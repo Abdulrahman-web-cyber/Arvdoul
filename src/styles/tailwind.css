@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ====================== */
+/* Core Base Styles       */
+/* ====================== */
+html,
+body,
+#root {
+  @apply w-screen h-screen m-0 p-0 overflow-x-hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  @apply bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-50;
+  @apply transition-colors duration-300 ease-in-out;
+  @apply antialiased;
+
+  overflow-y: auto;
+  text-rendering: optimizeLegibility;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+#root {
+  /* ✅ keep it flexible and full viewport */
+  @apply w-full h-full min-h-screen flex flex-col;
+}
+
+/* ====================== */
+/* Element Resets         */
+/* ====================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+img,
+video,
+iframe,
+canvas,
+svg {
+  @apply max-w-full h-auto block;
+}
+
+button,
+input,
+textarea,
+select {
+  @apply focus-visible:outline-none;
+  font: inherit;
+}
+
+a {
+  @apply text-inherit no-underline transition-colors duration-200;
+  @apply hover:text-primary-600 dark:hover:text-primary-400;
+}
+
+:focus-visible {
+  @apply outline-2 outline-primary-500 outline-offset-2;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip-path: inset(100%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* ====================== */
+/* Scrollbars (Ultra Pro) */
+/* ====================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.dark * {
+  scrollbar-color: #4b5563 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 9999px;
+  transition: background-color 0.2s;
+}
+body.dark ::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+body.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280;
+}
+
+/* ====================== */
+/* Utility Classes        */
+/* ====================== */
+.flex-center {
+  @apply flex items-center justify-center;
+}
+.grid-center {
+  @apply grid place-items-center;
+}
+
+.full-bleed {
+  @apply relative left-1/2 right-1/2 w-screen;
+  margin-left: calc(50vw * -1);
+  margin-right: calc(50vw * -1);
+}
+
+.rounded-lg {
+  @apply rounded-xl;
+}
+.shadow-card {
+  @apply shadow-lg shadow-gray-200 dark:shadow-gray-800;
+}
+.text-truncate {
+  @apply truncate;
+}
+
+/* ====================== */
+/* Animation Helpers      */
+/* ====================== */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out forwards;
+  }
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* ====================== */
+/* Dark/Light Mode Helpers */
+/* ====================== */
+.dark .bg-primary-500 {
+  background-color: #2563eb;
+}
+.dark .text-primary-500 {
+  color: #3b82f6;
+}
+.light .bg-primary-500 {
+  background-color: #3b82f6;
+}
+.light .text-primary-500 {
+  color: #2563eb;
+}
+
+/* ====================== */
+/* Print Styles           */
+/* ====================== */
+@media print {
+  body * {
+    @apply !bg-transparent !text-black;
+  }
+  .no-print {
+    @apply hidden;
+  }
+}
+
+/* ====================== */
+/* Utility for swipeable / stories overflow */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE 10+ */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
