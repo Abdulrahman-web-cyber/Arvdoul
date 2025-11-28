@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uidField) {
+      return isSignedIn() && request.auth.uid == resource.data[uidField];
+    }
+
+    // USERS
+    match /users/{uid} {
+      allow read: if isSignedIn(); // or make "public" fields via custom subcollection
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update, delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // POSTS
+    match /posts/{postId} {
+      allow read: if true; // public posts
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // STORIES
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // FUTURE: comments, likes, follows... add similar owner checks
+  }
+}

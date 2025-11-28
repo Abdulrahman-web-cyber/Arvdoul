@@ -1,0 +1,22 @@
+<html>
+<head>
+<title>External Viewers Setup</title>
+</head>
+<body>
+<h1>External Viewers Setup</h1>
+<form method=post action="file:///$LIB/w3mhelperpanel">
+<input type=hidden name=mode value=edit>
+<input type=hidden name=cookie value="1265241422@localhost">
+<table>
+<tr><td>New Entry:<td>Type=<input type=text name=newtype size=40>
+<tr><td><td>Command=<input type=text name=newcmd size=40>
+<tr><td><input type=submit name=submit value="Register">
+</table>
+<p><hr width=50%><p>
+<table border='0' cellpadding='0'>
+<tr><th align=left><b>Type</b><th><b>Command</b>
+</table>
+<input type=submit name=submit value="Do it">
+</form>
+</body>
+</html>
