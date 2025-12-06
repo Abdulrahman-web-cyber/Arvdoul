@@ -48,7 +48,7 @@ const fmt = (s) => {
 if (!Number.isFinite(s)) return "0:00";
 const m = Math.floor(s / 60);
 const sec = Math.floor(s % 60);
-return ${m}:${sec < 10 ? "0" : ""}${sec};
+return `${m}:${sec < 10 ? "0" : ""}${sec}`;
 };
 
 // how long to consider a view (ms)

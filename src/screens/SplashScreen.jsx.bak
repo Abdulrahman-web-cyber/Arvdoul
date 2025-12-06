@@ -1,7 +1,6 @@
 // src/screens/SplashScreen.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-console.log('DEBUG: SplashScreen module loaded');
 import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion";
 import LoadingSpinner from "@components/Shared/LoadingSpinner";
 import { useTheme } from "@context/ThemeContext";
@@ -577,6 +576,9 @@ export default function SplashScreen() {
                         ? 'linear-gradient(90deg, #1f2937 0%, #374151 50%, #1f2937 100%)'
                         : 'linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%)',
                       backgroundSize: '200% 100%'
+                    }}
+                    animate={{
+                      backgroundPosition: ['0% 0', '200% 0']
                     }}
                     transition={{
                       duration: 1.5,

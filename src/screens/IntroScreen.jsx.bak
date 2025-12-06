@@ -9,7 +9,6 @@ import React, {
   Component,
 } from "react";
 import { useNavigate } from "react-router-dom";
-console.log('DEBUG: IntroScreen module loaded');
 import { useTheme } from "@context/ThemeContext";
 import ThemeToggle from "@components/Shared/ThemeToggle";
 import {

@@ -1,0 +1,13 @@
+module.exports = {
+  plugins: [
+    // support @extend semantics
+    require('postcss-extend-rule')(),
+
+    // support nested rules using & and nested selectors
+    require('postcss-nested')(),
+
+    // tailwind + autoprefixer
+    require('tailwindcss'),
+    require('autoprefixer'),
+  ],
+};

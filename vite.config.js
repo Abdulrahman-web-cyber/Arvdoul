@@ -1,23 +1,18 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import path from "path";
 
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
-      "@context": "/src/context",
-      "@components": "/src/components",
-      "@screens": "/src/screens",
-      "@hooks": "/src/hooks",
-      "@lib": "/src/lib",
+      "@context": path.resolve(__dirname, "src/context"),
+      "@components": path.resolve(__dirname, "src/components"),
+      "@screens": path.resolve(__dirname, "src/screens"),
     },
   },
-  plugins: [react()],
-  optimizeDeps: {
-    include: [
-      "firebase/app",
-      "firebase/auth",
-      "firebase/firestore",
-      "firebase/storage",
-    ],
-  },
+  server: {
+    host: true,
+    port: 5173,
+  }
 });

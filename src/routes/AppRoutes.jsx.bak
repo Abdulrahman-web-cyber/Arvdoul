@@ -1,12 +1,12 @@
 // src/routes/AppRoutes.jsx
-import React, { Suspense,  } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Lazy load screens for optimal performance
-import SplashScreen from '../screens/SplashScreen';
+const SplashScreen = lazy(() => import('../screens/SplashScreen'));
 
 // Import your existing IntroScreen
-import IntroScreen from '../screens/IntroScreen';
+const IntroScreen = lazy(() => import('../screens/IntroScreen'));
 
 // Loading fallback for Suspense
 const LoadingFallback = () => (
