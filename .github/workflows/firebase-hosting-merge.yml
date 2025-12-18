@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -25,12 +25,22 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Install Firebase CLI (under Node 20)
+        run: npm install -g firebase-tools@latest
+
       - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ARVDOUL_8057B }}
-          channelId: live
-          projectId: arvdoul-8057b
         env:
-          NODE_VERSION: 20
+          # Secret must contain the raw service account JSON
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ARVDOUL_8057B }}
+        run: |
+          # Write service account JSON to file
+          echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
+
+          # Point the Google SDK / firebase-tools at the service account
+          export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/serviceAccountKey.json"
+
+          # Optional: show a short confirmation (avoid printing the secret)
+          echo "GOOGLE_APPLICATION_CREDENTIALS set to $GOOGLE_APPLICATION_CREDENTIALS"
+
+          # Deploy hosting (uses the service account credentials)
+          firebase deploy --only hosting --project arvdoul-8057b
