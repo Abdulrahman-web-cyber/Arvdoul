@@ -1,21 +1,26 @@
 import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { ThemeProvider } from "./context/ThemeContext";
-import { AuthProvider } from "./context/AuthContext";
+import { createRoot } from "react-dom/client";
+import App from "./App.jsx";
+
+// Core Providers
+import { ThemeProvider } from "./context/ThemeContext.jsx";
+import { AuthProvider } from "./context/AuthContext.jsx"; // even if auth not ready
+
+// Global styles
 import "./index.css";
 
-// Import the new AppRoutes component
-import App from "./App";
+const rootElement = document.getElementById("root");
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+if (!rootElement) {
+  throw new Error("[ARVDOUL BOOT ERROR] Root element not found");
+}
+
+createRoot(rootElement).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <ThemeProvider>
       <AuthProvider>
-        <ThemeProvider>
         <App />
-      </ThemeProvider>
       </AuthProvider>
-    </BrowserRouter>
+    </ThemeProvider>
   </React.StrictMode>
 );
