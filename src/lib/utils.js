@@ -1,46 +1,55 @@
-// Utility for class name merging (for Tailwind)
-export function cn(...classes) {
+// src/lib/utils.js
+// Arvdoul-level utilities: small, well-tested helpers used across the app.
+
+export function cn(...args) {
+  // Accept strings, arrays, objects {className: bool}, nested
+  const classes = [];
+
+  args.forEach((arg) => {
+    if (!arg) return;
+    if (typeof arg === "string") classes.push(arg);
+    else if (Array.isArray(arg)) classes.push(cn(...arg));
+    else if (typeof arg === "object") {
+      Object.entries(arg).forEach(([k, v]) => {
+        if (v) classes.push(k);
+      });
+    }
+  });
+
   return classes.filter(Boolean).join(" ");
 }
 
-// Format date to readable string
 export function formatDate(timestamp) {
   if (!timestamp) return "";
-  const date = new Date(timestamp);
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-// Capitalize first letter
-export function capitalize(text) {
+export function capitalize(text = "") {
   if (typeof text !== "string") return "";
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-// Generate a random username (fallback for users without names)
 export function generateUsername(prefix = "user") {
-  const random = Math.floor(Math.random() * 100000);
+  const random = Math.floor(Math.random() * 1000000);
   return `${prefix}${random}`;
 }
 
-// Get initials from full name
 export function getInitials(fullName = "") {
+  if (!fullName) return "";
   return fullName
     .split(" ")
-    .map((part) => part[0]?.toUpperCase())
+    .filter(Boolean)
+    .map((p) => p[0]?.toUpperCase() || "")
     .join("")
     .slice(0, 2);
 }
 
-// Convert bytes to human-readable format
-export function formatBytes(bytes, decimals = 2) {
-  if (!+bytes) return "0 Bytes";
+export function formatBytes(bytes = 0, decimals = 2) {
+  if (bytes === 0) return "0 Bytes";
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
