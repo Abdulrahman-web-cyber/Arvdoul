@@ -1,4 +1,6 @@
-// src/firebase/firebase.js  (Arvdoul-level, async-safe)
+// src/firebase/firebase.js
+// Arvdoul — production-grade Firebase bootstrap (CI-safe, async-safe)
+
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -8,14 +10,15 @@ import {
 } from "firebase/auth";
 import {
   getFirestore,
-  enableIndexedDbPersistence,
-  CACHE_SIZE_UNLIMITED
+  enableIndexedDbPersistence
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported as analyticsSupported } from "firebase/analytics";
 import { getPerformance } from "firebase/performance";
 
-const requiredEnvVars = [
+/* ───────────────────────── ENV VALIDATION ───────────────────────── */
+
+const REQUIRED_ENV = [
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
   "VITE_FIREBASE_PROJECT_ID",
@@ -25,13 +28,13 @@ const requiredEnvVars = [
 ];
 
 function assertEnv() {
-  const missing = requiredEnvVars.filter(k => !import.meta.env[k]);
+  const missing = REQUIRED_ENV.filter(k => !import.meta.env[k]);
   if (missing.length) {
-    throw new Error(`[ARVDOUL][FIREBASE] Missing env: ${missing.join(", ")}`);
+    throw new Error(`[ARVDOUL][FIREBASE] Missing env vars: ${missing.join(", ")}`);
   }
 }
 
-function buildConfig() {
+function firebaseConfig() {
   assertEnv();
   return {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -40,108 +43,94 @@ function buildConfig() {
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
   };
 }
 
-class FirebaseServices {
-  constructor() {
-    this.app = null;
-    this.auth = null;
-    this.db = null;
-    this.storage = null;
-    this.analytics = null;
-    this.performance = null;
-    this._initPromise = null;
-  }
+/* ───────────────────────── SINGLETON STATE ───────────────────────── */
 
-  async initialize() {
-    if (this._initPromise) return this._initPromise;
+let app;
+let auth;
+let db;
+let storage;
+let analytics;
+let performance;
+let initPromise;
 
-    this._initPromise = (async () => {
-      const cfg = buildConfig();
-      this.app = initializeApp(cfg);
+/* ───────────────────────── INITIALIZER ───────────────────────── */
 
-      // Auth
-      this.auth = getAuth(this.app);
-      try {
-        await setPersistence(this.auth, import.meta.env.DEV ? inMemoryPersistence : browserLocalPersistence);
-      } catch (err) {
-        console.warn("[ARVDOUL][FIREBASE] setPersistence failed:", err);
+export async function initializeFirebase() {
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    app = initializeApp(firebaseConfig());
+
+    // Auth
+    auth = getAuth(app);
+    try {
+      await setPersistence(
+        auth,
+        import.meta.env.DEV ? inMemoryPersistence : browserLocalPersistence
+      );
+    } catch (e) {
+      console.warn("[ARVDOUL][AUTH] persistence fallback:", e);
+    }
+
+    // Firestore
+    db = getFirestore(app);
+    try {
+      await enableIndexedDbPersistence(db);
+    } catch (e) {
+      console.warn("[ARVDOUL][FIRESTORE] persistence disabled:", e?.code || e);
+    }
+
+    // Storage
+    storage = getStorage(app);
+
+    // Optional services
+    try {
+      if (await analyticsSupported()) {
+        analytics = getAnalytics(app);
       }
+    } catch {}
 
-      // Firestore
-      this.db = getFirestore(this.app);
-      try {
-        await enableIndexedDbPersistence(this.db, { forceOwnership: false });
-      } catch (err) {
-        // if persistence fails, app still works in memory
-        console.warn("[ARVDOUL][FIRESTORE] persistence not enabled:", err?.code || err?.message || err);
-      }
+    try {
+      performance = getPerformance(app);
+    } catch {}
 
-      // Storage
-      this.storage = getStorage(this.app);
+    return { app, auth, db, storage, analytics, performance };
+  })();
 
-      // Optional services
-      try {
-        if (await analyticsSupported()) {
-          this.analytics = getAnalytics(this.app);
-        }
-      } catch (err) {
-        console.warn("[ARVDOUL][ANALYTICS] not supported:", err);
-      }
-
-      try {
-        this.performance = getPerformance(this.app);
-      } catch (err) {
-        // not critical
-        console.warn("[ARVDOUL][PERF] not supported:", err);
-      }
-
-      return this;
-    })();
-
-    return this._initPromise;
-  }
-
-  // getters (lazy and guarded)
-  getAuth() {
-    if (!this.auth) throw new Error("Auth not initialized — call initialize() first");
-    return this.auth;
-  }
-  getDB() {
-    if (!this.db) throw new Error("Firestore not initialized — call initialize() first");
-    return this.db;
-  }
-  getStorage() {
-    if (!this.storage) throw new Error("Storage not initialized — call initialize() first");
-    return this.storage;
-  }
-
-  async healthCheck() {
-    return {
-      initialized: !!this.app,
-      services: {
-        auth: !!this.auth,
-        db: !!this.db,
-        storage: !!this.storage,
-        analytics: !!this.analytics,
-        performance: !!this.performance
-      },
-      ts: new Date().toISOString(),
-      env: import.meta.env.MODE
-    };
-  }
+  return initPromise;
 }
 
-export const firebaseServices = new FirebaseServices();
+/* ───────────────────────── NAMED EXPORTS (CRITICAL) ───────────────────────── */
 
-export const initializeFirebase = async () => {
-  return firebaseServices.initialize();
+// These exports FIX your build error
+export { auth, db, storage };
+
+/* ───────────────────────── SAFE ACCESSORS ───────────────────────── */
+
+export const getFirebaseAuth = () => {
+  if (!auth) throw new Error("Firebase not initialized");
+  return auth;
 };
 
-export const getFirebaseAuth = () => firebaseServices.getAuth();
-export const getFirestoreDB = () => firebaseServices.getDB();
-export const getFirebaseStorage = () => firebaseServices.getStorage();
-export const firebaseHealthCheck = () => firebaseServices.healthCheck();
-export default firebaseServices;
+export const getFirestoreDB = () => {
+  if (!db) throw new Error("Firebase not initialized");
+  return db;
+};
+
+export const getFirebaseStorage = () => {
+  if (!storage) throw new Error("Firebase not initialized");
+  return storage;
+};
+
+/* ───────────────────────── DEFAULT EXPORT ───────────────────────── */
+
+export default {
+  initializeFirebase,
+  getFirebaseAuth,
+  getFirestoreDB,
+  getFirebaseStorage
+};
