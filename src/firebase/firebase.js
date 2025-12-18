@@ -1,5 +1,5 @@
 // src/firebase/firebase.js
-// Arvdoul — production-grade Firebase bootstrap (CI-safe, async-safe)
+// Arvdoul — Vite-safe, modular Firebase bootstrap (ESM, CI-safe, async-safe)
 
 import { initializeApp } from "firebase/app";
 import {
@@ -8,16 +8,12 @@ import {
   browserLocalPersistence,
   inMemoryPersistence
 } from "firebase/auth";
-import {
-  getFirestore,
-  enableIndexedDbPersistence
-} from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported as analyticsSupported } from "firebase/analytics";
 import { getPerformance } from "firebase/performance";
 
-/* ───────────────────────── ENV VALIDATION ───────────────────────── */
-
+/* ---------------------- ENV Validation ---------------------- */
 const REQUIRED_ENV = [
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
@@ -28,13 +24,13 @@ const REQUIRED_ENV = [
 ];
 
 function assertEnv() {
-  const missing = REQUIRED_ENV.filter(k => !import.meta.env[k]);
+  const missing = REQUIRED_ENV.filter((k) => !import.meta.env[k]);
   if (missing.length) {
     throw new Error(`[ARVDOUL][FIREBASE] Missing env vars: ${missing.join(", ")}`);
   }
 }
 
-function firebaseConfig() {
+function buildConfig() {
   assertEnv();
   return {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -43,27 +39,38 @@ function firebaseConfig() {
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined
   };
 }
 
-/* ───────────────────────── SINGLETON STATE ───────────────────────── */
+/* ---------------------- VITE-SAFE NAMED EXPORTS ---------------------- */
+/*
+  Important: export names must exist at module-eval time so Rollup/Vite static analysis
+  can see them. We assign to them during async initialization.
+*/
+export let auth = null;
+export let db = null;
+export let storage = null;
+export let analytics = null;
+export let performance = null;
 
-let app;
-let auth;
-let db;
-let storage;
-let analytics;
-let performance;
-let initPromise;
+/* ---------------------- INTERNAL STATE ---------------------- */
+let app = null;
+let _initPromise = null;
 
-/* ───────────────────────── INITIALIZER ───────────────────────── */
-
+/* ---------------------- INITIALIZER ---------------------- */
+/**
+ * initializeFirebase()
+ * - idempotent
+ * - sets module-level named exports (auth, db, storage, analytics, performance)
+ * - returns an object with services
+ */
 export async function initializeFirebase() {
-  if (initPromise) return initPromise;
+  if (_initPromise) return _initPromise;
 
-  initPromise = (async () => {
-    app = initializeApp(firebaseConfig());
+  _initPromise = (async () => {
+    const cfg = buildConfig();
+    app = initializeApp(cfg);
 
     // Auth
     auth = getAuth(app);
@@ -73,64 +80,90 @@ export async function initializeFirebase() {
         import.meta.env.DEV ? inMemoryPersistence : browserLocalPersistence
       );
     } catch (e) {
-      console.warn("[ARVDOUL][AUTH] persistence fallback:", e);
+      // not fatal - fallback to default persistence
+      // keep going; warn for visibility in logs
+      // eslint-disable-next-line no-console
+      console.warn("[ARVDOUL][FIREBASE] setPersistence failed:", e?.message || e);
     }
 
     // Firestore
     db = getFirestore(app);
     try {
+      // attempt to enable IndexedDB persistence (optional)
       await enableIndexedDbPersistence(db);
     } catch (e) {
-      console.warn("[ARVDOUL][FIRESTORE] persistence disabled:", e?.code || e);
+      // Common reasons: multiple tabs / unsupported browser
+      // Not fatal — Firestore will still work without persistence.
+      // eslint-disable-next-line no-console
+      console.warn("[ARVDOUL][FIRESTORE] persistence not enabled:", e?.code || e?.message || e);
     }
 
     // Storage
     storage = getStorage(app);
 
-    // Optional services
+    // Optional: Analytics (guarded)
     try {
       if (await analyticsSupported()) {
         analytics = getAnalytics(app);
       }
-    } catch {}
+    } catch (e) {
+      // analytics not supported in this environment (SSR, test, etc.)
+      // eslint-disable-next-line no-console
+      console.warn("[ARVDOUL][ANALYTICS] not supported:", e?.message || e);
+    }
 
+    // Optional: Performance
     try {
       performance = getPerformance(app);
-    } catch {}
+    } catch (e) {
+      // not critical
+      // eslint-disable-next-line no-console
+      console.warn("[ARVDOUL][PERF] not supported:", e?.message || e);
+    }
 
     return { app, auth, db, storage, analytics, performance };
   })();
 
-  return initPromise;
+  return _initPromise;
 }
 
-/* ───────────────────────── NAMED EXPORTS (CRITICAL) ───────────────────────── */
-
-// These exports FIX your build error
-export { auth, db, storage };
-
-/* ───────────────────────── SAFE ACCESSORS ───────────────────────── */
-
+/* ---------------------- SAFE GETTERS ---------------------- */
 export const getFirebaseAuth = () => {
-  if (!auth) throw new Error("Firebase not initialized");
+  if (!auth) throw new Error("Firebase auth not initialized — call initializeFirebase() first");
   return auth;
 };
 
 export const getFirestoreDB = () => {
-  if (!db) throw new Error("Firebase not initialized");
+  if (!db) throw new Error("Firestore not initialized — call initializeFirebase() first");
   return db;
 };
 
 export const getFirebaseStorage = () => {
-  if (!storage) throw new Error("Firebase not initialized");
+  if (!storage) throw new Error("Firebase storage not initialized — call initializeFirebase() first");
   return storage;
 };
 
-/* ───────────────────────── DEFAULT EXPORT ───────────────────────── */
+/* ---------------------- HEALTH CHECK ---------------------- */
+export async function firebaseHealthCheck() {
+  return {
+    initialized: !!app,
+    services: {
+      auth: !!auth,
+      db: !!db,
+      storage: !!storage,
+      analytics: !!analytics,
+      performance: !!performance
+    },
+    ts: new Date().toISOString(),
+    env: import.meta.env.MODE
+  };
+}
 
+/* ---------------------- DEFAULT EXPORT (utility) ---------------------- */
 export default {
   initializeFirebase,
   getFirebaseAuth,
   getFirestoreDB,
-  getFirebaseStorage
+  getFirebaseStorage,
+  firebaseHealthCheck
 };
