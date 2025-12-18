@@ -1,6 +1,3 @@
-// src/firebase/firebase.js
-// Arvdoul — Vite-safe, modular Firebase bootstrap (ESM, CI-safe, async-safe)
-
 import { initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -26,7 +23,9 @@ const REQUIRED_ENV = [
 function assertEnv() {
   const missing = REQUIRED_ENV.filter((k) => !import.meta.env[k]);
   if (missing.length) {
-    throw new Error(`[ARVDOUL][FIREBASE] Missing env vars: ${missing.join(", ")}`);
+    throw new Error(
+      `[ARVDOUL][FIREBASE] Missing env vars: ${missing.join(", ")}`
+    );
   }
 }
 
@@ -89,13 +88,15 @@ export async function initializeFirebase() {
     // Firestore
     db = getFirestore(app);
     try {
-      // attempt to enable IndexedDB persistence (optional)
       await enableIndexedDbPersistence(db);
     } catch (e) {
       // Common reasons: multiple tabs / unsupported browser
       // Not fatal — Firestore will still work without persistence.
       // eslint-disable-next-line no-console
-      console.warn("[ARVDOUL][FIRESTORE] persistence not enabled:", e?.code || e?.message || e);
+      console.warn(
+        "[ARVDOUL][FIRESTORE] persistence not enabled:",
+        e?.code || e?.message || e
+      );
     }
 
     // Storage
