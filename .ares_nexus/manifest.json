@@ -1,0 +1,13 @@
+{
+  "version": "7.0.0",
+  "created": "2025-12-19T17:07:43Z",
+  "project": "/data/data/com.termux/files/home/Arvdoul",
+  "issues_we_actually_fix": stray_text template_literal missing_react missing_export firebase_init provider_ssr hook_violation css_issues,
+  "limitations": [
+    "cannot_fix_business_logic",
+    "cannot_create_features",
+    "only_structural_and_syntax"
+  ],
+  "termux_compatible": true,
+  "no_broken_commands": true
+}

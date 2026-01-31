@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect, useState } from "react";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-import { db } from "../../firebase/firebase.js";
+import { getDbInstance } from "../../firebase/firebase.js";
 import StoryViewer from "./StoryViewer";
 
 const DEFAULT_AVATAR = "/default-profile.png";
@@ -70,7 +70,7 @@ export default function StoryList() {
               key={userId}
               role="button"
               tabIndex={0}
-              title={story.username || "User"}
+              title={`story.username || "User"`}
               onClick={() => setSelectedUserId(userId)}
               onKeyDown={(e) => e.key === "Enter" && setSelectedUserId(userId)}
               className="flex flex-col items-center cursor-pointer group"
@@ -84,7 +84,7 @@ export default function StoryList() {
               >
                 <img
                   src={story.userAvatar || DEFAULT_AVATAR}
-                  alt={story.username || "User"}
+                  alt={`story.username || "User"`}
                   className="w-full h-full object-cover rounded-full"
                   loading="lazy"
                 />

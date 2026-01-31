@@ -1,0 +1,12 @@
+{
+  "id": "recovery_1766147171619",
+  "backupId": "backup_1766147171605_c4f77a57",
+  "created": "2025-12-19T12:26:11.619Z",
+  "status": "success",
+  "steps": [],
+  "rollback": {
+    "possible": true,
+    "backupDir": "/data/data/com.termux/files/home/Arvdoul/.ares_ultra/backups/backup_1766147171605_c4f77a57",
+    "command": "cp -r /data/data/com.termux/files/home/Arvdoul/.ares_ultra/backups/backup_1766147171605_c4f77a57/* ."
+  }
+}

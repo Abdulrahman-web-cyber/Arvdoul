@@ -1,4 +1,4 @@
-import { db } from "../firebase/firebase.js";
+import { getDbInstance } from '../firebase/compat.js';
 import {
   collection,
   doc,
@@ -8,9 +8,9 @@ import {
 } from "firebase/firestore";
 import axios from "axios";
 
-// =========================
-// Cloudinary Upload Helper
-// =========================
+\/\/ =========================
+\/\/ Cloudinary Upload Helper
+\/\/ =========================
 export async function uploadToCloudinary(
   file,
   folder = "arvdoul",
@@ -19,15 +19,15 @@ export async function uploadToCloudinary(
   try {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", "arvdoul"); // Must create unsigned preset in Cloudinary
+    formData.append("upload_preset", "arvdoul"); \/\/ Must create unsigned preset in Cloudinary
     formData.append("folder", folder);
 
     if (options.resource_type)
-      formData.append("resource_type", options.resource_type); // 'image' | 'video'
-    if (options.public_id) formData.append("public_id", options.public_id); // overwrite or set specific ID
+      formData.append("resource_type", options.resource_type); \/\/ 'image' | 'video'
+    if (options.public_id) formData.append("public_id", options.public_id); \/\/ overwrite or set specific ID
 
     const response = await axios.post(
-      `https://api.cloudinary.com/v1_1/dutqufben/${options.resource_type || "auto"}/upload`,
+      `https:\/\/api.cloudinary.com/v1_1/dutqufben/${options.resource_type || "auto"}/upload`,
       formData,
     );
 
@@ -47,11 +47,11 @@ export async function uploadToCloudinary(
   }
 }
 
-// =========================
-// Firestore Helpers
-// =========================
+\/\/ =========================
+\/\/ Firestore Helpers
+\/\/ =========================
 
-// Posts: images/videos in feed
+\/\/ Posts: images/videos in feed
 export async function savePostToFirestore({ userId, media, caption = "" }) {
   try {
     const postsRef = collection(db, "posts");
@@ -70,7 +70,7 @@ export async function savePostToFirestore({ userId, media, caption = "" }) {
   }
 }
 
-// Stories: ephemeral content
+\/\/ Stories: ephemeral content
 export async function saveStoryToFirestore({
   userId,
   media,
@@ -94,7 +94,7 @@ export async function saveStoryToFirestore({
   }
 }
 
-// Profile picture upload
+\/\/ Profile picture upload
 export async function uploadProfilePicture({ userId, file }) {
   try {
     const uploadResult = await uploadToCloudinary(
@@ -102,7 +102,7 @@ export async function uploadProfilePicture({ userId, file }) {
       `profile_pictures/${userId}`,
       { resource_type: "image" },
     );
-    // Save URL to Firestore user document, overwrite if exists
+    \/\/ Save URL to Firestore user document, overwrite if exists
     const userRef = doc(db, "users", userId);
     await setDoc(
       userRef,
@@ -120,9 +120,9 @@ export async function uploadProfilePicture({ userId, file }) {
   }
 }
 
-// =========================
-// Utility: Download media
-// =========================
+\/\/ =========================
+\/\/ Utility: Download media
+\/\/ =========================
 export function downloadMedia(url, filename) {
   try {
     const link = document.createElement("a");

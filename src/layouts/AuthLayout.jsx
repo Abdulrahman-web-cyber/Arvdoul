@@ -1,35 +1,37 @@
+// src/layouts/AuthLayout.jsx - FIXED VERSION
 import React from "react";
 import { useLocation, Outlet } from "react-router-dom";
-import { useTheme } from "@context/ThemeContext";
-import { cn } from "../lib/utils";
-
-const logoLight = "/logo/logo-light.png";
-const logoDark = "/logo/logo-dark.png";
+import { useTheme } from "../context/ThemeContext";
 
 const AuthLayout = () => {
   const location = useLocation();
   const showLogo = location.pathname !== "/intro";
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
+
+  // Define logo paths
+  const logoLight = "/logo/logo-light.png";
+  const logoDark = "/logo/logo-dark.png";
 
   return (
-    <div
-      className={cn(
-        "min-h-screen flex items-center justify-center px-4 py-8 bg-gray-100 dark:bg-zinc-900",
-        "transition-colors duration-300 ease-in-out",
-      )}
-    >
-      <div className="w-full max-w-md md:max-w-lg space-y-8 bg-white dark:bg-zinc-800 shadow-xl rounded-2xl p-6 sm:p-8">
+    <div className="min-h-screen w-full flex items-center justify-center px-4 py-8 bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-md space-y-6 bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
         {showLogo && (
-          <div className="flex justify-center">
+          <div className="flex justify-center mb-6">
             <img
-              src={theme === "dark" ? logoDark : logoLight}
+              src={resolvedTheme === "dark" ? logoDark : logoLight}
               alt="Arvdoul Logo"
-              className="w-16 h-16 rounded-full animate-fadeIn"
+              className="w-16 h-16 rounded-full"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "/logo/logo-default.png";
+              }}
             />
           </div>
         )}
-
-        <Outlet />
+        
+        <div className="w-full">
+          <Outlet />
+        </div>
       </div>
     </div>
   );

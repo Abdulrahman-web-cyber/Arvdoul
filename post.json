@@ -1,0 +1,21 @@
+{
+  "authorId": "USER_ID",
+  "authorName": "John Doe",
+  "authorUsername": "johndoe",
+  "authorPhoto": "https://...photo-url",
+  "authorLevel": 1,
+  "content": "Hello Arvdoul!",
+  "media": [],
+  "type": "text",
+  "stats": {
+    "likes": 0,
+    "comments": 0,
+    "shares": 0,
+    "views": 0
+  },
+  "likedBy": [],
+  "savedBy": [],
+  "createdAt": "SERVER_TIMESTAMP",
+  "isDeleted": false,
+  "status": "published"
+}

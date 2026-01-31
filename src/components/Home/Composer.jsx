@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
-import { db, storage } from "../../firebase/firebase";
+import { getDbInstance, storage } from "../../firebase/firebase";
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { toast } from "sonner";
@@ -30,7 +30,7 @@ return () => mediaFiles.forEach(file => URL.revokeObjectURL(file.preview));
 
 // ---------------- Detect Link Preview ----------------
 useEffect(() => {
-const urlRegex = /(https?://[^\s]+)/g;
+const urlRegex = /(https?:\/\/[^\s]+)/g;
 const match = text.match(urlRegex);
 if (match) {
 const url = match[0];
@@ -169,7 +169,7 @@ const handleDragOver = (e) => e.preventDefault();
 
 return (
 <div
-className={p-3 rounded-xl border ${theme === "dark" ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}}
+className={`p-3 rounded-xl border ${theme === "dark" ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
 onDrop={handleDrop}
 onDragOver={handleDragOver}
 >
@@ -178,7 +178,7 @@ onDragOver={handleDragOver}
 value={text}
 onChange={(e) => setText(e.target.value)}
 placeholder="What's happening?"
-className={w-full p-2 rounded-md resize-none border ${theme === "dark" ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-50 border-gray-200 text-gray-900"}}
+className={`w-full p-2 rounded-md resize-none border ${theme === "dark" ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-50 border-gray-200 text-gray-900"}`}
 rows={3}
 maxLength={280}
 />
@@ -221,7 +221,7 @@ maxLength={280}
   {/* Upload Progress */}  
   {uploading && progress > 0 && (  
     <div className="w-full h-1 bg-gray-300 rounded mt-1">  
-      <div className="h-1 bg-primary-500 rounded" style={{ width: `${progress}%` }} />  
+      <div className="h-1 bg-primary-500 rounded" style={`{ width: `${progress}%` `}} />  
     </div>  
   )}  
 

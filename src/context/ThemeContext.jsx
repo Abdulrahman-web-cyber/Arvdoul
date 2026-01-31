@@ -1,13 +1,32 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+// src/context/ThemeContext.jsx - FIXED VERSION
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState('light');
-  const [systemTheme, setSystemTheme] = useState('light');
+  const [theme, setThemeState] = useState(() => {
+    // Get initial theme from localStorage or default to 'light'
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'light' || saved === 'dark' || saved === 'system') {
+        return saved;
+      }
+    }
+    return 'light';
+  });
 
-  // Detect system theme
+  const [systemTheme, setSystemTheme] = useState('light');
+  const [mounted, setMounted] = useState(false);
+
+  // Set mounted state
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Detect system theme changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
     const handleChange = (e) => {
@@ -18,31 +37,54 @@ export const ThemeProvider = ({ children }) => {
     handleChange(mediaQuery);
     
     // Listen for changes
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else {
+      mediaQuery.addListener(handleChange);
+      return () => mediaQuery.removeListener(handleChange);
+    }
   }, []);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
+  // Calculate resolved theme
   const resolvedTheme = theme === 'system' ? systemTheme : theme;
 
-  // Apply theme to document
+  // Apply theme to document - SIMPLIFIED
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const root = document.documentElement;
     
-    if (resolvedTheme === 'dark') {
-      root.classList.add('dark');
-      root.setAttribute('data-theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      root.setAttribute('data-theme', 'light');
+    // Remove all theme classes first
+    root.classList.remove('light', 'dark');
+    
+    // Add current theme class
+    root.classList.add(resolvedTheme);
+    
+    // Store in localStorage
+    localStorage.setItem('theme', theme);
+    
+  }, [theme, resolvedTheme]);
+
+  // Update theme
+  const setTheme = useCallback((newTheme) => {
+    if (newTheme === 'light' || newTheme === 'dark' || newTheme === 'system') {
+      setThemeState(newTheme);
     }
-  }, [resolvedTheme]);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setThemeState(current => {
+      if (current === 'light') return 'dark';
+      if (current === 'dark') return 'light';
+      return systemTheme === 'light' ? 'dark' : 'light';
+    });
+  }, [systemTheme]);
+
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return <div style={{ visibility: 'hidden' }}>{children}</div>;
+  }
 
   return (
     <ThemeContext.Provider value={{
@@ -60,7 +102,14 @@ export const ThemeProvider = ({ children }) => {
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within ThemeProvider');
+    console.warn("useTheme must be used within ThemeProvider");
+    return {
+      theme: 'light',
+      systemTheme: 'light',
+      toggleTheme: () => {},
+      setTheme: () => {},
+      resolvedTheme: 'light'
+    };
   }
   return context;
 };

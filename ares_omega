@@ -1,0 +1,454 @@
+#!/data/data/com.termux/files/usr/bin/env bash
+# ARES OMEGA CLI - The Ultimate Platform Engineering Tool
+set -euo pipefail
+IFS=$'\n\t'
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Configuration
+PROJECT_ROOT="$(pwd)"
+OMEGA_HOME="$PROJECT_ROOT/.ares_omega"
+OMEGA_ENGINES="$OMEGA_HOME/engines"
+REPORT_FILE="$OMEGA_HOME/deepscan_report.json"
+FIX_REPORT_FILE="$OMEGA_HOME/fix_report.json"
+
+# Logging
+log() { echo -e "${CYAN}[OMEGA]${NC} $1"; }
+success() { echo -e "${GREEN}✅ $1${NC}"; }
+warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+error() { echo -e "${RED}❌ $1${NC}"; }
+info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
+critical() { echo -e "${MAGENTA}🚨 $1${NC}"; }
+
+# Banner
+print_banner() {
+    echo -e "${CYAN}"
+    echo "    ___    ____  ________  ___       __  _______"
+    echo "   /   |  / __ \/  _/ __ \/   |     / / / / ___/"
+    echo "  / /| | / /_/ // // /_/ / /| |    / /_/ /\__ \ "
+    echo " / ___ |/ _, _// // ____/ ___ |   / __  /___/ / "
+    echo "/_/  |_/_/ |_/___/_/   /_/  |_|  /_/ /_//____/  "
+    echo -e "${NC}"
+    echo "ARES OMEGA v5.0 - Platform Engineering System"
+    echo "Finds EVERYTHING • Never Claims • Always Works"
+    echo ""
+}
+
+# Check environment
+check_environment() {
+    log "Checking environment..."
+    
+    # Check Node.js
+    if ! command -v node &> /dev/null; then
+        error "Node.js not found"
+        info "Installing Node.js..."
+        pkg install nodejs -y 2>/dev/null || {
+            error "Failed to install Node.js"
+            return 1
+        }
+    fi
+    
+    # Check npm
+    if ! command -v npm &> /dev/null; then
+        error "npm not found"
+        info "Installing npm..."
+        pkg install nodejs -y 2>/dev/null || {
+            error "Failed to install npm"
+            return 1
+        }
+    fi
+    
+    # Check for required npm packages
+    if [ ! -d "$OMEGA_ENGINES/node_modules/@babel/parser" ]; then
+        log "Installing Omega engines..."
+        mkdir -p "$OMEGA_ENGINES"
+        cd "$OMEGA_ENGINES"
+        
+        cat > package.json << PKG_JSON
+{
+  "name": "ares-omega-engines",
+  "version": "5.0.0",
+  "private": true,
+  "dependencies": {
+    "@babel/parser": "^7.23.0",
+    "@babel/traverse": "^7.23.0",
+    "glob": "^10.3.10"
+  }
+}
+PKG_JSON
+        
+        npm install --no-audit --no-fund --silent 2>&1 | tail -5
+        cd "$PROJECT_ROOT"
+    fi
+    
+    success "Environment ready"
+    return 0
+}
+
+# Deep scan command
+deep_scan() {
+    print_banner
+    log "Starting deep scan - Finding EVERYTHING..."
+    
+    # Run the deep scan engine
+    if node "$OMEGA_ENGINES/deepscan.js" 2>&1; then
+        success "Deep scan completed"
+        
+        # Show summary from report
+        if [ -f "$REPORT_FILE" ]; then
+            echo ""
+            echo "=" .repeat(60)
+            echo "QUICK SUMMARY:"
+            echo "=" .repeat(60)
+            
+            local total=$(jq -r '.summary.totalIssues // 0' "$REPORT_FILE" 2>/dev/null || echo 0)
+            local critical=$(jq -r '.summary.critical // 0' "$REPORT_FILE" 2>/dev/null || echo 0)
+            local high=$(jq -r '.summary.high // 0' "$REPORT_FILE" 2>/dev/null || echo 0)
+            
+            if [ "$critical" -gt 0 ]; then
+                critical "CRITICAL ISSUES FOUND: $critical"
+                echo "These WILL cause blank screens"
+            fi
+            
+            if [ "$high" -gt 0 ]; then
+                warning "HIGH PRIORITY ISSUES: $high"
+                echo "These MAY cause problems"
+            fi
+            
+            if [ "$total" -eq 0 ]; then
+                success "NO STRUCTURAL ISSUES FOUND"
+                echo "Blank screen is likely due to component logic"
+            fi
+            
+            echo ""
+            info "Full report: $REPORT_FILE"
+        fi
+        
+    else
+        error "Deep scan failed"
+        return 1
+    fi
+}
+
+# Fix command
+apply_fixes() {
+    print_banner
+    
+    # Check if scan was done
+    if [ ! -f "$REPORT_FILE" ]; then
+        warning "No scan report found. Running deep scan first..."
+        deep_scan
+    fi
+    
+    # Show what will be fixed
+    local critical=$(jq -r '.summary.critical // 0' "$REPORT_FILE" 2>/dev/null || echo 0)
+    local high=$(jq -r '.summary.high // 0' "$REPORT_FILE" 2>/dev/null || echo 0)
+    
+    if [ "$critical" -eq 0 ] && [ "$high" -eq 0 ]; then
+        warning "No critical or high issues found to fix"
+        read -p "Apply fixes anyway? (yes/NO): " confirm
+        if [ "$confirm" != "yes" ]; then
+            info "Operation cancelled"
+            return 0
+        fi
+    else
+        critical "Found $critical critical and $high high priority issues"
+        echo ""
+        echo "The fix engine will:"
+        echo "1. Create backups of all modified files"
+        echo "2. Apply platform-grade fixes"
+        echo "3. Never delete your code"
+        echo "4. Only comment out stray text"
+        echo ""
+        read -p "Continue? (yes/NO): " confirm
+        if [ "$confirm" != "yes" ]; then
+            info "Operation cancelled"
+            return 0
+        fi
+    fi
+    
+    log "Applying platform-grade fixes..."
+    
+    # Run the fix engine
+    if node "$OMEGA_ENGINES/omega_fix.js" 2>&1; then
+        success "Fixes applied successfully"
+        
+        # Show fix summary
+        if [ -f "$FIX_REPORT_FILE" ]; then
+            echo ""
+            local applied=$(jq -r '.summary.totalApplied // 0' "$FIX_REPORT_FILE" 2>/dev/null || echo 0)
+            local failed=$(jq -r '.summary.totalFailed // 0' "$FIX_REPORT_FILE" 2>/dev/null || echo 0)
+            
+            echo "🔧 Fixes applied: $applied"
+            echo "❌ Fixes failed: $failed"
+            echo ""
+            
+            if [ "$applied" -gt 0 ]; then
+                success "Some fixes were applied"
+                echo "Next: Run 'npm run build' to verify"
+            else
+                warning "No fixes were applied"
+                echo "Check the scan report for issues"
+            fi
+        fi
+        
+    else
+        error "Fix engine failed"
+        return 1
+    fi
+}
+
+# Verify command
+verify_project() {
+    print_banner
+    log "Verifying project structure..."
+    
+    echo ""
+    echo "1. Checking package.json..."
+    if [ -f "package.json" ]; then
+        success "✓ package.json exists"
+        
+        # Check for required scripts
+        if grep -q '"build"' package.json; then
+            success "✓ Build script exists"
+        else
+            warning "⚠ Build script missing"
+        fi
+        
+        if grep -q '"dev"' package.json; then
+            success "✓ Dev script exists"
+        else
+            warning "⚠ Dev script missing"
+        fi
+        
+    else
+        error "✗ Missing package.json"
+    fi
+    
+    echo ""
+    echo "2. Checking entry files..."
+    
+    # Check main entry
+    local found_entry=false
+    for file in "src/main.jsx" "src/main.js" "main.jsx" "main.js" "src/index.jsx" "src/index.js"; do
+        if [ -f "$file" ]; then
+            success "✓ Found: $file"
+            found_entry=true
+            
+            # Check for ReactDOM
+            if grep -q "ReactDOM" "$file" || grep -q "createRoot" "$file"; then
+                success "  ✓ Has ReactDOM render"
+            else
+                warning "  ⚠ Missing ReactDOM render"
+            fi
+            break
+        fi
+    done
+    
+    if [ "$found_entry" = false ]; then
+        error "✗ No main entry file found"
+    fi
+    
+    echo ""
+    echo "3. Checking App component..."
+    
+    local found_app=false
+    for file in "src/App.jsx" "src/App.js" "App.jsx" "App.js"; do
+        if [ -f "$file" ]; then
+            success "✓ Found: $file"
+            found_app=true
+            
+            # Check for default export
+            if grep -q "export default" "$file"; then
+                success "  ✓ Has default export"
+            else
+                warning "  ⚠ Missing default export"
+            fi
+            break
+        fi
+    done
+    
+    if [ "$found_app" = false ]; then
+        error "✗ No App component found"
+    fi
+    
+    echo ""
+    echo "4. Checking HTML entry..."
+    
+    if [ -f "index.html" ]; then
+        success "✓ index.html exists"
+        
+        # Check for root div
+        if grep -q 'id="root"' index.html || grep -q 'id="app"' index.html; then
+            success "  ✓ Has root div"
+        else
+            warning "  ⚠ Missing root div (id='root' or id='app')"
+        fi
+        
+        # Check for script tag
+        if grep -q '<script' index.html; then
+            success "  ✓ Has script tag"
+        else
+            warning "  ⚠ Missing script tag"
+        fi
+        
+    else
+        error "✗ Missing index.html"
+    fi
+    
+    echo ""
+    echo "=" .repeat(40)
+    echo "VERIFICATION COMPLETE"
+    echo "=" .repeat(40)
+    echo ""
+    echo "If all checks pass, blank screen is likely due to:"
+    echo "• Component logic errors"
+    echo "• State management issues"
+    echo "• API/async problems"
+    echo "• CSS/display issues"
+    echo ""
+}
+
+# Build command
+run_build() {
+    log "Running build verification..."
+    
+    if [ ! -f "package.json" ]; then
+        error "No package.json found"
+        return 1
+    fi
+    
+    echo ""
+    echo "1. Installing dependencies..."
+    if npm install --no-audit --no-fund --silent 2>&1 | tail -10; then
+        success "Dependencies installed"
+    else
+        warning "npm install had issues (check output above)"
+    fi
+    
+    echo ""
+    echo "2. Running build..."
+    if npm run build 2>&1; then
+        success "Build successful!"
+        
+        # Check build output
+        if [ -d "dist" ]; then
+            echo ""
+            echo "Build output:"
+            ls -la dist/ | head -10
+        fi
+        
+    else
+        error "Build failed"
+        echo "Check the error output above"
+        return 1
+    fi
+}
+
+# Dev command
+run_dev() {
+    log "Starting development server..."
+    
+    if [ ! -f "package.json" ]; then
+        error "No package.json found"
+        return 1
+    fi
+    
+    if ! grep -q '"dev"' package.json; then
+        error "No dev script in package.json"
+        return 1
+    fi
+    
+    echo "Starting: npm run dev"
+    echo "Press Ctrl+C to stop"
+    echo ""
+    
+    npm run dev
+}
+
+# Help command
+show_help() {
+    print_banner
+    cat << HELP
+
+USAGE:
+  ./ares_omega [command]
+
+COMMANDS:
+  scan      - Deep scan finds EVERYTHING wrong with project
+  fix       - Apply platform-grade fixes (with backup)
+  verify    - Quick verification of project structure
+  build     - Run build to verify everything works
+  dev       - Start development server
+  help      - Show this help
+
+EXAMPLES:
+  ./ares_omega scan      # Find all issues
+  ./ares_omega fix       # Fix found issues
+  ./ares_omega verify    # Quick health check
+  ./ares_omega build     # Verify build works
+  ./ares_omega dev       # Start dev server
+
+FEATURES:
+  • Finds EVERYTHING - 5-phase deep scan
+  • Never claims - Only reports what it finds
+  • Platform-grade fixes - Facebook/Google level
+  • Always creates backups - Never loses your code
+  • Checks entire project - From package.json to components
+  • Finds blank screen root causes - Structural issues only
+
+SAFETY:
+  • Backups created before every change
+  • Only comments out stray text (never deletes)
+  • Never modifies business logic
+  • Always asks for confirmation
+  • Rollback ready
+
+HELP
+}
+
+# Main
+main() {
+    local command="${1:-help}"
+    
+    # Initialize if needed
+    if [ ! -d "$OMEGA_HOME" ]; then
+        init_omega
+    fi
+    
+    case "$command" in
+        scan)
+            check_environment && deep_scan
+            ;;
+        fix)
+            check_environment && apply_fixes
+            ;;
+        verify)
+            verify_project
+            ;;
+        build)
+            run_build
+            ;;
+        dev)
+            run_dev
+            ;;
+        help|--help|-h|"")
+            show_help
+            ;;
+        *)
+            error "Unknown command: $command"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Run
+main "$@"

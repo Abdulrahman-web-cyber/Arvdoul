@@ -1,122 +1,161 @@
-// src/screens/SignupStep1Personal.jsx
+// src/screens/SignupStep1Personal.jsx - MOBILE OPTIMIZED ULTIMATE VERSION - FIXED
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSignup } from "@context/SignupContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../firebase/firebase";
+import { useTheme } from "@context/ThemeContext";
 
-// Advanced input component with futuristic features
-const AdvancedInput = ({ 
+// ==================== MOBILE-OPTIMIZED INPUT COMPONENT ====================
+const MobileOptimizedInput = React.memo(({ 
   label, 
   value, 
   onChange, 
   error, 
   type = "text",
-  placeholder,
   autoFocus = false,
   onKeyPress,
   disabled = false,
-  theme
+  theme,
+  className = "",
+  required = true
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef(null);
 
-  const handleFocus = () => setIsFocused(true);
+  const handleFocus = () => {
+    setIsFocused(true);
+    // On mobile, ensure virtual keyboard doesn't cover input
+    if (window.innerWidth < 768) {
+      setTimeout(() => {
+        inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  };
+
   const handleBlur = () => setIsFocused(false);
 
+  const isActive = isFocused || value;
+
   return (
-    <div className="relative">
-      <motion.div
-        className={`relative rounded-xl border-2 transition-all duration-300 ${
-          error 
-            ? "border-red-500 shadow-lg shadow-red-500/20" 
-            : isFocused 
-            ? "border-indigo-500 shadow-lg shadow-indigo-500/20" 
-            : theme === 'dark' 
-            ? "border-gray-600" 
-            : "border-gray-300"
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-        whileHover={!disabled ? { scale: 1.02 } : {}}
-        animate={error ? { x: [-5, 5, -5, 5, 0] } : {}}
-        transition={{ duration: 0.4 }}
-      >
-        <input
-          ref={inputRef}
-          type={type}
-          value={value}
-          onChange={onChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-          onKeyPress={onKeyPress}
-          disabled={disabled}
-          placeholder={placeholder}
-          autoFocus={autoFocus}
-          className={`w-full px-4 py-4 bg-transparent outline-none text-lg ${
-            theme === 'dark' ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'
-          }`}
-        />
-        
-        {/* Animated label */}
-        <motion.label
-          className={`absolute left-4 pointer-events-none transition-all duration-300 ${
-            value || isFocused 
-              ? 'top-2 text-xs font-medium' 
-              : 'top-4 text-base'
-          } ${
-            error 
-              ? 'text-red-500' 
-              : isFocused 
-              ? 'text-indigo-500' 
-              : theme === 'dark' 
-              ? 'text-gray-400' 
-              : 'text-gray-500'
-          }`}
-        >
-          {label}
-        </motion.label>
+    <div className={`relative ${className}`}>
+      {/* Label - Optimized for mobile touch */}
+      <label className={`block mb-1.5 text-sm font-medium transition-colors duration-200 touch-none ${
+        error 
+          ? 'text-red-600 dark:text-red-400' 
+          : isActive
+          ? 'text-indigo-600 dark:text-indigo-400'
+          : 'text-gray-600 dark:text-gray-400'
+      }`}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
 
-        {/* Focus indicator line */}
+      {/* Input Container with mobile-optimized sizing */}
+      <div className="relative">
         <motion.div
-          className={`absolute bottom-0 left-0 right-0 h-0.5 rounded-full ${
-            isFocused ? 'bg-gradient-to-r from-indigo-500 to-purple-500' : 'bg-transparent'
-          }`}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: isFocused ? 1 : 0 }}
-          transition={{ duration: 0.3 }}
-        />
-      </motion.div>
+          className={`relative rounded-lg border transition-all duration-200 overflow-hidden ${
+            error
+              ? 'border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/10'
+              : isFocused
+              ? theme === 'dark'
+                ? 'border-indigo-500 bg-gray-800/50'
+                : 'border-indigo-500 bg-white'
+              : theme === 'dark'
+              ? 'border-gray-700 bg-gray-800/30 active:border-gray-600'
+              : 'border-gray-300 bg-white active:border-gray-400'
+          } ${disabled ? 'opacity-50 cursor-not-allowed' : 'active:scale-[0.995]'}`}
+          whileTap={!disabled ? { scale: 0.995 } : {}}
+        >
+          <input
+            ref={inputRef}
+            type={type}
+            value={value}
+            onChange={onChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onKeyPress={onKeyPress}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            // Mobile-specific attributes
+            inputMode={type === "number" ? "numeric" : "text"}
+            enterKeyHint="next"
+            className={`w-full px-4 py-3 bg-transparent outline-none text-base font-normal 
+              ${theme === 'dark' ? 'text-white' : 'text-gray-900'} 
+              ${disabled ? 'cursor-not-allowed' : ''}
+              min-h-[44px]`} // Minimum touch target size for mobile
+            style={{
+              WebkitAppearance: 'none',
+              WebkitTapHighlightColor: 'transparent',
+              fontSize: '16px', // Prevents iOS zoom on focus
+            }}
+          />
 
-      {/* Error message with animation */}
+          {/* Focus Indicator */}
+          {isFocused && !error && (
+            <motion.div
+              className="absolute bottom-0 left-0 right-0 h-0.5"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.3 }}
+              style={{
+                background: theme === 'dark'
+                  ? 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)'
+                  : 'linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%)'
+              }}
+            />
+          )}
+        </motion.div>
+
+        {/* Validation Indicator - Mobile optimized */}
+        {value && !error && (
+          <motion.div
+            className="absolute right-3 top-1/2 -translate-y-1/2"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 500, damping: 25 }}
+          >
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+          </motion.div>
+        )}
+      </div>
+
+      {/* Error Message - Mobile optimized */}
       <AnimatePresence>
         {error && (
-          <motion.p
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mt-2 text-sm text-red-500 flex items-center gap-2"
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginTop: 4 }}
+            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+            className="overflow-hidden"
           >
-            <span className="text-lg">⚠️</span>
-            {error}
-          </motion.p>
+            <p className="text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1.5">
+              <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              {error}
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
-};
+});
 
-// Advanced select component
-const AdvancedSelect = ({ 
+MobileOptimizedInput.displayName = 'MobileOptimizedInput';
+
+// ==================== MOBILE-OPTIMIZED SELECT COMPONENT ====================
+const MobileOptimizedSelect = React.memo(({ 
   label, 
   value, 
   onChange, 
   options, 
   error, 
-  theme 
+  theme,
+  required = true
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt.value === value);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -126,107 +165,148 @@ const AdvancedSelect = ({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
-  const selectedOption = options.find(opt => opt.value === value);
+  const handleSelectClick = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const handleOptionClick = (optionValue) => {
+    onChange(optionValue);
+    setIsOpen(false);
+  };
 
   return (
     <div className="relative" ref={selectRef}>
+      {/* Label */}
+      <label className={`block mb-1.5 text-sm font-medium touch-none ${
+        error
+          ? 'text-red-600 dark:text-red-400'
+          : value
+          ? 'text-indigo-600 dark:text-indigo-400'
+          : 'text-gray-600 dark:text-gray-400'
+      }`}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+
+      {/* Select Container - Mobile optimized */}
       <motion.div
-        className={`relative rounded-xl border-2 transition-all duration-300 cursor-pointer ${
-          error 
-            ? "border-red-500 shadow-lg shadow-red-500/20" 
-            : isOpen 
-            ? "border-indigo-500 shadow-lg shadow-indigo-500/20" 
-            : theme === 'dark' 
-            ? "border-gray-600" 
-            : "border-gray-300"
+        className={`relative cursor-pointer rounded-lg border transition-all duration-200 min-h-[44px] flex items-center ${
+          error
+            ? 'border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/10'
+            : isOpen
+            ? theme === 'dark'
+              ? 'border-indigo-500 bg-gray-800/50'
+              : 'border-indigo-500 bg-white'
+            : theme === 'dark'
+            ? 'border-gray-700 bg-gray-800/30 active:border-gray-600'
+            : 'border-gray-300 bg-white active:border-gray-400'
         }`}
-        whileHover={{ scale: 1.02 }}
-        onClick={() => setIsOpen(!isOpen)}
+        whileTap={{ scale: 0.995 }}
+        onClick={handleSelectClick}
       >
-        <div className="px-4 py-4">
-          <div className={`text-left ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-            {selectedOption ? selectedOption.label : label}
+        <div className="px-4 py-3 w-full">
+          <div className={`flex items-center justify-between ${
+            theme === 'dark' ? 'text-white' : 'text-gray-900'
+          } ${!selectedOption ? 'opacity-70' : 'font-medium'}`}>
+            <span className="truncate">{selectedOption ? selectedOption.label : `Select ${label.toLowerCase()}`}</span>
+            <motion.div
+              animate={{ rotate: isOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </motion.div>
           </div>
         </div>
-
-        {/* Dropdown arrow */}
-        <motion.div
-          className="absolute right-4 top-1/2 transform -translate-y-1/2"
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <span className={`text-lg ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-            ▼
-          </span>
-        </motion.div>
       </motion.div>
 
-      {/* Dropdown options */}
+      {/* Dropdown Options - Mobile optimized */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className={`absolute top-full left-0 right-0 mt-2 rounded-xl border-2 shadow-2xl z-50 ${
-              theme === 'dark' 
-                ? 'bg-gray-800 border-gray-600' 
-                : 'bg-white border-gray-300'
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            className={`fixed inset-x-4 bottom-4 top-auto z-50 rounded-lg border shadow-2xl ${
+              theme === 'dark'
+                ? 'bg-gray-900 border-gray-800'
+                : 'bg-white border-gray-200'
             }`}
+            style={{
+              maxHeight: '50vh',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+            }}
           >
-            {options.map((option, index) => (
-              <motion.div
-                key={option.value}
-                className={`px-4 py-3 cursor-pointer transition-colors ${
-                  theme === 'dark' 
-                    ? 'hover:bg-gray-700 text-white' 
-                    : 'hover:bg-gray-100 text-gray-900'
-                } ${option.value === value ? 'bg-indigo-500 text-white' : ''}`}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                whileHover={{ scale: 1.02 }}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                {option.label}
-              </motion.div>
-            ))}
+            <div className="p-2">
+              {options.map((option) => (
+                <div
+                  key={option.value}
+                  className={`px-4 py-3 cursor-pointer rounded-lg my-1 min-h-[44px] flex items-center ${
+                    option.value === value
+                      ? theme === 'dark'
+                        ? 'bg-indigo-900/40 text-indigo-300'
+                        : 'bg-indigo-50 text-indigo-700'
+                      : theme === 'dark'
+                      ? 'active:bg-gray-800 text-gray-300'
+                      : 'active:bg-gray-100 text-gray-700'
+                  }`}
+                  onClick={() => handleOptionClick(option.value)}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-medium">{option.label}</span>
+                    {option.value === value && (
+                      <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Error message */}
+      {/* Error Message */}
       <AnimatePresence>
         {error && (
-          <motion.p
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mt-2 text-sm text-red-500 flex items-center gap-2"
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginTop: 4 }}
+            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+            className="overflow-hidden"
           >
-            <span className="text-lg">⚠️</span>
-            {error}
-          </motion.p>
+            <p className="text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1.5">
+              <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              {error}
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
-};
+});
 
-// Enhanced DOB Selector with age calculation
-const DOBSelector = ({ value, onChange, error, theme }) => {
+MobileOptimizedSelect.displayName = 'MobileOptimizedSelect';
+
+// ==================== DATE OF BIRTH COMPONENT (Mobile Optimized) ====================
+const MobileDateOfBirthSelector = React.memo(({ value, onChange, error, theme }) => {
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
   const months = [
-    { value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" },
-    { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" },
-    { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" },
-    { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }
+    { value: 1, label: "Jan" }, { value: 2, label: "Feb" }, { value: 3, label: "Mar" },
+    { value: 4, label: "Apr" }, { value: 5, label: "May" }, { value: 6, label: "Jun" },
+    { value: 7, label: "Jul" }, { value: 8, label: "Aug" }, { value: 9, label: "Sep" },
+    { value: 10, label: "Oct" }, { value: 11, label: "Nov" }, { value: 12, label: "Dec" }
   ];
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
@@ -249,179 +329,162 @@ const DOBSelector = ({ value, onChange, error, theme }) => {
   const age = calculateAge();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-2">
         <label className={`text-sm font-medium ${
-          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+          error
+            ? 'text-red-600 dark:text-red-400'
+            : value.day || value.month || value.year
+            ? 'text-indigo-600 dark:text-indigo-400'
+            : 'text-gray-600 dark:text-gray-400'
         }`}>
-          Date of Birth
+          Date of Birth <span className="text-red-500">*</span>
         </label>
+        
         {age !== null && (
           <motion.span
-            initial={{ opacity: 0, scale: 0.8 }}
+            initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`text-sm px-3 py-1 rounded-full ${
-              age >= 13 
-                ? 'bg-green-500/20 text-green-600 dark:text-green-400' 
-                : 'bg-red-500/20 text-red-600 dark:text-red-400'
+            className={`text-xs font-medium px-2 py-1 rounded-full ${
+              age >= 13
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
             }`}
           >
-            Age: {age}
+            {age} years
           </motion.span>
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {/* Day Selector */}
-        <AdvancedSelect
+      {/* Day, Month, Year - Mobile optimized grid */}
+      <div className="grid grid-cols-3 gap-2">
+        <MobileOptimizedSelect
           label="Day"
           value={value.day}
           onChange={(day) => onChange({ ...value, day })}
           options={days.map(day => ({ value: day, label: day }))}
           theme={theme}
+          required={true}
         />
 
-        {/* Month Selector */}
-        <AdvancedSelect
+        <MobileOptimizedSelect
           label="Month"
           value={value.month}
           onChange={(month) => onChange({ ...value, month })}
           options={months}
           theme={theme}
+          required={true}
         />
 
-        {/* Year Selector */}
-        <AdvancedSelect
+        <MobileOptimizedSelect
           label="Year"
           value={value.year}
           onChange={(year) => onChange({ ...value, year })}
           options={years.map(year => ({ value: year, label: year }))}
           theme={theme}
+          required={true}
         />
       </div>
 
-      {/* DOB Error */}
+      {/* Error Message */}
       <AnimatePresence>
         {error && (
-          <motion.p
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="text-sm text-red-500 flex items-center gap-2"
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
           >
-            <span className="text-lg">⚠️</span>
-            {error}
-          </motion.p>
+            <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1.5">
+              <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              {error}
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
-};
+});
 
-// Main component
+MobileDateOfBirthSelector.displayName = 'MobileDateOfBirthSelector';
+
+// ==================== MAIN COMPONENT (Mobile Optimized) ====================
 export default function SignupStep1Personal() {
   const navigate = useNavigate();
-  const { signupData, updateSignupData, theme } = useSignup();
-
-  const [localData, setLocalData] = useState({
-    firstName: signupData.firstName || "",
-    lastName: signupData.lastName || "",
-    gender: signupData.gender || "",
-    dob: signupData.dob || { day: "", month: "", year: "" },
-    username: signupData.username || "",
+  const themeCtx = useTheme?.() || { theme: 'light' };
+  const { theme } = themeCtx;
+  
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    gender: "",
+    dob: { day: "", month: "", year: "" },
+    username: "",
   });
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [validationStatus, setValidationStatus] = useState({});
+  const [submissionAttempted, setSubmissionAttempted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Refs for focus management
   const firstNameRef = useRef(null);
 
+  // Auto-focus first name on mount
   useEffect(() => {
-    firstNameRef.current?.focus();
+    const timer = setTimeout(() => {
+      firstNameRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Real-time validation
   useEffect(() => {
-    const newValidationStatus = {};
-    
-    // First Name validation
-    if (localData.firstName) {
-      if (localData.firstName.length < 2) {
-        newValidationStatus.firstName = "Too short (min 2 chars)";
-      } else if (!/^[a-zA-Z\s]+$/.test(localData.firstName)) {
-        newValidationStatus.firstName = "Only letters allowed";
-      } else {
-        newValidationStatus.firstName = "valid";
-      }
-    }
+    if (!submissionAttempted) return;
 
-    // Last Name validation
-    if (localData.lastName) {
-      if (localData.lastName.length < 2) {
-        newValidationStatus.lastName = "Too short (min 2 chars)";
-      } else if (!/^[a-zA-Z\s]+$/.test(localData.lastName)) {
-        newValidationStatus.lastName = "Only letters allowed";
-      } else {
-        newValidationStatus.lastName = "valid";
-      }
-    }
-
-    // Age validation
-    if (localData.dob.day && localData.dob.month && localData.dob.year) {
-      const birthDate = new Date(localData.dob.year, localData.dob.month - 1, localData.dob.day);
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      
-      if (age < 13) {
-        newValidationStatus.dob = "Must be 13+ years old";
-      } else if (age > 120) {
-        newValidationStatus.dob = "Please enter a valid age";
-      } else {
-        newValidationStatus.dob = "valid";
-      }
-    }
-
-    setValidationStatus(newValidationStatus);
-  }, [localData]);
-
-  // Enhanced validation with detailed error messages
-  const validate = async () => {
     const newErrors = {};
 
-    // First Name validation
-    if (!localData.firstName.trim()) {
-      newErrors.firstName = "First name is required";
-    } else if (localData.firstName.length < 2) {
-      newErrors.firstName = "First name must be at least 2 characters";
-    } else if (!/^[a-zA-Z\s]+$/.test(localData.firstName)) {
-      newErrors.firstName = "First name can only contain letters";
+    // First Name
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "Required";
+    } else if (formData.firstName.length < 2) {
+      newErrors.firstName = "Min 2 characters";
+    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.firstName)) {
+      newErrors.firstName = "Invalid characters";
     }
 
-    // Last Name validation
-    if (!localData.lastName.trim()) {
-      newErrors.lastName = "Last name is required";
-    } else if (localData.lastName.length < 2) {
-      newErrors.lastName = "Last name must be at least 2 characters";
-    } else if (!/^[a-zA-Z\s]+$/.test(localData.lastName)) {
-      newErrors.lastName = "Last name can only contain letters";
+    // Last Name
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Required";
+    } else if (formData.lastName.length < 2) {
+      newErrors.lastName = "Min 2 characters";
+    } else if (!/^[a-zA-Z\s'-]+$/.test(formData.lastName)) {
+      newErrors.lastName = "Invalid characters";
     }
 
-    // Gender validation
-    if (!localData.gender) {
-      newErrors.gender = "Please select your gender";
+    // Gender
+    if (!formData.gender) {
+      newErrors.gender = "Please select";
     }
 
-    // Date of Birth validation
-    if (!localData.dob.day || !localData.dob.month || !localData.dob.year) {
-      newErrors.dob = "Please complete your date of birth";
+    // Date of Birth
+    if (!formData.dob.day || !formData.dob.month || !formData.dob.year) {
+      newErrors.dob = "Complete all fields";
     } else {
-      const birthDate = new Date(localData.dob.year, localData.dob.month - 1, localData.dob.day);
+      const birthDate = new Date(formData.dob.year, formData.dob.month - 1, formData.dob.day);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
@@ -431,333 +494,327 @@ export default function SignupStep1Personal() {
       }
       
       if (age < 13) {
-        newErrors.dob = "You must be at least 13 years old to join";
+        newErrors.dob = "Must be 13+ years";
       } else if (age > 120) {
-        newErrors.dob = "Please enter a valid date of birth";
+        newErrors.dob = "Invalid year";
       }
     }
 
-    // Username uniqueness check
-    if (localData.username && localData.username.trim()) {
-      try {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("username", "==", localData.username.trim().toLowerCase()));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          newErrors.username = "Username is already taken";
-        }
-      } catch (err) {
-        console.error("Username validation error:", err);
-        toast.error("Could not validate username. Try again.");
+    // Username (if provided)
+    if (formData.username.trim()) {
+      if (formData.username.length < 3) {
+        newErrors.username = "Min 3 characters";
+      } else if (formData.username.length > 30) {
+        newErrors.username = "Max 30 characters";
+      } else if (!/^[a-zA-Z0-9_.-]+$/.test(formData.username)) {
+        newErrors.username = "Invalid format";
       }
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  }, [formData, submissionAttempted]);
 
-  const handleNext = async () => {
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    
+    setSubmissionAttempted(true);
     setLoading(true);
-    try {
-      if (!(await validate())) {
-        toast.error("Please fix the errors before proceeding.");
-        setLoading(false);
-        return;
-      }
 
-      // Auto-capitalize names
-      const capitalizedData = {
-        ...localData,
-        firstName: localData.firstName.trim().replace(/\b\w/g, l => l.toUpperCase()),
-        lastName: localData.lastName.trim().replace(/\b\w/g, l => l.toUpperCase()),
+    // Check for any existing errors
+    if (Object.keys(errors).length > 0) {
+      toast.error("Please fix the errors");
+      setLoading(false);
+      return;
+    }
+
+    // Final validation
+    const isValid = 
+      formData.firstName.trim().length >= 2 &&
+      formData.lastName.trim().length >= 2 &&
+      formData.gender &&
+      formData.dob.day && formData.dob.month && formData.dob.year;
+
+    if (!isValid) {
+      toast.error("Complete all required fields");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Process data
+      const processedData = {
+        ...formData,
+        firstName: formData.firstName.trim().replace(/\b\w/g, l => l.toUpperCase()),
+        lastName: formData.lastName.trim().replace(/\b\w/g, l => l.toUpperCase()),
+        username: formData.username.trim().toLowerCase(),
       };
 
-      // Commit to signup context
-      updateSignupData({ ...capitalizedData });
-      
-      // Success animation delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      navigate("/signup/step2");
-    } catch (err) {
-      console.error("handleNext error:", err);
-      toast.error(err?.message || "Unexpected error occurred");
+      // Store in session storage
+      sessionStorage.setItem('signup_step1', JSON.stringify(processedData));
+
+      // Navigate to next step
+      navigate("/signup/step2", {
+        state: { 
+          step1Data: processedData,
+          timestamp: Date.now()
+        },
+        replace: true
+      });
+
+    } catch (error) {
+      console.error("Form error:", error);
+      toast.error("An error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Enter key press
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleNext();
+    if (e.key === 'Enter' && !loading) {
+      handleSubmit();
     }
   };
 
+  // Check form validity
+  const isFormValid = useMemo(() => {
+    return (
+      formData.firstName.trim().length >= 2 &&
+      formData.lastName.trim().length >= 2 &&
+      formData.gender &&
+      formData.dob.day && formData.dob.month && formData.dob.year &&
+      Object.keys(errors).length === 0
+    );
+  }, [formData, errors]);
+
+  // Background style
   const backgroundStyle = useMemo(() => ({
     background: theme === "dark"
-      ? "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99,102,241,0.15) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 0% 100%, rgba(168,85,247,0.1) 0%, transparent 50%), #0a0f1c"
-      : "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 0% 100%, rgba(168,85,247,0.06) 0%, transparent 50%), #f9fafb",
+      ? `linear-gradient(135deg, #0f172a 0%, #1e293b 100%)`
+      : `linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)`
   }), [theme]);
-
-  const isFormValid = 
-    localData.firstName?.length >= 2 &&
-    localData.lastName?.length >= 2 &&
-    localData.gender &&
-    localData.dob.day &&
-    localData.dob.month &&
-    localData.dob.year;
 
   return (
     <div 
-      className="w-full min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      className="min-h-screen w-full flex items-center justify-center p-3 sm:p-4 md:p-6 safe-area-bottom"
       style={backgroundStyle}
     >
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(15)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              width: Math.random() * 8 + 4,
-              height: Math.random() * 8 + 4,
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-              background: theme === "dark" 
-                ? "rgba(99,102,241,0.1)" 
-                : "rgba(79,70,229,0.08)",
-            }}
-            animate={{
-              y: [0, -30, 0],
-              opacity: [0.3, 0.8, 0.3],
-            }}
-            transition={{
-              duration: Math.random() * 6 + 4,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: Math.random() * 2,
-            }}
-          />
-        ))}
-      </div>
-
       <motion.div
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.6, type: "spring" }}
-        className="relative z-10 w-full max-w-2xl"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full max-w-md sm:max-w-lg md:max-w-2xl"
       >
-        {/* Progress indicator */}
-        <motion.div 
-          className="flex items-center justify-center mb-8"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="flex items-center space-x-2">
+        {/* Progress Indicator - Mobile optimized */}
+        <div className="flex items-center justify-center mb-6 sm:mb-8">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             {[1, 2, 3].map((step) => (
-              <div key={step} className="flex items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+              <div key={step} className="flex flex-col items-center">
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold ${
                   step === 1 
-                    ? 'bg-indigo-600 text-white' 
+                    ? theme === 'dark'
+                      ? 'bg-indigo-500 text-white'
+                      : 'bg-indigo-500 text-white'
                     : theme === 'dark'
-                    ? 'bg-gray-700 text-gray-400'
-                    : 'bg-gray-300 text-gray-600'
+                    ? 'bg-gray-800 text-gray-400'
+                    : 'bg-gray-100 text-gray-500'
                 }`}>
                   {step}
                 </div>
-                {step < 3 && (
-                  <div className={`w-12 h-1 mx-2 ${
-                    step === 1 
-                      ? 'bg-indigo-600' 
-                      : theme === 'dark'
-                      ? 'bg-gray-700'
-                      : 'bg-gray-300'
-                  }`} />
-                )}
+                <div className={`mt-1 text-xs sm:text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Step {step}
+                </div>
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
 
+        {/* Main Form Card - Mobile optimized */}
         <motion.div
-          className={`rounded-3xl shadow-2xl border backdrop-blur-lg ${
-            theme === 'dark' 
-              ? 'bg-gray-900/80 border-gray-700/50' 
-              : 'bg-white/90 border-gray-200/60'
-          } p-8 md:p-10`}
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className={`rounded-xl border ${
+            theme === 'dark'
+              ? 'bg-gray-900/80 border-gray-800'
+              : 'bg-white border-gray-200'
+          } shadow-lg sm:shadow-xl p-4 sm:p-6 md:p-8`}
+          style={{
+            maxHeight: 'calc(100vh - 180px)',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+          }}
         >
-          <header className="text-center mb-8">
-            <motion.h1
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className={`text-3xl font-bold mb-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}
-            >
-              Create Your Account
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className={`text-lg ${
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              }`}
-            >
-              Step 1 • Personal Information
-            </motion.p>
-          </header>
+          {/* Header */}
+          <div className="mb-6 sm:mb-8">
+            <h1 className={`text-xl sm:text-2xl md:text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Personal Information
+            </h1>
+            <p className={`mt-1 text-sm sm:text-base ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              Step 1 of 3 • Create account
+            </p>
+          </div>
 
-          <div className="space-y-6">
-            {/* Name fields side by side */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-4"
-            >
-              <AdvancedInput
+          <form onSubmit={handleSubmit}>
+            {/* FIRST & LAST NAME - SIDE BY SIDE ON MOBILE & DESKTOP */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
+              <MobileOptimizedInput
+                ref={firstNameRef}
                 label="First Name"
-                value={localData.firstName}
-                onChange={(e) => setLocalData({ ...localData, firstName: e.target.value })}
+                value={formData.firstName}
+                onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
                 error={errors.firstName}
-                placeholder="John"
                 autoFocus={true}
                 onKeyPress={handleKeyPress}
                 theme={theme}
+                required={true}
               />
 
-              <AdvancedInput
+              <MobileOptimizedInput
                 label="Last Name"
-                value={localData.lastName}
-                onChange={(e) => setLocalData({ ...localData, lastName: e.target.value })}
+                value={formData.lastName}
+                onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
                 error={errors.lastName}
-                placeholder="Doe"
                 onKeyPress={handleKeyPress}
                 theme={theme}
+                required={true}
               />
-            </motion.div>
+            </div>
 
             {/* Gender Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <AdvancedSelect
-                label="Select Gender"
-                value={localData.gender}
-                onChange={(gender) => setLocalData({ ...localData, gender })}
+            <div className="mb-4 sm:mb-6">
+              <MobileOptimizedSelect
+                label="Gender"
+                value={formData.gender}
+                onChange={(gender) => setFormData(prev => ({ ...prev, gender }))}
                 options={[
                   { value: "Male", label: "Male" },
                   { value: "Female", label: "Female" },
                   { value: "Other", label: "Other" },
+                  { value: "Prefer not to say", label: "Prefer not to say" }
                 ]}
                 error={errors.gender}
                 theme={theme}
+                required={true}
               />
-            </motion.div>
+            </div>
 
             {/* Date of Birth */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-            >
-              <DOBSelector
-                value={localData.dob}
-                onChange={(dob) => setLocalData({ ...localData, dob })}
+            <div className="mb-4 sm:mb-6">
+              <MobileDateOfBirthSelector
+                value={formData.dob}
+                onChange={(dob) => setFormData(prev => ({ ...prev, dob }))}
                 error={errors.dob}
                 theme={theme}
               />
-            </motion.div>
+            </div>
 
             {/* Optional Username */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8 }}
-            >
-              <AdvancedInput
+            <div className="mb-6 sm:mb-8">
+              <MobileOptimizedInput
                 label="Username (optional)"
-                value={localData.username}
-                onChange={(e) => setLocalData({ ...localData, username: e.target.value })}
+                value={formData.username}
+                onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
                 error={errors.username}
-                placeholder="johndoe123"
                 onKeyPress={handleKeyPress}
                 theme={theme}
+                required={false}
               />
-              <p className={`text-xs mt-2 ${
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-              }`}>
-                Choose a unique username. If not provided, we'll generate one for you.
+              <p className={`mt-1 text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                If not provided, we'll generate one for you.
               </p>
-            </motion.div>
+            </div>
 
-            {/* Continue Button */}
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.9 }}
-              whileHover={isFormValid && !loading ? { scale: 1.02 } : {}}
-              whileTap={isFormValid && !loading ? { scale: 0.98 } : {}}
-              onClick={handleNext}
-              disabled={!isFormValid || loading}
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg transition-all duration-300 ${
-                isFormValid && !loading
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-xl'
-                  : theme === 'dark'
-                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {loading ? (
-                <div className="flex items-center justify-center gap-3">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                  />
-                  Validating...
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2">
-                  Continue to Step 2
-                  <motion.span
-                    animate={{ x: [0, 5, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  >
-                    →
-                  </motion.span>
-                </div>
-              )}
-            </motion.button>
+            {/* Continue Button - Mobile optimized */}
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+              <motion.button
+                type="submit"
+                disabled={!isFormValid || loading}
+                whileTap={isFormValid && !loading ? { scale: 0.98 } : {}}
+                className={`w-full py-3 sm:py-3.5 px-4 rounded-lg font-medium text-sm sm:text-base transition-all duration-200 ${
+                  isFormValid && !loading
+                    ? theme === 'dark'
+                      ? 'bg-indigo-600 active:bg-indigo-700 text-white'
+                      : 'bg-indigo-600 active:bg-indigo-700 text-white'
+                    : theme === 'dark'
+                    ? 'bg-gray-800 text-gray-400'
+                    : 'bg-gray-200 text-gray-400'
+                } min-h-[48px] active:scale-[0.98]`}
+                style={{
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Processing...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <span>Continue</span>
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </div>
+                )}
+              </motion.button>
 
-            {/* Login link */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1 }}
-              className="text-center"
-            >
-              <p className={`text-sm ${
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              }`}>
+              {/* Terms Notice - Mobile optimized */}
+              <p className={`mt-3 text-center text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                By continuing, you agree to our Terms & Privacy.
+              </p>
+            </div>
+
+            {/* Sign In Link */}
+            <div className="mt-6 text-center">
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                 Already have an account?{" "}
                 <button
+                  type="button"
                   onClick={() => navigate("/login")}
-                  className="text-indigo-500 hover:text-indigo-400 font-semibold underline transition-colors"
+                  className={`font-medium ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   Sign in
                 </button>
               </p>
-            </motion.div>
-          </div>
+            </div>
+          </form>
         </motion.div>
+
+        {/* Footer Note */}
+        <div className="mt-4 text-center">
+          <p className={`text-xs ${theme === 'dark' ? 'text-gray-600' : 'text-gray-500'}`}>
+            © {new Date().getFullYear()} Arvdoul
+          </p>
+        </div>
       </motion.div>
+
+      {/* Mobile-specific CSS */}
+      <style jsx>{`
+        .safe-area-bottom {
+          padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+        
+        /* Prevent text size adjustment on mobile */
+        @media screen and (max-width: 768px) {
+          input, select, textarea {
+            font-size: 16px !important;
+          }
+        }
+        
+        /* Better scrolling on mobile */
+        * {
+          -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Hide scrollbar but allow scrolling */
+        ::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,0 +1,32 @@
+{
+  "version": "5.0.0",
+  "created": "2025-12-19T16:51:14Z",
+  "project": "/data/data/com.termux/files/home/Arvdoul",
+  "mode": "platform_engineering",
+  "capabilities": [
+    "full_repo_scan",
+    "ast_deep_analysis",
+    "render_graph_reconstruction",
+    "blank_screen_root_cause",
+    "dependency_vulnerability",
+    "provider_deadlock_detection",
+    "firebase_initialization_flow",
+    "context_hierarchy_validation",
+    "hook_violation_detection",
+    "async_boundary_analysis",
+    "css_injection_verification",
+    "build_chain_validation"
+  ],
+  "safety": {
+    "backups": true,
+    "dry_run": true,
+    "verification": true,
+    "rollback": true
+  },
+  "limitations": [
+    "cannot_fix_business_logic",
+    "cannot_modify_architecture",
+    "cannot_generate_features",
+    "only_deterministic_fixes"
+  ]
+}

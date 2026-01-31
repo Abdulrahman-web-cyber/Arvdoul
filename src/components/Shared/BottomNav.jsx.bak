@@ -1,0 +1,623 @@
+import PropTypes from "prop-types";
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Home, PlayCircle, MessageCircle, UserPlus, Bell, Plus } from "lucide-react";
+import { useTheme } from "@context/ThemeContext";
+import { useSound } from "../../hooks/useSound";
+import { useAnalytics } from "../../hooks/useAnalytics";
+import { cn } from "../../lib/utils";
+import { useAppStore } from "../../store/appStore";
+import ThemeToggle from "./ThemeToggle";
+
+export default function BottomNav() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const { playSound } = useSound();
+  const { track } = useAnalytics();
+  const { unreadCounts = {}, currentUser } = useAppStore();
+  
+  const [activeTab, setActiveTab] = useState(location.pathname);
+  const [showNav, setShowNav] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [drawerHeight, setDrawerHeight] = useState(0);
+  const dragControls = useDragControls();
+  const drawerRef = useRef(null);
+  const navRef = useRef(null);
+
+  const tabs = [
+    { to: "/home", label: "Home", icon: Home, notification: false },
+    { to: "/videos", label: "Videos", icon: PlayCircle, notification: false },
+    { to: "/messages", label: "Messages", icon: MessageCircle, notification: true },
+    { to: "/requests", label: "Requests", icon: UserPlus, notification: true },
+    { to: "/notifications", label: "Alerts", icon: Bell, notification: true },
+  ];
+
+  // Perfect drawer heights (55% of screen)
+  const drawerMaxHeight = window.innerHeight * 0.55;
+  const drawerMinHeight = 0;
+
+  // Scroll Hide/Show with drawer awareness
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isDrawerOpen) return; // Don't hide when drawer is open
+      
+      const currentY = window.scrollY;
+      if (currentY < 50 || currentY < lastScrollY) {
+        setShowNav(true);
+      } else if (currentY > lastScrollY + 10) {
+        setShowNav(false);
+      }
+      setLastScrollY(currentY);
+    };
+    
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [lastScrollY, isDrawerOpen]);
+
+  // Analytics
+  useEffect(() => {
+    track("BottomNav_Interaction", { tab: activeTab, drawerOpen: isDrawerOpen });
+  }, [activeTab, isDrawerOpen, track]);
+
+  // Close drawer on escape or click outside
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isDrawerOpen) {
+        closeDrawer();
+      }
+    };
+
+    const handleClickOutside = (e) => {
+      if (isDrawerOpen && drawerRef.current && 
+          !drawerRef.current.contains(e.target) &&
+          navRef.current && 
+          !navRef.current.contains(e.target)) {
+        closeDrawer();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDrawerOpen]);
+
+  const handleNavigation = useCallback((to) => {
+    if (location.pathname === to) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      playSound("nav_click");
+      setActiveTab(to);
+      navigate(to);
+    }
+    if (isDrawerOpen) closeDrawer();
+  }, [location.pathname, navigate, playSound, isDrawerOpen]);
+
+  const handlePlusClick = useCallback(() => {
+    playSound("ui_click_soft");
+    track("plus_button_click", { fromDrawer: false });
+    // You can implement create post/modal here
+    console.log("Plus button clicked - implement create functionality");
+  }, [playSound, track]);
+
+  // Drag handlers for drawer
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+    playSound("ui_click_soft");
+  }, [playSound]);
+
+  const handleDragEnd = useCallback((event, info) => {
+    setIsDragging(false);
+    const velocity = info.velocity.y;
+    const offset = info.offset.y;
+    
+    if (velocity < -800 || offset < -100) {
+      // Dragged up - open drawer
+      openDrawer();
+    } else if (velocity > 800 || offset > 100) {
+      // Dragged down - close drawer
+      closeDrawer();
+    } else {
+      // Return to current state based on drawerHeight
+      if (drawerHeight > drawerMaxHeight * 0.5) {
+        openDrawer();
+      } else {
+        closeDrawer();
+      }
+    }
+  }, [drawerHeight, drawerMaxHeight]);
+
+  const openDrawer = useCallback(() => {
+    setIsDrawerOpen(true);
+    setDrawerHeight(drawerMaxHeight);
+    playSound("drawer_open");
+    track("drawer_opened", { method: "drag" });
+  }, [drawerMaxHeight, playSound, track]);
+
+  const closeDrawer = useCallback(() => {
+    setIsDrawerOpen(false);
+    setDrawerHeight(0);
+    playSound("drawer_close");
+    track("drawer_closed");
+  }, [playSound, track]);
+
+  // Handle drag on drawer itself
+  const handleDrawerDragEnd = useCallback((event, info) => {
+    const velocity = info.velocity.y;
+    const offset = info.offset.y;
+    
+    if (velocity > 800 || offset > 100) {
+      closeDrawer();
+    }
+  }, [closeDrawer]);
+
+  // User stats (placeholder - replace with real data)
+  const userStats = [
+    { label: "Posts", value: "42" },
+    { label: "Collections", value: "12" },
+    { label: "Videos", value: "8" },
+    { label: "Following", value: "256" },
+  ];
+
+  return (
+    <>
+      {/* Main Bottom Navigation */}
+      <AnimatePresence>
+        {showNav && (
+          <motion.nav
+            ref={navRef}
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ 
+              type: "spring", 
+              damping: 25, 
+              stiffness: 350,
+              mass: 0.8
+            }}
+            className={cn(
+              "fixed bottom-0 z-40 w-full max-w-2xl mx-auto left-0 right-0",
+              "px-2 pb-2 pt-1",
+              "backdrop-blur-xl supports-backdrop-blur:bg-opacity-95",
+              "border-t border-x",
+              theme === "dark"
+                ? "bg-gray-900/95 border-gray-800/60"
+                : "bg-white/95 border-gray-200/70"
+            )}
+            style={{
+              borderTopLeftRadius: "1.5rem",
+              borderTopRightRadius: "1.5rem",
+              borderBottomLeftRadius: "0.75rem",
+              borderBottomRightRadius: "0.75rem",
+              boxShadow: theme === "dark" 
+                ? "0 -20px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.03)"
+                : "0 -20px 40px -10px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.01)"
+            }}
+          >
+            {/* Drag Handle */}
+            <motion.div
+              className={cn(
+                "relative mx-auto mb-2",
+                "w-16 h-1.5 rounded-full",
+                "cursor-grab active:cursor-grabbing",
+                "transition-all duration-200",
+                theme === "dark" 
+                  ? "bg-gray-700/60 hover:bg-gray-600/80" 
+                  : "bg-gray-400/60 hover:bg-gray-500/80"
+              )}
+              onPointerDown={(e) => {
+                handleDragStart();
+                dragControls.start(e);
+              }}
+              drag="y"
+              dragControls={dragControls}
+              dragConstraints={{ top: -200, bottom: 0 }}
+              dragElastic={0.1}
+              onDragEnd={handleDragEnd}
+              whileDrag={{ scale: 1.05 }}
+              animate={{
+                scale: isDragging ? 1.05 : 1,
+                opacity: isDragging ? 0.9 : 1
+              }}
+            />
+
+            {/* Navigation Items */}
+            <div className="grid grid-cols-5 items-center relative">
+              {tabs.map(({ to, label, icon: Icon, notification }) => {
+                const isActive = activeTab === to;
+                const unreadCount = unreadCounts[to.replace("/", "")] || 0;
+
+                return (
+                  <motion.button
+                    key={to}
+                    onClick={() => handleNavigation(to)}
+                    whileTap={{ scale: 0.92 }}
+                    whileHover={{ scale: 1.05 }}
+                    className="flex flex-col items-center justify-center py-2 relative focus:outline-none"
+                    aria-label={label}
+                    type="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && handleNavigation(to)}
+                  >
+                    <div className="relative">
+                      <Icon
+                        className={cn(
+                          "w-6 h-6 transition-all duration-300",
+                          isActive 
+                            ? theme === "dark" 
+                              ? "text-cyan-400" 
+                              : "text-cyan-600"
+                            : theme === "dark"
+                              ? "text-gray-400"
+                              : "text-gray-600"
+                        )}
+                      />
+
+                      {notification && unreadCount > 0 && (
+                        <motion.span
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className={cn(
+                            "absolute -top-1 -right-1 flex items-center justify-center rounded-full text-xs font-bold",
+                            "min-w-[1rem] min-h-[1rem] px-0.5",
+                            theme === "dark"
+                              ? "bg-red-500 text-white"
+                              : "bg-red-600 text-white"
+                          )}
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </motion.span>
+                      )}
+                    </div>
+
+                    <span
+                      className={cn(
+                        "text-[10px] mt-1.5 font-medium transition-all duration-300",
+                        isActive
+                          ? theme === "dark"
+                            ? "text-cyan-400"
+                            : "text-cyan-600"
+                          : theme === "dark"
+                            ? "text-gray-500"
+                            : "text-gray-600"
+                      )}
+                    >
+                      {label}
+                    </span>
+
+                    {isActive && (
+                      <motion.div
+                        layoutId="bottomNavActiveIndicator"
+                        className={cn(
+                          "absolute top-0 left-1/4 right-1/4 h-0.5 rounded-full",
+                          theme === "dark" 
+                            ? "bg-cyan-400" 
+                            : "bg-cyan-600"
+                        )}
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* Perfect Centered Plus Button */}
+            <motion.div
+              className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <button
+                onClick={handlePlusClick}
+                onPointerDown={(e) => {
+                  handleDragStart();
+                  dragControls.start(e, { snapToCursor: true });
+                }}
+                className={cn(
+                  "relative flex items-center justify-center",
+                  "w-14 h-14 rounded-full",
+                  "backdrop-blur-lg",
+                  "shadow-2xl",
+                  "border-2",
+                  "focus:outline-none focus:ring-4 focus:ring-opacity-30",
+                  "transition-all duration-300",
+                  theme === "dark"
+                    ? "bg-gray-800/90 border-gray-700 hover:bg-gray-700/90 focus:ring-cyan-500"
+                    : "bg-white/90 border-gray-200 hover:bg-gray-100/90 focus:ring-cyan-400"
+                )}
+                aria-label="Create new"
+                style={{
+                  boxShadow: theme === "dark"
+                    ? "0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1)"
+                    : "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8)"
+                }}
+              >
+                <div className="absolute inset-0 rounded-full overflow-hidden">
+                  <div className={cn(
+                    "absolute inset-0",
+                    theme === "dark"
+                      ? "bg-gradient-to-br from-gray-800 to-gray-900"
+                      : "bg-gradient-to-br from-white to-gray-100"
+                  )} />
+                </div>
+                
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="2"
+                  stroke="currentColor"
+                  className={cn(
+                    "w-7 h-7 relative z-10",
+                    theme === "dark" ? "text-cyan-400" : "text-cyan-600"
+                  )}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 4.5v15m7.5-7.5h-15"
+                  />
+                </svg>
+              </button>
+            </motion.div>
+          </motion.nav>
+        )}
+      </AnimatePresence>
+
+      {/* Advanced User Drawer */}
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm"
+              onClick={closeDrawer}
+            />
+            
+            {/* Drawer */}
+            <motion.div
+              ref={drawerRef}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{
+                type: "spring",
+                damping: 30,
+                stiffness: 300,
+                mass: 0.8
+              }}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.2 }}
+              onDragEnd={handleDrawerDragEnd}
+              className={cn(
+                "fixed z-40 w-full max-w-2xl mx-auto left-0 right-0",
+                "backdrop-blur-2xl supports-backdrop-blur:bg-opacity-95",
+                "border-t border-x",
+                "overflow-hidden"
+              )}
+              style={{
+                bottom: "3.5rem",
+                height: drawerMaxHeight,
+                borderTopLeftRadius: "1.5rem",
+                borderTopRightRadius: "1.5rem",
+                boxShadow: theme === "dark"
+                  ? "0 -20px 40px -10px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.05)"
+                  : "0 -20px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.8)"
+              }}
+            >
+              {/* Drawer background */}
+              <div className={cn(
+                "absolute inset-0",
+                theme === "dark"
+                  ? "bg-gradient-to-b from-gray-900/95 via-gray-900/90 to-gray-900/95"
+                  : "bg-gradient-to-b from-white/95 via-white/90 to-white/95"
+              )} />
+              
+              {/* Inner glow effect */}
+              <div className={cn(
+                "absolute inset-0 pointer-events-none",
+                theme === "dark"
+                  ? "bg-gradient-to-t from-transparent via-cyan-500/5 to-transparent"
+                  : "bg-gradient-to-t from-transparent via-cyan-500/3 to-transparent"
+              )} />
+
+              {/* Drawer content */}
+              <div className="relative h-full overflow-y-auto">
+                {/* Drawer handle */}
+                <div className="flex justify-center pt-4 pb-2">
+                  <div className={cn(
+                    "w-16 h-1.5 rounded-full",
+                    theme === "dark" ? "bg-gray-700/60" : "bg-gray-400/60"
+                  )} />
+                </div>
+
+                {/* Header */}
+                <div className="px-6 pt-2 pb-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className={cn(
+                      "text-xl font-bold",
+                      theme === "dark" ? "text-white" : "text-gray-900"
+                    )}>
+                      Profile
+                    </h2>
+                    <ThemeToggle variant="icon" />
+                  </div>
+                </div>
+
+                {/* User Profile */}
+                <div className="px-6 pb-8">
+                  <div className="flex flex-col items-center">
+                    {/* Perfect Circular Profile Picture */}
+                    <div className="relative mb-4">
+                      <div className={cn(
+                        "relative w-24 h-24 rounded-full p-0.5",
+                        "bg-gradient-to-br from-cyan-500 via-blue-500 to-purple-500",
+                        "shadow-2xl"
+                      )}>
+                        <img
+                          src={currentUser?.photoURL || "/assets/default-profile.png"}
+                          alt={currentUser?.displayName || "Profile"}
+                          className="w-full h-full rounded-full object-cover border-2 border-transparent"
+                        />
+                      </div>
+                      
+                      {/* Online indicator */}
+                      {currentUser?.isOnline && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900"
+                        >
+                          <div className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-75" />
+                        </motion.div>
+                      )}
+                    </div>
+
+                    {/* User Name */}
+                    <h3 className={cn(
+                      "text-lg font-semibold mb-1",
+                      theme === "dark" ? "text-white" : "text-gray-900"
+                    )}>
+                      {currentUser?.displayName || "Guest User"}
+                    </h3>
+                    
+                    {/* Username */}
+                    <p className={cn(
+                      "text-sm mb-6",
+                      theme === "dark" ? "text-gray-400" : "text-gray-600"
+                    )}>
+                      @{currentUser?.username || "username"}
+                    </p>
+
+                    {/* User Stats */}
+                    <div className="grid grid-cols-4 gap-4 w-full max-w-md">
+                      {userStats.map((stat, index) => (
+                        <motion.div
+                          key={stat.label}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className={cn(
+                            "flex flex-col items-center justify-center p-3 rounded-2xl",
+                            "backdrop-blur-sm",
+                            theme === "dark"
+                              ? "bg-gray-800/50 hover:bg-gray-800/70"
+                              : "bg-gray-100/50 hover:bg-gray-200/70",
+                            "transition-colors duration-200"
+                          )}
+                        >
+                          <span className={cn(
+                            "text-xl font-bold mb-1",
+                            theme === "dark" ? "text-cyan-400" : "text-cyan-600"
+                          )}>
+                            {stat.value}
+                          </span>
+                          <span className={cn(
+                            "text-xs font-medium",
+                            theme === "dark" ? "text-gray-400" : "text-gray-600"
+                          )}>
+                            {stat.label}
+                          </span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional User Info */}
+                <div className={cn(
+                  "px-6 py-6 border-t",
+                  theme === "dark" ? "border-gray-800" : "border-gray-200"
+                )}>
+                  <h4 className={cn(
+                    "text-sm font-semibold mb-4",
+                    theme === "dark" ? "text-gray-300" : "text-gray-700"
+                  )}>
+                    Account Details
+                  </h4>
+                  
+                  <div className="space-y-3">
+                    {[
+                      { label: "Email", value: currentUser?.email || "Not provided" },
+                      { label: "Member Since", value: "January 2024" },
+                      { label: "Account Status", value: "Active" },
+                    ].map((detail, index) => (
+                      <div key={detail.label} className="flex justify-between items-center">
+                        <span className={cn(
+                          "text-sm",
+                          theme === "dark" ? "text-gray-400" : "text-gray-600"
+                        )}>
+                          {detail.label}
+                        </span>
+                        <span className={cn(
+                          "text-sm font-medium",
+                          theme === "dark" ? "text-gray-300" : "text-gray-800"
+                        )}>
+                          {detail.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="px-6 pb-8 pt-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className={cn(
+                        "py-3 px-4 rounded-xl",
+                        "text-sm font-medium",
+                        "transition-all duration-200",
+                        theme === "dark"
+                          ? "bg-gray-800 hover:bg-gray-700 text-white"
+                          : "bg-gray-100 hover:bg-gray-200 text-gray-900"
+                      )}
+                      onClick={() => navigate("/profile")}
+                    >
+                      View Profile
+                    </motion.button>
+                    
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      className={cn(
+                        "py-3 px-4 rounded-xl",
+                        "text-sm font-medium",
+                        "transition-all duration-200",
+                        "bg-gradient-to-r from-cyan-500 to-blue-500",
+                        "text-white hover:shadow-lg"
+                      )}
+                      onClick={() => {
+                        playSound("nav_click");
+                        navigate("/settings");
+                      }}
+                    >
+                      Settings
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Spacer for bottom nav */}
+      <div className="h-20" />
+    </>
+  );
+}
+
+BottomNav.propTypes = {};

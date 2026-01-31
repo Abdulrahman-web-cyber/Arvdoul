@@ -119,7 +119,7 @@ const ResetCountdown = ({ duration, isActive, theme }) => {
       <Clock className={`w-5 h-5 ${timeLeft < 10 ? 'text-yellow-500' : 'text-indigo-500'}`} />
       <div className="flex-1">
         <div className="flex justify-between text-sm">
-          <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+          <span className={`theme === 'dark' ? 'text-gray-300' : 'text-gray-700'`}>
             {timeLeft > 0 ? 'Resend available in' : 'Ready to resend'}
           </span>
           <span className={`font-mono font-bold ${
@@ -136,7 +136,7 @@ const ResetCountdown = ({ duration, isActive, theme }) => {
               timeLeft < 10 ? 'bg-yellow-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'
             }`}
             initial={{ width: '100%' }}
-            animate={{ width: `${(timeLeft / duration) * 100}%` }}
+            animate={`{ width: `${(timeLeft / duration) * 100}%` `}}
             transition={{ duration: 1, ease: "linear" }}
           />
         </div>
@@ -549,7 +549,7 @@ export default function ForgotPassword() {
                     theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white'
                   }`}>
                     <span className="text-lg">🇺🇸</span>
-                    <span className={theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                    <span className={`theme === 'dark' ? 'text-white' : 'text-gray-900'`}>
                       {phone.countryCode}
                     </span>
                   </div>

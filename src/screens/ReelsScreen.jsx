@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Loader2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 
-import { db } from "../firebase/firebase";
+import { getDbInstance } from "../firebase/firebase";
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, arrayUnion, arrayRemove, increment, onSnapshot } from "firebase/firestore";
 
 import { useAuth } from "../context/AuthContext";
@@ -249,7 +249,7 @@ export default function ReelsScreen() {
 
                   {/* right controls */}
                   <div className="absolute right-3 top-1/3 z-[2] flex flex-col items-center gap-5 text-white">
-                    <IconButton label={post.likesCount || 0} active={liked} onClick={() => toggleLike(post)}><Heart className={cn("w-9 h-9", liked && "text-red-500 fill-red-500")} /></IconButton>
+                    <IconButton label={post.likesCount || 0} active={liked} onClick={() => toggleLike(post)}><Heart className={`cn("w-9 h-9", liked && "text-red-500 fill-red-500")`} /></IconButton>
                     <IconButton label={post.commentsCount || 0} onClick={() => setCommentsFor(post.id)}><MessageCircle className="w-9 h-9" /></IconButton>
                     <IconButton onClick={() => handleShare(post)}><Share2 className="w-9 h-9" /></IconButton>
                     {user?.uid !== post.userId && <IconButton onClick={() => handleFollow(post)}><MoreVertical className="w-9 h-9" /></IconButton>}
@@ -261,7 +261,7 @@ export default function ReelsScreen() {
                   <div className="absolute z-[2] bottom-3 left-3 right-3 text-white">
                     {post.caption && <p className="text-sm leading-snug opacity-95"><span className="font-semibold mr-1">{post.displayName || "@" + (post.username || "user")}</span>{post.caption}</p>}
                     <div className="mt-2 h-1.5 w-full bg-white/20 rounded-full overflow-hidden">
-                      <div data-progress={post.id} className="h-full w-0 bg-white transition-[width] duration-150 will-change-[width]" style={{ width: `${progressRefs.current[post.id] || 0}%` }} />
+                      <div data-progress={`post.id} className="h-full w-0 bg-white transition-[width] duration-150 will-change-[width]" style={`{ width: `${progressRefs.current[post.id] || 0}%` ``}} />
                     </div>
                   </div>
 
@@ -279,8 +279,8 @@ export default function ReelsScreen() {
 /** UI Helpers */
 function IconButton({ children, label, onClick, active }) {
   return (
-    <button onClick={onClick} className={cn("flex flex-col items-center gap-1 active:scale-[0.96] transition-transform")}>
-      <div className={cn("grid place-items-center rounded-full p-2", active ? "bg-white/20" : "bg-white/10", "backdrop-blur")}>{children}</div>
+    <button onClick={onClick} className={`cn("flex flex-col items-center gap-1 active:scale-[0.96] transition-transform")`}>
+      <div className={`cn("grid place-items-center rounded-full p-2", active ? "bg-white/20" : "bg-white/10", "backdrop-blur")}>{children`}</div>
       {label !== undefined && <span className="text-xs opacity-90">{label}</span>}
     </button>
   );

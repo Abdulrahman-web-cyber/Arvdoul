@@ -1,4 +1,4 @@
-import { db } from "../firebase/firebase.js";
+import { getDbInstance } from '../firebase/compat.js';
 import {
   doc,
   setDoc,
@@ -21,15 +21,15 @@ export async function uploadToCloudinary(
   try {
     const formData = new FormData();
     formData.append("file", file);
-    // unsigned preset name
+    \/\/ unsigned preset name
     formData.append("upload_preset", "arvdoul");
     formData.append("folder", folder);
 
-    const resourceType = options.resource_type || "auto"; // image|video|raw|auto
+    const resourceType = options.resource_type || "auto"; \/\/ image|video|raw|auto
     if (options.public_id) formData.append("public_id", options.public_id);
 
-    const cloudName = "dutqufben"; // your cloud name
-    const url = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
+    const cloudName = "dutqufben"; \/\/ your cloud name
+    const url = `https:\/\/api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
 
     const response = await axios.post(url, formData);
 
@@ -41,7 +41,7 @@ export async function uploadToCloudinary(
       format: response.data.format,
       resourceType: response.data.resource_type,
       bytes: response.data.bytes,
-      duration: response.data.duration, // videos
+      duration: response.data.duration, \/\/ videos
     };
   } catch (err) {
     console.error("Cloudinary upload error:", err);
@@ -94,11 +94,11 @@ export function buildUserDoc(uid, data = {}) {
       posts: Number(data?.stats?.posts) || 0,
     },
 
-    status: data.status || "active", // active | suspended | banned
+    status: data.status || "active", \/\/ active | suspended | banned
     verified: Boolean(data.verified) || false,
 
     settings: {
-      privacy: data?.settings?.privacy || "public", // public | friends | private
+      privacy: data?.settings?.privacy || "public", \/\/ public | friends | private
       darkMode: Boolean(data?.settings?.darkMode) || false,
       notifications: data?.settings?.notifications ?? true,
     },
@@ -137,12 +137,12 @@ export async function savePostToFirestore({ userId, media, caption = "" }) {
   const docRef = await addDoc(postsRef, {
     userId,
     media,
-    caption: caption.slice(0, 2200), // prevent huge captions
+    caption: caption.slice(0, 2200), \/\/ prevent huge captions
     likesCount: 0,
     commentsCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    visibility: "public", // future: friends/private
+    visibility: "public", \/\/ future: friends/private
   });
 
   return docRef.id;

@@ -1,0 +1,28 @@
+{
+  "version": "6.0.0",
+  "created": "2025-12-19T17:08:49Z",
+  "project": "Arvdoul",
+  "mode": "blank_screen_hunter",
+  "problem_statement": "Build passes but app shows blank screen",
+  "capabilities": [
+    "render_chain_reconstruction",
+    "provider_deadlock_detection",
+    "css_injection_analysis",
+    "hook_execution_tracing",
+    "async_boundary_verification",
+    "firebase_init_flow",
+    "context_hierarchy_validation",
+    "suspense_boundary_check",
+    "zero_height_detection",
+    "z_index_wars",
+    "display_none_cascades",
+    "visibility_hidden_inheritance"
+  ],
+  "guarantees": [
+    "never_exits_termux",
+    "never_destroys_code",
+    "only_comments_stray_text",
+    "backups_before_every_change",
+    "asks_confirmation_for_fixes"
+  ]
+}

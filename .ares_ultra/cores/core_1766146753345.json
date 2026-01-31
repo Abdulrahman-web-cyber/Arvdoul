@@ -1,0 +1,6 @@
+{
+  "timestamp": "2025-12-19T12:19:13.343Z",
+  "strategy": "bound scanWithBabel",
+  "error": "content is not defined",
+  "stack": "ReferenceError: content is not defined\n    at AresUltraRuntime.scanWithBabel (/data/data/com.termux/files/home/Arvdoul/.ares_ultra/runtime/ares_ultra.cjs:245:57)\n    at AresUltraRuntime.executeScanWithFallbacks (/data/data/com.termux/files/home/Arvdoul/.ares_ultra/runtime/ares_ultra.cjs:165:30)\n    at AresUltraRuntime.nuclearScan (/data/data/com.termux/files/home/Arvdoul/.ares_ultra/runtime/ares_ultra.cjs:119:43)\n    at Object.<anonymous> (/data/data/com.termux/files/home/Arvdoul/.ares_ultra/runtime/ares_ultra.cjs:1094:21)\n    at Module._compile (node:internal/modules/cjs/loader:1760:14)\n    at Module._extensions..js (node:internal/modules/cjs/loader:1892:10)\n    at Module.load (node:internal/modules/cjs/loader:1480:32)\n    at Module._load (node:internal/modules/cjs/loader:1299:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:328:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)"
+}

@@ -1,0 +1,639 @@
+// src/context/AuthContext.jsx - ARVDOUL AUTH CONTEXT ULTRA PRO MAX
+// 🎯 Pure React Context - ZERO Firebase imports
+// 🔥 Uses service layer only
+// ✅ Perfect for unicorn-scale applications
+
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import PropTypes from "prop-types";
+import { toast } from "sonner";
+import { useLocation, useNavigate } from "react-router-dom";
+
+// Import services ONLY - No direct Firebase imports
+import { 
+  signInWithGoogleService,
+  handleRedirectResultService,
+  getAuthStateService,
+  signOutService,
+  checkAuthServiceHealth,
+  updateAuthProfileService
+} from "../services/authService.js";
+import { 
+  getUserProfile,
+  createUserProfile,
+  updateUserProfile,
+  checkUsernameAvailability,
+  generateUniqueUsername
+} from "../services/userService.js";
+
+// Import infrastructure for status only
+import { 
+  isFirebaseInitialized,
+} from "../firebase/firebase.js";
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const [state, setState] = useState({
+    user: null,
+    userProfile: null,
+    authReady: false,
+    loading: true,
+    error: null,
+    firebaseStatus: "checking",
+    health: { status: 'unknown' },
+    redirectInProgress: false,
+    lastAuthCheck: null,
+    authState: 'unauthenticated'
+  });
+  
+  const isMounted = useRef(true);
+  const unsubscribeRef = useRef(null);
+  const healthCheckInterval = useRef(null);
+  const redirectCheckDone = useRef(false);
+  const retryCount = useRef(0);
+  const maxRetries = 3;
+
+  // Setup auth state listener using service
+  const setupAuthListener = useCallback(async () => {
+    try {
+      // Import auth listener dynamically to avoid circular deps
+      const { onAuthStateChanged } = await import('../firebase/firebase.js');
+      
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+
+      const unsubscribe = onAuthStateChanged(
+        async (firebaseUser) => {
+          try {
+            if (!isMounted.current) return;
+
+            if (!redirectCheckDone.current && location.search.includes('state')) {
+              await checkRedirectResult();
+              return;
+            }
+
+            if (firebaseUser) {
+              const userProfile = await getUserProfile(firebaseUser.uid);
+              
+              setState(prev => ({
+                ...prev,
+                user: {
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  displayName: firebaseUser.displayName,
+                  photoURL: firebaseUser.photoURL,
+                  emailVerified: firebaseUser.emailVerified,
+                  phoneNumber: firebaseUser.phoneNumber,
+                  providers: firebaseUser.providerData?.map(p => ({
+                    providerId: p.providerId,
+                    uid: p.uid,
+                    displayName: p.displayName,
+                    email: p.email,
+                    phoneNumber: p.phoneNumber,
+                    photoURL: p.photoURL
+                  })) || [],
+                  metadata: {
+                    creationTime: firebaseUser.metadata?.creationTime,
+                    lastSignInTime: firebaseUser.metadata?.lastSignInTime
+                  }
+                },
+                userProfile,
+                authReady: true,
+                loading: false,
+                error: null,
+                firebaseStatus: "authenticated",
+                authState: 'authenticated',
+                redirectInProgress: false,
+                lastAuthCheck: Date.now()
+              }));
+              
+              console.log("✅ User authenticated:", firebaseUser.uid);
+            } else {
+              setState(prev => ({
+                ...prev,
+                user: null,
+                userProfile: null,
+                authReady: true,
+                loading: false,
+                error: null,
+                firebaseStatus: "ready",
+                authState: 'unauthenticated',
+                redirectInProgress: false,
+                lastAuthCheck: Date.now()
+              }));
+            }
+            
+            retryCount.current = 0;
+            
+          } catch (error) {
+            console.error("Auth state handler error:", error);
+            
+            setState(prev => ({
+              ...prev,
+              error: error.message,
+              loading: false,
+              firebaseStatus: "error"
+            }));
+            
+            if (retryCount.current < maxRetries) {
+              retryCount.current++;
+              console.log(`🔄 Retrying auth setup (${retryCount.current}/${maxRetries})...`);
+              setTimeout(setupAuthListener, 1000 * retryCount.current);
+            }
+          }
+        },
+        (error) => {
+          console.error("Auth state change error:", error);
+          setState(prev => ({
+            ...prev,
+            error: `Auth error: ${error.message}`,
+            loading: false
+          }));
+        }
+      );
+
+      unsubscribeRef.current = unsubscribe;
+      return true;
+      
+    } catch (error) {
+      console.error("Auth listener setup failed:", error);
+      
+      setState(prev => ({
+        ...prev,
+        error: `Auth setup failed: ${error.message}`,
+        loading: false,
+        firebaseStatus: "error"
+      }));
+      
+      return false;
+    }
+  }, [location.search]);
+
+  // Check for redirect result
+  const checkRedirectResult = useCallback(async () => {
+    if (redirectCheckDone.current) return;
+    
+    try {
+      setState(prev => ({ ...prev, loading: true }));
+      
+      const result = await handleRedirectResultService();
+      
+      if (result.success && result.user) {
+        console.log("✅ Redirect authentication successful:", result.user.uid);
+        
+        const userProfile = await getUserProfile(result.user.uid);
+        
+        setState(prev => ({
+          ...prev,
+          user: result.user,
+          userProfile,
+          authReady: true,
+          loading: false,
+          authState: 'authenticated',
+          redirectInProgress: false,
+          lastAuthCheck: Date.now()
+        }));
+        
+        toast.success("Welcome back!");
+        
+        if (location.pathname.includes('login') || location.pathname.includes('signup')) {
+          navigate('/home', { replace: true });
+        }
+      }
+    } catch (error) {
+      console.warn("Redirect result check failed:", error);
+    } finally {
+      redirectCheckDone.current = true;
+      setState(prev => ({ ...prev, loading: false }));
+    }
+  }, [location.pathname, navigate]);
+
+  // Check Firebase health
+  const checkFirebaseHealthInternal = useCallback(async () => {
+    try {
+      if (!isFirebaseInitialized()) {
+        setState(prev => ({
+          ...prev,
+          health: { status: 'unhealthy', error: 'Firebase not initialized' }
+        }));
+        return;
+      }
+
+      const [firebaseStatus, authHealth] = await Promise.all([
+        checkAuthServiceHealth()
+      ]);
+      
+      const combinedHealth = {
+        ...firebaseStatus,
+        authService: authHealth,
+        timestamp: Date.now()
+      };
+      
+      setState(prev => ({
+        ...prev,
+        health: combinedHealth,
+        firebaseStatus: authHealth.status === 'healthy' ? 'ready' : 'checking'
+      }));
+
+      if (combinedHealth.authService?.status === 'healthy' && state.firebaseStatus === 'checking') {
+        setupAuthListener();
+      }
+    } catch (error) {
+      console.warn("Health check failed:", error);
+    }
+  }, [setupAuthListener, state.firebaseStatus]);
+
+  // Initialize auth system
+  useEffect(() => {
+    const initializeAuth = async () => {
+      setState(prev => ({ ...prev, loading: true }));
+      
+      try {
+        await checkFirebaseHealthInternal();
+        
+        healthCheckInterval.current = setInterval(checkFirebaseHealthInternal, 30000);
+        
+        const urlParams = new URLSearchParams(location.search);
+        if (urlParams.has('state') && urlParams.has('code')) {
+          setState(prev => ({ ...prev, redirectInProgress: true }));
+          await checkRedirectResult();
+        }
+        
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+        setState(prev => ({
+          ...prev,
+          error: `Initialization failed: ${error.message}`,
+          loading: false
+        }));
+      } finally {
+        setState(prev => ({ ...prev, loading: false }));
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      if (healthCheckInterval.current) {
+        clearInterval(healthCheckInterval.current);
+      }
+      
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+      
+      isMounted.current = false;
+    };
+  }, [checkFirebaseHealthInternal, checkRedirectResult, location.search]);
+
+  // Google Sign In
+  const handleSignInWithGoogle = useCallback(async (options = {}) => {
+    setState(prev => ({ 
+      ...prev, 
+      loading: true,
+      error: null,
+      authState: 'authenticating'
+    }));
+    
+    try {
+      const result = await signInWithGoogleService(options);
+      
+      if (result.redirecting) {
+        setState(prev => ({
+          ...prev,
+          redirectInProgress: true,
+          loading: false,
+          authState: 'authenticating'
+        }));
+        return result;
+      }
+      
+      const userProfile = await getUserProfile(result.user.uid);
+      
+      setState(prev => ({
+        ...prev,
+        user: result.user,
+        userProfile,
+        loading: false,
+        authState: 'authenticated',
+        lastAuthCheck: Date.now()
+      }));
+      
+      toast.success(`Welcome${result.user.displayName ? ', ' + result.user.displayName : ''}!`);
+      
+      return {
+        success: true,
+        user: result.user,
+        isNewUser: result.isNewUser
+      };
+      
+    } catch (error) {
+      console.error("Google sign in error:", error);
+      
+      setState(prev => ({
+        ...prev,
+        error: error.message,
+        loading: false,
+        authState: 'unauthenticated'
+      }));
+      
+      toast.error(error.message);
+      
+      return {
+        success: false,
+        error: error.message,
+        code: error.code
+      };
+    }
+  }, []);
+
+  // Sign Out
+  const handleSignOut = useCallback(async () => {
+    setState(prev => ({ 
+      ...prev, 
+      loading: true,
+      error: null 
+    }));
+    
+    try {
+      await signOutService();
+      
+      setState(prev => ({
+        ...prev,
+        user: null,
+        userProfile: null,
+        loading: false,
+        authState: 'unauthenticated',
+        lastAuthCheck: Date.now()
+      }));
+      
+      toast.success("Signed out successfully");
+      return { success: true };
+      
+    } catch (error) {
+      console.error("Sign out error:", error);
+      
+      setState(prev => ({
+        ...prev,
+        error: error.message,
+        loading: false
+      }));
+      
+      toast.error("Failed to sign out");
+      return { success: false, error: error.message };
+    }
+  }, []);
+
+  // Refresh user profile
+  const refreshUserProfile = useCallback(async () => {
+    if (!state.user?.uid) {
+      throw new Error("No user ID available");
+    }
+    
+    try {
+      const profile = await getUserProfile(state.user.uid);
+      
+      if (profile) {
+        setState(prev => ({
+          ...prev,
+          userProfile: profile
+        }));
+      }
+      
+      return profile;
+    } catch (error) {
+      console.error("Failed to refresh user profile:", error);
+      throw error;
+    }
+  }, [state.user?.uid]);
+
+  // Update auth profile
+  const updateAuthProfile = useCallback(async (profileData) => {
+    try {
+      const result = await updateAuthProfileService(profileData);
+      
+      if (result.success && state.user) {
+        setState(prev => ({
+          ...prev,
+          user: {
+            ...prev.user,
+            displayName: result.user.displayName,
+            photoURL: result.user.photoURL
+          }
+        }));
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Failed to update auth profile:", error);
+      throw error;
+    }
+  }, [state.user]);
+
+  // Clear error
+  const clearError = useCallback(() => {
+    setState(prev => ({ ...prev, error: null }));
+  }, []);
+
+  // Force re-check
+  const forceRecheck = useCallback(() => {
+    redirectCheckDone.current = false;
+    retryCount.current = 0;
+    checkFirebaseHealthInternal();
+  }, [checkFirebaseHealthInternal]);
+
+  // Refresh auth state
+  const refreshAuthState = useCallback(async () => {
+    try {
+      const authState = getAuthStateService();
+      if (authState && authState.uid === state.user?.uid) {
+        setState(prev => ({
+          ...prev,
+          user: { ...prev.user, ...authState },
+          lastAuthCheck: Date.now()
+        }));
+      }
+    } catch (error) {
+      console.warn("Failed to refresh auth state:", error);
+    }
+  }, [state.user?.uid]);
+
+  // Context value
+  const contextValue = useMemo(() => ({
+    // State
+    user: state.user,
+    userProfile: state.userProfile,
+    authReady: state.authReady,
+    loading: state.loading,
+    error: state.error,
+    firebaseStatus: state.firebaseStatus,
+    health: state.health,
+    redirectInProgress: state.redirectInProgress,
+    authState: state.authState,
+    lastAuthCheck: state.lastAuthCheck,
+    
+    // Computed properties
+    isAuthenticated: !!state.user,
+    isEmailVerified: !!(state.user && state.user.emailVerified),
+    isPhoneVerified: !!(state.user && state.user.phoneNumber),
+    isProfileComplete: !!(state.userProfile && state.userProfile.isProfileComplete),
+    userId: state.user?.uid,
+    userEmail: state.user?.email,
+    userName: state.user?.displayName,
+    userPhoto: state.user?.photoURL,
+    providers: state.user?.providers || [],
+    
+    // Methods
+    signInWithGoogle: handleSignInWithGoogle,
+    signOut: handleSignOut,
+    refreshUserProfile,
+    updateAuthProfile,
+    refreshAuthState,
+    clearError,
+    forceRecheck,
+    checkUsernameAvailability,
+    createUserProfile,
+    generateUniqueUsername,
+    
+    // Status checks
+    hasError: !!state.error,
+    isReady: state.authReady && !state.loading,
+    isLoading: state.loading,
+    
+  }), [state, handleSignInWithGoogle, handleSignOut, refreshUserProfile, updateAuthProfile, refreshAuthState, clearError, forceRecheck]);
+
+  // Render loading state
+  if (state.redirectInProgress) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-pulse" />
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+            Completing Google authentication...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!state.authReady && state.loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-pulse" />
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+            Initializing authentication system...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.error && !state.authReady) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950 p-4">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <span className="text-2xl">⚠️</span>
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            Authentication System Error
+          </h3>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            {state.error}
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={forceRecheck}
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
+            >
+              Retry Initialization
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-3 px-4 bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Hook with fallback
+export function useAuth() {
+  const context = useContext(AuthContext);
+  
+  if (!context) {
+    console.warn("useAuth was called outside of AuthProvider");
+    
+    return {
+      user: null,
+      userProfile: null,
+      authReady: false,
+      loading: false,
+      error: null,
+      firebaseStatus: "not_initialized",
+      authState: 'unauthenticated',
+      
+      isAuthenticated: false,
+      isEmailVerified: false,
+      isPhoneVerified: false,
+      isProfileComplete: false,
+      userId: null,
+      userEmail: null,
+      userName: null,
+      userPhoto: null,
+      providers: [],
+      
+      signInWithGoogle: async () => ({ 
+        success: false, 
+        error: "Auth not initialized"
+      }),
+      signOut: async () => ({ 
+        success: false, 
+        error: "Auth not initialized" 
+      }),
+      refreshUserProfile: async () => null,
+      updateAuthProfile: async () => null,
+      refreshAuthState: async () => {},
+      clearError: () => {},
+      forceRecheck: () => {},
+      checkUsernameAvailability: async () => ({ available: false, error: "Service not ready" }),
+      createUserProfile: async () => ({ success: false, error: "Service not ready" }),
+      generateUniqueUsername: async () => "user",
+      
+      hasError: false,
+      isReady: false,
+      isLoading: false
+    };
+  }
+  
+  return context;
+}
+
+AuthProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};

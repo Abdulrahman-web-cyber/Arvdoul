@@ -12,7 +12,7 @@ import {
   reload,
   onAuthStateChanged
 } from "firebase/auth";
-import { auth } from "../firebase/firebase.js";
+import { auth } from '../firebase/compat.js';
 import { Shield, Mail, RefreshCw, Zap, Clock, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 
 // Advanced Security Shield Component
@@ -140,7 +140,7 @@ const CountdownTimer = ({ duration, onComplete, theme }) => {
             timeLeft < 10 ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'
           }`}
           initial={{ width: '100%' }}
-          animate={{ width: `${progress}%` }}
+          animate={`{ width: `${progress}%` `}}
           transition={{ duration: 1, ease: "linear" }}
         />
       </div>

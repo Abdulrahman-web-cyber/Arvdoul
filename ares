@@ -1,0 +1,22 @@
+#!/data/data/com.termux/files/usr/bin/env bash
+# ARES v3.0 Wrapper Script
+set -euo pipefail
+
+PROJECT_ROOT="$(pwd)"
+ARES_HOME="$PROJECT_ROOT/.ares_v3"
+
+# Check if ARES is initialized
+if [[ ! -d "$ARES_HOME" ]]; then
+    echo "🔄 ARES v3.0 not initialized. Initializing..."
+    mkdir -p "$ARES_HOME"
+    # Initialization would happen here
+fi
+
+# Check Node.js
+if ! command -v node &> /dev/null; then
+    echo "❌ Node.js not found. Please install Node.js v18+"
+    exit 1
+fi
+
+# Run ARES CLI
+exec node "$ARES_HOME/ares_cli.js" "$@"

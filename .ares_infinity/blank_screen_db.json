@@ -1,0 +1,101 @@
+{
+  "blank_screen_causes": [
+    {
+      "id": "BS-001",
+      "name": "Provider Deadlock",
+      "description": "Provider tries to read localStorage/sessionStorage during initialization",
+      "symptoms": ["Blank screen", "No console errors", "Build passes"],
+      "detection": "Look for localStorage/sessionStorage/document/window in module scope",
+      "fix": "Wrap in useEffect or conditional check",
+      "example": "localStorage.getItem('token') in AuthProvider constructor"
+    },
+    {
+      "id": "BS-002",
+      "name": "CSS Zero Height",
+      "description": "Root container has height: 0 or display: none",
+      "symptoms": ["Blank screen", "Elements exist in DOM", "No content visible"],
+      "detection": "Check root div CSS for zero dimensions",
+      "fix": "Add min-height: 100vh or height: 100%",
+      "example": "#root { height: 0; } or .app { display: none; }"
+    },
+    {
+      "id": "BS-003",
+      "name": "Suspense Boundary Missing",
+      "description": "Async component without Suspense wrapper",
+      "symptoms": ["Blank screen", "No loading state", "Build passes"],
+      "detection": "Components with async operations or lazy loading",
+      "fix": "Wrap in <Suspense fallback={...}>",
+      "example": "const LazyComponent = React.lazy(...) without Suspense"
+    },
+    {
+      "id": "BS-004",
+      "name": "Firebase Init Race",
+      "description": "Firebase used before initialization completes",
+      "symptoms": ["Blank screen", "Firebase errors in console", "App doesn't render"],
+      "detection": "Firebase calls before initializeApp() resolves",
+      "fix": "Await initialization or add loading state",
+      "example": "getAuth() called before initializeApp()"
+    },
+    {
+      "id": "BS-005",
+      "name": "Context Provider Missing",
+      "description": "Component uses useContext but no Provider in tree",
+      "symptoms": ["Blank screen", "Context value is undefined", "No errors"],
+      "detection": "useContext hooks without wrapping Provider",
+      "fix": "Add Provider higher in component tree",
+      "example": "useContext(ThemeContext) without <ThemeProvider>"
+    },
+    {
+      "id": "BS-006",
+      "name": "Hook Violation",
+      "description": "Hooks called conditionally or in loops",
+      "symptoms": ["Blank screen", "Rendered fewer hooks than expected", "Build passes"],
+      "detection": "Hooks inside if/for/while statements",
+      "fix": "Move hooks to top level of component",
+      "example": "if (condition) { useState(...) }"
+    },
+    {
+      "id": "BS-007",
+      "name": "Import Cycle",
+      "description": "Circular imports cause undefined values",
+      "symptoms": ["Blank screen", "Undefined imports", "Build passes"],
+      "detection": "File A imports B, B imports A",
+      "fix": "Break cycle with lazy import or refactor",
+      "example": "auth.js imports user.js, user.js imports auth.js"
+    },
+    {
+      "id": "BS-008",
+      "name": "Z-Index War",
+      "description": "Elements hidden behind others with higher z-index",
+      "symptoms": ["Blank screen", "Elements exist but not visible", "No errors"],
+      "detection": "Root element has low z-index or position issues",
+      "fix": "Ensure root has proper z-index and positioning",
+      "example": "#root { z-index: -1; } or position: fixed without top/left"
+    },
+    {
+      "id": "BS-009",
+      "name": "Visibility Inheritance",
+      "description": "Parent has visibility: hidden or opacity: 0",
+      "symptoms": ["Blank screen", "Elements in DOM but not visible", "Build passes"],
+      "detection": "Check parent chain for visibility/opacity",
+      "fix": "Remove visibility: hidden or set opacity: 1",
+      "example": "body { visibility: hidden; } or .container { opacity: 0; }"
+    },
+    {
+      "id": "BS-010",
+      "name": "Module Scope Side Effect",
+      "description": "Code runs at module level and blocks render",
+      "symptoms": ["Blank screen", "No errors", "Build passes"],
+      "detection": "API calls, calculations, or logic at top level",
+      "fix": "Move to useEffect or event handler",
+      "example": "fetch('/api') at top level of component file"
+    }
+  ],
+  "detection_patterns": {
+    "css_zero_height": ["height: 0", "min-height: 0", "display: none", "visibility: hidden", "opacity: 0"],
+    "provider_deadlock": ["localStorage", "sessionStorage", "document.", "window.", "indexedDB"],
+    "firebase_issues": ["initializeApp", "getAuth", "getFirestore", "getDatabase"],
+    "hook_violations": ["useState", "useEffect", "useContext", "useReducer"],
+    "async_boundaries": ["React.lazy", "Suspense", "lazy(() => import"]
+  }
+}

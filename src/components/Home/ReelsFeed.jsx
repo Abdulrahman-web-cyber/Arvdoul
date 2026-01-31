@@ -1,6 +1,6 @@
 // src/components/Home/ReelsFeed.jsx
 import { useState, useEffect, useRef, useCallback } from "react";
-import { db } from "../../firebase/firebase";
+import { getDbInstance } from "../../firebase/firebase";
 import {
 collection,
 query,
@@ -86,7 +86,7 @@ preloadNextVideos(newReels);
 
 const handleIntersection = (reelId, isVisible) => {
 setActiveReel(isVisible ? reelId : null);
-if (isVisible && user) addCoins(0.1, watch-reel-${reelId});
+if (isVisible && user) addCoins(0.1, ``watch-reel-${reelId});
 };
 
 const handleReaction = async (reelId, emoji) => {
@@ -98,7 +98,7 @@ const reelRef = doc(db, "reels", reelId);
 if (existing) await updateDoc(reelRef, { reactions: arrayRemove(existing) });
 else {
 await updateDoc(reelRef, { reactions: arrayUnion({ emoji, userId: user.uid }) });
-await addCoins(1, react-reel-${emoji});
+await addCoins(1, `react-reel-${emoji});
 }
 } catch (err) {
 console.error(err);
@@ -156,7 +156,7 @@ isActive={activeReel === reel.id}
 onVisible={handleIntersection}
 onReaction={handleReaction}
 onComment={() => openComments(reel)}
-onDownload={() => handleDownload(reel.videoURL, ${reel.id}.mp4)}
+onDownload={`() => handleDownload(reel.videoURL, ${reel.id}.mp4)`}
 onFollow={() => handleFollow(reel.userId)}
 theme={theme}
 user={user}
@@ -264,7 +264,7 @@ onDoubleClick={handleDoubleTap}
     <div className="flex items-center gap-2">  
       <img  
         src={reel.userPhotoURL || "/assets/default-profile.png"}  
-        alt={reel.displayName}  
+        alt={`reel.displayName`}  
         className="w-10 h-10 rounded-full border-2 border-white"  
       />  
       <span className="font-semibold flex items-center gap-1">  

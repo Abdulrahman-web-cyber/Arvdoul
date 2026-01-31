@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { doc, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../firebase/firebase";
+import { getDbInstance } from "../../firebase/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { X } from "lucide-react";
 import { toast } from "sonner";
@@ -59,7 +59,7 @@ export default function CommentsDrawer({ postId, onClose }) {
 
             <form onSubmit={submit} className="mt-4 sticky bottom-0 bg-transparent pt-4">
               <div className="flex gap-2">
-                <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 px-4 py-2 rounded-xl border bg-transparent" placeholder={user ? "Add a comment..." : "Log in to comment"} />
+                <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 px-4 py-2 rounded-xl border bg-transparent" placeholder={`user ? "Add a comment..." : "Log in to comment"`} />
                 <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-xl">Send</button>
               </div>
             </form>

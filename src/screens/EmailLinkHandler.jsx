@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { isSignInWithEmailLink, signInWithEmailLink } from "firebase/auth";
-import { auth } from "../firebase/firebase.js";
+import { auth } from '../firebase/compat.js';
 import LoadingSpinner from "@components/Shared/LoadingSpinner";
 import { useTheme } from "@context/ThemeContext";
 import { toast } from "sonner";

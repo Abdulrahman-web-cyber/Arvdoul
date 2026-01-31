@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { db } from "../../firebase/firebase.js";
+import { getDbInstance } from "../../firebase/firebase.js";
 import {
   collection,
   query,
@@ -224,7 +224,7 @@ export default function StoryViewer({ userId, onClose }) {
         ) : (
           <img
             src={currentStory.mediaUrl}
-            alt={currentStory.username || "Story"}
+            alt={`currentStory.username || "Story"`}
             className="max-h-full max-w-full object-contain rounded-xl"
           />
         )}

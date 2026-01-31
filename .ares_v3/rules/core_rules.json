@@ -1,0 +1,322 @@
+{
+  "version": "3.0.0",
+  "rules": [
+    {
+      "id": "DRL-0001",
+      "name": "stray_text_eliminator",
+      "description": "Mathematical proof: Non-JS text in module scope creates syntax error",
+      "type": "syntax_correction",
+      "category": "parsing",
+      "severity": "critical",
+      "deterministic": true,
+      "proof": "Given: JavaScript parser expects tokens from ECMAScript specification. Let T be token 'Core Providers'. By ECMAScript 2023 §12.2, T ∉ {ReservedWord, Identifier, Punctuator, Literal}. Therefore, Parser(T) → SyntaxError. Correction: Replace T with Comment(T) where Comment ∈ ValidTokens.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "ModuleItem[type!='ImportDeclaration' && type!='ExportDeclaration' && type!='Statement']",
+        "conditions": [
+          "sourceText.matches(/^[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*$/)"],
+        "context": {
+          "position": "module_scope",
+          "line_range": [1, 50]
+        }
+      },
+      "transformation": {
+        "type": "text_replacement",
+        "operation": "comment_line",
+        "template": "// ARES: Removed stray text: {{original}}"
+      },
+      "safety_score": 100,
+      "risk_factors": [],
+      "verification": [
+        "parse_after_fix",
+        "no_semantic_change",
+        "import_graph_unchanged"
+      ]
+    },
+    {
+      "id": "DRL-0002",
+      "name": "template_literal_synthesizer",
+      "description": "Mathematical proof: JSX attribute interpolation requires template literal syntax",
+      "type": "syntax_transformation",
+      "category": "jsx",
+      "severity": "high",
+      "deterministic": true,
+      "proof": "Given: JSX Attribute value expression E containing interpolation ${X}. By JSX spec, attribute values accept Expression but template interpolation requires TemplateLiteral. Let A = {E where E contains ${...} and not wrapped in backticks}. For all a ∈ A, render(a) → runtime error or incorrect string. Transform: wrap a in backticks to create TemplateLiteral.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "JSXAttribute[value.type='JSXExpressionContainer' && value.expression.type!='TemplateLiteral']",
+        "conditions": [
+          "containsInterpolation(value.expression)"],
+        "context": {
+          "scope": "jsx_element"
+        }
+      },
+      "transformation": {
+        "type": "ast_transformation",
+        "operation": "convert_to_template_literal",
+        "function": "wrapExpressionInTemplateLiteral"
+      },
+      "safety_score": 95,
+      "risk_factors": ["possible_nested_interpolation"],
+      "verification": [
+        "ast_validity_check",
+        "render_test"
+      ]
+    },
+    {
+      "id": "DRL-0003",
+      "name": "react_import_guarantor",
+      "description": "Theorem: JSX usage requires React in scope (JSX Transform Theorem)",
+      "type": "import_correction",
+      "category": "imports",
+      "severity": "high",
+      "deterministic": true,
+      "proof": "JSX Theorem: JSX syntactic sugar transforms to React.createElement calls. Proof: JSX → Babel AST → React.createElement(component, props, children). If React not in lexical scope, transformation fails. Therefore, if file contains JSX elements, must import React.",
+      "matcher": {
+        "type": "multi_condition",
+        "conditions": [
+          {
+            "type": "ast_pattern",
+            "pattern": "JSXElement",
+            "match_count": ">0"
+          },
+          {
+            "type": "import_check",
+            "missing": ["react", "React"]
+          }
+        ]
+      },
+      "transformation": {
+        "type": "import_insertion",
+        "position": "after_last_import",
+        "statement": "import React from 'react';"
+      },
+      "safety_score": 100,
+      "risk_factors": [],
+      "verification": [
+        "import_graph_check",
+        "build_test"
+      ]
+    },
+    {
+      "id": "DRL-0004",
+      "name": "provider_side_effect_guard",
+      "description": "Deterministic isolation of side effects in provider initialization",
+      "type": "runtime_safety",
+      "category": "providers",
+      "severity": "medium",
+      "deterministic": true,
+      "proof": "Provider initialization side effects during module evaluation cause: 1) SSR failures, 2) hydration mismatches, 3) test environment failures. Let S = {side effects: localStorage, document, window, crypto}. Guard: wrap S in runtime check for execution context.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "VariableDeclaration[declarations[*].init.type='CallExpression']",
+        "conditions": [
+          "containsSideEffects(declarations[*].init)",
+          "isProviderFile(filename)"
+        ],
+        "context": {
+          "scope": "module_top_level"
+        }
+      },
+      "transformation": {
+        "type": "ast_wrapping",
+        "operation": "conditional_execution",
+        "wrapper": "if (typeof window !== 'undefined' && typeof document !== 'undefined') {\n  {{original}}\n}"
+      },
+      "safety_score": 90,
+      "risk_factors": ["execution_order_change"],
+      "verification": [
+        "ssr_test",
+        "hydration_check"
+      ]
+    },
+    {
+      "id": "DRL-0005",
+      "name": "firebase_initialization_verifier",
+      "description": "Firebase must initialize before any Firebase API calls",
+      "type": "initialization_order",
+      "category": "firebase",
+      "severity": "critical",
+      "deterministic": true,
+      "proof": "Firebase Theorem: Let I = initializeApp(config). Let C = {firebase API calls}. For correct execution, must satisfy ordering: ∀c ∈ C, execution_order(I) < execution_order(c). Violation causes: 'Firebase App not initialized'.",
+      "matcher": {
+        "type": "data_flow",
+        "pattern": "CallExpression[callee.property.name=/^(getAuth|getFirestore|getDatabase)$/]",
+        "conditions": [
+          "noReachingInitialization(path)"
+        ]
+      },
+      "transformation": {
+        "type": "dependency_injection",
+        "operation": "ensure_initialization_before",
+        "strategy": "move_to_after_initialization"
+      },
+      "safety_score": 85,
+      "risk_factors": ["dependency_injection"],
+      "verification": [
+        "firebase_runtime_check",
+        "dependency_order_verification"
+      ]
+    },
+    {
+      "id": "DRL-0006",
+      "name": "circular_dependency_resolver",
+      "description": "Break circular dependencies deterministically",
+      "type": "dependency_resolution",
+      "category": "imports",
+      "severity": "high",
+      "deterministic": true,
+      "proof": "Dependency Graph Theorem: Let G = (V, E) where V = files, E = imports. If ∃ cycle C ⊆ G, then module evaluation may fail. Break cycle by: 1) Extract common code, 2) Use dynamic import, 3) Dependency injection.",
+      "matcher": {
+        "type": "graph_pattern",
+        "pattern": "cycle",
+        "min_length": 2,
+        "max_length": 5
+      },
+      "transformation": {
+        "type": "graph_transformation",
+        "operation": "break_cycle",
+        "strategy": "dynamic_import_for_side"
+      },
+      "safety_score": 80,
+      "risk_factors": ["interface_changes"],
+      "verification": [
+        "import_graph_acyclic_check",
+        "runtime_behavior_preserved"
+      ]
+    },
+    {
+      "id": "DRL-0007",
+      "name": "suspense_boundary_enforcer",
+      "description": "Async components must be wrapped in Suspense with fallback",
+      "type": "react_pattern",
+      "category": "suspense",
+      "severity": "medium",
+      "deterministic": true,
+      "proof": "Suspense Contract: Component that throws Promise during render must be ancestor of Suspense component. Let A = {components with async operations in render}. Then ∀a ∈ A, must be wrapped in <Suspense fallback={...}>.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "FunctionComponent[containsAsyncRender]",
+        "conditions": [
+          "notWrappedInSuspense(path)"
+        ]
+      },
+      "transformation": {
+        "type": "jsx_wrapping",
+        "operation": "wrap_in_suspense",
+        "fallback": "<>Loading...</>"
+      },
+      "safety_score": 88,
+      "risk_factors": ["ui_layout_change"],
+      "verification": [
+        "suspense_boundary_check",
+        "hydration_test"
+      ]
+    },
+    {
+      "id": "DRL-0008",
+      "name": "hook_rule_violation_fixer",
+      "description": "Fix React Hook violations deterministically",
+      "type": "hook_compliance",
+      "category": "react",
+      "severity": "critical",
+      "deterministic": true,
+      "proof": "Hook Rules: 1) Only call Hooks at top level, 2) Only call Hooks from React functions. Violation causes: 'Rendered fewer hooks than expected'. Correction: move hook to correct position or convert to function.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "CallExpression[callee.name=/^use[A-Z]/]",
+        "conditions": [
+          "insideConditional(path)",
+          "or",
+          "insideLoop(path)",
+          "or",
+          "notInFunctionComponent(path)"
+        ]
+      },
+      "transformation": {
+        "type": "ast_restructuring",
+        "operation": "move_hook_to_top_level",
+        "strategy": "extract_to_custom_hook"
+      },
+      "safety_score": 75,
+      "risk_factors": ["logic_extraction"],
+      "verification": [
+        "hook_rules_check",
+        "render_count_test"
+      ]
+    },
+    {
+      "id": "DRL-0009",
+      "name": "nullish_coalescing_synthesizer",
+      "description": "Replace logical OR with nullish coalescing for null/undefined checks",
+      "type": "logical_correction",
+      "category": "operators",
+      "severity": "low",
+      "deterministic": true,
+      "proof": "Logical OR (||) treats falsy values (0, '', false) as null. Nullish coalescing (??) only treats null/undefined. For default values where 0 or '' are valid, must use ??.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "LogicalExpression[operator='||']",
+        "conditions": [
+          "leftHandSideMayBeFalsyButNotNullish(left)"
+        ]
+      },
+      "transformation": {
+        "type": "operator_replacement",
+        "from": "||",
+        "to": "??"
+      },
+      "safety_score": 95,
+      "risk_factors": ["operator_precedence"],
+      "verification": [
+        "truthiness_test",
+        "type_check"
+      ]
+    },
+    {
+      "id": "DRL-0010",
+      "name": "optional_chaining_propagator",
+      "description": "Propagate optional chaining through property access chains",
+      "type": "null_safety",
+      "category": "operators",
+      "severity": "medium",
+      "deterministic": true,
+      "proof": "Chain Theorem: For expression a.b.c.d, if any of a, a.b, or a.b.c may be nullish, entire chain needs optional chaining. Let P = property access chain. Transform: insert ?. after each possibly-nullish member.",
+      "matcher": {
+        "type": "ast_pattern",
+        "pattern": "MemberExpression",
+        "conditions": [
+          "chainLength > 2",
+          "hasNullishMemberInChain(path)"
+        ]
+      },
+      "transformation": {
+        "type": "chain_transformation",
+        "operation": "insert_optional_chaining",
+        "positions": "after_nullish_possibilities"
+      },
+      "safety_score": 92,
+      "risk_factors": ["performance_impact"],
+      "verification": [
+        "null_safety_test",
+        "runtime_error_prevention"
+      ]
+    }
+  ],
+  "rule_sets": {
+    "syntax": ["DRL-0001", "DRL-0002"],
+    "imports": ["DRL-0003", "DRL-0006"],
+    "react": ["DRL-0003", "DRL-0007", "DRL-0008"],
+    "firebase": ["DRL-0005"],
+    "providers": ["DRL-0004"],
+    "operators": ["DRL-0009", "DRL-0010"],
+    "critical_path": ["DRL-0001", "DRL-0005", "DRL-0008"]
+  },
+  "execution_constraints": {
+    "max_files_per_second": 100,
+    "max_memory_mb": 512,
+    "timeout_ms": 300000,
+    "require_backup": true,
+    "dry_run_by_default": true
+  }
+}

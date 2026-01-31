@@ -1,0 +1,36 @@
+=== ARVDOUL DEBUG SUMMARY ===
+Time: Thu Dec 18 20:50:26 WAT 2025
+Log: debug_logs/debug_20251218_204913.log
+Backup: backup_*/
+
+=== SYNTAX CHECK ===
+Syntax errors: 71
+Build: FAILED
+
+=== PROBLEMATIC FILES ===
+❌ src/App.jsx
+❌ src/components/Ads/AdsSlot.jsx
+❌ src/components/Home/BottomMenu.jsx
+❌ src/components/Home/CommentsModal.jsx
+❌ src/components/Home/Composer.jsx
+❌ src/components/Home/MediaCarousel.jsx
+❌ src/components/Home/PostCard.jsx
+❌ src/components/Home/ReelsFeed.jsx
+❌ src/components/Home/Stories.jsx
+❌ src/components/Home/SwipableMedia.jsx
+
+=== RECOMMENDATIONS ===
+1. Check debug_logs/debug_20251218_204913.log for details
+2. Fix files with syntax errors first
+3. Run: node -c <file> to test individual files
+4. Common issues: missing backticks in template literals
+
+=== QUICK FIX COMMANDS ===
+# Check specific file:
+node -c src/components/Home/CommentsModal.jsx
+
+# Fix template literals in a file:
+sed -i "s/className={\([^}]*${[^}]*}[^}]*\)}/className={`\1`}/g" file.jsx
+
+# Test build:
+npx vite build --debug

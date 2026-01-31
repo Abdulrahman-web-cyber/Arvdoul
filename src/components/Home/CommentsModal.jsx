@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Edit2, Trash2, MessageCircle } from "lucide-react";
-import { db } from "../../firebase/firebase";
+import { getDbInstance } from "../../firebase/firebase";
 import {
 collection,
 query,
@@ -207,7 +207,7 @@ onClick={onClose}
 <motion.div
 ref={containerRef}
 onScroll={handleScroll}
-className={w-full max-w-md mx-2 rounded-t-xl overflow-y-auto max-h-[80vh] ${   theme === "dark" ? "bg-gray-900 text-white" : "bg-white text-gray-900"   }}
+className={`w-full max-w-md mx-2 rounded-t-xl overflow-y-auto max-h-[80vh] ${   theme === "dark" ? "bg-gray-900 text-white" : "bg-white text-gray-900"   }}
 initial={{ y: "100%" }}
 animate={{ y: 0 }}
 exit={{ y: "100%" }}
@@ -233,13 +233,13 @@ className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
         {comments.map((c) => (  
           <motion.div key={c.id} layout className="flex flex-col gap-1" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>  
             <div className="flex gap-3 items-start">  
-              <img src={c.userPhotoURL || "/assets/default-profile.png"} alt={c.displayName} className="w-8 h-8 rounded-full object-cover" />  
+              <img src={c.userPhotoURL || "/assets/default-profile.png"} alt={`c.displayName`} className="w-8 h-8 rounded-full object-cover" />  
               <div className="flex-1">  
                 {editingCommentId === c.id ? (  
                   <div className="flex gap-2">  
                     <input  
                       type="text"  
-                      className={`flex-1 px-2 py-1 rounded border ${  
+                      className={`flex-1 px-2 py-1 rounded-border ${  
                         theme === "dark" ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-100 border-gray-300"  
                       }`}  
                       defaultValue={c.text}  
@@ -287,7 +287,7 @@ className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
               <div className="ml-10 mt-1 space-y-1 border-l border-gray-300 pl-2 dark:border-gray-700">  
                 {c.replies.map((r) => (  
                   <div key={r.id} className="flex gap-2 items-start text-sm">  
-                    <img src={r.userPhotoURL || "/assets/default-profile.png"} alt={r.displayName} className="w-6 h-6 rounded-full object-cover" />  
+                    <img src={r.userPhotoURL || "/assets/default-profile.png"} alt={`r.displayName`} className="w-6 h-6 rounded-full object-cover" />  
                     <p>  
                       <span className="font-medium mr-1">{r.displayName}</span>  
                       {r.text}{" "}  
@@ -333,7 +333,7 @@ className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
       </div>  
     </motion.div>  
   </motion.div>  
-</AnimatePresence>,  
+</AnimatePresence>  
 document.body
 
 );

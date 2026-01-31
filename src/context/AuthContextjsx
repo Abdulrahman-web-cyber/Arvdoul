@@ -1,0 +1,1369 @@
+// src/context/AuthContext.jsx - ENTERPRISE PRODUCTION VERSION
+// 🚀 Military-Grade Authentication • Perfect State Management • Production Ready
+// 🔐 Complete Error Recovery • Real-time Monitoring • Scalable Architecture
+
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import PropTypes from "prop-types";
+import { toast } from "sonner";
+import { useLocation, useNavigate } from "react-router-dom";
+
+// ==================== ENTERPRISE CONFIGURATION ====================
+const AUTH_CONFIG = {
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 1000,
+  HEALTH_CHECK_INTERVAL: 30000,
+  SESSION_TIMEOUT: 30 * 60 * 1000,
+  SERVICE_LOAD_TIMEOUT: 10000,
+  ERROR_RECOVERY_ATTEMPTS: 2,
+  DEVELOPMENT_MODE: import.meta.env.DEV,
+  AUTO_INITIALIZE: true
+};
+
+// ==================== ENTERPRISE STATE MANAGEMENT ====================
+
+  const createInitialState = () => ({
+  // Core Auth State
+  user: null,
+  firebaseUser: null,
+  userProfile: null,
+  
+  // System State
+  status: {
+    firebase: 'initializing',
+    authService: 'initializing',
+    userService: 'initializing',
+    network: typeof navigator !== "undefined" ? navigator.onLine : true, // FIXED!
+    session: 'checking'
+  },
+  
+  // Process State
+  loading: true,
+  initializing: true,
+  ready: false,
+  
+  // Session State
+  session: {
+    id: null,
+    provider: null,
+    isNewUser: false,
+    createdAt: null,
+    expiresAt: null,
+    lastActivity: Date.now(),
+    requiresProfileCompletion: false
+  },
+  
+  // Error State
+  error: null,
+  errorCode: null,
+  recoverable: true,
+  
+  // Health Metrics
+  metrics: {
+    authCheckCount: 0,
+    lastSuccess: null,
+    lastFailure: null,
+    uptime: 0,
+    operations: 0
+  }
+});
+
+// ==================== ENTERPRISE SERVICE MANAGER ====================
+class EnterpriseServiceManager {
+  constructor() {
+    this.services = {
+      authService: null,
+      userService: null,
+      firebase: null
+    };
+    this.loaded = false;
+    this.loading = false;
+    this.error = null;
+    this.listeners = new Set();
+    this.initializationAttempts = 0;
+  }
+
+  async loadServices() {
+    if (this.loaded) return this.services;
+    if (this.loading) return this.waitForLoad();
+    
+    this.loading = true;
+    this.error = null;
+    this.initializationAttempts++;
+    
+    try {
+      console.log("🚀 Loading enterprise authentication services...");
+      
+      // Load with timeout and retry logic
+      const loadWithRetry = async (importer, serviceName, maxRetries = 2) => {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            return await importer();
+          } catch (error) {
+            if (attempt === maxRetries) throw error;
+            console.warn(`${serviceName} load attempt ${attempt} failed, retrying...`, error);
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      };
+
+      // Parallel service loading
+      const [authModule, userModule, firebaseModule] = await Promise.allSettled([
+        loadWithRetry(() => import("../services/authService.js"), "AuthService"),
+        loadWithRetry(() => import("../services/userService.js"), "UserService"),
+        loadWithRetry(() => import("../firebase/firebase.js"), "Firebase")
+      ]);
+
+      // Process results
+      const errors = [];
+      const results = {};
+
+      if (authModule.status === 'fulfilled') {
+        this.services.authService = authModule.value;
+        results.auth = true;
+      } else {
+        errors.push(`Auth: ${authModule.reason?.message || 'Failed to load'}`);
+      }
+
+      if (userModule.status === 'fulfilled') {
+        this.services.userService = userModule.value;
+        results.user = true;
+      } else {
+        errors.push(`User: ${userModule.reason?.message || 'Failed to load'}`);
+      }
+
+      if (firebaseModule.status === 'fulfilled') {
+        this.services.firebase = firebaseModule.value;
+        results.firebase = true;
+      } else {
+        errors.push(`Firebase: ${firebaseModule.reason?.message || 'Failed to load'}`);
+      }
+
+      // Check minimum requirements
+      if (!this.services.firebase || !this.services.authService) {
+        throw new Error(`Service initialization failed: ${errors.join(', ')}`);
+      }
+
+      this.loaded = true;
+      console.log("✅ Enterprise services loaded successfully");
+      
+      // Notify all listeners
+      this.notifyListeners();
+      
+      return this.services;
+      
+    } catch (error) {
+      console.error("❌ Enterprise service loading failed:", error);
+      this.error = error;
+      throw error;
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  waitForLoad() {
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        if (this.loaded) resolve(this.services);
+        else if (!this.loading) reject(new Error('Service loading failed'));
+        else setTimeout(check, 100);
+      };
+      check();
+    });
+  }
+
+  addListener(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  notifyListeners() {
+    this.listeners.forEach(listener => {
+      try {
+        listener(this.services);
+      } catch (error) {
+        console.error('Service listener error:', error);
+      }
+    });
+  }
+
+  getService(serviceName) {
+    const service = this.services[serviceName];
+    if (!service) {
+      throw new Error(`Service ${serviceName} not loaded`);
+    }
+    return service;
+  }
+
+  isLoaded() {
+    return this.loaded;
+  }
+
+  hasError() {
+    return !!this.error;
+  }
+
+  reset() {
+    this.services = { authService: null, userService: null, firebase: null };
+    this.loaded = false;
+    this.error = null;
+    this.initializationAttempts = 0;
+  }
+}
+
+// ==================== ENTERPRISE AUTH STATE MANAGER ====================
+const useAuthStateManager = () => {
+  const [state, setState] = useState(createInitialState);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const updateState = useCallback((updates) => {
+    if (!isMounted.current) return;
+    
+    setState(prev => {
+      const newState = typeof updates === 'function' ? updates(prev) : updates;
+      
+      // Update metrics
+      const metricsUpdate = { ...prev.metrics };
+      
+      if (newState.user && !prev.user) {
+        metricsUpdate.lastSuccess = Date.now();
+        metricsUpdate.authCheckCount = prev.metrics.authCheckCount + 1;
+      }
+      
+      if (newState.error && !prev.error) {
+        metricsUpdate.lastFailure = Date.now();
+      }
+      
+      if (newState.user !== prev.user) {
+        metricsUpdate.operations = prev.metrics.operations + 1;
+      }
+      
+      return { 
+        ...prev, 
+        ...newState,
+        metrics: { ...prev.metrics, ...metricsUpdate }
+      };
+    });
+  }, []);
+
+  const setUser = useCallback((user, firebaseUser = null, isNewUser = false, requiresProfileCompletion = false) => {
+    updateState({
+      user,
+      firebaseUser,
+      session: {
+        id: user?.uid || null,
+        provider: user?.providerId || null,
+        isNewUser,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + AUTH_CONFIG.SESSION_TIMEOUT,
+        lastActivity: Date.now(),
+        requiresProfileCompletion
+      },
+      error: null,
+      errorCode: null,
+      recoverable: true,
+      ready: true,
+      loading: false
+    });
+  }, [updateState]);
+
+  const setError = useCallback((error, recoverable = true) => {
+    const errorCode = error?.code || error?.name || 'UNKNOWN_ERROR';
+    
+    updateState({
+      error: error?.message || error?.toString() || 'Unknown error',
+      errorCode,
+      recoverable,
+      loading: false
+    });
+  }, [updateState]);
+
+  const setLoading = useCallback((loading) => {
+    updateState({ loading });
+  }, [updateState]);
+
+  const setServiceStatus = useCallback((service, status) => {
+    updateState(prev => ({
+      status: {
+        ...prev.status,
+        [service]: status
+      }
+    }));
+  }, [updateState]);
+
+  const clearError = useCallback(() => {
+    updateState({
+      error: null,
+      errorCode: null,
+      recoverable: true
+    });
+  }, [updateState]);
+
+  const updateProfile = useCallback((profile) => {
+    updateState(prev => ({
+      userProfile: { ...prev.userProfile, ...profile }
+    }));
+  }, [updateState]);
+
+  const clearUser = useCallback(() => {
+    updateState({
+      user: null,
+      firebaseUser: null,
+      userProfile: null,
+      session: createInitialState().session,
+      loading: false
+    });
+  }, [updateState]);
+
+  const setSession = useCallback((sessionUpdates) => {
+    updateState(prev => ({
+      session: { ...prev.session, ...sessionUpdates }
+    }));
+  }, [updateState]);
+
+  return {
+    state,
+    setUser,
+    setError,
+    setLoading,
+    setServiceStatus,
+    clearError,
+    updateProfile,
+    clearUser,
+    setSession,
+    updateState
+  };
+};
+
+// ==================== ENTERPRISE SERVICE HOOK ====================
+const useServiceManager = () => {
+  const [manager] = useState(() => new EnterpriseServiceManager());
+  const [services, setServices] = useState(manager.services);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = manager.addListener((newServices) => {
+      setServices(newServices);
+      setIsReady(manager.isLoaded());
+    });
+
+    const initializeServices = async () => {
+      try {
+        await manager.loadServices();
+        setIsReady(true);
+      } catch (err) {
+        console.error('Service initialization error:', err);
+        setError(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (AUTH_CONFIG.AUTO_INITIALIZE) {
+      initializeServices();
+    } else {
+      setLoading(false);
+    }
+
+    return unsubscribe;
+  }, [manager]);
+
+  return {
+    services,
+    loading,
+    error,
+    manager,
+    isReady
+  };
+};
+
+// ==================== ENTERPRISE PROFILE MANAGER ====================
+const useProfileManager = (userId, userService) => {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
+
+  const loadProfile = useCallback(async (uid) => {
+    if (!uid || !userService) return null;
+
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+    
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`🔍 Loading enterprise profile for: ${uid}`);
+      
+      // Use the userService module directly
+      const profileData = await userService.getUserProfile(uid);
+      
+      if (!abortControllerRef.current.signal.aborted) {
+        if (profileData) {
+          console.log(`✅ Profile loaded: ${profileData.displayName || uid}`);
+          setProfile(profileData);
+          return profileData;
+        } else {
+          console.log(`📝 Creating default profile for: ${uid}`);
+          const defaultProfile = {
+            uid,
+            displayName: '',
+            username: '',
+            email: '',
+            photoURL: null,
+            bio: '',
+            isProfileComplete: false,
+            accountStatus: 'active',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          setProfile(defaultProfile);
+          return defaultProfile;
+        }
+      }
+      
+      return null;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.log('Profile load aborted');
+        return null;
+      }
+      
+      console.error(`❌ Profile load error:`, err);
+      setError(err.message);
+      return null;
+    } finally {
+      if (!abortControllerRef.current?.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }, [userService]);
+
+  const updateProfile = useCallback((updates) => {
+    setProfile(prev => prev ? { ...prev, ...updates } : updates);
+  }, []);
+
+  const clearProfile = useCallback(() => {
+    setProfile(null);
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (userId && userService) {
+      return loadProfile(userId);
+    }
+    return null;
+  }, [userId, userService, loadProfile]);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (userId && userService) {
+      loadProfile(userId);
+    }
+  }, [userId, userService, loadProfile]);
+
+  return {
+    profile,
+    loading,
+    error,
+    loadProfile,
+    updateProfile,
+    clearProfile,
+    refreshProfile,
+    setProfile
+  };
+};
+
+// ==================== ENTERPRISE AUTH LISTENER ====================
+const useAuthListener = (firebase, authService, onAuthChange) => {
+  const [listenerReady, setListenerReady] = useState(false);
+  const unsubscribeRef = useRef(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const setupListener = useCallback(async () => {
+    if (!firebase || !authService) return false;
+
+    try {
+      // Clean up existing listener
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+
+      // Ensure Firebase is ready
+      if (firebase.awaitFirebaseReady) {
+        await firebase.awaitFirebaseReady();
+      }
+
+      // Get auth instance
+      const auth = await firebase.getAuthInstance?.();
+      if (!auth) {
+        throw new Error('Auth instance not available');
+      }
+
+      // Set up auth state listener
+      unsubscribeRef.current = auth.onAuthStateChanged(
+        async (firebaseUser) => {
+          try {
+            console.log('👤 Auth state changed:', firebaseUser?.uid || 'No user');
+            
+            if (firebaseUser) {
+              // Get current auth state
+              const userInfo = await authService.getAuthState?.();
+              
+              const user = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                emailVerified: firebaseUser.emailVerified,
+                displayName: firebaseUser.displayName,
+                photoURL: firebaseUser.photoURL,
+                phoneNumber: firebaseUser.phoneNumber,
+                providerData: firebaseUser.providerData || [],
+                metadata: {
+                  creationTime: firebaseUser.metadata?.creationTime,
+                  lastSignInTime: firebaseUser.metadata?.lastSignInTime
+                },
+                providerId: 'firebase'
+              };
+
+              onAuthChange(user, firebaseUser, false, null);
+            } else {
+              onAuthChange(null, null, false, null);
+            }
+          } catch (error) {
+            console.error('Auth state handler error:', error);
+            onAuthChange(null, null, false, error);
+          }
+        },
+        (error) => {
+          console.error('Auth listener error:', error);
+          onAuthChange(null, null, false, error);
+        }
+      );
+
+      if (isMounted.current) {
+        setListenerReady(true);
+      }
+      
+      console.log('✅ Enterprise auth listener established');
+      return true;
+    } catch (error) {
+      console.error('Failed to setup auth listener:', error);
+      if (isMounted.current) {
+        setListenerReady(false);
+      }
+      return false;
+    }
+  }, [firebase, authService, onAuthChange]);
+
+  const cleanup = useCallback(() => {
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+    setListenerReady(false);
+  }, []);
+
+  useEffect(() => {
+    return cleanup;
+  }, [cleanup]);
+
+  return {
+    setupListener,
+    cleanup,
+    listenerReady
+  };
+};
+
+// ==================== ENTERPRISE HEALTH MONITOR ====================
+const useHealthMonitor = (services, authState) => {
+  const [health, setHealth] = useState({
+    status: 'checking',
+    services: {},
+    network: navigator.onLine,
+    timestamp: Date.now(),
+    uptime: 0
+  });
+
+  const startTime = useRef(Date.now());
+
+  const checkHealth = useCallback(async () => {
+    try {
+      const checks = {
+        firebase: services.firebase?.isFirebaseInitialized?.() ? 'healthy' : 'unhealthy',
+        authService: services.authService ? 'healthy' : 'unhealthy',
+        userService: services.userService ? 'healthy' : 'unhealthy',
+        network: navigator.onLine,
+        authState: authState?.status || 'unknown'
+      };
+
+      const allHealthy = Object.values(checks).every(status => 
+        status === 'healthy' || status === true
+      );
+
+      setHealth({
+        status: allHealthy ? 'healthy' : 'degraded',
+        services: checks,
+        network: navigator.onLine,
+        timestamp: Date.now(),
+        uptime: Date.now() - startTime.current
+      });
+
+      return allHealthy;
+    } catch (error) {
+      setHealth({
+        status: 'unhealthy',
+        services: {},
+        network: navigator.onLine,
+        timestamp: Date.now(),
+        uptime: Date.now() - startTime.current,
+        error: error.message
+      });
+      return false;
+    }
+  }, [services, authState]);
+
+  useEffect(() => {
+    const interval = setInterval(checkHealth, AUTH_CONFIG.HEALTH_CHECK_INTERVAL);
+    return () => clearInterval(interval);
+  }, [checkHealth]);
+
+  return {
+    health,
+    checkHealth
+  };
+};
+
+// ==================== MAIN AUTH CONTEXT ====================
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Core Managers
+  const authState = useAuthStateManager();
+  const serviceManager = useServiceManager();
+  const profileManager = useProfileManager(
+    authState.state.user?.uid,
+    serviceManager.services.userService
+  );
+  const healthMonitor = useHealthMonitor(serviceManager.services, authState.state);
+
+  // Refs
+  const initAttempts = useRef(0);
+  const redirectHandled = useRef(false);
+  const isMounted = useRef(true);
+  const navigationLock = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // ==================== AUTH LISTENER ====================
+  const authListener = useAuthListener(
+    serviceManager.services.firebase,
+    serviceManager.services.authService,
+    useCallback(async (user, firebaseUser, isNewUser, error) => {
+      if (error) {
+        // Handle specific errors
+        if (error.code === 'auth/popup-closed-by-user' || 
+            error.code === 'auth/cancelled-popup-request') {
+          console.log('User cancelled authentication');
+          return;
+        }
+        
+        authState.setError(error, true);
+        toast.error(error.message || 'Authentication error');
+        return;
+      }
+
+      if (user) {
+        console.log('👤 User authenticated:', user.uid);
+        
+        // Determine if profile completion is needed
+        const requiresProfileCompletion = 
+          isNewUser || 
+          !profileManager.profile?.isProfileComplete ||
+          location.pathname === '/signup/step2' ||
+          !!sessionStorage.getItem('signup_data');
+
+        // Update auth state
+        authState.setUser(user, firebaseUser, isNewUser, requiresProfileCompletion);
+        
+        // Load profile if user service is available
+        if (serviceManager.services.userService) {
+          await profileManager.loadProfile(user.uid);
+        }
+
+        // Handle navigation based on user state
+        if (!navigationLock.current) {
+          navigationLock.current = true;
+          
+          // Check for signup data
+          const signupData = sessionStorage.getItem('signup_data');
+          
+          if (requiresProfileCompletion || signupData) {
+            // Navigate to setup-profile for new users or incomplete profiles
+            if (location.pathname !== '/setup-profile') {
+              console.log('🚀 Navigating to setup-profile (profile completion required)');
+              navigate('/setup-profile', { 
+                state: { 
+                  fromSignup: true,
+                  userId: user.uid,
+                  userEmail: user.email
+                },
+                replace: true 
+              });
+            }
+          } else if (location.pathname === '/login' || location.pathname === '/signup/step2') {
+            // Redirect logged in users away from auth pages
+            navigate('/', { replace: true });
+          }
+          
+          setTimeout(() => {
+            navigationLock.current = false;
+          }, 1000);
+        }
+      } else {
+        console.log('👤 No user authenticated');
+        authState.clearUser();
+        profileManager.clearProfile();
+        
+        // Clear signup data
+        sessionStorage.removeItem('signup_data');
+        sessionStorage.removeItem('phone_verification');
+      }
+    }, [authState, profileManager, serviceManager, navigate, location.pathname])
+  );
+
+  // ==================== INITIALIZATION ====================
+  const initializeAuth = useCallback(async () => {
+    if (authState.state.ready || initAttempts.current >= AUTH_CONFIG.MAX_RETRIES) {
+      return;
+    }
+
+    authState.setLoading(true);
+    initAttempts.current++;
+
+    try {
+      console.log(`🔄 Initializing enterprise auth (attempt ${initAttempts.current})...`);
+
+      // Load services if not ready
+      if (!serviceManager.isReady && !serviceManager.loading) {
+        await serviceManager.manager.loadServices();
+      }
+
+      // Setup auth listener if services are ready
+      if (serviceManager.isReady) {
+        await authListener.setupListener();
+        
+        // Check for redirect result
+        await checkRedirectResult();
+        
+        // Check existing session
+        await checkExistingSession();
+      }
+
+      // Update status
+      authState.setServiceStatus('firebase', 'ready');
+      authState.setServiceStatus('authService', 'ready');
+      authState.setServiceStatus('userService', serviceManager.services.userService ? 'ready' : 'disabled');
+
+      authState.updateState({
+        initializing: false,
+        ready: true,
+        loading: false
+      });
+
+      console.log('✅ Enterprise auth system initialized');
+      
+    } catch (error) {
+      console.error('❌ Auth initialization failed:', error);
+      
+      const isRecoverable = initAttempts.current < AUTH_CONFIG.MAX_RETRIES;
+      
+      authState.setError(
+        new Error(`Authentication system failed to initialize${isRecoverable ? ', retrying...' : ''}`),
+        isRecoverable
+      );
+
+      // Retry logic
+      if (isRecoverable) {
+        setTimeout(() => {
+          if (isMounted.current) {
+            initializeAuth();
+          }
+        }, AUTH_CONFIG.RETRY_DELAY * initAttempts.current);
+      }
+    }
+  }, [authState, serviceManager, authListener]);
+
+  // ==================== REDIRECT HANDLING ====================
+  const checkRedirectResult = useCallback(async () => {
+    if (redirectHandled.current || !serviceManager.services.authService) return;
+    
+    try {
+      const urlParams = new URLSearchParams(location.search);
+      if (urlParams.has('state') || urlParams.has('code') || urlParams.has('authuser')) {
+        console.log('🔄 Processing auth redirect...');
+        
+        const result = await serviceManager.services.authService.handleRedirectResult();
+        
+        if (result.success && result.user) {
+          toast.success(result.isNewUser ? 'Welcome to Arvdoul!' : 'Welcome back!');
+        }
+        
+        redirectHandled.current = true;
+      }
+    } catch (error) {
+      console.error('Redirect result error:', error);
+      
+      // Don't show error for user cancellations
+      if (error.code !== 'auth/popup-closed-by-user' && 
+          error.code !== 'auth/cancelled-popup-request') {
+        toast.error('Authentication redirect failed');
+      }
+    }
+  }, [location.search, serviceManager]);
+
+  // ==================== SESSION MANAGEMENT ====================
+  const checkExistingSession = useCallback(async () => {
+    try {
+      if (serviceManager.services.authService) {
+        const authStateResult = await serviceManager.services.authService.getAuthState();
+        if (authStateResult) {
+          console.log('✅ Existing session found');
+        }
+      }
+    } catch (error) {
+      console.log('No existing session or session check failed:', error.message);
+    }
+  }, [serviceManager]);
+
+  // ==================== NETWORK MONITORING ====================
+  useEffect(() => {
+    const handleOnline = () => {
+      authState.updateState(prev => ({
+        status: { ...prev.status, network: true }
+      }));
+      toast.success('Network connection restored');
+    };
+
+    const handleOffline = () => {
+      authState.updateState(prev => ({
+        status: { ...prev.status, network: false }
+      }));
+      toast.warning('Network connection lost');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [authState]);
+
+  // ==================== AUTH METHODS ====================
+  const signInWithGoogle = useCallback(async (options = {}) => {
+    if (!serviceManager.services.authService) {
+      throw new Error('Authentication service not available');
+    }
+
+    authState.setLoading(true);
+    
+    try {
+      const result = await serviceManager.services.authService.signInWithGoogle(options);
+      
+      if (result.redirecting) {
+        toast.info('Redirecting to Google...');
+        return result;
+      }
+      
+      if (result.success) {
+        toast.success(result.isNewUser ? 'Welcome to Arvdoul!' : 'Welcome back!');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      
+      // Don't show error for user cancellations
+      if (error.code !== 'auth/popup-closed-by-user' && 
+          error.code !== 'auth/cancelled-popup-request') {
+        authState.setError(error, true);
+        toast.error(error.message || 'Google sign-in failed');
+      }
+      
+      throw error;
+    } finally {
+      authState.setLoading(false);
+    }
+  }, [serviceManager, authState]);
+
+  const signInWithEmailPassword = useCallback(async (email, password) => {
+    if (!serviceManager.services.authService) {
+      throw new Error('Authentication service not available');
+    }
+
+    authState.setLoading(true);
+    
+    try {
+      const result = await serviceManager.services.authService.signInWithEmailPassword(email, password);
+      
+      if (result.success) {
+        toast.success('Welcome back!');
+        return result;
+      }
+      
+      throw new Error(result.error || 'Login failed');
+    } catch (error) {
+      console.error('Email login error:', error);
+      authState.setError(error, true);
+      toast.error(error.message || 'Login failed');
+      throw error;
+    } finally {
+      authState.setLoading(false);
+    }
+  }, [serviceManager, authState]);
+
+  const signUpWithEmailPassword = useCallback(async (email, password, profileData = {}) => {
+    if (!serviceManager.services.authService) {
+      throw new Error('Authentication service not available');
+    }
+
+    authState.setLoading(true);
+    
+    try {
+      const result = await serviceManager.services.authService.createUserWithEmailPassword(
+        email,
+        password,
+        profileData
+      );
+      
+      if (result.success) {
+        toast.success('Account created successfully!');
+        return result;
+      }
+      
+      throw new Error(result.error || 'Signup failed');
+    } catch (error) {
+      console.error('Email signup error:', error);
+      authState.setError(error, true);
+      toast.error(error.message || 'Signup failed');
+      throw error;
+    } finally {
+      authState.setLoading(false);
+    }
+  }, [serviceManager, authState]);
+
+  const signOut = useCallback(async () => {
+    if (!serviceManager.services.authService) {
+      throw new Error('Authentication service not available');
+    }
+
+    authState.setLoading(true);
+    
+    try {
+      await serviceManager.services.authService.signOut();
+      
+      authState.clearUser();
+      profileManager.clearProfile();
+      
+      toast.success('Signed out successfully');
+      
+      // Clear all auth-related storage
+      ['signup_data', 'phone_verification', 'google_auth', 'email_auth'].forEach(key => {
+        sessionStorage.removeItem(key);
+      });
+      
+      navigate('/login', { replace: true });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast.error('Failed to sign out');
+      throw error;
+    } finally {
+      authState.setLoading(false);
+    }
+  }, [serviceManager, authState, profileManager, navigate]);
+
+  const updateAuthProfile = useCallback(async (profileData) => {
+    if (!serviceManager.services.authService) {
+      throw new Error('Authentication service not available');
+    }
+
+    try {
+      const result = await serviceManager.services.authService.updateAuthProfile(profileData);
+      
+      if (result.success) {
+        authState.updateState({
+          user: {
+            ...authState.state.user,
+            displayName: profileData.displayName || authState.state.user?.displayName,
+            photoURL: profileData.photoURL || authState.state.user?.photoURL
+          }
+        });
+        
+        toast.success('Profile updated successfully');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Update profile error:', error);
+      toast.error('Failed to update profile');
+      throw error;
+    }
+  }, [serviceManager, authState]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!authState.state.user?.uid || !serviceManager.services.userService) {
+      return null;
+    }
+
+    try {
+      return await profileManager.refreshProfile();
+    } catch (error) {
+      console.error('Refresh profile error:', error);
+      throw error;
+    }
+  }, [authState.state.user, serviceManager, profileManager]);
+
+  const clearError = useCallback(() => {
+    authState.clearError();
+  }, [authState]);
+
+  const forceReinitialize = useCallback(async () => {
+    console.log('🔄 Force reinitializing auth system...');
+    initAttempts.current = 0;
+    authState.updateState(createInitialState());
+    await initializeAuth();
+    toast.success('System reinitialized');
+  }, [initializeAuth, authState]);
+
+  // ==================== EFFECTS ====================
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  // Auto-refresh profile when user changes
+  useEffect(() => {
+    if (authState.state.user?.uid && serviceManager.isReady) {
+      profileManager.loadProfile(authState.state.user.uid);
+    }
+  }, [authState.state.user?.uid, serviceManager.isReady, profileManager]);
+
+  // ==================== CONTEXT VALUE ====================
+  const contextValue = useMemo(() => ({
+    // State
+    user: authState.state.user,
+    firebaseUser: authState.state.firebaseUser,
+    userProfile: profileManager.profile,
+    
+    // Status
+    status: {
+      ...authState.state.status,
+      loading: authState.state.loading || profileManager.loading || serviceManager.loading,
+      ready: authState.state.ready && serviceManager.isReady,
+      initializing: authState.state.initializing
+    },
+    
+    // Auth State
+    authState: authState.state,
+    error: authState.state.error || profileManager.error || serviceManager.error,
+    errorCode: authState.state.errorCode,
+    
+    // Health
+    health: healthMonitor.health,
+    
+    // Session
+    session: authState.state.session,
+    
+    // Computed Properties
+    isAuthenticated: !!authState.state.user,
+    isEmailVerified: !!(authState.state.user && authState.state.user.emailVerified),
+    isPhoneVerified: !!(authState.state.user && authState.state.user.phoneNumber),
+    isProfileComplete: !!(profileManager.profile && profileManager.profile.isProfileComplete),
+    isLoading: authState.state.loading || profileManager.loading || serviceManager.loading,
+    isReady: authState.state.ready && serviceManager.isReady,
+    requiresProfileCompletion: authState.state.session.requiresProfileCompletion,
+    
+    // User Info
+    userId: authState.state.user?.uid,
+    userEmail: authState.state.user?.email,
+    userName: authState.state.user?.displayName,
+    userPhoto: authState.state.user?.photoURL,
+    providers: authState.state.user?.providerData || [],
+    
+    // Methods
+    signInWithGoogle,
+    signInWithEmailPassword,
+    signUpWithEmailPassword,
+    signOut,
+    updateAuthProfile,
+    refreshProfile,
+    clearError,
+    forceReinitialize,
+    
+    // Services
+    services: serviceManager.isReady ? serviceManager.services : null,
+    
+    // Metrics
+    metrics: authState.state.metrics
+  }), [authState.state, profileManager, serviceManager, healthMonitor, signInWithGoogle, 
+       signInWithEmailPassword, signUpWithEmailPassword, signOut, updateAuthProfile, 
+       refreshProfile, clearError, forceReinitialize]);
+
+  // ==================== RENDER STATES ====================
+  
+  // Service Loading
+  if (serviceManager.loading && !serviceManager.error) {
+    return <EnterpriseLoadingScreen theme="dark" message="Loading enterprise authentication..." />;
+  }
+
+  // Service Error
+  if (serviceManager.error && !serviceManager.isReady) {
+    return <EnterpriseErrorScreen 
+      error={serviceManager.error} 
+      onRetry={() => window.location.reload()} 
+    />;
+  }
+
+  // Fatal Auth Error
+  if (authState.state.error && !authState.state.recoverable) {
+    return <EnterpriseErrorScreen 
+      error={authState.state.error} 
+      onRetry={forceReinitialize}
+      retryText="Reinitialize System"
+    />;
+  }
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// ==================== USE AUTH HOOK ====================
+export function useAuth() {
+  const context = useContext(AuthContext);
+  
+  if (!context) {
+    console.warn("useAuth must be used within AuthProvider");
+    
+    // Development fallback
+    if (import.meta.env.DEV) {
+      return {
+        // State
+        user: null,
+        userProfile: null,
+        status: { loading: false, ready: false, initializing: false },
+        error: null,
+        health: { status: 'unknown' },
+        session: { requiresProfileCompletion: false },
+        
+        // Computed
+        isAuthenticated: false,
+        isEmailVerified: false,
+        isPhoneVerified: false,
+        isProfileComplete: false,
+        isLoading: false,
+        isReady: false,
+        requiresProfileCompletion: false,
+        
+        // User Info
+        userId: null,
+        userEmail: null,
+        userName: null,
+        userPhoto: null,
+        providers: [],
+        
+        // Methods
+        signInWithGoogle: () => Promise.reject(new Error("Auth not initialized")),
+        signInWithEmailPassword: () => Promise.reject(new Error("Auth not initialized")),
+        signUpWithEmailPassword: () => Promise.reject(new Error("Auth not initialized")),
+        signOut: () => Promise.reject(new Error("Auth not initialized")),
+        updateAuthProfile: () => Promise.reject(new Error("Auth not initialized")),
+        refreshProfile: () => Promise.reject(new Error("Auth not initialized")),
+        clearError: () => {},
+        forceReinitialize: () => {},
+        
+        // Services
+        services: null,
+        
+        // Metrics
+        metrics: { operations: 0 }
+      };
+    }
+    
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  
+  return context;
+}
+
+// ==================== ENTERPRISE LOADING SCREEN ====================
+const EnterpriseLoadingScreen = ({ theme = 'dark', message = 'Loading...' }) => {
+  const isDark = theme === 'dark';
+  
+  return (
+    <div className={`fixed inset-0 z-50 flex items-center justify-center ${
+      isDark ? 'bg-gradient-to-br from-gray-900 to-black' : 'bg-gradient-to-br from-gray-50 to-white'
+    }`}>
+      <div className="text-center space-y-8">
+        {/* Animated Logo */}
+        <div className="relative">
+          <div className="w-32 h-32 mx-auto">
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-500 animate-spin" />
+            <div className="absolute inset-4 rounded-full border-4 border-transparent border-t-purple-500 animate-spin" style={{ animationDirection: 'reverse' }} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse" />
+            </div>
+          </div>
+        </div>
+        
+        {/* Loading Text */}
+        <div>
+          <h3 className={`text-2xl font-bold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Enterprise Authentication
+          </h3>
+          <p className={`text-lg ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+            {message}
+          </p>
+          <div className="mt-6 flex justify-center space-x-2">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              />
+            ))}
+          </div>
+        </div>
+        
+        {/* Security Badge */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg">
+          <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span className="text-sm font-medium text-white">🔒 Military-Grade Security</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== ENTERPRISE ERROR SCREEN ====================
+const EnterpriseErrorScreen = ({ error, onRetry, retryText = "Retry" }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-gray-900 to-black p-4">
+      <div className="max-w-md w-full text-center">
+        {/* Error Icon */}
+        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-r from-red-900/30 to-red-800/20 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+            <span className="text-3xl">🚨</span>
+          </div>
+        </div>
+        
+        {/* Error Message */}
+        <h3 className="text-2xl font-bold text-white mb-3">
+          System Error
+        </h3>
+        <div className="mb-6 p-4 rounded-lg bg-red-900/20 border border-red-800/50">
+          <p className="text-red-300 text-sm font-mono">
+            {error?.message || error?.toString() || 'Unknown error occurred'}
+          </p>
+        </div>
+        
+        {/* Error Code */}
+        {error?.code && (
+          <div className="mb-6">
+            <span className="text-xs text-gray-400">Error Code:</span>
+            <code className="block text-sm text-gray-300 font-mono bg-gray-800/50 p-2 rounded mt-1">
+              {error.code}
+            </code>
+          </div>
+        )}
+        
+        {/* Action Buttons */}
+        <div className="space-y-3">
+          <button
+            onClick={onRetry}
+            className="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold hover:opacity-90 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            {retryText}
+          </button>
+          
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-3 px-4 bg-gray-800 text-gray-200 rounded-lg font-medium hover:bg-gray-700 transition-colors"
+          >
+            Reload Application
+          </button>
+          
+          <button
+            onClick={() => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            }}
+            className="w-full py-2 px-4 text-sm text-gray-400 hover:text-gray-300"
+          >
+            Clear Cache & Reload
+          </button>
+        </div>
+        
+        {/* Support Info */}
+        <div className="mt-8 pt-6 border-t border-gray-800">
+          <p className="text-xs text-gray-500">
+            If the problem persists, please contact support
+          </p>
+          <code className="text-xs text-gray-600 mt-2">REF: {Date.now().toString(36).toUpperCase()}</code>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== PROP TYPES ====================
+AuthProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};
+
+// ==================== EXPORTS ====================
+export default {
+  AuthProvider,
+  useAuth,
+  EnterpriseLoadingScreen,
+  EnterpriseErrorScreen
+};

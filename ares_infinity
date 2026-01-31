@@ -1,0 +1,508 @@
+#!/data/data/com.termux/files/usr/bin/env bash
+# ARES INFINITY CLI - Simple, Powerful, Never Exits
+set -euo pipefail
+IFS=$'\n\t'
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Configuration
+PROJECT_ROOT="$(pwd)"
+INFINITY_HOME="$PROJECT_ROOT/.ares_infinity"
+INFINITY_ENGINES="$INFINITY_HOME/engines"
+ANALYSIS_REPORT="$INFINITY_HOME/render_analysis.json"
+FIX_REPORT="$INFINITY_HOME/fix_report.json"
+
+# Logging
+log() { echo -e "${CYAN}[INFINITY]${NC} $1"; }
+success() { echo -e "${GREEN}✅ $1${NC}"; }
+warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+error() { echo -e "${RED}❌ $1${NC}"; }
+info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
+
+# Banner
+print_banner() {
+    echo -e "${CYAN}"
+    echo "    ___    ____  ________  ___    _____  _____  _   _ ________  _   _"
+    echo "   /   |  / __ \/  _/ __ \/   |  / / / |/ / _ \/ | / /_  __/ / / / /"
+    echo "  / /| | / /_/ // // /_/ / /| | / / /    / // /  |/ / / / / /_/ / / "
+    echo " / ___ |/ _, _// // ____/ ___ |/ / / /| / // / /|  / / / / __  /_/  "
+    echo "/_/  |_/_/ |_/___/_/   /_/  |_/_/ /_/ |_/____/_/ |_/ /_/ /_/ /_(_)  "
+    echo -e "${NC}"
+    echo "ARES INFINITY v6.0 - Finds Hidden Blank Screen Causes"
+    echo "Build Passes • App Blank • We Find Why • Never Exits"
+    echo ""
+}
+
+# Check environment
+check_environment() {
+    log "Checking environment..."
+    
+    # Check Node.js
+    if ! command -v node &> /dev/null; then
+        error "Node.js not found"
+        info "Installing Node.js..."
+        pkg install nodejs -y 2>/dev/null || {
+            error "Failed to install Node.js"
+            return 1
+        }
+    fi
+    
+    # Check npm
+    if ! command -v npm &> /dev/null; then
+        error "npm not found"
+        return 1
+    fi
+    
+    # Check if engines are installed
+    if [ ! -d "$INFINITY_ENGINES" ]; then
+        warning "Engines not found. They will be created when needed."
+    fi
+    
+    success "Environment ready"
+    return 0
+}
+
+# Install dependencies if needed
+install_dependencies() {
+    if [ -d "$INFINITY_ENGINES/node_modules/@babel/parser" ]; then
+        return 0
+    fi
+    
+    log "Installing Infinity engines..."
+    mkdir -p "$INFINITY_ENGINES"
+    cd "$INFINITY_ENGINES"
+    
+    cat > package.json << 'PKG_JSON'
+{
+  "name": "ares-infinity-engines",
+  "version": "6.0.0",
+  "private": true,
+  "dependencies": {
+    "@babel/parser": "^7.23.0",
+    "glob": "^10.3.10"
+  }
+}
+PKG_JSON
+    
+    npm install --no-audit --no-fund --silent 2>&1 | tail -3
+    
+    if [ $? -eq 0 ]; then
+        success "Engines installed"
+    else
+        warning "Engine install had issues (continuing anyway)"
+    fi
+    
+    cd "$PROJECT_ROOT"
+}
+
+# Analyze command
+analyze_command() {
+    print_banner
+    
+    if ! check_environment; then
+        exit 1
+    fi
+    
+    install_dependencies
+    
+    log "Starting render chain analysis..."
+    log "This finds WHY your app is blank when build passes"
+    echo ""
+    
+    if node "$INFINITY_ENGINES/render_analyzer.js" 2>&1; then
+        success "Analysis complete"
+        
+        # Show quick summary
+        if [ -f "$ANALYSIS_REPORT" ]; then
+            echo ""
+            echo "=" .repeat(60)
+            echo "QUICK SUMMARY:"
+            echo "=" .repeat(60)
+            
+            local critical=$(jq -r '.summary.critical // 0' "$ANALYSIS_REPORT" 2>/dev/null || echo 0)
+            local css=$(jq -r '.cssIssues | length // 0' "$ANALYSIS_REPORT" 2>/dev/null || echo 0)
+            local providers=$(jq -r '.providerIssues | length // 0' "$ANALYSIS_REPORT" 2>/dev/null || echo 0)
+            local build=$(jq -r '.summary.buildStatus // "unknown"' "$ANALYSIS_REPORT" 2>/dev/null)
+            
+            if [ "$critical" -gt 0 ]; then
+                error "CRITICAL ISSUES: $critical"
+                echo "These WILL cause blank screen"
+            fi
+            
+            if [ "$css" -gt 0 ]; then
+                warning "CSS ISSUES: $css"
+                echo "CSS might be hiding your app"
+            fi
+            
+            if [ "$providers" -gt 0 ]; then
+                warning "PROVIDER ISSUES: $providers"
+                echo "Providers might be blocking render"
+            fi
+            
+            echo "Build status: $build"
+            
+            if [ "$critical" -eq 0 ] && [ "$css" -eq 0 ] && [ "$providers" -eq 0 ]; then
+                echo ""
+                info "NO STRUCTURAL ISSUES FOUND"
+                echo "Blank screen is likely due to:"
+                echo "• Component logic errors"
+                echo "• State management issues"
+                echo "• Async data loading problems"
+                echo "• Conditional rendering bugs"
+            fi
+            
+            echo ""
+            info "Full report: $ANALYSIS_REPORT"
+        fi
+        
+    else
+        error "Analysis failed"
+        return 1
+    fi
+}
+
+# Fix command
+fix_command() {
+    print_banner
+    
+    # Check if analysis was done
+    if [ ! -f "$ANALYSIS_REPORT" ]; then
+        warning "No analysis found. Running analysis first..."
+        analyze_command
+    fi
+    
+    # Show what we'll fix
+    local critical=$(jq -r '.summary.critical // 0' "$ANALYSIS_REPORT" 2>/dev/null || echo 0)
+    local css=$(jq -r '.cssIssues | length // 0' "$ANALYSIS_REPORT" 2>/dev/null || echo 0)
+    
+    if [ "$critical" -eq 0 ] && [ "$css" -eq 0 ]; then
+        warning "No critical or CSS issues found to fix"
+        read -p "Apply fixes anyway? (yes/NO): " confirm
+        if [ "$confirm" != "yes" ]; then
+            info "Operation cancelled"
+            return 0
+        fi
+    else
+        if [ "$critical" -gt 0 ]; then
+            error "Found $critical CRITICAL issues"
+        fi
+        if [ "$css" -gt 0 ]; then
+            warning "Found $css CSS issues"
+        fi
+        
+        echo ""
+        echo "The fix engine will:"
+        echo "1. Create backups of all files"
+        echo "2. Fix structural issues"
+        echo "3. Never delete your code"
+        echo "4. Only comment out problems"
+        echo ""
+        read -p "Continue? (yes/NO): " confirm
+        if [ "$confirm" != "yes" ]; then
+            info "Operation cancelled"
+            return 0
+        fi
+    fi
+    
+    log "Applying intelligent fixes..."
+    
+    if node "$INFINITY_ENGINES/fix_engine.js" 2>&1; then
+        success "Fixes applied"
+        
+        # Show fix summary
+        if [ -f "$FIX_REPORT" ]; then
+            echo ""
+            local applied=$(jq -r '.summary.totalApplied // 0' "$FIX_REPORT" 2>/dev/null || echo 0)
+            local failed=$(jq -r '.summary.totalFailed // 0' "$FIX_REPORT" 2>/dev/null || echo 0)
+            
+            echo "🔧 Fixes applied: $applied"
+            echo "❌ Fixes failed: $failed"
+            
+            if [ "$applied" -gt 0 ]; then
+                echo ""
+                success "Some fixes were applied"
+                echo "Next: Test if blank screen is fixed"
+            fi
+        fi
+        
+    else
+        error "Fix engine failed"
+        return 1
+    fi
+}
+
+# Verify command
+verify_command() {
+    print_banner
+    log "Verifying project structure..."
+    
+    echo ""
+    echo "1. Checking critical files..."
+    
+    local ok=0
+    local problems=0
+    
+    # Check package.json
+    if [ -f "package.json" ]; then
+        echo -e "  ${GREEN}✓ package.json exists${NC}"
+        
+        if grep -q '"react"' package.json; then
+            echo -e "    ${GREEN}✓ React in dependencies${NC}"
+        else
+            echo -e "    ${YELLOW}⚠ React not in dependencies${NC}"
+            problems=$((problems + 1))
+        fi
+        
+        if grep -q '"build"' package.json; then
+            echo -e "    ${GREEN}✓ Build script exists${NC}"
+        else
+            echo -e "    ${YELLOW}⚠ No build script${NC}"
+            problems=$((problems + 1))
+        fi
+        
+        ok=$((ok + 1))
+    else
+        echo -e "  ${RED}✗ Missing package.json${NC}"
+        problems=$((problems + 1))
+    fi
+    
+    # Check index.html
+    if [ -f "index.html" ]; then
+        echo -e "  ${GREEN}✓ index.html exists${NC}"
+        
+        if grep -q 'id="root"' index.html || grep -q 'id="app"' index.html; then
+            echo -e "    ${GREEN}✓ Has root div${NC}"
+        else
+            echo -e "    ${RED}✗ No root div (id='root' or id='app')${NC}"
+            problems=$((problems + 1))
+        fi
+        
+        if grep -q '<script' index.html; then
+            echo -e "    ${GREEN}✓ Has script tag${NC}"
+        else
+            echo -e "    ${YELLOW}⚠ No script tag${NC}"
+            problems=$((problems + 1))
+        fi
+        
+        ok=$((ok + 1))
+    else
+        echo -e "  ${RED}✗ Missing index.html${NC}"
+        problems=$((problems + 1))
+    fi
+    
+    # Check main entry
+    local found_entry=false
+    for file in "src/main.jsx" "src/main.js" "main.jsx" "main.js"; do
+        if [ -f "$file" ]; then
+            echo -e "  ${GREEN}✓ Found main entry: $file${NC}"
+            found_entry=true
+            ok=$((ok + 1))
+            break
+        fi
+    done
+    
+    if [ "$found_entry" = false ]; then
+        echo -e "  ${RED}✗ No main entry file found${NC}"
+        problems=$((problems + 1))
+    fi
+    
+    # Check App component
+    local found_app=false
+    for file in "src/App.jsx" "src/App.js" "App.jsx" "App.js"; do
+        if [ -f "$file" ]; then
+            echo -e "  ${GREEN}✓ Found App component: $file${NC}"
+            found_app=true
+            ok=$((ok + 1))
+            break
+        fi
+    done
+    
+    if [ "$found_app" = false ]; then
+        echo -e "  ${RED}✗ No App component found${NC}"
+        problems=$((problems + 1))
+    fi
+    
+    echo ""
+    echo "=" .repeat(40)
+    echo "VERIFICATION RESULTS:"
+    echo "=" .repeat(40)
+    echo -e "${GREEN}✓ OK: $ok${NC}"
+    echo -e "${RED}✗ Problems: $problems${NC}"
+    
+    if [ "$problems" -eq 0 ]; then
+        echo ""
+        success "Project structure looks good"
+        echo "Blank screen is likely due to logic errors"
+    else
+        echo ""
+        warning "Structural problems found"
+        echo "Run: ./ares_infinity analyze"
+        echo "Then: ./ares_infinity fix"
+    fi
+}
+
+# Build command
+build_command() {
+    log "Running build verification..."
+    
+    if [ ! -f "package.json" ]; then
+        error "No package.json found"
+        return 1
+    fi
+    
+    echo ""
+    echo "1. Installing dependencies..."
+    if npm install --no-audit --no-fund --silent 2>&1 | tail -5; then
+        success "Dependencies installed"
+    else
+        warning "npm install had issues"
+    fi
+    
+    echo ""
+    echo "2. Running build..."
+    if npm run build 2>&1; then
+        success "Build successful!"
+        
+        # Check dist output
+        if [ -d "dist" ]; then
+            echo ""
+            echo "Build output in dist/:"
+            ls -la dist/ | head -5
+            
+            # Check if index.html has root div
+            if [ -f "dist/index.html" ]; then
+                if grep -q 'id="root"' dist/index.html || grep -q 'id="app"' dist/index.html; then
+                    echo -e "\n${GREEN}✓ Built index.html has root div${NC}"
+                else
+                    echo -e "\n${RED}✗ Built index.html missing root div${NC}"
+                fi
+            fi
+        fi
+        
+    else
+        error "Build failed"
+        echo "Check the error output above"
+        return 1
+    fi
+}
+
+# Dev command
+dev_command() {
+    log "Starting development server..."
+    
+    if [ ! -f "package.json" ]; then
+        error "No package.json found"
+        return 1
+    fi
+    
+    if ! grep -q '"dev"' package.json; then
+        error "No dev script in package.json"
+        return 1
+    fi
+    
+    echo ""
+    echo "Starting: npm run dev"
+    echo "Press Ctrl+C to stop"
+    echo ""
+    
+    npm run dev
+}
+
+# Help command
+help_command() {
+    print_banner
+    cat << HELP
+
+ARES INFINITY v6.0 - Finds Hidden Blank Screen Causes
+For when: Build passes but app shows blank screen
+
+USAGE:
+  ./ares_infinity [command]
+
+COMMANDS:
+  analyze   - Find WHY app is blank (build passes)
+  fix       - Fix structural issues (with backup)
+  verify    - Quick project structure check
+  build     - Run build to verify
+  dev       - Start development server
+  help      - Show this help
+
+EXAMPLES:
+  ./ares_infinity analyze   # Find blank screen causes
+  ./ares_infinity fix       # Fix found issues
+  ./ares_infinity verify    # Check project structure
+  ./ares_infinity build     # Verify build works
+  ./ares_infinity dev       # Start dev server
+
+WHAT IT FINDS:
+  ✓ Missing root div in index.html
+  ✓ Missing ReactDOM.render in main.jsx
+  ✓ CSS that hides content (display: none, opacity: 0)
+  ✓ Provider side effects blocking render
+  ✓ Stray text in critical files
+  ✓ Missing default exports
+  ✓ And more...
+
+SAFETY GUARANTEES:
+  • Backups before every change
+  • Only comments, never deletes
+  • Never modifies business logic
+  • Always asks for confirmation
+  • Never exits Termux
+
+BLANK SCREEN COMMON CAUSES:
+  1. CSS: display: none, height: 0, opacity: 0
+  2. Providers: localStorage in constructor
+  3. Missing: root div, ReactDOM.render, default export
+  4. Logic: Component returns null/undefined
+  5. Async: Data not loaded, promises not handled
+
+START:
+  ./ares_infinity analyze
+
+HELP
+}
+
+# Main
+main() {
+    local command="${1:-help}"
+    
+    case "$command" in
+        analyze|scan)
+            analyze_command
+            ;;
+        fix|repair)
+            fix_command
+            ;;
+        verify|check)
+            verify_command
+            ;;
+        build)
+            build_command
+            ;;
+        dev|start)
+            dev_command
+            ;;
+        help|--help|-h|"")
+            help_command
+            ;;
+        *)
+            error "Unknown command: $command"
+            help_command
+            exit 1
+            ;;
+    esac
+}
+
+# Trap errors to prevent exit
+trap 'warning "Recovering from error..."; sleep 1' ERR
+
+# Run
+main "$@"

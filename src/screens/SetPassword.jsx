@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useSignup } from "@context/SignupContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
-import { auth } from "../firebase/firebase.js";
+import { auth } from '../firebase/compat.js';
 import { updatePassword, reload, verifyBeforeUpdateEmail } from "firebase/auth";
 
 // Advanced Password Strength Analyzer
@@ -96,7 +96,7 @@ const PasswordStrengthMeter = ({ password, theme }) => {
           <motion.div
             className={`h-3 rounded-full bg-gradient-to-r ${getStrengthColor()}`}
             initial={{ width: 0 }}
-            animate={{ width: `${score}%` }}
+            animate={`{ width: `${score}%` `}}
             transition={{ duration: 0.5, ease: "easeOut" }}
           />
         </div>
@@ -184,7 +184,7 @@ const AdvancedPasswordInput = ({
         onChange={onChange}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        placeholder={placeholder}
+        placeholder={`placeholder`}
         className={`w-full px-4 py-4 bg-transparent outline-none text-lg pr-12 ${
           theme === 'dark' ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'
         }`}

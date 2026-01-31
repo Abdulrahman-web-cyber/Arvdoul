@@ -16,7 +16,7 @@ import SwipableMedia from "./SwipableMedia";
 import BottomMenu from "./BottomMenu";
 import { useAuth } from "../../context/AuthContext";
 import { doc, updateDoc, arrayUnion, increment, onSnapshot } from "firebase/firestore";
-import { db } from "../../firebase/firebase.js";
+import { getDbInstance } from "../../firebase/firebase.js";
 import CommentsModal from "./CommentsModal"; // <- New modal component
 
 // Advanced reaction emojis
@@ -85,7 +85,7 @@ await updateDoc(postRef, {
 reactions: arrayUnion({ emoji, userId: user.uid }),
 });
 setShowReactions(false);
-await addCoins(1, react ${emoji});
+await addCoins(1, `react ${emoji});
 } catch (err) {
 console.error("Error reacting:", err);
 }
@@ -96,7 +96,7 @@ const handleViewAllComments = () => setShowCommentsModal(true);
 
 // ---------------- Share ----------------
 const handleShare = () => {
-const postUrl = ${window.location.origin}/post/${post.id};
+const postUrl = `${window.location.origin}/post/${post.id};
 if (navigator.share) {
 navigator.share({
 title: post.displayName,
@@ -123,7 +123,7 @@ className="bg-background border dark:border-gray-700 rounded-2xl overflow-hidden
 <div className="flex items-center gap-3">
 <img
 src={post.userPhotoURL || "/assets/default-profile.png"}
-alt={${post.displayName} avatar}
+alt={`${post.displayName} avatar`}
 className="w-10 h-10 rounded-full object-cover"
 />
 <span className="font-semibold text-sm">{post.displayName}</span>

@@ -1,6 +1,6 @@
 // src/context/MessagingContext.jsx
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
-import { db, storage } from "../firebase/firebase";
+import { getDbInstance, storage } from "../firebase/firebase";
 import {
   collection,
   doc,

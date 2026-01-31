@@ -1,6 +1,6 @@
 // src/context/PostsContext.jsx
 import { createContext, useContext, useState, useRef } from "react";
-import { db, storage } from "../firebase/firebase";
+import { getDbInstance, storage } from "../firebase/firebase";
 import {
 collection,
 doc,

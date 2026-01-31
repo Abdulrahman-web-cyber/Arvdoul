@@ -9,6 +9,7 @@ import React, {
   Component,
 } from "react";
 import { useNavigate } from "react-router-dom";
+console.log('DEBUG: IntroScreen module loaded');
 import { useTheme } from "@context/ThemeContext";
 import ThemeToggle from "@components/Shared/ThemeToggle";
 import {
@@ -637,7 +638,7 @@ function IntroScreen() {
                   { label: "AI Assistant", action: () => {}, hint: "⌘A" },
                   { label: "Settings", action: () => navigate("/settings"), hint: "⌘," },
                 ].map((it, i) => (
-                  <button key={i} onClick={it.action} className={`w-full p-3 rounded-lg text-left ${resolvedTheme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-100"}`}>
+                  <button key={i} onClick={it.action} className={`w-full p-3 rounded-lg text-left ${resolvedTheme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-100"}``}>
                     <div className="flex items-center justify-between">
                       <div>{it.label}</div>
                       <div className="text-xs text-gray-400 px-2 py-1 border rounded">{it.hint}</div>

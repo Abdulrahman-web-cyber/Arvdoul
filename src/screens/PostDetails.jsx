@@ -7,7 +7,7 @@ import {
   arrayUnion,
   increment,
 } from "firebase/firestore";
-import { db } from "../firebase/firebase.js";
+import { getDbInstance } from '../firebase/compat.js';
 import {
   Heart,
   MessageCircle,

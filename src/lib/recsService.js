@@ -1,7 +1,7 @@
-// src/lib/recsService.js
+\/\/ src/lib/recsService.js
 import { httpsCallable } from "firebase/functions";
 import { getFunctions } from "firebase/functions";
-import { db } from "../firebase/firebase";
+import { getDbInstance } from "../firebase/firebase";
 import { collection, query, orderBy, getDocs, limit } from "firebase/firestore";
 
 /**
@@ -12,7 +12,7 @@ import { collection, query, orderBy, getDocs, limit } from "firebase/firestore";
  */
 export async function getRecommendations({ userId = null, count = 50 } = {}) {
   try {
-    // Try server callable
+    \/\/ Try server callable
     const functions = getFunctions();
     const fn = httpsCallable(functions, "getRecommendations");
     const res = await fn({ userId, count });
@@ -21,15 +21,15 @@ export async function getRecommendations({ userId = null, count = 50 } = {}) {
     console.warn("server recs failed", e);
   }
 
-  // fallback: fetch recent posts and rank locally
+  \/\/ fallback: fetch recent posts and rank locally
   const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(count));
   const snap = await getDocs(q);
   const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => Array.isArray(p?.media));
-  // simple score: recency + (likes * 0.4) + (views * 0.2)
+  \/\/ simple score: recency + (likes * 0.4) + (views * 0.2)
   const now = Date.now();
   const scored = list.map((p) => {
     const age = p.createdAt?.toDate ? (now - p.createdAt.toDate().getTime()) / 1000 : 0;
-    const recencyScore = Math.max(0, 1 - age / (60 * 60 * 24)); // within a day ~1
+    const recencyScore = Math.max(0, 1 - age / (60 * 60 * 24)); \/\/ within a day ~1
     const likes = p.likesCount || p.likes?.length || 0;
     const views = p.viewCount || 0;
     const score = recencyScore * 0.7 + Math.min(1, likes / 100) * 0.2 + Math.min(1, views / 500) * 0.1;
@@ -46,7 +46,7 @@ export async function reportView(postId, meta = {}) {
     const fn = httpsCallable(functions, "reportView");
     return await fn({ postId, meta });
   } catch (e) {
-    // best effort: ignore
+    \/\/ best effort: ignore
     return null;
   }
 }

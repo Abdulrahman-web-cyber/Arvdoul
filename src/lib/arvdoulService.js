@@ -1,5 +1,5 @@
-// src/lib/arvdoulService.js
-// Arvdoul-level Firestore helpers. Uses lazy firestore getter getFirestoreDB().
+\/\/ src/lib/arvdoulService.js
+\/\/ Arvdoul-level Firestore helpers. Uses lazy firestore getter getFirestoreDB().
 
 import {
   collection,
@@ -14,7 +14,7 @@ import {
   where,
 } from "firebase/firestore";
 
-import { getFirestoreDB } from "../firebase/firebase.js"; // lazy getter
+import { getFirestoreDB } from '../firebase/compat.js'; \/\/ lazy getter
 
 const PAGE_SIZE = 10;
 const FOLLOWING_LIMIT = 500;

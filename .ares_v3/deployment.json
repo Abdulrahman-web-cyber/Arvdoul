@@ -1,0 +1,18 @@
+{
+  "version": "3.0.0",
+  "sha": "e76ea1c4a6edf4c3",
+  "deployed_at": "2025-12-19T10:04:40Z",
+  "deployment_duration_seconds": 2,
+  "components": [
+    "deterministic_rule_engine",
+    "advanced_ast_engine",
+    "execution_reality_graph",
+    "mathematical_verification_engine",
+    "production_safety_engine",
+    "performance_analytics_engine",
+    "cli_interface"
+  ],
+  "status": "deployed",
+  "project_root": "/data/data/com.termux/files/home/Arvdoul",
+  "ares_home": "/data/data/com.termux/files/home/Arvdoul/.ares_v3"
+}

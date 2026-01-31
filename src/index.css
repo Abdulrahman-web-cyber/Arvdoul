@@ -1,15 +1,4 @@
-/* Arvdoul/src/index.css */
-@import "./tailwind.css";
-
-/* Base styles */
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
-
-#root {
-  width: 100%;
-  height: 100%;
-}
+/* Global fixes */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; overflow-x: hidden !important; }
+@media (max-width: 768px) { input, select, textarea { font-size: 16px !important; } }

@@ -1,6 +1,6 @@
 // src/context/CommentsContext.jsx
 import { createContext, useContext, useState, useRef } from "react";
-import { db } from "../firebase/firebase";
+import { getDbInstance } from "../firebase/firebase";
 import {
   collection,
   doc,

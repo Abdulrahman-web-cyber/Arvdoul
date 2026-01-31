@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion } from "firebase/firestore";
-import { db } from "../../firebase/firebase.js";
+import { getDbInstance } from "../../firebase/firebase.js";
 import defaultAvatar from "../../assets/default-profile.png";
 
 // ---------------- Constants ----------------
@@ -166,8 +166,8 @@ export default function Stories() {
           : stories.map(story => {
               const viewed = story.views?.includes(currentUser?.uid);
               return (
-                <motion.div key={story.id} whileTap={{ scale: 0.95 }} className="w-20 shrink-0 snap-start cursor-pointer text-center" onClick={() => openStory(story)} aria-label={`View story from ${story.username || "User"}`}>
-                  <img src={story.userAvatar || defaultAvatar} alt={story.username || "User"} className={`w-16 h-16 rounded-full border-2 ${viewed ? theme === "dark" ? "border-gray-600" : "border-gray-400" : "border-primary-500"} object-cover`} />
+                <motion.div key={`story.id} whileTap={`{ scale: 0.95 }} className="w-20 shrink-0 snap-start cursor-pointer text-center" onClick={() => openStory(story)} aria-label={`View story from ${story.username || "User"}```}>
+                  <img src={`story.userAvatar || defaultAvatar} alt={`story.username || "User"} className={`w-16 h-16 rounded-full border-2 ${viewed ? theme === "dark" ? "border-gray-600" : "border-gray-400" : "border-primary-500"} object-cover```} />
                   <p className="text-xs mt-1 truncate">{story.username || "User"}</p>
                 </motion.div>
               );
@@ -208,7 +208,7 @@ export default function Stories() {
                       {muted ? <VolumeX size={18}/> : <Volume2 size={18}/>}
                     </button>
                   </>
-                : <img src={activeStory.media[activeIndex].url} alt={`Story ${activeIndex + 1}`} className="max-h-full max-w-full object-contain rounded-lg" />
+                : <img src={`activeStory.media[activeIndex].url} alt={`Story ${activeIndex + 1}``} className="max-h-full max-w-full object-contain rounded-lg" />
               }
             </div>
             <div className="absolute inset-0 flex justify-between items-center px-4">

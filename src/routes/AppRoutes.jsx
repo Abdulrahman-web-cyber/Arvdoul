@@ -1,88 +1,269 @@
-// src/routes/AppRoutes.jsx
-import React, { Suspense,  } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+// src/routes/AppRoutes.jsx - ULTIMATE PRODUCTION VERSION - COMPLETE & FIXED
+import React, { lazy, Suspense } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import AppStateGuard from "../app/AppStateGuard.jsx";
+import MainLayout from "../layouts/MainLayout.jsx";
 
-// Lazy load screens for optimal performance
-import SplashScreen from '../screens/SplashScreen';
+// ==================== LAZY LOAD COMPONENTS ====================
+const SplashScreen = lazy(() => import("../screens/SplashScreen.jsx"));
+const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
+const LoginScreen = lazy(() => import("../screens/LoginScreen.jsx"));
+const SignupStep1Personal = lazy(() => import("../screens/SignupStep1Personal.jsx"));
+const SignupStep2VerifyContact = lazy(() => import("../screens/SignupStep2VerifyContact.jsx"));
+const OtpVerification = lazy(() => import("../screens/OtpVerification.jsx"));
+const VerifyEmailScreen = lazy(() => import("../screens/VerifyEmailScreen.jsx"));
+const ForgotPasswordScreen = lazy(() => import("../screens/ForgotPassword.jsx"));
+const ResetPasswordScreen = lazy(() => import("../screens/ResetPassword.jsx"));
+const SetupProfile = lazy(() => import("../screens/SetupProfile.jsx"));
+const HomeScreen = lazy(() => import("../screens/HomeScreen.jsx"));
+const VideosScreen = lazy(() => import("../screens/VideosScreen.jsx"));
+const MessagingScreen = lazy(() => import("../screens/MessagingScreen.jsx"));
+const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
+const NetworkScreen = lazy(() => import("../screens/NetworkScreen.jsx"));
+const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
+const NotificationsScreen = lazy(() => import("../screens/NotificationsScreen.jsx"));
+const CreateStory = lazy(() => import("../screens/CreateStory.jsx"));
+const ProfileScreen = lazy(() => import("../screens/ProfileScreen.jsx"));
+const EditProfile = lazy(() => import("../screens/EditProfile.jsx"));
+const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
+const SearchScreen = lazy(() => import("../screens/SearchScreen.jsx"));
+const SavedScreen = lazy(() => import("../screens/SavedScreen.jsx"));
+const CollectionsScreen = lazy(() => import("../screens/CollectionsScreen.jsx"));
+const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
 
-// Import your existing IntroScreen
-import IntroScreen from '../screens/IntroScreen';
-
-// Loading fallback for Suspense
-const LoadingFallback = () => (
-  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+// ==================== LOADING COMPONENT ====================
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
     <div className="text-center">
-      <div className="relative">
-        <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto mb-6"></div>
-        <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-purple-500 rounded-full animate-spin mx-auto mb-6" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-      </div>
-      <p className="text-gray-600 dark:text-gray-400 font-medium">Loading Arvdoul...</p>
+      <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-900 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+      <p className="text-gray-600 dark:text-gray-400">Loading screen...</p>
     </div>
   </div>
 );
 
-// Placeholder for HomeScreen (you'll create this later)
-const HomeScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800">
-    <div className="text-center p-8 max-w-lg">
-      <h1 className="text-5xl font-bold text-gray-800 dark:text-white mb-6">
-        Welcome to Arvdoul! 🎉
-      </h1>
-      <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
-        This is the home screen. The splash screen successfully navigated here.
-      </p>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-        <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-200 mb-4">
-          Home Screen ✅
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
-          This screen is for logged-in users. You'll build the full dashboard here.
-        </p>
-        <div className="mt-6 flex gap-4 justify-center">
-          <button
-            onClick={() => window.history.back()}
-            className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
-          >
-            Go Back
-          </button>
-          <button
-            onClick={() => window.location.href = '/'}
-            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg font-medium"
-          >
-            Restart
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+// ==================== ROUTE WRAPPERS ====================
+const PublicRoute = ({ children }) => {
+  return <AppStateGuard>{children}</AppStateGuard>;
+};
 
-// Main AppRoutes component
+const ProtectedRoute = ({ children }) => {
+  return (
+    <AppStateGuard>
+      <MainLayout>{children}</MainLayout>
+    </AppStateGuard>
+  );
+};
+
+// ==================== MAIN APP ROUTES ====================
 export default function AppRoutes() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        {/* 
-          Splash Screen - Entry Point 
-          This screen handles its own navigation logic:
-          - If user is logged in → /home
-          - If user is not logged in → /intro
-        */}
-        <Route path="/" element={<SplashScreen />} />
-        
-        {/* Intro Screen - Your existing IntroScreen.jsx */}
-        <Route path="/intro" element={<IntroScreen />} />
-        
-        {/* Home Screen - Main dashboard for logged-in users */}
-        <Route path="/home" element={<HomeScreen />} />
-        
-        {/* 
-          Catch-all route 
-          Redirects to splash screen for any undefined routes
-          This ensures users always start at the splash screen
-        */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
+    <Routes>
+      {/* Splash Screen Route (First screen shown) */}
+      <Route path="/" element={
+        <Suspense fallback={<RouteFallback />}>
+          <SplashScreen />
+        </Suspense>
+      } />
+      
+      {/* Public Routes (No Layout) */}
+      <Route path="/intro" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <IntroScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/login" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <LoginScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/signup/step1" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SignupStep1Personal />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/signup/step2" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SignupStep2VerifyContact />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/otp-verification" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <OtpVerification />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/verify-email" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VerifyEmailScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/forgot-password" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ForgotPasswordScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/reset-password" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ResetPasswordScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      {/* Protected Routes (With Layout) */}
+      <Route path="/home" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <HomeScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/videos" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VideosScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/messages" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <MessagingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/create-post" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreatePost />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/network" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <NetworkScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/coins" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CoinsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/notifications" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <NotificationsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/create-story" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreateStory />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProfileScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/profile/edit" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <EditProfile />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SettingsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/search" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SearchScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/saved" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SavedScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/collections" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CollectionsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/live" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <LiveScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/setup-profile" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SetupProfile />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Redirects */}
+      <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
+      
+      {/* Catch-all redirect */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

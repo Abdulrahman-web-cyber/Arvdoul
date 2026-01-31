@@ -1,0 +1,15 @@
+#!/data/data/com.termux/files/usr/bin/env bash
+# ARES APEX CLI - Simple Wrapper
+set -e
+
+APEX_HOME="$(pwd)/.ares_apex"
+FIXER="$APEX_HOME/fixer.sh"
+
+# Check if fixer exists
+if [[ ! -f "$FIXER" ]]; then
+    echo "❌ APEX not initialized. Please run the deployment script first."
+    exit 1
+fi
+
+# Pass all arguments to the fixer
+exec "$FIXER" "$@"

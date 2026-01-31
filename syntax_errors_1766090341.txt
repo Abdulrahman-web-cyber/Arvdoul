@@ -1,0 +1,51 @@
+Syntax Error Report - Thu Dec 18 21:39:01 WAT 2025
+❌ src/firebase/firebase.js
+/data/data/com.termux/files/home/Arvdoul/src/firebase/firebase.js:74
+    \/\/ Auth
+    ^
+---
+❌ src/hooks/useAnalytics.js
+/data/data/com.termux/files/home/Arvdoul/src/hooks/useAnalytics.js:3
+    \/\/ Replace this with Firebase Analytics or your own logger
+    ^
+---
+❌ src/hooks/useAuth.js
+/data/data/com.termux/files/home/Arvdoul/src/hooks/useAuth.js:1
+\/\/ src/hooks/useAuth.js
+^
+---
+❌ src/hooks/useMediaQuery.js
+/data/data/com.termux/files/home/Arvdoul/src/hooks/useMediaQuery.js:20
+    handleChange(); \/\/ Set initial match
+                    ^
+---
+❌ src/hooks/useSound.js
+/data/data/com.termux/files/home/Arvdoul/src/hooks/useSound.js:1
+const clickSound = "/sounds/click.mp3"; \/\/ Make sure this exists
+                                        ^
+---
+❌ src/lib/arvdoulMediaService.js
+/data/data/com.termux/files/home/Arvdoul/src/lib/arvdoulMediaService.js:11
+\/\/ =========================
+^
+---
+❌ src/lib/arvdoulService.js
+/data/data/com.termux/files/home/Arvdoul/src/lib/arvdoulService.js:1
+\/\/ src/lib/arvdoulService.js
+^
+---
+❌ src/lib/cloudinaryService.js
+/data/data/com.termux/files/home/Arvdoul/src/lib/cloudinaryService.js:24
+    \/\/ unsigned preset name
+    ^
+---
+❌ src/lib/recsService.js
+/data/data/com.termux/files/home/Arvdoul/src/lib/recsService.js:1
+\/\/ src/lib/recsService.js
+^
+---
+❌ src/lib/utils.js
+/data/data/com.termux/files/home/Arvdoul/src/lib/utils.js:1
+\/\/ src/lib/utils.js
+^
+---
