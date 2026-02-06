@@ -58,14 +58,15 @@ const ProtectedRoute = ({ children }) => {
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Splash Screen Route (First screen shown) */}
+      {/* Public Routes (No Layout) */}
       <Route path="/" element={
-        <Suspense fallback={<RouteFallback />}>
-          <SplashScreen />
-        </Suspense>
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SplashScreen />
+          </Suspense>
+        </PublicRoute>
       } />
       
-      {/* Public Routes (No Layout) */}
       <Route path="/intro" element={
         <PublicRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -252,18 +253,20 @@ export default function AppRoutes() {
       } />
       
       <Route path="/setup-profile" element={
-        <ProtectedRoute>
+        <PublicRoute>
           <Suspense fallback={<RouteFallback />}>
             <SetupProfile />
           </Suspense>
-        </ProtectedRoute>
+        </PublicRoute>
       } />
       
       {/* Redirects */}
       <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
       
       {/* Catch-all redirect */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }
+
+// Note: You need to import Route from react-router-dom at the top
