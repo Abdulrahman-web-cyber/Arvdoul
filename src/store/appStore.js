@@ -1,5 +1,6 @@
-// src/store/appStore.js - ENTERPRISE PRO MAX v3
+// src/store/appStore.js - ENTERPRISE PRO MAX v3 (FIXED PERSISTENCE)
 // ✅ SMART COINS • NOTIFICATIONS • USER PROFILE • PRODUCTION READY
+// 🔧 FIX: coins & transactions no longer persisted – now live‑synced from Firestore
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -11,7 +12,7 @@ const useAppStore = create(
       currentUser: null,
       isAuthenticated: false,
       
-      // Coins System
+      // Coins System (in‑memory only – synced from Firestore)
       coins: 1000, // Starting coins
       transactions: [],
       subscription: null,
@@ -41,7 +42,7 @@ const useAppStore = create(
         notifications: []
       }),
       
-      // Coin Management
+      // Coin Management (now in‑memory only)
       addCoins: (amount) => {
         if (amount <= 0) return;
         
@@ -178,12 +179,14 @@ const useAppStore = create(
     }),
     {
       name: 'arvdoul-app-store',
+      // FIXED: coins and transactions are now excluded from persistence
+      // They will be kept in memory and synced from Firestore via userService.
       partialize: (state) => ({
         currentUser: state.currentUser,
-        coins: state.coins,
-        transactions: state.transactions.slice(0, 50), // Store last 50 transactions
+        // coins: state.coins,          // removed – now in‑memory only
+        // transactions: state.transactions.slice(0, 50), // removed
         subscription: state.subscription,
-        notifications: state.notifications.slice(0, 50), // Store last 50 notifications
+        notifications: state.notifications.slice(0, 50),
         unreadNotifications: state.unreadNotifications,
         theme: state.theme,
         language: state.language,

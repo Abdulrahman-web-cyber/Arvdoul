@@ -10,6 +10,7 @@
   "dependencies": {
     "@emoji-mart/react": "^1.1.1",
     "@react-oauth/google": "^0.13.0",
+    "algoliasearch": "^5.49.1",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "crypto-js": "^4.2.0",
@@ -22,6 +23,7 @@
     "lucide-react": "^0.562.0",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",
+    "react-color": "^2.19.3",
     "react-dom": "^18.2.0",
     "react-helmet-async": "^2.0.5",
     "react-icons": "^5.5.0",
@@ -29,6 +31,7 @@
     "react-phone-number-input": "^3.4.14",
     "react-router-dom": "^6.30.2",
     "react-swipeable": "^7.0.2",
+    "search-insights": "^2.17.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "uuid": "^13.0.0",

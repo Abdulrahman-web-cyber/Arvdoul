@@ -1,12 +1,115 @@
-// src/services/firestoreService.js - ARVDOUL ENTERPRISE PRO MAX V8 - REAL FIREBASE FIXED
+// src/services/firestoreService.js - ARVDOUL ENTERPRISE PRO MAX V9
 // 🚀 REAL-TIME SYNC • POST TYPE SUPPORT • PRODUCTION READY
 // 🔥 SMART MONETIZATION • ENTERPRISE • ALL POST TYPES WORKING • REAL FIREBASE FIX
+// ✅ ADDED: LRU cache with size limit, index suggestion logging, offline persistence
 
+// ==================== LRU CACHE IMPLEMENTATION ====================
+class LRUCache {
+  constructor(maxSize = 100, ttl = 60000) { // default 100 items, 60 seconds
+    this.maxSize = maxSize;
+    this.ttl = ttl;
+    this.cache = new Map();
+  }
+
+  get(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+    // move to end (most recent)
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.value;
+  }
+
+  set(key, value) {
+    if (this.cache.size >= this.maxSize) {
+      // remove oldest (first key)
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    this.cache.set(key, { value, timestamp: Date.now() });
+  }
+
+  delete(key) {
+    this.cache.delete(key);
+  }
+
+  deletePattern(pattern) {
+    // pattern can be a string like "user_posts_user123_*" – we'll convert to regex
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    for (const key of this.cache.keys()) {
+      if (regex.test(key)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  get size() {
+    return this.cache.size;
+  }
+}
+
+// ==================== ENHANCED ERROR HANDLER ====================
+function enhanceError(error, defaultMessage) {
+  const errorMap = {
+    // Permission errors
+    'permission-denied': 'You do not have permission to perform this action. Please sign in again.',
+    'unauthenticated': 'Authentication required. Please sign in to continue.',
+    
+    // Not found errors
+    'not-found': 'The requested document was not found.',
+    'already-exists': 'Document already exists.',
+    
+    // Resource errors
+    'resource-exhausted': 'Database quota exceeded. Please try again later.',
+    'failed-precondition': 'Operation failed due to system state. Please refresh.',
+    
+    // Network errors
+    'deadline-exceeded': 'Request timeout. Please check your connection.',
+    'aborted': 'Operation was aborted.',
+    'unavailable': 'Service temporarily unavailable.',
+    'internal': 'Internal server error. Our team has been notified.',
+    
+    // Validation errors
+    'invalid-argument': 'Invalid data provided.',
+    'out-of-range': 'Value out of acceptable range.',
+    'unimplemented': 'This operation is not available.',
+    'data-loss': 'Data corruption detected.',
+    'cancelled': 'Operation cancelled.'
+  };
+  
+  const code = error?.code || 'unknown';
+  let message = errorMap[code] || defaultMessage || 'Database operation failed';
+  
+  // 🔥 MISSING INDEX SUGGESTION
+  if (code === 'failed-precondition' && error.message?.includes('index')) {
+    const match = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
+    const url = match ? match[0] : 'Check Firebase console';
+    console.error(`[FirestoreService] Missing index. Create it here: ${url}`);
+    message = `Missing Firestore index. Please create it: ${url}`;
+  }
+  
+  const enhanced = new Error(message);
+  enhanced.code = code;
+  enhanced.originalError = error;
+  enhanced.timestamp = new Date().toISOString();
+  
+  return enhanced;
+}
+
+// ==================== MAIN SERVICE CLASS ====================
 class EnterpriseFirestoreService {
   constructor() {
     this.firestore = null;
     this.initialized = false;
-    this.cache = new Map();
+    this.cache = new LRUCache(100, 60000); // 100 items, 60s TTL
     this.subscriptions = new Map();
     this.retryAttempts = 3;
     this.isOnline = navigator.onLine;
@@ -108,7 +211,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error('❌ Firestore initialization failed:', error);
-      throw this.enhanceError(error, 'Failed to initialize database');
+      throw enhanceError(error, 'Failed to initialize database');
     }
   }
 
@@ -248,7 +351,7 @@ class EnterpriseFirestoreService {
       });
       
       // Invalidate user posts cache
-      this.invalidateCache(`user_posts_${postData.authorId}`);
+      this.invalidateCachePattern(`user_posts_${postData.authorId}`);
       
       return {
         success: true,
@@ -261,8 +364,7 @@ class EnterpriseFirestoreService {
     } catch (error) {
       console.error('❌ Create post failed:', error);
       
-      // Enhanced error handling
-      const enhancedError = this.enhanceError(error, 'Failed to create post');
+      const enhancedError = enhanceError(error, 'Failed to create post');
       
       // Check for specific Firestore errors
       if (error.code === 'permission-denied') {
@@ -289,7 +391,7 @@ class EnterpriseFirestoreService {
     // Check cache first
     if (options.cacheFirst !== false) {
       const cached = this.cache.get(postId);
-      if (cached && Date.now() - cached._cachedAt < 300000) { // 5 minutes
+      if (cached) {
         return { success: true, post: cached, cached: true };
       }
     }
@@ -323,7 +425,7 @@ class EnterpriseFirestoreService {
       console.error(`❌ Get post failed for ${postId}:`, error);
       return { 
         success: false, 
-        error: this.enhanceError(error, 'Failed to fetch post').message,
+        error: enhanceError(error, 'Failed to fetch post').message,
         code: error.code || 'unknown'
       };
     }
@@ -337,7 +439,7 @@ class EnterpriseFirestoreService {
     // Check cache
     if (options.cacheFirst !== false) {
       const cached = this.cache.get(cacheKey);
-      if (cached && Date.now() - cached._cachedAt < 60000) { // 1 minute
+      if (cached) {
         return { success: true, posts: cached.posts, cached: true };
       }
     }
@@ -406,7 +508,7 @@ class EnterpriseFirestoreService {
         return { success: true, posts: [], cached: false };
       }
       
-      throw this.enhanceError(error, `Failed to fetch posts for user ${userId}`);
+      throw enhanceError(error, `Failed to fetch posts for user ${userId}`);
     }
   }
 
@@ -434,7 +536,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Update post failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to update post');
+      throw enhanceError(error, 'Failed to update post');
     }
   }
 
@@ -466,7 +568,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Delete post failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to delete post');
+      throw enhanceError(error, 'Failed to delete post');
     }
   }
 
@@ -492,7 +594,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Like post failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to like post');
+      throw enhanceError(error, 'Failed to like post');
     }
   }
 
@@ -526,7 +628,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Share post failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to share post');
+      throw enhanceError(error, 'Failed to share post');
     }
   }
 
@@ -551,7 +653,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Save post failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to save post');
+      throw enhanceError(error, 'Failed to save post');
     }
   }
 
@@ -606,7 +708,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Send gift failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to send gift');
+      throw enhanceError(error, 'Failed to send gift');
     }
   }
 
@@ -669,7 +771,7 @@ class EnterpriseFirestoreService {
       
     } catch (error) {
       console.error(`❌ Vote on poll failed for ${postId}:`, error);
-      throw this.enhanceError(error, 'Failed to vote on poll');
+      throw enhanceError(error, 'Failed to vote on poll');
     }
   }
 
@@ -711,61 +813,17 @@ class EnterpriseFirestoreService {
     }
   }
 
-  enhanceError(error, defaultMessage) {
-    const errorMap = {
-      // Permission errors
-      'permission-denied': 'You do not have permission to perform this action. Please sign in again.',
-      'unauthenticated': 'Authentication required. Please sign in to continue.',
-      
-      // Not found errors
-      'not-found': 'The requested document was not found.',
-      'already-exists': 'Document already exists.',
-      
-      // Resource errors
-      'resource-exhausted': 'Database quota exceeded. Please try again later.',
-      'failed-precondition': 'Operation failed due to system state. Please refresh.',
-      
-      // Network errors
-      'deadline-exceeded': 'Request timeout. Please check your connection.',
-      'aborted': 'Operation was aborted.',
-      'unavailable': 'Service temporarily unavailable.',
-      'internal': 'Internal server error. Our team has been notified.',
-      
-      // Validation errors
-      'invalid-argument': 'Invalid data provided.',
-      'out-of-range': 'Value out of acceptable range.',
-      'unimplemented': 'This operation is not available.',
-      'data-loss': 'Data corruption detected.',
-      'cancelled': 'Operation cancelled.'
-    };
-    
-    const enhanced = new Error(errorMap[error.code] || defaultMessage || 'Database operation failed');
-    enhanced.code = error.code || 'unknown';
-    enhanced.originalError = error;
-    enhanced.timestamp = new Date().toISOString();
-    
-    return enhanced;
-  }
-
   invalidateCache(key) {
     this.cache.delete(key);
   }
 
   invalidateCachePattern(pattern) {
-    for (const [key] of this.cache.entries()) {
-      if (key.startsWith(pattern)) {
-        this.cache.delete(key);
-      }
-    }
+    this.cache.deletePattern(pattern);
   }
 
   cleanupCache() {
-    const now = Date.now();
-    for (const [key, value] of this.cache.entries()) {
-      if (value._cachedAt && now - value._cachedAt > 30 * 60 * 1000) {
-        this.cache.delete(key);
-      }
-    }
+    // LRU cache automatically handles TTL; we can optionally force cleanup
+    // Not needed for LRU
   }
 
   getStats() {

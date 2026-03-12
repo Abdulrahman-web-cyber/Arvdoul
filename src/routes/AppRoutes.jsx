@@ -1,6 +1,7 @@
-// src/routes/AppRoutes.jsx - ULTIMATE PRODUCTION VERSION - COMPLETE & FIXED
+// src/routes/AppRoutes.jsx - ULTIMATE PRODUCTION VERSION FIXED V2
+// 🏆 PERFECT ROUTING • COMPLETE MESSAGING • PRODUCTION READY
 import React, { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
 
@@ -18,6 +19,7 @@ const SetupProfile = lazy(() => import("../screens/SetupProfile.jsx"));
 const HomeScreen = lazy(() => import("../screens/HomeScreen.jsx"));
 const VideosScreen = lazy(() => import("../screens/VideosScreen.jsx"));
 const MessagingScreen = lazy(() => import("../screens/MessagingScreen.jsx"));
+const ChatScreen = lazy(() => import("../screens/ChatScreen.jsx"));
 const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
 const NetworkScreen = lazy(() => import("../screens/NetworkScreen.jsx"));
 const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
@@ -54,11 +56,21 @@ const ProtectedRoute = ({ children }) => {
   );
 };
 
+// ==================== MESSAGING LAYOUT WRAPPER ====================
+// Special layout for messaging that handles both list and chat views
+const MessagingLayout = ({ children }) => {
+  return (
+    <AppStateGuard>
+      <MainLayout>{children}</MainLayout>
+    </AppStateGuard>
+  );
+};
+
 // ==================== MAIN APP ROUTES ====================
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Public Routes (No Layout) */}
+      {/* ========== PUBLIC ROUTES (No Layout) ========== */}
       <Route path="/" element={
         <PublicRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -131,7 +143,9 @@ export default function AppRoutes() {
         </PublicRoute>
       } />
       
-      {/* Protected Routes (With Layout) */}
+      {/* ========== PROTECTED ROUTES (With Layout) ========== */}
+      
+      {/* Core App Routes */}
       <Route path="/home" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -148,6 +162,40 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      {/* ========== MESSAGING ROUTES (Ultimate Professional) ========== */}
+      {/* Option 1: Nested Routes for Better UX */}
+      <Route path="/messages" element={
+        <MessagingLayout>
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
+        </MessagingLayout>
+      }>
+        {/* Default view - conversation list */}
+        <Route index element={
+          <Suspense fallback={<RouteFallback />}>
+            <MessagingScreen />
+          </Suspense>
+        } />
+        
+        {/* Individual chat */}
+        <Route path=":conversationId" element={
+          <Suspense fallback={<RouteFallback />}>
+            <ChatScreen />
+          </Suspense>
+        } />
+        
+        {/* New conversation */}
+        <Route path="new" element={
+          <Suspense fallback={<RouteFallback />}>
+            <MessagingScreen initialView="new" />
+          </Suspense>
+        } />
+      </Route>
+      
+      {/* Option 2: Separate Routes (Simple & Direct) */}
+      {/* Uncomment if you prefer separate routes instead of nested */}
+      {/*
       <Route path="/messages" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -156,6 +204,16 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/messages/:conversationId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ChatScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      */}
+      
+      {/* ========== SOCIAL & CONTENT ROUTES ========== */}
       <Route path="/create-post" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -196,6 +254,7 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      {/* ========== PROFILE ROUTES ========== */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -212,6 +271,7 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      {/* ========== SETTINGS & UTILITY ROUTES ========== */}
       <Route path="/settings" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -252,6 +312,7 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      {/* ========== ONBOARDING ROUTES ========== */}
       <Route path="/setup-profile" element={
         <PublicRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -260,13 +321,27 @@ export default function AppRoutes() {
         </PublicRoute>
       } />
       
-      {/* Redirects */}
+      {/* ========== REDIRECTS ========== */}
       <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
+      <Route path="/message" element={<Navigate to="/messages" replace />} />
+      <Route path="/chat" element={<Navigate to="/messages" replace />} />
+      <Route path="/inbox" element={<Navigate to="/messages" replace />} />
+      <Route path="/dm" element={<Navigate to="/messages" replace />} />
       
-      {/* Catch-all redirect */}
+      {/* ========== ERROR & CATCH-ALL ========== */}
+      {/* 404 Page (Future Implementation) */}
+      {/*
+      <Route path="/404" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <NotFoundScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      */}
+      
+      {/* Catch-all redirect - Use home for authenticated, intro for unauthenticated */}
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }
-
-// Note: You need to import Route from react-router-dom at the top
