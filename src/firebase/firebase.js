@@ -1,6 +1,7 @@
-// src/firebase/firebase.js - ULTRA PRO MAX ENTERPRISE EDITION V3
+// src/firebase/firebase.js - ULTRA PRO MAX ENTERPRISE EDITION V4
 // 🏢 Perfect Singleton • Zero Race Conditions • Global Ready
 // 🔐 Complete Firebase v12.7.0+ Support • All Services Working
+// ✅ FIXED: Added getStorageInstance and getMessagingInstance exports
 
 // ==================== ENTERPRISE CONFIGURATION ====================
 const FIREBASE_CONFIG = {
@@ -21,6 +22,7 @@ class UltimateFirebaseManager {
     this._auth = null;
     this._firestore = null;
     this._storage = null;
+    this._messaging = null;
     
     this._initialized = false;
     this._initializing = false;
@@ -29,7 +31,8 @@ class UltimateFirebaseManager {
     this._services = {
       auth: null,
       firestore: null,
-      storage: null
+      storage: null,
+      messaging: null
     };
     
     this._listeners = new Map();
@@ -158,6 +161,25 @@ class UltimateFirebaseManager {
     }
   }
 
+  async getMessaging() {
+    if (!this._initialized) await this.initialize();
+    
+    if (this._messaging) return this._messaging;
+    
+    try {
+      const { getMessaging } = await import('firebase/messaging');
+      
+      this._messaging = getMessaging(this._app);
+      
+      console.log('✅ Messaging service loaded');
+      return this._messaging;
+      
+    } catch (error) {
+      console.error('❌ Failed to load Messaging service:', error);
+      throw error;
+    }
+  }
+
   // ==================== UTILITY METHODS ====================
   async awaitReady(timeout = 10000) {
     if (this._initialized) return true;
@@ -187,6 +209,7 @@ class UltimateFirebaseManager {
     this._auth = null;
     this._firestore = null;
     this._storage = null;
+    this._messaging = null;
     console.log('🧹 Firebase cleanup completed');
   }
 }
@@ -212,6 +235,16 @@ async function getFirestoreInstance() {
   return manager.getFirestore();
 }
 
+async function getStorageInstance() {
+  const manager = getFirebaseManager();
+  return manager.getStorage();
+}
+
+async function getMessagingInstance() {
+  const manager = getFirebaseManager();
+  return manager.getMessaging();
+}
+
 async function initializeFirebase() {
   const manager = getFirebaseManager();
   return manager.initialize();
@@ -231,6 +264,8 @@ function isFirebaseInitialized() {
 export {
   getAuthInstance,
   getFirestoreInstance,
+  getStorageInstance,
+  getMessagingInstance,
   initializeFirebase,
   awaitFirebaseReady,
   isFirebaseInitialized,

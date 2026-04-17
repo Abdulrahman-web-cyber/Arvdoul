@@ -1,11 +1,11 @@
-// src/services/feedService.js - ENTERPRISE PRODUCTION V15.1 - MULTI‑FIELD PAGINATION FIX
-// 🏠 ULTIMATE SMART FEED • WRITE‑TIME FAN‑OUT • COST OPTIMIZED • PAGINATION PERFECT
-// 💰 INTEGRATED WITH MONETIZATION SERVICE FOR REAL ADS • NO MOCK DATA • BILLION‑USER READY
-// ✅ FOLLOWING FEED NOW USES USER‑SPECIFIC FEED COLLECTION • OTHER SOURCES QUERY WITH INDEXES
-// 🔧 FIXES: multi‑field cursors for for_you/trending feeds, removed in+orderBy, added fan-out read
+// src/services/feedService.js - ENTERPRISE PRODUCTION V16.7 - ULTIMATE HYBRID FEED ENGINE (FIXED)
+// 🎲 ADDICTIVE FEED • PERSONALIZED • ADAPTIVE • HYBRID • EXPLORATION BOOST • ANTI‑STALE
+// 🏠 BUILT ON V15.1 – PRESERVES RELIABILITY • ADDED RANDOMNESS • REMOTE CONFIG • TIMEOUT PROTECTION
+// 💰 INTEGRATED WITH MONETIZATION SERVICE • BILLION‑USER READY
+// 🔧 FIXED: Recursive initialization bug in _loadWeightsFromConfig
 
 const FEED_CONFIG = {
-  // Feed Types & Weights
+  // Feed Types & Weights (base – overridden by Remote Config)
   FEED_TYPES: {
     FOLLOWING: 'following',
     FOR_YOU: 'for_you',
@@ -20,7 +20,7 @@ const FEED_CONFIG = {
   // Algorithm Settings
   ALGORITHM: {
     BASE_WEIGHTS: {
-      following: 0.50,   // increased because it's now highly efficient
+      following: 0.50,
       for_you: 0.25,
       trending: 0.15,
       discover: 0.05,
@@ -39,6 +39,15 @@ const FEED_CONFIG = {
     MIN_SCORE_THRESHOLD: 0.1,
   },
 
+  // 🔥 Controlled randomness settings
+  RANDOMNESS: {
+    EXPLORATION_BOOST: 0.08,       // fraction of posts that get a random score boost
+    ANTI_STALE_PENALTY: 0.7,       // multiplier for posts already seen in feed history
+    SESSION_VARIATION: true,        // vary feed per session
+    AD_INTERVAL_RANDOM_RANGE: 1,    // +/-1 variation to ad interval
+    MAX_RANDOM_POSTS_PER_PAGE: 3,   // max random exploration posts per page
+  },
+
   // Monetization Settings
   MONETIZATION: {
     AD_INTERVAL: 4,
@@ -55,10 +64,15 @@ const FEED_CONFIG = {
     PRELOAD_COUNT: 5,
     LAZY_LOAD_THRESHOLD: 2,
     MAX_CONCURRENT_FETCHES: 2,
-    REQUEST_TIMEOUT: 8000,
+    REQUEST_TIMEOUT: 8000,          // per source timeout
     BATCH_SIZE: 10,
     DEBOUNCE_TIME: 500,
     PAGE_CACHE_TTL: 3 * 60 * 1000,
+    CONFIG_CACHE_TTL: 15 * 60 * 1000,
+    PROFILE_CACHE_TTL: 15 * 60 * 1000,
+    PREF_CACHE_TTL: 10 * 60 * 1000,
+    BEHAVIOR_CACHE_TTL: 20 * 60 * 1000,
+    MAX_CACHE_SIZE: 100,
   },
 
   // Content Diversity
@@ -73,11 +87,14 @@ const FEED_CONFIG = {
   // Following Feed (fan-out) settings
   FOLLOWING_FEED: {
     COLLECTION: 'feeds',               // subcollection under users: users/{userId}/feeds
-    MAX_FEED_SIZE: 1000,                // keep last 1000 posts per user (optional cleanup)
+    MAX_FEED_SIZE: 1000,
   },
 
   // Block list cache TTL
   BLOCK_CACHE_TTL: 5 * 60 * 1000,
+
+  // Debug mode (set to false in production)
+  DEBUG: false,
 };
 
 class UltimateFeedService {
@@ -90,11 +107,12 @@ class UltimateFeedService {
     this.cache = new Map();               // feed pages & metadata
     this.userFeedState = new Map();       // pagination cursors per user
     this.userPreferences = new Map();     // user prefs cache
-    this.blockCache = new Map();           // blocked users per viewer
+    this.blockCache = new Map();          // blocked users per viewer
+    this.configCache = { weights: null, timestamp: 0 }; // dynamic weights
 
     // Tracking
     this.engagementTracker = new Map();
-    this.feedHistory = new Map();
+    this.feedHistory = new Map();          // posts already shown per user (for anti‑stale)
 
     // Real‑time subscriptions
     this.realtimeSubscriptions = new Map();
@@ -104,9 +122,9 @@ class UltimateFeedService {
     this.debounceTimers = new Map();
 
     // Algorithm version
-    this.algorithmVersion = 'v15.1_multifield';
+    this.algorithmVersion = 'v16.7_hybrid_fixed';
 
-    console.log('🏠 Ultimate Feed Service V15.1 - Multi‑Field Pagination');
+    console.log('🏠 Ultimate Feed Service V16.7 - Hybrid Feed Engine (Fixed)');
 
     setTimeout(() => this.initialize().catch(err => {
       console.warn('Feed service initialization warning:', err.message);
@@ -138,8 +156,12 @@ class UltimateFeedService {
         serverTimestamp: firestoreModule.serverTimestamp,
       };
 
+      // Load dynamic weights (optional – if fails, defaults are used)
+      // 🔥 FIX: Do NOT call _ensureInitialized here – it would cause recursion
+      await this._loadWeightsFromConfig();
+
       this.initialized = true;
-      console.log('✅ Feed Service V15.1 initialized');
+      console.log('✅ Feed Service V16.7 initialized');
       return this.firestore;
     } catch (error) {
       console.error('❌ Feed service init failed:', error);
@@ -150,6 +172,41 @@ class UltimateFeedService {
   async _ensureInitialized() {
     if (!this.initialized) await this.initialize();
     return this.firestore;
+  }
+
+  // ==================== DYNAMIC WEIGHTS FROM REMOTE CONFIG ====================
+  async _loadWeightsFromConfig(force = false) {
+    const now = Date.now();
+    if (!force && this.configCache.weights && (now - this.configCache.timestamp) < FEED_CONFIG.PERFORMANCE.CONFIG_CACHE_TTL) {
+      return this.configCache.weights;
+    }
+
+    try {
+      // 🔥 FIX: Directly use this.firestore and this.firestoreMethods – they are already set
+      if (!this.firestore || !this.firestoreMethods) {
+        throw new Error('Firestore not initialized yet');
+      }
+      const { doc, getDoc } = this.firestoreMethods;
+      const configRef = doc(this.firestore, 'config', 'feed_weights');
+      const configSnap = await getDoc(configRef);
+
+      let weights = { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
+      if (configSnap.exists()) {
+        const remote = configSnap.data();
+        weights = { ...weights, ...remote };
+        const total = Object.values(weights).reduce((s, w) => s + w, 0);
+        if (Math.abs(total - 1) > 0.01) {
+          Object.keys(weights).forEach(k => weights[k] /= total);
+        }
+      }
+
+      this.configCache = { weights, timestamp: now };
+      if (FEED_CONFIG.DEBUG) console.log('📊 Dynamic weights loaded:', weights);
+      return weights;
+    } catch (error) {
+      console.warn('Failed to load weights from config, using defaults:', error);
+      return FEED_CONFIG.ALGORITHM.BASE_WEIGHTS;
+    }
   }
 
   // ==================== RATE LIMITING & DEBOUNCE ====================
@@ -181,75 +238,19 @@ class UltimateFeedService {
     const forceRefresh = options.forceRefresh || false;
     const feedType = options.feedType || 'smart';
 
-    if (!forceRefresh && !this._canMakeRequest(userId, 'getSmartFeed')) {
-      const cached = this._getPageFromCache(userId, limit, lastDoc);
-      if (cached) return { ...cached, rateLimited: true, cached: true, operationId, duration: Date.now() - startTime };
-    }
+    // Overall timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Feed generation timeout after 15s')), 15000);
+    });
 
     try {
-      await this._ensureInitialized();
-
-      if (!forceRefresh) {
-        const cached = this._getPageFromCache(userId, limit, lastDoc);
-        if (cached) {
-          return { ...cached, cached: true, operationId, duration: Date.now() - startTime };
-        }
-      }
-
-      const [userProfile, userPreferences, behaviorData] = await Promise.allSettled([
-        this._getUserProfileCached(userId),
-        this._getUserPreferencesCached(userId),
-        this._getUserBehaviorCached(userId)
-      ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : {}));
-
-      const dynamicWeights = this._calculateDynamicWeights(userPreferences, behaviorData);
-
-      const feedSources = await this._fetchOptimizedSources(userId, userPreferences, dynamicWeights, {
-        ...options,
-        limit,
-        lastDoc: lastDoc ? this._decodeCursor(lastDoc) : null,
-        feedType
-      });
-
-      const scoredPosts = this._scoreAndRankPostsOptimized(feedSources, userId, userPreferences, dynamicWeights);
-
-      const diversified = this._applyDiversityOptimized(scoredPosts, userId, limit);
-
-      const monetizedFeed = await this._insertMonetizationOptimized(diversified, userId, options);
-
-      const finalFeed = this._finalizeFeedOptimized(monetizedFeed, userId, options);
-      const nextCursor = this._encodeCursor(finalFeed, feedSources);
-
-      this._cachePage(userId, limit, lastDoc, {
-        feed: finalFeed,
-        nextCursor,
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          sourceCounts: this._countSources(feedSources),
-          weights: dynamicWeights,
-          algorithmVersion: this.algorithmVersion,
-          page: lastDoc ? 'next' : 'first'
-        }
-      });
-
-      console.log(`✅ Feed generated for ${userId}`, {
-        operationId,
-        posts: finalFeed.length,
-        hasNext: !!nextCursor,
-        duration: Date.now() - startTime
-      });
-
-      return {
-        success: true,
-        feed: finalFeed,
-        nextCursor,
-        metadata: { operationId },
-        operationId,
-        duration: Date.now() - startTime
-      };
-
+      const result = await Promise.race([
+        this._generateFeed(userId, options, startTime, operationId, limit, lastDoc, forceRefresh, feedType),
+        timeoutPromise
+      ]);
+      return result;
     } catch (error) {
-      console.error('❌ Feed generation failed:', error);
+      console.error('❌ Feed generation failed (timeout or error):', error);
       const fallback = await this._getFallbackFeed(userId, { limit });
       return {
         success: true,
@@ -262,74 +263,97 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== PAGINATION CURSOR MANAGEMENT (BROWSER-SAFE) ====================
-  // FIX: Include all orderBy fields in the cursor per source
-  _encodeCursor(feed, sources) {
-    if (!feed || feed.length === 0) return null;
-    const lastPost = feed[feed.length - 1];
-    const cursor = {
-      createdAt: lastPost.createdAt instanceof Date ? lastPost.createdAt.toISOString() : lastPost.createdAt,
-      postId: lastPost.id,
-      sources: {}
-    };
-    Object.entries(sources).forEach(([key, posts]) => {
-      if (posts && posts.length > 0) {
-        const last = posts[posts.length - 1];
-        // Base fields
-        const sourceCursor = {
-          lastId: last.id,
-          lastCreatedAt: last.createdAt instanceof Date ? last.createdAt.toISOString() : last.createdAt
-        };
-        // For multi‑orderBy sources, store the relevant score fields
-        if (key === 'for_you' && last.personalizationScore !== undefined) {
-          sourceCursor.lastScore = last.personalizationScore;
-        }
-        if (key === 'trending' && last.trendingScore !== undefined) {
-          sourceCursor.lastScore = last.trendingScore;
-        }
-        cursor.sources[key] = sourceCursor;
+  async _generateFeed(userId, options, startTime, operationId, limit, lastDoc, forceRefresh, feedType) {
+    if (FEED_CONFIG.DEBUG) console.log(`[${operationId}] Starting feed generation for ${userId}`);
+
+    if (!forceRefresh && !this._canMakeRequest(userId, 'getSmartFeed')) {
+      const cached = this._getPageFromCache(userId, limit, lastDoc);
+      if (cached) return { ...cached, rateLimited: true, cached: true, operationId, duration: Date.now() - startTime };
+    }
+
+    await this._ensureInitialized();
+
+    if (!forceRefresh) {
+      const cached = this._getPageFromCache(userId, limit, lastDoc);
+      if (cached) {
+        return { ...cached, cached: true, operationId, duration: Date.now() - startTime };
+      }
+    }
+
+    // 🔥 SESSION‑BASED SEED for randomness
+    let sessionSeed = this.userFeedState.get(userId)?.sessionSeed;
+    if (!sessionSeed || options.resetSession) {
+      sessionSeed = Math.random();
+      const state = this.userFeedState.get(userId) || {};
+      state.sessionSeed = sessionSeed;
+      this.userFeedState.set(userId, state);
+    }
+
+    const [userProfile, userPreferences, behaviorData] = await Promise.allSettled([
+      this._getUserProfileCached(userId),
+      this._getUserPreferencesCached(userId),
+      this._getUserBehaviorCached(userId)
+    ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : {}));
+
+    const dynamicWeights = this._calculateDynamicWeights(userPreferences, behaviorData);
+
+    const feedSources = await this._fetchOptimizedSources(userId, userPreferences, dynamicWeights, {
+      ...options,
+      limit,
+      lastDoc: lastDoc ? this._decodeCursor(lastDoc) : null,
+      feedType
+    });
+
+    if (FEED_CONFIG.DEBUG) {
+      console.log(`[${operationId}] Sources fetched:`, Object.keys(feedSources).map(k => `${k}:${feedSources[k]?.length || 0}`));
+    }
+
+    // 🔥 SCORE POSTS WITH RANDOMNESS + ANTI‑STALE
+    const scoredPosts = this._scoreAndRankPostsOptimized(feedSources, userId, userPreferences, dynamicWeights, sessionSeed);
+
+    // 🔥 APPLY DIVERSITY + RANDOM EXPLORATION INJECTION
+    const diversified = this._applyDiversityOptimized(scoredPosts, userId, limit, sessionSeed);
+
+    // 🔥 MONETIZATION WITH PARALLEL ADS
+    const monetizedFeed = await this._insertMonetizationOptimized(diversified, userId, options);
+
+    const finalFeed = this._finalizeFeedOptimized(monetizedFeed, userId, options);
+    const nextCursor = this._encodeCursor(finalFeed, feedSources);
+
+    // Record seen posts for anti‑stale
+    this._recordSeenPosts(userId, finalFeed);
+
+    this._cachePage(userId, limit, lastDoc, {
+      feed: finalFeed,
+      nextCursor,
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        sourceCounts: this._countSources(feedSources),
+        weights: dynamicWeights,
+        algorithmVersion: this.algorithmVersion,
+        page: lastDoc ? 'next' : 'first',
+        sessionSeed,
       }
     });
-    return btoa(unescape(encodeURIComponent(JSON.stringify(cursor))));
+
+    console.log(`✅ Feed generated for ${userId}`, {
+      operationId,
+      posts: finalFeed.length,
+      hasNext: !!nextCursor,
+      duration: Date.now() - startTime
+    });
+
+    return {
+      success: true,
+      feed: finalFeed,
+      nextCursor,
+      metadata: { operationId },
+      operationId,
+      duration: Date.now() - startTime
+    };
   }
 
-  _decodeCursor(cursorString) {
-    try {
-      const json = decodeURIComponent(escape(atob(cursorString)));
-      return JSON.parse(json);
-    } catch {
-      return null;
-    }
-  }
-
-  _getPageFromCache(userId, limit, cursor) {
-    const cacheKey = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PAGE_CACHE_TTL) {
-      return cached.data;
-    }
-    return null;
-  }
-
-  _cachePage(userId, limit, cursor, data) {
-    const cacheKey = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
-    this.cache.set(cacheKey, { data, timestamp: Date.now() });
-    if (this.cache.size > 100) {
-      const oldest = Array.from(this.cache.keys()).sort((a,b) =>
-        this.cache.get(a).timestamp - this.cache.get(b).timestamp
-      )[0];
-      this.cache.delete(oldest);
-    }
-  }
-
-  _countSources(sources) {
-    return Object.keys(sources).reduce((acc, key) => {
-      acc[key] = sources[key]?.length || 0;
-      return acc;
-    }, {});
-  }
-
-  // ==================== OPTIMIZED SOURCE FETCHING ====================
+  // ==================== OPTIMIZED SOURCE FETCHING (unchanged from V15.1) ====================
   async _fetchOptimizedSources(userId, preferences, weights, options) {
     const sources = {};
     const { limit, lastDoc } = options;
@@ -342,7 +366,7 @@ class UltimateFeedService {
       sourcePromises.push(
         this._getFollowingFeedFromUserFeed(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.following })
           .then(posts => { sources.following = posts; })
-          .catch(() => { sources.following = []; })
+          .catch(err => { console.warn('Following feed error:', err); sources.following = []; })
       );
     }
 
@@ -351,7 +375,7 @@ class UltimateFeedService {
       sourcePromises.push(
         this._getForYouFeedPaginated(userId, preferences, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.for_you })
           .then(posts => { sources.for_you = posts; })
-          .catch(() => { sources.for_you = []; })
+          .catch(err => { console.warn('For you feed error:', err); sources.for_you = []; })
       );
     }
 
@@ -360,7 +384,7 @@ class UltimateFeedService {
       sourcePromises.push(
         this._getTrendingFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.trending })
           .then(posts => { sources.trending = posts; })
-          .catch(() => { sources.trending = []; })
+          .catch(err => { console.warn('Trending feed error:', err); sources.trending = []; })
       );
     }
 
@@ -369,7 +393,7 @@ class UltimateFeedService {
       sourcePromises.push(
         this._getDiscoverFeedPaginated(userId, preferences, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.discover })
           .then(posts => { sources.discover = posts; })
-          .catch(() => { sources.discover = []; })
+          .catch(err => { console.warn('Discover feed error:', err); sources.discover = []; })
       );
     }
 
@@ -378,25 +402,26 @@ class UltimateFeedService {
       sourcePromises.push(
         this._getVideoFeedPaginated(userId, { ...options, limit: pageLimit, lastDoc: lastDoc?.sources?.videos })
           .then(posts => { sources.videos = posts; })
-          .catch(() => { sources.videos = []; })
+          .catch(err => { console.warn('Video feed error:', err); sources.videos = []; })
       );
     }
 
-    await Promise.allSettled(sourcePromises.map(p =>
-      Promise.race([p, new Promise(resolve => setTimeout(resolve, FEED_CONFIG.PERFORMANCE.REQUEST_TIMEOUT))])
-    ));
+    // Wrap each promise with a timeout (as in V15.1)
+    const timedPromises = sourcePromises.map(p =>
+      Promise.race([p, new Promise(resolve => setTimeout(() => resolve([]), FEED_CONFIG.PERFORMANCE.REQUEST_TIMEOUT))])
+    );
 
+    await Promise.allSettled(timedPromises);
     return sources;
   }
 
-  // ---------- NEW: FOLLOWING FEED FROM USER'S FEED SUBCOLLECTION (FAN-OUT) ----------
+  // ---------- FOLLOWING FEED (unchanged: returns full post data) ----------
   async _getFollowingFeedFromUserFeed(userId, options) {
     try {
       await this._ensureInitialized();
       const { limit = 20, lastDoc } = options;
       const { collection, query, orderBy, limit: firestoreLimit, startAfter, getDocs } = this.firestoreMethods;
 
-      // Feed documents are stored in users/{userId}/feeds
       const feedRef = collection(this.firestore, 'users', userId, 'feeds');
 
       let q = query(
@@ -436,7 +461,7 @@ class UltimateFeedService {
     }
   }
 
-  // ---------- FOR YOU FEED (query posts with personalizationScore) ----------
+  // ---------- FOR YOU FEED (unchanged) ----------
   async _getForYouFeedPaginated(userId, preferences, options) {
     try {
       await this._ensureInitialized();
@@ -456,7 +481,6 @@ class UltimateFeedService {
         firestoreLimit(limit)
       );
 
-      // FIX: Use multi-field cursor if lastDoc contains both score and createdAt
       if (lastDoc && lastDoc.lastScore !== undefined && lastDoc.lastCreatedAt) {
         q = query(
           postsRef,
@@ -494,7 +518,7 @@ class UltimateFeedService {
     }
   }
 
-  // ---------- TRENDING FEED (query posts with trendingScore) ----------
+  // ---------- TRENDING FEED (unchanged) ----------
   async _getTrendingFeedPaginated(userId, options) {
     try {
       await this._ensureInitialized();
@@ -514,7 +538,6 @@ class UltimateFeedService {
         firestoreLimit(limit)
       );
 
-      // FIX: Use multi-field cursor if lastDoc contains both score and createdAt
       if (lastDoc && lastDoc.lastScore !== undefined && lastDoc.lastCreatedAt) {
         q = query(
           postsRef,
@@ -552,7 +575,7 @@ class UltimateFeedService {
     }
   }
 
-  // ---------- DISCOVER FEED (simple random / recent) ----------
+  // ---------- DISCOVER FEED (unchanged) ----------
   async _getDiscoverFeedPaginated(userId, preferences, options) {
     try {
       await this._ensureInitialized();
@@ -605,7 +628,7 @@ class UltimateFeedService {
     }
   }
 
-  // ---------- VIDEO FEED ----------
+  // ---------- VIDEO FEED (unchanged) ----------
   async _getVideoFeedPaginated(userId, options) {
     try {
       await this._ensureInitialized();
@@ -660,45 +683,86 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== BLOCKED USERS CACHE ====================
-  async _getBlockedUsersCached(userId) {
-    const cacheKey = `blocked_${userId}`;
-    const cached = this.blockCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.BLOCK_CACHE_TTL) {
-      return cached.data;
-    }
+  // ==================== SCORING & RANKING (with randomness and anti‑stale) ====================
+  _scoreAndRankPostsOptimized(sources, userId, preferences, dynamicWeights, sessionSeed) {
+    const allPosts = [];
+    const seenSet = this._getSeenSet(userId); // posts already shown to this user
 
-    try {
-      await this._ensureInitialized();
-      const { collection, query, where, getDocs } = this.firestoreMethods;
-      const blocksRef = collection(this.firestore, 'blocks');
-      const q = query(blocksRef, where('blockerId', '==', userId));
-      const snapshot = await getDocs(q);
-      const blockedIds = new Set(snapshot.docs.map(doc => doc.data().blockedId));
-      this.blockCache.set(cacheKey, { data: blockedIds, timestamp: Date.now() });
-      return blockedIds;
-    } catch (error) {
-      console.warn('Get blocked users failed:', error);
-      return new Set();
-    }
+    Object.entries(sources).forEach(([source, posts]) => {
+      if (posts?.length) {
+        const weight = dynamicWeights[source] || 0.1;
+        posts.forEach(p => {
+          let baseScore = p._score || 1.0;
+          let finalScore = baseScore * weight;
+
+          // 🔥 ANTI‑STALE PENALTY
+          if (seenSet.has(p.id)) {
+            finalScore *= FEED_CONFIG.RANDOMNESS.ANTI_STALE_PENALTY;
+          }
+
+          // 🔥 EXPLORATION BOOST (deterministic based on post id + session seed)
+          const hash = this._hashString(p.id + sessionSeed);
+          const randomBoost = hash % 100 / 100;
+          if (randomBoost < FEED_CONFIG.RANDOMNESS.EXPLORATION_BOOST) {
+            finalScore *= (1 + randomBoost);
+            p._explorationBoosted = true;
+          }
+
+          p._finalScore = finalScore;
+          allPosts.push(p);
+        });
+      }
+    });
+
+    allPosts.sort((a,b) => b._finalScore - a._finalScore);
+    return allPosts.slice(0, FEED_CONFIG.ALGORITHM.MAX_TOTAL_FETCH);
   }
 
-  // ==================== DIVERSITY & SHUFFLING ====================
-  _applyDiversityOptimized(posts, userId, targetLimit) {
+  _hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
+  _getSeenSet(userId) {
+    const history = this.feedHistory.get(userId);
+    if (!history) return new Set();
+    return new Set(history.posts.map(p => p.id));
+  }
+
+  _recordSeenPosts(userId, posts) {
+    let history = this.feedHistory.get(userId);
+    if (!history) {
+      history = { posts: [], timestamp: Date.now() };
+      this.feedHistory.set(userId, history);
+    }
+    const newPosts = [...posts];
+    history.posts.unshift(...newPosts);
+    // Keep only the last 500 seen posts to avoid memory bloat
+    if (history.posts.length > 500) {
+      history.posts = history.posts.slice(0, 500);
+    }
+    history.timestamp = Date.now();
+  }
+
+  // ==================== DIVERSITY WITH RANDOM INJECTION ====================
+  _applyDiversityOptimized(posts, userId, targetLimit, sessionSeed) {
     const diversified = [];
     const seenPosts = new Set();
     const lastAuthorByUser = this._getLastAuthor(userId);
-
     let lastAuthor = lastAuthorByUser;
     let typeStreak = 0, lastType = null;
 
-    for (const post of posts) {
-      if (diversified.length >= targetLimit) break;
-      if (seenPosts.has(post.id)) continue;
+    let remaining = [...posts];
 
-      if (post.authorId === lastAuthor) {
-        continue;
-      }
+    while (diversified.length < targetLimit && remaining.length > 0) {
+      const post = remaining.shift();
+      if (seenPosts.has(post.id)) continue;
+      if (post.authorId === lastAuthor) continue;
 
       if (post.type === lastType) {
         typeStreak++;
@@ -706,53 +770,79 @@ class UltimateFeedService {
         typeStreak = 0;
         lastType = post.type;
       }
-      if (typeStreak >= FEED_CONFIG.DIVERSITY.MAX_SAME_TYPE) {
-        continue;
-      }
+      if (typeStreak >= FEED_CONFIG.DIVERSITY.MAX_SAME_TYPE) continue;
 
       diversified.push(post);
       seenPosts.add(post.id);
       lastAuthor = post.authorId;
     }
 
+    // 🔥 Inject random exploration posts if room
+    const randomNeeded = Math.min(
+      FEED_CONFIG.RANDOMNESS.MAX_RANDOM_POSTS_PER_PAGE,
+      targetLimit - diversified.length
+    );
+    if (randomNeeded > 0) {
+      const candidates = remaining.filter(p => !seenPosts.has(p.id) && p.authorId !== lastAuthor);
+      const shuffled = this._shuffleArray(candidates, sessionSeed);
+      for (let i = 0; i < Math.min(randomNeeded, shuffled.length); i++) {
+        const post = shuffled[i];
+        if (post.authorId === lastAuthor) continue;
+        diversified.push(post);
+        seenPosts.add(post.id);
+        lastAuthor = post.authorId;
+      }
+    }
+
     this._setLastAuthor(userId, lastAuthor);
     return diversified;
   }
 
-  _getLastAuthor(userId) {
-    const state = this.userFeedState.get(userId);
-    return state?.lastAuthor || null;
+  _shuffleArray(arr, seed) {
+    const a = [...arr];
+    let r = seed || 0.5;
+    for (let i = a.length - 1; i > 0; i--) {
+      r = (r * 9301 + 49297) % 233280;
+      const j = Math.floor(r / 233280 * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
-  _setLastAuthor(userId, authorId) {
-    const state = this.userFeedState.get(userId) || {};
-    state.lastAuthor = authorId;
-    this.userFeedState.set(userId, state);
-  }
-
-  // ==================== MONETIZATION (ADS) ====================
+  // ==================== MONETIZATION (PARALLEL ADS) ====================
   async _insertMonetizationOptimized(posts, userId, options) {
     if (options.ads === false) return posts;
 
-    const monetized = [];
-    let postCount = 0;
-    let adCount = 0;
-    const adInterval = options.adInterval || FEED_CONFIG.MONETIZATION.AD_INTERVAL;
+    let adInterval = options.adInterval || FEED_CONFIG.MONETIZATION.AD_INTERVAL;
+    const range = FEED_CONFIG.RANDOMNESS.AD_INTERVAL_RANDOM_RANGE || 0;
+    if (range > 0) {
+      const variation = Math.floor(Math.random() * (range * 2 + 1)) - range;
+      adInterval = Math.max(1, adInterval + variation);
+    }
 
+    // Determine ad positions
+    const adPositions = [];
+    for (let i = adInterval; i <= posts.length; i += adInterval) {
+      adPositions.push(i);
+    }
+    if (adPositions.length === 0) return posts;
+
+    // Fetch all needed ads in parallel
+    const adPromises = adPositions.map((pos, index) => this._getAdOptimized(userId, index));
+    const ads = await Promise.all(adPromises);
+    const validAds = ads.filter(ad => ad !== null);
+
+    const monetized = [];
+    let adIndex = 0;
     for (let i = 0; i < posts.length; i++) {
       monetized.push(posts[i]);
-      postCount++;
-
-      if (postCount % adInterval === 0 && adCount < 2) {
-        const ad = await this._getAdOptimized(userId, adCount);
-        if (ad) {
-          monetized.push(ad);
-          adCount++;
-        }
+      if (adPositions.includes(i + 1) && adIndex < validAds.length) {
+        monetized.push(validAds[adIndex]);
+        adIndex++;
       }
     }
 
-    console.log(`💰 Ads inserted: ${adCount} (interval: ${adInterval})`);
+    console.log(`💰 Ads fetched in parallel: ${validAds.length} inserted at positions ${adPositions.slice(0, validAds.length)}`);
     return monetized;
   }
 
@@ -794,6 +884,48 @@ class UltimateFeedService {
     }
   }
 
+  // ==================== BLOCKED USERS CACHE ====================
+  async _getBlockedUsersCached(userId) {
+    const cacheKey = `blocked_${userId}`;
+    const cached = this.blockCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.BLOCK_CACHE_TTL) {
+      return cached.data;
+    }
+
+    try {
+      await this._ensureInitialized();
+      const { collection, query, where, getDocs } = this.firestoreMethods;
+      const blocksRef = collection(this.firestore, 'blocks');
+      const q = query(blocksRef, where('blockerId', '==', userId));
+      const snapshot = await getDocs(q);
+      const blockedIds = new Set(snapshot.docs.map(doc => doc.data().blockedId));
+      this.blockCache.set(cacheKey, { data: blockedIds, timestamp: Date.now() });
+      return blockedIds;
+    } catch (error) {
+      console.warn('Get blocked users failed:', error);
+      return new Set();
+    }
+  }
+
+  // Public method for block/unblock events
+  invalidateBlockCache(userId) {
+    const cacheKey = `blocked_${userId}`;
+    this.blockCache.delete(cacheKey);
+    console.log(`🚫 Block cache invalidated for user ${userId}`);
+  }
+
+  // ==================== DIVERSITY & SHUFFLING (helpers) ====================
+  _getLastAuthor(userId) {
+    const state = this.userFeedState.get(userId);
+    return state?.lastAuthor || null;
+  }
+
+  _setLastAuthor(userId, authorId) {
+    const state = this.userFeedState.get(userId) || {};
+    state.lastAuthor = authorId;
+    this.userFeedState.set(userId, state);
+  }
+
   // ==================== COIN REWARDS ====================
   async awardCoinsForViewOptimized(userId, postId, viewDuration) {
     if (viewDuration < FEED_CONFIG.MONETIZATION.MIN_VIEW_TIME) {
@@ -826,7 +958,7 @@ class UltimateFeedService {
   async _getUserProfileCached(userId) {
     const cacheKey = `user_profile_${userId}`;
     const cached = this.userPreferences.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) return cached.data;
+    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PROFILE_CACHE_TTL) return cached.data;
     try {
       const userService = await import('./userService.js');
       const profile = await userService.getUserProfile(userId);
@@ -838,7 +970,7 @@ class UltimateFeedService {
   async _getUserPreferencesCached(userId) {
     const cacheKey = `user_prefs_${userId}`;
     const cached = this.userPreferences.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) return cached.data;
+    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PREF_CACHE_TTL) return cached.data;
     try {
       const { doc, getDoc } = this.firestoreMethods;
       const prefsRef = doc(this.firestore, 'user_preferences', userId);
@@ -862,7 +994,7 @@ class UltimateFeedService {
   async _getUserBehaviorCached(userId) {
     const cacheKey = `user_behavior_${userId}`;
     const cached = this.userPreferences.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < 20 * 60 * 1000) return cached.data;
+    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.BEHAVIOR_CACHE_TTL) return cached.data;
     return { engagementRate: 0.3, timeOnPlatform: 0, likesGiven: 0 };
   }
 
@@ -882,23 +1014,7 @@ class UltimateFeedService {
     } catch { return []; }
   }
 
-  // ==================== SCORING & RANKING ====================
-  _scoreAndRankPostsOptimized(sources, userId, preferences, dynamicWeights) {
-    const allPosts = [];
-    Object.entries(sources).forEach(([source, posts]) => {
-      if (posts?.length) {
-        const weight = dynamicWeights[source] || 0.1;
-        posts.forEach(p => {
-          const baseScore = p._score || 1.0;
-          p._finalScore = baseScore * weight;
-          allPosts.push(p);
-        });
-      }
-    });
-    allPosts.sort((a,b) => b._finalScore - a._finalScore);
-    return allPosts.slice(0, FEED_CONFIG.ALGORITHM.MAX_TOTAL_FETCH);
-  }
-
+  // ==================== WEIGHT CALCULATION (unchanged) ====================
   _calculateDynamicWeights(preferences, behavior) {
     const baseWeights = { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
     if (behavior.engagementRate > 0.5) {
@@ -915,20 +1031,93 @@ class UltimateFeedService {
     return baseWeights;
   }
 
+  // ==================== PAGINATION CURSOR MANAGEMENT ====================
+  _encodeCursor(feed, sources) {
+    if (!feed || feed.length === 0) return null;
+    const lastPost = feed[feed.length - 1];
+    const cursor = {
+      createdAt: lastPost.createdAt instanceof Date ? lastPost.createdAt.toISOString() : lastPost.createdAt,
+      postId: lastPost.id,
+      sources: {}
+    };
+    Object.entries(sources).forEach(([key, posts]) => {
+      if (posts && posts.length > 0) {
+        const last = posts[posts.length - 1];
+        const sourceCursor = {
+          lastId: last.id,
+          lastCreatedAt: last.createdAt instanceof Date ? last.createdAt.toISOString() : last.createdAt
+        };
+        if (key === 'for_you' && last.personalizationScore !== undefined) {
+          sourceCursor.lastScore = last.personalizationScore;
+        }
+        if (key === 'trending' && last.trendingScore !== undefined) {
+          sourceCursor.lastScore = last.trendingScore;
+        }
+        cursor.sources[key] = sourceCursor;
+      }
+    });
+    return btoa(unescape(encodeURIComponent(JSON.stringify(cursor))));
+  }
+
+  _decodeCursor(cursorString) {
+    try {
+      const json = decodeURIComponent(escape(atob(cursorString)));
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+
+  _getPageFromCache(userId, limit, cursor) {
+    const cacheKey = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < FEED_CONFIG.PERFORMANCE.PAGE_CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  _cachePage(userId, limit, cursor, data) {
+    const cacheKey = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
+    this.cache.set(cacheKey, { data, timestamp: Date.now() });
+    if (this.cache.size > FEED_CONFIG.PERFORMANCE.MAX_CACHE_SIZE) {
+      const oldest = Array.from(this.cache.keys()).sort((a,b) =>
+        this.cache.get(a).timestamp - this.cache.get(b).timestamp
+      )[0];
+      this.cache.delete(oldest);
+    }
+  }
+
+  _countSources(sources) {
+    return Object.keys(sources).reduce((acc, key) => {
+      acc[key] = sources[key]?.length || 0;
+      return acc;
+    }, {});
+  }
+
+  // ==================== FINALIZE FEED (with location fix) ====================
   _finalizeFeedOptimized(posts, userId, options) {
     const limited = posts.slice(0, options.limit || FEED_CONFIG.ALGORITHM.DEFAULT_PAGE_LIMIT);
-    return limited.map((p, i) => ({
-      ...p,
-      _feedPosition: i + 1,
-      _viewed: false,
-      _impressionTracked: false,
-      _metadata: {
-        source: p._source,
-        score: p._finalScore || p._score,
-        insertedAt: new Date().toISOString(),
-        algorithmVersion: this.algorithmVersion
+    return limited.map((p, i) => {
+      // 🔥 FIX: Convert location object to string to prevent React error
+      let location = p.location;
+      if (location && typeof location === 'object') {
+        location = location.displayName || (location.lat && location.lon ? `${location.lat},${location.lon}` : null);
       }
-    }));
+      return {
+        ...p,
+        location,  // now always a string or null
+        _feedPosition: i + 1,
+        _viewed: false,
+        _impressionTracked: false,
+        _metadata: {
+          source: p._source,
+          score: p._finalScore || p._score,
+          insertedAt: new Date().toISOString(),
+          algorithmVersion: this.algorithmVersion
+        }
+      };
+    });
   }
 
   // ==================== REAL‑TIME UPDATES ====================
@@ -1045,7 +1234,9 @@ class UltimateFeedService {
       algorithmVersion: this.algorithmVersion,
       initialized: this.initialized,
       pagination: true,
-      diversityRule: 'no consecutive same author'
+      diversityRule: 'no consecutive same author',
+      randomnessEnabled: true,
+      antiStaleEnabled: true
     };
   }
 
@@ -1056,7 +1247,7 @@ class UltimateFeedService {
     this.userPreferences.delete(userId);
     this.userFeedState.delete(userId);
     this.feedHistory.delete(userId);
-    this.blockCache.delete(userId);
+    this.blockCache.delete(`blocked_${userId}`);
   }
 
   clearCache() {
@@ -1115,7 +1306,8 @@ const feedService = {
   clearUserCache: (userId) => getFeedService().clearUserCache(userId),
   clearCache: () => getFeedService().clearCache(),
   destroy: () => getFeedService().destroy(),
-  ensureInitialized: () => getFeedService()._ensureInitialized()
+  ensureInitialized: () => getFeedService()._ensureInitialized(),
+  invalidateBlockCache: (userId) => getFeedService().invalidateBlockCache(userId)
 };
 
 export default feedService;

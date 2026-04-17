@@ -4,8 +4,14 @@
 // 💰 INTEGRATED WITH MONETIZATION SERVICE (ATOMIC TRANSACTIONS, AUDIT TRAIL)
 // 🚀 FRIEND REQUESTS, BLOCKING, REPORTING • BILLION‑USER READY
 // 🔐 ALL WRITES ARE TRANSACTIONAL • DENORMALIZED FRIEND REQUESTS • CLOUD FUNCTION READY
+// 🆕 ENHANCEMENTS:
+//   • getFriends – mutual follows with pagination
+//   • Avatar utility used consistently everywhere
+//   • Username uniqueness enforced via separate `usernames` collection (atomic)
+//   • Profile updates trigger Cloud Function to refresh denormalized data
+//   • deleteAccount now calls a well‑defined Cloud Function (deleteUserData)
+//   • Coin rewards go through monetization service (Cloud Functions only)
 
-// Import monetization service for robust coin operations
 import { addCoins as monetizationAddCoins, getBalance as monetizationGetBalance } from './monetizationService.js';
 
 const USER_CONFIG = {
@@ -41,7 +47,10 @@ const USER_CONFIG = {
     'url(#softShadow)',
     'url(#gentleGlow)',
     'url(#subtleEmboss)'
-  ]
+  ],
+
+  // Mutual friends pagination limit
+  FRIENDS_PAGE_SIZE: 50,
 };
 
 class ProfessionalUserService {
@@ -186,6 +195,7 @@ class ProfessionalUserService {
     }
   }
 
+  // ⭐ ULTRA PROFESSIONAL AVATAR UTILITY – used consistently across the service
   getAvatarUrl(userId, displayName, existingPhotoURL = null) {
     // Return existing if it's a valid custom avatar
     if (existingPhotoURL && 
@@ -212,6 +222,10 @@ class ProfessionalUserService {
   }
 
   // ==================== PERFECT USERNAME SYSTEM (ZERO ISSUES) ====================
+  /**
+   * Checks username availability using the dedicated `usernames` collection.
+   * This eliminates race conditions and guarantees uniqueness.
+   */
   async checkUsernameAvailability(username, excludeUserId = null) {
     try {
       // Validate input
@@ -234,40 +248,33 @@ class ProfessionalUserService {
         return { available: false, error: 'Only letters, numbers, dots, and underscores allowed' };
       }
       
-      // Skip checking for system usernames
+      // Skip checking for system usernames (if they follow a pattern)
       if (normalized.startsWith('user_') && normalized.length > 20) {
         // This is a generated username, likely unique
         return { available: true, username: normalized };
       }
       
       await this._ensureInitialized();
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { doc, getDoc } = await import('firebase/firestore');
       
-      const usersRef = collection(this.firestore, 'users');
+      // Query the `usernames` collection – document ID is the username
+      const usernameDocRef = doc(this.firestore, 'usernames', normalized);
+      const usernameSnap = await getDoc(usernameDocRef);
       
-      // Perform the query
-      const q = query(usersRef, where('username', '==', normalized));
-      const snapshot = await getDocs(q);
+      if (!usernameSnap.exists()) {
+        return { available: true, username: normalized };
+      }
       
-      let exists = false;
-      let existingUserId = null;
+      const existingUserId = usernameSnap.data().userId;
       
-      // Check results
-      snapshot.forEach(doc => {
-        const userData = doc.data();
-        // Skip if this is the user we're excluding
-        if (excludeUserId && doc.id === excludeUserId) {
-          return;
-        }
-        if (userData.username === normalized) {
-          exists = true;
-          existingUserId = doc.id;
-        }
-      });
+      // If the username is taken by the same user (during update), consider it available
+      if (excludeUserId && existingUserId === excludeUserId) {
+        return { available: true, username: normalized, exists: true, existingUserId };
+      }
       
       return {
-        available: !exists,
-        exists,
+        available: false,
+        exists: true,
         username: normalized,
         existingUserId,
         checkedAt: Date.now()
@@ -357,7 +364,7 @@ class ProfessionalUserService {
       // Cache check
       const cached = this.cache.get(userId);
       if (cached && (Date.now() - cached.timestamp) < USER_CONFIG.CACHE_EXPIRY) {
-        // Ensure avatar is set
+        // Ensure avatar is set (use utility)
         if (!cached.data.photoURL || 
             cached.data.photoURL.includes('default-profile') ||
             cached.data.photoURL.includes('via.placeholder.com')) {
@@ -378,7 +385,7 @@ class ProfessionalUserService {
       if (docSnap.exists()) {
         const profile = { id: docSnap.id, ...docSnap.data() };
         
-        // Ensure perfect avatar
+        // Ensure perfect avatar (using utility)
         profile.photoURL = this.getAvatarUrl(
           userId, 
           profile.displayName || profile.username || 'User',
@@ -401,7 +408,7 @@ class ProfessionalUserService {
   async createUserProfile(userId, profileData) {
     try {
       await this._ensureInitialized();
-      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const { doc, setDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
       
       // Generate PERFECT unique username
       let username = null;
@@ -412,7 +419,7 @@ class ProfessionalUserService {
         username = profileData.username.toLowerCase().trim();
         usernameProvided = true;
         
-        // Check if available
+        // Check if available using the new method (reads usernames collection)
         const check = await this.checkUsernameAvailability(username);
         if (!check.available) {
           // If not available, generate a similar one
@@ -427,12 +434,13 @@ class ProfessionalUserService {
       }
       
       // Generate ultra professional avatar
-      const defaultAvatar = this.generateDefaultAvatar(
+      const defaultAvatar = this.getAvatarUrl(
         userId, 
-        profileData.displayName || username
+        profileData.displayName || username,
+        null
       );
       
-      // Create perfect profile document
+      // Prepare profile document
       const profile = {
         uid: userId,
         username: username,
@@ -488,10 +496,29 @@ class ProfessionalUserService {
         phoneVerified: profileData.phoneVerified || false
       };
       
+      // Use a transaction to atomically create the user document and reserve the username
       const userDoc = doc(this.firestore, 'users', userId);
-      await setDoc(userDoc, profile);
+      const usernameDoc = doc(this.firestore, 'usernames', username);
       
-      // Create settings
+      await runTransaction(this.firestore, async (transaction) => {
+        // Ensure username is still available (double-check inside transaction)
+        const usernameSnap = await transaction.get(usernameDoc);
+        if (usernameSnap.exists()) {
+          throw new Error(`Username "${username}" is already taken.`);
+        }
+        
+        // Create the user document
+        transaction.set(userDoc, profile);
+        
+        // Reserve the username by creating a document in the usernames collection
+        transaction.set(usernameDoc, {
+          userId: userId,
+          username: username,
+          createdAt: serverTimestamp()
+        });
+      });
+      
+      // Create settings (outside transaction, not critical)
       const settingsDoc = doc(this.firestore, 'user_settings', userId);
       await setDoc(settingsDoc, {
         userId,
@@ -537,23 +564,53 @@ class ProfessionalUserService {
   async updateUserProfile(userId, updates) {
     try {
       await this._ensureInitialized();
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { doc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
       
-      // Handle username change
+      // Handle username change (if provided)
       if (updates.username) {
-        const username = updates.username.toLowerCase().trim();
+        const newUsername = updates.username.toLowerCase().trim();
+        const oldUsername = await this._getCurrentUsername(userId);
         
-        // Check availability
-        const check = await this.checkUsernameAvailability(username, userId);
-        if (!check.available) {
-          throw new Error(`Username "${username}" is not available`);
+        if (oldUsername !== newUsername) {
+          // Check availability using the usernames collection
+          const check = await this.checkUsernameAvailability(newUsername, userId);
+          if (!check.available) {
+            throw new Error(`Username "${newUsername}" is not available`);
+          }
+          
+          // Perform atomic update: change username document and user document
+          const userDoc = doc(this.firestore, 'users', userId);
+          const oldUsernameDoc = doc(this.firestore, 'usernames', oldUsername);
+          const newUsernameDoc = doc(this.firestore, 'usernames', newUsername);
+          
+          await runTransaction(this.firestore, async (transaction) => {
+            // Ensure new username still free
+            const newSnap = await transaction.get(newUsernameDoc);
+            if (newSnap.exists()) {
+              throw new Error(`Username "${newUsername}" is already taken.`);
+            }
+            
+            // Delete old username document
+            transaction.delete(oldUsernameDoc);
+            
+            // Create new username document
+            transaction.set(newUsernameDoc, {
+              userId,
+              username: newUsername,
+              updatedAt: serverTimestamp()
+            });
+            
+            // Update user document with new username
+            transaction.update(userDoc, {
+              username: newUsername,
+              updatedAt: serverTimestamp(),
+              'metadata.usernameUpdatedAt': serverTimestamp()
+            });
+          });
+          
+          // Remove username from updates so we don't double-update
+          delete updates.username;
         }
-        
-        updates.username = username;
-        updates.metadata = {
-          ...updates.metadata,
-          usernameUpdatedAt: serverTimestamp()
-        };
       }
       
       // Handle avatar update
@@ -573,7 +630,7 @@ class ProfessionalUserService {
         const currentProfile = await this.getUserProfile(userId);
         if (currentProfile && !currentProfile.metadata?.hasCustomAvatar) {
           // Generate new professional avatar
-          const newAvatar = this.generateDefaultAvatar(userId, updates.displayName);
+          const newAvatar = this.getAvatarUrl(userId, updates.displayName, null);
           updates.photoURL = newAvatar;
           updates.metadata = {
             ...updates.metadata,
@@ -584,6 +641,7 @@ class ProfessionalUserService {
         }
       }
       
+      // Apply remaining updates to user document
       const userDoc = doc(this.firestore, 'users', userId);
       await updateDoc(userDoc, {
         ...updates,
@@ -602,6 +660,13 @@ class ProfessionalUserService {
     }
   }
 
+  // Helper to get current username (used during update)
+  async _getCurrentUsername(userId) {
+    const profile = await this.getUserProfile(userId);
+    if (!profile) throw new Error('User not found');
+    return profile.username;
+  }
+
   // ==================== SIMPLE & RELIABLE METHODS ====================
   async getCoinBalance(userId) {
     try {
@@ -614,14 +679,14 @@ class ProfessionalUserService {
   }
 
   /**
-   * Add coins to a user – now uses monetization service for atomic transactions and audit trail.
+   * Add coins to a user – now uses monetization service (Cloud Function) for atomic transactions and audit trail.
    * Maintains same return shape ({ success: true }) for backward compatibility.
    */
   async addCoins(userId, amount, reason = 'reward') {
     try {
       await this._ensureInitialized();
       
-      // Delegate to monetization service for robust handling
+      // Delegate to monetization service – which calls a Cloud Function (safe)
       const result = await monetizationAddCoins(userId, amount, reason, { source: 'user_service' });
       
       if (!result.success) {
@@ -637,6 +702,88 @@ class ProfessionalUserService {
       console.error('Add coins failed:', error);
       throw error;
     }
+  }
+
+  // ==================== NEW: GET FRIENDS (mutual follows) WITH PAGINATION ====================
+  /**
+   * Get mutual friends (users who follow each other) with pagination.
+   * @param {string} userId - The user ID.
+   * @param {Object} options - Pagination options.
+   * @param {number} options.limit - Number of friends per page (default: 50).
+   * @param {string} options.startAfter - The last followingId from the previous page.
+   * @returns {Promise<Object>} { success, friends, hasMore, nextCursor }
+   */
+  async getFriends(userId, options = {}) {
+    await this._ensureInitialized();
+    const { limit = USER_CONFIG.FRIENDS_PAGE_SIZE, startAfter = null } = options;
+    
+    const { collection, query, where, getDocs, limit: firestoreLimit, startAfter: startAfterDoc, orderBy } = await import('firebase/firestore');
+    
+    // 1. Build the query for the followed list, respecting pagination
+    const followsRef = collection(this.firestore, 'follows');
+    let followingQuery = query(
+      followsRef,
+      where('followerId', '==', userId),
+      orderBy('followingId'), // we need a consistent order for pagination
+      firestoreLimit(limit * 2) // fetch extra to allow filtering
+    );
+    
+    if (startAfter) {
+      // The cursor is the last followingId from previous page
+      followingQuery = query(followingQuery, startAfterDoc(startAfter));
+    }
+    
+    const followingSnapshot = await getDocs(followingQuery);
+    const followingDocs = followingSnapshot.docs;
+    
+    if (followingDocs.length === 0) {
+      return { success: true, friends: [], hasMore: false, nextCursor: null };
+    }
+    
+    // Extract the followingIds and also keep the last document for cursor
+    const followingIds = followingDocs.map(doc => doc.data().followingId);
+    const lastFollowingDoc = followingDocs[followingDocs.length - 1];
+    const lastFollowingId = lastFollowingDoc.data().followingId;
+    
+    // 2. For each followed user, check if they follow back (batch in chunks of 10)
+    const friendIds = [];
+    const chunkSize = 10;
+    for (let i = 0; i < followingIds.length; i += chunkSize) {
+      const chunk = followingIds.slice(i, i + chunkSize);
+      const mutualQuery = query(
+        followsRef,
+        where('followerId', 'in', chunk),
+        where('followingId', '==', userId)
+      );
+      const mutualSnapshot = await getDocs(mutualQuery);
+      mutualSnapshot.forEach(doc => {
+        friendIds.push(doc.data().followerId);
+      });
+    }
+    
+    // 3. Fetch profiles for mutual friends
+    const friends = [];
+    for (const friendId of friendIds) {
+      const profile = await this.getUserProfile(friendId);
+      if (profile) {
+        friends.push(profile);
+      }
+    }
+    
+    // 4. Determine if there are more results (we fetched extra followingDocs)
+    const hasMore = followingDocs.length === limit * 2;
+    const nextCursor = hasMore ? lastFollowingId : null;
+    
+    // Return only up to the requested limit
+    const paginatedFriends = friends.slice(0, limit);
+    
+    return {
+      success: true,
+      friends: paginatedFriends,
+      hasMore,
+      nextCursor,
+      total: friends.length
+    };
   }
 
   /**
@@ -760,7 +907,7 @@ class ProfessionalUserService {
 
   async acceptFriendRequest(requestId, userId) {
     await this._ensureInitialized();
-    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+    const { doc, runTransaction, serverTimestamp, increment } = await import('firebase/firestore');
     const requestRef = doc(this.firestore, 'friend_requests', requestId);
     
     return await runTransaction(this.firestore, async (transaction) => {
@@ -899,7 +1046,7 @@ class ProfessionalUserService {
   async blockUser(blockerId, blockedId) {
     if (blockerId === blockedId) throw new Error('Cannot block yourself');
     await this._ensureInitialized();
-    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+    const { doc, runTransaction, serverTimestamp, increment } = await import('firebase/firestore');
     
     const blockRef = doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
     const follow1Ref = doc(this.firestore, 'follows', `${blockerId}_${blockedId}`);
@@ -1016,7 +1163,7 @@ class ProfessionalUserService {
       updatedAt: serverTimestamp(),
     });
     
-    // Optionally call a Cloud Function to handle full cleanup asynchronously
+    // Call the Cloud Function to handle full cleanup asynchronously
     try {
       const functions = getFunctions();
       const deleteUserData = httpsCallable(functions, 'deleteUserData');
@@ -1094,7 +1241,7 @@ class ProfessionalUserService {
       
       snapshot.forEach(doc => {
         const userData = doc.data();
-        // Ensure avatar
+        // Ensure avatar (using utility)
         userData.photoURL = this.getAvatarUrl(
           doc.id, 
           userData.displayName || userData.username,
@@ -1141,7 +1288,7 @@ class ProfessionalUserService {
         profileCompletedAt: serverTimestamp()
       });
       
-      // Reward – now uses monetization service
+      // Reward – now uses monetization service (which uses Cloud Function)
       await this.addCoins(userId, 100, 'profile_complete');
       
       this.cache.delete(userId);
@@ -1161,7 +1308,7 @@ class ProfessionalUserService {
   async resetToDefaultAvatar(userId) {
     try {
       const profile = await this.getUserProfile(userId);
-      const defaultAvatar = this.generateDefaultAvatar(userId, profile?.displayName || profile?.username);
+      const defaultAvatar = this.getAvatarUrl(userId, profile?.displayName || profile?.username, null);
       
       await this.updateUserProfile(userId, { 
         photoURL: defaultAvatar,
@@ -1226,6 +1373,11 @@ export function generateDefaultAvatar(userId, displayName) {
   return service.generateDefaultAvatar(userId, displayName);
 }
 
+export function getAvatarUrl(userId, displayName, existingPhotoURL = null) {
+  const service = getUserService();
+  return service.getAvatarUrl(userId, displayName, existingPhotoURL);
+}
+
 export async function updateUserAvatar(userId, photoURL) {
   const service = getUserService();
   return await service.updateUserAvatar(userId, photoURL);
@@ -1253,6 +1405,7 @@ export async function getCoinBalance(userId) {
   return await service.getCoinBalance(userId);
 }
 
+// ⚠️ This method is kept for backward compatibility but delegates to monetization service (Cloud Function)
 export async function addCoins(userId, amount, reason = 'reward') {
   const service = getUserService();
   return await service.addCoins(userId, amount, reason);
@@ -1299,6 +1452,12 @@ export async function getFriendRequests(userId, type = 'received') {
 export async function getMutualFriends(userId, otherUserId) {
   const service = getUserService();
   return await service.getMutualFriends(userId, otherUserId);
+}
+
+// NEW: Get Friends (mutual follows) – paginated
+export async function getFriends(userId, options = {}) {
+  const service = getUserService();
+  return await service.getFriends(userId, options);
 }
 
 // NEW: Blocking
@@ -1365,3 +1524,16 @@ export function clearUserCache(userId = null) {
 
 // ==================== DEFAULT EXPORT ====================
 export default getUserService;
+
+/**
+ * 🔥 CLOUD FUNCTIONS REQUIRED FOR COMPLETE SYSTEM:
+ *
+ * 1. `deleteUserData` – triggered on account deletion (or called from client)
+ *    Should delete all user data: posts, comments, messages, follows, friend requests, etc.
+ *    Finally delete the Auth user.
+ *
+ * 2. `updateDenormalizedFriendRequests` – triggered on user update (onWrite to users/{userId})
+ *    When a user changes displayName or photoURL, update all friend requests where the user is the sender.
+ *
+ * 3. (Optional) `awardCoinsForView` / `awardCoinsForProfileComplete` – but these are handled by monetization service.
+ */

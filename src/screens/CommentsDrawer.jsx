@@ -1,208 +1,203 @@
-// FIXED CommentsDrawer.jsx - Production Ready
+// src/screens/CommentsDrawer.jsx – ARVDOUL ULTIMATE PRO MAX V30
+// 💬 REAL‑TIME COMMENTS FROM commentService • REPLIES • LIKES • REPORTING • LOAD MORE
+// 🔥 PERFECT ANIMATIONS • GLASS‑MORPHIC • BILLION‑SCALE
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { commentService } from '../services/commentService.js';
+import commentService from '../services/commentService.js';
+import { useTheme } from '../context/ThemeContext';
+import { useAppStore } from '../store/appStore';
 
-const CommentsDrawer = React.memo(({ 
-  isOpen, 
-  onClose, 
-  post, 
-  currentUser, 
-  theme 
-}) => {
+// Icons
+import { Heart, MessageCircle, X, Send, Loader2, Flag, Reply } from 'lucide-react';
+import { FaHeart, FaRegHeart } from 'react-icons/fa6';
+
+const formatTime = (timestamp) => {
+  if (!timestamp) return '';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const now = new Date();
+  const diff = (now - date) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return `${Math.floor(diff / 86400)}d`;
+};
+
+const CommentsDrawer = ({ isOpen, onClose, post, currentUser, theme, onCommentPosted }) => {
   const [comments, setComments] = useState([]);
-  const [nestedComments, setNestedComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [showFullScreen, setShowFullScreen] = useState(false);
+  const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyContent, setReplyContent] = useState('');
-  
+  const [hasMore, setHasMore] = useState(false);
+  const [lastDoc, setLastDoc] = useState(null);
+
   const commentsEndRef = useRef(null);
-  const drawerRef = useRef(null);
   const unsubscribeRef = useRef(null);
 
-  // Load comments with commentService
-  const loadComments = useCallback(async () => {
+  // Load comments
+  const loadComments = useCallback(async (loadMore = false) => {
     if (!post?.id) return;
-    
     setLoading(true);
     try {
       const result = await commentService.getCommentsByPost(post.id, {
-        parentId: null, // Top-level comments only
-        nested: true,   // Get nested structure
-        limit: 50,
-        cacheFirst: true
+        parentId: null,
+        limit: 20,
+        startAfter: loadMore ? lastDoc : null,
       });
-      
       if (result.success) {
-        setComments(result.comments);
-        setNestedComments(result.comments);
+        const newComments = result.comments;
+        setComments((prev) => (loadMore ? [...prev, ...newComments] : newComments));
+        setHasMore(result.hasMore);
+        if (result.lastComment) setLastDoc(result.lastComment);
       }
-    } catch (error) {
-      console.error('Load comments failed:', error);
+    } catch (err) {
+      console.error(err);
       toast.error('Failed to load comments');
     } finally {
       setLoading(false);
     }
-  }, [post?.id]);
+  }, [post?.id, lastDoc]);
 
-  // Setup real-time subscription
+  // Real‑time subscription
   useEffect(() => {
     if (!isOpen || !post?.id) return;
-    
-    // Load initial comments
     loadComments();
-    
-    // Setup real-time subscription
-    const subscriptionId = commentService.subscribeToPostComments(
-      post.id,
-      (update) => {
-        if (update.type === 'update') {
-          setComments(update.comments);
-          setNestedComments(update.comments);
-        }
-      },
-      { parentId: null, nested: true, limit: 50 }
-    );
-    
-    unsubscribeRef.current = () => commentService.unsubscribe(subscriptionId);
-    
-    return () => {
-      if (unsubscribeRef.current) unsubscribeRef.current();
-    };
-  }, [isOpen, post?.id, loadComments]);
+    const subId = commentService.subscribeToPostComments(post.id, (update) => {
+      if (update.type === 'update') {
+        setComments(update.comments);
+      }
+    }, { parentId: null, nested: true });
+    unsubscribeRef.current = () => commentService.unsubscribe(subId);
+    return () => unsubscribeRef.current?.();
+  }, [isOpen, post?.id]);
 
-  // Submit comment using commentService
+  // Submit comment
   const handleSubmitComment = async () => {
-    if (!newComment.trim() || !currentUser?.uid || !post?.id || submitting) return;
-    
+    if (!newComment.trim() || !currentUser?.uid || submitting) return;
     setSubmitting(true);
     try {
-      await commentService.createComment(post.id, currentUser.uid, newComment.trim(), {
+      const result = await commentService.createComment(post.id, currentUser.uid, newComment.trim(), {
         userName: currentUser.displayName,
         userUsername: currentUser.username,
-        userAvatar: currentUser.photoURL
+        userAvatar: currentUser.photoURL,
       });
-      
       setNewComment('');
-      toast.success('Comment posted!');
-      
-      setTimeout(() => {
-        commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-      
-    } catch (error) {
-      console.error('Post comment failed:', error);
-      toast.error(error.message || 'Failed to post comment');
+      toast.success('Comment posted');
+      const updatedPost = {
+        ...post,
+        stats: { ...post.stats, comments: (post.stats?.comments || 0) + 1 }
+      };
+      onCommentPosted?.(updatedPost);
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (err) {
+      toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Submit reply using commentService
+  // Submit reply
   const handleSubmitReply = async () => {
-    if (!replyContent.trim() || !replyingTo || !currentUser?.uid || !post?.id) return;
-    
+    if (!replyContent.trim() || !replyingTo || !currentUser?.uid) return;
     try {
       await commentService.replyToComment(replyingTo.id, currentUser.uid, replyContent.trim(), {
         userName: currentUser.displayName,
         userUsername: currentUser.username,
         userAvatar: currentUser.photoURL,
-        replyToUsername: replyingTo.userUsername
       });
-      
       setReplyContent('');
       setReplyingTo(null);
-      toast.success('Reply posted!');
-      
-    } catch (error) {
-      console.error('Post reply failed:', error);
-      toast.error(error.message || 'Failed to post reply');
+      toast.success('Reply posted');
+      const updatedPost = {
+        ...post,
+        stats: { ...post.stats, comments: (post.stats?.comments || 0) + 1 }
+      };
+      onCommentPosted?.(updatedPost);
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
-  // Like comment using commentService
+  // Like comment
   const handleLikeComment = async (commentId) => {
     if (!currentUser?.uid) {
-      toast.error('Sign in to like comments');
+      toast.error('Sign in to like');
       return;
     }
-    
     try {
       await commentService.likeComment(commentId, currentUser.uid);
-      // Real-time update will handle the UI update
-    } catch (error) {
-      console.error('Like comment failed:', error);
-      toast.error(error.message || 'Failed to like comment');
+      // Real‑time update will handle UI
+    } catch (err) {
+      toast.error(err.message);
     }
   };
 
-  // Render nested comments recursively
-  const renderCommentTree = (comments, depth = 0) => {
-    return comments.map((comment) => (
-      <div key={comment.id} className={`${depth > 0 ? 'ml-8 pl-4 border-l-2 border-gray-300 dark:border-gray-700' : ''}`}>
-        <div className="flex gap-3 p-3 rounded-2xl bg-gray-50/50 dark:bg-gray-800/50 mb-3">
-          <img
-            src={comment.userPhoto || comment.userAvatar || '/assets/default-profile.png'}
-            alt={comment.userName}
-            className="w-10 h-10 rounded-full"
-          />
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="font-bold dark:text-white">{comment.userName}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {formatCommentTime(comment.createdAt)}
-                </span>
-              </div>
-            </div>
-            <p className="dark:text-gray-300 mb-2">{comment.content}</p>
-            
-            <div className="flex items-center gap-4 text-sm">
-              <button 
-                onClick={() => handleLikeComment(comment.id)}
-                className="text-gray-500 hover:text-red-500 dark:hover:text-red-400 flex items-center gap-1"
-              >
-                <Heart className="w-4 h-4" />
-                <span>{comment.likes || 0}</span>
-              </button>
-              
-              <button 
-                onClick={() => setReplyingTo(comment)}
-                className="text-gray-500 hover:text-blue-500 dark:hover:text-blue-400"
-              >
-                Reply
-              </button>
-              
-              {comment.replies?.length > 0 && (
-                <button className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                  {comment.replies.length} replies
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        {/* Replies */}
-        {comment.replies && comment.replies.length > 0 && (
-          <div className="mt-2">
-            {renderCommentTree(comment.replies, depth + 1)}
-          </div>
-        )}
-      </div>
-    ));
+  // Report comment
+  const handleReportComment = (commentId) => {
+    if (!currentUser?.uid) return;
+    const reason = window.prompt('Reason for reporting?');
+    if (reason) {
+      commentService.reportComment(commentId, currentUser.uid, reason).catch(console.warn);
+    }
   };
 
-  // ... (rest of the component remains similar with UI)
+  // Render nested comments
+  const renderComment = (comment, depth = 0) => {
+    const isLiked = comment.likedBy?.includes(currentUser?.uid);
+    return (
+      <div key={comment.id} className={`${depth > 0 ? 'ml-8 mt-2 pl-4 border-l-2 border-gray-300 dark:border-gray-700' : 'mt-4'}`}>
+        <div className="flex gap-3">
+          <img
+            src={comment.userAvatar || '/assets/default-profile.png'}
+            alt=""
+            className="w-10 h-10 rounded-full object-cover"
+          />
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold dark:text-white">{comment.userName}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">{formatTime(comment.createdAt)}</span>
+            </div>
+            <p className="dark:text-gray-300 mt-1 break-words">{comment.content}</p>
+            <div className="flex items-center gap-4 mt-2 text-sm">
+              <button
+                onClick={() => handleLikeComment(comment.id)}
+                className="flex items-center gap-1 text-gray-500 hover:text-red-500"
+              >
+                {isLiked ? (
+                  <FaHeart className="w-4 h-4 text-red-500 fill-current" />
+                ) : (
+                  <FaRegHeart className="w-4 h-4" />
+                )}
+                <span>{comment.likes || 0}</span>
+              </button>
+              <button
+                onClick={() => setReplyingTo(comment)}
+                className="flex items-center gap-1 text-gray-500 hover:text-blue-500"
+              >
+                <Reply className="w-4 h-4" />
+                Reply
+              </button>
+              <button
+                onClick={() => handleReportComment(comment.id)}
+                className="text-gray-500 hover:text-red-500"
+              >
+                <Flag className="w-4 h-4" />
+              </button>
+            </div>
+            {comment.replies?.map((reply) => renderComment(reply, depth + 1))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -210,124 +205,103 @@ const CommentsDrawer = React.memo(({
             onClick={onClose}
             className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[90]"
           />
-          
-          {/* Drawer Content */}
           <motion.div
-            ref={drawerRef}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className={`fixed ${showFullScreen ? 'inset-0' : 'bottom-0 left-0 right-0'} z-[91] ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} ${showFullScreen ? '' : 'rounded-t-3xl'} shadow-2xl flex flex-col`}
-            style={{ height: showFullScreen ? '100vh' : '90vh' }}
+            transition={{ type: 'spring', damping: 25 }}
+            className={`fixed bottom-0 left-0 right-0 z-[91] ${
+              theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+            } rounded-t-3xl shadow-2xl max-h-[90vh] flex flex-col`}
           >
             {/* Header */}
-            <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} flex items-center justify-between`}>
+            <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <MessageCircle className="w-6 h-6" />
                 <div>
                   <h3 className="text-xl font-bold dark:text-white">Comments</h3>
-                  <p className="text-sm dark:text-gray-400">
-                    {post?.stats?.comments || 0} comments • {comments.length} loaded
-                  </p>
+                  <p className="text-sm dark:text-gray-400">{post?.stats?.comments || 0} total</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowFullScreen(!showFullScreen)}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  {showFullScreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            
-            {/* Reply Input (if replying) */}
+
+            {/* Reply input if replying */}
             {replyingTo && (
-              <div className={`p-4 border-b ${theme === 'dark' ? 'border-blue-800/30' : 'border-blue-200'} bg-blue-50/50 dark:bg-blue-900/10`}>
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="flex-1">
-                    <p className="text-sm dark:text-gray-300 mb-1">
-                      Replying to <span className="font-bold">{replyingTo.userName}</span>
-                    </p>
-                    <textarea
-                      value={replyContent}
-                      onChange={(e) => setReplyContent(e.target.value)}
-                      placeholder="Write your reply..."
-                      className="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white resize-none"
-                      rows={2}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={handleSubmitReply}
-                      disabled={!replyContent.trim()}
-                      className="px-4 py-2 rounded-xl bg-blue-500 text-white disabled:opacity-50"
-                    >
-                      Reply
-                    </button>
-                    <button
-                      onClick={() => setReplyingTo(null)}
-                      className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+              <div className="p-4 border-b border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10">
+                <p className="text-sm mb-2">
+                  Replying to <span className="font-bold">{replyingTo.userName}</span>
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                    placeholder="Write your reply..."
+                    className="flex-1 p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white"
+                  />
+                  <button
+                    onClick={handleSubmitReply}
+                    disabled={!replyContent.trim()}
+                    className="px-4 py-2 rounded-xl bg-blue-500 text-white disabled:opacity-50"
+                  >
+                    Reply
+                  </button>
+                  <button
+                    onClick={() => setReplyingTo(null)}
+                    className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             )}
-            
-            {/* Comments List */}
+
+            {/* Comments list */}
             <div className="flex-1 overflow-y-auto p-4">
-              {loading ? (
-                <div className="flex flex-col gap-4 py-8">
-                  {[1,2,3].map(i => (
-                    <div key={i} className="flex gap-3 p-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-700 animate-pulse" />
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded mb-2 animate-pulse" style={{ width: '60%' }} />
-                        <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded mb-1 animate-pulse" style={{ width: '90%' }} />
-                        <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded animate-pulse" style={{ width: '70%' }} />
-                      </div>
-                    </div>
-                  ))}
+              {loading && comments.length === 0 ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                 </div>
-              ) : nestedComments.length === 0 ? (
+              ) : comments.length === 0 ? (
                 <div className="text-center py-12">
                   <MessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h4 className="text-lg font-bold mb-2 dark:text-white">No comments yet</h4>
-                  <p className="text-gray-500 dark:text-gray-400">Be the first to comment!</p>
+                  <p className="dark:text-gray-300">No comments yet. Be the first!</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {renderCommentTree(nestedComments)}
+                <>
+                  {comments.map((c) => renderComment(c))}
+                  {hasMore && (
+                    <button
+                      onClick={() => loadComments(true)}
+                      className="mt-4 w-full py-2 text-center text-blue-500 hover:underline"
+                    >
+                      Load more comments
+                    </button>
+                  )}
                   <div ref={commentsEndRef} />
-                </div>
+                </>
               )}
             </div>
-            
-            {/* Comment Input */}
-            <div className={`p-4 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+
+            {/* New comment input */}
+            <div className="p-4 border-t border-gray-200 dark:border-gray-800">
               <div className="flex gap-2">
                 <img
                   src={currentUser?.photoURL || '/assets/default-profile.png'}
-                  alt={currentUser?.displayName}
-                  className="w-10 h-10 rounded-full"
+                  alt=""
+                  className="w-10 h-10 rounded-full object-cover"
                 />
                 <div className="flex-1 relative">
                   <input
                     type="text"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder={replyingTo ? `Replying to ${replyingTo.userName}...` : "Write a comment..."}
-                    className="w-full p-3 pl-4 pr-12 rounded-2xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:border-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && !submitting && handleSubmitComment()}
+                    placeholder="Write a comment..."
+                    className="w-full p-3 pr-12 rounded-2xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white"
+                    onKeyPress={(e) => e.key === 'Enter' && !submitting && handleSubmitComment()}
                   />
                   <button
                     onClick={handleSubmitComment}
@@ -344,6 +318,6 @@ const CommentsDrawer = React.memo(({
       )}
     </AnimatePresence>
   );
-});
+};
 
 export default CommentsDrawer;
