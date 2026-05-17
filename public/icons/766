@@ -1,1 +1,1238 @@
 
+Welcome to Termux
+
+Docs:       https://doc.termux.com
+Community:  https://community.termux.com
+
+Working with packages:
+ - Search:  pkg search <query>
+ - Install: pkg install <package>
+ - Upgrade: pkg upgrade
+
+Report issues at https://bugs.termux.com
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx ~/Arvdoul/src/components/Shared/BottomNav.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/BottomNav.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/App.jsx ~/Arvdoul/src/App.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/App.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/App.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsxcp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppRoutes.jsx': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.jsx ~/Arvdoul/src/services/firestoreservice.js
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.jsx': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/watermarkService.js ~/Arvdoul/src/services/watermarkServiceervice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/watermarkService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/watermarkServiceervice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/watermarkService.js ~/Arvdoul/src/services/watermarkServiceervice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/watermarkService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/watermarkServiceervice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/watermarkService.js ~/Arvdoul/src/services/watermarkService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/watermarkService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/watermarkService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/store/appStore.js ~/Arvdoul/src/store/appStore.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/store/appStore.js' -> '/data/data/com.termux/files/home/Arvdoul/src/store/appStore.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx ~/Arvdoul/src/screens/CoinsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CoinsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storageService.js ~/Arvdoul/src/services/storageService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storageService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storageService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx ~/Arvdoul/src/screens/CoinsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CoinsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul
+/Arvdoul $
+Welcome to Termux
+
+Docs:       https://doc.termux.com
+Community:  https://community.termux.com
+
+Working with packages:
+ - Search:  pkg search <query>
+ - Install: pkg install <package>
+ - Upgrade: pkg upgrade
+
+Report issues at https://bugs.termux.com
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx ~/Arvdoul/src/components/Shared/BottomNav.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/BottomNav.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/App.jsx ~/Arvdoul/src/App.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/App.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/App.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsxcp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppRoutes.jsx': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/layouts/MainLayout.jsx ~/Arvdoul/src/layouts/MainLayout.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/layouts/MainLayout.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/layouts/MainLayout.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.jsx ~/Arvdoul/src/services/firestoreservice.js
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.jsx': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/watermarkService.js ~/Arvdoul/src/services/watermarkServiceervice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/watermarkService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/watermarkServiceervice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/watermarkService.js ~/Arvdoul/src/services/watermarkServiceervice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/watermarkService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/watermarkServiceervice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/watermarkService.js ~/Arvdoul/src/services/watermarkService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/watermarkService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/watermarkService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/store/appStore.js ~/Arvdoul/src/store/appStore.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/store/appStore.js' -> '/data/data/com.termux/files/home/Arvdoul/src/store/appStore.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx ~/Arvdoul/src/screens/CoinsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CoinsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreservice.js ~/Arvdoul/src/services/firestoreservice.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreservice.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreservice.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storageService.js ~/Arvdoul/src/services/storageService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storageService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storageService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx ~/Arvdoul/src/screens/CoinsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CoinsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CoinsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul^C
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ npm list luiced react firebase
+arvdoul@1.0.0 /data/data/com.termux/files/home/Arvdoul
+├─┬ @react-oauth/google@0.13.4
+│ └── react@18.3.1 deduped
+├─┬ @testing-library/react@16.3.1
+│ └── react@18.3.1 deduped
+├── firebase@12.7.0
+├─┬ framer-motion@6.3.7
+│ └── react@18.3.1 deduped
+├─┬ lucide-react@0.562.0
+│ └── react@18.3.1 deduped
+├─┬ react-dom@18.3.1
+│ └── react@18.3.1 deduped
+├─┬ react-helmet-async@2.0.5
+│ └── react@18.3.1 deduped
+├─┬ react-icons@5.5.0
+│ └── react@18.3.1 deduped
+├─┬ react-intersection-observer@9.16.0
+│ └── react@18.3.1 deduped
+├─┬ react-phone-number-input@3.4.14
+│ ├─┬ input-format@0.3.14
+│ │ └── react@18.3.1 deduped
+│ └── react@18.3.1 deduped
+├─┬ react-router-dom@6.30.2
+│ ├─┬ react-router@6.30.2
+│ │ └── react@18.3.1 deduped
+│ └── react@18.3.1 deduped
+├── react@18.3.1
+├─┬ sonner@2.0.7
+│ └── react@18.3.1 deduped
+└─┬ zustand@5.0.9
+  └── react@18.3.1 deduped
+
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul^C
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul
+eens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul^C
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx ~/Arvdoul/src/components/Shared/BottomNav.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/BottomNav.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MenuDrawer.jsx ~/Arvdoul/src/screens/MenuDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MenuDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MenuDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul(0)/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+bash: syntax error near unexpected token `('
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/commentService.js ~/Arvdoul/src/services/commentService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/commentService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/commentService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/commentService.js ~/Arvdoul/src/services/commentsService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/commentService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/commentsService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/commentService.js ~/Arvdoul/src/services/commentsService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/commentService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/commentsService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MenuDrawer.jsx ~/Arvdoul/src/screens/MenuDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MenuDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MenuDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/messagingScreen.jsx ~/Arvdoul/src/screens/messagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/messagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/messagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/messagingScreen.jsx ~/Arvdoul/src/screens/chatScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/messagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/chatScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/notificationsService.js ~/Arvdoul/src/services/notificationsService.js
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/notificationsService.js': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/notificationsService.js ~/Arvdoul/src/services/notificationsService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/notificationsService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/notificationsService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx ~/Arvdoul/src/screens/PostOptionsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostOptionsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx ~/Arvdoul/src/components/Shared/QuickAccessPanel.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/QuickAccessPanel.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/QuickAccessPanel.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx ~/Arvdoul/src/screens/PostOptionsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostOptionsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/ChatScreen.jsx ~/Arvdoul/src/screens/ChatScreen.jsx
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/ChatScreen.jsx': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ChatScreen.jsx ~/Arvdoul/src/screens/ChatScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ChatScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ChatScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ConveesationList.jsx ~/Arvdoul/src/screens/ConversationList.jsx
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ConveesationList.jsx': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ConversationList.jsx ~/Arvdoul/src/screens/ConversationList.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ConversationList.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ConversationList.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ChatScreen.jsx ~/Arvdoul/src/screens/ChatScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ChatScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ChatScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx ~/Arvdoul/src/screens/PostOptionsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostOptionsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx ~/Arvdoul/src/screens/PostOptionsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostOptionsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ChatScreen.jsx ~/Arvdoul/src/screens/ChatScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ChatScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ChatScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ConversationList.jsx ~/Arvdoul/src/screens/ConversationList.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ConversationList.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ConversationList.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ConversationList.jsx ~/Arvdoul/src/screens/ConversationList.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ConversationList.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ConversationList.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ChatScreen.jsx ~/Arvdoul/src/screens/ChatScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ChatScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ChatScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagesScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagesScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagesScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagesScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagesScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagesScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/MessagesScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/MessagesScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagesScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagesScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ConversationList.jsx ~/Arvdoul/src/screens/ConversationList.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ConversationList.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ConversationList.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx ~/Arvdoul/src/screens/MessagingScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/MessagingScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/MessagingScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/ChatScreen.jsx ~/Arvdoul/src/screens/ChatScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/ChatScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/ChatScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'
+~/Arvdoul
+oul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/commentService.js ~/Arvdoul/src/services/commentService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/commentService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/commentService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul
+services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul^C
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/monetizationService.js ~/Arvdoul/src/services/monetizationService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/monetizationService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/monetizationService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/notificationsService.js ~/Arvdoul/src/services/notificationsService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/notificationsService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/notificationsService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/commentService.js ~/Arvdoul/src/services/commentService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/commentService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/commentService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul(0)/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+bash: syntax error near unexpected token `('
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/notificationService.js ~/Arvdoul/src/services/monetizationService.js
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/notificationService.js': No such file or directory
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/monetizationService.js ~/Arvdoul/src/services/monetizationService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/monetizationService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/monetizationService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/functions3/index.js ~/Arvdoul/functions/index.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/functions3/index.js' -> '/data/data/com.termux/files/home/Arvdoul/functions/index.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/store/appStore.js ~/Arvdoul/src/store/appStore.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/store/appStore.js' -> '/data/data/com.termux/files/home/Arvdoul/src/store/appStore.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/searchService.js ~/Arvdoul/src/services/searchService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/searchService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/searchService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService1.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService1.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'^C
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx ~/Arvdoul/src/screens/SignupStep2VerifyContact.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SignupStep2VerifyContact.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx ~/Arvdoul/src/screens/SignupStep2VerifyContact.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SignupStep2VerifyContact.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx ~/Arvdoul/src/screens/SignupStep2VerifyContact.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SignupStep2VerifyContact.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx ~/Arvdoul/src/screens/SignupStep2VerifyContact.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SignupStep2VerifyContact.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx ~/Arvdoul/src/screens/SignupStep2VerifyContact.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SignupStep2VerifyContact.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul
+e.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul^C
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/videoService.js ~/Arvdoul/src/services/videoService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/videoService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/videoService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreateStory.jsx ~/Arvdoul/src/screens/CreateStory.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreateStory.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreateStory.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/notificationsService.js ~/Arvdoul/src/services/notificationsService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/notificationsService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/notificationsService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/functions3/index.js ~/Arvdoul/functions/index.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/functions3/index.js' -> '/data/data/com.termux/files/home/Arvdoul/functions/index.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/feedService.js ~/Arvdoul/src/services/feedService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/services/feedService.js ~/Arvdoul/src/services/feedService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx                          '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'     
+~/Arvdoul
+/storage/shared/Arvdoul1/src/services/feedService.js ~/Arvdoul/src/services/feedService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx                          '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'                       ~/Arvdoul^C                                  ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx                            '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'                         ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/app/AppStateGuard.jsx ~/Arvdoul/src/app/AppStateGuard.jsx                            '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/app/AppStateGuard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/app/AppStateGuard.jsx'                         ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/services/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx                              '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'                           ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/monetizationService.js ~/Arvdoul/src/services/monetizationService.js       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/monetizationService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/monetizationService.js'    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/vite.config.js ~/Arvdoul/vite.config.js     '/data/data/com.termux/files/home/storage/shared/Arvdoul/vite.config.js' -> '/data/data/com.termux/files/home/Arvdoul/vite.config.js'  ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/vite.config.js ~/Arvdoul/vite.config.cjs    '/data/data/com.termux/files/home/storage/shared/Arvdoul/vite.config.js' -> '/data/data/com.termux/files/home/Arvdoul/vite.config.cjs' ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/vite.config.cjs ~/Arvdoul/vite.config.cjs   '/data/data/com.termux/files/home/storage/shared/Arvdoul/vite.config.cjs' -> '/data/data/com.termux/files/home/Arvdoul/vite.config.cjs'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx ~/Arvdoul/src/components/Shared/BottomNav.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/BottomNav.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/BottomNav.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/components/Shared/TopAppBar.jsx ~/Arvdoul/src/components/Shared/TopAppBar.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/components/Shared/TopAppBar.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/components/Shared/TopAppBar.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/routes/AppRoutes.jsx ~/Arvdoul/src/routes/AppRoutes.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/routes/AppRoutes.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/routes/AppRoutes.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storageService.js ~/Arvdoul/src/services/storageService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storageService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storageService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services1/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services1/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/authService.js ~/Arvdoul/src/services/authService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/authService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/authService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul1/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul1/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/context/AuthContext.jsx ~/Arvdoul/src/context/AuthContext.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/context/AuthContext.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/context/AuthContext.jsx'
+~/Arvdoul $ cd ~/Arvdoul                     ~/Arvdoul $ git fetch origin                 ~/Arvdoul $ git reset --hard origin/main
+HEAD is now at 8771058 update                ~/Arvdoul $ git clean -fd                    Removing .ares_apex/backups/                 Removing .ares_apex/reports/
+Removing .ares_infinity/analysis/            Removing .ares_infinity/backups/             Removing .ares_infinity/fixes/
+Removing .ares_infinity/reports/             Removing .ares_infinity/temp/                Removing .ares_nexus/backups/                Removing .ares_nexus/reports/
+Removing .ares_omega/cores/                  Removing .ares_omega/critical/               Removing .ares_omega/deepscan/
+Removing .ares_omega/platform/               Removing .ares_omega/reports/                Removing .ares_ultra/backup_brains/          Removing .ares_ultra/critical/
+Removing .ares_ultra/emergency/              Removing .ares_ultra/fallbacks/              Removing .ares_ultra/immortal/
+Removing .ares_ultra/nuclear_fallback/       Removing .ares_ultra/resurrections/          Removing .ares_ultra/runtime/analyzers/      Removing .ares_ultra/runtime/backups/
+Removing .ares_ultra/runtime/cache/          Removing .ares_ultra/runtime/cores/          Removing .ares_ultra/runtime/parsers/
+Removing .ares_ultra/runtime/recovery/       Removing .ares_ultra/runtime/transformers/   Removing .ares_v3/backups/                   Removing .ares_v3/cache/
+Removing .ares_v3/reports/                   Removing .ares_v3/temp/                      Removing dist/
+Removing functions/firestore.indexes.json    Removing src/context/AuthContext.jsx^C       Removing src/screens/NewConversationScreen.jsx
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx ~/Arvdoul/src/screens/PostOptionsDrawer.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostOptionsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostOptionsDrawer.jsx'
+~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul3/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx
+cp: cannot stat '/data/data/com.termux/files/home/storage/shared/Arvdoul3/src/screens/HomeScreen.jsx': No such file or directory       ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/HomeScreen.jsx ~/Arvdoul/src/screens/HomeScreen.jsx                          '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/HomeScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/HomeScreen.jsx'                       ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/PostCard.jsx ~/Arvdoul/src/screens/PostCard.jsx                              '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/PostCard.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/PostCard.jsx'                           ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CreatePost.jsx ~/Arvdoul/src/screens/CreatePost.jsx                          '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CreatePost.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CreatePost.jsx'                       ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx ~/Arvdoul/src/screens/CommentsDrawer.jsx                  '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/CommentsDrawer.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/CommentsDrawer.jsx'               ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js                      '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'                   ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/feedService.js ~/Arvdoul/src/services/feedService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/storyService.js ~/Arvdoul/src/services/storyService.js                     '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'                  ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storyService.js ~/Arvdoul/src/services/storyService.js                      '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storyService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storyService.js'                   ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/functions3/index.js ~/Arvdoul/functions/index.js                                         '/data/data/com.termux/files/home/storage/shared/Arvdoul/functions3/index.js' -> '/data/data/com.termux/files/home/Arvdoul/functions/index.js'                                      ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/storageService.js ~/Arvdoul/src/services/storageService.js                  '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/storageService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/storageService.js'               ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/firebase/firebase.js ~/Arvdoul/src/firebase/firebase.js                              '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/firebase/firebase.js' -> '/data/data/com.termux/files/home/Arvdoul/src/firebase/firebase.js'                           ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/feedService.js ~/Arvdoul/src/services/feedService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/feedService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/feedService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx ~/Arvdoul/src/screens/SignupStep2VerifyContact.jsx
+'/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SignupStep2VerifyContact.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SignupStep2VerifyContact.jsx'                                        ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/userService.js ~/Arvdoul/src/services/userService.js                       '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                    ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/userService.js ~/Arvdoul/src/services/userService.js                        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/userService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/userService.js'                     ~/Arvdoul $  cp -v -f ~/storage/shared/Arvdoul/src/screens/SetupProfile.jsx ~/Arvdoul/src/screens/SetupProfile.jsx                     '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/SetupProfile.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/SetupProfile.jsx'                   ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/messagesService.js ~/Arvdoul/src/services/messagesService.js                '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'             ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services2/messagesService.js ~/Arvdoul/src/services/messagesService.js               '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services2/messagesService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/messagesService.js'            ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx ~/Arvdoul/src/screens/NotificationsScreen.jsx        '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/screens/NotificationsScreen.jsx' -> '/data/data/com.termux/files/home/Arvdoul/src/screens/NotificationsScreen.jsx'     ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/notificationsService.js ~/Arvdoul/src/services/notificationsService.js      '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/notificationsService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/notificationsService.js'   ~/Arvdoul $ cp -v -f ~/storage/shared/Arvdoul/src/services/firestoreService.js ~/Arvdoul/src/services/firestoreService.js              '/data/data/com.termux/files/home/storage/shared/Arvdoul/src/services/firestoreService.js' -> '/data/data/com.termux/files/home/Arvdoul/src/services/firestoreService.js'           ~/Arvdoul

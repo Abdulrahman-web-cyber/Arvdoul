@@ -1,13 +1,169 @@
+<!-- index.html - ULTIMATE FIXED VERSION - NO DUPLICATE SPLASH -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Arvdoul - Splash Screen Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- App Icons -->
+    <link rel="icon" type="image/png" href="/icons/icon.png" />
+    <link rel="apple-touch-icon" href="/icons/icon.png" />
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Arvdoul">
+    
+    <!-- Performance & Responsiveness -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    
+    <title>Arvdoul</title>
+    
+    <!-- Critical CSS - Shows your app background immediately -->
+    <style>
+      /* CRITICAL: Prevent white/black flash */
+      body {
+        margin: 0;
+        padding: 0;
+        background: #000000; /* Match your splash screen background */
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+      }
+      
+      #root {
+        position: relative;
+        height: 100vh;
+        width: 100vw;
+      }
+      
+      /* Remove any splash screen if exists */
+      #splash {
+        display: none !important;
+      }
+      
+      /* Prevent selection and tap highlights */
+      * {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+      
+      /* Allow selection in input fields */
+      input, textarea {
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      
+      /* Loading state for root */
+      .app-loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #000000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+    </style>
+    
+    <!-- Global error handler -->
+    <script>
+      // Global error handler for better debugging
+      window.addEventListener('error', function(event) {
+        console.error('Global error:', {
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          error: event.error
+        });
+        
+        // Send to analytics if available
+        if (window.gtag) {
+          window.gtag('event', 'exception', {
+            description: event.message,
+            fatal: true
+          });
+        }
+      });
+
+      // Unhandled promise rejection
+      window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled promise rejection:', event.reason);
+      });
+
+      // Prevent double tap zoom on mobile
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', function(event) {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          event.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, false);
+      
+      // Prevent context menu
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      });
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Root container for React -->
+    <div id="root">
+      <!-- Temporary loading state - will be replaced by React immediately -->
+      <div class="app-loading">
+        <!-- This will be visible for ~100ms until React renders -->
+        <div style="
+          width: 60px;
+          height: 60px;
+          border: 3px solid rgba(255,255,255,0.1);
+          border-top-color: #8b5cf6;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        "></div>
+      </div>
+    </div>
+    
+    <!-- Main React Entry -->
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      // Register service worker in background
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(
+            (registration) => {
+              console.log('✅ ServiceWorker registered');
+            },
+            (err) => {
+              console.log('⚠️ ServiceWorker registration failed: ', err);
+            }
+          );
+        });
+      }
+      
+      // Add spin animation for loading spinner
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    </script>
   </body>
 </html>

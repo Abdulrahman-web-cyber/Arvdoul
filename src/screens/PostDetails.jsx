@@ -1,135 +1,80 @@
-import { useParams } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
-import {
-  doc,
-  onSnapshot,
-  updateDoc,
-  arrayUnion,
-  increment,
-} from "firebase/firestore";
-import { db } from "../firebase/firebase.js";
-import {
-  Heart,
-  MessageCircle,
-  Bookmark,
-  Share,
-  MoreVertical,
-} from "lucide-react";
-import SwipableMedia from "@components/Home/SwipableMedia";
-import { useAuth } from "@context/AuthContext";
-import { formatDistanceToNow } from "date-fns";
+// src/screens/PostDetails.jsx – Full post view with swipe to go back, all types work
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, useMotionValue } from 'framer-motion';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext';
+import firestoreService from '../services/firestoreService.js';
+import PostCard, { MediaGallery, PostHeader, PostContent, PostActions } from './PostCard.jsx';
+import { ArrowLeft, Share2 } from 'lucide-react';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { triggerHaptic } from '../utils/haptics';
+
+const CommentsDrawer = React.lazy(() => import('./CommentsDrawer.jsx'));
+
+const cn = (...classes) => classes.filter(Boolean).join(' ');
 
 export default function PostDetails() {
   const { postId } = useParams();
-  const { user, addCoins } = useAuth();
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const { theme } = useTheme();
   const [post, setPost] = useState(null);
-  const [liked, setLiked] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showComments, setShowComments] = useState(false);
+  const dragX = useMotionValue(0);
+  const [exitAnimating, setExitAnimating] = useState(false);
+  const winWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
 
-  // ---------------- Real-time Firestore Listener ----------------
-  useEffect(() => {
-    const postRef = doc(db, "posts", postId);
-    const unsubscribe = onSnapshot(postRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = { id: docSnap.id, ...docSnap.data() };
-        setPost(data);
-        setLiked(data.likedBy?.includes(user?.uid) || false);
-      }
-    });
-    return unsubscribe;
-  }, [postId, user?.uid]);
-
-  // ---------------- Like Handler ----------------
-  const handleLike = useCallback(async () => {
-    if (!user || liked) return;
-
+  const loadPost = useCallback(async () => {
+    setLoading(true);
     try {
-      setLiked(true);
-      const postRef = doc(db, "posts", postId);
-      await updateDoc(postRef, {
-        likedBy: arrayUnion(user.uid),
-        likesCount: increment(1),
-      });
-      // Reward coins for liking
-      await addCoins(1, "like post");
-    } catch (err) {
-      console.error("Error liking post:", err);
-    }
-  }, [user, liked, postId, addCoins]);
+      const result = await firestoreService.getPost(postId);
+      if (result.success) setPost(result.post);
+      else setError('Post not found');
+    } catch (err) { setError('Failed to load post'); }
+    finally { setLoading(false); }
+  }, [postId]);
 
-  if (!post)
-    return (
-      <div className="text-center text-muted-foreground mt-10">
-        Loading post...
-      </div>
-    );
+  useEffect(() => { loadPost(); }, [loadPost]);
+
+  const handleDragEnd = (event, info) => {
+    if (info.offset.x > 80 && info.velocity.x > 500) {
+      setExitAnimating(true);
+      setTimeout(() => navigate(-1), 300);
+    } else dragX.set(0);
+  };
+
+  const handleShare = async () => {
+    triggerHaptic('light');
+    if (navigator.share) { try { await navigator.share({ title: post?.content?.substring(0, 100), url: window.location.href }); } catch {} }
+    else { navigator.clipboard.writeText(window.location.href); toast.success('Link copied'); }
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center dark:bg-black"><div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (error || !post) return (
+    <div className="min-h-screen flex items-center justify-center p-4 dark:bg-black">
+      <div className="text-center max-w-md"><h2 className="text-xl font-bold mb-2 dark:text-white">{error || 'Post not found'}</h2><button onClick={() => navigate('/home')} className="px-4 py-2 rounded-xl bg-indigo-500 text-white">Back to Home</button></div>
+    </div>
+  );
 
   return (
-    <div className="space-y-4 bg-background min-h-screen text-foreground">
-      {/* --- Post Header --- */}
-      <div className="px-4 pt-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img
-            src={post.author?.avatar || "/assets/default-profile.png"}
-            alt={`${post.author?.displayName || "User"} avatar`}
-            className="w-10 h-10 rounded-full object-cover"
-          />
-          <div>
-            <div className="flex items-center gap-1">
-              <h2 className="font-semibold text-sm">
-                {post.author?.displayName || "User"}
-              </h2>
-              {post.author?.verified && (
-                <span className="text-blue-500 text-xs font-bold">✔️</span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {post.createdAt?.seconds
-                ? `${formatDistanceToNow(new Date(post.createdAt.seconds * 1000))} ago`
-                : ""}
-            </p>
-          </div>
+    <div className={`fixed inset-0 z-50 flex flex-col ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
+      <div className="absolute top-4 left-4 z-20"><button onClick={() => navigate(-1)} className="p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><ArrowLeft className="w-6 h-6" /></button></div>
+      <button onClick={handleShare} className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/50 backdrop-blur-sm text-white"><Share2 className="w-6 h-6" /></button>
+
+      <motion.div drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.1} onDragEnd={handleDragEnd} style={{ x: dragX }} className={`flex-1 overflow-y-auto ${exitAnimating ? 'pointer-events-none' : ''}`} animate={exitAnimating ? { x: winWidth } : {}} transition={{ duration: 0.3 }}>
+        <div className="max-w-3xl mx-auto pt-16 pb-24 px-4">
+          <ErrorBoundary><PostHeader post={post} currentUser={currentUser} navigate={navigate} onShowOptions={() => {}} /></ErrorBoundary>
+          {post.media?.length > 0 && <MediaGallery media={post.media} type={post.type} onDoubleTap={() => {}} theme={theme} isVisible={true} />}
+          <ErrorBoundary><PostContent post={post} /></ErrorBoundary>
+          <ErrorBoundary><PostActions post={post} currentUser={currentUser} onComment={() => setShowComments(true)} theme={theme} /></ErrorBoundary>
         </div>
-        <button aria-label="Post menu">
-          <MoreVertical className="w-5 h-5 text-muted-foreground" />
-        </button>
-      </div>
+      </motion.div>
 
-      {/* --- Media --- */}
-      <div onDoubleClick={handleLike}>
-        <SwipableMedia media={post.media || []} />
-      </div>
-
-      {/* --- Caption & Actions --- */}
-      <div className="px-4 space-y-2">
-        {post.caption && <p className="text-sm">{post.caption}</p>}
-
-        <div className="flex items-center justify-between text-muted-foreground text-sm pt-2">
-          <div className="flex items-center gap-4">
-            <Heart
-              size={20}
-              className={`cursor-pointer transition-all ${
-                liked ? "text-red-500 fill-red-500" : "text-muted-foreground"
-              }`}
-              onClick={handleLike}
-            />
-            <MessageCircle size={20} className="cursor-pointer" />
-            <Share size={20} className="cursor-pointer" />
-          </div>
-          <Bookmark size={20} className="cursor-pointer" />
-        </div>
-
-        {/* Likes Count */}
-        {post.likesCount > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {post.likesCount} likes
-          </p>
-        )}
-      </div>
-
-      {/* --- Comments Section --- */}
-      <div className="px-4 text-sm text-muted-foreground">
-        Comments (coming soon)
-      </div>
+      {showComments && <Suspense fallback={<div className="p-4">Loading comments…</div>}><CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={post} currentUser={currentUser} theme={theme} /></Suspense>}
     </div>
   );
 }

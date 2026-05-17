@@ -1,537 +1,355 @@
-// src/screens/HomeScreen.jsx
-import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import localforage from "localforage";
-import { toast } from "sonner";
-import { useTheme } from "../context/ThemeContext";
-import { useAuth } from "../context/AuthContext";
+// src/screens/HomeScreen.jsx – ULTRA PRO MAX V17 (FINAL)
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext.jsx';
+import { Compass, AlertCircle, ChevronUp, RefreshCw, Sparkles, Film } from 'lucide-react';
+import Draggable from 'react-draggable';
+import feedService from '../services/feedService.js';
+import PostCard from './PostCard.jsx';
+import CommentsDrawer from './CommentsDrawer.jsx';
+import PostOptionsDrawer from './PostOptionsDrawer.jsx';
+import { saveToCache, loadFromCache } from '../utils/offlineCache';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { triggerHaptic } from '../utils/haptics';
 
-import TopAppBar from "../components/Shared/TopAppBar";
-import BottomNav from "../components/Shared/BottomNav";
-import Stories from "../components/Home/Stories";
-import Composer from "../components/Home/Composer";
-import PostCard from "../components/Home/PostCard";
-import ReelsFeed from "../components/Home/ReelsFeed";
-import TrendingWidget from "../components/Home/TrendingWidget";
-import LoadingSpinner from "../components/Shared/LoadingSpinner";
+const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-import {
-subscribeStories,
-loadTrending,
-loadAds,
-getFollowingIds,
-getPostsPage,
-getExplorePage,
-rankAndBlend,
-getColdStart,
-getSuggestedUsers,
-getUserInterests,
-} from "../lib/arvdoulService";
-
-/** ---------- Tunables ---------- */
-const POSTS_PAGE_SIZE = 10;
-const ADS_INJECTION_EVERY = 6;
-const CACHE_KEY_FEED = "arvdoul_feed_cache_v2";
-const CACHE_TTL_MS = 1000 * 60 * 5;
-
-/** ---------- Helpers ---------- */
-const now = () => Date.now();
-
-/** ---------- Skeletons ---------- */
-const PostSkeleton = ({ keyVal }) => (
-
-  <div key={keyVal} className="p-4 border-b border-muted animate-pulse">  
-    <div className="flex items-center space-x-3 mb-3">  
-      <div className="w-10 h-10 bg-muted rounded-full" />  
-      <div className="flex-1 h-4 bg-muted rounded" />  
-    </div>  
-    <div className="h-48 bg-muted rounded mb-3" />  
-    <div className="h-4 bg-muted rounded w-3/4 mb-1" />  
-    <div className="h-4 bg-muted rounded w-1/2" />  
-  </div>  
-);  function AdCard({ ad }) {
-if (!ad) return null;
-return (
-<article className="p-3 border rounded-xl bg-yellow-50 dark:bg-yellow-900/20" role="article" aria-label="Sponsored">
-<div className="flex items-center justify-between mb-2">
-<span className="text-xs font-semibold text-yellow-700 dark:text-yellow-300">Sponsored</span>
-<span className="text-xs text-muted-foreground">{ad.sponsor || "Partner"}</span>
-</div>
-{ad.type === "video" ? (
-<video src={ad.mediaUrl} controls className="w-full h-56 object-cover rounded-md" playsInline />
-) : (
-<img src={ad.mediaUrl} alt={ad.title || "Sponsored content"} className="w-full h-56 object-cover rounded-md" />
-)}
-<h4 className="mt-3 font-semibold text-sm">{ad.title}</h4>
-<p className="text-xs mt-1 text-muted-foreground">{ad.description}</p>
-<div className="mt-3 flex gap-2">
-<a href={ad.clickUrl || "#"} className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-600 text-white text-xs">
-Learn more
-</a>
-</div>
-</article>
+const PostCardSkeleton = () => (
+  <div className="rounded-3xl overflow-hidden border w-full mb-6 bg-gray-100 dark:bg-gray-800 animate-pulse">
+    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-gray-700" />
+        <div className="flex-1">
+          <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded mb-2 w-1/3" />
+          <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-1/4" />
+        </div>
+      </div>
+    </div>
+    <div className="p-4 space-y-2">
+      <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-full" />
+      <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-5/6" />
+      <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-4/6" />
+    </div>
+    <div className="h-64 bg-gray-300 dark:bg-gray-700" />
+  </div>
 );
-}
 
-function ReelsFallback({ videos }) {
-if (!videos?.length) return <div className="p-6 text-center text-muted-foreground">No reels available yet.</div>;
-return (
-<div className="space-y-4 p-3">
-{videos.map((v) => (
-<div key={v.id} className="rounded-xl overflow-hidden border">
-<video src={v.media?.[0]?.url || v.mediaUrl} controls className="w-full h-96 object-cover" />
-</div>
-))}
-</div>
-);
-}
-
-/** ---------- Cache helpers ---------- */
-const saveFeedCache = async (items) => {
-try {
-await localforage.setItem(CACHE_KEY_FEED, { ts: now(), items });
-} catch {}
-};
-const getFeedCache = async () => {
-try {
-const v = await localforage.getItem(CACHE_KEY_FEED);
-if (!v) return null;
-if (now() - (v.ts || 0) > CACHE_TTL_MS) return null;
-return v.items || null;
-} catch {
-return null;
-}
-};
-
-/** ================================================================
-
-HomeScreen
-
-============================================================== */
 export default function HomeScreen() {
-const navigate = useNavigate();
-const { theme } = useTheme();
-const { user } = useAuth();
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const isDark = theme === 'dark';
 
+  const [feed, setFeed] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const nextCursorRef = useRef(null);
+  const isLoadingRef = useRef(false);
+  const sentinelRef = useRef(null);
 
-// data state
-const [posts, setPosts] = useState([]);
-const [ads, setAds] = useState([]);
-const [stories, setStories] = useState([]);
-const [videos, setVideos] = useState([]);
-const [trending, setTrending] = useState([]);
-const [suggested, setSuggested] = useState([]);
+  const [activePost, setActivePost] = useState(null);
+  const [showComments, setShowComments] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
 
-// UI state
-const [activeTab, setActiveTab] = useState("feed"); // feed | reels | explore
-const [loading, setLoading] = useState(true);
-const [loadingMore, setLoadingMore] = useState(false);
-const [hasMore, setHasMore] = useState(true);
-const [lastFriendDoc, setLastFriendDoc] = useState(null);
-const [lastExploreDoc, setLastExploreDoc] = useState(null);
-const sentinelRef = useRef(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showOnlineBanner, setShowOnlineBanner] = useState(false);
+  const [showOfflineBanner, setShowOfflineBanner] = useState(!navigator.onLine);
 
-// personalization
-const [followingIds, setFollowingIds] = useState([]);
-const [interests, setInterests] = useState([]);
+  const [storyButtonPos, setStoryButtonPos] = useState(() => {
+    const saved = localStorage.getItem('arvdoul_story_button_pos');
+    return saved ? JSON.parse(saved) : { x: 0, y: 0 };
+  });
 
-// bootstrap cache
-useEffect(() => {
-let mounted = true;
-(async () => {
-const cached = await getFeedCache();
-if (mounted && cached?.length) {
-setPosts(cached);
-setLoading(false);
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowOnlineBanner(true);
+      setShowOfflineBanner(false);
+      setTimeout(() => setShowOnlineBanner(false), 2000);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowOfflineBanner(true);
+      setShowOnlineBanner(false);
+      setTimeout(() => setShowOfflineBanner(false), 4000);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const loadFeed = useCallback(async (reset = false, skipCache = false) => {
+    if (!user?.uid) return;
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+
+    if (reset) {
+      setLoading(true);
+      setError(null);
+      nextCursorRef.current = null;
+    }
+
+    try {
+      const result = await feedService.getSmartFeed(user.uid, {
+        limit: 12,
+        lastDoc: reset ? null : nextCursorRef.current,
+        forceRefresh: skipCache,
+      });
+      if (result.success) {
+        setFeed(prev => {
+          const prevMap = new Map(prev.map(p => [p.id, p]));
+          const newPosts = result.feed.map(newPost => {
+            const oldPost = prevMap.get(newPost.id);
+            if (oldPost && JSON.stringify(oldPost) === JSON.stringify(newPost)) return oldPost;
+            return newPost;
+          });
+          if (reset) return newPosts;
+          const existingIds = new Set(prev.map(p => p.id));
+          const uniqueNew = newPosts.filter(p => !existingIds.has(p.id));
+          return [...prev, ...uniqueNew];
+        });
+        setHasMore(result.hasMore);
+        nextCursorRef.current = result.nextCursor;
+        if (reset) saveToCache(`feed_cache_${user.uid}`, result.feed.slice(0, 30));
+      } else {
+        setError(result.error || 'Failed to load feed');
+      }
+    } catch (err) {
+      console.error('Feed error:', err);
+      const cached = loadFromCache(`feed_cache_${user.uid}`);
+      if (cached && feed.length === 0) setFeed(cached);
+      else setError(err.message);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      setRefreshing(false);
+      isLoadingRef.current = false;
+    }
+  }, [user?.uid]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    triggerHaptic('medium');
+    await loadFeed(true, true);
+    toast.success('Feed refreshed!');
+  }, [refreshing, loadFeed]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    if (!hasMore) return;
+    if (loading || loadingMore || isLoadingRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore && !isLoadingRef.current && hasMore) {
+          setLoadingMore(true);
+          loadFeed(false);
+        }
+      },
+      { threshold: 0.1, rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => {
+      observer.unobserve(sentinel);
+      observer.disconnect();
+    };
+  }, [hasMore, loadFeed, loading, loadingMore]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    let unsubscribe = null;
+    const setup = async () => {
+      unsubscribe = await feedService.subscribeToFeedUpdates(user.uid, (update) => {
+        if (update.type === 'feed_updated' && update.feed?.length) {
+          setFeed(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const incoming = update.feed.filter(p => !existingIds.has(p.id));
+            if (incoming.length) {
+              toast.info(`${incoming.length} new post${incoming.length > 1 ? 's' : ''} available – pull to refresh`, { duration: 2000, icon: '📱' });
+              return [...incoming, ...prev];
+            }
+            return prev;
+          });
+        }
+      });
+    };
+    setup();
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.uid || authLoading) return;
+    loadFeed(true);
+  }, [isAuthenticated, user?.uid, authLoading, loadFeed]);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login', { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  if (authLoading) {
+    return (
+      <div className={cn("min-h-screen flex items-center justify-center", isDark ? 'bg-gray-950' : 'bg-white')}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Loading Arvdoul...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("min-h-screen pt-20 pb-24 w-full", isDark ? 'bg-gradient-to-b from-gray-950 to-gray-900' : 'bg-gradient-to-b from-gray-50 to-white')}>
+      
+      <AnimatePresence>
+        {showOnlineBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-green-500 text-white text-center py-1 px-4 rounded-full text-xs font-semibold shadow-md shadow-green-500/30"
+          >
+            <Sparkles className="w-3 h-3 inline mr-1" /> Back online
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showOfflineBanner && !isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-amber-500 text-white text-center py-1 px-4 rounded-full text-xs font-semibold shadow-md shadow-amber-500/30"
+          >
+            Offline – cached content
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <Draggable
+        position={storyButtonPos}
+        onStop={(e, data) => {
+          const newPos = { x: data.x, y: data.y };
+          setStoryButtonPos(newPos);
+          localStorage.setItem('arvdoul_story_button_pos', JSON.stringify(newPos));
+        }}
+        bounds="parent"
+        handle=".drag-handle"
+      >
+        <div className="fixed z-50" style={{ top: 0, left: 0 }}>
+          <div className="drag-handle cursor-grab active:cursor-grabbing">
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.05 }}
+              onClick={() => navigate('/stories')}
+              className={cn(
+                "p-3 rounded-full bg-gradient-to-r shadow-xl backdrop-blur-sm border transition-all duration-200",
+                isDark
+                  ? "from-purple-600 to-pink-600 text-white border-purple-400/50 hover:shadow-purple-500/30"
+                  : "from-orange-500 to-red-500 text-white border-orange-400/50 hover:shadow-orange-500/30",
+                "hover:shadow-xl story-button-glow"
+              )}
+              style={{ boxShadow: isDark ? "0 0 12px rgba(168,85,247,0.6)" : "0 0 12px rgba(249,115,22,0.6)" }}
+            >
+              <Film className="w-6 h-6" />
+            </motion.button>
+          </div>
+        </div>
+      </Draggable>
+
+      {refreshing && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-indigo-500 text-white px-4 py-1 rounded-full text-xs shadow-lg">
+          <RefreshCw className="w-3 h-3 inline animate-spin mr-1" /> Refreshing...
+        </div>
+      )}
+
+      <div className="max-w-2xl mx-auto px-4">
+        {loading && feed.length === 0 ? (
+          <div className="space-y-6">
+            <PostCardSkeleton />
+            <PostCardSkeleton />
+            <PostCardSkeleton />
+          </div>
+        ) : error && feed.length === 0 ? (
+          <div className="min-h-[60vh] flex items-center justify-center">
+            <div className="text-center">
+              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2 dark:text-white">Connection Error</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">{error}</p>
+              <button onClick={handleRefresh} className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium">Retry</button>
+            </div>
+          </div>
+        ) : feed.length === 0 && !loading ? (
+          <div className="min-h-[60vh] flex items-center justify-center">
+            <div className="text-center">
+              <Compass className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2 dark:text-white">Welcome to Arvdoul!</h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">Follow creators to see content.</p>
+              <button onClick={() => navigate('/explore')} className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium">Discover</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {feed.map((post) => (
+              <ErrorBoundary key={post.id} fallback={<div className="text-red-500 p-4 text-center">Failed to load post</div>}>
+                <PostCard
+                  post={post}
+                  currentUser={user}
+                  onOpenComments={(p) => { setActivePost(p); setShowComments(true); }}
+                  onOpenOptions={(p) => { setActivePost(p); setShowOptions(true); }}
+                />
+              </ErrorBoundary>
+            ))}
+            {hasMore && <div ref={sentinelRef} className="h-10" />}
+            {loadingMore && <div className="py-4 text-center text-gray-500">Loading more…</div>}
+          </div>
+        )}
+      </div>
+
+      <ScrollToTopButton />
+
+      {showComments && activePost && (
+        <CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={activePost} currentUser={user} theme={theme} />
+      )}
+      {showOptions && activePost && (
+        <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} />
+      )}
+    </div>
+  );
 }
-})();
-return () => { mounted = false; };
-}, []);
 
-// real-time stories
-useEffect(() => {
-let unsub;
-(async () => {
-unsub = await subscribeStories(
-(arr) => setStories(arr),
-(err) => console.error("stories error", err)
-);
-})();
-return () => unsub && unsub();
-}, []);
-
-// trending + ads (static fetch)
-useEffect(() => {
-(async () => {
-try {
-const [t, a] = await Promise.all([loadTrending(12), loadAds(20)]);
-setTrending(t);
-setAds(a);
-} catch (e) {
-console.warn("aux load failed", e);
-}
-})();
-}, []);
-
-// personalization: following + interests
-useEffect(() => {
-(async () => {
-if (!user?.uid) return;
-try {
-const [f, ints] = await Promise.all([getFollowingIds(user.uid), getUserInterests(user.uid)]);
-setFollowingIds(f);
-setInterests(ints);
-} catch (e) {
-console.warn("personalization load failed", e);
-}
-})();
-}, [user?.uid]);
-
-// initial feed load (rank & blend)
-useEffect(() => {
-let cancelled = false;
-(async () => {
-setLoading(true);
-try {
-if (!user?.uid || followingIds.length === 0) {
-// Cold start: explore + suggestions
-const cs = await getColdStart({ pageSize: POSTS_PAGE_SIZE });
-if (cancelled) return;
-setSuggested(cs.suggestions || []);
-setPosts(cs.posts || []);
-setHasMore(true); // we can always page explore
-setLastFriendDoc(null);
-setLastExploreDoc(null);
-} else {
-const [friendPage, explorePage] = await Promise.all([
-getPostsPage({ followingIds, pageSize: POSTS_PAGE_SIZE }),
-getExplorePage({ pageSize: POSTS_PAGE_SIZE, excludeAuthorIds: followingIds }),
-]);
-if (cancelled) return;
-
-// inject interests into ranking via closure  
-      const ranked = rankAndBlend({  
-        friendDocs: friendPage.docs.map((d) => ({ ...d, interests })),  
-        exploreDocs: explorePage.docs.map((d) => ({ ...d, interests })),  
-        followingIds,  
-      });  
-
-      setPosts(ranked);  
-      setLastFriendDoc(friendPage.lastDoc);  
-      setLastExploreDoc(explorePage.lastDoc);  
-      setHasMore((friendPage.docs?.length || 0) + (explorePage.docs?.length || 0) >= POSTS_PAGE_SIZE);  
-    }  
-  } catch (e) {  
-    console.error("feed init error", e);  
-    toast.error("Failed to load feed.");  
-  } finally {  
-    if (!cancelled) setLoading(false);  
-  }  
-})();  
-return () => { cancelled = true; };
-
-}, [user?.uid, followingIds.join("|")]); // re-run when following changes
-
-// reels/videos subset (for Reels tab fallback)
-useEffect(() => {
-const vids = (posts || []).filter(
-(p) => p.media?.some((m) => m.type === "video") || p.type === "video"
-);
-setVideos(vids);
-}, [posts]);
-
-// pagination: load more with dual cursors
-const loadMore = useCallback(async () => {
-if (loadingMore) return;
-setLoadingMore(true);
-try {
-if (!user?.uid || followingIds.length === 0) {
-// cold start: just page explore
-const explore = await getExplorePage({
-cursor: lastExploreDoc,
-pageSize: POSTS_PAGE_SIZE,
-excludeAuthorIds: [],
-});
-const merged = [...posts, ...explore.docs];
-setPosts(merged);
-setLastExploreDoc(explore.lastDoc);
-setHasMore((explore.docs?.length || 0) === POSTS_PAGE_SIZE);
-saveFeedCache(merged.slice(0, POSTS_PAGE_SIZE * 3));
-} else {
-const [friendPage, explorePage] = await Promise.all([
-getPostsPage({ followingIds, cursor: lastFriendDoc, pageSize: POSTS_PAGE_SIZE }),
-getExplorePage({ cursor: lastExploreDoc, pageSize: POSTS_PAGE_SIZE, excludeAuthorIds: followingIds }),
-]);
-const ranked = rankAndBlend({
-friendDocs: friendPage.docs.map((d) => ({ ...d, interests })),
-exploreDocs: explorePage.docs.map((d) => ({ ...d, interests })),
-followingIds,
-});
-const deDuped = (() => {
-const seen = new Set(posts.map((p) => p.id));
-return [...posts, ...ranked.filter((p) => !seen.has(p.id))];
-})();
-setPosts(deDuped);
-setLastFriendDoc(friendPage.lastDoc);
-setLastExploreDoc(explorePage.lastDoc);
-setHasMore((friendPage.docs?.length || 0) + (explorePage.docs?.length || 0) > 0);
-saveFeedCache(deDuped.slice(0, POSTS_PAGE_SIZE * 3));
-}
-} catch (e) {
-console.error("loadMore error", e);
-toast.error("Could not load more posts.");
-} finally {
-setLoadingMore(false);
-}
-}, [loadingMore, user?.uid, followingIds.join("|"), lastFriendDoc, lastExploreDoc, posts, interests]);
-
-// infinite scroll
-useEffect(() => {
-if (!sentinelRef.current) return;
-const obs = new IntersectionObserver(
-(entries) => {
-if (entries[0].isIntersecting && !loading && !loadingMore && hasMore) {
-loadMore();
-}
-},
-{ rootMargin: "300px" }
-);
-obs.observe(sentinelRef.current);
-return () => obs.disconnect();
-}, [loadMore, loading, loadingMore, hasMore]);
-
-// compose final feed: inject ads + trending
-const preparedFeed = useMemo(() => {
-if (!posts?.length) return [];
-const result = [];
-let adIdx = 0;
-
-for (let i = 0; i < posts.length; i++) {  
-  result.push({ __type: "post", data: posts[i] });  
-
-  // trending after #3  
-  if (i === 2 && trending.length > 0) {  
-    result.push({ __type: "trending", data: trending });  
-  }  
-
-  // ad pacing  
-  if ((i + 1) % ADS_INJECTION_EVERY === 0 && ads.length > 0) {  
-    result.push({ __type: "ad", data: ads[adIdx % ads.length] });  
-    adIdx++;  
-  }  
-}  
-return result;
-
-}, [posts, ads, trending]);
-
-// actions
-const handleNavigateToPost = (postId) => navigate(/post/${postId});
-const handleOpenCreate = () => navigate("/create");
-
-// UI — include cold-start suggestions
-const ColdStartBlock = () => (
-<div className="p-4 border rounded-xl bg-surface/50">
-<h3 className="font-semibold mb-2">Suggested creators to follow</h3>
-<div className="grid grid-cols-2 gap-3">
-{suggested.slice(0, 6).map((u) => (
-<div key={u.id} className="flex items-center gap-2">
-<img src={u.photoURL || "/assets/default-profile.png"} alt={u.displayName} className="w-8 h-8 rounded-full" />
-<div className="flex-1">
-<div className="text-sm font-medium truncate">{u.displayName || "Creator"}</div>
-<div className="text-xs text-muted-foreground">{(u.followerCount || 0).toLocaleString()} followers</div>
-</div>
-<button className="px-2 py-1 text-xs rounded-full bg-primary-600 text-white">Follow</button>
-</div>
-))}
-</div>
-</div>
-);
-
-return (
-<div className={min-h-screen flex flex-col ${theme === "dark" ? "bg-black text-white" : "bg-gray-50 text-gray-900"}}>
-{/* Top app bar */}
-<TopAppBar
-leftContent={<h1 className="text-lg font-bold">Arvdoul</h1>}
-rightContent={
-<div className="flex items-center gap-3">
-<button aria-label="Search" onClick={() => navigate("/search")} className="p-1">🔎</button>
-<button aria-label="Notifications" onClick={() => navigate("/notifications")} className="p-1">🔔</button>
-<button aria-label="Messages" onClick={() => navigate("/messages")} className="p-1">💬</button>
-</div>
-}
-/>
-
-{/* Stories */}  
-  <div className="border-b border-muted">  
-    <Stories items={stories} onOpenStory={(id) => navigate(`/story/${id}`)} />  
-  </div>  
-
-  {/* Composer */}  
-  <div className="p-3 border-b border-muted">  
-    <Composer onCreate={() => {}} onOpenCreate={handleOpenCreate} />  
-  </div>  
-
-  {/* Tabs */}  
-  <div className="flex gap-2 justify-center py-2">  
-    <button  
-      onClick={() => setActiveTab("feed")}  
-      className={`px-4 py-1 rounded-full text-sm ${activeTab === "feed" ? "bg-primary-600 text-white" : "bg-muted text-muted-foreground"}`}  
-    >  
-      Feed  
-    </button>  
-    <button  
-      onClick={() => setActiveTab("reels")}  
-      className={`px-4 py-1 rounded-full text-sm ${activeTab === "reels" ? "bg-primary-600 text-white" : "bg-muted text-muted-foreground"}`}  
-    >  
-      Reels  
-    </button>  
-    <button  
-      onClick={() => setActiveTab("explore")}  
-      className={`px-4 py-1 rounded-full text-sm ${activeTab === "explore" ? "bg-primary-600 text-white" : "bg-muted text-muted-foreground"}`}  
-    >  
-      Explore  
-    </button>  
-  </div>  
-
-  {/* Main content */}  
-  <main className="flex-1 overflow-y-auto">  
-    <AnimatePresence mode="wait">  
-      {activeTab === "feed" && (  
-        <motion.div key="feed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3 p-3">  
-          {loading && posts.length === 0 ? (  
-            <>  
-              <PostSkeleton keyVal="s1" />  
-              <PostSkeleton keyVal="s2" />  
-              <PostSkeleton keyVal="s3" />  
-            </>  
-          ) : posts.length === 0 ? (  
-            <div className="space-y-3">  
-              <div className="py-10 text-center text-muted-foreground">No posts yet — start following creators you like.</div>  
-              <ColdStartBlock />  
-            </div>  
-          ) : (  
-            preparedFeed.map((slot, idx) => {  
-              if (slot.__type === "post") {  
-                const p = slot.data;  
-                return (  
-                  <motion.div  
-                    key={p.id}  
-                    initial={{ opacity: 0, y: 8 }}  
-                    animate={{ opacity: 1, y: 0 }}  
-                    exit={{ opacity: 0, y: -8 }}  
-                    transition={{ duration: 0.18 }}  
-                  >  
-                    <PostCard post={p} onOpen={() => handleNavigateToPost(p.id)} />  
-                  </motion.div>  
-                );  
-              }  
-              if (slot.__type === "ad") {  
-                return (  
-                  <motion.div  
-                    key={`ad-${slot.data.id || idx}`}  
-                    initial={{ opacity: 0, y: 8 }}  
-                    animate={{ opacity: 1, y: 0 }}  
-                    exit={{ opacity: 0, y: -8 }}  
-                    transition={{ duration: 0.18 }}  
-                  >  
-                    <AdCard ad={slot.data} />  
-                  </motion.div>  
-                );  
-              }  
-              if (slot.__type === "trending") {  
-                return (  
-                  <div key="trending" className="p-3 rounded-xl bg-surface/60 border">  
-                    {typeof TrendingWidget === "function" ? (  
-                      <TrendingWidget items={slot.data} />  
-                    ) : (  
-                      <div>  
-                        <h4 className="font-semibold mb-2">Trending</h4>  
-                        <div className="flex flex-wrap gap-2">  
-                          {slot.data.slice(0, 8).map((t) => (  
-                            <button  
-                              key={t.id}  
-                              onClick={() => navigate(`/search?q=${encodeURIComponent(t.tag || t.name)}`)}  
-                              className="px-3 py-1 text-xs rounded-full bg-muted"  
-                            >  
-                              #{t.tag || t.name}  
-                            </button>  
-                          ))}  
-                        </div>  
-                      </div>  
-                    )}  
-                  </div>  
-                );  
-              }  
-              return null;  
-            })  
-          )}  
-
-          {/* sentinel / load more */}  
-          <div className="flex justify-center py-6">  
-            {loadingMore ? (  
-              <LoadingSpinner />  
-            ) : hasMore ? (  
-              <div ref={sentinelRef} className="w-full h-2" />  
-            ) : (  
-              <div className="text-sm text-muted-foreground">You’re all caught up 👋</div>  
-            )}  
-          </div>  
-        </motion.div>  
-      )}  
-
-      {activeTab === "reels" && (  
-        <motion.div key="reels" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1">  
-          {typeof ReelsFeed === "function" ? <ReelsFeed initialQueryLimit={8} /> : <ReelsFallback videos={videos} />}  
-        </motion.div>  
-      )}  
-
-      {activeTab === "explore" && (  
-        <motion.div key="explore" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-3 grid grid-cols-2 gap-3">  
-          {posts.slice(0, 30).map((p) => (  
-            <div key={p.id} className="cursor-pointer" onClick={() => navigate(`/post/${p.id}`)}>  
-              <img  
-                src={(p.media && p.media[0] && p.media[0].url) || p.mediaUrl}  
-                alt={p.content?.slice(0, 60) || "Explore item"}  
-                className="w-full h-40 object-cover rounded-lg"  
-              />  
-            </div>  
-          ))}  
-        </motion.div>  
-      )}  
-    </AnimatePresence>  
-  </main>  
-
-  {/* Trending rail (mobile) */}  
-  <div className="p-3 border-t border-muted bg-background/50">  
-    <div className="flex items-center justify-between">  
-      <h4 className="text-sm font-semibold">Trending</h4>  
-      <button onClick={() => navigate("/trending")} className="text-xs text-primary-600">See all</button>  
-    </div>  
-    <div className="mt-2 flex flex-wrap gap-2">  
-      {trending.slice(0, 6).map((t) => (  
-        <button  
-          key={t.id}  
-          onClick={() => navigate(`/search?q=${encodeURIComponent(t.tag || t.name)}`)}  
-          className="px-3 py-1 text-xs rounded-full bg-muted"  
-        >  
-          #{t.tag || t.name}  
-        </button>  
-      ))}  
-    </div>  
-  </div>  
-
-  {/* Bottom navigation */}  
-  <BottomNav  
-    items={[  
-      { icon: "home", label: "Home", onClick: () => setActiveTab("feed") },  
-      { icon: "reels", label: "Reels", onClick: () => setActiveTab("reels") },  
-      { icon: "create", label: "Create", onClick: handleOpenCreate },  
-      { icon: "messages", label: "Messages", onClick: () => navigate("/messages") },  
-      { icon: "profile", label: "Profile", onClick: () => navigate(`/profile/${user?.uid || "me"}`) },  
-    ]}  
-  />  
-</div>
-
-);
+function ScrollToTopButton() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const toggle = () => setVisible(window.scrollY > 300);
+    window.addEventListener('scroll', toggle);
+    return () => window.removeEventListener('scroll', toggle);
+  }, []);
+  if (!visible) return null;
+  return (
+    <motion.button
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      className="fixed bottom-24 right-4 z-40 p-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-2xl hover:shadow-3xl transition-all"
+    >
+      <ChevronUp className="w-6 h-6" />
+    </motion.button>
+  );
 }

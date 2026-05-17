@@ -1,1125 +1,763 @@
-// src/screens/SetupProfile.jsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+// src/screens/SetupProfile.jsx – ARVDOUL SUPREMACY • FINAL ULTRA PRODUCTION
+// ✅ Offline banner, non‑scrollable glass card, username generator based on display name
+// ✅ Firebase Auth update, avatar upload, skip button, no delay, glowing button
+
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { UploadCloud, ImagePlus, Loader2, X, Shield, Zap, Globe, Lock, Eye, EyeOff, Sparkles } from "lucide-react";
+import { useTheme } from "@context/ThemeContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import { updateProfile as firebaseUpdateProfile } from "firebase/auth";
 
-import { auth, db, storage } from "../firebase/firebase.js";
-import { useSignup } from "@context/SignupContext";
-import { useTheme } from "@context/ThemeContext";
-import { doc, serverTimestamp, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 import {
-  ref as storageRef,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
+  createUserProfile,
+  checkUsernameAvailability,
+  generateDefaultAvatar,
+} from "../services/userService.js";
+import storageService from "../services/storageService.js";
 
-import DefaultProfile from "../assets/default-profile.png";
-import LoadingDots from "@components/Shared/LoadingDots";
+// ==================== AVATAR UPLOADER (unchanged, perfect) ====================
+const PerfectAvatarUploader = React.memo(
+  ({ onUpload, currentAvatar, displayName, userId, theme, loading = false }) => {
+    const [avatarPreview, setAvatarPreview] = useState(currentAvatar);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const [isHovering, setIsHovering] = useState(false);
+    const fileInputRef = useRef(null);
 
-/** ---------- Advanced Configuration ---------- */
-const MAX_IMG_MB = 3;
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/avif"];
-const BIO_LIMIT = 250;
-const NICKNAME_LIMIT = 30;
-const USERNAME_LIMIT = 20;
+    const resolvedTheme =
+      theme === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
 
-/** ---------- AI-Powered Profile Optimizer ---------- */
-const useAIOptimizer = () => {
-  const analyzeImage = useCallback(async (file) => {
-    // Simulate AI analysis for image quality, composition, etc.
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const analysis = {
-          quality: Math.random() > 0.3 ? 'excellent' : Math.random() > 0.5 ? 'good' : 'average',
-          brightness: Math.random() * 100,
-          contrast: Math.random() * 100,
-          suggestions: Math.random() > 0.7 ? ['Consider cropping for better composition'] : []
-        };
-        resolve(analysis);
-      }, 800);
-    });
-  }, []);
-
-  const generateBioSuggestions = useCallback((firstName, lastName) => {
-    const suggestions = [
-      `Creative soul exploring the digital universe 🌌`,
-      `${firstName} ${lastName} - Building connections that matter 💫`,
-      `Digital creator | Innovator | Community builder ✨`,
-      `Passionate about meaningful conversations and authentic connections 🎯`,
-      `Turning ideas into reality, one post at a time 🚀`,
-      `Living life in pixels and passion 📱`,
-      `Creating content that inspires and connects 🌟`
-    ];
-    return suggestions.slice(0, 3);
-  }, []);
-
-  const generateUsernameSuggestions = useCallback((firstName, lastName) => {
-    const base = `${firstName}${lastName}`.toLowerCase().replace(/\s/g, '');
-    const suggestions = [
-      base,
-      `${base}${Math.floor(Math.random() * 999)}`,
-      `the${firstName.charAt(0).toUpperCase() + firstName.slice(1)}`,
-      `${firstName}.${lastName}`,
-      `${firstName}_${Math.random().toString(36).substring(2, 6)}`
-    ];
-    return [...new Set(suggestions)].slice(0, 4);
-  }, []);
-
-  return { analyzeImage, generateBioSuggestions, generateUsernameSuggestions };
-};
-
-/** ---------- Blockchain Verification Simulator ---------- */
-const useBlockchainVerification = () => {
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  const verifyProfile = useCallback(async (profileData) => {
-    setIsVerifying(true);
-    // Simulate blockchain verification
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const verified = Math.random() > 0.3; // 70% success rate
-        setIsVerifying(false);
-        resolve({
-          verified,
-          transactionHash: verified ? `0x${Math.random().toString(16).substring(2, 42)}` : null,
-          timestamp: new Date().toISOString()
-        });
-      }, 2000);
-    });
-  }, []);
-
-  return { verifyProfile, isVerifying };
-};
-
-/** ---------- Advanced Image Processor ---------- */
-const useAdvancedImageProcessor = () => {
-  const bytesToMB = (bytes) => +(bytes / (1024 * 1024)).toFixed(2);
-
-  const compressImageFile = useCallback(async (file, maxMB = MAX_IMG_MB, quality = 0.8) => {
-    if (!file || !file.type.startsWith("image/")) return file;
-    if (bytesToMB(file.size) <= maxMB) return file;
-
-    return new Promise((resolve) => {
-      const img = new Image();
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      img.onload = () => {
-        // Maintain aspect ratio while fitting within 1000px
-        const maxDim = 1000;
-        let { width, height } = img;
-
-        if (width > height && width > maxDim) {
-          height = (height * maxDim) / width;
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = (width * maxDim) / height;
-          height = maxDim;
+    useEffect(() => {
+      if (!currentAvatar && displayName && userId) {
+        try {
+          setAvatarPreview(generateDefaultAvatar(userId, displayName));
+        } catch (error) {
+          setAvatarPreview("/assets/default-profile.png");
         }
+      } else if (currentAvatar) {
+        setAvatarPreview(currentAvatar);
+      }
+    }, [currentAvatar, displayName, userId]);
 
-        canvas.width = width;
-        canvas.height = height;
-
-        // Enhanced image processing
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Apply subtle enhancements
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-
-        // Simple contrast enhancement
-        for (let i = 0; i < data.length; i += 4) {
-          data[i] = Math.min(255, data[i] * 1.1);     // Red
-          data[i + 1] = Math.min(255, data[i + 1] * 1.1); // Green
-          data[i + 2] = Math.min(255, data[i + 2] * 1.1); // Blue
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-
-        canvas.toBlob(
-          (blob) => resolve(new File([blob], file.name, { type: "image/jpeg" })),
-          "image/jpeg",
-          quality
+    const handleFileSelect = async (file) => {
+      if (!file || !file.type.startsWith("image/")) {
+        toast.error("Please select a valid image");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Maximum file size is 5MB");
+        return;
+      }
+      try {
+        const reader = new FileReader();
+        reader.onloadend = () => setAvatarPreview(reader.result);
+        reader.readAsDataURL(file);
+        setUploadProgress(10);
+        const uploadPath = `avatars/${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}_${file.name.replace(/\s+/g, "_")}`;
+        const result = await storageService.uploadFileWithProgress(
+          file,
+          uploadPath,
+          {
+            onProgress: (progressData) =>
+              setUploadProgress(progressData.progress),
+          }
         );
-      };
+        setUploadProgress(100);
+        if (result.success && onUpload) {
+          onUpload(result.downloadURL);
+          toast.success("🎉 Profile picture updated!");
+        }
+        setTimeout(() => setUploadProgress(0), 1000);
+      } catch (error) {
+        console.error("Avatar upload error:", error);
+        toast.error("Upload failed. Please try again.");
+        setUploadProgress(0);
+      }
+    };
 
-      img.src = URL.createObjectURL(file);
-    });
-  }, []);
+    const handleClick = () => {
+      if (!loading && fileInputRef.current) fileInputRef.current.click();
+    };
 
-  return { compressImageFile, bytesToMB };
-};
-
-/** ---------- Privacy Settings Manager ---------- */
-const PrivacySettings = ({ settings, onChange, theme }) => {
-  const privacyOptions = [
-    {
-      value: "public",
-      label: "Public",
-      description: "Anyone can see your profile and content",
-      icon: "🌐"
-    },
-    {
-      value: "friends",
-      label: "Friends Only",
-      description: "Only approved friends can see your content",
-      icon: "👥"
-    },
-    {
-      value: "private",
-      label: "Private",
-      description: "Only you can see your profile and content",
-      icon: "🔒"
-    }
-  ];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
-    >
-      <h3 className={`text-lg font-semibold ${
-        theme === 'dark' ? 'text-white' : 'text-gray-900'
-      }`}>
-        Privacy Settings
-      </h3>
-      
-      <div className="grid gap-3">
-        {privacyOptions.map((option) => (
-          <motion.label
-            key={option.value}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-              settings.privacy === option.value
-                ? theme === 'dark'
-                  ? 'border-indigo-500 bg-indigo-500/10'
-                  : 'border-indigo-500 bg-indigo-50'
-                : theme === 'dark'
-                ? 'border-gray-600 bg-gray-800 hover:border-gray-500'
-                : 'border-gray-300 bg-white hover:border-gray-400'
-            }`}
-          >
-            <input
-              type="radio"
-              name="privacy"
-              value={option.value}
-              checked={settings.privacy === option.value}
-              onChange={(e) => onChange({ ...settings, privacy: e.target.value })}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">{option.icon}</span>
-                <span className={`font-medium ${
-                  theme === 'dark' ? 'text-white' : 'text-gray-900'
-                }`}>
-                  {option.label}
-                </span>
-              </div>
-              <p className={`text-sm ${
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              }`}>
-                {option.description}
-              </p>
-            </div>
-          </motion.label>
-        ))}
-      </div>
-    </motion.div>
-  );
-};
-
-/** ---------- Advanced Image Upload Zone ---------- */
-const AdvancedImageUpload = ({ file, previewUrl, onFileSelect, onRemove, theme, loading }) => {
-  const [dragOver, setDragOver] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState(null);
-  const fileInputRef = useRef(null);
-  const { analyzeImage } = useAIOptimizer();
-
-  const handleFileSelect = async (selectedFile) => {
-    if (!selectedFile) return;
-
-    // AI Analysis
-    setAiAnalysis({ status: 'analyzing' });
-    const analysis = await analyzeImage(selectedFile);
-    setAiAnalysis({ status: 'complete', ...analysis });
-
-    onFileSelect(selectedFile);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragOver(false);
-    const droppedFile = e.dataTransfer.files[0];
-    handleFileSelect(droppedFile);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
-    >
-      <label className={`block text-sm font-medium ${
-        theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-      }`}>
-        Profile Picture
-      </label>
-
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        className={`relative border-2 border-dashed rounded-2xl transition-all ${
-          dragOver
-            ? theme === 'dark'
-              ? 'border-indigo-500 bg-indigo-500/10'
-              : 'border-indigo-500 bg-indigo-50'
-            : theme === 'dark'
-            ? 'border-gray-600 bg-gray-800/50'
-            : 'border-gray-300 bg-gray-50'
-        } ${loading ? 'opacity-50' : ''}`}
-      >
-        {previewUrl ? (
-          <div className="p-6">
-            <div className="flex items-center gap-6">
-              {/* Profile Preview */}
-              <div className="relative">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-2xl"
-                >
-                  <img
-                    src={previewUrl}
-                    alt="Profile preview"
-                    className="w-full h-full object-cover"
-                  />
-                </motion.div>
-                
-                {/* AI Analysis Badge */}
-                {aiAnalysis && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute -top-2 -right-2"
-                  >
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
-                      aiAnalysis.quality === 'excellent' 
-                        ? 'bg-green-500 text-white'
-                        : aiAnalysis.quality === 'good'
-                        ? 'bg-yellow-500 text-white'
-                        : 'bg-gray-500 text-white'
-                    }`}>
-                      <Sparkles size={12} />
-                      AI
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Image Info */}
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h4 className={`font-semibold ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Profile Ready
-                  </h4>
-                  {aiAnalysis && aiAnalysis.status === 'analyzing' && (
-                    <Loader2 className="animate-spin" size={16} />
-                  )}
-                </div>
-
-                {/* AI Analysis Results */}
-                {aiAnalysis && aiAnalysis.status === 'complete' && (
-                  <div className="space-y-1">
-                    <p className={`text-sm ${
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      Quality: <span className="capitalize">{aiAnalysis.quality}</span>
-                    </p>
-                    {aiAnalysis.suggestions.length > 0 && (
-                      <p className="text-sm text-amber-600 dark:text-amber-400">
-                        💡 {aiAnalysis.suggestions[0]}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex gap-3 mt-3">
-                  <motion.button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
-                      theme === 'dark'
-                        ? 'bg-gray-700 text-white hover:bg-gray-600'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    <ImagePlus size={16} />
-                    Change
-                  </motion.button>
-
-                  <motion.button
-                    type="button"
-                    onClick={onRemove}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 flex items-center gap-2"
-                  >
-                    <X size={16} />
-                    Remove
-                  </motion.button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 text-center">
-            <motion.div
-              whileHover={{ scale: 1.1 }}
-              className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center"
-            >
-              <UploadCloud className="text-white" size={32} />
-            </motion.div>
-            
-            <p className={`mb-2 ${
-              theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-            }`}>
-              Drag & drop your photo here
-            </p>
-            <p className={`text-sm mb-4 ${
-              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-            }`}>
-              Supports JPG, PNG, WEBP • Max {MAX_IMG_MB}MB
-            </p>
-
-            <motion.button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`px-6 py-3 rounded-xl font-medium flex items-center gap-2 mx-auto ${
-                theme === 'dark'
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-500'
-                  : 'bg-indigo-500 text-white hover:bg-indigo-600'
-              }`}
-            >
-              <ImagePlus size={18} />
-              Choose File
-            </motion.button>
-          </div>
-        )}
-
+    return (
+      <div className="relative w-full">
         <input
-          ref={fileInputRef}
           type="file"
-          accept={ALLOWED_TYPES.join(",")}
+          ref={fileInputRef}
           onChange={(e) => handleFileSelect(e.target.files?.[0])}
+          accept="image/*"
           className="hidden"
           disabled={loading}
         />
-      </div>
-    </motion.div>
-  );
-};
-
-/** ---------- Main Component ---------- */
-export default function SetupProfile() {
-  const navigate = useNavigate();
-  const { signupData, updateSignupData } = useSignup();
-  const { theme } = useTheme();
-  const { generateBioSuggestions, generateUsernameSuggestions } = useAIOptimizer();
-  const { verifyProfile, isVerifying } = useBlockchainVerification();
-  const { compressImageFile } = useAdvancedImageProcessor();
-
-  const user = auth.currentUser;
-
-  // Enhanced state management
-  const [profileData, setProfileData] = useState({
-    nickname: signupData?.nickname || "",
-    username: signupData?.username || "",
-    bio: signupData?.bio || "",
-    privacy: "public",
-    verified: false
-  });
-
-  const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(DefaultProfile);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [showCoinReward, setShowCoinReward] = useState(false);
-  const [bioSuggestions, setBioSuggestions] = useState([]);
-  const [usernameSuggestions, setUsernameSuggestions] = useState([]);
-  const [blockchainVerification, setBlockchainVerification] = useState(null);
-
-  const uploadTaskRef = useRef(null);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    
-    // Generate AI suggestions
-    if (signupData?.firstName) {
-      setBioSuggestions(generateBioSuggestions(signupData.firstName, signupData.lastName));
-      setUsernameSuggestions(generateUsernameSuggestions(signupData.firstName, signupData.lastName));
-    }
-
-    return () => {
-      isMountedRef.current = false;
-      if (uploadTaskRef.current) uploadTaskRef.current.cancel?.();
-      if (previewUrl && previewUrl.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
-    };
-  }, [signupData, generateBioSuggestions, generateUsernameSuggestions]);
-
-  // Authentication & signup guards
-  useEffect(() => {
-    if (!user) {
-      toast.error("Authentication required. Please log in.");
-      navigate("/login", { replace: true });
-    }
-  }, [user, navigate]);
-
-  // Preview generator/cleanup
-  useEffect(() => {
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-  }, [file]);
-
-  // Enhanced file validation
-  const validateFile = (file) => {
-    if (!file) return "No file selected";
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return "Unsupported format. Use JPG, PNG, or WEBP.";
-    }
-    if (file.size > MAX_IMG_MB * 1024 * 1024) {
-      return `Image too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Max ${MAX_IMG_MB}MB.`;
-    }
-    return null;
-  };
-
-  // Advanced upload with AI optimization
-  const uploadAvatar = async (uid, file) => {
-    if (!file) return null;
-
-    setUploading(true);
-    setUploadProgress(0);
-
-    try {
-      // Compress and optimize image
-      const optimizedFile = await compressImageFile(file);
-      
-      const path = `profile_pictures/${uid}/${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
-      const sRef = storageRef(storage, path);
-
-      const task = uploadBytesResumable(sRef, optimizedFile, {
-        contentType: "image/jpeg",
-        cacheControl: "public,max-age=31536000,immutable",
-      });
-
-      uploadTaskRef.current = task;
-
-      const downloadUrl = await new Promise((resolve, reject) => {
-        task.on(
-          "state_changed",
-          (snapshot) => {
-            if (!isMountedRef.current) return;
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(Math.round(progress));
-          },
-          (error) => reject(error),
-          async () => {
-            try {
-              const url = await getDownloadURL(task.snapshot.ref);
-              resolve(url);
-            } catch (error) {
-              reject(error);
-            }
-          }
-        );
-      });
-
-      return downloadUrl;
-    } catch (error) {
-      throw error;
-    } finally {
-      setUploading(false);
-      setUploadProgress(100);
-    }
-  };
-
-  // Blockchain verification handler
-  const handleBlockchainVerification = async () => {
-    if (blockchainVerification) return;
-
-    const result = await verifyProfile(profileData);
-    setBlockchainVerification(result);
-
-    if (result.verified) {
-      toast.success("🎉 Profile verified on blockchain!");
-    } else {
-      toast.error("Blockchain verification failed. Try again.");
-    }
-  };
-
-  // Enhanced save handler
-  const handleSave = async (skip = false) => {
-    if (!user || !signupData) return;
-    if (saving) return;
-
-    setSaving(true);
-
-    try {
-      let photoURL = DefaultProfile;
-
-      // Upload avatar if provided
-      if (!skip && file) {
-        try {
-          photoURL = await uploadAvatar(user.uid, file);
-          toast.success("🖼️ Profile picture optimized and uploaded");
-        } catch (error) {
-          console.error("Upload failed:", error);
-          toast.error("Failed to upload image. Using default avatar.");
-          photoURL = DefaultProfile;
-        }
-      }
-
-      // Build advanced profile payload
-      const payload = {
-        uid: user.uid,
-        email: user.email || signupData.email,
-        phone: user.phoneNumber || signupData.phone,
-
-        // Personal Info
-        firstName: signupData.firstName?.trim() || "",
-        lastName: signupData.lastName?.trim() || "",
-        displayName: `${signupData.firstName || ""} ${signupData.lastName || ""}`.trim(),
-        
-        // Profile Customization
-        nickname: skip ? null : profileData.nickname?.trim() || null,
-        username: skip ? null : profileData.username?.trim() || null,
-        bio: skip ? null : profileData.bio?.trim() || null,
-
-        // Media
-        profilePicture: photoURL,
-        coverPhoto: null,
-
-        // Stats & Economy
-        coins: (signupData.coins || 0) + 100,
-        level: 1,
-        xp: 0,
-
-        // Social
-        followersCount: 0,
-        followingCount: 0,
-        friendsCount: 0,
-        postsCount: 0,
-
-        // Verification & Status
-        status: "active",
-        verified: blockchainVerification?.verified || false,
-        blockchainVerification,
-
-        // Advanced Settings
-        settings: {
-          privacy: profileData.privacy,
-          darkMode: theme === "dark",
-          notifications: true,
-          language: "en",
-          contentPreferences: {
-            nsfw: false,
-            sensitive: false
-          }
-        },
-
-        // Metadata
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastActive: serverTimestamp(),
-        profileCompleted: !skip
-      };
-
-      // Save to Firestore
-      await setDoc(doc(db, "users", user.uid), payload, { merge: true });
-
-      // Check username availability if provided
-      if (profileData.username) {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("username", "==", profileData.username.toLowerCase()));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          toast.error("Username already taken. Please choose another.");
-          setSaving(false);
-          return;
-        }
-      }
-
-      // Success effects
-      setShowCoinReward(true);
-      setShowConfetti(true);
-      
-      toast.success(
-        skip 
-          ? "🚀 Profile created! Welcome to Arvdoul!" 
-          : "🎉 Profile setup complete! Welcome to the future of social!"
-      );
-
-      // Navigate after celebration
-      setTimeout(() => {
-        navigate("/home", { replace: true });
-      }, 2000);
-
-    } catch (error) {
-      console.error("Profile setup error:", error);
-      toast.error(error?.message || "Failed to save profile. Please try again.");
-    } finally {
-      if (isMountedRef.current) setSaving(false);
-    }
-  };
-
-  const displayName = useMemo(() => {
-    const first = signupData?.firstName || "";
-    const last = signupData?.lastName || "";
-    return `${first} ${last}`.trim() || "New User";
-  }, [signupData]);
-
-  const backgroundStyle = useMemo(() => ({
-    background: theme === "dark"
-      ? "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99,102,241,0.15) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 100% 100%, rgba(168,85,247,0.1) 0%, transparent 50%), #0a0f1c"
-      : "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%), radial-gradient(ellipse 50% 50% at 100% 100%, rgba(168,85,247,0.06) 0%, transparent 50%), #f9fafb",
-  }), [theme]);
-
-  const disableActions = saving || uploading;
-
-  return (
-    <div className="relative w-full min-h-screen p-4" style={backgroundStyle}>
-      {/* Advanced Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(15)].map((_, i) => (
+        <div className="flex flex-col items-center space-y-4">
           <motion.div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              width: Math.random() * 8 + 4,
-              height: Math.random() * 8 + 4,
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-              background: theme === "dark" 
-                ? "rgba(99,102,241,0.1)" 
-                : "rgba(79,70,229,0.08)",
-            }}
-            animate={{
-              y: [0, -30, 0],
-              opacity: [0.2, 0.6, 0.2],
-            }}
-            transition={{
-              duration: Math.random() * 6 + 4,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: Math.random() * 2,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Confetti Celebration */}
-      <AnimatePresence>
-        {showConfetti && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 pointer-events-none"
+            onMouseEnter={() => setIsHovering(true)}
+            onMouseLeave={() => setIsHovering(false)}
+            onClick={handleClick}
+            whileHover={!loading ? { scale: 1.02 } : {}}
+            whileTap={!loading ? { scale: 0.98 } : {}}
+            className={`relative w-32 h-32 sm:w-40 sm:h-40 rounded-2xl cursor-pointer transition-all duration-300 overflow-hidden ${
+              isDragging
+                ? "border-3 border-dashed border-indigo-500 bg-indigo-500/10"
+                : resolvedTheme === "dark"
+                ? "border-2 border-gray-700 bg-gray-800/50"
+                : "border-2 border-gray-300 bg-gray-50"
+            } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            {[...Array(150)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute text-2xl"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                }}
-                animate={{
-                  y: [0, -1000],
-                  x: [0, (Math.random() - 0.5) * 100],
-                  rotate: [0, 360],
-                  opacity: [1, 0],
-                }}
-                transition={{
-                  duration: Math.random() * 3 + 2,
-                  ease: "easeOut",
-                }}
-              >
-                {["🎉", "🎊", "✨", "🌟", "💫", "🚀"][Math.floor(Math.random() * 6)]}
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Coin Reward Notification */}
-      <AnimatePresence>
-        {showCoinReward && (
-          <motion.div
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-            className="fixed top-8 left-1/2 transform -translate-x-1/2 z-50"
-          >
-            <div className="bg-gradient-to-r from-yellow-400 to-amber-500 text-gray-900 px-8 py-4 rounded-2xl shadow-2xl text-center font-bold text-lg">
-              🎉 +100 Arvdoul Coins Rewarded! 🎉
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="relative z-10 max-w-4xl mx-auto py-8">
-        {/* Progress Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <h1 className={`text-4xl font-bold mb-2 ${
-            theme === 'dark' ? 'text-white' : 'text-gray-900'
-          }`}>
-            Customize Your Profile
-          </h1>
-          <p className={`text-lg ${
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-          }`}>
-            Final step • Make it uniquely yours
-          </p>
-        </motion.div>
-
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left Column - Profile Media */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            {/* Profile Picture Upload */}
-            <AdvancedImageUpload
-              file={file}
-              previewUrl={previewUrl}
-              onFileSelect={setFile}
-              onRemove={() => {
-                setFile(null);
-                setPreviewUrl(DefaultProfile);
-              }}
-              theme={theme}
-              loading={disableActions}
-            />
-
-            {/* Upload Progress */}
-            <AnimatePresence>
-              {uploading && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="p-4 rounded-xl bg-gray-100 dark:bg-gray-800"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <Loader2 className="animate-spin" size={16} />
-                    <span className="text-sm font-medium">Optimizing & Uploading...</span>
-                    <span className="text-sm">{uploadProgress}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <motion.div
-                      className="h-2 bg-gradient-to-r from-indigo-500 to-purple-500"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${uploadProgress}%` }}
-                      transition={{ duration: 0.3 }}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Display Name Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-center"
-            >
-              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-2xl">
-                <Zap size={20} />
-                <span className="text-lg font-semibold">{displayName}</span>
-              </div>
-              <p className={`text-sm mt-2 ${
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              }`}>
-                This is how you'll appear on Arvdoul
-              </p>
-            </motion.div>
-
-            {/* Blockchain Verification */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="p-6 rounded-2xl border-2 border-amber-500/30 bg-amber-500/10"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <Shield className="text-amber-500" size={24} />
-                <h3 className={`text-lg font-semibold ${
-                  theme === 'dark' ? 'text-amber-400' : 'text-amber-700'
-                }`}>
-                  Blockchain Verification
-                </h3>
-              </div>
-              
-              <p className={`text-sm mb-4 ${
-                theme === 'dark' ? 'text-amber-300' : 'text-amber-600'
-              }`}>
-                Verify your profile on the blockchain for enhanced trust and security.
-              </p>
-
-              <motion.button
-                onClick={handleBlockchainVerification}
-                disabled={isVerifying || blockchainVerification}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 ${
-                  blockchainVerification?.verified
-                    ? 'bg-green-500 text-white'
-                    : isVerifying || blockchainVerification
-                    ? 'bg-gray-500 text-white cursor-not-allowed'
-                    : 'bg-amber-500 text-white hover:bg-amber-600'
-                }`}
-              >
-                {isVerifying ? (
-                  <>
-                    <Loader2 className="animate-spin" size={16} />
-                    Verifying...
-                  </>
-                ) : blockchainVerification?.verified ? (
-                  <>
-                    ✅ Verified on Blockchain
-                  </>
-                ) : blockchainVerification ? (
-                  "Verification Failed"
-                ) : (
-                  "Verify on Blockchain"
-                )}
-              </motion.button>
-
-              {blockchainVerification?.transactionHash && (
-                <p className={`text-xs mt-2 ${
-                  theme === 'dark' ? 'text-amber-400' : 'text-amber-600'
-                }`}>
-                  TX: {blockchainVerification.transactionHash.slice(0, 16)}...
-                </p>
-              )}
-            </motion.div>
-          </motion.div>
-
-          {/* Right Column - Profile Details */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            {/* Username */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <label className={`block text-sm font-medium mb-2 ${
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                Username
-              </label>
-              <input
-                type="text"
-                value={profileData.username}
-                onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
-                maxLength={USERNAME_LIMIT}
-                placeholder="Choose a unique username"
-                className={`w-full px-4 py-3 rounded-xl border-2 transition-all ${
-                  theme === 'dark'
-                    ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500'
-                    : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                } focus:outline-none focus:border-indigo-500`}
-                disabled={disableActions}
-              />
-              <div className="flex justify-between mt-1">
-                <span className={`text-xs ${
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                }`}>
-                  {profileData.username.length}/{USERNAME_LIMIT}
-                </span>
-                {usernameSuggestions.length > 0 && (
-                  <div className="text-xs">
-                    <span className="text-gray-500">Suggestions: </span>
-                    {usernameSuggestions.slice(0, 2).map((suggestion, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setProfileData({ ...profileData, username: suggestion })}
-                        className="text-indigo-500 hover:text-indigo-400 ml-2"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Nickname */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <label className={`block text-sm font-medium mb-2 ${
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                Nickname (Optional)
-              </label>
-              <input
-                type="text"
-                value={profileData.nickname}
-                onChange={(e) => setProfileData({ ...profileData, nickname: e.target.value })}
-                maxLength={NICKNAME_LIMIT}
-                placeholder="What should friends call you?"
-                className={`w-full px-4 py-3 rounded-xl border-2 transition-all ${
-                  theme === 'dark'
-                    ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500'
-                    : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                } focus:outline-none focus:border-indigo-500`}
-                disabled={disableActions}
-              />
-              <div className="text-right">
-                <span className={`text-xs ${
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                }`}>
-                  {profileData.nickname.length}/{NICKNAME_LIMIT}
-                </span>
-              </div>
-            </motion.div>
-
-            {/* Bio with AI Suggestions */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <label className={`block text-sm font-medium ${
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  Bio
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (bioSuggestions.length > 0) {
-                      setProfileData({ ...profileData, bio: bioSuggestions[0] });
-                    }
+            <div className="absolute inset-0 rounded-2xl overflow-hidden">
+              {avatarPreview ? (
+                <motion.img
+                  src={avatarPreview}
+                  alt="Avatar preview"
+                  className="w-full h-full object-cover"
+                  initial={{ scale: 1 }}
+                  animate={{
+                    scale: isHovering ? 1.1 : 1,
+                    filter: isHovering ? "brightness(1.05)" : "brightness(1)",
                   }}
-                  className="text-xs text-indigo-500 hover:text-indigo-400 flex items-center gap-1"
+                  transition={{ duration: 0.3 }}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = generateDefaultAvatar(
+                      userId || "temp",
+                      displayName || "User"
+                    );
+                  }}
+                />
+              ) : (
+                <div
+                  className={`w-full h-full flex items-center justify-center ${
+                    resolvedTheme === "dark"
+                      ? "bg-gray-800 text-gray-400"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
                 >
-                  <Sparkles size={12} />
-                  AI Suggest
-                </button>
-              </div>
-              <textarea
-                value={profileData.bio}
-                onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                maxLength={BIO_LIMIT}
-                rows={4}
-                placeholder="Tell your story..."
-                className={`w-full px-4 py-3 rounded-xl border-2 resize-none transition-all ${
-                  theme === 'dark'
-                    ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500'
-                    : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                } focus:outline-none focus:border-indigo-500`}
-                disabled={disableActions}
-              />
-              <div className="flex justify-between mt-1">
-                <span className={`text-xs ${
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                }`}>
-                  {profileData.bio.length}/{BIO_LIMIT}
-                </span>
-              </div>
-            </motion.div>
-
-            {/* Privacy Settings */}
-            <PrivacySettings
-              settings={{ privacy: profileData.privacy }}
-              onChange={(newSettings) => setProfileData({ ...profileData, ...newSettings })}
-              theme={theme}
-            />
-
-            {/* Action Buttons */}
+                  <svg
+                    className="w-16 h-16 sm:w-20 sm:h-20 opacity-50"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                </div>
+              )}
+            </div>
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="flex flex-col gap-3 pt-4"
+              className={`absolute bottom-2 right-2 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
+                resolvedTheme === "dark"
+                  ? "bg-gray-900/80 border border-gray-700"
+                  : "bg-white/80 border border-gray-300"
+              }`}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 400 }}
             >
-              <motion.button
-                onClick={() => handleSave(false)}
-                disabled={disableActions}
-                whileHover={{ scale: disableActions ? 1 : 1.02 }}
-                whileTap={{ scale: disableActions ? 1 : 0.98 }}
-                className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 ${
-                  disableActions
-                    ? 'bg-gray-500 text-white cursor-not-allowed'
-                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-2xl'
-                }`}
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                {saving ? (
-                  <>
-                    <Loader2 className="animate-spin" size={20} />
-                    Creating Your Digital Identity...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} />
-                    Complete Profile Setup
-                  </>
-                )}
-              </motion.button>
-
-              <motion.button
-                onClick={() => handleSave(true)}
-                disabled={disableActions}
-                whileHover={{ scale: disableActions ? 1 : 1.02 }}
-                whileTap={{ scale: disableActions ? 1 : 0.98 }}
-                className={`w-full py-3 rounded-xl border-2 font-semibold transition-all ${
-                  theme === 'dark'
-                    ? 'border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300'
-                    : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-700'
-                } ${disableActions ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                Skip for Now
-              </motion.button>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
             </motion.div>
+            {uploadProgress > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 bg-black/50 flex items-center justify-center"
+              >
+                <div className="relative">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20">
+                    <svg className="w-full h-full" viewBox="0 0 100 100">
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.1)"
+                        strokeWidth="8"
+                      />
+                      <motion.circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        fill="none"
+                        stroke="#6366f1"
+                        strokeWidth="8"
+                        strokeLinecap="round"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: uploadProgress / 100 }}
+                        transition={{ duration: 0.5 }}
+                        transform="rotate(-90 50 50)"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-lg font-bold text-white">
+                        {uploadProgress}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
+          <div className="text-center space-y-1">
+            <p
+              className={`text-sm font-medium ${
+                resolvedTheme === "dark" ? "text-gray-300" : "text-gray-700"
+              }`}
+            >
+              Profile Picture
+            </p>
+            <p className="text-xs text-gray-500">
+              Tap to upload or we'll generate one
+            </p>
+          </div>
         </div>
       </div>
+    );
+  }
+);
+PerfectAvatarUploader.displayName = "PerfectAvatarUploader";
+
+// ==================== SMART USERNAME GENERATOR (FIXED) ====================
+const SmartUsernameGenerator = React.memo(
+  ({ username, onChange, theme, loading = false, displayName = "", userId = null }) => {
+    const [status, setStatus] = useState("idle");
+    const [message, setMessage] = useState("");
+    const [isChecking, setIsChecking] = useState(false);
+    const timeoutRef = useRef(null);
+
+    const resolvedTheme =
+      theme === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
+
+    const validateUsername = useCallback(
+      async (value) => {
+        if (!value || value.trim().length < 3) {
+          setStatus("idle");
+          setMessage("Minimum 3 characters");
+          return;
+        }
+        if (!/^[a-zA-Z0-9_.-]+$/.test(value)) {
+          setStatus("invalid");
+          setMessage("Use letters, numbers, dots, dashes, or underscores");
+          return;
+        }
+        if (value.length > 30) {
+          setStatus("invalid");
+          setMessage("Maximum 30 characters");
+          return;
+        }
+
+        setIsChecking(true);
+        setStatus("checking");
+        setMessage("Checking availability...");
+
+        try {
+          const result = await checkUsernameAvailability(value, userId);
+          if (result.available) {
+            setStatus("available");
+            setMessage("Username available!");
+          } else if (result.error) {
+            console.warn("Username check failed:", result.error, result.errorCode);
+            setStatus("error");
+            setMessage("Unable to verify – try again");
+          } else {
+            setStatus("taken");
+            setMessage("Username is taken");
+          }
+        } catch (error) {
+          console.error("Username check exception:", error);
+          setStatus("error");
+          setMessage("Unable to verify");
+        } finally {
+          setIsChecking(false);
+        }
+      },
+      [userId]
+    );
+
+    const generateSmartUsername = useCallback(async () => {
+      if (!displayName || !displayName.trim()) {
+        toast.error("Please enter a display name first");
+        return;
+      }
+      setStatus("checking");
+      setMessage("Generating unique username...");
+
+      try {
+        const { generateUniqueUsername } = await import("../services/userService.js");
+        const generated = await generateUniqueUsername(displayName, userId);
+        if (generated && generated.length >= 3) {
+          onChange(generated);
+          await validateUsername(generated);
+          toast.success("Username generated!");
+        } else {
+          throw new Error("Generation returned empty");
+        }
+      } catch (error) {
+        console.warn("Username generation failed, using fallback:", error);
+        const fallback = `user_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`;
+        onChange(fallback);
+        setStatus("available");
+        setMessage("Generated username!");
+        toast.info("Auto‑generated username: " + fallback);
+      }
+    }, [displayName, onChange, userId, validateUsername]);
+
+    useEffect(() => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (username.length >= 3) {
+        timeoutRef.current = setTimeout(() => validateUsername(username), 500);
+      } else {
+        setStatus("idle");
+        setMessage(username.length > 0 ? "Minimum 3 characters" : "");
+      }
+      return () => clearTimeout(timeoutRef.current);
+    }, [username, validateUsername]);
+
+    const getStatusColor = () => {
+      switch (status) {
+        case "available": return "text-emerald-500";
+        case "taken":     return "text-rose-500";
+        case "invalid":   return "text-amber-500";
+        case "checking":  return "text-blue-500";
+        case "error":     return "text-red-500";
+        default:          return "text-gray-400";
+      }
+    };
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label
+            className={`block text-sm font-semibold ${
+              resolvedTheme === "dark" ? "text-gray-200" : "text-gray-800"
+            }`}
+          >
+            Username
+            <span className="text-rose-500 ml-1">*</span>
+          </label>
+          <span className="text-xs text-gray-500">{username.length}/30</span>
+        </div>
+        <div className="relative">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">@</div>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => onChange(e.target.value.replace(/\s+/g, "").toLowerCase())}
+            disabled={loading}
+            placeholder="yourusername"
+            className={`w-full pl-8 pr-10 py-3 rounded-lg border transition-all duration-200 text-sm ${
+              resolvedTheme === "dark"
+                ? "bg-gray-900 text-white placeholder-gray-500 border-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                : "bg-white text-gray-900 placeholder-gray-400 border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            } ${
+              status === "available" ? "!border-emerald-500" :
+              status === "taken" || status === "invalid" || status === "error" ? "!border-rose-500" : ""
+            } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+          />
+          {username.length >= 3 && status !== "idle" && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              {status === "checking" ? (
+                <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+              ) : status === "available" ? (
+                <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                  <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              ) : status === "taken" || status === "invalid" || status === "error" ? (
+                <div className="w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center">
+                  <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+
+        {message && (
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-medium ${getStatusColor()}`}>{message}</span>
+          </div>
+        )}
+
+        <button
+          onClick={generateSmartUsername}
+          disabled={loading || isChecking || !displayName}
+          className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+            resolvedTheme === "dark"
+              ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          } ${loading || isChecking || !displayName ? "opacity-50 cursor-not-allowed" : ""}`}
+        >
+          {isChecking ? (
+            <>
+              <div className="animate-spin w-3 h-3 border-2 border-current border-t-transparent rounded-full" />
+              <span>Generating...</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Generate Smart Username</span>
+            </>
+          )}
+        </button>
+      </div>
+    );
+  }
+);
+SmartUsernameGenerator.displayName = "SmartUsernameGenerator";
+
+// ==================== MAIN COMPONENT ====================
+export default function SetupProfile() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const themeCtx = useTheme?.() || { theme: "light" };
+  const { theme } = themeCtx;
+  const { user, updateUserProfile, authService } = useAuth();
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const signupData = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem("signup_data");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const stateData = location.state?.userData || {};
+  const stateMethod = location.state?.method || null;
+  const step1FromState = location.state?.step1Data || {};
+
+  const resolvedTheme =
+    theme === "system"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : theme;
+
+  const buildDisplayName = () => {
+    // Priority: step1Data from signup_data (saved during step2)
+    const step1 = signupData.firstName ? signupData : step1FromState;
+    if (step1.firstName && step1.lastName) {
+      return `${step1.firstName} ${step1.lastName}`.trim();
+    }
+    if (step1.firstName) return step1.firstName;
+    if (step1.lastName) return step1.lastName;
+    // Fallback: from stateData or user
+    if (stateData.displayName) return stateData.displayName;
+    if (user?.displayName) return user.displayName;
+    if (user?.email) return user.email.split('@')[0];
+    return "Arvdoul User";
+  };
+
+  const getInitials = () => {
+    const displayName = buildDisplayName();
+    const username =
+      signupData.username ||
+      stateData.username ||
+      `user_${user?.uid?.slice(0, 8) || Date.now().toString(36)}`;
+    const avatar = signupData.photoURL || stateData.photoURL || user?.photoURL || "";
+    const authProvider = signupData.authProvider || stateData.authProvider || stateMethod || user?.authProvider || "email";
+    const identifier = signupData.phoneNumber || signupData.email || stateData.phoneNumber || stateData.email || user?.phoneNumber || user?.email || "";
+    return { displayName, username, avatar, authProvider, identifier };
+  };
+
+  const { displayName: initDn, username: initUn, avatar: initAv, authProvider: initAp, identifier: initId } = getInitials();
+
+  const [displayName, setDisplayName] = useState(initDn);
+  const [username, setUsername] = useState(initUn);
+  const [avatarUrl, setAvatarUrl] = useState(initAv);
+  const [authProvider, setAuthProvider] = useState(initAp);
+  const [identifier, setIdentifier] = useState(initId);
+  const [bio, setBio] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [profileComplete, setProfileComplete] = useState(false);
+
+  useEffect(() => {
+    const { displayName: dn, username: un, avatar: av, authProvider: ap, identifier: id } = getInitials();
+    if (dn !== displayName) setDisplayName(dn);
+    if (un !== username) setUsername(un);
+    if (av !== avatarUrl) setAvatarUrl(av);
+    if (ap !== authProvider) setAuthProvider(ap);
+    if (id !== identifier) setIdentifier(id);
+  }, [signupData, stateData, user]);
+
+  const handleAvatarUpload = (url) => setAvatarUrl(url);
+
+  const updateFirebaseAuthProfile = async (authUser, profile) => {
+    if (!authUser) return;
+    try {
+      await firebaseUpdateProfile(authUser, {
+        displayName: profile.displayName,
+        photoURL: profile.photoURL,
+      });
+    } catch (err) {
+      console.warn("Failed to update Auth profile", err);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (loading || profileComplete || !displayName.trim() || username.length < 3) return;
+    setLoading(true);
+    try {
+      const avail = await checkUsernameAvailability(username, user?.uid);
+      if (!avail.available) {
+        toast.error(avail.error || "Username not available");
+        setLoading(false);
+        return;
+      }
+
+      const finalAvatar = avatarUrl || generateDefaultAvatar(user.uid, displayName);
+      const result = await createUserProfile(user.uid, {
+        uid: user.uid,
+        displayName: displayName.trim(),
+        username: username.toLowerCase(),
+        bio: bio.trim(),
+        photoURL: finalAvatar,
+        email: user?.email || "",
+        emailVerified: user?.emailVerified || false,
+        phoneNumber: user?.phoneNumber || "",
+        isProfileComplete: true,
+        authProvider: authProvider || "email",
+        accountStatus: "active",
+      });
+
+      if (!result.success) throw new Error(result.error || "Profile creation failed");
+
+      if (updateUserProfile) await updateUserProfile({ isProfileComplete: true });
+
+      if (authService?.auth?.currentUser) {
+        await updateFirebaseAuthProfile(authService.auth.currentUser, {
+          displayName: displayName.trim(),
+          photoURL: finalAvatar,
+        });
+      }
+
+      sessionStorage.removeItem("signup_data");
+      localStorage.removeItem("signup_data_persist");
+      setProfileComplete(true);
+      toast.success("🎉 Profile setup complete!");
+      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);
+    } catch (error) {
+      toast.error(error.message || "Failed to create profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!displayName.trim()) return toast.error("Display name required");
+    const finalUsername = username || `user_${Date.now().toString(36).slice(-8)}`;
+    setUsername(finalUsername);
+    setLoading(true);
+    try {
+      const finalAvatar = avatarUrl || generateDefaultAvatar(user.uid, displayName);
+      const result = await createUserProfile(user.uid, {
+        uid: user.uid,
+        displayName: displayName.trim(),
+        username: finalUsername.toLowerCase(),
+        bio: bio.trim(),
+        photoURL: finalAvatar,
+        email: user?.email || "",
+        emailVerified: user?.emailVerified || false,
+        phoneNumber: user?.phoneNumber || "",
+        isProfileComplete: true,
+        authProvider: authProvider || "email",
+        accountStatus: "active",
+      });
+      if (!result.success) throw new Error(result.error || "Profile creation failed");
+      if (updateUserProfile) await updateUserProfile({ isProfileComplete: true });
+      if (authService?.auth?.currentUser) {
+        await updateFirebaseAuthProfile(authService.auth.currentUser, {
+          displayName: displayName.trim(),
+          photoURL: finalAvatar,
+        });
+      }
+      sessionStorage.removeItem("signup_data");
+      localStorage.removeItem("signup_data_persist");
+      setProfileComplete(true);
+      toast.success("🎉 Profile setup complete!");
+      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);
+    } catch (err) {
+      toast.error(err.message || "Profile creation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const authMethodIcon = {
+    phone: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
+    email: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+    google: <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>,
+  }[authProvider] || null;
+
+  if (!user?.uid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+        <div className="text-center text-gray-600 dark:text-gray-400">
+          <div className="animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <p>Redirecting to login…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // NON‑SCROLLABLE WRAPPER + MAX‑WIDTH CARD WITH INTERNAL SCROLL
+  return (
+    <div className="h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      {/* Offline Banner */}
+      <AnimatePresence>
+        {isOffline && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-amber-500/95 text-white text-center py-2 text-xs font-semibold backdrop-blur-sm"
+          >
+            You are offline – profile setup requires internet
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex-1 flex items-center justify-center p-4 overflow-hidden">
+        <div className="w-full max-w-md mx-auto h-full flex flex-col justify-center">
+          {/* Progress Steps */}
+          <div className="mb-4 flex items-center justify-center space-x-2">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  step === 3 ? "bg-indigo-600 text-white ring-4 ring-indigo-500/30" : step < 3 ? "bg-emerald-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                }`}>{step < 3 ? "✓" : step}</div>
+                {step < 3 && <div className="w-6 h-1 bg-emerald-500" />}
+              </div>
+            ))}
+          </div>
+          <div className="text-center mb-4">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Complete Your Profile</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Almost done! Let's personalize your account</p>
+          </div>
+
+          {/* Glass Card with internal scroll */}
+          <div className={`relative rounded-2xl border backdrop-blur-xl overflow-y-auto max-h-[calc(100dvh-12rem)] ${
+            navigator.deviceMemory && navigator.deviceMemory >= 4 ? "shadow-2xl" : "shadow-lg"
+          } ${
+            resolvedTheme === "dark"
+              ? "bg-gray-900/70 border-white/10 shadow-indigo-900/20"
+              : "bg-white/70 border-gray-200/60 shadow-indigo-100/20"
+          } p-6 space-y-6`}
+          >
+            <PerfectAvatarUploader onUpload={handleAvatarUpload} currentAvatar={avatarUrl} displayName={displayName} userId={user?.uid} theme={theme} loading={loading} />
+
+            {/* Read‑Only Display Name */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Display Name</label>
+              <div className={`w-full px-3 py-2 rounded-lg border ${resolvedTheme === "dark" ? "bg-gray-800/50 border-gray-600 text-gray-200" : "bg-gray-100 border-gray-300 text-gray-700"}`}>{displayName}</div>
+            </div>
+
+            {/* Auth Method with truncation for long email/phone */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Sign‑up Method</label>
+              <div className={`w-full px-3 py-2 rounded-lg border flex items-center gap-2 ${resolvedTheme === "dark" ? "bg-gray-800/50 border-gray-600 text-gray-300" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
+                {authMethodIcon}
+                <span className="capitalize font-medium">{authProvider}</span>
+                {identifier && (
+                  <span className={`text-xs ml-auto max-w-[150px] truncate ${resolvedTheme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    {identifier}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <SmartUsernameGenerator username={username} onChange={setUsername} theme={theme} loading={loading} displayName={displayName} userId={user?.uid} />
+
+            {/* Bio */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white">Bio (Optional)</label>
+                <span className="text-xs text-gray-500">{150 - bio.length} chars left</span>
+              </div>
+              <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 150))} disabled={loading} placeholder="Tell us about yourself..." rows={3} className="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-500 resize-none border-gray-300 dark:border-gray-600 focus:border-indigo-500" />
+            </div>
+
+            {/* Buttons with glowing effect */}
+            <div className="space-y-3">
+              <button
+                onClick={handleSubmit}
+                disabled={loading || profileComplete || !displayName.trim() || username.length < 3}
+                className={`w-full py-3 rounded-lg font-semibold text-white transition-all duration-300 ${
+                  !loading && displayName.trim() && username.length >= 3
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/25 hover:shadow-2xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
+                    : "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
+                }`}
+              >
+                {loading ? "Creating Profile..." : "Complete Setup"}
+              </button>
+              <button
+                onClick={handleSkip}
+                disabled={loading || !displayName.trim()}
+                className="w-full py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        @media screen and (max-width: 768px) {
+          input, select, textarea { font-size: 16px !important; }
+        }
+      `}</style>
     </div>
   );
 }

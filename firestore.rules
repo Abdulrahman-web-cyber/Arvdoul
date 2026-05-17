@@ -1,36 +1,65 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // 🔐 Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(uidField) {
-      return isSignedIn() && request.auth.uid == resource.data[uidField];
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    // USERS
-    match /users/{uid} {
-      allow read: if isSignedIn(); // or make "public" fields via custom subcollection
-      allow create: if isSignedIn() && request.auth.uid == uid;
-      allow update, delete: if isSignedIn() && request.auth.uid == uid;
+    // 👤 Users
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId);
+      allow update, delete: if isOwner(userId);
     }
 
-    // POSTS
+    // 📝 Posts
     match /posts/{postId} {
-      allow read: if true; // public posts
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
     }
 
-    // STORIES
+    // 💬 Comments
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    // 💌 Messages (subcollection example)
+    match /conversations/{conversationId}/messages/{messageId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 👥 Follows
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSignedIn();
+    }
+
+    // 📖 Stories
     match /stories/{storyId} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
 
-    // FUTURE: comments, likes, follows... add similar owner checks
+    // 🪙 Coins / Transactions
+    match /coin_transactions/{txId} {
+      allow read: if isSignedIn();
+      allow write: if false; // server-controlled
+    }
+
+    // 🔒 Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

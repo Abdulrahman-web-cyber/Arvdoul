@@ -1,973 +1,1032 @@
-// src/context/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithPhoneNumber,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-  updatePassword,
-  sendPasswordResetEmail,
-  confirmPasswordReset,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-  PhoneAuthProvider,
-  RecaptchaVerifier,
-  getAdditionalUserInfo
-} from 'firebase/auth';
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  updateDoc, 
-  serverTimestamp,
-  collection,
-  query,
-  where,
-  getDocs
-} from 'firebase/firestore';
-import { auth, db } from '../firebase/firebase';
-import { toast } from 'sonner';
+// src/context/AuthContext.jsx - ULTIMATE PRODUCTION V23 - NO FLICKER, PERFECT FLOW
+// 🎯 ALL METHODS PERFECT • WAITS FOR PROFILE • NO RACE CONDITIONS • PROFESSIONAL READY
 
-// Security constants
-const SECURITY_CONFIG = {
-  MAX_LOGIN_ATTEMPTS: 5,
-  LOCKOUT_DURATION: 15 * 60 * 1000, // 15 minutes
-  PASSWORD_MIN_LENGTH: 8,
-  SESSION_TIMEOUT: 30 * 60 * 1000, // 30 minutes
-  TOKEN_REFRESH_INTERVAL: 10 * 60 * 1000, // 10 minutes
-};
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { toast } from "sonner";
+import { useAppStore } from "../store/appStore";
 
-// Security event types
-const SECURITY_EVENTS = {
-  LOGIN_SUCCESS: 'login_success',
-  LOGIN_FAILED: 'login_failed',
-  LOGOUT: 'logout',
-  PASSWORD_RESET: 'password_reset',
-  PROFILE_UPDATE: 'profile_update',
-  ACCOUNT_LOCKED: 'account_locked',
-  ACCOUNT_UNLOCKED: 'account_unlocked',
-  SESSION_EXPIRED: 'session_expired',
-  SUSPICIOUS_ACTIVITY: 'suspicious_activity'
-};
-
-// Create context
 const AuthContext = createContext(null);
 
-// Custom hook for using auth context
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-// Security logger
-const createSecurityLogger = (userId) => {
-  const logEvent = (eventType, details = {}) => {
-    const logEntry = {
-      userId,
-      eventType,
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      ip: '127.0.0.1', // In production, get from request headers
-      details
-    };
-    
-    // In production, send to security monitoring service
-    console.log('[SECURITY LOG]:', logEntry);
-    
-    // Also store in localStorage for debugging
-    const logs = JSON.parse(localStorage.getItem('security_logs') || '[]');
-    logs.push(logEntry);
-    if (logs.length > 100) logs.shift(); // Keep last 100 logs
-    localStorage.setItem('security_logs', JSON.stringify(logs));
-  };
-  
-  return { logEvent };
-};
-
-// Rate limiter
-const createRateLimiter = (maxAttempts, lockoutDuration) => {
-  const attempts = new Map();
-  
-  const check = (identifier) => {
-    const now = Date.now();
-    const userAttempts = attempts.get(identifier) || [];
-    
-    // Clean old attempts
-    const recentAttempts = userAttempts.filter(time => now - time < lockoutDuration);
-    
-    if (recentAttempts.length >= maxAttempts) {
-      return { allowed: false, remaining: 0 };
-    }
-    
-    return { 
-      allowed: true, 
-      remaining: maxAttempts - recentAttempts.length 
-    };
-  };
-  
-  const recordAttempt = (identifier) => {
-    const userAttempts = attempts.get(identifier) || [];
-    userAttempts.push(Date.now());
-    attempts.set(identifier, userAttempts);
-  };
-  
-  const reset = (identifier) => {
-    attempts.delete(identifier);
-  };
-  
-  return { check, recordAttempt, reset };
-};
-
-// Auth provider component
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(false);
-  const [sessionExpiry, setSessionExpiry] = useState(null);
-  const [loginAttempts, setLoginAttempts] = useState({});
-  const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
-  const [securityEvents, setSecurityEvents] = useState([]);
-
-  // Initialize rate limiter
-  const rateLimiter = useMemo(() => 
-    createRateLimiter(SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS, SECURITY_CONFIG.LOCKOUT_DURATION),
-    []
-  );
-
-  // Initialize security logger
-  const securityLogger = useMemo(() => 
-    createSecurityLogger(user?.uid || 'anonymous'),
-    [user?.uid]
-  );
-
-  // Initialize reCAPTCHA
-  const initializeRecaptcha = useCallback((containerId) => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-        size: 'invisible',
-        callback: () => {
-          console.log('reCAPTCHA solved');
-        },
-        'expired-callback': () => {
-          console.log('reCAPTCHA expired');
-        }
-      });
-    }
-    setRecaptchaVerifier(window.recaptchaVerifier);
-  }, []);
-
-  // Security event logger
-  const logSecurityEvent = useCallback((eventType, details = {}) => {
-    const event = {
-      type: eventType,
-      timestamp: new Date().toISOString(),
-      userId: user?.uid || 'anonymous',
-      userEmail: user?.email || null,
-      details
-    };
-    
-    setSecurityEvents(prev => [...prev.slice(-49), event]); // Keep last 50 events
-    
-    // Also log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[AUTH SECURITY] ${eventType}:`, details);
-    }
-  }, [user]);
-
-  // Check rate limiting
-  const checkRateLimit = useCallback((identifier) => {
-    const result = rateLimiter.check(identifier);
-    
-    if (!result.allowed) {
-      logSecurityEvent(SECURITY_EVENTS.ACCOUNT_LOCKED, { identifier });
-      toast.error('Too many failed attempts. Account temporarily locked.');
-      return false;
-    }
-    
-    return true;
-  }, [rateLimiter, logSecurityEvent]);
-
-  // Record failed attempt
-  const recordFailedAttempt = useCallback((identifier) => {
-    rateLimiter.recordAttempt(identifier);
-    logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILED, { identifier });
-  }, [rateLimiter, logSecurityEvent]);
-
-  // Reset attempts
-  const resetAttempts = useCallback((identifier) => {
-    rateLimiter.reset(identifier);
-    logSecurityEvent(SECURITY_EVENTS.ACCOUNT_UNLOCKED, { identifier });
-  }, [rateLimiter, logSecurityEvent]);
-
-  // Session management
-  const updateSessionExpiry = useCallback(() => {
-    const expiry = Date.now() + SECURITY_CONFIG.SESSION_TIMEOUT;
-    setSessionExpiry(expiry);
-    localStorage.setItem('session_expiry', expiry.toString());
-  }, []);
-
-  const checkSessionExpiry = useCallback(() => {
-    if (!sessionExpiry) return true;
-    
-    if (Date.now() > sessionExpiry) {
-      logSecurityEvent(SECURITY_EVENTS.SESSION_EXPIRED);
-      handleLogout();
-      return false;
-    }
-    
-    return true;
-  }, [sessionExpiry]);
-
-  // Initialize session timer
-  useEffect(() => {
-    if (user) {
-      updateSessionExpiry();
-      
-      // Refresh session periodically
-      const refreshInterval = setInterval(() => {
-        if (checkSessionExpiry()) {
-          updateSessionExpiry();
-        }
-      }, SECURITY_CONFIG.TOKEN_REFRESH_INTERVAL);
-      
-      // Check session expiry periodically
-      const expiryCheckInterval = setInterval(() => {
-        checkSessionExpiry();
-      }, 60000); // Check every minute
-      
-      return () => {
-        clearInterval(refreshInterval);
-        clearInterval(expiryCheckInterval);
-      };
-    }
-  }, [user, updateSessionExpiry, checkSessionExpiry]);
-
-  // Validate password strength
-  const validatePassword = useCallback((password) => {
-    const errors = [];
-    
-    if (password.length < SECURITY_CONFIG.PASSWORD_MIN_LENGTH) {
-      errors.push(`Password must be at least ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} characters`);
-    }
-    
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Password must contain at least one uppercase letter');
-    }
-    
-    if (!/[a-z]/.test(password)) {
-      errors.push('Password must contain at least one lowercase letter');
-    }
-    
-    if (!/[0-9]/.test(password)) {
-      errors.push('Password must contain at least one number');
-    }
-    
-    if (!/[^A-Za-z0-9]/.test(password)) {
-      errors.push('Password must contain at least one special character');
-    }
-    
-    // Check common passwords
-    const commonPasswords = [
-      'password', '123456', 'qwerty', 'admin', 'letmein',
-      'welcome', 'monkey', 'dragon', 'baseball', 'football'
+// ==================== ENHANCED STORAGE MANAGER ====================
+const AuthStorageManager = {
+  clearAll() {
+    const sessionItems = [
+      'email_auth_data',
+      'google_auth_data',
+      'phone_auth_data',
+      'pending_profile_creation',
+      'email_not_verified_user',
+      'pending_redirect',
+      'last_auth_path',
+      'auth_flow_state',
+      'phone_verification_data'
     ];
-    
-    if (commonPasswords.includes(password.toLowerCase())) {
-      errors.push('This password is too common and insecure');
-    }
-    
-    return {
-      isValid: errors.length === 0,
-      errors,
-      strength: errors.length === 0 ? 'strong' : 'weak'
-    };
-  }, []);
-
-  // Create user document in Firestore
-  const createUserDocument = useCallback(async (userData) => {
+    const localItems = [
+      'auth_verification_attempts',
+      'last_auth_method',
+      'phone_verification_attempts'
+    ];
+    sessionItems.forEach(key => sessionStorage.removeItem(key));
+    localItems.forEach(key => localStorage.removeItem(key));
+    console.log('🧹 Auth storage cleared completely');
+  },
+  
+  set(key, value) {
     try {
-      const userRef = doc(db, 'users', userData.uid);
-      const userDoc = {
-        uid: userData.uid,
-        email: userData.email || null,
-        phone: userData.phoneNumber || null,
-        emailVerified: userData.emailVerified || false,
-        displayName: userData.displayName || '',
-        photoURL: userData.photoURL || '',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp(),
-        security: {
-          twoFactorEnabled: false,
-          loginAttempts: 0,
-          lastFailedAttempt: null,
-          accountLockedUntil: null
-        },
-        preferences: {
-          theme: 'system',
-          notifications: true,
-          language: 'en'
-        }
-      };
-      
-      await setDoc(userRef, userDoc);
-      return userDoc;
+      sessionStorage.setItem(key, JSON.stringify({
+        data: value,
+        timestamp: Date.now()
+      }));
     } catch (error) {
-      console.error('Error creating user document:', error);
-      throw error;
+      console.warn('Storage set failed:', error);
     }
-  }, []);
-
-  // Update user document
-  const updateUserDocument = useCallback(async (userId, updates) => {
+  },
+  
+  get(key) {
     try {
-      const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        ...updates,
-        updatedAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Error updating user document:', error);
-      throw error;
-    }
-  }, []);
-
-  // Get user document
-  const getUserDocument = useCallback(async (userId) => {
-    try {
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      return userDoc.exists() ? userDoc.data() : null;
-    } catch (error) {
-      console.error('Error getting user document:', error);
+      const item = sessionStorage.getItem(key);
+      if (!item) return null;
+      const parsed = JSON.parse(item);
+      if (Date.now() - parsed.timestamp > 24 * 60 * 60 * 1000) {
+        this.remove(key);
+        return null;
+      }
+      return parsed.data;
+    } catch {
       return null;
     }
-  }, []);
-
-  // Check if email exists
-  const checkEmailExists = useCallback(async (email) => {
+  },
+  
+  remove(key) {
+    sessionStorage.removeItem(key);
+  },
+  
+  setVerified(userId, method = 'email') {
+    localStorage.setItem(`verified_${userId}`, JSON.stringify({
+      verified: true,
+      method,
+      timestamp: Date.now()
+    }));
+  },
+  
+  isVerified(userId) {
+    const item = localStorage.getItem(`verified_${userId}`);
+    if (!item) return false;
     try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', email.toLowerCase()));
-      const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
-    } catch (error) {
-      console.error('Error checking email:', error);
+      const data = JSON.parse(item);
+      return data.verified === true;
+    } catch {
       return false;
     }
+  },
+  
+  setFlowState(state) {
+    this.set('auth_flow_state', state);
+  },
+  
+  getFlowState() {
+    return this.get('auth_flow_state') || {};
+  },
+  
+  clearFlowState() {
+    this.remove('auth_flow_state');
+  }
+};
+
+// ==================== PERFECT USER SYNC UTILITY ====================
+const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
+  if (!user) {
+    setCurrentUser(null);
+    return null;
+  }
+  
+  const isProfileComplete = !!(userProfile && userProfile.isProfileComplete);
+  
+  const userData = {
+    uid: user.uid,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    displayName: userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
+    username: userProfile?.username || user.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '_') || `user_${user.uid?.slice(0, 8)}`,
+    photoURL: userProfile?.photoURL || user.photoURL || "/assets/default-profile.png",
+    phoneNumber: userProfile?.phoneNumber || user.phoneNumber,
+    authProvider: userProfile?.authProvider || user.providerData?.[0]?.providerId || 'email',
+    isProfileComplete,
+    accountStatus: userProfile?.accountStatus || 'active',
+    coins: userProfile?.coins || 0,
+    level: userProfile?.level || 1,
+    postCount: userProfile?.postCount || 0,
+    videoCount: userProfile?.videoCount || 0,
+    savedCount: userProfile?.savedCount || 0,
+    followerCount: userProfile?.followerCount || 0,
+    followingCount: userProfile?.followingCount || 0,
+    isOnline: true,
+    lastActive: new Date().toISOString(),
+    createdAt: user.metadata?.creationTime || new Date().toISOString(),
+    isNewUser: user.isNewUser || false,
+    requiresProfileCompletion: !isProfileComplete
+  };
+  
+  setCurrentUser(userData);
+  console.log('🔄 Synced user with app store:', { 
+    uid: userData.uid, 
+    email: userData.email,
+    profileComplete: userData.isProfileComplete 
+  });
+  
+  return userData;
+};
+
+// ==================== PERFECT AUTH PROVIDER ====================
+export function AuthProvider({ children }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isMounted = useRef(true);
+  
+  const { setCurrentUser, clearUserData } = useAppStore();
+  
+  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [authError, setAuthError] = useState(null);
+  const [authService, setAuthService] = useState(null);
+  const [userService, setUserService] = useState(null);
+  
+  const [isSignupInProgress, setIsSignupInProgress] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [securityChecks, setSecurityChecks] = useState({
+    firebaseReady: false,
+    servicesLoaded: false,
+    authListenerActive: false
+  });
+
+  const pendingOperations = useRef(new Set());
+  const navigationLock = useRef(false);
+  const listenerSetUp = useRef(false);
+
+  // ========== CLEANUP ==========
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      navigationLock.current = false;
+      pendingOperations.current.clear();
+      console.log('🧹 AuthContext cleanup completed');
+    };
   }, []);
 
-  // Check if phone exists
-  const checkPhoneExists = useCallback(async (phone) => {
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('phone', '==', phone));
-      const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
-    } catch (error) {
-      console.error('Error checking phone:', error);
-      return false;
-    }
-  }, []);
-
-  // Check if username exists
-  const checkUsernameExists = useCallback(async (username) => {
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('displayName', '==', username));
-      const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
-    } catch (error) {
-      console.error('Error checking username:', error);
-      return false;
-    }
-  }, []);
-
-  // Sign up with email and password
-  const signUpWithEmail = useCallback(async (email, password, userData = {}) => {
-    setAuthLoading(true);
+  // ========== SERVICE INITIALIZATION ==========
+  useEffect(() => {
+    const abortController = new AbortController();
     
-    try {
-      // Check if email already exists
-      const emailExists = await checkEmailExists(email);
-      if (emailExists) {
-        throw new Error('Email already registered');
+    const initServices = async () => {
+      if (!isMounted.current || abortController.signal.aborted) return;
+      
+      try {
+        console.log('🚀 Initializing auth services...');
+        setLoading(true);
+        
+        const authModule = await import('../services/authService.js');
+        const userModule = await import('../services/userService.js');
+        
+        if (!isMounted.current || abortController.signal.aborted) return;
+        
+        const authSvc = authModule.default ? authModule.default() : authModule.getAuthService();
+        const userSvc = userModule.default ? userModule.default() : userModule.getUserService();
+        
+        setAuthService(authSvc);
+        setUserService(userSvc);
+        setSecurityChecks(prev => ({ ...prev, servicesLoaded: true }));
+        
+        console.log('✅ Auth services initialized');
+        
+      } catch (error) {
+        if (!isMounted.current || abortController.signal.aborted) return;
+        console.error('❌ Service initialization failed:', error);
+        setError('Failed to initialize authentication services');
+        setAuthError(error.message);
+        toast.error('Authentication service unavailable. Please refresh.');
+      } finally {
+        if (isMounted.current && !abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
-      
-      // Validate password
-      const passwordValidation = validatePassword(password);
-      if (!passwordValidation.isValid) {
-        throw new Error(passwordValidation.errors[0]);
-      }
-      
-      // Create user with Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const { user: firebaseUser } = userCredential;
-      
-      // Update profile with user data
-      if (userData.displayName) {
-        await updateProfile(firebaseUser, {
-          displayName: userData.displayName,
-          ...(userData.photoURL && { photoURL: userData.photoURL })
+    };
+    
+    initServices();
+    
+    return () => {
+      abortController.abort();
+    };
+  }, []);
+
+  // ========== AUTH STATE LISTENER (blocks until profile is loaded) ==========
+  useEffect(() => {
+    if (!authService || listenerSetUp.current || !isMounted.current) return;
+    
+    const abortController = new AbortController();
+    
+    const setupAuthListener = async () => {
+      try {
+        await authService.initialize();
+        
+        if (!isMounted.current || abortController.signal.aborted) return;
+        
+        const firebaseAuth = await import('firebase/auth');
+        const { onAuthStateChanged } = firebaseAuth;
+        const auth = authService.auth;
+        
+        if (!auth) {
+          throw new Error('Failed to get Firebase auth instance');
+        }
+        
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          if (!isMounted.current) return;
+          
+          console.log('👤 Auth state changed:', firebaseUser ? `User logged in (${firebaseUser.uid})` : 'No user');
+          
+          // 🔒 Lock the guard: loading = true until profile is fetched
+          setLoading(true);
+          
+          if (firebaseUser) {
+            const userData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              emailVerified: firebaseUser.emailVerified,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              phoneNumber: firebaseUser.phoneNumber,
+              authProvider: firebaseUser.providerData[0]?.providerId || 'unknown',
+              metadata: {
+                creationTime: firebaseUser.metadata.creationTime,
+                lastSignInTime: firebaseUser.metadata.lastSignInTime
+              },
+              isNewUser: firebaseUser.metadata.creationTime === firebaseUser.metadata.lastSignInTime
+            };
+            
+            setUser(userData);
+            
+            // FETCH PROFILE BEFORE UNLOCKING
+            if (userService) {
+              try {
+                const profile = await userService.getUserProfile(firebaseUser.uid);
+                if (profile && isMounted.current) {
+                  setUserProfile(profile);
+                  syncUserWithAppStore(userData, profile, setCurrentUser);
+                  
+                  if (firebaseUser.emailVerified) {
+                    AuthStorageManager.setVerified(firebaseUser.uid);
+                  }
+                } else {
+                  // No profile yet – this is a new user
+                  setUserProfile(null);
+                  syncUserWithAppStore(userData, null, setCurrentUser);
+                }
+              } catch (profileError) {
+                console.warn('Profile load failed:', profileError);
+                setUserProfile(null);
+                syncUserWithAppStore(userData, null, setCurrentUser);
+              }
+            } else {
+              setUserProfile(null);
+              syncUserWithAppStore(userData, null, setCurrentUser);
+            }
+            
+          } else {
+            // User logged out
+            setUser(null);
+            setUserProfile(null);
+            clearUserData();
+            AuthStorageManager.clearAll();
+            console.log('👤 User logged out');
+          }
+          
+          // 🔓 Now we can unlock the guard
+          if (isMounted.current) {
+            setLoading(false);
+          }
         });
+        
+        if (!isMounted.current || abortController.signal.aborted) {
+          unsubscribe();
+          return;
+        }
+        
+        setSecurityChecks(prev => ({ 
+          ...prev, 
+          firebaseReady: true,
+          authListenerActive: true 
+        }));
+        setAuthInitialized(true);
+        listenerSetUp.current = true;
+        
+        console.log('✅ Auth listener setup complete');
+        
+      } catch (error) {
+        if (!isMounted.current || abortController.signal.aborted) return;
+        console.error('❌ Auth listener setup failed:', error);
+        setAuthError(error.message);
+        toast.error('Authentication system error');
+        setLoading(false);
+        setAuthInitialized(true);
       }
-      
-      // Create user document in Firestore
-      await createUserDocument({
-        ...firebaseUser,
-        displayName: userData.displayName || '',
-        ...userData
-      });
-      
-      // Update local state
-      setUser({
-        ...firebaseUser,
-        metadata: await getUserDocument(firebaseUser.uid)
-      });
-      
-      updateSessionExpiry();
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_SUCCESS, { method: 'email_signup' });
-      
-      toast.success('Account created successfully!');
-      return { success: true, user: firebaseUser };
-      
-    } catch (error) {
-      console.error('Sign up error:', error);
-      
-      let errorMessage = 'Failed to create account';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Email already registered';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      }
-      
-      toast.error(errorMessage);
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILED, { method: 'email_signup', error: error.message });
-      return { success: false, error: errorMessage };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [checkEmailExists, validatePassword, createUserDocument, updateSessionExpiry, logSecurityEvent]);
+    };
+    
+    setupAuthListener();
+    
+    return () => {
+      abortController.abort();
+    };
+  }, [authService, userService, setCurrentUser, clearUserData]);
 
-  // Sign up with phone number
-  const signUpWithPhone = useCallback(async (phoneNumber, userData = {}) => {
-    setAuthLoading(true);
-    
-    try {
-      // Check if phone already exists
-      const phoneExists = await checkPhoneExists(phoneNumber);
-      if (phoneExists) {
-        throw new Error('Phone number already registered');
-      }
-      
-      // In production, you would use Firebase Phone Auth
-      // For now, simulate successful signup
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast.success('Phone verification initiated!');
-      return { success: true, requiresVerification: true };
-      
-    } catch (error) {
-      console.error('Phone sign up error:', error);
-      toast.error(error.message || 'Failed to initiate phone signup');
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILED, { method: 'phone_signup', error: error.message });
-      return { success: false, error: error.message };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [checkPhoneExists, logSecurityEvent]);
-
-  // Login with email and password
-  const loginWithEmail = useCallback(async (email, password, rememberMe = false) => {
-    setAuthLoading(true);
-    
-    try {
-      // Check rate limiting
-      if (!checkRateLimit(email)) {
-        return { success: false, error: 'Account temporarily locked' };
-      }
-      
-      // Sign in with Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const { user: firebaseUser } = userCredential;
-      
-      // Get user document
-      const userDoc = await getUserDocument(firebaseUser.uid);
-      
-      // Update last login
-      await updateUserDocument(firebaseUser.uid, {
-        lastLoginAt: serverTimestamp(),
-        'security.loginAttempts': 0
-      });
-      
-      // Update local state
-      setUser({
-        ...firebaseUser,
-        metadata: userDoc
-      });
-      
-      updateSessionExpiry();
-      resetAttempts(email);
-      
-      // Store remember me preference
-      if (rememberMe) {
-        localStorage.setItem('remember_me', 'true');
-        localStorage.setItem('remembered_email', email);
-      }
-      
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_SUCCESS, { method: 'email', userId: firebaseUser.uid });
-      toast.success('Login successful!');
-      
-      return { success: true, user: firebaseUser };
-      
-    } catch (error) {
-      console.error('Login error:', error);
-      
-      // Record failed attempt
-      recordFailedAttempt(email);
-      
-      let errorMessage = 'Login failed';
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = 'Invalid email or password';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Account temporarily locked.';
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'Account has been disabled';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      }
-      
-      toast.error(errorMessage);
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILED, { method: 'email', email, error: error.message });
-      
-      return { success: false, error: errorMessage };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [checkRateLimit, getUserDocument, updateUserDocument, updateSessionExpiry, resetAttempts, recordFailedAttempt, logSecurityEvent]);
-
-  // Login with phone number
-  const loginWithPhone = useCallback(async (phoneNumber, password) => {
-    setAuthLoading(true);
-    
-    try {
-      // Check rate limiting
-      if (!checkRateLimit(phoneNumber)) {
-        return { success: false, error: 'Account temporarily locked' };
-      }
-      
-      // In production, you would use Firebase Phone Auth
-      // For now, simulate login
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Simulated user
-      const simulatedUser = {
-        uid: `phone_${Date.now()}`,
-        phoneNumber,
-        emailVerified: false,
-        displayName: 'Phone User'
-      };
-      
-      setUser(simulatedUser);
-      updateSessionExpiry();
-      resetAttempts(phoneNumber);
-      
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_SUCCESS, { method: 'phone', userId: simulatedUser.uid });
-      toast.success('Login successful!');
-      
-      return { success: true, user: simulatedUser };
-      
-    } catch (error) {
-      console.error('Phone login error:', error);
-      
-      recordFailedAttempt(phoneNumber);
-      toast.error('Phone login failed');
-      logSecurityEvent(SECURITY_EVENTS.LOGIN_FAILED, { method: 'phone', phoneNumber, error: error.message });
-      
-      return { success: false, error: error.message };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [checkRateLimit, updateSessionExpiry, resetAttempts, recordFailedAttempt, logSecurityEvent]);
-
-  // Verify phone OTP
-  const verifyPhoneOtp = useCallback(async (verificationId, verificationCode) => {
-    setAuthLoading(true);
-    
-    try {
-      // In production, use PhoneAuthProvider.credential
-      // const credential = PhoneAuthProvider.credential(verificationId, verificationCode);
-      // await signInWithCredential(auth, credential);
-      
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast.success('Phone verified successfully!');
-      return { success: true };
-      
-    } catch (error) {
-      console.error('OTP verification error:', error);
-      
-      let errorMessage = 'Verification failed';
-      if (error.code === 'auth/invalid-verification-code') {
-        errorMessage = 'Invalid verification code';
-      } else if (error.code === 'auth/code-expired') {
-        errorMessage = 'Verification code has expired';
-      }
-      
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, []);
-
-  // Send password reset email
-  const sendPasswordReset = useCallback(async (email) => {
-    setAuthLoading(true);
-    
-    try {
-      // Check if email exists
-      const emailExists = await checkEmailExists(email);
-      if (!emailExists) {
-        throw new Error('No account found with this email');
-      }
-      
-      // Send password reset email
-      await sendPasswordResetEmail(auth, email);
-      
-      logSecurityEvent(SECURITY_EVENTS.PASSWORD_RESET, { email });
-      toast.success('Password reset email sent!');
-      
-      return { success: true };
-      
-    } catch (error) {
-      console.error('Password reset error:', error);
-      
-      let errorMessage = 'Failed to send reset email';
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many requests. Please try again later.';
-      }
-      
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [checkEmailExists, logSecurityEvent]);
-
-  // Confirm password reset
-  const confirmPasswordReset = useCallback(async (code, newPassword) => {
-    setAuthLoading(true);
-    
-    try {
-      // Validate new password
-      const passwordValidation = validatePassword(newPassword);
-      if (!passwordValidation.isValid) {
-        throw new Error(passwordValidation.errors[0]);
-      }
-      
-      // Confirm password reset
-      await confirmPasswordReset(auth, code, newPassword);
-      
-      logSecurityEvent(SECURITY_EVENTS.PASSWORD_RESET, { action: 'confirmed' });
-      toast.success('Password reset successfully!');
-      
-      return { success: true };
-      
-    } catch (error) {
-      console.error('Confirm password reset error:', error);
-      
-      let errorMessage = 'Failed to reset password';
-      if (error.code === 'auth/expired-action-code') {
-        errorMessage = 'Reset code has expired';
-      } else if (error.code === 'auth/invalid-action-code') {
-        errorMessage = 'Invalid reset code';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak';
-      }
-      
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [validatePassword, logSecurityEvent]);
-
-  // Update user password
-  const updateUserPassword = useCallback(async (currentPassword, newPassword) => {
-    if (!user) {
-      throw new Error('No user logged in');
-    }
-    
-    setAuthLoading(true);
-    
-    try {
-      // Reauthenticate user
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      
-      // Validate new password
-      const passwordValidation = validatePassword(newPassword);
-      if (!passwordValidation.isValid) {
-        throw new Error(passwordValidation.errors[0]);
-      }
-      
-      // Update password
-      await updatePassword(user, newPassword);
-      
-      logSecurityEvent(SECURITY_EVENTS.PASSWORD_RESET, { action: 'updated', userId: user.uid });
-      toast.success('Password updated successfully!');
-      
-      return { success: true };
-      
-    } catch (error) {
-      console.error('Update password error:', error);
-      
-      let errorMessage = 'Failed to update password';
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Current password is incorrect';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'New password is too weak';
-      } else if (error.code === 'auth/requires-recent-login') {
-        errorMessage = 'Please reauthenticate to change password';
-      }
-      
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [user, validatePassword, logSecurityEvent]);
-
-  // Update user profile
-  const updateUserProfile = useCallback(async (updates) => {
-    if (!user) {
-      throw new Error('No user logged in');
-    }
-    
-    setAuthLoading(true);
-    
-    try {
-      // Update in Firebase Auth
-      await updateProfile(user, updates);
-      
-      // Update in Firestore
-      await updateUserDocument(user.uid, updates);
-      
-      // Update local state
-      setUser(prev => ({
-        ...prev,
-        ...updates,
-        metadata: { ...prev.metadata, ...updates }
-      }));
-      
-      logSecurityEvent(SECURITY_EVENTS.PROFILE_UPDATE, { userId: user.uid, updates });
-      toast.success('Profile updated successfully!');
-      
-      return { success: true };
-      
-    } catch (error) {
-      console.error('Update profile error:', error);
-      toast.error('Failed to update profile');
-      return { success: false, error: error.message };
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [user, updateUserDocument, logSecurityEvent]);
-
-  // Logout
-  const handleLogout = useCallback(async () => {
-    setAuthLoading(true);
-    
-    try {
-      await signOut(auth);
-      
-      setUser(null);
-      setSessionExpiry(null);
-      
-      // Clear session data
-      localStorage.removeItem('session_expiry');
-      localStorage.removeItem('remembered_email');
-      
-      logSecurityEvent(SECURITY_EVENTS.LOGOUT, { userId: user?.uid });
-      toast.success('Logged out successfully');
-      
-    } catch (error) {
-      console.error('Logout error:', error);
-      toast.error('Failed to logout');
-      
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [user, logSecurityEvent]);
-
-  // Reauthenticate user
-  const reauthenticateUser = useCallback(async (password) => {
-    if (!user || !user.email) {
-      throw new Error('No user logged in');
-    }
-    
-    try {
-      const credential = EmailAuthProvider.credential(user.email, password);
-      await reauthenticateWithCredential(user, credential);
-      return { success: true };
-    } catch (error) {
-      console.error('Reauthentication error:', error);
-      return { success: false, error: error.message };
-    }
+  // Derived flag: does this user need email verification?
+  const requiresEmailVerification = useMemo(() => {
+    if (!user) return false;
+    return (user.authProvider === 'email' || user.authProvider === 'password');
   }, [user]);
 
-  // Check user authentication state
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Get user document from Firestore
-        const userDoc = await getUserDocument(firebaseUser.uid);
-        
-        setUser({
-          ...firebaseUser,
-          metadata: userDoc
-        });
-        
-        updateSessionExpiry();
-        logSecurityEvent(SECURITY_EVENTS.LOGIN_SUCCESS, { method: 'session_restore', userId: firebaseUser.uid });
-      } else {
-        setUser(null);
+  // ========== PERFECT EMAIL SIGNUP ==========
+  const signUpWithEmailPassword = useCallback(async (email, password, profileData = {}) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    const operationId = `email_signup_${Date.now()}`;
+    pendingOperations.current.add(operationId);
+    
+    try {
+      setIsSignupInProgress(true);
+      setError(null);
+      
+      console.log('📧 Creating email user:', email);
+      
+      const result = await authService.createUserWithEmailPassword(email, password, profileData);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Email signup failed');
       }
       
-      setLoading(false);
-    });
-    
-    return unsubscribe;
-  }, [getUserDocument, updateSessionExpiry, logSecurityEvent]);
+      console.log('✅ User created, verification required');
+      
+      AuthStorageManager.set('email_auth_data', {
+        userId: result.user.userId,
+        email: result.user.email,
+        requiresVerification: true,
+        profileData: profileData,
+        isUnverified: true,
+        createdAt: Date.now(),
+        flow: 'signup'
+      });
+      
+      AuthStorageManager.set('pending_profile_creation', {
+        userId: result.user.userId,
+        method: 'email',
+        userData: result.user,
+        profileData: profileData,
+        timestamp: Date.now(),
+        requiresVerification: true
+      });
+      
+      toast.success('Account created! Please verify your email.');
+      
+      return {
+        success: true,
+        user: result.user,
+        requiresVerification: true
+      };
+      
+    } catch (error) {
+      console.error('❌ Email signup error:', error);
+      
+      const errorMap = {
+        'auth/email-already-in-use': 'This email is already registered. Please sign in instead.',
+        'auth/invalid-email': 'Invalid email address format.',
+        'auth/weak-password': 'Password is too weak (min 8 characters).',
+        'auth/too-many-requests': 'Too many attempts. Please try again later.',
+        'auth/network-request-failed': 'Network error. Check your connection.'
+      };
+      
+      const errorMessage = errorMap[error.code] || error.message || 'Failed to create account';
+      toast.error(errorMessage);
+      throw error;
+      
+    } finally {
+      pendingOperations.current.delete(operationId);
+    }
+  }, [authService]);
 
-  // Context value
-  const contextValue = useMemo(() => ({
-    // State
+  // ========== PERFECT EMAIL SIGN IN ==========
+  const signInWithEmailPassword = useCallback(async (email, password) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    const operationId = `email_login_${Date.now()}`;
+    pendingOperations.current.add(operationId);
+    navigationLock.current = true;
+    
+    try {
+      setError(null);
+      
+      console.log('🔐 Email sign in:', email);
+      
+      const result = await authService.signInWithEmailPassword(email, password);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to sign in');
+      }
+      
+      if (result.requiresVerification || result.user?.isUnverified) {
+        console.log('📧 User requires email verification');
+        
+        AuthStorageManager.set('email_not_verified_user', {
+          email: email,
+          userId: result.user.uid,
+          requiresVerification: true,
+          fromLogin: true,
+          userData: result.user
+        });
+        
+        toast.info('Please verify your email to access all features.');
+        
+        return {
+          ...result,
+          requiresVerification: true
+        };
+      }
+      
+      // Verified user - sync (but the listener will also fetch profile)
+      syncUserWithAppStore(result.user, null, setCurrentUser);
+      
+      const pending = AuthStorageManager.get('pending_profile_creation');
+      if (pending && pending.userId === result.user.uid) {
+        console.log('👤 Pending profile found, will redirect to setup-profile via guard');
+      }
+      
+      toast.success('Welcome back!');
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Email sign in failed:', error);
+      
+      const errorMap = {
+        'auth/user-not-found': 'No account found. Please sign up first.',
+        'auth/wrong-password': 'Incorrect password.',
+        'auth/user-disabled': 'Account disabled. Contact support.',
+        'auth/too-many-requests': 'Too many attempts. Try again later.',
+        'auth/network-request-failed': 'Network error. Check connection.',
+        'auth/email-not-verified': 'Please verify your email to login.'
+      };
+      
+      const errorMessage = errorMap[error.code] || error.message || 'Login failed';
+      
+      if (error.code === 'auth/email-not-verified') {
+        AuthStorageManager.set('email_not_verified_user', {
+          email: email,
+          userId: error.originalError?.userId,
+          requiresVerification: true,
+          fromLogin: true
+        });
+        
+        toast.info('Please verify your email before logging in.');
+        
+        return {
+          success: false,
+          requiresVerification: true
+        };
+      }
+      
+      toast.error(errorMessage);
+      throw error;
+    } finally {
+      pendingOperations.current.delete(operationId);
+      if (isMounted.current) {
+        setIsSignupInProgress(false);
+      }
+    }
+  }, [authService, setCurrentUser]);
+
+  // ========== PERFECT GOOGLE SIGN IN ==========
+  const signInWithGoogle = useCallback(async (options = {}) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    const operationId = `google_signin_${Date.now()}`;
+    pendingOperations.current.add(operationId);
+    
+    try {
+      setIsSignupInProgress(true);
+      setError(null);
+      
+      console.log('🔐 Google sign in...');
+      
+      const result = await authService.signInWithGoogle(options);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Google auth failed');
+      }
+      
+      console.log('✅ Google auth successful. New user:', result.isNewUser);
+      
+      syncUserWithAppStore(result.user, null, setCurrentUser);
+      
+      if (result.isNewUser) {
+        console.log('🆕 New Google user, setting up profile...');
+        
+        AuthStorageManager.set('pending_profile_creation', {
+          userId: result.user.uid,
+          method: 'google',
+          userData: result.user,
+          timestamp: Date.now(),
+          emailVerified: true,
+          requiresProfile: true
+        });
+        
+        toast.success('Welcome to Arvdoul! Complete your profile.');
+      } else {
+        console.log('👤 Existing Google user, checking profile...');
+        
+        if (userService) {
+          try {
+            const profile = await userService.getUserProfile(result.user.uid);
+            if (profile) {
+              setUserProfile(profile);
+              syncUserWithAppStore(result.user, profile, setCurrentUser);
+              
+              if (!profile.isProfileComplete) {
+                // Guard will redirect to setup-profile
+              } else {
+                toast.success('Welcome back!');
+              }
+            }
+          } catch (profileError) {
+            console.warn('Profile load failed for Google user:', profileError);
+          }
+        }
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Google auth error:', error);
+      
+      if (error.code !== 'auth/popup-closed-by-user' && 
+          error.code !== 'auth/cancelled-popup-request') {
+        toast.error(error.message || 'Google sign-in failed');
+        setError(error.message);
+      }
+      throw error;
+      
+    } finally {
+      pendingOperations.current.delete(operationId);
+    }
+  }, [authService, userService, setCurrentUser]);
+
+  // ========== PERFECT PHONE VERIFICATION ==========
+  const sendPhoneVerificationCode = useCallback(async (phoneNumber, recaptchaVerifier) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    const operationId = `phone_verification_${Date.now()}`;
+    pendingOperations.current.add(operationId);
+    navigationLock.current = true;
+    
+    try {
+      setIsSignupInProgress(true);
+      setError(null);
+      
+      console.log('📱 Sending phone verification:', phoneNumber);
+      
+      const result = await authService.sendPhoneVerificationCode(phoneNumber, recaptchaVerifier);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send code');
+      }
+      
+      AuthStorageManager.set('phone_verification_data', {
+        verificationId: result.verificationId,
+        phoneNumber: result.phoneNumber,
+        sentAt: Date.now()
+      });
+      
+      toast.success(`✅ Code sent to ${result.phoneNumber}`);
+      
+      navigationLock.current = false;
+      return result;
+      
+    } catch (error) {
+      navigationLock.current = false;
+      console.error('❌ Phone verification failed:', error);
+      
+      const errorMap = {
+        'auth/invalid-phone-number': 'Invalid phone number format.',
+        'auth/quota-exceeded': 'SMS quota exceeded. Try again tomorrow.',
+        'auth/captcha-check-failed': 'Security check failed.',
+        'auth/too-many-requests': 'Too many attempts. Wait 5 minutes.',
+        'auth/network-request-failed': 'Network error.',
+        'auth/argument-error': 'Phone verification is unavailable right now. Please try again later.'
+      };
+      
+      const errorMessage = errorMap[error.code] || error.message || 'Failed to send code';
+      toast.error(errorMessage);
+      throw error;
+      
+    } finally {
+      pendingOperations.current.delete(operationId);
+      if (isMounted.current) {
+        setIsSignupInProgress(false);
+      }
+    }
+  }, [authService]);
+
+  const verifyPhoneOTP = useCallback(async (verificationId, otp) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    const operationId = `phone_verify_otp_${Date.now()}`;
+    pendingOperations.current.add(operationId);
+    navigationLock.current = true;
+    
+    try {
+      setError(null);
+      
+      console.log('🔢 Verifying phone OTP...');
+      
+      const result = await authService.verifyPhoneOTP(verificationId, otp);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to verify OTP');
+      }
+      
+      console.log('✅ Phone verified:', result.user.uid);
+      
+      // Immediately sync the user data into the store
+      syncUserWithAppStore(result.user, null, setCurrentUser);
+      
+      // Now fetch the full profile so that isProfileComplete becomes accurate
+      if (userService) {
+        try {
+          const profile = await userService.getUserProfile(result.user.uid);
+          if (profile) {
+            setUserProfile(profile);
+            syncUserWithAppStore(result.user, profile, setCurrentUser);
+          }
+        } catch (profileError) {
+          console.warn('Could not fetch profile after phone OTP', profileError);
+        }
+      }
+      
+      if (result.isNewUser) {
+        AuthStorageManager.set('pending_profile_creation', {
+          userId: result.user.uid,
+          method: 'phone',
+          userData: result.user,
+          timestamp: Date.now(),
+          phoneVerified: true
+        });
+        
+        toast.success('Phone verified! Complete your profile.');
+      } else {
+        toast.success('Phone number verified!');
+      }
+      
+      navigationLock.current = false;
+      return result;
+      
+    } catch (error) {
+      navigationLock.current = false;
+      console.error('❌ OTP verification failed:', error);
+      
+      const errorMap = {
+        'auth/invalid-verification-code': 'Invalid code.',
+        'auth/code-expired': 'Code expired. Request new one.',
+        'auth/credential-already-in-use': 'Phone already linked.',
+        'auth/invalid-verification-id': 'Session expired.',
+        'auth/too-many-requests': 'Too many attempts.'
+      };
+      
+      const errorMessage = errorMap[error.code] || error.message || 'Verification failed';
+      toast.error(errorMessage);
+      throw error;
+    } finally {
+      pendingOperations.current.delete(operationId);
+    }
+  }, [authService, setCurrentUser, userService]);
+
+  // ========== PERFECT EMAIL VERIFICATION ==========
+  const checkEmailVerification = useCallback(async (userId) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    try {
+      console.log('📧 Checking email verification:', userId);
+      
+      const result = await authService.checkEmailVerification(userId);
+      
+      if (result.verified && result.user) {
+        setUser(prev => prev ? { ...prev, emailVerified: true } : prev);
+        syncUserWithAppStore({ ...result.user, emailVerified: true }, null, setCurrentUser);
+        AuthStorageManager.setVerified(userId);
+        AuthStorageManager.remove('email_not_verified_user');
+        AuthStorageManager.remove('email_auth_data');
+        
+        if (userService) {
+          const profile = await userService.getUserProfile(userId);
+          
+          if (profile) {
+            setUserProfile(profile);
+            syncUserWithAppStore(result.user, profile, setCurrentUser);
+            toast.success('Email verified! Welcome back.');
+            return { ...result, hasProfile: true, profileComplete: profile.isProfileComplete };
+          } else {
+            const pending = AuthStorageManager.get('pending_profile_creation');
+            if (pending && pending.userId === userId) {
+              console.log('👤 Verified email, profile creation pending');
+              return { 
+                ...result, 
+                hasProfile: false,
+                requiresProfileSetup: true,
+                navigateTo: '/setup-profile',
+                state: {
+                  method: pending.method,
+                  userData: pending.userData,
+                  isNewUser: true,
+                  fromVerification: true
+                }
+              };
+            }
+          }
+        }
+        
+        toast.success('Email verified!');
+        return result;
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Email verification check failed:', error);
+      return { verified: false, error: error.message };
+    }
+  }, [authService, userService, setCurrentUser]);
+
+  const resendEmailVerification = useCallback(async (userId) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    try {
+      const result = await authService.resendEmailVerification(userId);
+      toast.success('Verification email resent!');
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Failed to resend verification:', error);
+      const errorMessage = error.code === 'auth/too-many-requests'
+        ? 'Too many attempts. Try again later.'
+        : error.message || 'Failed to resend';
+      toast.error(errorMessage);
+      throw error;
+    }
+  }, [authService]);
+
+  // ========== PERFECT PROFILE MANAGEMENT ==========
+  const createUserProfile = useCallback(async (profileData) => {
+    if (!userService || !user) throw new Error('Services not ready');
+    
+    const operationId = `create_profile_${Date.now()}`;
+    pendingOperations.current.add(operationId);
+    navigationLock.current = true;
+    
+    try {
+      console.log('👤 Creating profile for:', user.uid);
+      
+      const result = await userService.createUserProfile(user.uid, {
+        ...profileData,
+        emailVerified: user.emailVerified || true,
+        authProvider: user.authProvider || 'email',
+        isProfileComplete: true
+      });
+      
+      if (isMounted.current) {
+        setUserProfile(result.profile);
+        syncUserWithAppStore(user, result.profile, setCurrentUser);
+      }
+      
+      AuthStorageManager.clearAll();
+      AuthStorageManager.setVerified(user.uid, 'profile_complete');
+      
+      toast.success('Profile created successfully! Welcome to Arvdoul.');
+      
+      navigationLock.current = false;
+      
+      return {
+        ...result,
+        success: true
+      };
+      
+    } catch (error) {
+      navigationLock.current = false;
+      console.error('❌ Profile creation failed:', error);
+      toast.error('Failed to create profile');
+      throw error;
+    } finally {
+      pendingOperations.current.delete(operationId);
+    }
+  }, [userService, user, setCurrentUser]);
+
+  const updateUserProfile = useCallback(async (updates) => {
+    if (!userService || !user) throw new Error('Services not ready');
+    
+    try {
+      await userService.updateUserProfile(user.uid, updates);
+      
+      if (isMounted.current) {
+        setUserProfile(prev => ({ ...prev, ...updates }));
+        syncUserWithAppStore(user, { ...userProfile, ...updates }, setCurrentUser);
+      }
+      
+      toast.success('Profile updated!');
+      
+    } catch (error) {
+      toast.error('Failed to update profile');
+      throw error;
+    }
+  }, [userService, user, userProfile, setCurrentUser]);
+
+  // ========== PASSWORD RESET ==========
+  const sendPasswordResetEmail = useCallback(async (email) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    try {
+      const result = await authService.sendPasswordResetEmail(email);
+      AuthStorageManager.set('password_reset_attempt', { email, timestamp: Date.now() });
+      toast.success('Password reset email sent! Check your inbox.');
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Password reset failed:', error);
+      const errorMap = {
+        'auth/user-not-found': 'No account found with this email.',
+        'auth/invalid-email': 'Invalid email address.',
+        'auth/too-many-requests': 'Too many attempts. Try again later.'
+      };
+      const errorMessage = errorMap[error.code] || 'Failed to send reset email';
+      toast.error(errorMessage);
+      throw error;
+    }
+  }, [authService]);
+
+  const confirmPasswordReset = useCallback(async (actionCode, newPassword) => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    try {
+      const result = await authService.confirmPasswordReset(actionCode, newPassword);
+      AuthStorageManager.remove('password_reset_attempt');
+      toast.success('Password reset successful! You can now login.');
+      setTimeout(() => {
+        navigate('/login', {
+          state: { passwordResetSuccess: true },
+          replace: true
+        });
+      }, 1500);
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Password reset confirmation failed:', error);
+      const errorMap = {
+        'auth/expired-action-code': 'Reset link has expired. Request a new one.',
+        'auth/invalid-action-code': 'Invalid reset link.',
+        'auth/user-disabled': 'Account disabled.',
+        'auth/weak-password': 'Password is too weak.'
+      };
+      const errorMessage = errorMap[error.code] || 'Failed to reset password';
+      toast.error(errorMessage);
+      throw error;
+    }
+  }, [authService, navigate]);
+
+  // ========== RECAPTCHA MANAGEMENT ==========
+  const createRecaptchaVerifier = useCallback(async (containerId, options = {}) => {
+    if (!authService) throw new Error('Auth service not ready');
+    try {
+      return await authService.createRecaptchaVerifier(containerId, options);
+    } catch (error) {
+      console.error('❌ Failed to create reCAPTCHA:', error);
+      throw error;
+    }
+  }, [authService]);
+  
+  const cleanupRecaptchaVerifier = useCallback((containerId) => {
+    if (!authService) return;
+    try {
+      authService.cleanupRecaptchaVerifier(containerId);
+    } catch (error) {
+      console.warn('Failed to cleanup reCAPTCHA:', error);
+    }
+  }, [authService]);
+
+  // ========== SIGN OUT ==========
+  const signOut = useCallback(async () => {
+    if (!authService) throw new Error('Auth service not ready');
+    
+    navigationLock.current = true;
+    
+    try {
+      await authService.signOut();
+      
+      if (isMounted.current) {
+        setUser(null);
+        setUserProfile(null);
+        setIsSignupInProgress(false);
+      }
+      
+      clearUserData();
+      AuthStorageManager.clearAll();
+      
+      toast.success('Signed out successfully');
+      
+      setTimeout(() => {
+        navigate('/', { replace: true });
+        navigationLock.current = false;
+      }, 300);
+      
+    } catch (error) {
+      navigationLock.current = false;
+      console.error('❌ Sign out failed:', error);
+      toast.error('Failed to sign out');
+      throw error;
+    }
+  }, [authService, navigate, clearUserData]);
+
+  // ========== UTILITY FUNCTIONS ==========
+  const getCurrentUser = useCallback(() => user, [user]);
+  const clearError = useCallback(() => setError(null), []);
+  const resetSignupState = useCallback(() => {
+    setIsSignupInProgress(false);
+    AuthStorageManager.clearAll();
+  }, []);
+
+  const checkAuthState = useCallback(() => {
+    return {
+      isAuthenticated: !!user,
+      isEmailVerified: !!(user && user.emailVerified),
+      isProfileComplete: !!(userProfile && userProfile.isProfileComplete),
+      hasPendingProfile: !!AuthStorageManager.get('pending_profile_creation'),
+      requiresVerification: !!AuthStorageManager.get('email_not_verified_user')
+    };
+  }, [user, userProfile]);
+
+  const contextValue = {
     user,
+    userProfile,
     loading,
-    authLoading,
-    sessionExpiry,
-    securityEvents,
-    recaptchaVerifier,
-    
-    // Authentication methods
-    signUpWithEmail,
-    signUpWithPhone,
-    loginWithEmail,
-    loginWithPhone,
-    verifyPhoneOtp,
-    handleLogout,
-    
-    // Password management
-    sendPasswordReset,
+    error,
+    authError,
+    isSignupInProgress,
+    authInitialized,
+    securityChecks,
+    authService,
+    userService,
+    isAuthenticated: !!user,
+    isEmailVerified: !!(user && user.emailVerified),
+    isProfileComplete: !!(userProfile && userProfile.isProfileComplete),
+    requiresEmailVerification,
+    signInWithEmailPassword,
+    signUpWithEmailPassword,
+    signInWithGoogle,
+    sendPhoneVerificationCode,
+    verifyPhoneOTP,
+    signOut,
+    checkEmailVerification,
+    resendEmailVerification,
+    sendPasswordResetEmail,
     confirmPasswordReset,
-    updateUserPassword,
-    
-    // Profile management
+    createRecaptchaVerifier,
+    cleanupRecaptchaVerifier,
+    createUserProfile,
     updateUserProfile,
-    reauthenticateUser,
-    
-    // Validation methods
-    validatePassword,
-    checkEmailExists,
-    checkPhoneExists,
-    checkUsernameExists,
-    
-    // Security methods
-    checkRateLimit,
-    resetAttempts,
-    checkSessionExpiry,
-    
-    // Utility methods
-    initializeRecaptcha,
-    logSecurityEvent,
-    getUserDocument,
-    updateUserDocument
-  }), [
-    user,
-    loading,
-    authLoading,
-    sessionExpiry,
-    securityEvents,
-    recaptchaVerifier,
-    signUpWithEmail,
-    signUpWithPhone,
-    loginWithEmail,
-    loginWithPhone,
-    verifyPhoneOtp,
-    handleLogout,
-    sendPasswordReset,
-    confirmPasswordReset,
-    updateUserPassword,
-    updateUserProfile,
-    reauthenticateUser,
-    validatePassword,
-    checkEmailExists,
-    checkPhoneExists,
-    checkUsernameExists,
-    checkRateLimit,
-    resetAttempts,
-    checkSessionExpiry,
-    initializeRecaptcha,
-    logSecurityEvent,
-    getUserDocument,
-    updateUserDocument
-  ]);
+    getCurrentUser,
+    clearError,
+    resetSignupState,
+    checkAuthState
+  };
+
+  if (loading && !authInitialized) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-gray-900 to-black z-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg font-medium">Initializing Authentication</p>
+          <p className="text-gray-400 text-sm mt-2">Preparing secure connection...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
-// Higher-order component for protected routes
-export const withAuth = (Component) => {
-  return function WithAuthComponent(props) {
-    const { user, loading, checkSessionExpiry } = useAuth();
-    const navigate = useNavigate();
-    
-    useEffect(() => {
-      if (!loading && !user) {
-        navigate('/login', { replace: true });
-      }
-      
-      if (user && !checkSessionExpiry()) {
-        navigate('/login', { replace: true });
-      }
-    }, [user, loading, navigate, checkSessionExpiry]);
-    
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      );
-    }
-    
-    if (!user) {
-      return null;
-    }
-    
-    return <Component {...props} />;
-  };
-};
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
+}

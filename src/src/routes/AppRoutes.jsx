@@ -1,0 +1,354 @@
+// src/routes/AppRoutes.jsx - ULTIMATE PRODUCTION VERSION FIXED V3
+// 🏆 PERFECT ROUTING • COMPLETE MESSAGING • PRODUCTION READY
+import React, { lazy, Suspense } from "react";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import AppStateGuard from "../app/AppStateGuard.jsx";
+import MainLayout from "../layouts/MainLayout.jsx";
+import { useAuth } from "../context/AuthContext.jsx"; // for catch-all
+
+// ==================== LAZY LOAD COMPONENTS ====================
+const SplashScreen = lazy(() => import("../screens/SplashScreen.jsx"));
+const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
+const LoginScreen = lazy(() => import("../screens/LoginScreen.jsx"));
+const SignupStep1Personal = lazy(() => import("../screens/SignupStep1Personal.jsx"));
+const SignupStep2VerifyContact = lazy(() => import("../screens/SignupStep2VerifyContact.jsx"));
+const OtpVerification = lazy(() => import("../screens/OtpVerification.jsx"));
+const VerifyEmailScreen = lazy(() => import("../screens/VerifyEmailScreen.jsx"));
+const ForgotPasswordScreen = lazy(() => import("../screens/ForgotPassword.jsx"));
+const ResetPasswordScreen = lazy(() => import("../screens/ResetPassword.jsx"));
+const SetupProfile = lazy(() => import("../screens/SetupProfile.jsx"));
+const HomeScreen = lazy(() => import("../screens/HomeScreen.jsx"));
+const VideosScreen = lazy(() => import("../screens/VideosScreen.jsx"));
+const MessagingScreen = lazy(() => import("../screens/MessagingScreen.jsx"));
+const ChatScreen = lazy(() => import("../screens/ChatScreen.jsx"));
+const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
+const NetworkScreen = lazy(() => import("../screens/NetworkScreen.jsx"));
+const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
+const NotificationsScreen = lazy(() => import("../screens/NotificationsScreen.jsx"));
+const CreateStory = lazy(() => import("../screens/CreateStory.jsx"));
+const ProfileScreen = lazy(() => import("../screens/ProfileScreen.jsx"));
+const EditProfile = lazy(() => import("../screens/EditProfile.jsx"));
+const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
+const SearchScreen = lazy(() => import("../screens/SearchScreen.jsx"));
+const SavedScreen = lazy(() => import("../screens/SavedScreen.jsx"));
+const CollectionsScreen = lazy(() => import("../screens/CollectionsScreen.jsx"));
+const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
+
+// ==================== LOADING COMPONENT ====================
+const RouteFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
+    <div className="text-center">
+      <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-900 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+      <p className="text-gray-600 dark:text-gray-400">Loading screen...</p>
+    </div>
+  </div>
+);
+
+// ==================== ROUTE WRAPPERS ====================
+const PublicRoute = ({ children }) => {
+  return <AppStateGuard>{children}</AppStateGuard>;
+};
+
+const ProtectedRoute = ({ children }) => {
+  return (
+    <AppStateGuard>
+      <MainLayout>{children}</MainLayout>
+    </AppStateGuard>
+  );
+};
+
+// ==================== MESSAGING LAYOUT WRAPPER ====================
+// Special layout for messaging that handles both list and chat views
+const MessagingLayout = ({ children }) => {
+  return (
+    <AppStateGuard>
+      <MainLayout>{children}</MainLayout>
+    </AppStateGuard>
+  );
+};
+
+// ==================== CATCH-ALL REDIRECT ====================
+function CatchAllRedirect() {
+  const { isAuthenticated } = useAuth();
+  return <Navigate to={isAuthenticated ? "/home" : "/intro"} replace />;
+}
+
+// ==================== MAIN APP ROUTES ====================
+export default function AppRoutes() {
+  return (
+    <Routes>
+      {/* ========== PUBLIC ROUTES (No Layout) ========== */}
+      <Route path="/" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SplashScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/intro" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <IntroScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/login" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <LoginScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/signup/step1" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SignupStep1Personal />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/signup/step2" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SignupStep2VerifyContact />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/otp-verification" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <OtpVerification />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/verify-email" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VerifyEmailScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/forgot-password" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ForgotPasswordScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      <Route path="/reset-password" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ResetPasswordScreen />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      {/* ========== PROTECTED ROUTES (With Layout) ========== */}
+      
+      {/* Core App Routes */}
+      <Route path="/home" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <HomeScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/videos" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VideosScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* ========== MESSAGING ROUTES (Ultimate Professional) ========== */}
+      {/* Option 1: Nested Routes for Better UX */}
+      <Route path="/messages" element={
+        <MessagingLayout>
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
+        </MessagingLayout>
+      }>
+        {/* Default view - conversation list */}
+        <Route index element={
+          <Suspense fallback={<RouteFallback />}>
+            <MessagingScreen />
+          </Suspense>
+        } />
+        
+        {/* Individual chat */}
+        <Route path=":conversationId" element={
+          <Suspense fallback={<RouteFallback />}>
+            <ChatScreen />
+          </Suspense>
+        } />
+        
+        {/* New conversation */}
+        <Route path="new" element={
+          <Suspense fallback={<RouteFallback />}>
+            <MessagingScreen initialView="new" />
+          </Suspense>
+        } />
+      </Route>
+      
+      {/* Option 2: Separate Routes (Simple & Direct) */}
+      {/* Uncomment if you prefer separate routes instead of nested */}
+      {/*
+      <Route path="/messages" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <MessagingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/messages/:conversationId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ChatScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      */}
+      
+      {/* ========== SOCIAL & CONTENT ROUTES ========== */}
+      <Route path="/create-post" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreatePost />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/network" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <NetworkScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/coins" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CoinsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/notifications" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <NotificationsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/create-story" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreateStory />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* ========== PROFILE ROUTES ========== */}
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProfileScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/profile/edit" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <EditProfile />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* ========== SETTINGS & UTILITY ROUTES ========== */}
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SettingsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/search" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SearchScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/saved" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SavedScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/collections" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CollectionsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/live" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <LiveScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* ========== ONBOARDING ROUTES ========== */}
+      <Route path="/setup-profile" element={
+        <PublicRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SetupProfile />
+          </Suspense>
+        </PublicRoute>
+      } />
+      
+      {/* ========== REDIRECTS ========== */}
+      <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
+      <Route path="/message" element={<Navigate to="/messages" replace />} />
+      <Route path="/chat" element={<Navigate to="/messages" replace />} />
+      <Route path="/inbox" element={<Navigate to="/messages" replace />} />
+      <Route path="/dm" element={<Navigate to="/messages" replace />} />
+      
+      {/* ========== ERROR & CATCH-ALL ========== */}
+      {/* 404 Page (Future Implementation) */}
+      {/*
+      <Route path="/404" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <NotFoundScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      */}
+      
+      {/* Catch-all redirect - intelligent based on auth */}
+      <Route path="*" element={<CatchAllRedirect />} />
+    </Routes>
+  );
+}

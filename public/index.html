@@ -1,11 +1,778 @@
-<!doctype html>
-<html lang="en" class="light">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Arvdoul</title>
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌸 Mardiyyerh — My Eternal Love 🌸</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --pink-light: #ffd1dc;
+            --pink: #ff8da1;
+            --pink-deep: #ff4d6d;
+            --purple-soft: #e8b4f8;
+            --purple: #c77dff;
+            --purple-deep: #9b5de5;
+            --bg-dark: #1a0325;
+            --bg-mid: #2d0a3d;
+            --text-glow: #ffe6f0;
+            --font: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: radial-gradient(ellipse at 50% 30%, #2d0a3d 0%, #1a0325 70%, #0d0015 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font);
+            overflow-x: hidden;
+            overflow-y: auto;
+            cursor: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom heart cursor */
+        #customCursor {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            font-size: 1.8rem;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.2s;
+            filter: drop-shadow(0 0 10px rgba(255, 77, 109, 0.9));
+            will-change: left, top;
+            opacity: 0;
+        }
+
+        /* Soft vignette */
+        .vignette {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 4;
+            background: radial-gradient(ellipse at center, transparent 40%, rgba(26, 3, 37, 0.65) 85%, #1a0325 100%);
+        }
+
+        /* Aurora layers */
+        .aurora {
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.3;
+            filter: blur(90px);
+            animation: auroraSpin 25s linear infinite;
+        }
+        .aurora.pink {
+            background: conic-gradient(from 0deg, transparent 0%, rgba(255, 141, 161, 0.5) 20%, transparent 40%, rgba(255, 77, 109, 0.4) 60%, transparent 80%, rgba(255, 141, 161, 0.3) 100%);
+            animation-duration: 25s;
+        }
+        .aurora.purple {
+            background: conic-gradient(from 120deg, transparent 0%, rgba(199, 125, 255, 0.45) 25%, transparent 50%, rgba(155, 93, 229, 0.35) 70%, transparent 100%);
+            animation-duration: 30s;
+            animation-direction: reverse;
+            opacity: 0.35;
+            filter: blur(100px);
+        }
+        @keyframes auroraSpin {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.08); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+
+        /* Canvases */
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        #starCanvas { z-index: 1; }
+        #heartDustCanvas { z-index: 2; }
+        #constellationCanvas { z-index: 3; }
+
+        /* Main container */
+        .container {
+            position: relative;
+            z-index: 20;
+            text-align: center;
+            padding: 2rem 1.5rem;
+            perspective: 1000px;
+        }
+
+        /* 3D card */
+        .card-3d {
+            display: inline-block;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+            will-change: transform;
+        }
+
+        /* Orbit rings */
+        .orbit-rings {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        .orbit-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            transform: translate(-50%, -50%);
+            animation: spinRing var(--duration) linear infinite;
+            box-shadow: 0 0 25px rgba(255, 141, 161, 0.5), inset 0 0 25px rgba(199, 125, 255, 0.3);
+        }
+        .orbit-ring:nth-child(1) { width: 300px; height: 100px; --duration: 10s; border-color: rgba(255, 141, 161, 0.6); }
+        .orbit-ring:nth-child(2) { width: 370px; height: 120px; --duration: 14s; border-color: rgba(199, 125, 255, 0.5); animation-direction: reverse; }
+        .orbit-ring:nth-child(3) { width: 440px; height: 140px; --duration: 18s; border-color: rgba(255, 77, 109, 0.45); }
+        .orbit-ring:nth-child(4) { width: 510px; height: 160px; --duration: 22s; border-color: rgba(155, 93, 229, 0.4); animation-direction: reverse; }
+        @keyframes spinRing {
+            0% { transform: translate(-50%, -50%) rotateX(55deg) rotateZ(0deg); }
+            100% { transform: translate(-50%, -50%) rotateX(55deg) rotateZ(360deg); }
+        }
+
+        /* Name */
+        .name-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 0.6rem;
+            z-index: 5;
+        }
+        .name {
+            font-family: var(--font);
+            font-size: clamp(4rem, 11vw, 9rem);
+            font-weight: 900;
+            letter-spacing: 0.04em;
+            text-transform: lowercase;
+            background: linear-gradient(160deg, #fff0f5 0%, #ffd1dc 15%, #ff8da1 35%, #c77dff 55%, #ff4d6d 70%, #ffd1dc 85%, #fff0f5 100%);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shimmer 3s ease-in-out infinite, floatName 4s ease-in-out infinite;
+            filter: drop-shadow(0 0 25px rgba(255, 77, 109, 0.9)) drop-shadow(0 0 55px rgba(199, 125, 255, 0.6)) drop-shadow(0 0 85px rgba(255, 141, 161, 0.4));
+            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1.2);
+            cursor: pointer;
+        }
+        .name:hover {
+            filter: drop-shadow(0 0 40px rgba(255, 77, 109, 1)) drop-shadow(0 0 75px rgba(199, 125, 255, 0.8)) drop-shadow(0 0 110px rgba(255, 141, 161, 0.6));
+            transform: scale(1.05) translateZ(15px);
+        }
+        @keyframes shimmer {
+            0%, 100% { background-position: 0% 50%; }
+            25% { background-position: 100% 0%; }
+            50% { background-position: 100% 100%; }
+            75% { background-position: 0% 100%; }
+        }
+        @keyframes floatName {
+            0%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-12px); }
+            70% { transform: translateY(-4px); }
+        }
+        .name-reflection {
+            position: absolute;
+            top: 105%;
+            left: 0;
+            right: 0;
+            font-size: inherit;
+            font-weight: 900;
+            letter-spacing: 0.04em;
+            text-transform: lowercase;
+            background: linear-gradient(160deg, rgba(255, 141, 161, 0.5) 0%, rgba(199, 125, 255, 0.35) 40%, transparent 80%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            transform: scaleY(-1) translateY(-8px);
+            opacity: 0.4;
+            pointer-events: none;
+            filter: blur(3px);
+            animation: reflectPulse 3s ease-in-out infinite;
+        }
+        @keyframes reflectPulse {
+            0%, 100% { opacity: 0.3; filter: blur(4px); }
+            50% { opacity: 0.55; filter: blur(1.5px); }
+        }
+
+        /* Subtitle */
+        .subtitle {
+            font-size: clamp(1rem, 2.5vw, 1.5rem);
+            color: #ffe6f0;
+            letter-spacing: 0.18em;
+            margin-top: 0.8rem;
+            animation: fadeUp 2s cubic-bezier(0.22, 0.61, 0.36, 1) 0.5s both;
+            text-shadow: 0 0 20px rgba(255, 141, 161, 0.7), 0 0 45px rgba(199, 125, 255, 0.5);
+            font-style: italic;
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(35px); filter: blur(5px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+
+        /* Love carousel */
+        .love-carousel {
+            margin-top: 2.2rem;
+            height: 3.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #ffe6f0;
+            letter-spacing: 0.07em;
+            animation: fadeUp 2s 1s both;
+            text-shadow: 0 0 15px rgba(199, 125, 255, 0.6);
+            font-style: italic;
+        }
+        .love-carousel span {
+            animation: carouselSwitch 4s ease-in-out infinite;
+            white-space: nowrap;
+        }
+        @keyframes carouselSwitch {
+            0%, 15% { opacity: 1; transform: translateY(0); }
+            28%, 100% { opacity: 0; transform: translateY(-10px); }
+        }
+
+        /* Compliment balloons */
+        .compliment {
+            position: fixed;
+            pointer-events: none;
+            z-index: 150;
+            font-family: var(--font);
+            font-style: italic;
+            font-weight: 700;
+            color: #ffe6f0;
+            text-shadow: 0 0 15px rgba(255, 77, 109, 0.8), 0 0 30px rgba(199, 125, 255, 0.6);
+            animation: floatUp 8s linear forwards;
+            white-space: nowrap;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.6); opacity: 0; }
+            10% { opacity: 1; transform: translateY(-10px) scale(1); }
+            80% { opacity: 0.6; transform: translateY(-80vh) scale(1.1); }
+            100% { opacity: 0; transform: translateY(-100vh) scale(0.4); }
+        }
+
+        /* Heart rain button */
+        .heart-rain-toggle {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            z-index: 300;
+            background: rgba(255, 141, 161, 0.2);
+            border: 2px solid rgba(255, 141, 161, 0.6);
+            color: #ffe6f0;
+            font-size: 1.6rem;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            cursor: pointer;
+            backdrop-filter: blur(12px);
+            transition: all 0.35s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 25px rgba(255, 77, 109, 0.4);
+        }
+        .heart-rain-toggle:hover {
+            background: rgba(255, 77, 109, 0.4);
+            border-color: #ffd1dc;
+            box-shadow: 0 0 45px rgba(255, 77, 109, 0.9);
+            transform: scale(1.1);
+        }
+        .heart-rain-toggle.active {
+            background: rgba(199, 125, 255, 0.5);
+            border-color: #e8b4f8;
+            box-shadow: 0 0 45px rgba(199, 125, 255, 0.9);
+            animation: btnPulse 0.9s ease-in-out infinite;
+        }
+        @keyframes btnPulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(199, 125, 255, 0.6); }
+            50% { box-shadow: 0 0 60px rgba(199, 125, 255, 1), 0 0 90px rgba(255, 77, 109, 0.5); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .name { font-size: 3.5rem; }
+            .orbit-ring { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Aurora layers -->
+    <div class="aurora pink"></div>
+    <div class="aurora purple"></div>
+
+    <!-- Canvases -->
+    <canvas id="starCanvas"></canvas>
+    <canvas id="heartDustCanvas"></canvas>
+    <canvas id="constellationCanvas"></canvas>
+
+    <!-- Vignette -->
+    <div class="vignette"></div>
+
+    <!-- Custom cursor -->
+    <div id="customCursor">💖</div>
+
+    <div class="container">
+        <div class="card-3d" id="card3d">
+            <div class="orbit-rings">
+                <div class="orbit-ring"></div>
+                <div class="orbit-ring"></div>
+                <div class="orbit-ring"></div>
+                <div class="orbit-ring"></div>
+            </div>
+            <div class="name-wrapper">
+                <h1 class="name" id="nameDisplay">mardiyyerh</h1>
+                <div class="name-reflection" aria-hidden="true">mardiyyerh</div>
+            </div>
+        </div>
+        <p class="subtitle">✨ the most beautiful soul in the cosmos ✨</p>
+        <div class="love-carousel" id="loveCarousel">
+            <span>you are my 🌙 everything 💫</span>
+        </div>
+        <p style="color:#ffe6f0; margin-top:1.2rem; font-size:1rem; letter-spacing:0.1em; animation:fadeUp 2s 1.3s both; text-shadow:0 0 15px rgba(199,125,255,0.5);">
+            Mardiyyerh, you are the magic in every sunrise and the peace in every starry night.
+        </p>
+    </div>
+
+    <button class="heart-rain-toggle" id="heartRainToggle" title="Heart Rain">🌧️</button>
+
+    <script>
+        (function() {
+            // DOM elements
+            const starCanvas = document.getElementById('starCanvas');
+            const starCtx = starCanvas.getContext('2d');
+            const heartDustCanvas = document.getElementById('heartDustCanvas');
+            const heartDustCtx = heartDustCanvas.getContext('2d');
+            const constellationCanvas = document.getElementById('constellationCanvas');
+            const constellationCtx = constellationCanvas.getContext('2d');
+            const card3d = document.getElementById('card3d');
+            const nameDisplay = document.getElementById('nameDisplay');
+            const heartRainToggle = document.getElementById('heartRainToggle');
+            const customCursor = document.getElementById('customCursor');
+            const loveCarousel = document.getElementById('loveCarousel');
+
+            let w, h;
+            let mouseX = window.innerWidth / 2;
+            let mouseY = window.innerHeight / 2;
+            let heartRainActive = false;
+            let heartRainDrops = [];
+            const MAX_RAIN = 30;
+
+            // Audio context for soft chime
+            let audioCtx = null;
+            function initAudio() {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            }
+            function playChime() {
+                if (!audioCtx) return;
+                const t = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, t);
+                osc.frequency.exponentialRampToValueAtTime(330, t + 0.25);
+                gain.gain.setValueAtTime(0.12, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(t);
+                osc.stop(t + 0.35);
+            }
+
+            // Resize
+            function resize() {
+                w = window.innerWidth;
+                h = window.innerHeight;
+                starCanvas.width = w;
+                starCanvas.height = h;
+                heartDustCanvas.width = w;
+                heartDustCanvas.height = h;
+                constellationCanvas.width = w;
+                constellationCanvas.height = h;
+            }
+            resize();
+            window.addEventListener('resize', () => { resize(); initStars(); initConstellation(); });
+
+            // Cursor tracking
+            document.addEventListener('mousemove', e => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                customCursor.style.left = e.clientX + 'px';
+                customCursor.style.top = e.clientY + 'px';
+                if (card3d) {
+                    const rect = card3d.getBoundingClientRect();
+                    const cx = rect.left + rect.width/2;
+                    const cy = rect.top + rect.height/2;
+                    const dx = (e.clientX - cx) / rect.width;
+                    const dy = (e.clientY - cy) / rect.height;
+                    card3d.style.transform = `rotateY(${dx*22}deg) rotateX(${-dy*22}deg) translateZ(10px)`;
+                }
+            });
+            document.addEventListener('mouseleave', () => {
+                if (card3d) card3d.style.transform = 'rotateY(0deg) rotateX(0deg) translateZ(0)';
+                customCursor.style.opacity = '0';
+            });
+            document.addEventListener('mouseenter', () => { customCursor.style.opacity = '1'; });
+            document.addEventListener('touchstart', () => { customCursor.style.opacity = '0'; });
+
+            // Love carousel phrases
+            const lovePhrases = [
+                "you are my 🌙 everything 💫",
+                "the rhythm of my heartbeat 💓",
+                "my sweetest dream come true 🌠",
+                "more precious than all the stars ✨",
+                "the queen of my soul 👑",
+                "my forever and always 💞",
+                "the light in my darkest nights 🕯️",
+                "a miracle I'll cherish eternally 🌸",
+                "the poetry written in my heart 📜",
+                "my greatest treasure 💎",
+                "the love I've waited for ⏳",
+                "my serendipitous blessing 🍀",
+                "the most beautiful chapter of my life 📖",
+                "my everything, Mardiyyerh 💖"
+            ];
+            let phraseIdx = 0;
+            function rotatePhrase() {
+                const span = loveCarousel.querySelector('span');
+                if (!span) return;
+                span.textContent = lovePhrases[phraseIdx];
+                phraseIdx = (phraseIdx + 1) % lovePhrases.length;
+            }
+            setInterval(rotatePhrase, 4000);
+            rotatePhrase();
+
+            // Compliment balloons
+            const compliments = [
+                "gorgeous", "irreplaceable", "precious", "adored", "breathtaking",
+                "magnificent", "queen", "soulmate", "mesmerizing", "enchanting",
+                "divine", "captivating", "radiant", "angelic", "stunning",
+                "one and only", "masterpiece", "my universe", "my peace", "my heart"
+            ];
+            function spawnCompliment() {
+                if (document.hidden) return;
+                const el = document.createElement('div');
+                el.className = 'compliment';
+                el.textContent = compliments[Math.floor(Math.random() * compliments.length)];
+                el.style.left = (Math.random() * 80 + 10) + '%';
+                el.style.bottom = '-30px';
+                el.style.fontSize = (1.2 + Math.random() * 1.8) + 'rem';
+                el.style.animationDuration = (7 + Math.random() * 5) + 's';
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 9000);
+            }
+            setInterval(spawnCompliment, 2500);
+            spawnCompliment();
+
+            // Starfield
+            let stars = [];
+            function initStars() {
+                stars = [];
+                for (let i = 0; i < 180; i++) {
+                    stars.push({
+                        x: Math.random() * w,
+                        y: Math.random() * h,
+                        r: Math.random() * 1.6 + 0.3,
+                        speed: Math.random() * 0.02 + 0.005,
+                        offset: Math.random() * Math.PI * 2,
+                        hue: 300 + Math.random() * 40 // purple-pink range
+                    });
+                }
+            }
+            initStars();
+            function drawStars(ts) {
+                starCtx.clearRect(0, 0, w, h);
+                stars.forEach(s => {
+                    const alpha = 0.4 + Math.sin(ts * s.speed + s.offset) * 0.5;
+                    starCtx.beginPath();
+                    starCtx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+                    starCtx.fillStyle = `hsla(${s.hue}, 70%, 80%, ${alpha})`;
+                    starCtx.fill();
+                    starCtx.beginPath();
+                    starCtx.arc(s.x, s.y, s.r*3, 0, Math.PI*2);
+                    starCtx.fillStyle = `hsla(${s.hue}, 60%, 75%, ${alpha*0.2})`;
+                    starCtx.fill();
+                });
+            }
+
+            // Constellation network
+            let constellationPoints = [];
+            function initConstellation() {
+                constellationPoints = [];
+                for (let i = 0; i < 20; i++) {
+                    constellationPoints.push({
+                        x: Math.random() * w,
+                        y: Math.random() * h,
+                        vx: (Math.random() - 0.5) * 0.2,
+                        vy: (Math.random() - 0.5) * 0.2,
+                        r: Math.random() * 1.2 + 0.4,
+                        hue: 290 + Math.random() * 40
+                    });
+                }
+            }
+            initConstellation();
+            function drawConstellation(ts) {
+                constellationCtx.clearRect(0, 0, w, h);
+                constellationPoints.forEach(p => {
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.x < -20) p.x = w+20; if (p.x > w+20) p.x = -20;
+                    if (p.y < -20) p.y = h+20; if (p.y > h+20) p.y = -20;
+                });
+                constellationPoints.forEach(p => {
+                    const alpha = 0.4 + Math.sin(ts*0.002 + p.x*0.01)*0.3;
+                    constellationCtx.beginPath();
+                    constellationCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                    constellationCtx.fillStyle = `hsla(${p.hue}, 65%, 85%, ${alpha})`;
+                    constellationCtx.fill();
+                });
+                for (let i=0; i<constellationPoints.length; i++) {
+                    for (let j=i+1; j<constellationPoints.length; j++) {
+                        const a = constellationPoints[i], b = constellationPoints[j];
+                        const dx = a.x - b.x, dy = a.y - b.y, dist = Math.sqrt(dx*dx+dy*dy);
+                        if (dist < 150) {
+                            constellationCtx.beginPath();
+                            constellationCtx.moveTo(a.x, a.y);
+                            constellationCtx.lineTo(b.x, b.y);
+                            constellationCtx.strokeStyle = `rgba(255,180,230,${(1-dist/150)*0.25})`;
+                            constellationCtx.lineWidth = 0.6;
+                            constellationCtx.stroke();
+                        }
+                    }
+                }
+                // highlight nearest to mouse
+                let closest = null, minDist = Infinity;
+                constellationPoints.forEach(p => {
+                    const dx = p.x - mouseX, dy = p.y - mouseY;
+                    const d = Math.sqrt(dx*dx+dy*dy);
+                    if (d < minDist) { minDist = d; closest = p; }
+                });
+                if (closest && minDist < 180) {
+                    constellationCtx.beginPath();
+                    constellationCtx.arc(closest.x, closest.y, closest.r*5, 0, Math.PI*2);
+                    constellationCtx.fillStyle = 'rgba(255,200,240,0.5)';
+                    constellationCtx.fill();
+                    constellationCtx.beginPath();
+                    constellationCtx.moveTo(closest.x, closest.y);
+                    constellationCtx.lineTo(mouseX, mouseY);
+                    constellationCtx.strokeStyle = 'rgba(255,180,230,0.4)';
+                    constellationCtx.stroke();
+                }
+            }
+
+            // Heart dust particles (floating hearts)
+            let dustParticles = [];
+            class HeartDust {
+                constructor() { this.reset(true); }
+                reset(initial=false) {
+                    this.x = Math.random() * w;
+                    this.y = initial ? Math.random() * h : h + 25;
+                    this.size = Math.random() * 2.5 + 1;
+                    this.speedY = Math.random() * 0.45 + 0.2;
+                    this.speedX = (Math.random() - 0.5) * 0.4;
+                    this.alpha = Math.random() * 0.6 + 0.3;
+                    this.hue = 300 + Math.random() * 40;
+                    this.wobbleAmp = 0.5;
+                    this.wobbleSpeed = 0.012;
+                    this.wobbleOffset = Math.random()*Math.PI*2;
+                }
+                update(ts) {
+                    this.y -= this.speedY;
+                    this.x += this.speedX + Math.sin(ts*this.wobbleSpeed + this.wobbleOffset)*this.wobbleAmp;
+                    this.alpha = 0.3 + Math.sin(ts*0.005 + this.wobbleOffset)*0.4;
+                    if (this.y < -25 || this.x < -25 || this.x > w+25) this.reset();
+                }
+                draw(ctx) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                    ctx.fillStyle = `hsla(${this.hue}, 70%, 80%, ${Math.max(0,Math.min(1,this.alpha))})`;
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size*2.8, 0, Math.PI*2);
+                    ctx.fillStyle = `hsla(${this.hue}, 60%, 75%, ${this.alpha*0.18})`;
+                    ctx.fill();
+                }
+            }
+            for (let i=0; i<90; i++) dustParticles.push(new HeartDust());
+            function drawHeartDust(ts) {
+                heartDustCtx.clearRect(0,0,w,h);
+                dustParticles.forEach(p => { p.update(ts); p.draw(heartDustCtx); });
+            }
+
+            // Heart rain
+            class RainDrop {
+                constructor() { this.reset(true); }
+                reset(initial=false) {
+                    this.x = Math.random() * w;
+                    this.y = initial ? Math.random() * h : -(Math.random()*100+30);
+                    this.size = Math.random()*2.2+1.2;
+                    this.speed = Math.random()*1.9+0.9;
+                    this.wobble = Math.random()*0.8;
+                    this.wobbleSpeed = Math.random()*0.03+0.02;
+                    this.offset = Math.random()*Math.PI*2;
+                    this.emoji = ['💖','💕','💗','💘','💝','💞','🩷','💓','✨','🌟'][Math.floor(Math.random()*10)];
+                }
+                update(ts) {
+                    this.y += this.speed;
+                    this.x += Math.sin(ts*this.wobbleSpeed + this.offset)*this.wobble;
+                    if (this.y > h+80) this.reset();
+                }
+                draw(ctx) {
+                    ctx.font = `${this.size*10}px serif`;
+                    ctx.fillText(this.emoji, this.x, this.y);
+                }
+            }
+            function toggleHeartRain() {
+                heartRainActive = !heartRainActive;
+                if (heartRainActive) {
+                    heartRainToggle.classList.add('active');
+                    heartRainToggle.textContent = '💖';
+                    heartRainDrops = [];
+                    for (let i=0; i<MAX_RAIN; i++) {
+                        const drop = new RainDrop();
+                        drop.y = Math.random() * h;
+                        heartRainDrops.push(drop);
+                    }
+                } else {
+                    heartRainToggle.classList.remove('active');
+                    heartRainToggle.textContent = '🌧️';
+                    heartRainDrops = [];
+                }
+            }
+            heartRainToggle.addEventListener('click', toggleHeartRain);
+            function drawHeartRain(ts) {
+                if (!heartRainActive) return;
+                heartRainDrops.forEach(d => { d.update(ts); d.draw(heartDustCtx); });
+            }
+
+            // Main animation loop
+            function animate(ts) {
+                drawStars(ts);
+                drawHeartDust(ts);
+                drawHeartRain(ts);
+                drawConstellation(ts);
+                requestAnimationFrame(animate);
+            }
+            requestAnimationFrame(animate);
+
+            // Burst effects
+            function spawnBurst(x, y, count=20, emojiSet=null) {
+                const emojis = emojiSet || ['❤️','💖','💕','💗','💘','💝','💞','🩷','💓','✨','🌟','💫','🎀','💐'];
+                const frag = document.createDocumentFragment();
+                for (let i=0; i<count; i++) {
+                    const span = document.createElement('span');
+                    span.style.cssText = `position:fixed; pointer-events:none; z-index:200; left:${x}px; top:${y}px; font-size:${1.5+Math.random()*2.5}rem; animation: burstAnim 1.3s cubic-bezier(0.22,0.61,0.36,1) forwards;`;
+                    span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+                    const angle = (Math.PI*2/count)*i;
+                    const dist = 50 + Math.random()*120;
+                    span.style.setProperty('--dx', Math.cos(angle)*dist+'px');
+                    span.style.setProperty('--dy', Math.sin(angle)*dist-45+'px');
+                    span.style.setProperty('--rot', (Math.random()*360-180)+'deg');
+                    frag.appendChild(span);
+                }
+                document.body.appendChild(frag);
+                setTimeout(() => {
+                    document.querySelectorAll('span[style*="burstAnim"]').forEach(el => {
+                        if (parseFloat(el.style.animationDuration) < 1.5) el.remove();
+                    });
+                }, 1600);
+            }
+
+            // Click anywhere -> burst
+            document.addEventListener('click', e => {
+                if (e.target.closest('#heartRainToggle')) return;
+                initAudio();
+                playChime();
+                spawnBurst(e.clientX, e.clientY, 18);
+            });
+
+            // Name click -> mega burst
+            nameDisplay.addEventListener('click', e => {
+                e.stopPropagation();
+                initAudio();
+                playChime();
+                const rect = nameDisplay.getBoundingClientRect();
+                const cx = rect.left + rect.width/2;
+                const cy = rect.top + rect.height/2;
+                const mega = ['❤️','💖','💕','💗','💘','💝','💞','🩷','💓','✨','🌟','💫','🎀','💐','🌹','🕊️','👑','💎','🌙','⭐'];
+                spawnBurst(cx, cy, 45, mega);
+                setTimeout(() => spawnBurst(cx, cy, 30, mega), 280);
+            });
+
+            // Keyboard easter egg
+            let buffer = '';
+            document.addEventListener('keydown', e => {
+                buffer += e.key.toLowerCase();
+                if (buffer.includes('mardiyyerh')) {
+                    buffer = '';
+                    for (let wave=0; wave<4; wave++) {
+                        setTimeout(() => {
+                            const mega = ['❤️','💖','💕','💗','💘','💝','✨','🌟','💫','🎀','💐','🌹','💎','👑'];
+                            for (let i=0; i<50; i++) {
+                                const span = document.createElement('span');
+                                span.style.cssText = `position:fixed; pointer-events:none; z-index:200; left:${Math.random()*w}px; top:${Math.random()*h}px; font-size:${2+Math.random()*4}rem; animation: burstAnim 1.8s cubic-bezier(0.22,0.61,0.36,1) forwards;`;
+                                span.textContent = mega[Math.floor(Math.random()*mega.length)];
+                                const angle = Math.random()*Math.PI*2;
+                                const dist = 80+Math.random()*200;
+                                span.style.setProperty('--dx', Math.cos(angle)*dist+'px');
+                                span.style.setProperty('--dy', Math.sin(angle)*dist-60+'px');
+                                span.style.setProperty('--rot', (Math.random()*540-270)+'deg');
+                                document.body.appendChild(span);
+                                setTimeout(() => span.remove(), 2200);
+                            }
+                        }, wave*250);
+                    }
+                }
+                clearTimeout(window.__typeTimeout);
+                window.__typeTimeout = setTimeout(() => { buffer = ''; }, 3000);
+            });
+
+            // Periodic cleanup of burst spans
+            setInterval(() => {
+                document.querySelectorAll('span[style*="burstAnim"]').forEach(el => {
+                    const dur = parseFloat(el.style.animationDuration) || 1.3;
+                    if (el._ts && Date.now()-el._ts > dur*1000+600) el.remove();
+                    if (!el._ts) el._ts = Date.now();
+                });
+            }, 2000);
+
+            // Styles for burst animation injected dynamically
+            const burstStyle = document.createElement('style');
+            burstStyle.textContent = `
+                @keyframes burstAnim {
+                    0% { transform: translate(0,0) scale(0) rotate(0deg); opacity:1; }
+                    25% { transform: translate(var(--dx), var(--dy)) scale(1.7) rotate(var(--rot)); opacity:1; }
+                    60% { transform: translate(calc(var(--dx)*1.8), calc(var(--dy)*1.8)) scale(0.5) rotate(calc(var(--rot)*1.5)); opacity:0.7; }
+                    100% { transform: translate(calc(var(--dx)*3), calc(var(--dy)*3)) scale(0) rotate(calc(var(--rot)*2.5)); opacity:0; }
+                }
+            `;
+            document.head.appendChild(burstStyle);
+
+            console.log('%c💖🌸 Mardiyyerh — You are the poetry of my soul 🌸💖', 'font-size:1.5em;color:#ff4d6d;');
+            console.log('%c✨ Every heartbeat whispers your name ✨', 'font-size:1.2em;color:#c77dff;');
+        })();
+    </script>
+</body>
 </html>
