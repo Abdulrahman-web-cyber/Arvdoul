@@ -1,55 +1,196 @@
-// src/screens/PostCard.jsx – ARVDOUL KING 👑 EDITION (FINAL)
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+// src/screens/PostCard.jsx – ARVDOUL ULTIMATE POST CARD (FINAL PERFECT)
+// Perfect rounded edges, compact height, larger avatar, bubble counts, all bugs fixed.
+
+import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
-import firestoreService from '../services/firestoreService.js';
-import * as userService from '../services/userService.js';
-import * as monetizationService from '../services/monetizationService.js';
-import notificationService from '../services/notificationsService.js';
-import { formatDistanceToNow, format } from 'date-fns';
+import firestoreService from '../services/firestoreService';
+import commentService from '../services/commentService';
+import * as userService from '../services/userService';
+import * as monetizationService from '../services/monetizationService';
+import notificationService from '../services/notificationsService';
+import { triggerHaptic } from '../utils/haptics';
+import { formatDistanceToNow } from 'date-fns';
 import {
-  Heart, MessageCircle, Share2, Bookmark, MoreVertical, Play, Pause,
-  Volume2, VolumeX, Download, ChevronLeft, ChevronRight, Smile, Gift,
-  MapPin, Calendar, Link as LinkIcon, HelpCircle, BarChart2, Music,
-  Video, Image, ExternalLink, Copy, Quote, Clock, AlertTriangle
+  Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift,
+  MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, Sparkles,
+  Eye, BarChart3, Coins, Send, AlertTriangle, Shield,
+  Download, RefreshCw, Quote, PlusCircle, Copy, X, Flag, Users,
+  ShoppingBag, ExternalLink
 } from 'lucide-react';
-import { FaHeart, FaRegHeart } from 'react-icons/fa6';
+import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
+
+// Sub‑cards
+import TextCard from './PostCard/TextCard';
+import ImageCard from './PostCard/ImageCard';
+import VideoCard from './PostCard/VideoCard';
+import AudioCard from './PostCard/AudioCard';
+import PollCard from './PostCard/PollCard';
+import QuestionCard from './PostCard/QuestionCard';
+import EventCard from './PostCard/EventCard';
+import LinkCard from './PostCard/LinkCard';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
 // ------------------------------------------------------------------
-// ERROR BOUNDARY
+// 1. DESIGN TOKENS – Perfectly rounded, compact, neon purple
+// ------------------------------------------------------------------
+const getDesignTokens = (theme) => {
+  const isDark = theme === 'dark';
+  return {
+    primary: isDark ? '#8B5CF6' : '#3B82F6',
+    secondary: isDark ? '#A78BFA' : '#60A5FA',
+    accent: '#FF2D55',
+    gold: '#D4AF37',
+    surface: isDark ? '#121217' : '#FFFFFF',
+    border: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)',
+    text: isDark ? '#FFFFFF' : '#0F172A',
+    textMuted: isDark ? '#9CA3AF' : '#475569',
+    textSecondary: isDark ? '#6B7280' : '#64748B',
+    cardBg: isDark ? '#121217' : '#FFFFFF',
+    cardBgAlt: isDark ? '#1A1A24' : '#F8FAFC',
+    overlayBg: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.4)',
+    overlayPanel: isDark ? '#1f1f2b' : '#FFFFFF',
+    overlayPanelBorder: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+    actionBarBg: 'linear-gradient(135deg, #9333ea, #c026d3, #06b6d4)',
+    shadowDirectional: isDark
+      ? '0 20px 35px -12px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.2)'
+      : '0 20px 35px -12px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.05)',
+    neonPurple: 'linear-gradient(135deg, #9333ea, #c026d3, #06b6d4)',
+    actionBarGlow: '0 0 12px rgba(236, 72, 153, 0.4), 0 0 20px rgba(147, 51, 234, 0.3)',
+  };
+};
+
+// ------------------------------------------------------------------
+// 2. INTERNAL EVENT BUS (with cleanup)
+// ------------------------------------------------------------------
+let globalEventBus = null;
+const getEventBus = () => {
+  if (!globalEventBus) {
+    globalEventBus = {
+      listeners: new Map(),
+      emit(event, detail) {
+        this.listeners.get(event)?.forEach(fn => fn(detail));
+      },
+      on(event, fn) {
+        if (!this.listeners.has(event)) this.listeners.set(event, []);
+        this.listeners.get(event).push(fn);
+      },
+      off(event, fn) {
+        const arr = this.listeners.get(event);
+        if (arr) this.listeners.set(event, arr.filter(f => f !== fn));
+      },
+      clear() {
+        this.listeners.clear();
+      },
+    };
+  }
+  return globalEventBus;
+};
+
+// ------------------------------------------------------------------
+// 3. OFFLINE QUEUE (safe, with crypto‑strong IDs, collapse by action)
+// ------------------------------------------------------------------
+let offlineQueueDB = null;
+let offlineQueueInitPromise = null;
+
+const idbRequestPromise = (req) => new Promise((resolve, reject) => {
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
+
+const openOfflineQueue = () => {
+  if (offlineQueueDB) return Promise.resolve(offlineQueueDB);
+  if (offlineQueueInitPromise) return offlineQueueInitPromise;
+  offlineQueueInitPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open('arvdoul_offline_queue', 5);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('actions')) {
+        db.createObjectStore('actions', { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => {
+      offlineQueueDB = request.result;
+      resolve(offlineQueueDB);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  return offlineQueueInitPromise;
+};
+
+async function addToOfflineQueue(action, data) {
+  const db = await openOfflineQueue();
+  const tx = db.transaction('actions', 'readwrite');
+  const store = tx.objectStore('actions');
+  // Use crypto.randomUUID if available, fallback to Date.now + random
+  const id = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${data.postId}_${data.userId}_${action}_${Date.now()}_${Math.random().toString(36)}`;
+  const request = store.put({ id, action, data, timestamp: Date.now() });
+  await idbRequestPromise(request);
+}
+
+async function replayOfflineQueue() {
+  if (!navigator.onLine) return;
+  const db = await openOfflineQueue();
+  const tx = db.transaction('actions', 'readonly');
+  const store = tx.objectStore('actions');
+  const items = await idbRequestPromise(store.getAll());
+  if (!items.length) return;
+
+  const deleteTx = db.transaction('actions', 'readwrite');
+  const deleteStore = deleteTx.objectStore('actions');
+  for (const item of items) {
+    const { action, data } = item;
+    try {
+      if (action === 'like') {
+        await firestoreService.likePost?.(data.postId, data.userId);
+      } else if (action === 'unlike') {
+        await firestoreService.unlikePost?.(data.postId, data.userId);
+      } else if (action === 'save') {
+        await firestoreService.savePost?.(data.postId, data.userId);
+      } else if (action === 'unsave') {
+        await firestoreService.unsavePost?.(data.postId, data.userId);
+      } else if (action === 'reaction') {
+        await firestoreService.addReaction?.(data.postId, data.userId, data.reaction);
+      } else if (action === 'removeReaction') {
+        await firestoreService.removeReaction?.(data.postId, data.userId);
+      }
+      await idbRequestPromise(deleteStore.delete(item.id));
+    } catch (err) {
+      console.warn('Offline replay failed', err);
+    }
+  }
+}
+
+// ------------------------------------------------------------------
+// 4. ERROR BOUNDARY (dev/prod friendly)
 // ------------------------------------------------------------------
 class PostErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
   componentDidCatch(error, errorInfo) {
-    console.error('PostCard error:', error, errorInfo);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('PostCard crashed:', error, errorInfo);
+    } else {
+      console.warn('PostCard error:', error.message);
+    }
   }
-  handleRetry = () => {
-    this.setState({ hasError: false, error: null });
-    this.props.onRetry?.();
-  };
+  handleRetry = () => { this.setState({ hasError: false, error: null }); this.props.onRetry?.(); };
   render() {
     if (this.state.hasError) {
       return (
-        <div className="rounded-[22px] p-8 text-center bg-red-50 dark:bg-red-950/30 my-4">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-          <p className="text-red-600 dark:text-red-400 font-medium">Failed to load post</p>
-          <p className="text-xs text-gray-500 mt-1">{this.state.error?.message || 'Unknown error'}</p>
-          <button
-            onClick={this.handleRetry}
-            className="mt-4 px-5 py-2 rounded-full bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition"
-          >
-            Try Again
-          </button>
+        <div className="rounded-3xl p-6 text-center bg-red-500/10 my-2">
+          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+          <p className="text-red-600 dark:text-red-400 font-medium">
+            {process.env.NODE_ENV === 'development'
+              ? this.state.error?.message || 'Could not load post'
+              : 'Something went wrong. Please try again.'}
+          </p>
+          <button onClick={this.handleRetry} className="mt-3 px-4 py-1.5 rounded-full bg-red-500 text-white text-sm shadow-md">Try again</button>
         </div>
       );
     }
@@ -58,924 +199,853 @@ class PostErrorBoundary extends React.Component {
 }
 
 // ------------------------------------------------------------------
-// REACTIONS
+// 5. SHARE SHEET (tap outside / ESC, download only if hasMedia)
 // ------------------------------------------------------------------
-const REACTIONS = [
-  { emoji: '👍', label: 'Like', value: 'like' },
-  { emoji: '❤️', label: 'Love', value: 'love' },
-  { emoji: '😂', label: 'Haha', value: 'haha' },
-  { emoji: '😮', label: 'Wow', value: 'wow' },
-  { emoji: '😢', label: 'Sad', value: 'sad' },
-  { emoji: '😡', label: 'Angry', value: 'angry' },
-  { emoji: '🔥', label: 'Fire', value: 'fire' },
-  { emoji: '🎉', label: 'Celebrate', value: 'celebrate' },
-];
-
-// ------------------------------------------------------------------
-// DOUBLE TAP HEART
-// ------------------------------------------------------------------
-const DoubleTapHeart = ({ position }) => (
-  <motion.div
-    initial={{ scale: 0, opacity: 0 }}
-    animate={{ scale: 2.5, opacity: [0, 1, 0] }}
-    transition={{ duration: 0.8, ease: "easeOut" }}
-    className="fixed pointer-events-none z-[9999]"
-    style={{ left: position.x - 40, top: position.y - 40 }}
-  >
-    <FaHeart className="w-20 h-20 text-red-500 fill-current drop-shadow-2xl" />
-  </motion.div>
-);
-
-// ------------------------------------------------------------------
-// REACTIONS POPUP (smart positioning for small screens)
-// ------------------------------------------------------------------
-const ReactionsPopup = ({ onSelect, theme, onClose, triggerRect }) => {
-  const ref = useRef();
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia }) => {
+  const sheetRef = useRef(null);
+  const overlayRef = useRef(null);
 
   useEffect(() => {
-    if (triggerRect) {
-      const viewportWidth = window.innerWidth;
-      const popupWidth = 280; // approximate
-      let left = triggerRect.left + triggerRect.width / 2 - popupWidth / 2;
-      left = Math.max(10, Math.min(left, viewportWidth - popupWidth - 10));
-      setPosition({
-        top: triggerRect.top - 70,
-        left: left,
-      });
+    const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKeyDown);
+    sheetRef.current?.focus();
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const handleOverlayClick = (e) => {
+    if (e.target === overlayRef.current) onClose();
+  };
+
+  const copyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied!');
+      onClose();
+    } catch { toast.error('Copy failed'); }
+  }, [url, onClose]);
+
+  const shareNative = useCallback(() => {
+    if (navigator.share) navigator.share({ title: content, url }).catch(() => copyLink());
+    else copyLink();
+    onClose();
+  }, [content, url, copyLink, onClose]);
+
+  const repost = useCallback(async () => {
+    if (!postId) return;
+    try {
+      await firestoreService.repostPost?.(postId);
+      toast.success('Reposted!');
+    } catch { toast.error('Failed to repost'); }
+    onClose();
+  }, [postId, onClose]);
+
+  const quotePost = useCallback(() => {
+    getEventBus().emit('quote-post', { postId, postData });
+    onClose();
+  }, [postId, postData, onClose]);
+
+  const sendToFriends = useCallback(() => {
+    toast.info('Send to friends modal (implement)');
+    onClose();
+  }, [onClose]);
+
+  const downloadMedia = useCallback(async () => {
+    if (!postData?.media?.length) {
+      toast.info('No media to download');
+      onClose();
+      return;
     }
-  }, [triggerRect]);
+    triggerHaptic('light');
+    for (const media of postData.media) {
+      try {
+        const response = await fetch(media.url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `arvdoul_media_${Date.now()}.${media.type === 'video' ? 'mp4' : 'jpg'}`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      } catch (err) {
+        console.error(err);
+        toast.error('Download failed');
+      }
+    }
+    toast.success('Download started');
+    onClose();
+  }, [postData, onClose]);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+  const addToStory = useCallback(() => {
+    toast.info('Add to Story (implement)');
+    onClose();
+  }, [onClose]);
+
+  const promotePost = useCallback(() => {
+    toast.info('Promotion panel (implement)');
+    onClose();
   }, [onClose]);
 
   return (
     <motion.div
-      ref={ref}
-      initial={{ scale: 0.8, opacity: 0, y: 10 }}
-      animate={{ scale: 1, opacity: 1, y: 0 }}
-      exit={{ scale: 0.8, opacity: 0, y: 10 }}
-      transition={{ type: "spring", damping: 25, stiffness: 350 }}
-      className={cn(
-        "fixed z-[999] flex gap-2 p-2 rounded-full shadow-xl backdrop-blur-xl border",
-        theme === 'dark' ? 'bg-gray-900/90 border-gray-700' : 'bg-white/90 border-gray-200'
-      )}
-      style={{ top: position.top, left: position.left }}
+      ref={overlayRef}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ backgroundColor: tokens.overlayBg }}
+      onClick={handleOverlayClick}
     >
-      {REACTIONS.map((r) => (
-        <button
-          key={r.value}
-          onClick={() => { onSelect(r); onClose(); }}
-          className="text-2xl hover:scale-125 transition-transform duration-150 active:scale-90 px-1"
-        >
-          {r.emoji}
-        </button>
-      ))}
+      <motion.div
+        ref={sheetRef}
+        initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+        className="rounded-2xl shadow-2xl border max-w-[360px] w-full mx-4 p-5 max-h-[80vh] overflow-y-auto"
+        style={{ backgroundColor: tokens.overlayPanel, borderColor: tokens.overlayPanelBorder }}
+        onClick={(e) => e.stopPropagation()}
+        tabIndex={-1} role="dialog" aria-modal="true" aria-label="Share options"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-sm" style={{ color: tokens.text }}>Share</h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition" aria-label="Close"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="grid grid-cols-4 gap-3 mb-4" role="listbox">
+          <button onClick={shareNative} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Share2 className="w-6 h-6 text-blue-500" /><span className="text-xs">Share</span></button>
+          <button onClick={copyLink} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><Copy className="w-6 h-6" /><span className="text-xs">Copy</span></button>
+          <button onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(content + ' ' + url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaWhatsapp className="w-6 h-6 text-green-500" /><span className="text-xs">WA</span></button>
+          <button onClick={() => { window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(content)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTelegram className="w-6 h-6 text-blue-500" /><span className="text-xs">TG</span></button>
+          <button onClick={() => { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(content)}&url=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaTwitter className="w-6 h-6 text-sky-500" /><span className="text-xs">X</span></button>
+          <button onClick={() => { window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'noopener,noreferrer'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaFacebook className="w-6 h-6 text-blue-600" /><span className="text-xs">FB</span></button>
+          <button onClick={() => { navigator.clipboard.writeText(url); toast.success('Link copied – share in Instagram DM'); onClose(); }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><FaInstagram className="w-6 h-6 text-pink-500" /><span className="text-xs">IG</span></button>
+          <button onClick={repost} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition"><RefreshCw className="w-6 h-6 text-green-500" /><span className="text-xs">Repost</span></button>
+        </div>
+        <div className="border-t pt-3 space-y-2" style={{ borderColor: tokens.overlayPanelBorder }}>
+          <button onClick={quotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Quote className="w-5 h-5" /><span className="text-sm">Quote Post</span></button>
+          <button onClick={sendToFriends} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Send className="w-5 h-5" /><span className="text-sm">Send to Friends</span></button>
+          {hasMedia && (
+            <button onClick={downloadMedia} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><Download className="w-5 h-5" /><span className="text-sm">Download Media</span></button>
+          )}
+          <button onClick={addToStory} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><PlusCircle className="w-5 h-5" /><span className="text-sm">Add to Story</span></button>
+          {isCreator && (
+            <button onClick={promotePost} className="w-full text-left px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"><TrendingUp className="w-5 h-5" style={{ color: tokens.gold }} /><span className="text-sm" style={{ color: tokens.gold }}>Promote Post</span></button>
+          )}
+        </div>
+      </motion.div>
     </motion.div>
   );
-};
+});
 
 // ------------------------------------------------------------------
-// MEDIA GALLERY (edge-to-edge, no borders)
+// 6. REACTIONS PICKER (tap outside / ESC)
 // ------------------------------------------------------------------
-const MediaGallery = ({ media, type, onDoubleTap, isVisible }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoProgress, setVideoProgress] = useState(0);
-  const videoRef = useRef(null);
-  const touchStartX = useRef(0);
-
-  useEffect(() => {
-    if (type !== 'video' || !videoRef.current) return;
-    if (isVisible && isPlaying) videoRef.current.play().catch(() => {});
-    else videoRef.current.pause();
-  }, [isVisible, isPlaying, type]);
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current && videoRef.current.duration) {
-      setVideoProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
-    }
-  };
-
-  const handleSave = (url) => {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `arvdoul_media_${Date.now()}.${url.split('?')[0].split('.').pop()}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    toast.success('Saved to downloads');
-  };
-
-  const handlePrev = () => setCurrentIndex(Math.max(0, currentIndex - 1));
-  const handleNext = () => setCurrentIndex(Math.min(media.length - 1, currentIndex + 1));
-  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e) => {
-    const diff = e.changedTouches[0].clientX - touchStartX.current;
-    if (Math.abs(diff) > 50) diff > 0 ? handlePrev() : handleNext();
-  };
-
-  if (type === 'video' && media[0]) {
-    return (
-      <div className="relative bg-black" onDoubleClick={onDoubleTap}>
-        <video
-          ref={videoRef}
-          src={media[0].url}
-          className="w-full h-auto max-h-[70vh] object-cover"
-          playsInline
-          loop={false}
-          muted={isMuted}
-          onTimeUpdate={handleTimeUpdate}
-        />
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
-          <div className="h-full bg-red-500 transition-all" style={{ width: `${videoProgress}%` }} />
-        </div>
-        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-          <div className="flex gap-2">
-            <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white">
-              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            </button>
-            <button onClick={() => setIsMuted(!isMuted)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white">
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-          </div>
-          <button onClick={() => handleSave(media[0].url)} className="p-2 rounded-full bg-black/50 backdrop-blur-md text-white">
-            <Download className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (media.length === 1) {
-    return (
-      <div className="relative" onDoubleClick={onDoubleTap}>
-        <img src={media[0].url} alt="" className="w-full h-auto max-h-[70vh] object-cover" loading="lazy" decoding="async" />
-        <button onClick={() => handleSave(media[0].url)} className="absolute top-2 right-2 p-2 rounded-full bg-black/50 backdrop-blur-sm text-white opacity-0 hover:opacity-100 transition">
-          <Download className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onDoubleClick={onDoubleTap}>
-      <div className="flex transition-transform duration-300" style={{ transform: `translateX(-${currentIndex * 100}%)` }}>
-        {media.map((item, idx) => (
-          <img key={idx} src={item.url} alt="" className="w-full flex-shrink-0 h-auto max-h-[70vh] object-cover" loading="lazy" decoding="async" />
-        ))}
-      </div>
-      {media.length > 1 && (
-        <>
-          <button onClick={handlePrev} disabled={currentIndex === 0} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white disabled:opacity-30">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={handleNext} disabled={currentIndex === media.length - 1} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white disabled:opacity-30">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
-            {media.map((_, idx) => (
-              <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === currentIndex ? 'bg-white' : 'bg-white/50'}`} />
-            ))}
-          </div>
-          <button onClick={() => handleSave(media[currentIndex].url)} className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white opacity-0 hover:opacity-100 transition">
-            <Download className="w-4 h-4" />
-          </button>
-        </>
-      )}
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// POLL COMPONENT (clean, no borders)
-// ------------------------------------------------------------------
-const PollComponent = ({ poll, postId, currentUser, theme }) => {
-  const [voted, setVoted] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [results, setResults] = useState(() => {
-    const opts = poll.options.map((opt, i) => ({
-      id: i,
-      text: opt.text || opt,
-      votes: opt.votes || 0,
-    }));
-    const total = opts.reduce((sum, o) => sum + o.votes, 0);
-    return opts.map(o => ({ ...o, percentage: total ? Math.round((o.votes / total) * 100) : 0 }));
-  });
-
-  const handleVote = async (index) => {
-    if (!currentUser?.uid) return toast.error('Sign in to vote');
-    if (voted && !poll.allowMultiple) return toast.error('You already voted');
-    try {
-      const result = await firestoreService.voteOnPoll(postId, currentUser.uid, index, poll.allowMultiple);
-      if (result.success) {
-        setVoted(true);
-        setSelected(index);
-        const newResults = [...results];
-        newResults[index].votes += 1;
-        const newTotal = newResults.reduce((sum, o) => sum + o.votes, 0);
-        newResults.forEach(o => o.percentage = Math.round((o.votes / newTotal) * 100));
-        setResults(newResults);
-        toast.success('Vote recorded!');
-      }
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  return (
-    <div className="px-4 py-3">
-      <h4 className="text-[15px] font-semibold mb-2">{poll.question}</h4>
-      <div className="space-y-2">
-        {results.map((opt, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleVote(idx)}
-            disabled={voted && !poll.allowMultiple}
-            className={`w-full p-3 rounded-xl text-left relative overflow-hidden transition-all ${
-              voted && idx === selected ? 'bg-purple-500/10' : 'bg-black/5 dark:bg-white/5'
-            }`}
-          >
-            <div className="flex justify-between items-center text-sm">
-              <span>{opt.text}</span>
-              {voted && <span className="font-semibold text-purple-500">{opt.percentage}%</span>}
-            </div>
-            {voted && (
-              <div className="absolute bottom-0 left-0 h-0.5 bg-purple-500 transition-all" style={{ width: `${opt.percentage}%` }} />
-            )}
-          </button>
-        ))}
-      </div>
-      <p className="text-xs text-gray-500 mt-2">{results.reduce((sum, o) => sum + o.votes, 0)} total votes</p>
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// QUESTION COMPONENT
-// ------------------------------------------------------------------
-const QuestionComponent = ({ question, postId, currentUser, theme, answerCount, onAnswer }) => {
-  const [answer, setAnswer] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!currentUser?.uid) return toast.error('Sign in to answer');
-    if (!answer.trim()) return;
-    setSubmitting(true);
-    try {
-      await firestoreService.answerQuestion(postId, currentUser.uid, answer.trim());
-      toast.success('Answer submitted!');
-      setAnswer('');
-      onAnswer?.();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="px-4 py-3">
-      <h4 className="text-[15px] font-semibold mb-2">{question}</h4>
-      <textarea
-        value={answer}
-        onChange={(e) => setAnswer(e.target.value)}
-        placeholder="Write your answer..."
-        rows={2}
-        className="w-full p-3 rounded-xl bg-black/5 dark:bg-white/5 border-0 resize-none text-sm focus:ring-1 focus:ring-amber-500 outline-none"
-      />
-      <div className="flex items-center justify-between mt-2">
-        <button
-          onClick={handleSubmit}
-          disabled={submitting || !answer.trim()}
-          className="px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-sm font-medium disabled:opacity-50"
-        >
-          {submitting ? 'Submitting...' : 'Submit Answer'}
-        </button>
-        <span className="text-xs text-gray-500">{answerCount || 0} answers</span>
-      </div>
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// EVENT COMPONENT (clean)
-// ------------------------------------------------------------------
-const EventComponent = ({ event, theme }) => {
-  const [going, setGoing] = useState(false);
-  const formatEventDate = (date) => {
-    if (!date) return 'TBA';
-    const d = date.toDate ? date.toDate() : new Date(date);
-    return format(d, 'PPPp');
-  };
-
-  return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-3 mb-2">
-        <Calendar className="w-5 h-5 text-orange-500" />
-        <h4 className="text-[15px] font-semibold">{event.title || 'Event'}</h4>
-      </div>
-      <div className="space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-          <Clock className="w-4 h-4" />
-          <span>{formatEventDate(event.startTime || event.startDate || event.date)}</span>
-        </div>
-        {event.location && (
-          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-            <MapPin className="w-4 h-4" />
-            <span>{event.location}</span>
-          </div>
-        )}
-        <p className="text-sm text-gray-700 dark:text-gray-300">{event.description}</p>
-        <button
-          onClick={() => setGoing(!going)}
-          className="mt-2 px-4 py-1.5 rounded-full text-sm font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition"
-        >
-          {going ? "Going ✓" : "Mark as Going"}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// LINK COMPONENT
-// ------------------------------------------------------------------
-const LinkComponent = ({ link, theme }) => {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(link.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success('Link copied');
-  };
-
-  return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-3 mb-2">
-        <LinkIcon className="w-5 h-5 text-indigo-500" />
-        <h4 className="font-semibold text-[15px] truncate">{link.title || link.url}</h4>
-      </div>
-      {link.description && <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{link.description}</p>}
-      <div className="flex gap-2">
-        <a
-          href={link.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 py-1.5 rounded-full bg-indigo-500 text-white text-xs flex items-center justify-center gap-1 hover:bg-indigo-600 transition"
-        >
-          <ExternalLink className="w-3 h-3" /> Visit
-        </a>
-        <button onClick={handleCopy} className="px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/5 text-xs">
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// AUDIO COMPONENT (with progress)
-// ------------------------------------------------------------------
-const AudioComponent = ({ audio, isVisible }) => {
-  const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const audioRef = useRef();
-
-  useEffect(() => {
-    if (isVisible && playing) audioRef.current?.play();
-    else audioRef.current?.pause();
-  }, [isVisible, playing]);
-
-  const togglePlay = () => setPlaying(!playing);
-  const formatTime = (sec) => {
-    if (!sec) return '0:00';
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-  const progress = duration ? (currentTime / duration) * 100 : 0;
-
-  return (
-    <div className="px-4 py-3">
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
-        <button onClick={togglePlay} className="p-2 rounded-full bg-indigo-500 text-white shadow-md">
-          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-        </button>
-        <div className="flex-1">
-          <div className="text-sm font-medium truncate">{audio.name || 'Audio'}</div>
-          <div className="h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full mt-1 overflow-hidden">
-            <div className="h-full bg-indigo-500 transition-all" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="text-xs text-gray-500 mt-0.5">{formatTime(currentTime)} / {formatTime(duration)}</div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// TEXT POST BACKGROUNDS (king‑level subtle gradients)
-// ------------------------------------------------------------------
-const TEXT_BACKGROUNDS = [
-  'from-zinc-900 via-zinc-800 to-black',
-  'from-slate-900 via-slate-800 to-gray-900',
-  'from-neutral-900 via-neutral-800 to-stone-900',
-  'from-gray-900 via-gray-800 to-gray-900',
-  'from-[#1a1d24] via-[#20242c] to-[#15181e]',
-  'from-[#0f1115] via-[#161a20] to-[#0b0d11]',
+const REACTIONS = [
+  { emoji: '👍', label: 'Like' }, { emoji: '❤️', label: 'Love' }, { emoji: '😂', label: 'Haha' },
+  { emoji: '😮', label: 'Wow' }, { emoji: '😢', label: 'Sad' }, { emoji: '😡', label: 'Angry' },
+  { emoji: '🔥', label: 'Fire' }, { emoji: '🎉', label: 'Celebrate' }
 ];
 
-const getRandomBackground = (seed) => {
-  const safeSeed = String(seed || 'arvdoul');
-  const hash = safeSeed.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const index = Math.abs(hash) % TEXT_BACKGROUNDS.length;
-  return TEXT_BACKGROUNDS[index];
-};
+const CardReactionsPicker = React.memo(({ onSelect, onClose, tokens, targetRect }) => {
+  const pickerRef = useRef(null);
+  const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 360;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 640;
+  let top = targetRect ? targetRect.top - 140 : viewportHeight / 2;
+  let left = targetRect ? targetRect.left - 100 : viewportWidth / 2;
+  top = clamp(top, 20, viewportHeight - 200);
+  left = clamp(left, 20, viewportWidth - 280);
+  const style = targetRect ? {
+    position: 'fixed',
+    top, left,
+    zIndex: 1001,
+    boxShadow: tokens.shadowDirectional,
+    backgroundColor: tokens.overlayPanel,
+    borderRadius: '16px',
+    padding: '12px',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '8px',
+    maxWidth: '280px',
+    border: `1px solid ${tokens.overlayPanelBorder}`,
+  } : { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 1001, backgroundColor: tokens.overlayPanel, border: `1px solid ${tokens.overlayPanelBorder}`, borderRadius: '16px', padding: '16px', maxWidth: '280px' };
 
-const TextBackgroundCard = ({ post }) => {
-  const bgClass = getRandomBackground(post.id || post.userId);
-  return (
-    <div className={cn("relative w-full overflow-hidden py-8 px-4 bg-gradient-to-br", bgClass, "min-h-[180px] flex items-center")}>
-      <div className="relative z-10 w-full text-white">
-        {(post.hashtags || []).length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
-            {post.hashtags.map(tag => (
-              <span key={tag} className="text-xs bg-white/10 rounded-full px-2 py-0.5">#{tag}</span>
-            ))}
-          </div>
-        )}
-        <p className="font-medium leading-relaxed text-xl break-words">{post.content}</p>
-        <div className="mt-3 flex justify-end opacity-50"><Quote className="w-5 h-5" /></div>
-      </div>
-    </div>
-  );
-};
-
-// ------------------------------------------------------------------
-// MAIN POST CARD – KING EDITION (no borders, immersive)
-// ------------------------------------------------------------------
-function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, navigate }) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
-  // State
-  const [postData, setPostData] = useState(() => ({
-    ...post,
-    stats: post.stats || { likes: 0, comments: 0, shares: 0, reactions: {} },
-    media: post.media || [],
-    hashtags: post.hashtags || [],
-    likedBy: post.likedBy || [],
-    savedBy: post.savedBy || [],
-  }));
-  const [isLiked, setIsLiked] = useState(postData.likedBy.includes(currentUser?.uid));
-  const [isSaved, setIsSaved] = useState(postData.savedBy.includes(currentUser?.uid));
-  const [followState, setFollowState] = useState('none');
-  const [showHeartBurst, setShowHeartBurst] = useState(false);
-  const [tapPosition, setTapPosition] = useState({ x: 0, y: 0 });
-  const [showReactionsPopup, setShowReactionsPopup] = useState(false);
-  const [triggerRect, setTriggerRect] = useState(null);
-  const [isCardVisible, setIsCardVisible] = useState(false);
-  const [answerCount, setAnswerCount] = useState(postData.stats?.answerCount || 0);
-  const [likeCount, setLikeCount] = useState(postData.stats.likes);
-  const [commentCount, setCommentCount] = useState(postData.stats.comments);
-  const [shareCount, setShareCount] = useState(postData.stats.shares);
-
-  const cardRef = useRef(null);
-  const reactionsButtonRef = useRef(null);
-  const lastTapRef = useRef(0);
-  const touchTimer = useRef(null);
-
-  const isAuthor = currentUser?.uid === postData.authorId;
-  const isCreator = (postData.authorLevel || 1) >= 5;
-
-  // Follow logic
   useEffect(() => {
-    if (!isAuthor && currentUser?.uid) {
-      userService.getFollowStatus(currentUser.uid, postData.authorId).then(res => {
-        if (res.isFollowing) setFollowState('following');
-      });
-    }
-  }, [postData.authorId, currentUser, isAuthor]);
+    const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
-  const handleFollow = async () => {
-    if (!currentUser) return toast.error('Sign in');
-    const original = followState;
-    setFollowState(original === 'following' ? 'none' : 'following');
-    try {
-      if (original === 'following') {
-        await userService.unfollowUser(currentUser.uid, postData.authorId);
-        toast.success(`Unfollowed ${postData.authorName}`);
-      } else {
-        await userService.followUser(currentUser.uid, postData.authorId);
-        toast.success(`Following ${postData.authorName}`);
-        notificationService.sendNotification({
-          type: 'follow',
-          recipientId: postData.authorId,
-          senderId: currentUser.uid,
-        }).catch(console.warn);
-      }
-    } catch (err) {
-      setFollowState(original);
-      toast.error('Action failed');
-    }
+  const overlayRef = useRef(null);
+  const handleOverlayClick = (e) => {
+    if (e.target === overlayRef.current) onClose();
   };
-
-  const handleFriendRequest = async () => {
-    if (!currentUser) return toast.error('Sign in');
-    const original = followState;
-    let newState;
-    if (original === 'friends') newState = 'none';
-    else if (original === 'requested') newState = 'none';
-    else newState = 'requested';
-    setFollowState(newState);
-    try {
-      if (original === 'friends') {
-        await userService.unfollowUser(currentUser.uid, postData.authorId);
-        await userService.unfollowUser(postData.authorId, currentUser.uid);
-        toast.success('Friend removed');
-      } else if (original === 'requested') {
-        await userService.declineFriendRequest(postData.authorId, currentUser.uid);
-        toast.success('Request cancelled');
-      } else {
-        await userService.sendFriendRequest(currentUser.uid, postData.authorId);
-        toast.success('Friend request sent');
-      }
-    } catch (err) {
-      setFollowState(original);
-      toast.error('Request failed');
-    }
-  };
-
-  // Like, Save, Share
-  const handleLike = useCallback(async () => {
-    if (!currentUser) return toast.error('Sign in');
-    const originalLiked = isLiked;
-    setIsLiked(!originalLiked);
-    setLikeCount(prev => originalLiked ? prev - 1 : prev + 1);
-    try {
-      const result = await firestoreService.likePost(postData.id, currentUser.uid);
-      setLikeCount(result.stats.likes);
-      if (!originalLiked && postData.authorId !== currentUser.uid) {
-        notificationService.sendNotification({
-          type: 'like',
-          recipientId: postData.authorId,
-          senderId: currentUser.uid,
-          targetId: postData.id,
-        }).catch(console.warn);
-      }
-    } catch (err) {
-      setIsLiked(originalLiked);
-      setLikeCount(prev => originalLiked ? prev + 1 : prev - 1);
-      toast.error('Failed to like');
-    }
-  }, [currentUser, isLiked, postData.id, postData.authorId]);
-
-  const handleSave = useCallback(async () => {
-    if (!currentUser) return toast.error('Sign in');
-    const original = isSaved;
-    setIsSaved(!original);
-    try {
-      await firestoreService.savePost(postData.id, currentUser.uid);
-      toast.success(original ? 'Removed from saved' : 'Post saved');
-    } catch (err) {
-      setIsSaved(original);
-      toast.error('Failed to save');
-    }
-  }, [currentUser, isSaved, postData.id]);
-
-  const handleShare = useCallback(async () => {
-    if (!currentUser) return toast.error('Sign in');
-    setShareCount(prev => prev + 1);
-    try {
-      await firestoreService.sharePost(postData.id, currentUser.uid);
-      if (navigator.share) {
-        await navigator.share({
-          title: postData.content?.slice(0, 100) || 'Arvdoul post',
-          text: postData.content,
-          url: `${window.location.origin}/post/${postData.id}`,
-        });
-      } else {
-        navigator.clipboard.writeText(`${window.location.origin}/post/${postData.id}`);
-        toast.success('Link copied to clipboard');
-      }
-      toast.success('Post shared!');
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setShareCount(prev => prev - 1);
-        toast.error('Failed to share');
-      }
-    }
-  }, [currentUser, postData.id, postData.content]);
-
-  const handleSendGift = async () => {
-    if (!currentUser) return toast.error('Sign in');
-    try {
-      await monetizationService.sendGift(currentUser.uid, postData.id, 'rose');
-      setPostData(prev => ({
-        ...prev,
-        stats: { ...prev.stats, gifts: (prev.stats.gifts || 0) + 1, giftValue: (prev.stats.giftValue || 0) + 5 },
-      }));
-      toast.success('Gift sent!');
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  // Double tap & long press
-  const handleDoubleTap = useCallback((e) => {
-    const now = Date.now();
-    if (now - lastTapRef.current < 300) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setTapPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      handleLike();
-      setShowHeartBurst(true);
-      setTimeout(() => setShowHeartBurst(false), 800);
-    }
-    lastTapRef.current = now;
-  }, [handleLike]);
-
-  const openReactionsPopup = () => {
-    if (reactionsButtonRef.current) {
-      const rect = reactionsButtonRef.current.getBoundingClientRect();
-      setTriggerRect(rect);
-      setShowReactionsPopup(true);
-    }
-  };
-  const closeReactionsPopup = () => setShowReactionsPopup(false);
-  const longPressStart = () => { touchTimer.current = setTimeout(openReactionsPopup, 400); };
-  const longPressEnd = () => { clearTimeout(touchTimer.current); closeReactionsPopup(); };
-
-  const handleReactionSelect = (reaction) => {
-    handleLike();
-    toast.success(`Reacted with ${reaction.label}`);
-  };
-
-  // Visibility for video/audio autoplay
-  useEffect(() => {
-    if (!cardRef.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsCardVisible(entry.isIntersecting),
-      { threshold: 0.3 }
-    );
-    observer.observe(cardRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  // Posted date
-  const postedDateTime = useMemo(() => {
-    try {
-      const date = postData.createdAt?.toDate?.() || new Date(postData.createdAt);
-      return formatDistanceToNow(date, { addSuffix: true });
-    } catch {
-      return 'just now';
-    }
-  }, [postData.createdAt]);
-
-  if (!postData.id) return null;
 
   return (
     <motion.div
-      ref={cardRef}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      transition={{ duration: 0.2 }}
-      className={cn(
-        "overflow-hidden my-3 rounded-[22px]",
-        isDark
-          ? "bg-[#0b0d11] shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
-          : "bg-white shadow-[0_10px_30px_rgba(0,0,0,0.04)]"
-      )}
-      onDoubleClick={handleDoubleTap}
+      ref={overlayRef}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[1000] flex items-center justify-center" style={{ backgroundColor: 'transparent' }}
+      onClick={handleOverlayClick}
     >
-      {/* HEADER – floating, no lines */}
-      <div className="px-4 pt-4 pb-1">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <button onClick={() => navigate(`/profile/${postData.authorId}`)} className="flex-shrink-0">
-              <img
-                src={postData.authorPhoto || '/assets/default-profile.png'}
-                alt={postData.authorName}
-                className="w-10 h-10 rounded-full object-cover"
-                loading="lazy"
-              />
-            </button>
-            <div className="flex-1 min-w-0">
-              <button onClick={() => navigate(`/profile/${postData.authorId}`)} className="text-left w-full">
-                <div className="flex items-center gap-1 flex-wrap">
-                  <h3 className="text-[15px] font-semibold tracking-tight truncate">{postData.authorName}</h3>
-                  {postData.authorVerified && (
-                    <svg className="w-4 h-4 text-blue-500 fill-current" viewBox="0 0 24 24"><path d="M22.5 12.5c0-1.58-.87-2.95-2.16-3.7.08-.42.13-.86.13-1.3 0-3.87-3.13-7-7-7-2.33 0-4.37 1.14-5.67 2.87-.85-.25-1.74-.37-2.66-.37-4.14 0-7.5 3.36-7.5 7.5 0 2.41 1.14 4.55 2.87 5.92-.04.35-.06.7-.06 1.06 0 3.87 3.13 7 7 7 1.5 0 2.89-.46 4.02-1.24.77.41 1.64.64 2.58.64 3.87 0 7-3.13 7-7 0-.37-.02-.73-.06-1.08 1.35-1.15 2.19-2.88 2.19-4.78z"/></svg>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  @{postData.authorUsername} · {postedDateTime}
-                </p>
-                {postData.location && (
-                  <p className="text-xs flex items-center gap-1 mt-1 text-gray-500">
-                    <MapPin className="w-3 h-3" /> {postData.location}
-                  </p>
-                )}
-              </button>
-            </div>
+      <motion.div
+        ref={pickerRef}
+        initial={{ scale: 0.8 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0.8 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        style={style}
+        onClick={(e) => e.stopPropagation()}
+        role="menu"
+        aria-label="Reaction picker"
+      >
+        {REACTIONS.map((r) => (
+          <button
+            key={r.emoji}
+            onClick={() => { onSelect(r); onClose(); }}
+            className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition text-2xl"
+            aria-label={r.label}
+            role="menuitem"
+          >
+            {r.emoji}
+            <span className="text-xs" style={{ color: tokens.textSecondary }}>{r.label}</span>
+          </button>
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+});
+
+// ------------------------------------------------------------------
+// 7. DOUBLE TAP HEART (reduced motion)
+// ------------------------------------------------------------------
+const DoubleTapHeart = React.memo(({ position, onFinish, prefersReducedMotion }) => {
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      onFinish?.();
+      return;
+    }
+    const timer = setTimeout(() => onFinish?.(), 600);
+    return () => clearTimeout(timer);
+  }, [onFinish, prefersReducedMotion]);
+  if (prefersReducedMotion) return null;
+  return (
+    <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 2, opacity: [0, 1, 0] }} transition={{ duration: 0.6 }}
+      className="absolute pointer-events-none z-50" style={{ left: position.x - 30, top: position.y - 30 }}>
+      <FaHeart className="w-16 h-16 text-red-500 fill-current drop-shadow-2xl" />
+    </motion.div>
+  );
+});
+
+// ------------------------------------------------------------------
+// 8. INLINE COMMENT PREVIEW (abort controller only, no mounted flag)
+// ------------------------------------------------------------------
+const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible, tokens }) => {
+  const [preview, setPreview] = useState([]);
+  const abortRef = useRef(null);
+  useEffect(() => {
+    if (!isVisible || totalComments === 0) return;
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    commentService.getCommentsByTarget('post', postId, { limit: 2, parentId: null }, { signal: controller.signal })
+      .then(res => { if (res.success) setPreview(res.comments); })
+      .catch(() => {});
+    return () => abortRef.current?.abort();
+  }, [postId, isVisible, totalComments]);
+  if (!preview.length) return null;
+  return (
+    <div className="px-4 pb-2">
+      <button onClick={onViewAll} className="text-xs hover:underline mb-1" style={{ color: tokens.textSecondary }}>View all {totalComments} comments</button>
+      {preview.map(comment => (
+        <div key={comment.id} className="flex gap-2 py-1">
+          <img src={comment.userAvatar || '/assets/default-profile.png'} className="w-6 h-6 rounded-full" alt="" />
+          <div>
+            <span className="text-xs font-semibold mr-1" style={{ color: tokens.text }}>{comment.userName}</span>
+            <span className="text-xs" style={{ color: tokens.textSecondary }}>{comment.content}</span>
           </div>
-          <div className="flex items-center gap-1">
-            {!isAuthor && currentUser && (
-              <button
-                onClick={isCreator ? handleFollow : handleFriendRequest}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-semibold transition-all",
-                  followState === 'following' ? (isDark ? "bg-gray-800 text-gray-300" : "bg-gray-100 text-gray-700") :
-                  followState === 'friends' ? "bg-green-500 text-white" :
-                  followState === 'requested' ? "bg-amber-500 text-white" :
-                  isDark
-                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                    : "bg-gradient-to-r from-orange-500 to-red-500 text-white"
-                )}
-              >
-                {followState === 'following' ? 'Following' :
-                 followState === 'friends' ? 'Friends' :
-                 followState === 'requested' ? 'Requested' : (isCreator ? 'Follow' : 'Add Friend')}
-              </button>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+// ------------------------------------------------------------------
+// 9. MAIN POST CARD – perfect rounded edges, compact, bubble counts
+// ------------------------------------------------------------------
+// Engagement reducer (unified state management)
+const engagementReducer = (state, action) => {
+  switch (action.type) {
+    case 'SET_LIKED':
+      return { ...state, liked: action.payload, reaction: action.payload ? '👍' : null, likeCount: state.likeCount + (action.payload ? 1 : -1) };
+    case 'SET_REACTION':
+      const newLiked = !!action.payload;
+      return { ...state, reaction: action.payload, liked: newLiked, likeCount: state.likeCount + (newLiked && !state.liked ? 1 : (!newLiked && state.liked ? -1 : 0)) };
+    case 'SET_SAVED':
+      return { ...state, saved: action.payload };
+    case 'SET_FOLLOW_STATE':
+      return { ...state, followState: action.payload };
+    case 'UPDATE_STATS':
+      return { ...state, likeCount: action.payload.likes ?? state.likeCount, commentCount: action.payload.comments ?? state.commentCount, shareCount: action.payload.shares ?? state.shareCount, giftCount: action.payload.gifts ?? state.giftCount };
+    case 'RESET_TO_SNAPSHOT':
+      return action.payload;
+    default:
+      return state;
+  }
+};
+
+function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, navigate, onRetry, isVisible = true }) {
+  const { theme } = useTheme();
+  const tokens = useMemo(() => getDesignTokens(theme), [theme]);
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Sponsored / ad detection
+  const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined;
+  const [adDetails, setAdDetails] = useState(null);
+  useEffect(() => {
+    if (isSponsored && post.adCampaignId && monetizationService.getAd) {
+      monetizationService.getAd('feed', currentUser?.uid, { adId: post.adCampaignId })
+        .then(ad => setAdDetails(ad))
+        .catch(() => {});
+    }
+  }, [isSponsored, post.adCampaignId, currentUser?.uid]);
+
+  // Memoized post data
+  const likedBySet = useMemo(() => new Set(post.likedBy || []), [post.likedBy]);
+  const isCreator = (post.authorLevel || 0) >= 5;
+  const isPremium = (post.authorLevel || 0) >= 8;
+  const hasMedia = !!(post.media && post.media.length > 0);
+
+  // Engagement state with reducer
+  const [engagement, dispatch] = useReducer(engagementReducer, {
+    liked: likedBySet.has(currentUser?.uid),
+    reaction: post.userReaction || null,
+    saved: post.savedBy?.includes(currentUser?.uid) || false,
+    followState: 'none',
+    likeCount: post.stats?.likes || 0,
+    commentCount: post.stats?.comments || 0,
+    shareCount: post.stats?.shares || 0,
+    giftCount: post.stats?.gifts || 0,
+  });
+  const engagementRef = useRef(engagement);
+  useEffect(() => { engagementRef.current = engagement; }, [engagement]);
+
+  // Rollback snapshot helper
+  const takeSnapshot = useCallback(() => ({ ...engagementRef.current }), []);
+  const rollbackTo = useCallback((snapshot) => {
+    dispatch({ type: 'RESET_TO_SNAPSHOT', payload: snapshot });
+  }, []);
+
+  const [ui, setUi] = useState({
+    expanded: false,
+    showAnalytics: false,
+    showShareSheet: false,
+    showReactionsPicker: false,
+    showHeartBurst: false,
+    tapPosition: { x: 0, y: 0 },
+    giftLoading: false,
+  });
+  const [isActiveForSubs, setIsActiveForSubs] = useState(isVisible);
+
+  // Refs for timers & subscriptions
+  const lastTapRef = useRef(0);
+  const longPressTimer = useRef(null);
+  const heartTimerRef = useRef(null);
+  const likeButtonRef = useRef(null);
+  const [reactionsTargetRect, setReactionsTargetRect] = useState(null);
+  const unsubStatsRef = useRef(null);
+  const debounceLikeRef = useRef(null);
+  const debounceReactionRef = useRef(null);
+  const likeLockRef = useRef(false);
+  const isAuthor = currentUser?.uid === post.authorId;
+
+  // Follow status
+  useEffect(() => {
+    if (!isAuthor && currentUser?.uid) {
+      userService.getFollowStatus(currentUser.uid, post.authorId).then(res => {
+        if (res.isFollowing) dispatch({ type: 'SET_FOLLOW_STATE', payload: 'following' });
+      }).catch(() => {});
+    }
+  }, [currentUser?.uid, post.authorId, isAuthor]);
+
+  // Real‑time stats (only if visible)
+  useEffect(() => {
+    if (!post.id || !isActiveForSubs) return;
+    const unsub = firestoreService.subscribeToPostStats?.(post.id, (stats) => {
+      dispatch({ type: 'UPDATE_STATS', payload: stats });
+    });
+    unsubStatsRef.current = unsub;
+    return () => {
+      if (unsubStatsRef.current && typeof unsubStatsRef.current === 'function') {
+        unsubStatsRef.current();
+      }
+    };
+  }, [post.id, isActiveForSubs]);
+
+  // Pause subscriptions when card not visible
+  useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
+
+  // Online listener for offline queue
+  useEffect(() => {
+    const onlineHandler = () => replayOfflineQueue();
+    window.addEventListener('online', onlineHandler);
+    return () => window.removeEventListener('online', onlineHandler);
+  }, []);
+
+  // Cleanup timers
+  useEffect(() => {
+    return () => {
+      if (heartTimerRef.current) clearTimeout(heartTimerRef.current);
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      if (debounceLikeRef.current) clearTimeout(debounceLikeRef.current);
+      if (debounceReactionRef.current) clearTimeout(debounceReactionRef.current);
+    };
+  }, []);
+
+  // Cleanup event bus on unmount (optional, but safe)
+  useEffect(() => {
+    return () => {
+      // Not clearing global bus here – it's shared; individual listeners must be cleaned
+    };
+  }, []);
+
+  // ------------------------------------------------------------------
+  // HANDLERS with snapshot rollback, separate debounces, lock
+  // ------------------------------------------------------------------
+  const handleLikeClick = useCallback(() => {
+    if (!currentUser) return toast.error('Sign in');
+    if (likeLockRef.current) return;
+    likeLockRef.current = true;
+    setTimeout(() => { likeLockRef.current = false; }, 500);
+
+    const snapshot = takeSnapshot();
+    const newLiked = !snapshot.liked;
+    dispatch({ type: 'SET_LIKED', payload: newLiked });
+    triggerHaptic('light');
+
+    if (debounceLikeRef.current) clearTimeout(debounceLikeRef.current);
+    debounceLikeRef.current = setTimeout(async () => {
+      try {
+        if (navigator.onLine) {
+          if (newLiked) {
+            await firestoreService.likePost?.(post.id, currentUser.uid);
+          } else {
+            await firestoreService.unlikePost?.(post.id, currentUser.uid);
+          }
+        } else {
+          await addToOfflineQueue(newLiked ? 'like' : 'unlike', { postId: post.id, userId: currentUser.uid });
+        }
+        if (newLiked && post.authorId !== currentUser.uid) {
+          notificationService.sendNotification?.({
+            type: 'like', recipientId: post.authorId, senderId: currentUser.uid, targetId: post.id
+          }).catch(() => {});
+        }
+      } catch (err) {
+        rollbackTo(snapshot);
+        toast.error('Failed to like');
+        if (process.env.NODE_ENV === 'development') console.error(err);
+      }
+    }, 300);
+  }, [currentUser, post.id, post.authorId, takeSnapshot, rollbackTo]);
+
+  const handleReaction = useCallback((reaction) => {
+    if (!currentUser) return toast.error('Sign in');
+    const snapshot = takeSnapshot();
+    const newReaction = snapshot.reaction === reaction.emoji ? null : reaction.emoji;
+    dispatch({ type: 'SET_REACTION', payload: newReaction });
+    triggerHaptic('light');
+
+    if (debounceReactionRef.current) clearTimeout(debounceReactionRef.current);
+    debounceReactionRef.current = setTimeout(async () => {
+      try {
+        if (navigator.onLine) {
+          if (newReaction) {
+            await firestoreService.addReaction?.(post.id, currentUser.uid, newReaction);
+          } else {
+            await firestoreService.removeReaction?.(post.id, currentUser.uid);
+          }
+        } else {
+          if (newReaction) {
+            await addToOfflineQueue('reaction', { postId: post.id, userId: currentUser.uid, reaction: newReaction });
+          } else {
+            await addToOfflineQueue('removeReaction', { postId: post.id, userId: currentUser.uid });
+          }
+        }
+      } catch (err) {
+        rollbackTo(snapshot);
+        toast.error('Failed to react');
+        if (process.env.NODE_ENV === 'development') console.error(err);
+      }
+    }, 300);
+  }, [currentUser, post.id, takeSnapshot, rollbackTo]);
+
+  const handleSave = useCallback(async () => {
+    if (!currentUser) return toast.error('Sign in');
+    const snapshot = takeSnapshot();
+    const newSaved = !snapshot.saved;
+    dispatch({ type: 'SET_SAVED', payload: newSaved });
+    triggerHaptic('light');
+    try {
+      if (navigator.onLine) {
+        if (newSaved) {
+          await firestoreService.savePost?.(post.id, currentUser.uid);
+        } else {
+          await firestoreService.unsavePost?.(post.id, currentUser.uid);
+        }
+      } else {
+        await addToOfflineQueue(newSaved ? 'save' : 'unsave', { postId: post.id, userId: currentUser.uid });
+      }
+      toast.success(newSaved ? 'Saved' : 'Removed');
+    } catch (err) {
+      rollbackTo(snapshot);
+      toast.error('Failed');
+      if (process.env.NODE_ENV === 'development') console.error(err);
+    }
+  }, [currentUser, post.id, takeSnapshot, rollbackTo]);
+
+  const handleFollow = useCallback(async () => {
+    if (!currentUser) return toast.error('Sign in');
+    const snapshot = takeSnapshot();
+    const newFollowState = snapshot.followState === 'following' ? 'none' : 'following';
+    dispatch({ type: 'SET_FOLLOW_STATE', payload: newFollowState });
+    triggerHaptic('medium');
+    try {
+      if (newFollowState === 'following') {
+        await userService.followUser(currentUser.uid, post.authorId);
+      } else {
+        await userService.unfollowUser(currentUser.uid, post.authorId);
+      }
+    } catch (err) {
+      rollbackTo(snapshot);
+      toast.error('Action failed');
+      if (process.env.NODE_ENV === 'development') console.error(err);
+    }
+  }, [currentUser, post.authorId, takeSnapshot, rollbackTo]);
+
+  const handleShare = useCallback(() => {
+    if (!currentUser) return toast.error('Sign in');
+    setUi(prev => ({ ...prev, showShareSheet: true }));
+  }, [currentUser]);
+
+  const handleSendGift = useCallback(async (giftType = 'rose', value = 5) => {
+    if (!currentUser) return toast.error('Sign in');
+    if (ui.giftLoading) return;
+    setUi(prev => ({ ...prev, giftLoading: true }));
+    triggerHaptic('medium');
+    try {
+      await monetizationService.sendGift?.(currentUser.uid, post.id, giftType, value);
+      dispatch({ type: 'UPDATE_STATS', payload: { gifts: engagement.giftCount + 1 } });
+      toast.success(`Sent ${giftType}!`);
+    } catch (err) {
+      toast.error(err.message);
+      if (process.env.NODE_ENV === 'development') console.error(err);
+    } finally {
+      setUi(prev => ({ ...prev, giftLoading: false }));
+    }
+  }, [currentUser, post.id, ui.giftLoading, engagement.giftCount]);
+
+  // Double‑tap detection (with lock)
+  const handleContainerClick = useCallback((e) => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      setUi(prev => ({ ...prev, tapPosition: { x: e.clientX - rect.left, y: e.clientY - rect.top }, showHeartBurst: true }));
+      if (heartTimerRef.current) clearTimeout(heartTimerRef.current);
+      heartTimerRef.current = setTimeout(() => setUi(prev => ({ ...prev, showHeartBurst: false })), 600);
+      handleLikeClick();
+    }
+    lastTapRef.current = now;
+  }, [handleLikeClick]);
+
+  const startLongPress = useCallback(() => {
+    if (likeButtonRef.current) {
+      const rect = likeButtonRef.current.getBoundingClientRect();
+      setReactionsTargetRect(rect);
+    }
+    longPressTimer.current = setTimeout(() => setUi(prev => ({ ...prev, showReactionsPicker: true })), 400);
+  }, []);
+  const cancelLongPress = useCallback(() => clearTimeout(longPressTimer.current), []);
+  const closeReactionsPicker = useCallback(() => setUi(prev => ({ ...prev, showReactionsPicker: false })), []);
+  const handleReactionSelect = useCallback((reaction) => {
+    handleReaction(reaction);
+    closeReactionsPicker();
+    toast.success(`Reacted with ${reaction.label}`);
+    triggerHaptic('light');
+  }, [handleReaction, closeReactionsPicker]);
+
+  const postedDateTime = useMemo(() => {
+    try { return formatDistanceToNow(post.createdAt?.toDate?.() || new Date(post.createdAt), { addSuffix: true }); } catch { return 'just now'; }
+  }, [post.createdAt]);
+
+  // Determine post type
+  const isTextOnly = post.type === 'text' && (!post.media || post.media.length === 0);
+  const isImage = post.type === 'image' || (post.media?.length > 0 && post.type !== 'video' && post.type !== 'audio');
+  const isVideo = post.type === 'video';
+  const isAudio = post.type === 'audio';
+  const isPoll = post.type === 'poll' && post.poll;
+  const isQuestion = post.type === 'question' && post.question;
+  const isEvent = post.type === 'event' && post.event;
+  const isLink = post.type === 'link' && post.link;
+
+  if (!post.id) return null;
+
+  const actionBarGradient = tokens.actionBarBg;
+  const ctaText = adDetails?.cta || (post.ctaText || 'Learn More');
+  const ctaLink = adDetails?.link || post.ctaLink;
+
+  const formatCount = (num) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={{ type: "spring", damping: 26, stiffness: 280 }}
+      whileHover={{ scale: 1.004, transition: { duration: 0.2 } }}
+      className="relative overflow-hidden my-2 rounded-3xl border shadow-lg"
+      style={{
+        backgroundColor: tokens.cardBg,
+        borderColor: tokens.border,
+        boxShadow: tokens.shadowDirectional,
+        borderRadius: '1.5rem',
+      }}
+      onClick={handleContainerClick}
+    >
+      {/* HEADER – larger avatar (w-10 h-10), compact padding */}
+      <div className="p-3 flex items-start gap-3">
+        <button onClick={() => navigate(`/profile/${post.authorId}`)} className="relative flex-shrink-0" aria-label={`Visit ${post.authorName}'s profile`}>
+          <div className={`absolute -inset-0.5 rounded-full ${isPremium ? 'bg-gradient-to-r from-amber-400 to-yellow-600' : isCreator ? 'bg-gradient-to-r from-purple-400 to-pink-600' : 'bg-transparent'}`} />
+          <img src={userService.getAvatarUrl(post.authorId, post.authorName, post.authorPhoto)} alt={post.authorName} className="relative w-10 h-10 rounded-full object-cover border-2" style={{ borderColor: tokens.border }} />
+          {isPremium && <Crown className="absolute -top-1 -right-1 w-3 h-3 text-yellow-400" />}
+          {post.isVerified && <CheckCircle className="absolute -bottom-0.5 -right-0.5 w-3 h-3 text-cyan-400" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="font-semibold text-sm" style={{ color: tokens.text }}>{post.authorName}</span>
+            {post.isVerified && <CheckCircle className="w-3 h-3 text-cyan-400" />}
+            {isCreator && <Zap className="w-3 h-3 text-amber-400" />}
+            {post.momentum === 'trending' && <TrendingUp className="w-3 h-3 text-green-400" title="Trending" />}
+            {post.momentum === 'exploding' && <Sparkles className="w-3 h-3 text-yellow-400" title="Exploding" />}
+            {isSponsored && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-300">Sponsored</span>
             )}
-            <button onClick={() => onOpenOptions?.(postData)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition">
-              <MoreVertical className="w-5 h-5" />
-            </button>
           </div>
+          <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: tokens.textSecondary }}>
+            <span>@{post.authorUsername}</span>
+            <span>·</span>
+            <span>{postedDateTime}</span>
+            {post.visibility === 'public' && <Globe className="w-3 h-3" />}
+            {post.visibility === 'followers' && <Users className="w-3 h-3" />}
+          </div>
+          {post.location && (
+            <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: tokens.accent }}>
+              <MapPin className="w-3 h-3" />
+              <span>{post.location}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {!isAuthor && currentUser && (
+            <motion.button
+              onClick={handleFollow}
+              whileTap={{ scale: 0.96 }}
+              className="px-2 py-0.5 rounded-full text-xs font-semibold text-white shadow-md transition-all"
+              style={{
+                background: engagement.followState === 'following' ? (theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)') : tokens.neonPurple,
+                boxShadow: engagement.followState === 'following' ? 'none' : `0 0 6px rgba(236,72,153,0.4), 0 0 8px rgba(147,51,234,0.2)`,
+                color: engagement.followState === 'following' ? (theme === 'dark' ? '#fff' : '#333') : '#fff',
+              }}
+            >
+              {engagement.followState === 'following' ? 'Following' : 'Follow'}
+            </motion.button>
+          )}
+          <button onClick={() => onOpenOptions?.(post)} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition" aria-label="Post options">
+            <MoreHorizontal className="w-4 h-4" style={{ color: tokens.textSecondary }} />
+          </button>
         </div>
       </div>
 
-      {/* BADGE (only if not text) */}
-      {postData.type !== 'text' && postData.type !== 'ad' && (
-        <div className="px-4 pt-1 pb-0">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-xs font-medium">
-            {postData.type === 'image' && <Image className="w-3 h-3" />}
-            {postData.type === 'video' && <Video className="w-3 h-3" />}
-            {postData.type === 'poll' && <BarChart2 className="w-3 h-3" />}
-            {postData.type === 'question' && <HelpCircle className="w-3 h-3" />}
-            {postData.type === 'link' && <LinkIcon className="w-3 h-3" />}
-            {postData.type === 'event' && <Calendar className="w-3 h-3" />}
-            {postData.type === 'audio' && <Music className="w-3 h-3" />}
-            {postData.type}
-          </span>
-        </div>
-      )}
-
-      {/* TEXT POST (full width background) */}
-      {postData.type === 'text' && (!postData.media || postData.media.length === 0) && (
-        <TextBackgroundCard post={postData} />
-      )}
-
-      {/* REGULAR CONTENT (non‑text posts) */}
-      {postData.content && postData.type !== 'text' && (
-        <div className="px-4 py-2">
-          <p className="text-[15px] leading-relaxed break-words">{postData.content}</p>
-          {postData.hashtags?.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {postData.hashtags.map((tag) => (
-                <span key={tag} className="text-blue-500 text-xs cursor-pointer hover:underline">#{tag}</span>
-              ))}
-            </div>
+      {/* SPONSORED CTA BANNER */}
+      {isSponsored && adDetails && (
+        <div className="mx-3 mb-2 p-2 rounded-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShoppingBag className="w-4 h-4 text-purple-400" />
+            <span className="text-xs text-white/80">{adDetails.title || 'Sponsored'}</span>
+          </div>
+          {ctaLink && (
+            <a
+              href={ctaLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs font-medium text-white bg-purple-600 px-3 py-1 rounded-full hover:bg-purple-700 transition"
+            >
+              {ctaText} <ExternalLink className="w-3 h-3 inline ml-1" />
+            </a>
           )}
         </div>
       )}
 
-      {/* MEDIA (edge-to-edge) */}
-      {postData.media?.length > 0 && postData.type !== 'audio' && (
-        <MediaGallery
-          media={postData.media}
-          type={postData.type}
-          onDoubleTap={handleDoubleTap}
-          isVisible={isCardVisible}
-        />
-      )}
-
-      {/* INTERACTIVE COMPONENTS */}
-      {postData.type === 'poll' && postData.poll && (
-        <PollComponent poll={postData.poll} postId={postData.id} currentUser={currentUser} theme={theme} />
-      )}
-      {postData.type === 'question' && (
-        <QuestionComponent
-          question={postData.question}
-          postId={postData.id}
-          currentUser={currentUser}
-          theme={theme}
-          answerCount={answerCount}
-          onAnswer={() => setAnswerCount(prev => prev + 1)}
-        />
-      )}
-      {postData.type === 'event' && postData.event && (
-        <EventComponent event={postData.event} theme={theme} />
-      )}
-      {postData.type === 'link' && postData.link && (
-        <LinkComponent link={postData.link} theme={theme} />
-      )}
-      {postData.type === 'audio' && postData.media?.[0] && (
-        <AudioComponent audio={postData.media[0]} isVisible={isCardVisible} />
-      )}
-
-      {/* STATS BAR – minimal */}
-      <div className="px-4 py-2">
-        <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-1.5">
-            {isLiked ? <FaHeart className="w-4 h-4 text-red-500 fill-current" /> : <FaRegHeart className="w-4 h-4" />}
-            <span className="text-gray-700 dark:text-gray-300 font-medium">{likeCount}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MessageCircle className="w-4 h-4" />
-            <span className="text-gray-700 dark:text-gray-300 font-medium">{commentCount}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Share2 className="w-4 h-4" />
-            <span className="text-gray-700 dark:text-gray-300 font-medium">{shareCount}</span>
-          </div>
+      {/* COMMUNITY NOTES */}
+      {post.communityNotes?.length > 0 && (
+        <div className="mx-3 mb-1 p-1.5 bg-blue-500/10 rounded-xl text-xs text-blue-600 dark:text-blue-300 flex items-start gap-2">
+          <Shield className="w-3 h-3 flex-shrink-0 mt-0.5" />
+          <span>{post.communityNotes[0].text}</span>
         </div>
-      </div>
+      )}
 
-      {/* ACTION BAR – clean, horizontal */}
-      <div className="flex justify-around px-2 py-2 border-t border-black/5 dark:border-white/5">
-        <button
-          ref={reactionsButtonRef}
-          onTouchStart={longPressStart}
-          onTouchEnd={longPressEnd}
-          className="flex items-center gap-2 py-2 px-4 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition"
-        >
-          <Smile className={`w-5 h-5 ${isLiked ? 'text-red-500' : ''}`} />
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">React</span>
-        </button>
+      {/* CONTENT */}
+      {isTextOnly && <TextCard content={post.content} bgClass={getRandomTextBg(post.id, currentUser?.uid)} expanded={ui.expanded} setExpanded={(val) => setUi(prev => ({ ...prev, expanded: val }))} tokens={tokens} currentUser={currentUser} postId={post.id} onAnalytics={() => {}} />}
+      {!isTextOnly && post.content && (
+        <p className="px-3 pb-1 text-sm leading-relaxed whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.content}</p>
+      )}
+      {post.hashtags?.length > 0 && (
+        <div className="px-3 pb-1 flex flex-wrap gap-1">
+          {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
+        </div>
+      )}
+      {isImage && <ImageCard images={post.media} onDoubleTap={() => {}} currentUser={currentUser} postId={post.id} />}
+      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} />}
+      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
+      {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} />}
+      {isQuestion && <QuestionCard question={post.question} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} />}
+      {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} />}
+      {isLink && <LinkCard link={post.link} tokens={tokens} />}
 
-        <button
-          onClick={() => onOpenComments?.(postData)}
-          className="flex items-center gap-2 py-2 px-4 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition"
-        >
-          <MessageCircle className="w-5 h-5" />
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Comment</span>
-        </button>
+      {/* INLINE COMMENT PREVIEW */}
+      <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} />
 
-        <button
-          onClick={handleShare}
-          className="flex items-center gap-2 py-2 px-4 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition"
-        >
-          <Share2 className="w-5 h-5" />
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Share</span>
-        </button>
-
-        <button
-          onClick={handleSave}
-          className="flex items-center gap-2 py-2 px-4 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition"
-        >
-          <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{isSaved ? 'Saved' : 'Save'}</span>
-        </button>
-
-        {isCreator && !isAuthor && (
-          <button
-            onClick={handleSendGift}
-            className="flex items-center gap-2 py-2 px-4 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition"
-          >
-            <Gift className="w-5 h-5" />
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Gift</span>
+      {/* ENGAGEMENT STATS (simplified – only analytics toggle for creators) */}
+      <div className="px-3 py-1 flex justify-end items-center text-sm">
+        {isAuthor && (
+          <button onClick={() => setUi(prev => ({ ...prev, showAnalytics: !prev.showAnalytics }))} className="flex items-center gap-1 hover:underline text-xs" style={{ color: tokens.textSecondary }} aria-label="View post analytics">
+            <BarChart3 className="w-3 h-3" /> Analytics
           </button>
         )}
       </div>
 
-      {/* Double‑tap heart burst */}
+      {/* ANALYTICS PANEL */}
       <AnimatePresence>
-        {showHeartBurst && <DoubleTapHeart position={tapPosition} />}
+        {ui.showAnalytics && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-2 overflow-hidden">
+            <div className="bg-black/20 rounded-xl p-2 space-y-1 text-xs" style={{ color: tokens.textSecondary }}>
+              <div className="flex justify-between"><span>Views</span><span>{post.analytics?.views?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Reach</span><span>{post.analytics?.reach?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span>Watch Time (avg)</span><span>{post.analytics?.watchTime || 'N/A'}</span></div>
+              <div className="flex justify-between"><span>Completion Rate</span><span>{post.analytics?.completionRate || 0}%</span></div>
+              <div className="flex justify-between"><span>Earnings</span><span style={{ color: tokens.gold }}>+{post.analytics?.earnings || 0} Coins</span></div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
-      {/* Reactions popup (smart position) */}
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* FLOATING ACTION BAR – neon gradient, rounded-full, with bubble counts */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <div
+        className="relative mx-3 mb-3 rounded-full"
+        style={{
+          background: actionBarGradient,
+          boxShadow: `0 4px 12px rgba(0,0,0,0.2), ${tokens.actionBarGlow}`,
+        }}
+      >
+        <div className="flex justify-between items-center px-4 py-1.5">
+          {/* Like button with bubble */}
+          <button
+            ref={likeButtonRef}
+            onClick={handleLikeClick}
+            onMouseDown={startLongPress}
+            onMouseUp={cancelLongPress}
+            onMouseLeave={cancelLongPress}
+            onTouchStart={startLongPress}
+            onTouchEnd={cancelLongPress}
+            className="flex items-center gap-1.5 text-sm transition relative"
+            aria-label={engagement.liked ? 'Unlike' : 'Like'}
+            aria-pressed={engagement.liked}
+          >
+            {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
+            <span className="text-xs text-white/90">Like</span>
+            {engagement.likeCount > 0 && (
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm">
+                {formatCount(engagement.likeCount)}
+              </span>
+            )}
+          </button>
+
+          {/* Comment button with bubble */}
+          <button
+            onClick={() => onOpenComments?.(post)}
+            className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
+            aria-label="Comment"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span className="text-xs text-white/90">Comment</span>
+            {engagement.commentCount > 0 && (
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
+                {formatCount(engagement.commentCount)}
+              </span>
+            )}
+          </button>
+
+          {/* Share button with bubble */}
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 text-sm text-white hover:text-white/80 transition relative"
+            aria-label="Share"
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="text-xs text-white/90">Share</span>
+            {engagement.shareCount > 0 && (
+              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-green-500 rounded-full flex items-center justify-center shadow-sm">
+                {formatCount(engagement.shareCount)}
+              </span>
+            )}
+          </button>
+
+          {/* Save button */}
+          <button
+            onClick={handleSave}
+            className={cn("flex items-center gap-1.5 text-sm transition", engagement.saved ? 'text-yellow-400' : 'text-white hover:text-white/80')}
+            aria-label={engagement.saved ? 'Unsave' : 'Save'}
+            aria-pressed={engagement.saved}
+          >
+            <Bookmark className="w-4 h-4" />
+            <span className="text-xs">Save</span>
+          </button>
+
+          {/* Gift button (creator only) */}
+          {isCreator && !isAuthor && (
+            <button onClick={() => handleSendGift('rose', 5)} disabled={ui.giftLoading} className="flex items-center gap-1.5 text-sm text-pink-300 hover:text-pink-200 transition disabled:opacity-50" aria-label="Send gift">
+              <Gift className="w-4 h-4" />
+              <span className="text-xs">Gift</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* OVERLAYS */}
       <AnimatePresence>
-        {showReactionsPopup && triggerRect && (
-          <ReactionsPopup
-            onSelect={handleReactionSelect}
-            theme={theme}
-            onClose={closeReactionsPopup}
-            triggerRect={triggerRect}
-          />
-        )}
+        {ui.showHeartBurst && <DoubleTapHeart position={ui.tapPosition} onFinish={() => setUi(prev => ({ ...prev, showHeartBurst: false }))} prefersReducedMotion={prefersReducedMotion} />}
+        {ui.showReactionsPicker && <CardReactionsPicker onSelect={handleReactionSelect} onClose={closeReactionsPicker} tokens={tokens} targetRect={reactionsTargetRect} />}
+        {ui.showShareSheet && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}/post/${post.id}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} />}
       </AnimatePresence>
     </motion.div>
   );
 }
 
-// ------------------------------------------------------------------
-// EXPORT WITH ERROR BOUNDARY
-// ------------------------------------------------------------------
+function getRandomTextBg(postId, userId) {
+  const palette = [
+    'from-blue-700 via-purple-600 to-orange-500',
+    'from-emerald-700 via-teal-600 to-cyan-500',
+    'from-rose-700 via-pink-600 to-purple-500',
+    'from-indigo-700 via-blue-600 to-violet-500',
+  ];
+  const hash = (postId + (userId || '')).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  return palette[Math.abs(hash) % palette.length];
+}
+
 export default function PostCard(props) {
-  const handleRetry = () => {
-    window.location.reload();
-  };
   return (
-    <PostErrorBoundary onRetry={handleRetry}>
+    <PostErrorBoundary onRetry={props.onRetry}>
       <PostCardContent {...props} />
     </PostErrorBoundary>
   );

@@ -1,10 +1,10 @@
-// src/services/commentService.js – UNIVERSAL COMMENT ENGINE V21 · FIREBASE‑OPTIMIZED CLIENT
+// src/services/commentService.js – UNIVERSAL COMMENT ENGINE V22 · PRODUCTION‑READY
 // 💬 REAL‑TIME THREADED COMMENTS • ANY TARGET (post, story, video, poll, …)
 // 🧩 GENERIC COUNTERS + BACKWARD‑COMPAT SYNC • PERSISTENT ANONYMOUS ID
 // 🎨 RICH TEXT (MARKDOWN/HTML) • TRANSLATION & SENTIMENT HOOKS
 // 🛡️ SPAM / ABUSE HOOK (PERSPECTIVE) • TWO‑TIER SHADOW BANNING • SLOW MODE
 // 📈 ADVANCED HYBRID RANKING • COLLAPSE LOW‑QUALITY • MODERATION QUEUE + BULK OPS
-// 🔔 NOTIFICATIONS INTEGRATION • SHARDED RATE LIMITS • GDPR STUBS
+// 🔔 NOTIFICATIONS INTEGRATION • SIMPLE RELIABLE RATE LIMITS • GDPR STUBS (disabled)
 // 🧹 AUTOMATED CLEANUP DISABLED (SERVER‑SIDE REQUIRED) • GRACEFUL DEGRADATION
 // 🚀 BEST‑IN‑CLASS FIREBASE CLIENT – PAIR WITH SERVER‑SIDE FOR WORLD‑SCALE
 // ⚠️ TO TRULY SURPASS GIANTS, ADD: CLOUD FUNCTIONS, SECURITY RULES, CDN, QUEUES
@@ -16,7 +16,7 @@ const COMMENTS_CONFIG = {
   CACHE_EXPIRY: 5 * 60 * 1000,            // 5 minutes
   PAGINATION_LIMIT: 50,
   REAL_TIME_UPDATE_INTERVAL: 2000,        // used for debouncing if needed
-  SPAM_CHECK_THRESHOLD: 5,                // max comments per minute (sharded)
+  SPAM_CHECK_THRESHOLD: 5,                // max comments per minute
   MENTION_LIMIT: 15,
   REPLY_DEPTH_LIMIT: 6,
   SLOW_MODE_SECONDS: 30,                 // per‑target cooldown (0 = off)
@@ -28,7 +28,6 @@ const COMMENTS_CONFIG = {
     /viagra|cialis|levitra/gi,
     /follow me|like for like|follow for follow/gi
   ],
-  SPAM_COUNTER_SHARDS: 10,
   ALLOWED_REACTIONS: ['👍', '❤️', '😂', '😮', '😢', '👎', '🔥', '🎉'],
   HISTORY_RETENTION_DAYS: 30,
   REACTION_RETENTION_DAYS: 90,
@@ -51,14 +50,14 @@ class UltimateCommentService {
     this.firestore = null;
     this.initialized = false;
     this.cache = new Map();
-    this.realtimeSubscriptions = new Map();
+    this.realtimeSubscriptions = new Map(); // subscriptionId -> { unsubscribe, ... }
     this.activeUsers = new Map();
     this.lastCleanup = Date.now();
     this.cleanupInterval = null;
     this.slowModeTimestamps = new Map();   // targetKey -> last comment creation time (ms)
     this.notificationsService = null;     // cached reference
 
-    console.log('💬 Ultimate Comment Service V21 – Firebase‑Optimized Client Foundation');
+    console.log('💬 Ultimate Comment Service V22 – Production‑Ready Client');
 
     this.initialize().catch(err => {
       console.warn('Comment service initialization warning:', err.message);
@@ -142,11 +141,17 @@ class UltimateCommentService {
     }
   }
 
-  async _ensureInitialized() {
+  /** Public method to ensure initialization */
+  async ensureInitialized() {
     if (!this.initialized || !this.firestore) {
       await this.initialize();
     }
     return this.firestore;
+  }
+
+  // Keep internal method for consistency
+  async _ensureInitialized() {
+    return this.ensureInitialized();
   }
 
   // ==================== GENERIC COUNTER MANAGEMENT ====================
@@ -174,9 +179,16 @@ class UltimateCommentService {
 
   // ==================== SYNC TARGET DOCUMENT COUNT (for feed backward compatibility) ====================
   async _syncTargetCommentCount(targetType, targetId, delta = 1) {
-    if (targetType !== 'post') return; // only posts need feed sync
+    // Only sync known target types; extend as needed
+    const collectionMap = {
+      post: 'posts',
+      story: 'stories',
+      video: 'videos',
+    };
+    const collectionName = collectionMap[targetType];
+    if (!collectionName) return;
     try {
-      const targetRef = this.firestoreMethods.doc(this.firestore, 'posts', targetId);
+      const targetRef = this.firestoreMethods.doc(this.firestore, collectionName, targetId);
       await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
         const snap = await transaction.get(targetRef);
         if (snap.exists()) {
@@ -229,7 +241,6 @@ class UltimateCommentService {
         if (now - lastTime < COMMENTS_CONFIG.SLOW_MODE_SECONDS * 1000) {
           throw new Error(`Slow mode active. Please wait ${COMMENTS_CONFIG.SLOW_MODE_SECONDS} seconds.`);
         }
-        // Mark after successful creation (below)
       }
 
       // ----- Content format & validation -----
@@ -249,7 +260,7 @@ class UltimateCommentService {
         throw new Error(`Comment validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // ----- Rate limiting (sharded counters) -----
+      // ----- Rate limiting (simple single‑document per minute) -----
       const spamCheck = await this._checkSpamRate(userId);
       if (!spamCheck.allowed) {
         throw new Error(`Rate limit exceeded. Please wait ${spamCheck.waitTime} seconds.`);
@@ -311,7 +322,7 @@ class UltimateCommentService {
         updatedAt: this.firestoreMethods.serverTimestamp(),
         lastActivityAt: this.firestoreMethods.serverTimestamp(),
 
-        version: 'v21',
+        version: 'v22',
         _operationId: operationId,
         _clientCreatedAt: new Date().toISOString()
       };
@@ -412,7 +423,7 @@ class UltimateCommentService {
   // ==================== COMMENT RETRIEVAL (with shadow‑ban filtering, ranking, collapsing) ====================
   async getCommentsByTarget(targetType, targetId, options = {}) {
     const startTime = Date.now();
-    const cacheKey = `comments_${targetType}_${targetId}_${JSON.stringify(options)}`;
+    const cacheKey = this._getCacheKey('comments', targetType, targetId, options);
 
     try {
       await this._ensureInitialized();
@@ -459,7 +470,23 @@ class UltimateCommentService {
         }
       }
 
-      const q = this.firestoreMethods.query(commentsRef, ...conditions);
+      let q;
+      try {
+        q = this.firestoreMethods.query(commentsRef, ...conditions);
+      } catch (queryError) {
+        // Check if it's a missing index error
+        if (queryError.code === 'failed-precondition' || queryError.message?.includes('index')) {
+          console.error('❌ Missing Firestore composite index. Please create the required indexes (see bottom of file).');
+          return {
+            success: false,
+            comments: [],
+            error: 'Missing database index. Please ask the developer to create the necessary Firestore indexes.',
+            indexError: true
+          };
+        }
+        throw queryError;
+      }
+
       const snapshot = await this.firestoreMethods.getDocs(q);
 
       const comments = [];
@@ -502,14 +529,13 @@ class UltimateCommentService {
         processedComments = this._collapseLowQuality(processedComments);
       }
 
-      // ✅ 1.1.2 ADD REPLY‑LOADING FLAG FOR UI (indicates if there are more replies than loaded)
+      // Add reply‑loading flags
       for (const comment of processedComments) {
         if (comment.repliesCount !== undefined) {
           comment._hasMoreReplies = comment.repliesCount > (comment.replies?.length || 0);
         } else if (comment.replies !== undefined) {
-          comment._hasMoreReplies = false; // not applicable, but safe fallback
+          comment._hasMoreReplies = false;
         } else {
-          // For top‑level comments we don't load replies automatically – default false
           comment._hasMoreReplies = false;
         }
       }
@@ -927,21 +953,18 @@ class UltimateCommentService {
     }
   }
 
-  // ✅ 1.1.3 IMPLEMENT COMMENT HISTORY VIEWER (UI‑friendly)
   async getCommentHistoryUI(commentId) {
     const result = await this.getCommentHistory(commentId);
     if (!result.success) {
       return { success: false, edits: [], error: result.error };
     }
-    // Format for easy display in a modal
     const edits = result.history.map(entry => ({
       version: entry.version || 1,
       content: entry.content,
       editedAt: entry.archivedAt,
       editedBy: entry.editedBy || (entry.userId || 'unknown'),
-      isCurrent: false, // client will mark current separately
+      isCurrent: false,
     }));
-    // Try to fetch current comment content for comparison
     const current = await this.getComment(commentId);
     if (current.success && current.comment) {
       edits.unshift({
@@ -1000,15 +1023,18 @@ class UltimateCommentService {
         createdAt: doc.data().createdAt?.toDate?.() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate?.() || new Date()
       }));
-      // Also set _hasMoreReplies for each reply (though rarely used, consistent)
+      // Set correct hasMore flag based on pagination limit
+      const hasMore = options.limit ? replies.length === options.limit : false;
       for (const reply of replies) {
-        if (reply.repliesCount !== undefined) {
-          reply._hasMoreReplies = reply.repliesCount > 0;
-        } else {
-          reply._hasMoreReplies = false;
-        }
+        reply._hasMoreReplies = false; // replies of replies not loaded yet
       }
-      return { success: true, replies, total: snapshot.size, hasMore: options.limit ? replies.length === options.limit : false, parentCommentId: commentId };
+      return {
+        success: true,
+        replies,
+        total: snapshot.size,
+        hasMore,
+        parentCommentId: commentId
+      };
     } catch (error) {
       console.error(`❌ Get replies for ${commentId} failed:`, error);
       return { success: false, replies: [], error: error.message };
@@ -1017,7 +1043,6 @@ class UltimateCommentService {
 
   // ==================== REAL‑TIME SUBSCRIPTIONS ====================
   subscribeToTargetComments(targetType, targetId, callback, options = {}) {
-    const subscriptionId = `${targetType}_${targetId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const setup = async () => {
       try {
         await this._ensureInitialized();
@@ -1051,19 +1076,51 @@ class UltimateCommentService {
           let processed = comments;
           if (options.nested === true) processed = this._buildNestedComments(comments);
           if (options.sortBy === 'best') processed = this._rankComments(processed, viewerUserId);
-          callback({ type: 'update', comments: processed, count: snapshot.size, subscriptionId, timestamp: new Date().toISOString() });
+          callback({ type: 'update', comments: processed, count: snapshot.size, timestamp: new Date().toISOString() });
         }, (error) => {
           console.error(`❌ Subscription error for ${targetType}/${targetId}:`, error);
-          callback({ type: 'error', error: error.message, subscriptionId, timestamp: new Date().toISOString() });
+          callback({ type: 'error', error: error.message, timestamp: new Date().toISOString() });
         });
+
+        // Store for cleanup, but return the unsubscribe function
+        const subscriptionId = `${targetType}_${targetId}_${Date.now()}`;
         this.realtimeSubscriptions.set(subscriptionId, { unsubscribe, targetType, targetId, createdAt: Date.now(), callback });
+        return unsubscribe; // ✅ now the drawer can use this directly
       } catch (error) {
         console.error(`❌ Setup subscription for ${targetType}/${targetId} failed:`, error);
-        callback({ type: 'error', error: error.message, subscriptionId, timestamp: new Date().toISOString() });
+        callback({ type: 'error', error: error.message, timestamp: new Date().toISOString() });
+        return () => {}; // return a no-op so the caller can still call it safely
       }
     };
-    setup();
-    return subscriptionId;
+
+    // We return the promise that resolves to the unsubscribe function.
+    // The drawer can await it or just call it; if it's a promise, the drawer's check `typeof unsubscribe === 'function'` would be false.
+    // To maintain backward compatibility with the drawer's current pattern (assign and call later),
+    // we must return a function immediately, but internally set up asynchronously.
+    // The drawer calls: unsubscribe = commentService.subscribeToTargetComments(...); later: if (unsubscribe && typeof unsubscribe === 'function') unsubscribe();
+    // So we must return a function that, when called, cancels the subscription.
+    // We'll use a pattern: create a placeholder unsubscribe that, when called, checks if the real unsubscribe is available (via a ref).
+
+    let realUnsubscribe = null;
+    let unsubCalled = false;
+
+    const wrappedUnsubscribe = () => {
+      unsubCalled = true;
+      if (realUnsubscribe) realUnsubscribe();
+    };
+
+    setup().then(unsubFn => {
+      if (unsubCalled) {
+        // already called before setup finished, call now
+        unsubFn();
+      } else {
+        realUnsubscribe = unsubFn;
+      }
+    }).catch(err => {
+      console.warn('Subscription setup failed:', err);
+    });
+
+    return wrappedUnsubscribe;
   }
 
   subscribeToPostComments(postId, callback, options = {}) {
@@ -1202,15 +1259,15 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== GDPR STUBS ====================
+  // ==================== GDPR STUBS (DISABLED) ====================
   async exportUserData(userId) {
-    console.log(`⚖️ GDPR export requested for user ${userId} – requires Cloud Function ${COMMENTS_CONFIG.GDPR_EXPORT_FUNCTION_NAME}`);
-    return { success: true, message: 'Export started (simulated – implement Cloud Function)' };
+    console.warn(`⚖️ GDPR export requested for user ${userId} – requires Cloud Function ${COMMENTS_CONFIG.GDPR_EXPORT_FUNCTION_NAME}`);
+    return { success: false, message: 'Export not available without a Cloud Function. Contact support.' };
   }
 
   async deleteUserData(userId) {
-    console.log(`⚖️ GDPR deletion requested for user ${userId} – requires Cloud Function ${COMMENTS_CONFIG.GDPR_DELETE_FUNCTION_NAME}`);
-    return { success: true, message: 'Deletion started (simulated – implement Cloud Function)' };
+    console.warn(`⚖️ GDPR deletion requested for user ${userId} – requires Cloud Function ${COMMENTS_CONFIG.GDPR_DELETE_FUNCTION_NAME}`);
+    return { success: false, message: 'Deletion not available without a Cloud Function. Contact support.' };
   }
 
   // ==================== ADVANCED RANKING & COLLAPSING ====================
@@ -1360,7 +1417,12 @@ class UltimateCommentService {
     const hashtags = [...new Set(hashtagMatches.map(h => h.substring(1).toLowerCase()))];
     const linkMatches = content.match(/(https?:\/\/[^\s]+)/g) || [];
     const links = [...new Set(linkMatches)];
-    return { mentions, hashtags, links, language: 'en' };
+    // Simple language detection stub – replace with `franc` or similar
+    let language = 'en';
+    if (/[\u0600-\u06FF]/.test(content)) language = 'ar';
+    else if (/[\u4e00-\u9fff]/.test(content)) language = 'zh';
+    else if (/[а-яА-Я]/.test(content)) language = 'ru';
+    return { mentions, hashtags, links, language };
   }
 
   _buildNestedComments(comments) {
@@ -1391,60 +1453,46 @@ class UltimateCommentService {
     switch (sortBy) {
       case 'newest': sorted.sort((a, b) => b.createdAt - a.createdAt); break;
       case 'oldest': sorted.sort((a, b) => a.createdAt - b.createdAt); break;
-      case 'popular': sorted.sort((a, b) => ((b.likes||0)-(b.dislikes||0)) - ((a.likes||0)-(a.dislikes||0))); break;
+      case 'popular':
+      case 'top': sorted.sort((a, b) => ((b.likes||0)-(b.dislikes||0)) - ((a.likes||0)-(a.dislikes||0))); break;
       case 'controversial': sorted.sort((a, b) => ((b.likes||0)+(b.dislikes||0)) - ((a.likes||0)+(a.dislikes||0))); break;
     }
     return sorted;
   }
 
-  // ✅ 1.1.1 OPTIMISED SHARDED RATE LIMITER – single random shard read
+  // ✅ SIMPLE, RELIABLE SINGLE‑DOCUMENT RATE LIMITER
   async _checkSpamRate(userId) {
     await this._ensureInitialized();
     const minuteTimestamp = Math.floor(Date.now() / 60000);
+    const docId = `comment_${userId}_${minuteTimestamp}`;
+    const rateRef = this.firestoreMethods.doc(this.firestore, 'rate_limits', docId);
     const threshold = COMMENTS_CONFIG.SPAM_CHECK_THRESHOLD;
-    const shards = COMMENTS_CONFIG.SPAM_COUNTER_SHARDS;
-    // Instead of reading all shards, pick one random shard – statistically correct for rate limiting
-    const shardIndex = Math.floor(Math.random() * shards);
-    const shardRef = this.firestoreMethods.doc(this.firestore, 'rate_limits', `comment_${userId}_${minuteTimestamp}_shard_${shardIndex}`);
-    
-    let count = 0;
+
     try {
-      const snap = await this.firestoreMethods.getDoc(shardRef);
-      count = snap.exists() ? snap.data().count : 0;
-    } catch (err) {
-      console.warn('Spam check read failed, allowing comment', err);
-      return { allowed: true, count: 0, waitTime: 0 };
-    }
-    
-    if (count >= threshold) {
-      const waitTime = 60 - Math.floor((Date.now() % 60000) / 1000);
-      return { allowed: false, count, waitTime };
-    }
-    
-    // Increment the shard counter
-    try {
-      await this.firestoreMethods.updateDoc(shardRef, {
-        count: this.firestoreMethods.increment(1),
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      }).catch(async (err) => {
-        if (err.code === 'not-found') {
-          await this.firestoreMethods.setDoc(shardRef, {
-            userId,
-            minute: minuteTimestamp,
-            shard: shardIndex,
-            count: 1,
-            updatedAt: this.firestoreMethods.serverTimestamp()
-          });
-        } else {
-          throw err;
+      const result = await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
+        const snap = await transaction.get(rateRef);
+        let current = snap.exists() ? snap.data().count || 0 : 0;
+        if (current >= threshold) {
+          throw new Error('RATE_LIMIT_EXCEEDED');
         }
+        transaction.set(rateRef, {
+          count: current + 1,
+          updatedAt: this.firestoreMethods.serverTimestamp(),
+          userId,
+          minuteTimestamp
+        }, { merge: true });
+        return current + 1;
       });
+      return { allowed: true, count: result, waitTime: 0 };
     } catch (err) {
-      console.warn('Spam check increment failed, allowing comment', err);
-      return { allowed: true, count: count + 1, waitTime: 0 };
+      if (err.message === 'RATE_LIMIT_EXCEEDED') {
+        const secondsLeft = 60 - (Math.floor(Date.now() / 1000) % 60);
+        return { allowed: false, count: threshold, waitTime: secondsLeft };
+      }
+      // For other errors (e.g., transaction failure), we allow the comment but log a warning
+      console.warn('Spam rate check failed, allowing comment', err);
+      return { allowed: true, count: 1, waitTime: 0 };
     }
-    
-    return { allowed: true, count: count + 1, waitTime: 0 };
   }
 
   async _updateReportStatus(commentId, action, moderatorId) {
@@ -1479,6 +1527,21 @@ class UltimateCommentService {
         this.cache.delete(key);
       }
     }
+  }
+
+  _getCacheKey(prefix, targetType, targetId, options) {
+    const stable = {
+      parentId: options.parentId,
+      limit: options.limit,
+      sortBy: options.sortBy,
+      nested: options.nested,
+      collapse: options.collapse,
+      maxDepth: options.maxDepth,
+      viewerUserId: options.viewerUserId,
+      isAdmin: options.isAdmin
+    };
+    const sorted = Object.keys(stable).sort().map(k => `${k}=${stable[k]}`).join('&');
+    return `${prefix}_${targetType}_${targetId}_${sorted}`;
   }
 
   _enhanceError(error, defaultMessage) {
@@ -1668,41 +1731,34 @@ const commentService = {
   getStats: () => getCommentService().getStats(),
   clearCache: () => getCommentService().clearCache(),
   destroy: () => getCommentService().destroy(),
-  ensureInitialized: () => getCommentService()._ensureInitialized()
+  ensureInitialized: () => getCommentService().ensureInitialized()
 };
 
 export default commentService;
 
 // ==================== REQUIRED FIRESTORE INDEXES & SECURITY RULES ====================
 /*
-  FIREBASE CONSOLE INDEXES (create these or queries will fail):
-  1. comments: targetType (ASC), targetId (ASC), isDeleted (ASC), isHidden (ASC), moderationStatus (ASC), createdAt (DESC)
-  2. comments: targetType (ASC), targetId (ASC), parentId (ASC), isDeleted (ASC), isHidden (ASC), moderationStatus (ASC), createdAt (DESC)
-  3. comments: parentId (ASC), isDeleted (ASC), isHidden (ASC), createdAt (ASC)
-  4. comments/{commentId}/history: archivedAt (DESC)
-  5. comments/{commentId}/reactions: createdAt (ASC)
-  6. comment_reports: commentId (ASC), userId (ASC)
-  7. comment_reports: commentId (ASC)
-  8. rate_limits: userId (ASC), minute (ASC)
+  ✅ CREATE THESE COMPOSITE INDEXES IN FIREBASE CONSOLE OR THE SERVICE WILL FAIL:
 
-  SECURITY RULES (pseudo‑code, implement in Firebase Console):
-  - Only authenticated users can create comments; content must pass server‑side validation.
-  - Users can read only non‑shadow‑banned comments (unless they're the author or admin).
-  - Users can update/delete only their own comments.
-  - Admins can update moderation fields, pin comments, batch delete.
-  - Rate‑limit writes using request.time and user custom claims.
-  - All cleanup operations must be restricted to backend service accounts.
+  1. comments collection:
+     - Fields: targetType Ascending, targetId Ascending, isDeleted Ascending, isHidden Ascending, createdAt Descending
+  2. comments collection:
+     - Fields: targetType Ascending, targetId Ascending, parentId Ascending, isDeleted Ascending, isHidden Ascending, createdAt Descending
+  3. comments collection:
+     - Fields: parentId Ascending, isDeleted Ascending, isHidden Ascending, createdAt Ascending
+  4. comments/{commentId}/history subcollection:
+     - Fields: archivedAt Descending
+  5. comments/{commentId}/reactions subcollection:
+     - Fields: createdAt Ascending
+  6. comment_reports collection:
+     - Fields: commentId Ascending, userId Ascending
+  7. comment_reports collection:
+     - Fields: commentId Ascending
 
-  ==================== BACKEND ARCHITECTURE TO SURPASS GIANTS ====================
-  This client service is a robust, Firebase‑optimized foundation. To truly surpass the world’s largest platforms, you must pair it with:
-
-  - Cloud Functions: moderateComment (Perspective API), processMentions, translateComment, cleanupOldData, GDPR export/delete.
-  - Real‑time ML‑based spam/toxicity detection.
-  - Global CDN caching of comment threads (e.g., Firestore Bundles + Cloud CDN).
-  - A custom ranking service with user‑specific personalization.
-  - Write‑ahead queues for viral posts (Fan‑out via Pub/Sub).
-  - Server‑side rate limiting and security enforcement (Firestore rules + Cloud Functions).
-  - Full‑text search via Algolia/Elastic, kept in sync via Cloud Functions.
-
-  This service alone will handle millions of comments on a moderate‑sized Firebase app. For billions, the heavy lifting must move to the backend.
+  🔐 SECURITY RULES (pseudo‑code, implement in Firebase Console):
+     - Only authenticated users can create comments.
+     - Users can read non‑shadow‑banned comments (except authors & admins).
+     - Users can update/delete their own comments.
+     - Admins can moderate, pin, batch delete.
+     - Rate‑limit writes using custom claims or Cloud Functions.
 */

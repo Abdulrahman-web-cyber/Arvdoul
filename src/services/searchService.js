@@ -1,27 +1,16 @@
-// src/services/searchService.js - ARVDOUL SEARCH ENGINE V7.2 (ULTRA PRODUCTION)
-// 🔍 WORLD‑CLASS SEARCH • TYPO TOLERANT • FACETED • PAGINATED • BILLION‑USER READY
-// 🧠 VECTOR SEARCH READY • GLOBAL RANKING FUSION • PERSONALIZATION • TRENDING
-// 🔄 REQUEST VERSIONING (no race conditions) • DISTRIBUTED CACHE (Redis optional)
-// 👑 USER RANKS (KING/QUEEN/RICH/WEALTHY) AND POPULARITY TITLES (LEGEND/ICON/STAR)
-// ✅ ALL CRITICAL FIXES: enhanceError defined, Firestore snapshot pagination, request versioning
-// ✅ tokenized search scoring improved (TF‑IDF style), cache key fast, fusion limited to 1000
-// ✅ vector search honest stub, distributed cache renamed, no fake AbortController
-// ✅ SSR safe, billion‑user scale
-
-import algoliasearch from 'algoliasearch/lite';
+// src/services/searchService.js - ARVDOUL SEARCH ENGINE V8.3 (DYNAMIC IMPORT FIX)
 import { getMonetizationService } from './monetizationService.js';
 import {
   collection,
-  query,
+  query as firestoreQuery,
   where,
   orderBy,
   limit as firestoreLimit,
   getDocs,
   startAfter,
-  doc,
 } from 'firebase/firestore';
 
-// ==================== HELPER: enhanceError (was missing) ====================
+// ==================== HELPER: enhanceError ====================
 function enhanceError(error, defaultMessage) {
   const code = error?.code || 'unknown';
   const message = {
@@ -164,7 +153,7 @@ const SEARCH_CONFIG = {
 // ==================== safe environment detection ====================
 const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
-// ==================== Local TTL Cache (not distributed, renamed) ====================
+// ==================== Local TTL Cache ====================
 class LocalTTLCache {
   constructor() {
     this.store = new Map();
@@ -187,24 +176,9 @@ class LocalTTLCache {
   }
 }
 
-// ==================== Fast deterministic hash (no JSON.stringify overhead) ====================
+// ==================== Fast deterministic hash ====================
 function fastHash(obj) {
-  // Manual string builder for speed
-  const parts = [];
-  const build = (val, prefix = '') => {
-    if (val === null || val === undefined) parts.push(`${prefix}null`);
-    else if (typeof val === 'string') parts.push(`${prefix}${val}`);
-    else if (typeof val === 'number') parts.push(`${prefix}${val}`);
-    else if (typeof val === 'boolean') parts.push(`${prefix}${val}`);
-    else if (Array.isArray(val)) {
-      for (let i = 0; i < val.length; i++) build(val[i], `${prefix}[${i}]`);
-    } else if (typeof val === 'object') {
-      const keys = Object.keys(val).sort();
-      for (const k of keys) build(val[k], `${prefix}.${k}`);
-    }
-  };
-  build(obj);
-  const str = parts.join('|');
+  const str = JSON.stringify(obj, Object.keys(obj).sort());
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -279,7 +253,7 @@ class AnalyticsBuffer {
   }
 }
 
-// ==================== Result Item (pure data) ====================
+// ==================== Result Item ====================
 class SearchResultItem {
   constructor(rawHit, type, source, score = 0) {
     this.id = rawHit.objectID;
@@ -303,7 +277,7 @@ class SearchResultItem {
   }
 }
 
-// ==================== LRU Cache (local) ====================
+// ==================== LRU Cache ====================
 class LRUCache {
   constructor(maxSize = 50, ttl = 5 * 60 * 1000) {
     this.maxSize = maxSize;
@@ -354,13 +328,11 @@ class UltimateSearchService {
     this.analyticsBuffer = new AnalyticsBuffer(this);
     this.indexNameCache = new Map();
     this.userProfileCache = new Map();
-
-    // Request versioning (no fake AbortController)
+    this.searchHistory = [];
     this.currentRequestId = 0;
     this.debounceTimer = null;
     this.pendingSearchPromise = null;
     this.lastSearchKey = null;
-
     this.insightsClient = null;
   }
 
@@ -373,16 +345,24 @@ class UltimateSearchService {
         if (!SEARCH_CONFIG.ALGOLIA_APP_ID || !SEARCH_CONFIG.ALGOLIA_SEARCH_KEY) {
           throw new Error('Algolia credentials missing. Set VITE_ALGOLIA_APP_ID and VITE_ALGOLIA_SEARCH_KEY');
         }
+        // ✅ FIXED: dynamic import to avoid default export error
+        const algoliasearchModule = await import('algoliasearch/lite');
+        const algoliasearch = algoliasearchModule.default || algoliasearchModule;
         this.client = algoliasearch(SEARCH_CONFIG.ALGOLIA_APP_ID, SEARCH_CONFIG.ALGOLIA_SEARCH_KEY);
+        
         const firebase = await import('../firebase/firebase.js');
         this.firestore = await firebase.getFirestoreInstance();
         this.monetizationService = getMonetizationService();
 
+        if (SEARCH_CONFIG.VECTOR_ENABLED && !SEARCH_CONFIG.VECTOR_API_KEY) {
+          console.warn('[Search] VECTOR_ENABLED is true but VECTOR_API_KEY missing – disabling vector search');
+          SEARCH_CONFIG.VECTOR_ENABLED = false;
+        }
         if (SEARCH_CONFIG.VECTOR_ENABLED) {
           console.log('[Search] Vector search configuration found (integration required)');
         }
         this.initialized = true;
-        console.log('[Search] V7.2 Engine ready');
+        console.log('[Search] V8.3 Engine ready');
       } catch (err) {
         console.error('[Search] Init failed', err);
         this.initPromise = null;
@@ -393,12 +373,12 @@ class UltimateSearchService {
   }
 
   // --------------------------------------------------------------------
-  //  🔍 PUBLIC SEARCH (debounced + versioned to prevent race conditions)
+  //  🔍 PUBLIC SEARCH (debounced + versioned)
   // --------------------------------------------------------------------
-  async search(query, options = {}) {
+  async search(searchQuery, options = {}) {
     await this.ensureInitialized();
 
-    const normalizedQuery = normalizeQuery(query);
+    const normalizedQuery = normalizeQuery(searchQuery);
     const cacheKeyObj = {
       q: normalizedQuery,
       i: (options.indices || Object.values(SEARCH_CONFIG.BASE_INDICES)).sort(),
@@ -407,21 +387,18 @@ class UltimateSearchService {
       f: options.filters || '',
       ff: this._normalizeFacetFilters(options.facetFilters),
       s: options.sortBy || '',
-      c: options.cursor || null,
     };
     const cacheKey = fastHash(cacheKeyObj);
 
-    // Deduplicate identical ongoing requests
     if (this.pendingSearchPromise && this.lastSearchKey === cacheKey) {
       return this.pendingSearchPromise;
     }
 
-    // Increment request version
     const requestId = ++this.currentRequestId;
 
     const execute = async () => {
       try {
-        const result = await this._executeSearch(normalizedQuery, options, cacheKeyObj, cacheKey, requestId);
+        const result = await this._executeSearch(normalizedQuery, options, cacheKey, requestId);
         return result;
       } finally {
         if (this.pendingSearchPromise && this.lastSearchKey === cacheKey) {
@@ -452,7 +429,7 @@ class UltimateSearchService {
     }
   }
 
-  async _executeSearch(query, options, cacheKeyObj, cacheKey, requestId) {
+  async _executeSearch(query, options, cacheKey, requestId) {
     const {
       indices = Object.values(SEARCH_CONFIG.BASE_INDICES),
       page = SEARCH_CONFIG.DEFAULT_PAGE,
@@ -462,10 +439,9 @@ class UltimateSearchService {
       sortBy,
       cache = true,
       userId = null,
-      cursor = null,   // Firestore cursor (DocumentSnapshot)
+      cursorByIndex = null,
     } = options;
 
-    // Check caches (local LRU + TTL)
     if (cache) {
       let cached = null;
       if (this.ttlCache) {
@@ -478,9 +454,7 @@ class UltimateSearchService {
       }
     }
 
-    // Intent scoring
     const intentScore = this._computeIntentScore(query);
-
     const resolvedIndexMap = new Map();
     for (const base of indices) {
       resolvedIndexMap.set(base, this._resolveIndexName(base, sortBy));
@@ -488,11 +462,10 @@ class UltimateSearchService {
 
     let resultsByType = {};
     let source = 'algolia';
+    let nextCursorByIndex = null;
     let sponsoredItem = null;
-    let nextCursor = null;
 
     try {
-      // Primary: Algolia
       try {
         resultsByType = await this._algoliaSearch(query, indices, page, hitsPerPage, filters, facetFilters, sortBy, userId, resolvedIndexMap);
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
@@ -501,24 +474,22 @@ class UltimateSearchService {
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         console.warn('[Search] Algolia failed, fallback to Firestore', algoliaError);
         if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
-          const fallbackResult = await this._firestoreFallbackSearch(query, indices, { page, hitsPerPage, cursor });
+          const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
           resultsByType = fallbackResult.resultsByType;
-          nextCursor = fallbackResult.nextCursor;
+          nextCursorByIndex = fallbackResult.nextCursorByIndex;
           source = 'firestore';
         } else {
           throw algoliaError;
         }
       }
 
-      // Vector search (if enabled and not fallback)
       if (SEARCH_CONFIG.VECTOR_ENABLED && source !== 'firestore' && query) {
         const vectorResults = await this._vectorSearch(query, userId);
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         resultsByType = this._mergeVectorResults(resultsByType, vectorResults);
       }
 
-      // Personalization
       let userProfile = null;
       if (userId && SEARCH_CONFIG.PERSONALIZATION.ENABLED && source === 'algolia') {
         userProfile = await this._getUserProfile(userId);
@@ -526,34 +497,27 @@ class UltimateSearchService {
         resultsByType = await this._applyPersonalizationBoost(resultsByType, userProfile, query);
       }
 
-      // Global ranking fusion (with top‑K limit)
       let fusedHits = await this._fuseResults(resultsByType, query, userProfile, intentScore);
       if (this.currentRequestId !== requestId) return { success: false, aborted: true };
       fusedHits = fusedHits.slice(0, SEARCH_CONFIG.RANKING_FUSION.MAX_FUSED_HITS);
 
-      // Paginate BEFORE sponsored injection
-      const start = page * hitsPerPage;
-      const paginatedRaw = fusedHits.slice(start, start + hitsPerPage);
-      const total = fusedHits.length;
-      const totalPages = Math.ceil(total / hitsPerPage);
-
-      // Sponsored injection (after pagination, into the current page)
-      let pageItems = [...paginatedRaw];
-      if (SEARCH_CONFIG.SPONSORED.ENABLED && userId && this.monetizationService) {
+      let finalHits = [...fusedHits];
+      if (SEARCH_CONFIG.SPONSORED.ENABLED && userId && this.monetizationService && page === 0) {
         sponsoredItem = await this._getSponsoredResult(query, userId);
-        if (sponsoredItem && pageItems.length) {
-          const pos = Math.min(SEARCH_CONFIG.SPONSORED.DEFAULT_POSITION, pageItems.length);
-          pageItems = [
-            ...pageItems.slice(0, pos),
-            sponsoredItem,
-            ...pageItems.slice(pos),
-          ];
+        if (sponsoredItem) {
+          const pos = Math.min(SEARCH_CONFIG.SPONSORED.DEFAULT_POSITION, finalHits.length);
+          finalHits.splice(pos, 0, sponsoredItem);
         }
       }
 
+      const start = page * hitsPerPage;
+      const paginated = finalHits.slice(start, start + hitsPerPage);
+      const total = finalHits.length;
+      const totalPages = Math.ceil(total / hitsPerPage);
+
       const response = {
         success: true,
-        items: pageItems.map(item => new SearchResultItem(item.raw || item, item.type, item.source || source, item.score || 0)),
+        items: paginated.map(item => new SearchResultItem(item.raw || item, item.type, item.source || source, item.score || 0)),
         total,
         page,
         totalPages,
@@ -561,18 +525,14 @@ class UltimateSearchService {
         source,
         sponsored: sponsoredItem ? new SearchResultItem(sponsoredItem.raw || sponsoredItem, sponsoredItem.type, 'sponsored', 0) : null,
         query,
-        nextCursor,
+        nextCursorByIndex,
       };
 
       if (cache) {
         const cacheValue = { ...response, cached: false };
         this.localCache.set(cacheKey, cacheValue);
         if (this.ttlCache) {
-          await this.ttlCache.set(
-            `${SEARCH_CONFIG.LOCAL_TTL_CACHE.PREFIX}${cacheKey}`,
-            cacheValue,
-            SEARCH_CONFIG.LOCAL_TTL_CACHE.TTL
-          );
+          await this.ttlCache.set(`${SEARCH_CONFIG.LOCAL_TTL_CACHE.PREFIX}${cacheKey}`, cacheValue, SEARCH_CONFIG.LOCAL_TTL_CACHE.TTL);
         }
       }
       return response;
@@ -620,25 +580,27 @@ class UltimateSearchService {
   }
 
   // --------------------------------------------------------------------
-  //  🔥 FIRESTORE FALLBACK (correct snapshot pagination)
+  //  🔥 FIRESTORE FALLBACK
   // --------------------------------------------------------------------
-  async _firestoreFallbackSearch(query, indices, { page, hitsPerPage, cursor }) {
+  async _firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex }) {
     const limitCount = Math.min(hitsPerPage, SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_RESULTS);
     const resultsByType = {};
-    let nextCursor = null;
+    const nextCursorByIndex = {};
 
     for (const baseIndex of indices) {
       let hits = [];
       let lastSnapshot = null;
+      const indexCursor = cursorByIndex?.[baseIndex] || null;
+
       switch (baseIndex) {
         case SEARCH_CONFIG.BASE_INDICES.USERS:
-          ({ hits, lastSnapshot } = await this._firestoreSearchUsersTokenized(query, limitCount, cursor));
+          ({ hits, lastSnapshot } = await this._firestoreSearchUsers(query, limitCount, indexCursor));
           break;
         case SEARCH_CONFIG.BASE_INDICES.POSTS:
-          ({ hits, lastSnapshot } = await this._firestoreSearchPostsTokenized(query, limitCount, cursor));
+          ({ hits, lastSnapshot } = await this._firestoreSearchPosts(query, limitCount, indexCursor));
           break;
         case SEARCH_CONFIG.BASE_INDICES.VIDEOS:
-          ({ hits, lastSnapshot } = await this._firestoreSearchVideosTokenized(query, limitCount, cursor));
+          ({ hits, lastSnapshot } = await this._firestoreSearchVideos(query, limitCount, indexCursor));
           break;
         default:
           hits = [];
@@ -653,179 +615,103 @@ class UltimateSearchService {
         score: hit._score || 0.1,
         normalizedScore: (hit._score || 0.1) / maxScore,
       }));
-      if (lastSnapshot) nextCursor = lastSnapshot;
+      if (lastSnapshot) nextCursorByIndex[baseIndex] = lastSnapshot;
       resultsByType[`_${baseIndex}_metadata`] = { nbHits: null, maxScore, hasMore: hits.length === limitCount };
     }
-    return { resultsByType, nextCursor };
+    return { resultsByType, nextCursorByIndex };
   }
 
-  async _firestoreSearchUsersTokenized(queryStr, limitCount, cursorSnapshot) {
+  async _firestoreSearchUsers(queryStr, limitCount, cursorSnapshot) {
     const usersRef = collection(this.firestore, 'users');
     const tokens = queryStr.split(/\s+/).filter(t => t.length > 0).slice(0, SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_TOKENS);
-    let lastSnapshot = null;
-    let hits = [];
-
-    if (SEARCH_CONFIG.FIRESTORE_FALLBACK.USE_TOKENIZED_SEARCH && tokens.length > 0) {
-      const q = query(usersRef, where('searchTokens', 'array-contains-any', tokens), firestoreLimit(limitCount));
-      const snap = await getDocs(q);
-      const allHits = snap.docs.map(doc => ({ objectID: doc.id, ...doc.data(), _score: 1 }));
-      // Improved TF‑IDF style scoring
-      const docFreq = {};
-      for (const h of allHits) {
-        const text = `${h.username || ''} ${h.displayName || ''}`.toLowerCase();
-        for (const t of tokens) if (text.includes(t)) docFreq[t] = (docFreq[t] || 0) + 1;
-      }
-      const totalDocs = allHits.length;
-      const scored = allHits.map(h => {
-        let score = 0;
-        const text = `${h.username || ''} ${h.displayName || ''}`.toLowerCase();
-        for (const t of tokens) {
-          if (text.includes(t)) {
-            const tf = 1;
-            const idf = Math.log((totalDocs + 1) / ((docFreq[t] || 1) + 1)) + 1;
-            score += tf * idf;
-          }
-        }
-        h._score = score;
-        return h;
-      });
-      scored.sort((a, b) => b._score - a._score);
-      hits = scored.slice(0, limitCount);
-      if (hits.length === limitCount && hits.length > 0) {
-        // Store actual DocumentSnapshot for cursor
-        const lastDocId = hits[hits.length - 1].objectID;
-        const lastDocRef = doc(this.firestore, 'users', lastDocId);
-        // Get the snapshot (single query)
-        const lastSnap = await getDocs(query(usersRef, where('__name__', '==', lastDocId)));
-        if (!lastSnap.empty) lastSnapshot = lastSnap.docs[0];
-      }
-    } else {
-      let q = query(usersRef, where('username', '>=', queryStr), where('username', '<=', queryStr + '\uf8ff'), orderBy('username'), firestoreLimit(limitCount));
-      if (cursorSnapshot) q = query(q, startAfter(cursorSnapshot));
-      const snap = await getDocs(q);
-      hits = snap.docs.map(doc => ({ objectID: doc.id, ...doc.data(), _score: 0.5 }));
-      if (hits.length === limitCount && hits.length > 0) lastSnapshot = snap.docs[snap.docs.length - 1];
+    let q = firestoreQuery(usersRef, firestoreLimit(limitCount));
+    if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
+    if (tokens.length > 0) {
+      q = firestoreQuery(usersRef, where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
+      if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
     }
-    return { hits, lastSnapshot };
+    const snap = await getDocs(q);
+    const hits = snap.docs.map(doc => {
+      const data = doc.data();
+      let score = 0;
+      const text = `${data.username || ''} ${data.displayName || ''}`.toLowerCase();
+      for (const token of tokens) {
+        if (text.includes(token)) score += 1;
+      }
+      return { objectID: doc.id, ...data, _score: score };
+    });
+    hits.sort((a, b) => b._score - a._score);
+    const limited = hits.slice(0, limitCount);
+    const lastSnapshot = limited.length === limitCount && snap.docs.length === limitCount ? snap.docs[snap.docs.length - 1] : null;
+    return { hits: limited, lastSnapshot };
   }
 
-  async _firestoreSearchPostsTokenized(queryStr, limitCount, cursorSnapshot) {
+  async _firestoreSearchPosts(queryStr, limitCount, cursorSnapshot) {
     const postsRef = collection(this.firestore, 'posts');
     const tokens = queryStr.split(/\s+/).filter(t => t.length > 0).slice(0, SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_TOKENS);
-    let lastSnapshot = null;
-    let hits = [];
-
-    if (SEARCH_CONFIG.FIRESTORE_FALLBACK.USE_TOKENIZED_SEARCH && tokens.length > 0) {
-      const q = query(postsRef, where('searchTokens', 'array-contains-any', tokens), firestoreLimit(limitCount));
-      const snap = await getDocs(q);
-      const allHits = snap.docs.map(doc => ({ objectID: doc.id, ...doc.data(), _score: 1 }));
-      const docFreq = {};
-      for (const h of allHits) {
-        const text = `${h.title || ''} ${h.content || ''}`.toLowerCase();
-        for (const t of tokens) if (text.includes(t)) docFreq[t] = (docFreq[t] || 0) + 1;
-      }
-      const totalDocs = allHits.length;
-      const scored = allHits.map(h => {
-        let score = 0;
-        const text = `${h.title || ''} ${h.content || ''}`.toLowerCase();
-        for (const t of tokens) {
-          if (text.includes(t)) {
-            const tf = 1;
-            const idf = Math.log((totalDocs + 1) / ((docFreq[t] || 1) + 1)) + 1;
-            score += tf * idf;
-          }
-        }
-        h._score = score;
-        return h;
-      });
-      scored.sort((a, b) => b._score - a._score);
-      hits = scored.slice(0, limitCount);
-      if (hits.length === limitCount && hits.length > 0) {
-        const lastDocId = hits[hits.length - 1].objectID;
-        const lastDocRef = doc(this.firestore, 'posts', lastDocId);
-        const lastSnap = await getDocs(query(postsRef, where('__name__', '==', lastDocId)));
-        if (!lastSnap.empty) lastSnapshot = lastSnap.docs[0];
-      }
-    } else {
-      let q = query(postsRef, where('content', '>=', queryStr), where('content', '<=', queryStr + '\uf8ff'), orderBy('content'), firestoreLimit(limitCount));
-      if (cursorSnapshot) q = query(q, startAfter(cursorSnapshot));
-      const snap = await getDocs(q);
-      hits = snap.docs.map(doc => ({ objectID: doc.id, ...doc.data(), _score: 0.5 }));
-      if (hits.length === limitCount && hits.length > 0) lastSnapshot = snap.docs[snap.docs.length - 1];
+    let q = firestoreQuery(postsRef, firestoreLimit(limitCount));
+    if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
+    if (tokens.length > 0) {
+      q = firestoreQuery(postsRef, where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
+      if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
     }
-    return { hits, lastSnapshot };
+    const snap = await getDocs(q);
+    const hits = snap.docs.map(doc => {
+      const data = doc.data();
+      let score = 0;
+      const text = `${data.title || ''} ${data.content || ''}`.toLowerCase();
+      for (const token of tokens) {
+        if (text.includes(token)) score += 1;
+      }
+      return { objectID: doc.id, ...data, _score: score };
+    });
+    hits.sort((a, b) => b._score - a._score);
+    const limited = hits.slice(0, limitCount);
+    const lastSnapshot = limited.length === limitCount && snap.docs.length === limitCount ? snap.docs[snap.docs.length - 1] : null;
+    return { hits: limited, lastSnapshot };
   }
 
-  async _firestoreSearchVideosTokenized(queryStr, limitCount, cursorSnapshot) {
+  async _firestoreSearchVideos(queryStr, limitCount, cursorSnapshot) {
     const videosRef = collection(this.firestore, 'videos');
     const tokens = queryStr.split(/\s+/).filter(t => t.length > 0).slice(0, SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_TOKENS);
-    let lastSnapshot = null;
-    let hits = [];
-
-    if (SEARCH_CONFIG.FIRESTORE_FALLBACK.USE_TOKENIZED_SEARCH && tokens.length > 0) {
-      const q = query(videosRef, where('searchTokens', 'array-contains-any', tokens), firestoreLimit(limitCount));
-      const snap = await getDocs(q);
-      const allHits = snap.docs.map(doc => ({ objectID: doc.id, ...doc.data(), _score: 1 }));
-      const docFreq = {};
-      for (const h of allHits) {
-        const text = `${h.title || ''} ${h.description || ''}`.toLowerCase();
-        for (const t of tokens) if (text.includes(t)) docFreq[t] = (docFreq[t] || 0) + 1;
-      }
-      const totalDocs = allHits.length;
-      const scored = allHits.map(h => {
-        let score = 0;
-        const text = `${h.title || ''} ${h.description || ''}`.toLowerCase();
-        for (const t of tokens) {
-          if (text.includes(t)) {
-            const tf = 1;
-            const idf = Math.log((totalDocs + 1) / ((docFreq[t] || 1) + 1)) + 1;
-            score += tf * idf;
-          }
-        }
-        h._score = score;
-        return h;
-      });
-      scored.sort((a, b) => b._score - a._score);
-      hits = scored.slice(0, limitCount);
-      if (hits.length === limitCount && hits.length > 0) {
-        const lastDocId = hits[hits.length - 1].objectID;
-        const lastDocRef = doc(this.firestore, 'videos', lastDocId);
-        const lastSnap = await getDocs(query(videosRef, where('__name__', '==', lastDocId)));
-        if (!lastSnap.empty) lastSnapshot = lastSnap.docs[0];
-      }
-    } else {
-      let q = query(videosRef, where('title', '>=', queryStr), where('title', '<=', queryStr + '\uf8ff'), orderBy('title'), firestoreLimit(limitCount));
-      if (cursorSnapshot) q = query(q, startAfter(cursorSnapshot));
-      const snap = await getDocs(q);
-      hits = snap.docs.map(doc => ({ objectID: doc.id, ...doc.data(), _score: 0.5 }));
-      if (hits.length === limitCount && hits.length > 0) lastSnapshot = snap.docs[snap.docs.length - 1];
+    let q = firestoreQuery(videosRef, firestoreLimit(limitCount));
+    if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
+    if (tokens.length > 0) {
+      q = firestoreQuery(videosRef, where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
+      if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
     }
-    return { hits, lastSnapshot };
+    const snap = await getDocs(q);
+    const hits = snap.docs.map(doc => {
+      const data = doc.data();
+      let score = 0;
+      const text = `${data.title || ''} ${data.description || ''}`.toLowerCase();
+      for (const token of tokens) {
+        if (text.includes(token)) score += 1;
+      }
+      return { objectID: doc.id, ...data, _score: score };
+    });
+    hits.sort((a, b) => b._score - a._score);
+    const limited = hits.slice(0, limitCount);
+    const lastSnapshot = limited.length === limitCount && snap.docs.length === limitCount ? snap.docs[snap.docs.length - 1] : null;
+    return { hits: limited, lastSnapshot };
   }
 
-  // --------------------------------------------------------------------
-  //  🧠 VECTOR SEMANTIC SEARCH (honest stub, returns empty)
-  // --------------------------------------------------------------------
   async _vectorSearch(query, userId) {
     if (!SEARCH_CONFIG.VECTOR_ENABLED) return { hits: [] };
-    console.log('[Search] Vector search not fully implemented – returning empty');
+    console.warn('[Search] Vector search not implemented – feature flag ignored. Set VITE_VECTOR_SEARCH_ENABLED=false to disable.');
     return { hits: [] };
   }
 
   _mergeVectorResults(original, vectorResults) {
-    if (!vectorResults.hits || vectorResults.hits.length === 0) return original;
-    // Real merge logic would go here (e.g., boost scores)
     return original;
   }
 
-  // --------------------------------------------------------------------
-  //  📈 PERSONALIZATION BOOST
-  // --------------------------------------------------------------------
   async _applyPersonalizationBoost(resultsByType, userProfile, query) {
     const boosted = {};
     const typeBoost = SEARCH_CONFIG.PERSONALIZATION.TYPE_BOOST;
     const freshnessDays = SEARCH_CONFIG.PERSONALIZATION.FRESHNESS_DAYS;
     const freshnessBoost = SEARCH_CONFIG.PERSONALIZATION.FRESHNESS_BOOST;
+    const engagementCap = SEARCH_CONFIG.PERSONALIZATION.ENGAGEMENT_BOOST_CAP;
     const now = Date.now();
 
     for (const [type, hits] of Object.entries(resultsByType)) {
@@ -838,7 +724,7 @@ class UltimateSearchService {
           if (ageDays <= freshnessDays) score *= freshnessBoost;
         }
         const engagement = (hit.likeCount || 0) + (hit.commentCount || 0) * 2 + (hit.shareCount || 0) * 3;
-        const engagementBoost = Math.min(SEARCH_CONFIG.PERSONALIZATION.ENGAGEMENT_BOOST_CAP, 1 + Math.log10(engagement + 1) * 0.1);
+        const engagementBoost = Math.min(engagementCap, 1 + Math.log10(engagement + 1) * 0.1);
         score *= engagementBoost;
         return { ...hit, score, normalizedScore: hit.normalizedScore };
       });
@@ -846,9 +732,6 @@ class UltimateSearchService {
     return boosted;
   }
 
-  // --------------------------------------------------------------------
-  //  🎯 GLOBAL RANKING FUSION (diversity with log‑based decay)
-  // --------------------------------------------------------------------
   async _fuseResults(resultsByType, query, userProfile, intentScore = 1.0) {
     const all = [];
     const weights = SEARCH_CONFIG.RANKING_FUSION.TYPE_WEIGHTS;
@@ -879,9 +762,6 @@ class UltimateSearchService {
     return diversified;
   }
 
-  // --------------------------------------------------------------------
-  //  🎯 INTENT SCORING (enhanced)
-  // --------------------------------------------------------------------
   _computeIntentScore(query) {
     const lower = query.toLowerCase();
     let score = SEARCH_CONFIG.INTENT_SCORING.DEFAULT;
@@ -891,35 +771,24 @@ class UltimateSearchService {
     return score;
   }
 
-  // --------------------------------------------------------------------
-  //  🎯 SUGGESTIONS
-  // --------------------------------------------------------------------
   async getSuggestions(query, options = {}) {
     await this.ensureInitialized();
     const normalized = normalizeQuery(query);
-    const res = await this.search(normalized, { ...options, hitsPerPage: 5, cache: false });
-    if (!res.success) return { success: false, suggestions: [] };
-    const suggestions = [];
-    const seen = new Set();
-    for (const item of res.items) {
-      const key = `${item.type}:${item.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      suggestions.push({
-        type: item.type,
-        id: item.id,
-        text: item.raw?.displayName || item.raw?.title || item.raw?.content?.slice(0, 50),
-        subtitle: item.metadata.positionTitle || item.metadata.popularityTitle || '',
-        image: item.raw?.photoURL || item.raw?.thumbnail,
-        url: `/${item.type}/${item.id}`,
-      });
+    if (!normalized) return { success: true, suggestions: [] };
+    try {
+      const index = this.client.initIndex('arvdoul_suggestions');
+      const res = await index.search(normalized, { hitsPerPage: 10 });
+      const suggestions = res.hits.map(h => h.query);
+      return { success: true, suggestions, query: normalized };
+    } catch (err) {
+      console.warn('[Search] Suggestions fallback to search', err);
+      const searchRes = await this.search(normalized, { ...options, hitsPerPage: 5, cache: false });
+      if (!searchRes.success) return { success: false, suggestions: [] };
+      const suggestions = searchRes.items.map(item => item.raw?.displayName || item.raw?.title || item.raw?.content?.slice(0, 50));
+      return { success: true, suggestions: [...new Set(suggestions)], query: normalized };
     }
-    return { success: true, suggestions, query: normalized };
   }
 
-  // --------------------------------------------------------------------
-  //  🧹 GET FACET VALUES (stable compare)
-  // --------------------------------------------------------------------
   async getFacetValues(indexName, facetName, query = '', options = {}) {
     await this.ensureInitialized();
     const fullIndexName = this._resolveIndexName(indexName);
@@ -937,9 +806,6 @@ class UltimateSearchService {
     }
   }
 
-  // --------------------------------------------------------------------
-  //  📈 TRACK CLICK (batched, insights init once)
-  // --------------------------------------------------------------------
   async trackClick(eventData) {
     if (!SEARCH_CONFIG.ANALYTICS.ENABLED) return;
     const { queryID, objectIDs, positions, index, userToken } = eventData;
@@ -975,9 +841,6 @@ class UltimateSearchService {
     }
   }
 
-  // --------------------------------------------------------------------
-  //  🛠️ PRIVATE HELPERS
-  // --------------------------------------------------------------------
   _resolveIndexName(baseIndex, sortBy = 'relevance') {
     const cacheKey = `${baseIndex}_${sortBy}`;
     if (this.indexNameCache.has(cacheKey)) return this.indexNameCache.get(cacheKey);
@@ -993,7 +856,7 @@ class UltimateSearchService {
     if (!facetFilters) return [];
     if (Array.isArray(facetFilters)) {
       const normalized = facetFilters.map(item => Array.isArray(item) ? [...item].sort() : item);
-      return normalized.sort((a, b) => (fastHash(a) < fastHash(b) ? -1 : 1));
+      return normalized.sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
     }
     return [facetFilters];
   }
@@ -1080,7 +943,22 @@ export function getSearchService() {
 // ==================== PUBLIC API ====================
 const searchService = {
   search: (q, opts) => getSearchService().search(q, opts),
-  searchUsers: (q, opts) => getSearchService().search(q, { ...opts, indices: ['users'] }),
+  searchUsers: async (q, opts) => {
+    const result = await getSearchService().search(q, { ...opts, indices: ['users'] });
+    if (!result.success) return { success: false, users: [] };
+    const users = result.items.map(item => {
+      const raw = item.raw;
+      return {
+        id: raw.objectID,
+        uid: raw.objectID,
+        username: raw.username,
+        displayName: raw.displayName,
+        photoURL: raw.photoURL,
+        ...raw,
+      };
+    });
+    return { success: true, users };
+  },
   searchPosts: (q, opts) => getSearchService().search(q, { ...opts, indices: ['posts'] }),
   searchVideos: (q, opts) => getSearchService().search(q, { ...opts, indices: ['videos'] }),
   getSuggestions: (q, opts) => getSearchService().getSuggestions(q, opts),

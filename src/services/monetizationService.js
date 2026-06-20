@@ -1,12 +1,12 @@
-// src/services/monetizationService.js - ARVDOUL ULTIMATE MONETIZATION ENGINE v4.2
+// src/services/monetizationService.js - ARVDOUL ULTIMATE MONETIZATION ENGINE v5.0 (BILLION-SCALE)
 // 🔒 FINANCIAL-GRADE • DOUBLE-ENTRY LEDGER • DYNAMIC CONFIG • FRAUD RESISTANT
-// 👑 GENDER-AWARE ROYAL POSITIONS • MOST POPULAR RANKS
+// 👑 GENDER‑AWARE ROYAL POSITIONS • MOST POPULAR RANKS
 // 💰 COIN PURCHASE (STRIPE) • AD REWARDS • SUBSCRIPTION TIERS • CREATOR PAYOUTS
 // ✅ ALL OPERATIONS DELEGATED TO CLOUD FUNCTIONS FOR SECURITY
-// ✅ SERVER-SIDE DAILY AD LIMITS, NO CLIENT-SIDE BYPASS
-// ✅ FIXED: offline queue delete bug, SSR/WebView safety, performance.now fallback
-// ✅ FIXED: integer coin math, progress clamp, removed per‑ad timeout, queue sync race
-// ✅ FIXED: navigator.onLine fallback, event listener cleanup
+// ✅ SERVER‑SIDE DAILY AD LIMITS, NO CLIENT‑SIDE BYPASS
+// ✅ FIXED: offline queue sync lifecycle, JSON.parse crash, ad cache leak, fake online detection
+// ✅ FIXED: config timing safety, leaderboard index hint, destroy() cleanup
+// ✅ ADDED: Firestore outbox pattern fallback for offline queue (not just IndexedDB)
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
@@ -18,6 +18,8 @@ import {
   where,
   orderBy,
   limit as firestoreLimit,
+  addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
@@ -99,6 +101,17 @@ const DEFAULT_CONFIG = {
   REMOTE_CONFIG_MIN_FETCH_INTERVAL_MS: 3600000,
 };
 
+// ---------- safe JSON parse with fallback ----------
+function safeJsonParse(str, fallback) {
+  if (!str) return fallback;
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    console.warn('Failed to parse remote config value, using fallback', e);
+    return fallback;
+  }
+}
+
 // ---------- fetch dynamic config from Remote Config (cached, with min interval) ----------
 let cachedConfig = null;
 let configPromise = null;
@@ -121,10 +134,10 @@ async function getMonetizationConfig(forceRefresh = false) {
       const popularityStr = getValue(remoteConfig, 'popularity_thresholds').asString();
       const subsStr = getValue(remoteConfig, 'subscription_tiers').asString();
 
-      const levels = levelsStr ? JSON.parse(levelsStr) : null;
-      const positionThresholds = positionsStr ? JSON.parse(positionsStr) : null;
-      const popularityThresholds = popularityStr ? JSON.parse(popularityStr) : null;
-      const subscriptionTiers = subsStr ? JSON.parse(subsStr) : null;
+      const levels = safeJsonParse(levelsStr, null);
+      const positionThresholds = safeJsonParse(positionsStr, null);
+      const popularityThresholds = safeJsonParse(popularityStr, null);
+      const subscriptionTiers = safeJsonParse(subsStr, null);
 
       const db = await getFirestoreInstance();
       const configDoc = await getDoc(doc(db, 'config', 'monetization'));
@@ -165,9 +178,10 @@ async function retryOperation(fn, maxRetries = 3, baseDelay = 1000) {
   throw lastError;
 }
 
-// ---------- Offline queue (IndexedDB) with proper key handling ----------
+// ---------- Offline queue (IndexedDB + Firestore outbox) with fixed event binding ----------
 class OfflineMonetizationQueue {
-  constructor() {
+  constructor(service) {
+    this.service = service; // store reference to service for sync
     this.dbPromise = openDB('monetization_offline', 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('queue')) {
@@ -189,6 +203,18 @@ class OfflineMonetizationQueue {
   async add(operation, params) {
     const db = await this.dbPromise;
     await db.add('queue', { operation, params, timestamp: Date.now() });
+    // Also write to Firestore outbox (backup)
+    if (this.service && this.service.db) {
+      try {
+        await addDoc(collection(this.service.db, 'monetization_outbox'), {
+          operation,
+          params,
+          createdAt: serverTimestamp(),
+          status: 'pending',
+          userId: params.userId || null,
+        });
+      } catch (e) { /* silent */ }
+    }
     this.sync();
   }
 
@@ -208,17 +234,17 @@ class OfflineMonetizationQueue {
     await db.delete('queue', id);
   }
 
-  async sync(serviceInstance) {
-    if (!serviceInstance || !serviceInstance.initialized || this.isSyncing) return;
+  async sync() {
+    if (!this.service || !this.service.initialized || this.isSyncing) return;
     this.isSyncing = true;
     try {
       const queue = await this.getAll();
       for (const item of queue) {
         try {
           if (item.operation === 'watchAd') {
-            await serviceInstance.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds);
+            await this.service.watchAd(item.params.placement, item.params.adId, item.params.watchDurationSeconds);
           } else if (item.operation === 'purchaseCoins') {
-            await serviceInstance.purchaseCoins(item.params.packageId, item.params.paymentMethodId);
+            await this.service.purchaseCoins(item.params.packageId, item.params.paymentMethodId);
           }
           await this.delete(item.id);
         } catch (err) {
@@ -250,8 +276,9 @@ class MonetizationService {
     this.initialized = false;
     this.adCache = new Map();
     this.config = null;
-    this.offlineQueue = new OfflineMonetizationQueue();
+    this.offlineQueue = null; // will be created after _ensureInitialized
     this.cleanupInterval = null;
+    this.destroyed = false;
 
     // Cloud Functions references
     this.cfAddCoins = null;
@@ -270,15 +297,15 @@ class MonetizationService {
     this.cfCancelSubscription = null;
     this.cfGetPayoutSettings = null;
     this.cfCreatePayoutAccount = null;
-
-    // Periodic ad cache cleaner
-    this.cleanupInterval = setInterval(() => this._cleanupExpiredAds(), 5 * 60 * 1000);
   }
 
   async _ensureInitialized() {
+    if (this.destroyed) throw new Error('MonetizationService has been destroyed');
     if (!this.initialized) {
       this.db = await getFirestoreInstance();
       this.config = await getMonetizationConfig();
+      // create offline queue with reference to this service
+      this.offlineQueue = new OfflineMonetizationQueue(this);
 
       const functions = getFunctions();
       this.cfAddCoins = httpsCallable(functions, 'addCoins');
@@ -299,8 +326,11 @@ class MonetizationService {
       this.cfCreatePayoutAccount = httpsCallable(functions, 'createPayoutAccount');
 
       this.initialized = true;
-      console.log('💰 MonetizationService v4.2 (gender-aware, offline queue fixed, production-hardened)');
-      this.offlineQueue.sync(this);
+      console.log('💰 MonetizationService v5.0 (gender-aware, offline queue fixed, production-hardened)');
+      // start periodic ad cache cleaner
+      this.cleanupInterval = setInterval(() => this._cleanupExpiredAds(), 5 * 60 * 1000);
+      // sync offline queue after init
+      this.offlineQueue.sync();
     }
     return this.db;
   }
@@ -314,14 +344,22 @@ class MonetizationService {
     }
   }
 
-  // ---------- real connection check (optional, but more reliable) ----------
+  // ---------- real connection check (more robust) ----------
   async _isActuallyOnline() {
+    // First check navigator.onLine (fast)
+    if (hasWindow && !navigator.onLine) return false;
+    // Then attempt to fetch a lightweight resource
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3000);
-      await fetch('/favicon.ico', { method: 'HEAD', cache: 'no-store', signal: controller.signal });
+      // Use a no-cache endpoint that is guaranteed to be available (e.g., Firebase root)
+      const res = await fetch('https://firestore.googleapis.com/v1/projects/-/databases/(default)/documents', {
+        method: 'HEAD',
+        cache: 'no-store',
+        signal: controller.signal,
+      });
       clearTimeout(timeoutId);
-      return true;
+      return res.ok || res.status === 403; // 403 means we can reach Firestore but auth fails – still online
     } catch {
       return false;
     }
@@ -339,6 +377,7 @@ class MonetizationService {
   async getTransactionHistory(userId, limitCount = 50) {
     await this._ensureInitialized();
     const txRef = collection(this.db, 'coin_transactions');
+    // Requires composite index: userId ASC, createdAt DESC
     const q = query(
       txRef,
       where('userId', '==', userId),
@@ -390,7 +429,7 @@ class MonetizationService {
     return { balance, level: levelInfo, totalTransactions: txCount };
   }
 
-  // 👑 GENDER‑AWARE ROYAL POSITIONS
+  // 👑 GENDER‑AWARE ROYAL POSITIONS (safe config access)
   async getUserPosition(userId, gender = 'other') {
     await this._ensureInitialized();
     const balance = await this.getBalance(userId);
@@ -435,6 +474,7 @@ class MonetizationService {
   async getCoinLeaderboard(limitCount = 50) {
     await this._ensureInitialized();
     const usersRef = collection(this.db, 'users');
+    // Firestore will use composite index automatically if created
     const q = query(usersRef, orderBy('coins', 'desc'), firestoreLimit(limitCount));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
@@ -446,7 +486,10 @@ class MonetizationService {
     }));
   }
 
+  // Safe because config is guaranteed to exist after _ensureInitialized()
   getPositionTitle(coins) {
+    // This method may be called before config is loaded – guard
+    if (!this.config) return 'Commoner';
     const thresholds = this.config.POSITION_THRESHOLDS;
     if (coins >= thresholds.KING) return 'King/Queen';
     if (coins >= thresholds.PRINCE) return 'Prince/Princess';
@@ -611,9 +654,12 @@ class MonetizationService {
 
   // -------------------- CLEANUP --------------------
   destroy() {
+    this.destroyed = true;
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
-    this.offlineQueue.destroy();
+    if (this.offlineQueue) this.offlineQueue.destroy();
     this.adCache.clear();
+    this.initialized = false;
+    console.log('💰 MonetizationService destroyed');
   }
 }
 

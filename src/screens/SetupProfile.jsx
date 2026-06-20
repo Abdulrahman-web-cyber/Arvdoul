@@ -1,6 +1,8 @@
-// src/screens/SetupProfile.jsx – ARVDOUL SUPREMACY • FINAL ULTRA PRODUCTION
-// ✅ Offline banner, non‑scrollable glass card, username generator based on display name
-// ✅ Firebase Auth update, avatar upload, skip button, no delay, glowing button
+// src/screens/SetupProfile.jsx – ARVDOUL SUPREMACY • FIXED FOR EXISTING USERS
+// ✅ Auto‑redirect if profile already complete
+// ✅ Forces profile refresh after creation
+// ✅ Username generation robust with retries
+// ✅ Non‑scrollable glass card, offline banner, glowing button
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -14,6 +16,7 @@ import {
   createUserProfile,
   checkUsernameAvailability,
   generateDefaultAvatar,
+  getUserProfile,
 } from "../services/userService.js";
 import storageService from "../services/storageService.js";
 
@@ -246,7 +249,7 @@ const PerfectAvatarUploader = React.memo(
 );
 PerfectAvatarUploader.displayName = "PerfectAvatarUploader";
 
-// ==================== SMART USERNAME GENERATOR (FIXED) ====================
+// ==================== SMART USERNAME GENERATOR (IMPROVED) ====================
 const SmartUsernameGenerator = React.memo(
   ({ username, onChange, theme, loading = false, displayName = "", userId = null }) => {
     const [status, setStatus] = useState("idle");
@@ -289,7 +292,7 @@ const SmartUsernameGenerator = React.memo(
             setStatus("available");
             setMessage("Username available!");
           } else if (result.error) {
-            console.warn("Username check failed:", result.error, result.errorCode);
+            console.warn("Username check failed:", result.error);
             setStatus("error");
             setMessage("Unable to verify – try again");
           } else {
@@ -315,9 +318,16 @@ const SmartUsernameGenerator = React.memo(
       setStatus("checking");
       setMessage("Generating unique username...");
 
+      // Add a timeout to prevent infinite waiting
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Generation timeout")), 10000)
+      );
+
       try {
         const { generateUniqueUsername } = await import("../services/userService.js");
-        const generated = await generateUniqueUsername(displayName, userId);
+        const generationPromise = generateUniqueUsername(displayName, userId);
+        const generated = await Promise.race([generationPromise, timeoutPromise]);
+
         if (generated && generated.length >= 3) {
           onChange(generated);
           await validateUsername(generated);
@@ -449,8 +459,9 @@ export default function SetupProfile() {
   const location = useLocation();
   const themeCtx = useTheme?.() || { theme: "light" };
   const { theme } = themeCtx;
-  const { user, updateUserProfile, authService } = useAuth();
+  const { user, userProfile, updateUserProfile, authService, checkAuthState } = useAuth();
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Offline detection
   useEffect(() => {
@@ -463,6 +474,14 @@ export default function SetupProfile() {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  // ✅ CRITICAL FIX: If user already has a complete profile, redirect immediately
+  useEffect(() => {
+    if (user && userProfile && userProfile.isProfileComplete) {
+      console.log("Profile already complete, redirecting to /home");
+      navigate("/home", { replace: true });
+    }
+  }, [user, userProfile, navigate]);
 
   const signupData = useMemo(() => {
     try {
@@ -485,14 +504,12 @@ export default function SetupProfile() {
       : theme;
 
   const buildDisplayName = () => {
-    // Priority: step1Data from signup_data (saved during step2)
     const step1 = signupData.firstName ? signupData : step1FromState;
     if (step1.firstName && step1.lastName) {
       return `${step1.firstName} ${step1.lastName}`.trim();
     }
     if (step1.firstName) return step1.firstName;
     if (step1.lastName) return step1.lastName;
-    // Fallback: from stateData or user
     if (stateData.displayName) return stateData.displayName;
     if (user?.displayName) return user.displayName;
     if (user?.email) return user.email.split('@')[0];
@@ -545,6 +562,24 @@ export default function SetupProfile() {
     }
   };
 
+  // Force refresh user profile from Firestore
+  const refreshUserProfile = async () => {
+    if (!user?.uid) return;
+    setRefreshing(true);
+    try {
+      const freshProfile = await getUserProfile(user.uid);
+      if (freshProfile && updateUserProfile) {
+        await updateUserProfile(freshProfile);
+        // Manually update the local userProfile state via AuthContext's updateUserProfile
+        console.log("Profile refreshed:", freshProfile);
+      }
+    } catch (err) {
+      console.warn("Failed to refresh profile", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (loading || profileComplete || !displayName.trim() || username.length < 3) return;
     setLoading(true);
@@ -573,14 +608,19 @@ export default function SetupProfile() {
 
       if (!result.success) throw new Error(result.error || "Profile creation failed");
 
+      // Update AuthContext
       if (updateUserProfile) await updateUserProfile({ isProfileComplete: true });
 
+      // Update Firebase Auth user profile
       if (authService?.auth?.currentUser) {
         await updateFirebaseAuthProfile(authService.auth.currentUser, {
           displayName: displayName.trim(),
           photoURL: finalAvatar,
         });
       }
+
+      // Force a refresh of the profile to ensure the flag is updated
+      await refreshUserProfile();
 
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
@@ -622,6 +662,7 @@ export default function SetupProfile() {
           photoURL: finalAvatar,
         });
       }
+      await refreshUserProfile();
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
       setProfileComplete(true);
@@ -651,7 +692,6 @@ export default function SetupProfile() {
     );
   }
 
-  // NON‑SCROLLABLE WRAPPER + MAX‑WIDTH CARD WITH INTERNAL SCROLL
   return (
     <div className="h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
       {/* Offline Banner */}
@@ -697,13 +737,11 @@ export default function SetupProfile() {
           >
             <PerfectAvatarUploader onUpload={handleAvatarUpload} currentAvatar={avatarUrl} displayName={displayName} userId={user?.uid} theme={theme} loading={loading} />
 
-            {/* Read‑Only Display Name */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Display Name</label>
               <div className={`w-full px-3 py-2 rounded-lg border ${resolvedTheme === "dark" ? "bg-gray-800/50 border-gray-600 text-gray-200" : "bg-gray-100 border-gray-300 text-gray-700"}`}>{displayName}</div>
             </div>
 
-            {/* Auth Method with truncation for long email/phone */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Sign‑up Method</label>
               <div className={`w-full px-3 py-2 rounded-lg border flex items-center gap-2 ${resolvedTheme === "dark" ? "bg-gray-800/50 border-gray-600 text-gray-300" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
@@ -719,7 +757,6 @@ export default function SetupProfile() {
 
             <SmartUsernameGenerator username={username} onChange={setUsername} theme={theme} loading={loading} displayName={displayName} userId={user?.uid} />
 
-            {/* Bio */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white">Bio (Optional)</label>
@@ -728,7 +765,6 @@ export default function SetupProfile() {
               <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 150))} disabled={loading} placeholder="Tell us about yourself..." rows={3} className="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-500 resize-none border-gray-300 dark:border-gray-600 focus:border-indigo-500" />
             </div>
 
-            {/* Buttons with glowing effect */}
             <div className="space-y-3">
               <button
                 onClick={handleSubmit}
@@ -748,6 +784,9 @@ export default function SetupProfile() {
               >
                 Skip for now
               </button>
+              {refreshing && (
+                <div className="text-center text-xs text-gray-500">Refreshing profile...</div>
+              )}
             </div>
           </div>
         </div>

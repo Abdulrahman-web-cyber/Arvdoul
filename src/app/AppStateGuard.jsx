@@ -1,4 +1,5 @@
 // src/app/AppStateGuard.jsx - WAITS FOR PROFILE, FIXED SPLASH, NO PREMATURE REDIRECT
+// 🔧 FIXED: Google/phone users no longer redirected to email verification
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -55,6 +56,16 @@ export default function AppStateGuard({ children }) {
     [location.pathname]
   );
 
+  // ✅ Safe check: only email/password users need email verification
+  const needsEmailVerification = useMemo(() => {
+    if (!user) return false;
+    const provider = user.authProvider;
+    // Only force verification for email/password providers
+    const isEmailProvider = provider === 'email' || provider === 'password' || provider === 'unknown';
+    // Also, if the user has an email and it's not verified AND the provider is email-like
+    return isEmailProvider && user.email && !user.emailVerified;
+  }, [user]);
+
   useEffect(() => {
     // DO NOT make any decisions until auth is fully initialized AND loading is complete
     if (!authInitialized || authLoading) {
@@ -62,7 +73,7 @@ export default function AppStateGuard({ children }) {
       return;
     }
 
-    const currentStateKey = `${location.pathname}-${isAuthenticated}-${isEmailVerified}-${isProfileComplete}-${isSignupInProgress}-${requiresEmailVerification}`;
+    const currentStateKey = `${location.pathname}-${isAuthenticated}-${isEmailVerified}-${isProfileComplete}-${isSignupInProgress}-${needsEmailVerification}`;
 
     // Prevent repeated navigation for the same state
     if (lastDecision.current.path === currentStateKey) {
@@ -72,7 +83,6 @@ export default function AppStateGuard({ children }) {
 
     // ===== SPLASH SCREEN AUTO‑REDIRECT =====
     if (location.pathname === "/") {
-      // The splash screen itself handles the redirect, so just allow it to render
       setShouldRender(true);
       lastDecision.current = { path: currentStateKey, decision: "allow-splash" };
       return;
@@ -87,14 +97,13 @@ export default function AppStateGuard({ children }) {
         lastDecision.current = { path: currentStateKey, decision: "redirect-intro" };
         return;
       }
-      // On a public route, allow
       setShouldRender(true);
       lastDecision.current = { path: currentStateKey, decision: "allow-public-unauth" };
       return;
     }
 
-    // ===== EMAIL VERIFICATION REQUIRED (only for email/password users) =====
-    if (isAuthenticated && requiresEmailVerification && !isEmailVerified) {
+    // ===== EMAIL VERIFICATION REQUIRED (ONLY for email/password users) =====
+    if (isAuthenticated && needsEmailVerification && !isEmailVerified) {
       if (isVerificationRoute) {
         setShouldRender(true);
         lastDecision.current = { path: currentStateKey, decision: "allow-verification" };
@@ -108,8 +117,7 @@ export default function AppStateGuard({ children }) {
     }
 
     // ===== PROFILE INCOMPLETE (only if email verified or not required) =====
-    if (isAuthenticated && (isEmailVerified || !requiresEmailVerification) && !isProfileComplete) {
-      // If already on setup-profile, allow it to render
+    if (isAuthenticated && (!needsEmailVerification || isEmailVerified) && !isProfileComplete) {
       if (isSetupProfileRoute) {
         setShouldRender(true);
         lastDecision.current = { path: currentStateKey, decision: "allow-setup" };
@@ -145,7 +153,7 @@ export default function AppStateGuard({ children }) {
     authInitialized,
     authLoading,
     isSignupInProgress,
-    requiresEmailVerification,
+    needsEmailVerification,
     user,
     navigate,
   ]);
