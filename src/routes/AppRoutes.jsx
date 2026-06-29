@@ -20,6 +20,9 @@ const HomeScreen = lazy(() => import("../screens/HomeScreen.jsx"));
 const VideosScreen = lazy(() => import("../screens/VideosScreen.jsx"));
 const MessagingScreen = lazy(() => import("../screens/MessagingScreen.jsx"));
 const ChatScreen = lazy(() => import("../screens/ChatScreen.jsx"));
+const NewConversationScreen = lazy(() => import("../screens/NewConversationScreen.jsx"));
+const GroupInfoScreen = lazy(() => import("../screens/GroupInfoScreen.jsx"));
+const ConversationSettingsScreen = lazy(() => import("../screens/ConversationSettingsScreen.jsx"));
 const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
 const NetworkScreen = lazy(() => import("../screens/NetworkScreen.jsx"));
 const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
@@ -178,6 +181,13 @@ export default function AppRoutes() {
           </Suspense>
         } />
         
+        {/* New conversation */}
+        <Route path="new" element={
+          <Suspense fallback={<RouteFallback />}>
+            <NewConversationScreen />
+          </Suspense>
+        } />
+        
         {/* Individual chat */}
         <Route path=":conversationId" element={
           <Suspense fallback={<RouteFallback />}>
@@ -185,10 +195,17 @@ export default function AppRoutes() {
           </Suspense>
         } />
         
-        {/* New conversation */}
-        <Route path="new" element={
+        {/* Group info */}
+        <Route path=":conversationId/info" element={
           <Suspense fallback={<RouteFallback />}>
-            <MessagingScreen initialView="new" />
+            <GroupInfoScreen />
+          </Suspense>
+        } />
+        
+        {/* Conversation settings */}
+        <Route path=":conversationId/settings" element={
+          <Suspense fallback={<RouteFallback />}>
+            <ConversationSettingsScreen />
           </Suspense>
         } />
       </Route>
