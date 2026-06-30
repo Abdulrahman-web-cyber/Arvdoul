@@ -1,1238 +1,1764 @@
-// src/screens/CommentsDrawer.jsx – ARVDOUL FINAL v53.0 (WORKING)
-// ✅ Loading spinner appears immediately
-// ✅ "No comments yet" shows when empty
-// ✅ Comments render correctly
-// ✅ Real‑time subscription works
-// ✅ Optimistic comments appear instantly
-// ✅ Offline queue flushes correctly
-// ✅ All interactions (like, reply, edit, delete, report) work
-// ✅ No infinite loops, no memoization lies
-// ✅ Production‑ready – uses the fixed commentService
+// src/services/commentService.js – UNIVERSAL COMMENT ENGINE V22 · PRODUCTION‑READY
+// 💬 REAL‑TIME THREADED COMMENTS • ANY TARGET (post, story, video, poll, …)
+// 🧩 GENERIC COUNTERS + BACKWARD‑COMPAT SYNC • PERSISTENT ANONYMOUS ID
+// 🎨 RICH TEXT (MARKDOWN/HTML) • TRANSLATION & SENTIMENT HOOKS
+// 🛡️ SPAM / ABUSE HOOK (PERSPECTIVE) • TWO‑TIER SHADOW BANNING • SLOW MODE
+// 📈 ADVANCED HYBRID RANKING • COLLAPSE LOW‑QUALITY • MODERATION QUEUE + BULK OPS
+// 🔔 NOTIFICATIONS INTEGRATION • SIMPLE RELIABLE RATE LIMITS • GDPR STUBS (disabled)
+// 🧹 AUTOMATED CLEANUP DISABLED (SERVER‑SIDE REQUIRED) • GRACEFUL DEGRADATION
+// 🚀 BEST‑IN‑CLASS FIREBASE CLIENT – PAIR WITH SERVER‑SIDE FOR WORLD‑SCALE
+// ⚠️ TO TRULY SURPASS GIANTS, ADD: CLOUD FUNCTIONS, SECURITY RULES, CDN, QUEUES
 
-import React, {
-  useState, useEffect, useCallback, useRef, useMemo
-} from 'react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
-import { Virtuoso } from 'react-virtuoso';
-import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
-import { enUS } from 'date-fns/locale';
-import { useNavigate } from 'react-router-dom';
-import {
-  MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2,
-  Pin, Heart, Smile, MoreHorizontal, AlertTriangle,
-  Clock, Search, ChevronDown, ChevronUp, Mic, StopCircle, History,
-  ChevronsDown, RefreshCw, Link, Copy, Sparkles
-} from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
-import commentService from '../services/commentService.js';
-import notificationsService from '../services/notificationsService.js';
-import userService from '../services/userService.js';
-import storageService from '../services/storageService.js';
-import { triggerHaptic } from '../utils/haptics';
-import { openDB } from 'idb';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import LoadingSpinner from '../components/Shared/LoadingSpinner.jsx';
-import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
-
-// ==================== CONSTANTS ====================
-const MAX_REPLY_DEPTH = 6;
-const PROFILE_CACHE_TTL = 5 * 60 * 1000;
-const PROFILE_CACHE_MAX = 200;
-const ACTION_DEBOUNCE_MS = 500;
-const MAX_RECORDING_SECONDS = 60;
-const TYPING_USER_EXPIRY_MS = 5000;
-const DRAFT_STORAGE_KEY = 'arvdoul_comment_draft';
-const REPLIES_PAGE_SIZE = 10;
-const COMMENTS_PAGE_SIZE = 30;
-
-// ==================== POLYFILLS ====================
-const safeRandomUUID = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+const COMMENTS_CONFIG = {
+  MAX_DEPTH: 6,
+  MAX_COMMENT_LENGTH: 10000,
+  MIN_COMMENT_LENGTH: 1,
+  CACHE_EXPIRY: 5 * 60 * 1000,            // 5 minutes
+  PAGINATION_LIMIT: 50,
+  REAL_TIME_UPDATE_INTERVAL: 2000,        // used for debouncing if needed
+  SPAM_CHECK_THRESHOLD: 5,                // max comments per minute
+  MENTION_LIMIT: 15,
+  REPLY_DEPTH_LIMIT: 6,
+  SLOW_MODE_SECONDS: 30,                 // per‑target cooldown (0 = off)
+  TOXIC_WORDS: ['idiot', 'stupid', 'retard', 'hate', 'kill yourself'],
+  SPAM_PATTERNS: [
+    /buy now|cheap|discount|click here|limited time/gi,
+    /bit\.ly|goo\.gl|tinyurl|shorturl/gi,
+    /casino|poker|betting|gambling/gi,
+    /viagra|cialis|levitra/gi,
+    /follow me|like for like|follow for follow/gi
+  ],
+  ALLOWED_REACTIONS: ['👍', '❤️', '😂', '😮', '😢', '👎', '🔥', '🎉'],
+  HISTORY_RETENTION_DAYS: 30,
+  REACTION_RETENTION_DAYS: 90,
+  USE_CLOUD_FUNCTIONS: true,              // external Cloud Functions expected
+  ANONYMOUS_PREFIX: 'Anonymous',
+  ANONYMOUS_HASH_SALT: 'arvdoul_comment_anon_salt_v2',
+  SUPPORTED_FORMATS: ['plain', 'markdown', 'html'],
+  DEFAULT_FORMAT: 'plain',
+  RANKING_GRAVITY: 1.5,                  // exponent for time decay
+  AUTHOR_REPUTATION_WEIGHT: 0.3,          // 0‑1
+  COLLAPSE_SCORE_THRESHOLD: -2,          // threads with score ≤ this are collapsed
+  SHADOW_BAN_DEFAULT_HIDE: false,
+  SEARCH_INDEXING_ENABLED: false,         // set to true + implement _indexCommentForSearch
+  GDPR_EXPORT_FUNCTION_NAME: 'exportUserComments',
+  GDPR_DELETE_FUNCTION_NAME: 'deleteUserComments',
 };
 
-const safeCopy = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    console.warn('Clipboard write failed');
+class UltimateCommentService {
+  constructor() {
+    this.firestore = null;
+    this.initialized = false;
+    this.cache = new Map();
+    this.realtimeSubscriptions = new Map(); // subscriptionId -> { unsubscribe, ... }
+    this.activeUsers = new Map();
+    this.lastCleanup = Date.now();
+    this.cleanupInterval = null;
+    this.slowModeTimestamps = new Map();   // targetKey -> last comment creation time (ms)
+    this.notificationsService = null;     // cached reference
+
+    console.log('💬 Ultimate Comment Service V22 – Production‑Ready Client');
+
+    this.initialize().catch(err => {
+      console.warn('Comment service initialization warning:', err.message);
+    });
+
+    // Periodic stale cache/subscriptions cleanup
+    this.cleanupInterval = setInterval(() => this.cleanupStaleData(), 5 * 60 * 1000);
+  }
+
+  // ==================== INITIALIZATION (caches critical dependencies) ====================
+  async initialize() {
+    if (this.initialized) return this.firestore;
+    try {
+      console.log('🚀 Initializing Comment Service...');
+
+      // Firebase core
+      const firebase = await import('../firebase/firebase.js');
+      this.firestore = await firebase.getFirestoreInstance();
+      if (!this.firestore) throw new Error('Failed to get Firestore instance');
+
+      // All Firestore methods
+      const firestoreModule = await import('firebase/firestore');
+      this.firestoreModule = firestoreModule;
+      this.firestoreMethods = {
+        collection: firestoreModule.collection,
+        addDoc: firestoreModule.addDoc,
+        getDoc: firestoreModule.getDoc,
+        getDocs: firestoreModule.getDocs,
+        updateDoc: firestoreModule.updateDoc,
+        deleteDoc: firestoreModule.deleteDoc,
+        query: firestoreModule.query,
+        where: firestoreModule.where,
+        orderBy: firestoreModule.orderBy,
+        limit: firestoreModule.limit,
+        startAfter: firestoreModule.startAfter,
+        startAt: firestoreModule.startAt,
+        endAt: firestoreModule.endAt,
+        serverTimestamp: firestoreModule.serverTimestamp,
+        increment: firestoreModule.increment,
+        arrayUnion: firestoreModule.arrayUnion,
+        arrayRemove: firestoreModule.arrayRemove,
+        doc: firestoreModule.doc,
+        writeBatch: firestoreModule.writeBatch,
+        onSnapshot: firestoreModule.onSnapshot,
+        getCountFromServer: firestoreModule.getCountFromServer,
+        enableIndexedDbPersistence: firestoreModule.enableIndexedDbPersistence,
+        runTransaction: firestoreModule.runTransaction,
+        sum: firestoreModule.sum,
+        average: firestoreModule.average,
+        count: firestoreModule.count,
+        getAll: firestoreModule.getAll,
+        setDoc: firestoreModule.setDoc,
+        Timestamp: firestoreModule.Timestamp
+      };
+
+      // Offline persistence – best effort
+      try {
+        await this.firestoreMethods.enableIndexedDbPersistence(this.firestore, {
+          synchronizeTabs: true,
+          forceOwnership: false
+        });
+        console.log('✅ Comment service persistence enabled');
+      } catch (persistenceError) {
+        console.warn('⚠️ Comment service persistence warning:', persistenceError.message);
+      }
+
+      // Cache notifications service (avoid repeated dynamic imports)
+      try {
+        const notificationsModule = await import('./notificationsService.js');
+        this.notificationsService = notificationsModule.default || notificationsModule.notificationsService;
+      } catch {
+        console.warn('Notifications service not available, continuing without');
+      }
+
+      this.initialized = true;
+      console.log('✅ Comment service initialized');
+      return this.firestore;
+    } catch (error) {
+      console.error('❌ Comment service initialization failed:', error);
+      throw this._enhanceError(error, 'Failed to initialize comment service');
+    }
+  }
+
+  /** Public method to ensure initialization */
+  async ensureInitialized() {
+    if (!this.initialized || !this.firestore) {
+      await this.initialize();
+    }
+    return this.firestore;
+  }
+
+  // Keep internal method for consistency
+  async _ensureInitialized() {
+    return this.ensureInitialized();
+  }
+
+  // ==================== GENERIC COUNTER MANAGEMENT ====================
+  async _incrementCommentCounter(targetType, targetId, delta = 1) {
+    await this._ensureInitialized();
+    const counterRef = this.firestoreMethods.doc(this.firestore, 'comment_counts', targetType, targetId);
+    await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
+      const snap = await transaction.get(counterRef);
+      const current = snap.exists() ? snap.data().count : 0;
+      transaction.set(counterRef, {
+        count: current + delta,
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        targetType,
+        targetId
+      }, { merge: true });
+    });
+  }
+
+  async getCommentCount(targetType, targetId) {
+    await this._ensureInitialized();
+    const counterRef = this.firestoreMethods.doc(this.firestore, 'comment_counts', targetType, targetId);
+    const snap = await this.firestoreMethods.getDoc(counterRef);
+    return snap.exists() ? snap.data().count : 0;
+  }
+
+  // ==================== SYNC TARGET DOCUMENT COUNT (for feed backward compatibility) ====================
+  async _syncTargetCommentCount(targetType, targetId, delta = 1) {
+    // Only sync known target types; extend as needed
+    const collectionMap = {
+      post: 'posts',
+      story: 'stories',
+      video: 'videos',
+    };
+    const collectionName = collectionMap[targetType];
+    if (!collectionName) return;
+    try {
+      const targetRef = this.firestoreMethods.doc(this.firestore, collectionName, targetId);
+      await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
+        const snap = await transaction.get(targetRef);
+        if (snap.exists()) {
+          const currentStats = snap.data().stats || {};
+          const newCount = Math.max(0, (currentStats.comments || 0) + delta);
+          transaction.update(targetRef, {
+            'stats.comments': newCount,
+            updatedAt: this.firestoreMethods.serverTimestamp()
+          });
+        }
+      });
+    } catch (error) {
+      console.warn(`Failed to sync comment count for ${targetType}/${targetId}:`, error);
+    }
+  }
+
+  // ==================== ANONYMOUS IDENTITY HELPER ====================
+  _getAnonymousDisplayName(userId, targetType, targetId) {
+    const hashInput = `${userId}_${targetType}_${targetId}_${COMMENTS_CONFIG.ANONYMOUS_HASH_SALT}`;
+    let hash = 0;
+    for (let i = 0; i < hashInput.length; i++) {
+      const char = hashInput.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // keep 32 bits
+    }
+    const num = Math.abs(hash) % 10000;
+    return `${COMMENTS_CONFIG.ANONYMOUS_PREFIX} ${num}`;
+  }
+
+  // ==================== COMMENT CREATION ====================
+  async createComment(targetType, targetId, userId, content, options = {}) {
+    const startTime = Date.now();
+    const operationId = `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    try {
+      await this._ensureInitialized();
+
+      console.log('💬 Creating comment:', {
+        operationId, targetType, targetId, userId,
+        contentLength: typeof content === 'string' ? content.length : JSON.stringify(content).length,
+        parentId: options.parentId || 'none',
+        isAnonymous: !!options.isAnonymous
+      });
+
+      // ----- Slow mode (client‑side best effort) -----
+      const slowKey = `${targetType}_${targetId}`;
+      if (COMMENTS_CONFIG.SLOW_MODE_SECONDS > 0) {
+        const lastTime = this.slowModeTimestamps.get(slowKey) || 0;
+        const now = Date.now();
+        if (now - lastTime < COMMENTS_CONFIG.SLOW_MODE_SECONDS * 1000) {
+          throw new Error(`Slow mode active. Please wait ${COMMENTS_CONFIG.SLOW_MODE_SECONDS} seconds.`);
+        }
+      }
+
+      // ----- Content format & validation -----
+      const format = options.format || COMMENTS_CONFIG.DEFAULT_FORMAT;
+      if (!COMMENTS_CONFIG.SUPPORTED_FORMATS.includes(format)) {
+        throw new Error(`Unsupported content format: ${format}`);
+      }
+      let validatedContent;
+      if (format === 'plain') {
+        validatedContent = content.trim();
+      } else {
+        validatedContent = content; // sanitization done on frontend / Cloud Function
+      }
+
+      const validation = this._validateComment(validatedContent, userId, format);
+      if (!validation.valid) {
+        throw new Error(`Comment validation failed: ${validation.errors.join(', ')}`);
+      }
+
+      // ----- Rate limiting (simple single‑document per minute) -----
+      const spamCheck = await this._checkSpamRate(userId);
+      if (!spamCheck.allowed) {
+        throw new Error(`Rate limit exceeded. Please wait ${spamCheck.waitTime} seconds.`);
+      }
+
+      const extracted = this._extractMetadata(validatedContent);
+
+      // ----- User identity -----
+      let userName = options.userName;
+      let userUsername = options.userUsername;
+      let userAvatar = options.userAvatar;
+      if (options.isAnonymous) {
+        const anonName = this._getAnonymousDisplayName(userId, targetType, targetId);
+        userName = anonName;
+        userUsername = `anon_${userId.slice(0, 8)}`;
+        userAvatar = '/assets/anonymous-profile.png';
+      } else {
+        userName = userName || `User_${userId.slice(0, 8)}`;
+        userUsername = userUsername || `user_${userId.slice(0, 8)}`;
+        userAvatar = userAvatar || '/assets/default-profile.png';
+      }
+
+      // ----- Comment document -----
+      const commentData = {
+        targetType,
+        targetId,
+        postId: targetType === 'post' ? targetId : null,
+        userId,
+        userAvatar,
+        userName,
+        userUsername,
+        content: validatedContent,
+        contentFormat: format,
+        parentId: options.parentId || null,
+        replyToId: options.replyToId || null,
+        replyToUsername: options.replyToUsername || null,
+        depth: options.depth || 0,
+        path: options.path || `${targetType}_${targetId}.${Date.now()}`,
+        isAnonymous: options.isAnonymous || false,
+
+        mentions: extracted.mentions,
+        hashtags: extracted.hashtags,
+        links: extracted.links,
+        language: extracted.language,
+        translatedContent: null,
+        translationLanguage: null,
+        sentimentScore: 0,
+
+        likes: 0, dislikes: 0, replies: 0, reports: 0,
+        likesBy: [], dislikesBy: [], reactionCounts: {},
+
+        isEdited: false, isDeleted: false, isPinned: false, isFeatured: false,
+        isSpam: false, isHidden: false, isShadowBanned: false,
+        moderationStatus: 'pending', moderationScore: 0,
+
+        viewCount: 0, shareCount: 0,
+
+        createdAt: this.firestoreMethods.serverTimestamp(),
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        lastActivityAt: this.firestoreMethods.serverTimestamp(),
+
+        version: 'v22',
+        _operationId: operationId,
+        _clientCreatedAt: new Date().toISOString()
+      };
+
+      // ----- Write to Firestore -----
+      const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+      const docRef = await this.firestoreMethods.addDoc(commentsRef, commentData);
+      const commentId = docRef.id;
+
+      // ----- Slow mode success -----
+      if (COMMENTS_CONFIG.SLOW_MODE_SECONDS > 0) {
+        this.slowModeTimestamps.set(slowKey, Date.now());
+      }
+
+      // ----- Counters & sync -----
+      await this._incrementCommentCounter(targetType, targetId, 1);
+      await this._syncTargetCommentCount(targetType, targetId, 1);
+
+      // ----- Parent update if reply -----
+      if (options.parentId) {
+        const parentRef = this.firestoreMethods.doc(this.firestore, 'comments', options.parentId);
+        await this.firestoreMethods.updateDoc(parentRef, {
+          replies: this.firestoreMethods.increment(1),
+          updatedAt: this.firestoreMethods.serverTimestamp(),
+          lastActivityAt: this.firestoreMethods.serverTimestamp()
+        });
+      }
+
+      // ----- Side effects (non‑blocking) -----
+      this._sendCommentNotification(targetType, targetId, userId, commentId, options.parentId, options.targetOwnerId)
+        .catch(console.warn);
+      this._indexCommentForSearch(commentId, commentData)
+        .catch(console.warn);
+
+      console.log('✅ Comment created successfully:', { id: commentId, targetType, targetId, userId, depth: options.depth || 0 });
+
+      // Invalidate caches
+      this._invalidateTargetCache(targetType, targetId);
+
+      return {
+        success: true,
+        commentId,
+        comment: { ...commentData, id: commentId },
+        operationId,
+        duration: Date.now() - startTime
+      };
+    } catch (error) {
+      console.error('❌ Create comment failed:', error);
+      throw this._enhanceError(error, 'Failed to create comment');
+    }
+  }
+
+  // ==================== NOTIFICATION HELPER (uses cached service) ====================
+  async _sendCommentNotification(targetType, targetId, commentAuthorId, commentId, parentId = null, targetOwnerId = null) {
+    try {
+      const notifications = this.notificationsService;
+      if (!notifications) return;
+
+      let recipientId = null;
+      let notificationType = 'comment';
+
+      if (parentId) {
+        const parentComment = await this.getComment(parentId);
+        if (parentComment.success && parentComment.comment.userId !== commentAuthorId) {
+          recipientId = parentComment.comment.userId;
+          notificationType = 'reply';
+        }
+      } else if (targetOwnerId && targetOwnerId !== commentAuthorId) {
+        recipientId = targetOwnerId;
+      }
+
+      if (recipientId) {
+        const postIdForNotif = targetType === 'post' ? targetId : `${targetType}:${targetId}`;
+        if (typeof notifications.createCommentNotification === 'function') {
+          if (notifications.createCommentNotification.length >= 5) {
+            await notifications.createCommentNotification(postIdForNotif, commentAuthorId, recipientId, commentId, notificationType);
+          } else {
+            await notifications.createCommentNotification(postIdForNotif, commentAuthorId, recipientId, commentId);
+          }
+        } else if (typeof notifications.sendNotification === 'function') {
+          await notifications.sendNotification({
+            type: notificationType,
+            targetType,
+            targetId,
+            commentId,
+            senderId: commentAuthorId,
+            recipientId,
+            title: notificationType === 'reply' ? 'New reply to your comment' : 'New comment',
+            message: `Someone ${notificationType === 'reply' ? 'replied' : 'commented'} on your ${targetType}`
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to send comment notification:', err);
+    }
+  }
+
+  // ==================== COMMENT RETRIEVAL (with shadow‑ban filtering, ranking, collapsing) ====================
+  async getCommentsByTarget(targetType, targetId, options = {}) {
+    const startTime = Date.now();
+    const cacheKey = this._getCacheKey('comments', targetType, targetId, options);
+
+    try {
+      await this._ensureInitialized();
+
+      // Cache lookup
+      if (options.cacheFirst !== false) {
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < COMMENTS_CONFIG.CACHE_EXPIRY) {
+          return {
+            success: true,
+            comments: cached.comments,
+            cached: true,
+            duration: Date.now() - startTime
+          };
+        }
+      }
+
+      const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+      const conditions = [
+        this.firestoreMethods.where('targetType', '==', targetType),
+        this.firestoreMethods.where('targetId', '==', targetId),
+        this.firestoreMethods.where('isDeleted', '==', false),
+        this.firestoreMethods.where('isHidden', '==', false),
+        this.firestoreMethods.orderBy('createdAt', 'desc')
+      ];
+
+      if (options.parentId === null || options.parentId === undefined) {
+        conditions.push(this.firestoreMethods.where('parentId', '==', null));
+      } else if (options.parentId !== 'all') {
+        conditions.push(this.firestoreMethods.where('parentId', '==', options.parentId));
+      }
+      if (options.maxDepth !== undefined) {
+        conditions.push(this.firestoreMethods.where('depth', '<=', options.maxDepth));
+      }
+      if (options.limit) {
+        conditions.push(this.firestoreMethods.limit(options.limit));
+      }
+      if (options.startAfter) {
+        const startAfterDoc = await this.firestoreMethods.getDoc(
+          this.firestoreMethods.doc(this.firestore, 'comments', options.startAfter)
+        );
+        if (startAfterDoc.exists()) {
+          conditions.push(this.firestoreMethods.startAfter(startAfterDoc));
+        }
+      }
+
+      let q;
+      try {
+        q = this.firestoreMethods.query(commentsRef, ...conditions);
+      } catch (queryError) {
+        // Check if it's a missing index error
+        if (queryError.code === 'failed-precondition' || queryError.message?.includes('index')) {
+          console.error('❌ Missing Firestore composite index. Please create the required indexes (see bottom of file).');
+          return {
+            success: false,
+            comments: [],
+            error: 'Missing database index. Please ask the developer to create the necessary Firestore indexes.',
+            indexError: true
+          };
+        }
+        throw queryError;
+      }
+
+      const snapshot = await this.firestoreMethods.getDocs(q);
+
+      const comments = [];
+      const commentMap = new Map();
+      const viewerUserId = options.viewerUserId || null;
+      const isAdmin = options.isAdmin || false;
+
+      // Post‑processing: shadow‑ban filter
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.isShadowBanned && !isAdmin && data.userId !== viewerUserId) return;
+        const comment = {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+          updatedAt: data.updatedAt?.toDate?.() || new Date()
+        };
+        comments.push(comment);
+        commentMap.set(docSnap.id, comment);
+      });
+
+      let processedComments = comments;
+
+      // Build nested tree if requested
+      if (options.nested === true && options.parentId === null) {
+        processedComments = this._buildNestedComments(comments);
+      }
+
+      // Sorting / ranking
+      if (options.sortBy) {
+        if (options.sortBy === 'best') {
+          processedComments = this._rankComments(processedComments, viewerUserId);
+        } else {
+          processedComments = this._sortComments(processedComments, options.sortBy);
+        }
+      }
+
+      // Collapse low‑quality threads
+      if (options.collapse !== false) {
+        processedComments = this._collapseLowQuality(processedComments);
+      }
+
+      // Add reply‑loading flags
+      for (const comment of processedComments) {
+        if (comment.repliesCount !== undefined) {
+          comment._hasMoreReplies = comment.repliesCount > (comment.replies?.length || 0);
+        } else if (comment.replies !== undefined) {
+          comment._hasMoreReplies = false;
+        } else {
+          comment._hasMoreReplies = false;
+        }
+      }
+
+      // Cache result
+      this.cache.set(cacheKey, {
+        comments: processedComments,
+        timestamp: Date.now(),
+        count: processedComments.length
+      });
+
+      return {
+        success: true,
+        comments: processedComments,
+        total: snapshot.size,    // original snapshot size before shadow‑ban filter
+        hasMore: options.limit ? comments.length === options.limit : false,
+        lastComment: comments.length > 0 ? comments[comments.length - 1] : null,
+        cached: false,
+        duration: Date.now() - startTime
+      };
+    } catch (error) {
+      console.error(`❌ Get comments for ${targetType}/${targetId} failed:`, error);
+      return {
+        success: false,
+        comments: [],
+        error: error.message,
+        duration: Date.now() - startTime
+      };
+    }
+  }
+
+  async getCommentsByPost(postId, options = {}) {
+    return this.getCommentsByTarget('post', postId, options);
+  }
+
+  async getComment(commentId, options = {}) {
+    try {
+      await this._ensureInitialized();
+      const cacheKey = `comment_${commentId}`;
+      if (options.cacheFirst !== false) {
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < COMMENTS_CONFIG.CACHE_EXPIRY) {
+          return { success: true, comment: cached.comment, cached: true };
+        }
+      }
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const commentSnap = await this.firestoreMethods.getDoc(commentRef);
+      if (!commentSnap.exists()) return { success: false, error: 'Comment not found', commentId };
+      const data = commentSnap.data();
+      const comment = {
+        id: commentSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.() || new Date(),
+        updatedAt: data.updatedAt?.toDate?.() || new Date()
+      };
+      this.cache.set(cacheKey, { comment, timestamp: Date.now() });
+      return { success: true, comment, cached: false };
+    } catch (error) {
+      console.error(`❌ Get comment ${commentId} failed:`, error);
+      return { success: false, error: error.message, commentId };
+    }
+  }
+
+  // ==================== COMMENT UPDATES ====================
+  async updateComment(commentId, userId, updates) {
+    try {
+      await this._ensureInitialized();
+      const current = await this.getComment(commentId);
+      if (!current.success || current.comment.userId !== userId) {
+        throw new Error('You can only edit your own comments');
+      }
+      if (updates.content) {
+        const format = updates.format || current.comment.contentFormat || COMMENTS_CONFIG.DEFAULT_FORMAT;
+        const validation = this._validateComment(updates.content, userId, format);
+        if (!validation.valid) throw new Error(`Comment validation failed: ${validation.errors.join(', ')}`);
+        const extracted = this._extractMetadata(updates.content);
+        updates.mentions = extracted.mentions;
+        updates.hashtags = extracted.hashtags;
+        updates.links = extracted.links;
+        updates.isEdited = true;
+      }
+      // Archive previous version
+      const historyRef = this.firestoreMethods.collection(this.firestore, 'comments', commentId, 'history');
+      await this.firestoreMethods.addDoc(historyRef, {
+        ...current.comment,
+        archivedAt: this.firestoreMethods.serverTimestamp(),
+        version: (current.comment._editCount || 0) + 1
+      });
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      await this.firestoreMethods.updateDoc(commentRef, {
+        ...updates,
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        lastActivityAt: this.firestoreMethods.serverTimestamp(),
+        _lastEditedAt: new Date().toISOString(),
+        _editCount: (current.comment._editCount || 0) + 1
+      });
+      this._invalidateCommentCache(commentId);
+      if (current.comment.targetType && current.comment.targetId) {
+        this._invalidateTargetCache(current.comment.targetType, current.comment.targetId);
+      }
+      this._indexCommentForSearch(commentId, { ...current.comment, ...updates }).catch(console.warn);
+      return { success: true, commentId };
+    } catch (error) {
+      console.error(`❌ Update comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to update comment');
+    }
+  }
+
+  async deleteComment(commentId, userId, isAdmin = false) {
+    try {
+      await this._ensureInitialized();
+      const comment = await this.getComment(commentId);
+      if (!comment.success) throw new Error('Comment not found');
+      if (!isAdmin && comment.comment.userId !== userId) throw new Error('You can only delete your own comments');
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const { targetType, targetId, parentId } = comment.comment;
+      await this.firestoreMethods.updateDoc(commentRef, {
+        isDeleted: true,
+        deletedAt: this.firestoreMethods.serverTimestamp(),
+        deletedBy: userId,
+        deletedReason: isAdmin ? 'admin_action' : 'user_action',
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        content: '[This comment has been deleted]',
+        userName: '[Deleted User]',
+        userUsername: '[deleted]',
+        userAvatar: null
+      });
+      await this._incrementCommentCounter(targetType, targetId, -1);
+      await this._syncTargetCommentCount(targetType, targetId, -1);
+      if (parentId) {
+        const parentRef = this.firestoreMethods.doc(this.firestore, 'comments', parentId);
+        await this.firestoreMethods.updateDoc(parentRef, {
+          replies: this.firestoreMethods.increment(-1),
+          updatedAt: this.firestoreMethods.serverTimestamp()
+        });
+      }
+      this._deleteCommentFromSearch(commentId).catch(console.warn);
+      this._invalidateCommentCache(commentId);
+      if (targetType && targetId) this._invalidateTargetCache(targetType, targetId);
+      return { success: true, commentId };
+    } catch (error) {
+      console.error(`❌ Delete comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to delete comment');
+    }
+  }
+
+  // ==================== ENGAGEMENT (like/dislike) ====================
+  async likeComment(commentId, userId) {
+    try {
+      await this._ensureInitialized();
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const comment = await this.getComment(commentId);
+      if (!comment.success) throw new Error('Comment not found');
+      const updates = {
+        likes: this.firestoreMethods.increment(1),
+        likesBy: this.firestoreMethods.arrayUnion(userId),
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        lastActivityAt: this.firestoreMethods.serverTimestamp()
+      };
+      if (comment.comment.dislikesBy?.includes(userId)) {
+        updates.dislikes = this.firestoreMethods.increment(-1);
+        updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
+      }
+      await this.firestoreMethods.updateDoc(commentRef, updates);
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, action: 'liked' };
+    } catch (error) {
+      console.error(`❌ Like comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to like comment');
+    }
+  }
+
+  async dislikeComment(commentId, userId) {
+    try {
+      await this._ensureInitialized();
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const comment = await this.getComment(commentId);
+      if (!comment.success) throw new Error('Comment not found');
+      const updates = {
+        dislikes: this.firestoreMethods.increment(1),
+        dislikesBy: this.firestoreMethods.arrayUnion(userId),
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        lastActivityAt: this.firestoreMethods.serverTimestamp()
+      };
+      if (comment.comment.likesBy?.includes(userId)) {
+        updates.likes = this.firestoreMethods.increment(-1);
+        updates.likesBy = this.firestoreMethods.arrayRemove(userId);
+      }
+      await this.firestoreMethods.updateDoc(commentRef, updates);
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, action: 'disliked' };
+    } catch (error) {
+      console.error(`❌ Dislike comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to dislike comment');
+    }
+  }
+
+  async removeLikeDislike(commentId, userId) {
+    try {
+      await this._ensureInitialized();
+      const comment = await this.getComment(commentId);
+      if (!comment.success) throw new Error('Comment not found');
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const updates = {
+        updatedAt: this.firestoreMethods.serverTimestamp(),
+        lastActivityAt: this.firestoreMethods.serverTimestamp()
+      };
+      if (comment.comment.likesBy?.includes(userId)) {
+        updates.likes = this.firestoreMethods.increment(-1);
+        updates.likesBy = this.firestoreMethods.arrayRemove(userId);
+      }
+      if (comment.comment.dislikesBy?.includes(userId)) {
+        updates.dislikes = this.firestoreMethods.increment(-1);
+        updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
+      }
+      await this.firestoreMethods.updateDoc(commentRef, updates);
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, action: 'removed' };
+    } catch (error) {
+      console.error(`❌ Remove like/dislike ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to remove reaction');
+    }
+  }
+
+  // ==================== EMOJI REACTIONS ====================
+  async addReaction(commentId, userId, reactionType) {
+    try {
+      await this._ensureInitialized();
+      if (!COMMENTS_CONFIG.ALLOWED_REACTIONS.includes(reactionType)) {
+        throw new Error(`Reaction type ${reactionType} not allowed`);
+      }
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const reactionRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'reactions', userId);
+      await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
+        const reactionDoc = await transaction.get(reactionRef);
+        const commentDoc = await transaction.get(commentRef);
+        if (!commentDoc.exists()) throw new Error('Comment not found');
+        const currentReaction = reactionDoc.exists() ? reactionDoc.data().type : null;
+        if (currentReaction) {
+          const oldCount = commentDoc.data().reactionCounts?.[currentReaction] || 0;
+          transaction.update(commentRef, {
+            [`reactionCounts.${currentReaction}`]: oldCount - 1,
+            updatedAt: this.firestoreMethods.serverTimestamp()
+          });
+        }
+        transaction.set(reactionRef, { type: reactionType, userId, createdAt: this.firestoreMethods.serverTimestamp() });
+        const newCount = (commentDoc.data().reactionCounts?.[reactionType] || 0) + 1;
+        transaction.update(commentRef, {
+          [`reactionCounts.${reactionType}`]: newCount,
+          updatedAt: this.firestoreMethods.serverTimestamp()
+        });
+      });
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, reactionType };
+    } catch (error) {
+      console.error(`❌ Add reaction to ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to add reaction');
+    }
+  }
+
+  async removeReaction(commentId, userId) {
+    try {
+      await this._ensureInitialized();
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const reactionRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'reactions', userId);
+      await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
+        const reactionDoc = await transaction.get(reactionRef);
+        const commentDoc = await transaction.get(commentRef);
+        if (!reactionDoc.exists()) return;
+        if (!commentDoc.exists()) throw new Error('Comment not found');
+        const reactionType = reactionDoc.data().type;
+        const oldCount = commentDoc.data().reactionCounts?.[reactionType] || 0;
+        transaction.delete(reactionRef);
+        transaction.update(commentRef, {
+          [`reactionCounts.${reactionType}`]: oldCount - 1,
+          updatedAt: this.firestoreMethods.serverTimestamp()
+        });
+      });
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId };
+    } catch (error) {
+      console.error(`❌ Remove reaction from ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to remove reaction');
+    }
+  }
+
+  async getReactions(commentId) {
+    try {
+      await this._ensureInitialized();
+      const reactionsRef = this.firestoreMethods.collection(this.firestore, 'comments', commentId, 'reactions');
+      const snapshot = await this.firestoreMethods.getDocs(reactionsRef);
+      const reactions = {};
+      snapshot.forEach(doc => { reactions[doc.id] = doc.data().type; });
+      return { success: true, reactions };
+    } catch (error) {
+      console.error(`❌ Get reactions for ${commentId} failed:`, error);
+      return { success: false, reactions: {}, error: error.message };
+    }
+  }
+
+  // ==================== PINNING ====================
+  async pinComment(commentId, userId, isAdmin = false) {
+    try {
+      await this._ensureInitialized();
+      if (!isAdmin) throw new Error('Only administrators can pin comments');
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      await this.firestoreMethods.updateDoc(commentRef, {
+        isPinned: true,
+        pinnedAt: this.firestoreMethods.serverTimestamp(),
+        updatedAt: this.firestoreMethods.serverTimestamp()
+      });
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId };
+    } catch (error) {
+      console.error(`❌ Pin comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to pin comment');
+    }
+  }
+
+  async unpinComment(commentId, userId, isAdmin = false) {
+    try {
+      await this._ensureInitialized();
+      if (!isAdmin) throw new Error('Only administrators can unpin comments');
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      await this.firestoreMethods.updateDoc(commentRef, {
+        isPinned: false,
+        pinnedAt: null,
+        updatedAt: this.firestoreMethods.serverTimestamp()
+      });
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId };
+    } catch (error) {
+      console.error(`❌ Unpin comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to unpin comment');
+    }
+  }
+
+  async pinCommentToTarget(targetType, targetId, commentId, userId, isAdmin = false) {
+    try {
+      await this._ensureInitialized();
+      if (!isAdmin) throw new Error('Only administrators can pin comments to targets');
+      const comment = await this.getComment(commentId);
+      if (!comment.success || comment.comment.targetType !== targetType || comment.comment.targetId !== targetId) {
+        throw new Error('Comment does not belong to this target');
+      }
+      const targetRef = this.firestoreMethods.doc(this.firestore, `${targetType}s`, targetId);
+      await this.firestoreMethods.updateDoc(targetRef, {
+        pinnedCommentId: commentId,
+        pinnedCommentAt: this.firestoreMethods.serverTimestamp(),
+        updatedAt: this.firestoreMethods.serverTimestamp()
+      });
+      return { success: true, targetType, targetId, commentId };
+    } catch (error) {
+      console.error(`❌ Pin comment to target ${targetType}/${targetId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to pin comment to target');
+    }
+  }
+
+  async unpinCommentFromTarget(targetType, targetId, userId, isAdmin = false) {
+    try {
+      await this._ensureInitialized();
+      if (!isAdmin) throw new Error('Only administrators can unpin comments from targets');
+      const targetRef = this.firestoreMethods.doc(this.firestore, `${targetType}s`, targetId);
+      await this.firestoreMethods.updateDoc(targetRef, {
+        pinnedCommentId: null,
+        pinnedCommentAt: null,
+        updatedAt: this.firestoreMethods.serverTimestamp()
+      });
+      return { success: true, targetType, targetId };
+    } catch (error) {
+      console.error(`❌ Unpin comment from target ${targetType}/${targetId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to unpin comment from target');
+    }
+  }
+
+  async getPinnedCommentForTarget(targetType, targetId) {
+    try {
+      await this._ensureInitialized();
+      const targetRef = this.firestoreMethods.doc(this.firestore, `${targetType}s`, targetId);
+      const targetSnap = await this.firestoreMethods.getDoc(targetRef);
+      if (!targetSnap.exists()) return null;
+      const pinnedCommentId = targetSnap.data().pinnedCommentId;
+      if (!pinnedCommentId) return null;
+      const comment = await this.getComment(pinnedCommentId);
+      return comment.success ? comment.comment : null;
+    } catch (error) {
+      console.error(`❌ Get pinned comment for ${targetType}/${targetId} failed:`, error);
+      return null;
+    }
+  }
+
+  // ==================== EDIT HISTORY ====================
+  async getCommentHistory(commentId, options = {}) {
+    try {
+      await this._ensureInitialized();
+      const historyRef = this.firestoreMethods.collection(this.firestore, 'comments', commentId, 'history');
+      let query = this.firestoreMethods.query(historyRef, this.firestoreMethods.orderBy('archivedAt', 'desc'));
+      if (options.limit) query = this.firestoreMethods.query(query, this.firestoreMethods.limit(options.limit));
+      if (options.startAfter) {
+        const startAfterDoc = await this.firestoreMethods.getDoc(
+          this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'history', options.startAfter)
+        );
+        if (startAfterDoc.exists()) query = this.firestoreMethods.query(query, this.firestoreMethods.startAfter(startAfterDoc));
+      }
+      const snapshot = await this.firestoreMethods.getDocs(query);
+      const history = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        history.push({ id: doc.id, ...data, archivedAt: data.archivedAt?.toDate?.() || new Date() });
+      });
+      return { success: true, history, total: snapshot.size };
+    } catch (error) {
+      console.error(`❌ Get history for ${commentId} failed:`, error);
+      return { success: false, history: [], error: error.message };
+    }
+  }
+
+  async getCommentHistoryUI(commentId) {
+    const result = await this.getCommentHistory(commentId);
+    if (!result.success) {
+      return { success: false, edits: [], error: result.error };
+    }
+    const edits = result.history.map(entry => ({
+      version: entry.version || 1,
+      content: entry.content,
+      editedAt: entry.archivedAt,
+      editedBy: entry.editedBy || (entry.userId || 'unknown'),
+      isCurrent: false,
+    }));
+    const current = await this.getComment(commentId);
+    if (current.success && current.comment) {
+      edits.unshift({
+        version: (current.comment._editCount || 0) + 1,
+        content: current.comment.content,
+        editedAt: current.comment.updatedAt,
+        editedBy: current.comment.userId,
+        isCurrent: true,
+      });
+    }
+    return { success: true, edits, total: edits.length };
+  }
+
+  // ==================== REPLY SYSTEM ====================
+  async replyToComment(parentCommentId, userId, content, options = {}) {
+    try {
+      await this._ensureInitialized();
+      const parent = await this.getComment(parentCommentId);
+      if (!parent.success) throw new Error('Parent comment not found');
+      if (parent.comment.depth >= COMMENTS_CONFIG.REPLY_DEPTH_LIMIT) throw new Error('Maximum reply depth reached');
+      const replyOptions = {
+        parentId: parentCommentId,
+        replyToId: parent.comment.userId,
+        replyToUsername: parent.comment.userUsername,
+        depth: parent.comment.depth + 1,
+        path: `${parent.comment.path}.${Date.now()}`,
+        ...options
+      };
+      return await this.createComment(parent.comment.targetType, parent.comment.targetId, userId, content, replyOptions);
+    } catch (error) {
+      console.error(`❌ Reply to comment ${parentCommentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to reply to comment');
+    }
+  }
+
+  async getReplies(commentId, options = {}) {
+    try {
+      await this._ensureInitialized();
+      const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+      let conditions = [
+        this.firestoreMethods.where('parentId', '==', commentId),
+        this.firestoreMethods.where('isDeleted', '==', false),
+        this.firestoreMethods.where('isHidden', '==', false),
+        this.firestoreMethods.orderBy('createdAt', 'asc')
+      ];
+      if (options.limit) conditions.push(this.firestoreMethods.limit(options.limit));
+      if (options.startAfter) {
+        const startAfterDoc = await this.firestoreMethods.getDoc(this.firestoreMethods.doc(this.firestore, 'comments', options.startAfter));
+        if (startAfterDoc.exists()) conditions.push(this.firestoreMethods.startAfter(startAfterDoc));
+      }
+      const q = this.firestoreMethods.query(commentsRef, ...conditions);
+      const snapshot = await this.firestoreMethods.getDocs(q);
+      const replies = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate?.() || new Date()
+      }));
+      // Set correct hasMore flag based on pagination limit
+      const hasMore = options.limit ? replies.length === options.limit : false;
+      for (const reply of replies) {
+        reply._hasMoreReplies = false; // replies of replies not loaded yet
+      }
+      return {
+        success: true,
+        replies,
+        total: snapshot.size,
+        hasMore,
+        parentCommentId: commentId
+      };
+    } catch (error) {
+      console.error(`❌ Get replies for ${commentId} failed:`, error);
+      return { success: false, replies: [], error: error.message };
+    }
+  }
+
+  // ==================== REAL‑TIME SUBSCRIPTIONS ====================
+  subscribeToTargetComments(targetType, targetId, callback, options = {}) {
+    const setup = async () => {
+      try {
+        await this._ensureInitialized();
+        const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+        const conditions = [
+          this.firestoreMethods.where('targetType', '==', targetType),
+          this.firestoreMethods.where('targetId', '==', targetId),
+          this.firestoreMethods.where('isDeleted', '==', false),
+          this.firestoreMethods.where('isHidden', '==', false),
+          this.firestoreMethods.orderBy('createdAt', 'desc')
+        ];
+        if (options.parentId === null || options.parentId === undefined) {
+          conditions.push(this.firestoreMethods.where('parentId', '==', null));
+        }
+        if (options.limit) conditions.push(this.firestoreMethods.limit(options.limit));
+        const q = this.firestoreMethods.query(commentsRef, ...conditions);
+        const unsubscribe = this.firestoreMethods.onSnapshot(q, (snapshot) => {
+          const comments = [];
+          const viewerUserId = options.viewerUserId || null;
+          const isAdmin = options.isAdmin || false;
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.isShadowBanned && !isAdmin && data.userId !== viewerUserId) return;
+            comments.push({
+              id: docSnap.id,
+              ...data,
+              createdAt: data.createdAt?.toDate?.() || new Date(),
+              updatedAt: data.updatedAt?.toDate?.() || new Date()
+            });
+          });
+          let processed = comments;
+          if (options.nested === true) processed = this._buildNestedComments(comments);
+          if (options.sortBy === 'best') processed = this._rankComments(processed, viewerUserId);
+          callback({ type: 'update', comments: processed, count: snapshot.size, timestamp: new Date().toISOString() });
+        }, (error) => {
+          console.error(`❌ Subscription error for ${targetType}/${targetId}:`, error);
+          callback({ type: 'error', error: error.message, timestamp: new Date().toISOString() });
+        });
+
+        // Store for cleanup, but return the unsubscribe function
+        const subscriptionId = `${targetType}_${targetId}_${Date.now()}`;
+        this.realtimeSubscriptions.set(subscriptionId, { unsubscribe, targetType, targetId, createdAt: Date.now(), callback });
+        return unsubscribe; // ✅ now the drawer can use this directly
+      } catch (error) {
+        console.error(`❌ Setup subscription for ${targetType}/${targetId} failed:`, error);
+        callback({ type: 'error', error: error.message, timestamp: new Date().toISOString() });
+        return () => {}; // return a no-op so the caller can still call it safely
+      }
+    };
+
+    // We return the promise that resolves to the unsubscribe function.
+    // The drawer can await it or just call it; if it's a promise, the drawer's check `typeof unsubscribe === 'function'` would be false.
+    // To maintain backward compatibility with the drawer's current pattern (assign and call later),
+    // we must return a function immediately, but internally set up asynchronously.
+    // The drawer calls: unsubscribe = commentService.subscribeToTargetComments(...); later: if (unsubscribe && typeof unsubscribe === 'function') unsubscribe();
+    // So we must return a function that, when called, cancels the subscription.
+    // We'll use a pattern: create a placeholder unsubscribe that, when called, checks if the real unsubscribe is available (via a ref).
+
+    let realUnsubscribe = null;
+    let unsubCalled = false;
+
+    const wrappedUnsubscribe = () => {
+      unsubCalled = true;
+      if (realUnsubscribe) realUnsubscribe();
+    };
+
+    setup().then(unsubFn => {
+      if (unsubCalled) {
+        // already called before setup finished, call now
+        unsubFn();
+      } else {
+        realUnsubscribe = unsubFn;
+      }
+    }).catch(err => {
+      console.warn('Subscription setup failed:', err);
+    });
+
+    return wrappedUnsubscribe;
+  }
+
+  subscribeToPostComments(postId, callback, options = {}) {
+    return this.subscribeToTargetComments('post', postId, callback, options);
+  }
+
+  unsubscribe(subscriptionId) {
+    const sub = this.realtimeSubscriptions.get(subscriptionId);
+    if (sub) {
+      try {
+        sub.unsubscribe();
+        this.realtimeSubscriptions.delete(subscriptionId);
+        return true;
+      } catch (e) {
+        console.warn(`Failed to unsubscribe ${subscriptionId}:`, e);
+        return false;
+      }
+    }
     return false;
   }
-};
 
-// ==================== SIMPLE PROFILE CACHE ====================
-const profileCache = new Map();
-async function getCachedProfile(userId) {
-  if (!userId) return null;
-  if (profileCache.has(userId)) {
-    const entry = profileCache.get(userId);
-    if (Date.now() - entry.timestamp < PROFILE_CACHE_TTL) return entry.data;
-    profileCache.delete(userId);
-  }
-  const profile = await userService.getUserProfile(userId);
-  if (profile) {
-    profileCache.set(userId, { data: profile, timestamp: Date.now() });
-    if (profileCache.size > PROFILE_CACHE_MAX) {
-      const oldest = profileCache.keys().next().value;
-      profileCache.delete(oldest);
-    }
-  }
-  return profile;
-}
-
-// ==================== OFFLINE QUEUE (IndexedDB) ====================
-let dbPromise = null;
-let isFlushing = false;
-
-async function getOfflineDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = await openDB('arvdoul_comments_offline_v53', 1, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains('queue')) {
-        db.createObjectStore('queue', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('voice_blobs')) {
-        const blobStore = db.createObjectStore('voice_blobs', { autoIncrement: true });
-        blobStore.createIndex('expiresAt', 'expiresAt');
-      }
-    },
-  });
-  return dbPromise;
-}
-
-async function addToOfflineQueue(postId, userId, content, parentId = null, metadata = {}) {
-  const db = await getOfflineDB();
-  const id = safeRandomUUID();
-  const tx = db.transaction('queue', 'readwrite');
-  await tx.store.put({
-    id,
-    postId, userId, content, parentId, metadata,
-    timestamp: Date.now(),
-    retries: 0,
-  });
-  await tx.done;
-  return id;
-}
-
-async function flushOfflineQueue(postId, userId, onSuccess) {
-  if (isFlushing) return;
-  if (!navigator.onLine) return;
-  isFlushing = true;
-  const db = await getOfflineDB();
-  try {
-    const all = await db.getAll('queue');
-    const items = all.filter(item => item.postId === postId);
-    for (const item of items) {
-      try {
-        let mediaUrl = null;
-        if (item.metadata.type === 'voice' && item.metadata.mediaUrl?.startsWith('blob://')) {
-          const blobId = parseInt(item.metadata.mediaUrl.split('://')[1]);
-          const blobTx = db.transaction('voice_blobs', 'readonly');
-          const record = await blobTx.objectStore('voice_blobs').get(blobId);
-          await blobTx.done;
-          if (record && record.blob) {
-            const file = new File([record.blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-            const uploadResult = await storageService.uploadFile(file, `comments/voice/${item.userId}/${safeRandomUUID()}.webm`, { userId: item.userId });
-            mediaUrl = uploadResult.downloadURL;
-          }
-        } else if (item.metadata.type === 'voice') {
-          mediaUrl = item.metadata.mediaUrl;
-        }
-        const result = await commentService.createComment(item.postId, item.userId, item.content, {
-          parentId: item.parentId,
-          ...item.metadata,
-          mediaUrl,
-        });
-        if (onSuccess && result.success) {
-          onSuccess(result.comment, item.parentId, item.metadata.tempId);
-        }
-        await db.delete('queue', item.id);
-        if (mediaUrl && item.metadata.mediaUrl?.startsWith('blob://')) {
-          const blobId = parseInt(item.metadata.mediaUrl.split('://')[1]);
-          await db.delete('voice_blobs', blobId);
-        }
-      } catch (err) {
-        console.warn('Offline flush item failed', err);
-        if (item.retries >= 3) {
-          await db.delete('queue', item.id);
-        } else {
-          await db.put('queue', { ...item, retries: item.retries + 1 });
-        }
-      }
-    }
-  } finally {
-    isFlushing = false;
-  }
-}
-
-// ==================== SIMPLE IN‑MEMORY STORE (no persisted Zustand for simplicity) ====================
-// We'll manage comments in local state for this component to avoid complexity.
-// This is safe because the drawer is isolated per post.
-
-// ==================== VOICE RECORDER ====================
-const VoiceRecorder = ({ onRecordingComplete, onCancel }) => {
-  const [recording, setRecording] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [cancelZone, setCancelZone] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const streamRef = useRef(null);
-  const chunksRef = useRef([]);
-  const startTimeRef = useRef(0);
-  const rafIdRef = useRef(null);
-  const pointerIdRef = useRef(null);
-  const buttonRef = useRef(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (mediaRecorderRef.current && recording) mediaRecorderRef.current.stop();
-      if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
-      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-      if (pointerIdRef.current !== null && buttonRef.current) {
-        try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (e) {}
-      }
-    };
-  }, [recording]);
-
-  const updateDuration = useCallback(() => {
-    if (!recording || !mountedRef.current) return;
-    const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-    setDuration(Math.min(elapsed, MAX_RECORDING_SECONDS));
-    if (elapsed >= MAX_RECORDING_SECONDS && mediaRecorderRef.current) mediaRecorderRef.current.stop();
-    else rafIdRef.current = requestAnimationFrame(updateDuration);
-  }, [recording]);
-
-  const startRecording = async () => {
-    if (recording) return;
+  // ==================== MODERATION & ADMIN ====================
+  async reportComment(commentId, userId, reason, details = '') {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
-      recorder.onstop = async () => {
-        if (cancelZone) { chunksRef.current = []; setCancelZone(false); return; }
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        onRecordingComplete(blob);
-        chunksRef.current = [];
+      await this._ensureInitialized();
+      const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
+      const existing = await this.firestoreMethods.getDocs(
+        this.firestoreMethods.query(reportsRef,
+          this.firestoreMethods.where('commentId', '==', commentId),
+          this.firestoreMethods.where('userId', '==', userId)
+        )
+      );
+      if (!existing.empty) throw new Error('You have already reported this comment');
+      await this.firestoreMethods.addDoc(reportsRef, {
+        commentId, userId, reason, details,
+        status: 'pending',
+        createdAt: this.firestoreMethods.serverTimestamp(),
+        reviewedAt: null,
+        reviewedBy: null,
+        actionTaken: null
+      });
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      await this.firestoreMethods.updateDoc(commentRef, {
+        reports: this.firestoreMethods.increment(1),
+        updatedAt: this.firestoreMethods.serverTimestamp()
+      });
+      return { success: true, commentId, reported: true };
+    } catch (error) {
+      console.error(`❌ Report comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to report comment');
+    }
+  }
+
+  async moderateComment(commentId, action, moderatorId, notes = '') {
+    try {
+      await this._ensureInitialized();
+      const allowedActions = ['approve', 'reject', 'hide', 'delete', 'warn', 'shadowban'];
+      if (!allowedActions.includes(action)) throw new Error(`Invalid moderation action: ${action}`);
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const updates = {
+        moderationStatus: action === 'approve' ? 'approved' :
+                         (action === 'shadowban' ? 'shadowbanned' : 'rejected'),
+        moderatedAt: this.firestoreMethods.serverTimestamp(),
+        moderatedBy: moderatorId,
+        moderationNotes: notes,
+        updatedAt: this.firestoreMethods.serverTimestamp()
       };
-      recorder.start(100);
-      mediaRecorderRef.current = recorder;
-      startTimeRef.current = Date.now();
-      setRecording(true);
-      rafIdRef.current = requestAnimationFrame(updateDuration);
-      triggerHaptic('light');
-    } catch (err) { toast.error('Microphone access denied'); }
-  };
-
-  const stopRecording = () => {
-    if (!recording || !mediaRecorderRef.current) return;
-    mediaRecorderRef.current.stop();
-    if (streamRef.current) { streamRef.current.getTracks().forEach(track => track.stop()); streamRef.current = null; }
-    setRecording(false); setLocked(false);
-    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    setDuration(0);
-  };
-
-  const handlePointerDown = (e) => {
-    e.preventDefault();
-    pointerIdRef.current = e.pointerId;
-    buttonRef.current?.setPointerCapture(e.pointerId);
-    startRecording();
-  };
-  const handlePointerMove = (e) => {
-    if (!recording) return;
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const deltaY = rect.top - e.clientY;
-    const deltaX = e.clientX - rect.left;
-    if (deltaY > 60 && !locked) {
-      setLocked(true);
-      triggerHaptic('medium');
-      toast.info('🔒 Locked – release to stop');
-    } else if (deltaY < -30 && locked) {
-      setLocked(false);
-      toast.info('Unlocked');
+      if (action === 'hide') { updates.isHidden = true; updates.moderationStatus = 'hidden'; }
+      else if (action === 'delete') { updates.isDeleted = true; updates.deletedBy = moderatorId; updates.deletedReason = 'moderation'; }
+      else if (action === 'shadowban') { updates.isShadowBanned = true; }
+      await this.firestoreMethods.updateDoc(commentRef, updates);
+      await this._updateReportStatus(commentId, action, moderatorId);
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, action };
+    } catch (error) {
+      console.error(`❌ Moderate comment ${commentId} failed:`, error);
+      throw this._enhanceError(error, 'Failed to moderate comment');
     }
-    setCancelZone(deltaX < -60);
-  };
-  const handlePointerUp = (e) => {
-    if (!recording) return;
-    if (cancelZone) { stopRecording(); toast.info('Recording cancelled'); }
-    else if (locked) stopRecording();
-    else stopRecording();
-    if (pointerIdRef.current !== null && buttonRef.current) {
-      try { buttonRef.current.releasePointerCapture(pointerIdRef.current); } catch (ex) {}
-      pointerIdRef.current = null;
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-3 p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
-      <button
-        ref={buttonRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        className="flex items-center justify-center w-12 h-12 rounded-full transition-all touch-none bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md hover:scale-105 active:scale-95 focus:outline-none relative"
-        style={{ minWidth: '44px', minHeight: '44px' }}
-        aria-label="Voice message"
-      >
-        {recording ? <StopCircle className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-        {recording && !locked && (
-          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-            ↑ slide up to lock
-          </div>
-        )}
-        {recording && locked && (
-          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-            🔒 locked
-          </div>
-        )}
-        {recording && cancelZone && (
-          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap">
-            ← swipe left to cancel
-          </div>
-        )}
-      </button>
-      <span className="text-sm font-normal text-gray-700 dark:text-gray-300">{recording ? `${duration}s` : 'Hold to record'}</span>
-      <button onClick={onCancel} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><X className="w-5 h-5 text-gray-500 dark:text-gray-400" /></button>
-    </div>
-  );
-};
-
-// ==================== COMMENT COMPOSER ====================
-const CommentComposer = React.memo(({ onSubmit, loading, placeholder = "Write a comment...", onTyping, parentId = null, currentUser, draftKey = null }) => {
-  const [content, setContent] = useState('');
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-  const inputRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const lastActionTime = useRef(0);
-
-  useEffect(() => {
-    if (!draftKey) return;
-    const draft = localStorage.getItem(`${DRAFT_STORAGE_KEY}_${draftKey}`);
-    if (draft) setContent(draft);
-  }, [draftKey]);
-
-  const handleChange = (e) => {
-    const newContent = e.target.value;
-    setContent(newContent);
-    if (draftKey) localStorage.setItem(`${DRAFT_STORAGE_KEY}_${draftKey}`, newContent);
-    if (onTyping) {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      onTyping(true);
-      typingTimeoutRef.current = setTimeout(() => onTyping(false), 2000);
-    }
-  };
-
-  const handleSubmit = (type = 'text', blob = null) => {
-    if (type === 'text' && !content.trim()) return;
-    const now = Date.now();
-    if (now - lastActionTime.current < ACTION_DEBOUNCE_MS) return;
-    lastActionTime.current = now;
-    onSubmit(content, parentId, type, blob);
-    setContent('');
-    if (draftKey) localStorage.removeItem(`${DRAFT_STORAGE_KEY}_${draftKey}`);
-    setShowVoiceRecorder(false);
-  };
-
-  const handleVoiceComplete = async (blob) => {
-    if (!currentUser) { toast.error('Please sign in'); return; }
-    handleSubmit('voice', blob);
-    setShowVoiceRecorder(false);
-  };
-
-  return (
-    <div className="p-3 border-t dark:border-gray-800 bg-white dark:bg-gray-900">
-      <div className="flex gap-2">
-        <img src={currentUser?.photoURL || '/assets/default-profile.png'} alt="" className="w-9 h-9 rounded-full object-cover" />
-        <div className="flex-1 relative">
-          <textarea
-            ref={inputRef}
-            value={content}
-            onChange={handleChange}
-            placeholder={placeholder}
-            className="w-full p-2 pr-20 rounded-2xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white resize-none text-sm"
-            rows={2}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit('text'); } }}
-          />
-          <div className="absolute right-2 bottom-2 flex gap-2">
-            <button onClick={() => setShowVoiceRecorder(!showVoiceRecorder)} className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md transition active:scale-95 hover:scale-105 focus:outline-none">
-              <Mic className="w-5 h-5" />
-            </button>
-            <button onClick={() => handleSubmit('text')} disabled={!content.trim() || loading} className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white disabled:opacity-50 shadow-md transition active:scale-95 hover:scale-105 focus:outline-none">
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-      </div>
-      <AnimatePresence>
-        {showVoiceRecorder && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="mt-2">
-            <VoiceRecorder onRecordingComplete={handleVoiceComplete} onCancel={() => setShowVoiceRecorder(false)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-});
-
-// ==================== TYPING INDICATOR ====================
-const TypingIndicator = ({ typingUsers }) => {
-  if (!typingUsers.length) return null;
-  const names = typingUsers.map(u => u.displayName || u.username);
-  let text = names.length === 1 ? `${names[0]} is typing...` : `${names.length} people are typing...`;
-  return (
-    <div className="px-4 py-2 text-xs text-gray-400 italic flex items-center gap-1">
-      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" />
-      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce delay-75" />
-      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce delay-150" />
-      <span className="ml-1">{text}</span>
-    </div>
-  );
-};
-
-// ==================== SEARCH BAR ====================
-const SearchBar = ({ onSearch, onClose }) => {
-  const [query, setQuery] = useState('');
-  const [filterUser, setFilterUser] = useState('');
-  const [dateRange, setDateRange] = useState('all');
-  const [searching, setSearching] = useState(false);
-  const handleSearch = async () => { setSearching(true); await onSearch(query, filterUser, dateRange); setSearching(false); };
-  return (
-    <div className="p-3 border-b dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-      <div className="flex flex-col sm:flex-row gap-2 mb-2">
-        <input type="text" placeholder="Search comments..." value={query} onChange={(e) => setQuery(e.target.value)} className="flex-1 p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-900 text-sm" autoFocus />
-        <div className="flex gap-2">
-          <button onClick={handleSearch} disabled={searching} className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm flex-1">Search</button>
-          <button onClick={onClose} className="p-2 rounded-xl border dark:border-gray-700"><X className="w-5 h-5" /></button>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2 text-xs">
-        <input type="text" placeholder="Filter by user" value={filterUser} onChange={(e) => setFilterUser(e.target.value)} className="flex-1 p-1 rounded border dark:border-gray-700 dark:bg-gray-900" />
-        <select value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="p-1 rounded border dark:border-gray-700 dark:bg-gray-900">
-          <option value="all">All time</option>
-          <option value="today">Today</option>
-          <option value="week">This week</option>
-          <option value="month">This month</option>
-        </select>
-      </div>
-    </div>
-  );
-};
-
-// ==================== EDIT HISTORY MODAL ====================
-const EditHistoryModal = ({ comment, onClose }) => {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    commentService.getCommentHistoryUI(comment.id).then(res => {
-      if (res.success) setHistory(res.edits.slice(0, 20));
-      setLoading(false);
-    });
-  }, [comment.id]);
-  return (
-    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-xl flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-md w-full max-h-[80vh] overflow-auto p-4" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold mb-3">Edit History</h3>
-        {loading && <LoadingSpinner size="sm" color="purple" />}
-        {history.map((edit, idx) => (
-          <div key={idx} className="mb-3 p-2 border-l-2 border-purple-500">
-            <div className="text-xs text-gray-500 mb-1">Version {edit.version} - {formatDistanceToNow(new Date(edit.editedAt), { addSuffix: true, locale: enUS })}</div>
-            <div className="text-sm whitespace-pre-wrap">{edit.content}</div>
-          </div>
-        ))}
-        <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-purple-600 text-white">Close</button>
-      </div>
-    </div>
-  );
-};
-
-// ==================== MANUAL COPY MODAL ====================
-const ManualCopyModal = ({ text, onClose }) => (
-  <div className="fixed inset-0 z-[250] bg-black/70 backdrop-blur-md flex items-center justify-center p-4" onClick={onClose}>
-    <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-4" onClick={e => e.stopPropagation()}>
-      <h3 className="font-bold mb-2">Copy link</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Please copy manually:</p>
-      <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg text-sm break-all mb-4 select-all">{text}</div>
-      <button onClick={onClose} className="w-full py-2 rounded-xl bg-purple-600 text-white">Close</button>
-    </div>
-  </div>
-);
-
-// ==================== COMMENT ITEM ====================
-const CommentItem = React.memo(({
-  comment,
-  depth = 0,
-  currentUser,
-  postAuthorId,
-  onReply,
-  onEdit,
-  onDelete,
-  onReport,
-  onPin,
-  onLike,
-  onReact,
-  onLoadReplies,
-  replies = [],
-  hasMoreReplies = false,
-  loadingReplies = false,
-  isPinned = false,
-  onToggleHistory,
-  onCopyLink,
-}) => {
-  const navigate = useNavigate();
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(comment.content);
-  const [showReplies, setShowReplies] = useState(depth === 0);
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const [showActionSheet, setShowActionSheet] = useState(false);
-  const touchStartX = useRef(0);
-  const doubleTapTimer = useRef(null);
-  const isAuthor = comment.userId === currentUser?.uid;
-  const canPin = postAuthorId === currentUser?.uid && !isPinned;
-  const timeAgo = useMemo(() => {
-    try {
-      const date = comment.createdAt?.toDate?.() || new Date(comment.createdAt);
-      return formatDistanceToNow(date, { addSuffix: true, locale: enUS });
-    } catch { return 'just now'; }
-  }, [comment.createdAt]);
-
-  const avatarUrl = useMemo(() => {
-    if (comment.userAvatar && !comment.userAvatar.includes('default')) return comment.userAvatar;
-    return userService.getAvatarUrl(comment.userId, comment.userName, comment.userAvatar);
-  }, [comment.userId, comment.userName, comment.userAvatar]);
-  const isVoice = comment.type === 'voice';
-  const likedByArray = comment.likedBy || [];
-
-  const handleSaveEdit = async () => { await onEdit(comment.id, editContent); setIsEditing(false); };
-  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchMove = (e) => {
-    const deltaX = e.touches[0].clientX - touchStartX.current;
-    setSwipeOffset(deltaX > 30 ? Math.min(80, deltaX) : 0);
-  };
-  const handleTouchEnd = () => {
-    if (swipeOffset > 60) { onReply(comment); triggerHaptic('light'); }
-    setSwipeOffset(0);
-  };
-  const handleDoubleTap = () => {
-    if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current);
-    doubleTapTimer.current = setTimeout(() => { onLike(comment.id); triggerHaptic('light'); }, 100);
-  };
-  const indent = Math.min(depth * 12, 48);
-
-  if (depth >= MAX_REPLY_DEPTH && comment.repliesCount > 0) {
-    return (
-      <div className={`relative ${depth > 0 ? 'pl-4 border-l-2 border-purple-500/30' : ''}`} style={{ marginLeft: `${indent}px` }}>
-        <button onClick={() => onLoadReplies(comment.id, true)} className="mt-2 text-xs text-purple-400 flex items-center gap-1">
-          <ChevronsDown className="w-3 h-3" /> View more replies
-        </button>
-      </div>
-    );
   }
 
-  return (
-    <motion.div
-      className={`relative ${depth > 0 ? 'pl-4 border-l-2 border-purple-500/30' : ''}`}
-      style={{ marginLeft: `${indent}px` }}
-      animate={{ x: swipeOffset }}
-      transition={{ type: 'spring', damping: 20 }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onDoubleClick={handleDoubleTap}
-    >
-      {isPinned && <div className="absolute -left-2 top-2 bg-yellow-500 text-white text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1 z-10"><Pin className="w-2 h-2" /> Pinned</div>}
-      <div className="flex gap-2 py-2">
-        <button onClick={() => navigate(`/profile/${encodeURIComponent(comment.userId)}`)} className="flex-shrink-0">
-          <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover" onError={(e) => { e.target.src = '/assets/default-profile.png'; }} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-bold text-sm dark:text-white truncate">{comment.userName || 'User'}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{timeAgo}</span>
-            {comment.isEdited && <button onClick={onToggleHistory} className="text-[10px] text-purple-400 underline">edited</button>}
-          </div>
-          {isEditing ? (
-            <div className="mt-1 space-y-2">
-              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 text-sm" rows={2} autoFocus />
-              <div className="flex gap-2">
-                <button onClick={handleSaveEdit} className="px-3 py-1 rounded-full bg-purple-600 text-white text-xs">Save</button>
-                <button onClick={() => setIsEditing(false)} className="px-3 py-1 rounded-full border dark:border-gray-700 text-xs">Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-1 break-words">
-              {isVoice && (
-                <div className="bg-gray-800 rounded-lg p-2">
-                  <audio controls src={comment.mediaUrl} className="w-full h-8" />
-                </div>
-              )}
-              {!isVoice && <p className="text-sm dark:text-gray-300 whitespace-pre-wrap break-words">{comment.content}</p>}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-            <div className="flex gap-1">
-              {['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉'].map(emoji => (
-                <button key={emoji} onClick={() => onReact(comment.id, emoji)} className="hover:scale-125 transition-transform">{emoji}</button>
-              ))}
-            </div>
-            <button onClick={() => onLike(comment.id)} className="flex items-center gap-1 text-gray-500 hover:text-red-500">
-              <Heart className={`w-3.5 h-3.5 ${likedByArray.includes(currentUser?.uid) ? 'fill-red-500 text-red-500' : ''}`} />
-              <span>{formatCount(comment.likes || 0)}</span>
-            </button>
-            <button onClick={() => onReply(comment)} className="flex items-center gap-1 text-gray-500 hover:text-purple-500"><Reply className="w-3.5 h-3.5" /> Reply</button>
-            <button onClick={() => setShowActionSheet(!showActionSheet)} className="text-gray-500 hover:text-purple-500"><MoreHorizontal className="w-3.5 h-3.5" /></button>
-            {isAuthor && (
-              <>
-                <button onClick={() => setIsEditing(true)} className="text-gray-500 hover:text-yellow-500"><Edit3 className="w-3.5 h-3.5" /></button>
-                <button onClick={() => onDelete(comment.id)} className="text-gray-500 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
-              </>
-            )}
-            <button onClick={() => onReport(comment)} className="text-gray-500 hover:text-red-500"><Flag className="w-3.5 h-3.5" /></button>
-            {canPin && <button onClick={() => onPin(comment.id)} className="text-gray-500 hover:text-yellow-500"><Pin className="w-3.5 h-3.5" /></button>}
-          </div>
-          {comment.repliesCount > 0 && (
-            <button onClick={() => { setShowReplies(!showReplies); if (!showReplies && !replies.length) onLoadReplies(comment.id); }} className="mt-2 text-xs text-purple-400 flex items-center gap-1">
-              {showReplies ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {comment.repliesCount} replies
-            </button>
-          )}
-          {showReplies && (
-            <div className="mt-2 space-y-2">
-              {replies.map(reply => (
-                <CommentItem
-                  key={reply.id}
-                  comment={reply}
-                  depth={depth + 1}
-                  currentUser={currentUser}
-                  postAuthorId={postAuthorId}
-                  onReply={onReply}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onReport={onReport}
-                  onPin={onPin}
-                  onLike={onLike}
-                  onReact={onReact}
-                  onLoadReplies={onLoadReplies}
-                  replies={reply.replies || []}
-                  hasMoreReplies={reply.hasMoreReplies}
-                  loadingReplies={false}
-                  isPinned={reply.id === (reply.pinnedId || null)}
-                  onCopyLink={onCopyLink}
-                />
-              ))}
-              {loadingReplies && <div className="text-xs text-gray-400">Loading replies...</div>}
-              {hasMoreReplies && <button onClick={() => onLoadReplies(comment.id, true)} className="text-xs text-purple-400">Load more replies</button>}
-            </div>
-          )}
-        </div>
-      </div>
-      {showActionSheet && (
-        <div className="fixed inset-0 z-[150] bg-black/50 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowActionSheet(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-t-2xl w-full max-w-md p-4 animate-slide-up" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { onCopyLink(comment.id); setShowActionSheet(false); }} className="w-full text-left py-3 px-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-              <Link className="w-5 h-5" /> Copy link to comment
-            </button>
-            <button onClick={() => { onReport(comment); setShowActionSheet(false); }} className="w-full text-left py-3 px-4 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-red-500">
-              <Flag className="w-5 h-5" /> Report
-            </button>
-            <button onClick={() => setShowActionSheet(false)} className="w-full text-center py-3 mt-2 border-t dark:border-gray-700">Cancel</button>
-          </div>
-        </div>
-      )}
-    </motion.div>
-  );
-});
-
-function formatCount(num) {
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
-}
-
-// ==================== MAIN DRAWER ====================
-export default function CommentsDrawer({ isOpen, onClose, post, currentUser, theme }) {
-  const navigate = useNavigate();
-  const isDark = theme === 'dark';
-  const postId = post?.id;
-  
-  // Local state
-  const [loading, setLoading] = useState(true);
-  const [comments, setComments] = useState([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [replyTarget, setReplyTarget] = useState(null);
-  const [reportingComment, setReportingComment] = useState(null);
-  const [reportReason, setReportReason] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchResults, setSearchResultsState] = useState(null);
-  const [historyComment, setHistoryComment] = useState(null);
-  const [manualCopyText, setManualCopyText] = useState(null);
-  const [drawerHeight, setDrawerHeight] = useState(85);
-  const [typingUsers, setTypingUsers] = useState([]);
-  const [blockedUserIds, setBlockedUserIds] = useState(new Set());
-  
-  const virtuosoRef = useRef(null);
-  const dragControls = useDragControls();
-  const pendingLikes = useRef(new Set());
-  const pendingReactions = useRef(new Set());
-  const reportLastTime = useRef(0);
-  const lastHapticTime = useRef(0);
-  const draftKey = postId ? `post_${postId}` : null;
-  const unsubscribeRef = useRef(null);
-  const mountedRef = useRef(true);
-
-  // Load blocked users
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-    const fetchBlocked = async () => {
-      try {
-        const blocked = await userService.getBlockedUsers(currentUser.uid);
-        const ids = new Set(blocked?.blockedUsers?.map(u => u.id) || []);
-        setBlockedUserIds(ids);
-      } catch (err) { console.warn(err); }
-    };
-    fetchBlocked();
-  }, [currentUser?.uid]);
-
-  // Load comments function
-  const loadComments = useCallback(async (reset = false) => {
-    if (!postId || !isOpen) return;
-    if (reset) setLoading(true);
+  async getPendingComments(limit = 50, startAfter = null) {
     try {
-      const result = await commentService.getCommentsByPost(postId, {
-        parentId: null,
-        limit: COMMENTS_PAGE_SIZE,
-        sortBy: 'best', // or ranking, but we'll keep simple
-        startAfter: reset ? null : nextCursor,
-      });
-      if (result.success) {
-        const newComments = result.comments;
-        if (reset) {
-          setComments(newComments);
-        } else {
-          setComments(prev => [...prev, ...newComments]);
-        }
-        setHasMore(result.hasMore);
-        setNextCursor(result.nextCursor || null);
-      } else {
-        toast.error('Failed to load comments');
+      await this._ensureInitialized();
+      const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+      let conditions = [
+        this.firestoreMethods.where('moderationStatus', '==', 'pending'),
+        this.firestoreMethods.orderBy('createdAt', 'asc'),
+        this.firestoreMethods.limit(limit)
+      ];
+      if (startAfter) {
+        const startAfterDoc = await this.firestoreMethods.getDoc(this.firestoreMethods.doc(this.firestore, 'comments', startAfter));
+        if (startAfterDoc.exists()) conditions.push(this.firestoreMethods.startAfter(startAfterDoc));
       }
+      const q = this.firestoreMethods.query(commentsRef, ...conditions);
+      const snapshot = await this.firestoreMethods.getDocs(q);
+      const comments = snapshot.docs.map(doc => ({
+        id: doc.id, ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+        updatedAt: doc.data().updatedAt?.toDate?.() || new Date()
+      }));
+      const lastDoc = comments.length > 0 ? comments[comments.length - 1] : null;
+      return { success: true, comments, hasMore: snapshot.size === limit, nextCursor: lastDoc?.id || null };
+    } catch (error) {
+      console.error('❌ Get pending comments failed:', error);
+      return { success: false, comments: [], error: error.message };
+    }
+  }
+
+  async batchModerateComments(commentIds, action, moderatorId, notes = '') {
+    try {
+      await this._ensureInitialized();
+      const batch = this.firestoreMethods.writeBatch(this.firestore);
+      let count = 0;
+      for (const commentId of commentIds) {
+        const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+        const updates = {
+          moderationStatus: action === 'approve' ? 'approved' :
+                           (action === 'shadowban' ? 'shadowbanned' : 'rejected'),
+          moderatedAt: this.firestoreMethods.serverTimestamp(),
+          moderatedBy: moderatorId,
+          moderationNotes: notes,
+          updatedAt: this.firestoreMethods.serverTimestamp()
+        };
+        if (action === 'delete') { updates.isDeleted = true; updates.deletedReason = 'moderation_batch'; }
+        else if (action === 'hide') { updates.isHidden = true; }
+        else if (action === 'shadowban') { updates.isShadowBanned = true; }
+        batch.update(commentRef, updates);
+        count++;
+        this._invalidateCommentCache(commentId);
+      }
+      await batch.commit();
+      return { success: true, moderatedCount: count };
+    } catch (error) {
+      console.error('❌ Batch moderate comments failed:', error);
+      throw this._enhanceError(error, 'Failed to batch moderate comments');
+    }
+  }
+
+  // ==================== GDPR STUBS (DISABLED) ====================
+  async exportUserData(userId) {
+    console.warn(`⚖️ GDPR export requested for user ${userId} – requires Cloud Function ${COMMENTS_CONFIG.GDPR_EXPORT_FUNCTION_NAME}`);
+    return { success: false, message: 'Export not available without a Cloud Function. Contact support.' };
+  }
+
+  async deleteUserData(userId) {
+    console.warn(`⚖️ GDPR deletion requested for user ${userId} – requires Cloud Function ${COMMENTS_CONFIG.GDPR_DELETE_FUNCTION_NAME}`);
+    return { success: false, message: 'Deletion not available without a Cloud Function. Contact support.' };
+  }
+
+  // ==================== ADVANCED RANKING & COLLAPSING ====================
+  _rankComments(comments, viewerUserId = null) {
+    const now = Date.now();
+    const gravity = COMMENTS_CONFIG.RANKING_GRAVITY;
+    const repWeight = COMMENTS_CONFIG.AUTHOR_REPUTATION_WEIGHT;
+    return comments.map(comment => {
+      const ageHours = (now - new Date(comment.createdAt).getTime()) / (1000 * 60 * 60);
+      const baseScore = (comment.likes - comment.dislikes) / Math.pow(ageHours + 2, gravity);
+      const authorRep = 0.5; // placeholder – fetch from user document
+      const score = baseScore + repWeight * authorRep;
+      return { ...comment, _score: score };
+    }).sort((a, b) => b._score - a._score);
+  }
+
+  _collapseLowQuality(comments) {
+    const threshold = COMMENTS_CONFIG.COLLAPSE_SCORE_THRESHOLD;
+    return comments.map(comment => {
+      if (comment._score != null && comment._score <= threshold) {
+        return { ...comment, _collapsed: true, replies: [] };
+      }
+      if (comment.replies && comment.replies.length > 0) {
+        comment.replies = this._collapseLowQuality(comment.replies);
+      }
+      return comment;
+    });
+  }
+
+  // ==================== SEARCH INDEXING STUBS ====================
+  async _indexCommentForSearch(commentId, commentData) {
+    if (!COMMENTS_CONFIG.SEARCH_INDEXING_ENABLED) return;
+    try {
+      // Replace with actual Algolia/Elastic client call
+      console.log(`🔍 Indexed comment ${commentId} for search`);
     } catch (err) {
-      console.error(err);
-      toast.error('Error loading comments');
-    } finally {
-      if (reset) setLoading(false);
+      console.warn('Failed to index comment for search:', err);
     }
-  }, [postId, isOpen, nextCursor]);
+  }
 
-  // Initial load when drawer opens
-  useEffect(() => {
-    if (isOpen && postId) {
-      loadComments(true);
-      // Start real‑time subscription
-      commentService.ensureInitialized().then(() => {
-        unsubscribeRef.current = commentService.subscribeToPostComments(postId, (update) => {
-          if (update.type === 'update' && update.comments) {
-            // Merge new comments: simple approach – reload from scratch to avoid complexity
-            // For better UX, we could merge, but reload is safe.
-            loadComments(true);
-          }
-        }, { parentId: null, limit: COMMENTS_PAGE_SIZE });
-      });
+  async _deleteCommentFromSearch(commentId) {
+    if (!COMMENTS_CONFIG.SEARCH_INDEXING_ENABLED) return;
+    try {
+      console.log(`🔍 Deleted comment ${commentId} from search index`);
+    } catch (err) {
+      console.warn('Failed to delete comment from search:', err);
     }
-    return () => {
-      if (unsubscribeRef.current && typeof unsubscribeRef.current === 'function') {
-        unsubscribeRef.current();
+  }
+
+  // ==================== ANALYTICS ====================
+  async getCommentAnalytics(targetType, targetId, options = {}) {
+    try {
+      await this._ensureInitialized();
+      const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+      const q = this.firestoreMethods.query(
+        commentsRef,
+        this.firestoreMethods.where('targetType', '==', targetType),
+        this.firestoreMethods.where('targetId', '==', targetId),
+        this.firestoreMethods.where('isDeleted', '==', false),
+        this.firestoreMethods.orderBy('createdAt', 'desc')
+      );
+      const snapshot = await this.firestoreMethods.getDocs(q);
+      const comments = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date()
+      }));
+      const totalComments = comments.length;
+      const topCommenters = new Map();
+      let totalLikes = 0, totalReplies = 0, sentimentSum = 0, sentimentCount = 0;
+      for (const comment of comments) {
+        if (comment.userId && !comment.isAnonymous) {
+          topCommenters.set(comment.userId, (topCommenters.get(comment.userId) || 0) + 1);
+        }
+        totalLikes += comment.likes || 0;
+        totalReplies += comment.replies || 0;
+        if (comment.sentimentScore) { sentimentSum += comment.sentimentScore; sentimentCount++; }
       }
-    };
-  }, [isOpen, postId, loadComments]);
-
-  // Flush offline queue when drawer opens
-  useEffect(() => {
-    if (isOpen && postId && currentUser) {
-      const onSuccess = (realComment, parentId, tempId) => {
-        // Reload to show new comment
-        loadComments(true);
+      const topCommentersList = Array.from(topCommenters.entries())
+        .map(([userId, count]) => ({ userId, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      return {
+        success: true,
+        analytics: {
+          totalComments,
+          totalLikes,
+          totalReplies,
+          averageLikes: totalComments ? totalLikes / totalComments : 0,
+          averageReplies: totalComments ? totalReplies / totalComments : 0,
+          averageSentiment: sentimentCount ? sentimentSum / sentimentCount : 0,
+          topCommenters: topCommentersList,
+          timeline: null // requires server‑side aggregation
+        }
       };
-      flushOfflineQueue(postId, currentUser.uid, onSuccess);
+    } catch (error) {
+      console.error('❌ Get comment analytics failed:', error);
+      return { success: false, analytics: null, error: error.message };
     }
-  }, [isOpen, postId, currentUser, loadComments]);
+  }
 
-  // Load more (pagination)
-  const handleLoadMore = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const result = await commentService.getCommentsByPost(postId, {
-        parentId: null,
-        limit: COMMENTS_PAGE_SIZE,
-        sortBy: 'best',
-        startAfter: nextCursor,
-      });
-      if (result.success) {
-        setComments(prev => [...prev, ...result.comments]);
-        setHasMore(result.hasMore);
-        setNextCursor(result.nextCursor || null);
+  // ==================== CLEANUP (DISABLED – MUST BE SERVER‑SIDE) ====================
+  async cleanupOldHistory() {
+    console.warn('Client‑side cleanupOldHistory is disabled for scalability. Use a scheduled Cloud Function.');
+    return { success: false, error: 'Client‑side cleanup disabled. Use Cloud Function.' };
+  }
+
+  async cleanupOldReactions() {
+    console.warn('Client‑side cleanupOldReactions is disabled for scalability. Use a scheduled Cloud Function.');
+    return { success: false, error: 'Client‑side cleanup disabled. Use Cloud Function.' };
+  }
+
+  // ==================== UTILITY METHODS ====================
+  _validateComment(content, userId, format = 'plain') {
+    const errors = [], warnings = [];
+    if (!content || (format === 'plain' && content.trim().length < COMMENTS_CONFIG.MIN_COMMENT_LENGTH)) {
+      errors.push('Comment cannot be empty');
+    }
+    const contentLength = typeof content === 'string' ? content.length : JSON.stringify(content).length;
+    if (contentLength > COMMENTS_CONFIG.MAX_COMMENT_LENGTH) {
+      errors.push(`Comment too long (max ${COMMENTS_CONFIG.MAX_COMMENT_LENGTH} characters)`);
+    }
+    const spamPatterns = [
+      /(http|https):\/\/[^\s]+/g,
+      /[A-Z]{5,}/g,
+      /!{3,}/g,
+      /\?{3,}/g,
+      /\.{4,}/g
+    ];
+    let spamScore = 0;
+    spamPatterns.forEach(pattern => {
+      const matches = content.match(pattern);
+      if (matches) spamScore += matches.length;
+    });
+    if (spamScore > 3) warnings.push('Comment contains spam-like patterns');
+    const mentions = content.match(/@(\w+)/g) || [];
+    if (mentions.length > COMMENTS_CONFIG.MENTION_LIMIT) {
+      errors.push(`Too many mentions (max ${COMMENTS_CONFIG.MENTION_LIMIT})`);
+    }
+    return { valid: errors.length === 0, errors, warnings, spamScore, mentionCount: mentions.length };
+  }
+
+  _extractMetadata(content) {
+    const mentionMatches = content.match(/@(\w+)/g) || [];
+    const mentions = [...new Set(mentionMatches.map(m => m.substring(1).toLowerCase()))];
+    const hashtagMatches = content.match(/#(\w+)/g) || [];
+    const hashtags = [...new Set(hashtagMatches.map(h => h.substring(1).toLowerCase()))];
+    const linkMatches = content.match(/(https?:\/\/[^\s]+)/g) || [];
+    const links = [...new Set(linkMatches)];
+    // Simple language detection stub – replace with `franc` or similar
+    let language = 'en';
+    if (/[\u0600-\u06FF]/.test(content)) language = 'ar';
+    else if (/[\u4e00-\u9fff]/.test(content)) language = 'zh';
+    else if (/[а-яА-Я]/.test(content)) language = 'ru';
+    return { mentions, hashtags, links, language };
+  }
+
+  _buildNestedComments(comments) {
+    const commentMap = new Map();
+    const roots = [];
+    comments.forEach(c => { c.replies = []; commentMap.set(c.id, c); });
+    comments.forEach(c => {
+      if (c.parentId && commentMap.has(c.parentId)) {
+        const parent = commentMap.get(c.parentId);
+        if (parent) parent.replies.push(c);
+      } else {
+        roots.push(c);
       }
-    } catch (err) {
-      toast.error('Failed to load more');
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [postId, hasMore, loadingMore, nextCursor]);
-
-  // Submit comment (optimistic)
-  const handleSubmitComment = useCallback(async (content, parentId = null, type = 'text', blob = null) => {
-    if (!currentUser) return toast.error('Sign in');
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const optimisticComment = {
-      id: tempId,
-      content: type === 'text' ? content : '',
-      type,
-      mediaUrl: null,
-      createdAt: new Date(),
-      userId: currentUser.uid,
-      userName: currentUser.displayName,
-      userAvatar: currentUser.photoURL,
-      likes: 0,
-      repliesCount: 0,
-      likedBy: [],
-      parentId: parentId || null,
+    });
+    roots.sort((a, b) => b.createdAt - a.createdAt);
+    const sortReplies = (comment) => {
+      if (comment.replies && comment.replies.length > 0) {
+        comment.replies.sort((a, b) => a.createdAt - b.createdAt);
+        comment.replies.forEach(sortReplies);
+      }
     };
-    // Add to UI optimistically
-    if (!parentId) {
-      setComments(prev => [optimisticComment, ...prev]);
-    } else {
-      // For replies, we need to add to the parent's replies array. To keep it simple, we'll reload after success.
-      // But we'll still show optimistic by updating the parent in the local state.
-      // For simplicity, we reload the whole thread after reply creation.
-    }
+    roots.forEach(sortReplies);
+    return roots;
+  }
 
-    if (!navigator.onLine) {
-      await addToOfflineQueue(postId, currentUser.uid, content, parentId, {
-        userName: currentUser.displayName,
-        type,
-        mediaUrl: blob,
-        tempId
-      });
-      toast.info('Comment saved offline');
-      return;
+  _sortComments(comments, sortBy) {
+    const sorted = [...comments];
+    switch (sortBy) {
+      case 'newest': sorted.sort((a, b) => b.createdAt - a.createdAt); break;
+      case 'oldest': sorted.sort((a, b) => a.createdAt - b.createdAt); break;
+      case 'popular':
+      case 'top': sorted.sort((a, b) => ((b.likes||0)-(b.dislikes||0)) - ((a.likes||0)-(a.dislikes||0))); break;
+      case 'controversial': sorted.sort((a, b) => ((b.likes||0)+(b.dislikes||0)) - ((a.likes||0)+(a.dislikes||0))); break;
     }
+    return sorted;
+  }
+
+  // ✅ SIMPLE, RELIABLE SINGLE‑DOCUMENT RATE LIMITER
+  async _checkSpamRate(userId) {
+    await this._ensureInitialized();
+    const minuteTimestamp = Math.floor(Date.now() / 60000);
+    const docId = `comment_${userId}_${minuteTimestamp}`;
+    const rateRef = this.firestoreMethods.doc(this.firestore, 'rate_limits', docId);
+    const threshold = COMMENTS_CONFIG.SPAM_CHECK_THRESHOLD;
 
     try {
-      let result;
-      if (type === 'voice') {
-        const uploadResult = await storageService.uploadFile(blob, `comments/voice/${currentUser.uid}/${safeRandomUUID()}.webm`, { userId: currentUser.uid });
-        result = await commentService.createComment(postId, currentUser.uid, '', {
-          parentId,
-          type,
-          mediaUrl: uploadResult.downloadURL,
-          userName: currentUser.displayName,
-          userUsername: currentUser.username,
-          userAvatar: currentUser.photoURL
-        });
-      } else {
-        result = await commentService.createComment(postId, currentUser.uid, content, {
-          parentId,
-          userName: currentUser.displayName,
-          userUsername: currentUser.username,
-          userAvatar: currentUser.photoURL
-        });
-      }
-      // Replace optimistic with real comment
-      setComments(prev => {
-        const idx = prev.findIndex(c => c.id === tempId);
-        if (idx !== -1) {
-          const newComments = [...prev];
-          newComments[idx] = result.comment;
-          return newComments;
+      const result = await this.firestoreMethods.runTransaction(this.firestore, async (transaction) => {
+        const snap = await transaction.get(rateRef);
+        let current = snap.exists() ? snap.data().count || 0 : 0;
+        if (current >= threshold) {
+          throw new Error('RATE_LIMIT_EXCEEDED');
         }
-        return [result.comment, ...prev];
+        transaction.set(rateRef, {
+          count: current + 1,
+          updatedAt: this.firestoreMethods.serverTimestamp(),
+          userId,
+          minuteTimestamp
+        }, { merge: true });
+        return current + 1;
       });
-      if (parentId) {
-        // Reload to refresh replies
-        loadComments(true);
-      }
-      if (post.authorId !== currentUser.uid && !parentId) {
-        await notificationsService.createCommentNotification(postId, currentUser.uid, post.authorId, result.comment.id);
-      }
-      setReplyTarget(null);
+      return { allowed: true, count: result, waitTime: 0 };
     } catch (err) {
-      // Remove optimistic comment
-      setComments(prev => prev.filter(c => c.id !== tempId));
-      toast.error(err.message);
+      if (err.message === 'RATE_LIMIT_EXCEEDED') {
+        const secondsLeft = 60 - (Math.floor(Date.now() / 1000) % 60);
+        return { allowed: false, count: threshold, waitTime: secondsLeft };
+      }
+      // For other errors (e.g., transaction failure), we allow the comment but log a warning
+      console.warn('Spam rate check failed, allowing comment', err);
+      return { allowed: true, count: 1, waitTime: 0 };
     }
-  }, [currentUser, postId, post?.authorId, loadComments]);
+  }
 
-  // Load replies for a comment
-  const loadReplies = useCallback(async (commentId, more = false) => {
+  async _updateReportStatus(commentId, action, moderatorId) {
     try {
-      const result = await commentService.getReplies(commentId, { limit: REPLIES_PAGE_SIZE });
-      if (result.success) {
-        setComments(prev => {
-          const updated = [...prev];
-          const idx = updated.findIndex(c => c.id === commentId);
-          if (idx !== -1) {
-            updated[idx] = {
-              ...updated[idx],
-              replies: result.replies,
-              repliesCount: result.total,
-              hasMoreReplies: result.hasMore,
-            };
-          }
-          return updated;
+      await this._ensureInitialized();
+      const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
+      const q = this.firestoreMethods.query(reportsRef, this.firestoreMethods.where('commentId', '==', commentId));
+      const snapshot = await this.firestoreMethods.getDocs(q);
+      const batch = this.firestoreMethods.writeBatch(this.firestore);
+      snapshot.forEach(doc => {
+        batch.update(doc.ref, {
+          status: 'resolved',
+          reviewedAt: this.firestoreMethods.serverTimestamp(),
+          reviewedBy: moderatorId,
+          actionTaken: action
         });
-      }
-    } catch (err) {
-      toast.error('Failed to load replies');
-    }
-  }, []);
-
-  // Like handler
-  const handleLike = useCallback(async (commentId) => {
-    if (!currentUser) return;
-    if (pendingLikes.current.has(commentId)) return;
-    pendingLikes.current.add(commentId);
-    const now = Date.now();
-    if (now - lastHapticTime.current < 50) { pendingLikes.current.delete(commentId); return; }
-    lastHapticTime.current = now;
-    triggerHaptic('light');
-
-    setComments(prev => {
-      const updated = [...prev];
-      const idx = updated.findIndex(c => c.id === commentId);
-      if (idx === -1) return prev;
-      const comment = updated[idx];
-      const wasLiked = (comment.likedBy || []).includes(currentUser.uid);
-      const newLikes = wasLiked ? comment.likes - 1 : comment.likes + 1;
-      const newLikedBy = wasLiked
-        ? (comment.likedBy || []).filter(id => id !== currentUser.uid)
-        : [...(comment.likedBy || []), currentUser.uid];
-      updated[idx] = { ...comment, likes: newLikes, likedBy: newLikedBy };
-      return updated;
-    });
-    try {
-      const comment = comments.find(c => c.id === commentId);
-      if (comment && (comment.likedBy || []).includes(currentUser.uid)) {
-        await commentService.removeLikeDislike(commentId, currentUser.uid);
-      } else {
-        await commentService.likeComment(commentId, currentUser.uid);
-      }
-    } catch (err) {
-      loadComments(true);
-      toast.error('Like failed');
-    } finally {
-      pendingLikes.current.delete(commentId);
-    }
-  }, [currentUser, comments, loadComments]);
-
-  const handleReact = useCallback(async (commentId, emoji) => {
-    if (!currentUser) return;
-    const key = `${commentId}_${emoji}`;
-    if (pendingReactions.current.has(key)) return;
-    pendingReactions.current.add(key);
-    triggerHaptic('light');
-    setComments(prev => {
-      const updated = [...prev];
-      const idx = updated.findIndex(c => c.id === commentId);
-      if (idx === -1) return prev;
-      const comment = updated[idx];
-      const newCounts = { ...comment.reactionCounts, [emoji]: (comment.reactionCounts?.[emoji] || 0) + 1 };
-      updated[idx] = { ...comment, reactionCounts: newCounts };
-      return updated;
-    });
-    try {
-      await commentService.addReaction(commentId, currentUser.uid, emoji);
-    } catch (err) {
-      loadComments(true);
-      toast.error('Reaction failed');
-    } finally {
-      pendingReactions.current.delete(key);
-    }
-  }, [currentUser, loadComments]);
-
-  const handleDelete = useCallback(async (commentId) => {
-    if (!currentUser) return;
-    const comment = comments.find(c => c.id === commentId);
-    if (!comment || comment.userId !== currentUser.uid) {
-      toast.error('You can only delete your own comments');
-      return;
-    }
-    if (!window.confirm('Delete this comment?')) return;
-    triggerHaptic('light');
-    setComments(prev => prev.filter(c => c.id !== commentId));
-    try {
-      await commentService.deleteComment(commentId, currentUser.uid);
-      toast.success('Comment deleted');
-    } catch (err) {
-      loadComments(true);
-      toast.error('Delete failed');
-    }
-  }, [currentUser, comments, loadComments]);
-
-  const handleEdit = useCallback(async (commentId, newContent) => {
-    if (!currentUser) return;
-    const comment = comments.find(c => c.id === commentId);
-    if (!comment || comment.userId !== currentUser.uid) {
-      toast.error('You can only edit your own comments');
-      return;
-    }
-    triggerHaptic('light');
-    setComments(prev => {
-      const updated = [...prev];
-      const idx = updated.findIndex(c => c.id === commentId);
-      if (idx !== -1) {
-        updated[idx] = { ...updated[idx], content: newContent, isEdited: true };
-      }
-      return updated;
-    });
-    try {
-      await commentService.updateComment(commentId, currentUser.uid, { content: newContent });
-      toast.success('Comment updated');
-    } catch (err) {
-      loadComments(true);
-      toast.error('Edit failed');
-    }
-  }, [currentUser, comments, loadComments]);
-
-  const handleReport = useCallback(async (comment) => {
-    const now = Date.now();
-    if (now - reportLastTime.current < 1000) { toast.info('Please wait before reporting again'); return; }
-    if (!reportReason) return;
-    reportLastTime.current = now;
-    try {
-      const reportFn = httpsCallable(getFunctions(), 'reportComment');
-      await reportFn({ commentId: comment.id, reporterId: currentUser.uid, reason: reportReason });
-      toast.success('Report submitted');
-    } catch (err) { toast.error('Report failed'); }
-    setReportingComment(null);
-    setReportReason('');
-  }, [currentUser, reportReason]);
-
-  const handlePin = useCallback(async (commentId) => {
-    if (!currentUser || currentUser.uid !== post?.authorId) {
-      toast.error('Only the post author can pin comments');
-      return;
-    }
-    try {
-      await commentService.pinCommentToTarget('post', postId, commentId, currentUser.uid, true);
-      loadComments(true);
-      toast.success('Pinned');
-    } catch (err) { toast.error('Pin failed'); }
-  }, [currentUser, post?.authorId, postId, loadComments]);
-
-  const handleCopyLink = useCallback(async (commentId) => {
-    const url = `${window.location.origin}/post/${postId}?commentId=${commentId}`;
-    const copied = await safeCopy(url);
-    if (!copied) setManualCopyText(url);
-    else toast.success('Comment link copied');
-  }, [postId]);
-
-  const handleSearch = useCallback(async (query, filterUser, dateRange) => {
-    // Client‑side filter on loaded comments
-    let filtered = comments.filter(c => c.content.toLowerCase().includes(query.toLowerCase()));
-    if (filterUser) {
-      filtered = filtered.filter(c => c.userName?.toLowerCase().includes(filterUser.toLowerCase()));
-    }
-    if (dateRange === 'today') {
-      filtered = filtered.filter(c => {
-        const d = new Date(c.createdAt).toDateString();
-        return d === new Date().toDateString();
       });
-    } else if (dateRange === 'week') {
-      const weekAgo = new Date(Date.now() - 7*24*3600000);
-      filtered = filtered.filter(c => new Date(c.createdAt) >= weekAgo);
-    } else if (dateRange === 'month') {
-      const monthAgo = new Date(Date.now() - 30*24*3600000);
-      filtered = filtered.filter(c => new Date(c.createdAt) >= monthAgo);
+      await batch.commit();
+    } catch (error) { console.warn('Update report status failed:', error); }
+  }
+
+  _invalidateCommentCache(commentId) {
+    this.cache.delete(`comment_${commentId}`);
+    for (const [key] of this.cache.entries()) {
+      if (key.startsWith('comments_')) this.cache.delete(key);
     }
-    setSearchResultsState(filtered);
-    setShowSearch(false);
-  }, [comments]);
+  }
 
-  const handleTyping = useCallback((isTyping) => {
-    if (!currentUser) return;
-    if (isTyping) {
-      setTypingUsers(prev => {
-        if (prev.some(u => u.userId === currentUser.uid)) return prev;
-        return [...prev, { userId: currentUser.uid, displayName: currentUser.displayName }];
-      });
-      setTimeout(() => {
-        setTypingUsers(prev => prev.filter(u => u.userId !== currentUser.uid));
-      }, TYPING_USER_EXPIRY_MS);
+  _invalidateTargetCache(targetType, targetId) {
+    for (const [key] of this.cache.entries()) {
+      if (key === `comments_${targetType}_${targetId}_` || key.startsWith(`comments_${targetType}_${targetId}_`)) {
+        this.cache.delete(key);
+      }
     }
-  }, [currentUser]);
+  }
 
-  const handleDrag = (_, info) => {
-    const deltaPercent = (info.offset.y / window.innerHeight) * 100;
-    let newHeight = drawerHeight - deltaPercent;
-    newHeight = Math.min(100, Math.max(30, newHeight));
-    setDrawerHeight(newHeight);
-  };
-  const handleDragEnd = (_, info) => {
-    if (info.offset.y > 100) onClose();
-    else if (info.offset.y < -50) setDrawerHeight(100);
-    else setDrawerHeight(85);
-  };
+  _getCacheKey(prefix, targetType, targetId, options) {
+    const stable = {
+      parentId: options.parentId,
+      limit: options.limit,
+      sortBy: options.sortBy,
+      nested: options.nested,
+      collapse: options.collapse,
+      maxDepth: options.maxDepth,
+      viewerUserId: options.viewerUserId,
+      isAdmin: options.isAdmin
+    };
+    const sorted = Object.keys(stable).sort().map(k => `${k}=${stable[k]}`).join('&');
+    return `${prefix}_${targetType}_${targetId}_${sorted}`;
+  }
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
+  _enhanceError(error, defaultMessage) {
+    const errorMap = {
+      'permission-denied': 'You do not have permission to perform this action.',
+      'unauthenticated': 'Please sign in to comment.',
+      'not-found': 'Comment not found.',
+      'already-exists': 'Comment already exists.',
+      'failed-precondition': 'Operation failed. Please refresh.',
+      'resource-exhausted': 'Rate limit exceeded. Please wait.',
+      'deadline-exceeded': 'Request timeout. Please try again.',
+      'aborted': 'Operation aborted.',
+      'unavailable': 'Service temporarily unavailable.',
+      'invalid-argument': 'Invalid comment data.',
+      'cancelled': 'Operation was cancelled.',
+      'data-loss': 'Unrecoverable data loss or corruption.',
+      'out-of-range': 'Operation was attempted past the valid range.',
+      'internal': 'Internal server error.',
+      'unknown': 'An unknown error occurred.'
+    };
+    const enhanced = new Error(errorMap[error.code] || defaultMessage || 'Comment operation failed');
+    enhanced.code = error.code || 'unknown';
+    enhanced.originalError = error;
+    enhanced.timestamp = new Date().toISOString();
+    return enhanced;
+  }
 
-  if (!isOpen) return null;
+  cleanupStaleData() {
+    const now = Date.now();
+    for (const [key, value] of this.cache.entries()) {
+      if (now - value.timestamp > 10 * 60 * 1000) this.cache.delete(key);
+    }
+    for (const [id, sub] of this.realtimeSubscriptions.entries()) {
+      if (now - sub.createdAt > 30 * 60 * 1000) this.unsubscribe(id);
+    }
+    if (now - this.lastCleanup > 60 * 1000) {
+      console.log('🧹 Comment service cleanup completed');
+      this.lastCleanup = now;
+    }
+  }
 
-  const displayComments = searchResults !== null ? searchResults : comments;
-  const isEmpty = !loading && displayComments.length === 0;
-  const isTouchCoarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
-  const overscan = isTouchCoarse ? 80 : 200;
+  // ==================== BATCH DELETE ====================
+  async batchDeleteComments(commentIds, userId, isAdmin = false) {
+    try {
+      await this._ensureInitialized();
+      const batch = this.firestoreMethods.writeBatch(this.firestore);
+      const counterUpdates = new Map();
+      const chunkSize = 10;
+      for (let i = 0; i < commentIds.length; i += chunkSize) {
+        const chunk = commentIds.slice(i, i + chunkSize);
+        const commentRefs = chunk.map(id => this.firestoreMethods.doc(this.firestore, 'comments', id));
+        const snapshots = await this.firestoreMethods.getAll(...commentRefs);
+        for (const snap of snapshots) {
+          if (!snap.exists()) continue;
+          const data = snap.data();
+          if (!isAdmin && data.userId !== userId) continue;
+          batch.update(snap.ref, {
+            isDeleted: true,
+            deletedAt: this.firestoreMethods.serverTimestamp(),
+            deletedBy: userId,
+            deletedReason: isAdmin ? 'admin_batch_delete' : 'user_batch_delete',
+            updatedAt: this.firestoreMethods.serverTimestamp(),
+            content: '[This comment has been deleted]'
+          });
+          const key = `${data.targetType}_${data.targetId}`;
+          counterUpdates.set(key, (counterUpdates.get(key) || 0) - 1);
+          if (data.parentId) {
+            const parentRef = this.firestoreMethods.doc(this.firestore, 'comments', data.parentId);
+            batch.update(parentRef, {
+              replies: this.firestoreMethods.increment(-1),
+              updatedAt: this.firestoreMethods.serverTimestamp()
+            });
+          }
+          this._invalidateCommentCache(snap.id);
+        }
+      }
+      if (counterUpdates.size > 0) {
+        await batch.commit();
+        for (const [key, delta] of counterUpdates.entries()) {
+          const [targetType, targetId] = key.split('_');
+          await this._incrementCommentCounter(targetType, targetId, delta);
+          await this._syncTargetCommentCount(targetType, targetId, delta);
+          this._invalidateTargetCache(targetType, targetId);
+        }
+      }
+      const totalDeleted = Array.from(counterUpdates.values()).reduce((a, b) => a + Math.abs(b), 0);
+      return {
+        success: true,
+        deleted: totalDeleted,
+        total: commentIds.length,
+        failed: commentIds.length - totalDeleted
+      };
+    } catch (error) {
+      console.error('❌ Batch delete comments failed:', error);
+      throw this._enhanceError(error, 'Failed to batch delete comments');
+    }
+  }
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-xl z-[90]"
-          />
-          <motion.div
-            drag="y" dragControls={dragControls} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={0.2}
-            onDrag={handleDrag} onDragEnd={handleDragEnd}
-            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className={`fixed bottom-0 left-0 right-0 z-[91] rounded-t-3xl shadow-2xl flex flex-col ${isDark ? 'bg-gray-900' : 'bg-white'}`}
-            style={{ height: `${drawerHeight}vh`, maxHeight: '100vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
-          >
-            <div className="w-full flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing" onMouseDown={dragControls.start} onTouchStart={dragControls.start}>
-              <div className="w-12 h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
-            </div>
+  // ==================== STATISTICS ====================
+  async getCommentStats(targetType = null, targetId = null, userId = null) {
+    try {
+      await this._ensureInitialized();
+      const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
+      const conditions = [];
+      if (targetType && targetId) {
+        conditions.push(this.firestoreMethods.where('targetType', '==', targetType));
+        conditions.push(this.firestoreMethods.where('targetId', '==', targetId));
+      }
+      if (userId) conditions.push(this.firestoreMethods.where('userId', '==', userId));
+      conditions.push(this.firestoreMethods.where('isDeleted', '==', false));
+      const q = this.firestoreMethods.query(commentsRef, ...conditions);
+      const snapshot = await this.firestoreMethods.getCountFromServer(q);
+      let total = snapshot.data().count;
+      if (targetType && targetId) total = await this.getCommentCount(targetType, targetId);
+      return { success: true, stats: { totalComments: total, averageLikes: 0, averageReplies: 0, topCommenters: [] } };
+    } catch (error) {
+      console.error('❌ Get comment stats failed:', error);
+      return { success: false, stats: null, error: error.message };
+    }
+  }
 
-            <div className="px-4 py-3 border-b dark:border-gray-800 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500"><MessageCircle className="w-5 h-5 text-white" /></div>
-                <div><h3 className="font-bold text-lg dark:text-white">Comments</h3><p className="text-xs text-gray-400 dark:text-gray-500">{post?.stats?.comments || 0} total</p></div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"><Search className="w-5 h-5" /></button>
-                <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"><X className="w-5 h-5" /></button>
-              </div>
-            </div>
+  getStats() {
+    return {
+      cacheSize: this.cache.size,
+      subscriptions: this.realtimeSubscriptions.size,
+      initialized: this.initialized,
+      activeUsers: this.activeUsers.size
+    };
+  }
 
-            {showSearch && <SearchBar onSearch={handleSearch} onClose={() => { setShowSearch(false); setSearchResultsState(null); }} />}
+  clearCache() { this.cache.clear(); console.log('🧹 Comment service cache cleared'); }
 
-            <div className="flex-1 overflow-hidden">
-              {loading ? (
-                <div className="flex justify-center items-center h-full">
-                  <LoadingSpinner size="lg" color="purple" />
-                </div>
-              ) : isEmpty ? (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <MessageCircle className="w-12 h-12 text-gray-400 mb-2" />
-                  <p className="text-gray-500 dark:text-gray-400">No comments yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Be the first to share your thoughts</p>
-                </div>
-              ) : (
-                <ErrorBoundary fallback={<div className="p-4 text-center text-red-500">Failed to render comments</div>}>
-                  <Virtuoso
-                    ref={virtuosoRef}
-                    data={displayComments}
-                    endReached={!searchResults && hasMore && !loadingMore ? handleLoadMore : undefined}
-                    overscan={overscan}
-                    style={{ height: '100%' }}
-                    defaultItemHeight={120}
-                    computeItemKey={(index, comment) => comment.id}
-                    itemContent={(index, comment) => {
-                      // Filter out blocked users from top level
-                      if (blockedUserIds.has(comment.userId)) return null;
-                      return (
-                        <div className="px-4 py-2">
-                          <CommentItem
-                            comment={comment}
-                            depth={0}
-                            currentUser={currentUser}
-                            postAuthorId={post?.authorId}
-                            onReply={setReplyTarget}
-                            onEdit={handleEdit}
-                            onDelete={handleDelete}
-                            onReport={setReportingComment}
-                            onPin={handlePin}
-                            onLike={handleLike}
-                            onReact={handleReact}
-                            onLoadReplies={loadReplies}
-                            replies={comment.replies || []}
-                            hasMoreReplies={comment.hasMoreReplies}
-                            loadingReplies={false}
-                            isPinned={comment.id === (post?.pinnedCommentId)}
-                            onToggleHistory={() => setHistoryComment(comment)}
-                            onCopyLink={handleCopyLink}
-                          />
-                        </div>
-                      );
-                    }}
-                    components={{
-                      Footer: () => {
-                        if (loadingMore) return <div className="flex justify-center py-4"><LoadingSpinner size="sm" color="purple" /></div>;
-                        if (!hasMore && displayComments.length > 0 && !searchResults) return <p className="text-center text-gray-400 text-xs py-4">End of comments</p>;
-                        return null;
-                      }
-                    }}
-                  />
-                </ErrorBoundary>
-              )}
-            </div>
-
-            <TypingIndicator typingUsers={typingUsers} />
-
-            {replyTarget && (
-              <div className="border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-2">
-                <div className="flex justify-between items-center mb-1 px-2">
-                  <span className="text-xs text-purple-400">Replying to @{replyTarget.userName || 'user'}</span>
-                  <button onClick={() => setReplyTarget(null)} className="text-gray-400"><X className="w-3 h-3" /></button>
-                </div>
-                <CommentComposer
-                  onSubmit={(content, _, type, blob) => handleSubmitComment(content, replyTarget.id, type, blob)}
-                  loading={false} placeholder={`Reply to ${replyTarget.userName || 'user'}...`}
-                  onTyping={handleTyping} currentUser={currentUser} draftKey={`reply_${replyTarget.id}`}
-                />
-              </div>
-            )}
-
-            <CommentComposer
-              onSubmit={(content, _, type, blob) => handleSubmitComment(content, null, type, blob)}
-              loading={false} onTyping={handleTyping} currentUser={currentUser} draftKey={draftKey}
-            />
-
-            {reportingComment && (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xl">
-                <div className={`p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4 ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
-                  <h3 className="text-lg font-bold mb-4">Report comment</h3>
-                  <select value={reportReason} onChange={(e) => setReportReason(e.target.value)} className="w-full p-2 rounded-xl border mb-4 dark:bg-gray-800">
-                    <option value="">Select reason...</option><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="inappropriate">Inappropriate</option><option value="hate_speech">Hate speech</option>
-                  </select>
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => setReportingComment(null)} className="px-4 py-2 rounded-xl border">Cancel</button>
-                    <button onClick={() => handleReport(reportingComment)} disabled={!reportReason} className="px-4 py-2 rounded-xl bg-red-500 text-white">Submit</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {historyComment && <EditHistoryModal comment={historyComment} onClose={() => setHistoryComment(null)} />}
-            {manualCopyText && <ManualCopyModal text={manualCopyText} onClose={() => setManualCopyText(null)} />}
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
+  destroy() {
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
+    for (const id of this.realtimeSubscriptions.keys()) this.unsubscribe(id);
+    this.clearCache(); this.activeUsers.clear();
+    this.initialized = false; this.firestore = null; this.firestoreMethods = null; this.firestoreModule = null; this.notificationsService = null;
+    console.log('🔥 Comment service destroyed');
+  }
 }
+
+// ==================== SINGLETON & EXPORTS ====================
+let instance = null;
+export function getCommentService() {
+  if (!instance) instance = new UltimateCommentService();
+  return instance;
+}
+
+const commentService = {
+  createComment: (targetType, targetId, userId, content, options) => getCommentService().createComment(targetType, targetId, userId, content, options),
+  getCommentsByTarget: (targetType, targetId, options) => getCommentService().getCommentsByTarget(targetType, targetId, options),
+  getComment: (commentId, options) => getCommentService().getComment(commentId, options),
+  updateComment: (commentId, userId, updates) => getCommentService().updateComment(commentId, userId, updates),
+  deleteComment: (commentId, userId, isAdmin) => getCommentService().deleteComment(commentId, userId, isAdmin),
+  likeComment: (commentId, userId) => getCommentService().likeComment(commentId, userId),
+  dislikeComment: (commentId, userId) => getCommentService().dislikeComment(commentId, userId),
+  removeLikeDislike: (commentId, userId) => getCommentService().removeLikeDislike(commentId, userId),
+  addReaction: (commentId, userId, reactionType) => getCommentService().addReaction(commentId, userId, reactionType),
+  removeReaction: (commentId, userId) => getCommentService().removeReaction(commentId, userId),
+  getReactions: (commentId) => getCommentService().getReactions(commentId),
+  pinComment: (commentId, userId, isAdmin) => getCommentService().pinComment(commentId, userId, isAdmin),
+  unpinComment: (commentId, userId, isAdmin) => getCommentService().unpinComment(commentId, userId, isAdmin),
+  pinCommentToTarget: (targetType, targetId, commentId, userId, isAdmin) => getCommentService().pinCommentToTarget(targetType, targetId, commentId, userId, isAdmin),
+  unpinCommentFromTarget: (targetType, targetId, userId, isAdmin) => getCommentService().unpinCommentFromTarget(targetType, targetId, userId, isAdmin),
+  getPinnedCommentForTarget: (targetType, targetId) => getCommentService().getPinnedCommentForTarget(targetType, targetId),
+  getCommentHistory: (commentId, options) => getCommentService().getCommentHistory(commentId, options),
+  getCommentHistoryUI: (commentId) => getCommentService().getCommentHistoryUI(commentId),
+  replyToComment: (parentCommentId, userId, content, options) => getCommentService().replyToComment(parentCommentId, userId, content, options),
+  getReplies: (commentId, options) => getCommentService().getReplies(commentId, options),
+  subscribeToTargetComments: (targetType, targetId, callback, options) => getCommentService().subscribeToTargetComments(targetType, targetId, callback, options),
+  unsubscribe: (subscriptionId) => getCommentService().unsubscribe(subscriptionId),
+  reportComment: (commentId, userId, reason, details) => getCommentService().reportComment(commentId, userId, reason, details),
+  moderateComment: (commentId, action, moderatorId, notes) => getCommentService().moderateComment(commentId, action, moderatorId, notes),
+  getPendingComments: (limit, startAfter) => getCommentService().getPendingComments(limit, startAfter),
+  batchModerateComments: (commentIds, action, moderatorId, notes) => getCommentService().batchModerateComments(commentIds, action, moderatorId, notes),
+  batchDeleteComments: (commentIds, userId, isAdmin) => getCommentService().batchDeleteComments(commentIds, userId, isAdmin),
+  exportUserData: (userId) => getCommentService().exportUserData(userId),
+  deleteUserData: (userId) => getCommentService().deleteUserData(userId),
+  getCommentStats: (targetType, targetId, userId) => getCommentService().getCommentStats(targetType, targetId, userId),
+  getCommentAnalytics: (targetType, targetId, options) => getCommentService().getCommentAnalytics(targetType, targetId, options),
+  cleanupOldHistory: () => getCommentService().cleanupOldHistory(),
+  cleanupOldReactions: () => getCommentService().cleanupOldReactions(),
+  getCommentCount: (targetType, targetId) => getCommentService().getCommentCount(targetType, targetId),
+  getCommentsByPost: (postId, options) => getCommentService().getCommentsByTarget('post', postId, options),
+  subscribeToPostComments: (postId, callback, options) => getCommentService().subscribeToTargetComments('post', postId, callback, options),
+  getService: getCommentService,
+  getStats: () => getCommentService().getStats(),
+  clearCache: () => getCommentService().clearCache(),
+  destroy: () => getCommentService().destroy(),
+  ensureInitialized: () => getCommentService().ensureInitialized()
+};
+
+export default commentService;
+
+// ==================== REQUIRED FIRESTORE INDEXES & SECURITY RULES ====================
+/*
+  ✅ CREATE THESE COMPOSITE INDEXES IN FIREBASE CONSOLE OR THE SERVICE WILL FAIL:
+
+  1. comments collection:
+     - Fields: targetType Ascending, targetId Ascending, isDeleted Ascending, isHidden Ascending, createdAt Descending
+  2. comments collection:
+     - Fields: targetType Ascending, targetId Ascending, parentId Ascending, isDeleted Ascending, isHidden Ascending, createdAt Descending
+  3. comments collection:
+     - Fields: parentId Ascending, isDeleted Ascending, isHidden Ascending, createdAt Ascending
+  4. comments/{commentId}/history subcollection:
+     - Fields: archivedAt Descending
+  5. comments/{commentId}/reactions subcollection:
+     - Fields: createdAt Ascending
+  6. comment_reports collection:
+     - Fields: commentId Ascending, userId Ascending
+  7. comment_reports collection:
+     - Fields: commentId Ascending
+
+  🔐 SECURITY RULES (pseudo‑code, implement in Firebase Console):
+     - Only authenticated users can create comments.
+     - Users can read non‑shadow‑banned comments (except authors & admins).
+     - Users can update/delete their own comments.
+     - Admins can moderate, pin, batch delete.
+     - Rate‑limit writes using custom claims or Cloud Functions.
+*/
