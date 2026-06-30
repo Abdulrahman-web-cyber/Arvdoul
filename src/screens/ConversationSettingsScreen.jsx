@@ -166,7 +166,7 @@ const ConversationSettingsScreen = () => {
       </div>
 
       {/* Settings list */}
-      <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}>
+      <div classNaume="flex-1 overflow-y-auto divide-y" style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}>
         {/* Mute notifications */}
         <button
           onClick={handleToggleMute}
