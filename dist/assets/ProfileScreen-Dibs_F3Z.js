@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-eu958idE.js";var t=e();function n(){return(0,t.jsx)(`div`,{children:`ProfileScreen`})}export{n as default};

@@ -1,0 +1,1 @@
+import{n as e,t}from"./jsx-runtime-eu958idE.js";e();var n=t();function r(){return(0,n.jsx)(`div`,{children:`CollectionsScreen placeholder`})}export{r as default};

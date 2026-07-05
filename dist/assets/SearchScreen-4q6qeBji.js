@@ -1,0 +1,1 @@
+import{n as e,t}from"./jsx-runtime-eu958idE.js";e();var n=t();function r(){return(0,n.jsx)(`div`,{style:{padding:20},children:(0,n.jsx)(`h1`,{children:`Search Screen`})})}export{r as default};

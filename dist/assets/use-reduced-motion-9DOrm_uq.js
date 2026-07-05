@@ -1,0 +1,1 @@
+import{c as e,n as t}from"./jsx-runtime-eu958idE.js";import{i as n,n as r,r as i}from"./motion-B3q5-htu.js";var a=e(t(),1);function o(){!i.current&&r();let[e]=(0,a.useState)(n.current);return e}export{o as t};

@@ -1,5 +1,5 @@
 // ============================================================
-// src/screens/CreatePost/CreatePost.jsx
+// src/screens/CreatePost.jsx
 // ARVDOUL ULTIMATE POST CREATOR – SHELL / ORCHESTRATOR
 // ============================================================
 
@@ -9,16 +9,16 @@ import React, {
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, LazyMotion, domAnimation } from "framer-motion";
 import { toast } from "sonner";
-import { useTheme } from "../../context/ThemeContext";
-import { useAuth } from "../../context/AuthContext";
-import { useAppStore } from "../../store/appStore";
+import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
+import { useAppStore } from "../store/appStore";
 import { openDB } from "idb";
 import { v4 as uuidv4 } from "uuid";
 import * as Icons from "lucide-react";
-import LoadingSpinner from "../../components/Shared/LoadingSpinner.jsx";
+import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import ContentEditor from "./ContentEditor";
-import PostSettings from "./PostSettings";
-import ReviewStep from "./ReviewStep";       // we'll inline it later
+import PostSettings from "../PostSettings";
+import ReviewStep from "../ReviewStep";   .    // we'll inline it later
 
 // Lazy heavy components (for settings)
 const DateTimePicker = lazy(() => import("react-datepicker"));
