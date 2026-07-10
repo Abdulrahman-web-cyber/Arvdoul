@@ -73,7 +73,8 @@ const BottomNav = () => {
     coins: "/coins",
     notifications: "/notifications",
     createStory: "/create-story",
-    storiesCarousel: "/stories"
+    storiesCarousel: "/stories",
+    profile: currentUser?.uid ? `/profile/${currentUser.uid}` : "/profile"
   };
 
   // 7 tabs: 3 left, Plus middle, 3 right

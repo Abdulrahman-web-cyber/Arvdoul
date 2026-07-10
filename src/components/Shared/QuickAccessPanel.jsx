@@ -1029,6 +1029,22 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   )}
                 </div>
                 
+                {/* View Profile Button */}
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  onClick={() => navigateToWithLoading(currentUser?.uid ? `/profile/${currentUser.uid}` : '/profile')}
+                  className={cn(
+                    "w-full mt-3 py-2 px-4 rounded-xl font-medium text-sm",
+                    "bg-gradient-to-r from-purple-500 to-blue-500",
+                    "text-white hover:opacity-90 transition-opacity",
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  View Profile
+                </motion.button>
+                
                 {/* Bio - Show in fullscreen */}
                 {isFullScreen && currentUser?.bio && (
                   <motion.p

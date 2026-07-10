@@ -28,8 +28,17 @@ const NetworkScreen = lazy(() => import("../screens/NetworkScreen.jsx"));
 const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
 const NotificationsScreen = lazy(() => import("../screens/NotificationsScreen.jsx"));
 const CreateStory = lazy(() => import("../screens/CreateStory.jsx"));
-const ProfileScreen = lazy(() => import("../screens/ProfileScreen.jsx"));
-const EditProfile = lazy(() => import("../screens/EditProfile.jsx"));
+// Profile screens - using new Profile directory
+const ProfileScreen = lazy(() => import("../screens/Profile/ProfileScreen.jsx"));
+const EditProfile = lazy(() => import("../screens/Profile/EditProfileScreen.jsx"));
+const CreatorDashboardScreen = lazy(() => import("../screens/Profile/CreatorDashboardScreen.jsx"));
+const FollowersScreen = lazy(() => import("../screens/Profile/FollowersScreen.jsx"));
+const FollowingScreen = lazy(() => import("../screens/Profile/FollowingScreen.jsx"));
+const FriendsScreen = lazy(() => import("../screens/Profile/FriendsScreen.jsx"));
+const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.jsx"));
+const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
+const ProfileSettingsScreen = lazy(() => import("../screens/Profile/ProfileSettingsScreen.jsx"));
+// Legacy screens
 const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
 const SearchScreen = lazy(() => import("../screens/SearchScreen.jsx"));
 const SavedScreen = lazy(() => import("../screens/SavedScreen.jsx"));
@@ -272,6 +281,7 @@ export default function AppRoutes() {
       } />
       
       {/* ========== PROFILE ROUTES ========== */}
+      {/* Main profile screen - with userId param for viewing other profiles */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -280,10 +290,83 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      {/* Profile with specific user ID */}
+      <Route path="/profile/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProfileScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Edit profile */}
       <Route path="/profile/edit" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <EditProfile />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Creator dashboard / analytics */}
+      <Route path="/profile/analytics" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreatorDashboardScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Highlights management */}
+      <Route path="/profile/highlights" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <HighlightsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Followers list */}
+      <Route path="/profile/:userId/followers" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FollowersScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Following list */}
+      <Route path="/profile/:userId/following" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FollowingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Friends list */}
+      <Route path="/profile/:userId/friends" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FriendsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* About / profile info */}
+      <Route path="/profile/about" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AboutScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Profile settings */}
+      <Route path="/profile/settings" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProfileSettingsScreen />
           </Suspense>
         </ProtectedRoute>
       } />
