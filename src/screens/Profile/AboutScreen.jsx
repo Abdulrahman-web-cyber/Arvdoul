@@ -11,7 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft } from 'lucide-react';
-import ProfileAbout from '../../components/profile/About';
+import ProfileAbout from '../../components/profile/ProfileAbout';
 import { useProfileStore } from '../../store/profileStore';
 
 /**

@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { useAnalyticsStore } from '../../store/analyticsStore';
+import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import {
   ProfileHeader,
@@ -33,10 +34,8 @@ export default function ProfileScreen() {
   const { theme } = useTheme();
   
   // Get current user from app store
-  const currentUser = useProfileStore(state => state.profile);
-  const { useAppStore } = require('../../store/appStore');
-  const appStore = useAppStore();
-  const authUser = appStore.currentUser;
+  const authUser = useAppStore(state => state.currentUser);
+  const currentUserId = authUser?.uid;
   
   // Profile store
   const {
@@ -72,7 +71,7 @@ export default function ProfileScreen() {
   // Analytics store
   const {
     analytics,
-    analyticsLoading,
+    loading: analyticsLoading,
     timeframe,
     ranking,
     loadAnalytics,
@@ -81,10 +80,9 @@ export default function ProfileScreen() {
   
   const [activeProfileTab, setActiveProfileTab] = useState('posts');
   
-  // Determine current user ID
-  const currentUserId = authUser?.uid || currentUser?.id;
+  // Determine current user ID and viewing user
   const targetUserId = userId || currentUserId;
-  const viewingUserId = targetUserId || currentUserId;
+  const viewingUserId = targetUserId;
   
   // Load profile data
   useEffect(() => {

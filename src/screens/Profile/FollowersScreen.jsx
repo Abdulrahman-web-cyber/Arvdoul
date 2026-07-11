@@ -35,17 +35,19 @@ export default function FollowersScreen() {
       setLoading(true);
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
-        // This would typically fetch from user service
-        // For now, set empty array
-        setFollowers([]);
+        const result = await userService.getFollowers(userId);
+        setFollowers(result.followers || []);
       } catch (error) {
         console.error('Failed to load followers:', error);
+        setFollowers([]);
       } finally {
         setLoading(false);
       }
     };
     
-    loadFollowers();
+    if (userId) {
+      loadFollowers();
+    }
   }, [userId]);
   
   const handleFollow = useCallback((followerId) => {

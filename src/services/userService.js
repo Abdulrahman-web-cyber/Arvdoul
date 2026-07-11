@@ -614,6 +614,49 @@ class ProfessionalUserService {
     return { success: true, friends, hasMore, nextCursor, total: friends.length };
   }
 
+  /**
+   * Get followers list for a user
+   * @param {string} userId - User ID
+   * @param {Object} options - Query options { limit, startAfter }
+   * @returns {Object} { success, followers, hasMore, nextCursor, total }
+   */
+  async getFollowers(userId, options = {}) {
+    await this._ensureInitialized();
+    const { limit = USER_CONFIG.FRIENDS_PAGE_SIZE, startAfter = null } = options;
+    const { collection, query, where, getDocs, limit: fLimit, orderBy, startAfter: startAfterDoc } = await import('firebase/firestore');
+
+    const followsRef = collection(this.firestore, 'follows');
+    let q = query(followsRef, where('followingId', '==', userId), orderBy('followerId'), fLimit(limit));
+    let lastSnapshot = null;
+
+    if (startAfter) {
+      q = query(q, startAfterDoc(startAfter));
+    }
+
+    const snap = await getDocs(q);
+    if (snap.empty) return { success: true, followers: [], hasMore: false, nextCursor: null };
+
+    const followerIds = snap.docs.map(d => d.data().followerId);
+    // Load profiles in parallel
+    const profiles = await Promise.all(followerIds.map(id => this.getUserProfile(id).catch(() => null)));
+    const followers = profiles.filter(Boolean);
+
+    const hasMore = snap.docs.length === limit;
+    const nextCursor = hasMore ? snap.docs[snap.docs.length - 1] : null;
+
+    return { success: true, followers, hasMore, nextCursor, total: followers.length };
+  }
+
+  /**
+   * Get following list for a user
+   * @param {string} userId - User ID
+   * @param {Object} options - Query options { limit, startAfter }
+   * @returns {Object} { success, following, hasMore, nextCursor, total }
+   */
+  async getFollowing(userId, options = {}) {
+    return this.getFriends(userId, options);
+  }
+
   async getMutualFriends(userId, otherUserId) {
     await this._ensureInitialized();
     try {
@@ -1055,6 +1098,8 @@ export const followUser = (fid, tid) => getUserService().followUser(fid, tid);
 export const unfollowUser = (fid, tid) => getUserService().unfollowUser(fid, tid);
 export const getFollowStatus = (fid, tid) => getUserService().getFollowStatus(fid, tid);
 export const getFriends = (uid, opts) => getUserService().getFriends(uid, opts);
+export const getFollowers = (uid, opts) => getUserService().getFollowers(uid, opts);
+export const getFollowing = (uid, opts) => getUserService().getFollowing(uid, opts);
 export const getMutualFriends = (uid, otherId) => getUserService().getMutualFriends(uid, otherId);
 export const getFriendRecommendations = (uid, limit) => getUserService().getFriendRecommendations(uid, limit);
 

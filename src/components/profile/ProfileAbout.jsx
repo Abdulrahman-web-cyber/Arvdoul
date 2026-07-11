@@ -12,7 +12,7 @@ import {
   MapPin, 
   Link as LinkIcon, 
   Calendar, 
-  Gender, 
+  User,
   Globe,
   Briefcase,
   GraduationCap,
@@ -47,7 +47,7 @@ const ProfileAbout = ({
     { icon: MapPin, label: 'Location', value: location },
     { icon: LinkIcon, label: 'Website', value: website, href: website },
     { icon: Calendar, label: 'Birthday', value: birthday },
-    { icon: Gender, label: 'Gender', value: gender },
+    { icon: User, label: 'Gender', value: gender },
     { icon: Globe, label: 'Language', value: profile.language || 'English' },
   ].filter(item => item.value);
 

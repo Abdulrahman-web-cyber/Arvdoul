@@ -51,7 +51,7 @@ const ProfileTabContent = ({
   }, []);
 
   // Render empty state
-  const renderEmpty = useCallback((icon: Icon, title: string, subtitle: string) => {
+  const renderEmpty = useCallback((icon, title, subtitle) => {
     const IconComponent = icon;
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4">

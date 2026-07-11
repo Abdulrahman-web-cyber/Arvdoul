@@ -26,23 +26,30 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Load friends
+  // Load friends (mutual friends between current user and viewed user)
   useEffect(() => {
     const loadFriends = async () => {
       setLoading(true);
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
-        // This would typically fetch mutual friends
-        setFriends([]);
+        if (currentUser?.uid && userId) {
+          const result = await userService.getMutualFriends(currentUser.uid, userId);
+          setFriends(result.mutualFriends || []);
+        } else {
+          setFriends([]);
+        }
       } catch (error) {
         console.error('Failed to load friends:', error);
+        setFriends([]);
       } finally {
         setLoading(false);
       }
     };
     
-    loadFriends();
-  }, [userId]);
+    if (currentUser?.uid && userId) {
+      loadFriends();
+    }
+  }, [currentUser?.uid, userId]);
   
   const filteredFriends = friends.filter(f => 
     f.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||

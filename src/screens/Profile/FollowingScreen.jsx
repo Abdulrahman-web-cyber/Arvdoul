@@ -35,16 +35,19 @@ export default function FollowingScreen() {
       setLoading(true);
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
-        // This would typically fetch from user service
-        setFollowing([]);
+        const result = await userService.getFollowing(userId);
+        setFollowing(result.following || result.friends || []);
       } catch (error) {
         console.error('Failed to load following:', error);
+        setFollowing([]);
       } finally {
         setLoading(false);
       }
     };
     
-    loadFollowing();
+    if (userId) {
+      loadFollowing();
+    }
   }, [userId]);
   
   const handleFollow = useCallback((followingId) => {
