@@ -487,7 +487,7 @@ const CROSS_PLATFORMS = [
   { id: "twitter", label: "Twitter", icon: Icons.Twitter },
   { id: "linkedin", label: "LinkedIn", icon: Icons.Linkedin },
   { id: "youtube", label: "YouTube", icon: Icons.Youtube },
-  { id: "pinterest", label: "Pinterest", icon: Icons.Pinterest },
+  { id: "instagram", label: "Instagram", icon: Icons.Instagram },
 ];
 
 const MEDIA_LIMITS = {
