@@ -107,7 +107,7 @@ function safeJsonParse(str, fallback) {
   try {
     return JSON.parse(str);
   } catch (e) {
-    console.warn('Failed to parse remote config value, using fallback', e);
+//     console.warn('Failed to parse remote config value, using fallback', e);
     return fallback;
   }
 }
@@ -152,7 +152,7 @@ async function getMonetizationConfig(forceRefresh = false) {
       cachedConfig = finalConfig;
       return finalConfig;
     } catch (e) {
-      console.warn('Using default monetization config', e);
+//       console.warn('Using default monetization config', e);
       cachedConfig = DEFAULT_CONFIG;
       return DEFAULT_CONFIG;
     } finally {
@@ -248,7 +248,7 @@ class OfflineMonetizationQueue {
           }
           await this.delete(item.id);
         } catch (err) {
-          console.warn('Offline sync failed, will retry later', err);
+//           console.warn('Offline sync failed, will retry later', err);
           if (Date.now() - item.timestamp > 7 * 24 * 60 * 60 * 1000) {
             await this.delete(item.id);
           }
@@ -326,7 +326,7 @@ class MonetizationService {
       this.cfCreatePayoutAccount = httpsCallable(functions, 'createPayoutAccount');
 
       this.initialized = true;
-      console.log('💰 MonetizationService v5.0 (gender-aware, offline queue fixed, production-hardened)');
+//       console.warn('💰 MonetizationService v5.0 (gender-aware, offline queue fixed, production-hardened)');
       // start periodic ad cache cleaner
       this.cleanupInterval = setInterval(() => this._cleanupExpiredAds(), 5 * 60 * 1000);
       // sync offline queue after init
@@ -538,7 +538,7 @@ class MonetizationService {
 
   async recordAdImpression(adId, placement, deviceMetadata = {}) {
     await this._ensureInitialized();
-    this.cfRecordAdImpression({ adId, placement, deviceMetadata }).catch(console.warn);
+//     this.cfRecordAdImpression({ adId, placement, deviceMetadata }).catch(console.warn);
   }
 
   // -------------------- SPONSORED SEARCH --------------------
@@ -548,7 +548,7 @@ class MonetizationService {
       const result = await retryOperation(() => this.cfGetSponsoredSearchResult({ userId, query, context }));
       return result.data.sponsoredResult;
     } catch (err) {
-      console.warn('Sponsored search failed:', err);
+//       console.warn('Sponsored search failed:', err);
       return null;
     }
   }
@@ -659,7 +659,7 @@ class MonetizationService {
     if (this.offlineQueue) this.offlineQueue.destroy();
     this.adCache.clear();
     this.initialized = false;
-    console.log('💰 MonetizationService destroyed');
+//     console.warn('💰 MonetizationService destroyed');
   }
 }
 

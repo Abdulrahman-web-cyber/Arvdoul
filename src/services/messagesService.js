@@ -432,7 +432,7 @@ class UltimateMessagingService {
       this.typingTimers.forEach(timer => clearTimeout(timer));
       this.typingTimers.clear();
     });
-    console.log('[Messaging] Supreme V41 (Complete) instantiated');
+//     console.warn('[Messaging] Supreme V41 (Complete) instantiated');
   }
 
   async ensureInitialized() {
@@ -441,7 +441,7 @@ class UltimateMessagingService {
 
     this.initPromise = (async () => {
       try {
-        console.log('[Messaging] Initializing...');
+//         console.warn('[Messaging] Initializing...');
 
         this.firestore = await getFirestoreInstance();
         this.storage = getStorage();
@@ -452,7 +452,7 @@ class UltimateMessagingService {
         try {
           await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
         } catch (err) {
-          if (err.code !== 'failed-precondition') console.warn('[Messaging] Persistence:', err.message);
+//           if (err.code !== 'failed-precondition') console.warn('[Messaging] Persistence:', err.message);
         }
 
         this.fs = {
@@ -469,7 +469,7 @@ class UltimateMessagingService {
         await this.offlineQueue.sync();
 
         this.initialized = true;
-        console.log('[Messaging] ✅ Initialized');
+//         console.warn('[Messaging] ✅ Initialized');
       } catch (err) {
         console.error('[Messaging] ❌ Init failed', err);
         this.initPromise = null;
@@ -540,7 +540,7 @@ class UltimateMessagingService {
     await this.fs.setDoc(userSettingsRef, { publicKey }, { merge: true });
 
     this.unlockedPrivateKeys.set(userId, privateKey);
-    console.log('[E2EE] Keys generated and stored securely');
+//     console.warn('[E2EE] Keys generated and stored securely');
     return { success: true };
   }
 
@@ -1039,7 +1039,7 @@ class UltimateMessagingService {
 
     // Unread counters
     if (conv.conversation.participantCount <= MESSAGING_CONFIG.UNREAD_COUNTERS.CLIENT_SIDE_MAX_PARTICIPANTS && conv.conversation.type !== 'channel') {
-      this._incrementUnreadCounters(conversationId, currentUser.uid, conv.conversation.participants).catch(console.warn);
+//       this._incrementUnreadCounters(conversationId, currentUser.uid, conv.conversation.participants).catch(console.warn);
     }
 
     this._invalidateConversationMessagesCache(conversationId);
@@ -1052,7 +1052,7 @@ class UltimateMessagingService {
     // Ephemeral auto‑delete timer
     if (conv.conversation.ephemeral && conv.conversation.disappearAfter) {
       setTimeout(() => {
-        this.deleteMessage(idempotencyKey, conversationId, currentUser.uid, true).catch(console.warn);
+//         this.deleteMessage(idempotencyKey, conversationId, currentUser.uid, true).catch(console.warn);
       }, conv.conversation.disappearAfter * 1000);
     }
 
@@ -1062,7 +1062,7 @@ class UltimateMessagingService {
     recipients.forEach(async uid => {
       if (!conv.conversation.mutedBy?.includes(uid) && await this._shouldSendPushNotification(uid)) {
         if (mentionedIds.length === 0 || mentionedIds.includes(uid)) {
-          this._sendPushNotification(idempotencyKey, conversationId, uid, message).catch(console.warn);
+//           this._sendPushNotification(idempotencyKey, conversationId, uid, message).catch(console.warn);
         }
       }
     });
@@ -1191,7 +1191,7 @@ class UltimateMessagingService {
     }
 
     if (options.markAsRead && messages.length > 0) {
-      this.markConversationAsRead(conversationId, currentUser.uid).catch(console.warn);
+//       this.markConversationAsRead(conversationId, currentUser.uid).catch(console.warn);
     }
 
     const result = {
@@ -1850,7 +1850,7 @@ class UltimateMessagingService {
       'groupSettings.joinRequests': arrayUnion(userId),
       updatedAt: this.fs.serverTimestamp(),
     });
-    this._notifyAdmins(conversationId, 'join_request', { userId }).catch(console.warn);
+//     this._notifyAdmins(conversationId, 'join_request', { userId }).catch(console.warn);
     return { success: true, message: 'Join request sent' };
   }
 
@@ -2047,7 +2047,7 @@ class UltimateMessagingService {
       activeMembers: Array.from(activeMemberIds),
       totalMessages,
       lastStatsUpdate: this.fs.serverTimestamp(),
-    }).catch(console.warn);
+    }).catch(() => {});
 
     return {
       success: true,
@@ -2255,7 +2255,7 @@ class UltimateMessagingService {
 
   async _getMessage(conversationId, messageId, timestamp = new Date()) {
     if (!conversationId) {
-      console.warn('_getMessage called without conversationId');
+//       console.warn('_getMessage called without conversationId');
       return null;
     }
     const conv = await this.getConversation(conversationId);
@@ -2669,7 +2669,7 @@ class UltimateMessagingService {
         return { sent: true, result: result.data };
       } catch (err) {
         if (i === maxRetries - 1) {
-          console.warn(`Push notification failed after ${maxRetries} attempts. Is the Cloud Function deployed?`);
+//           console.warn(`Push notification failed after ${maxRetries} attempts. Is the Cloud Function deployed?`);
           return { sent: false, error: err };
         }
         const delay = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.INITIAL_DELAY_MS *
@@ -2691,7 +2691,7 @@ class UltimateMessagingService {
         title: 'New join request',
         message: 'A user wants to join the group',
         metadata: { conversationId, ...data },
-      }).catch(console.warn);
+      }).catch(() => {});
     }
   }
 
@@ -2781,7 +2781,7 @@ class UltimateMessagingService {
         lastActivity: new Date().toISOString(),
       };
     } catch (err) {
-      console.warn('[Messaging] Failed to fetch conversation list ad:', err);
+//       console.warn('[Messaging] Failed to fetch conversation list ad:', err);
       return null;
     }
   }
@@ -2812,7 +2812,7 @@ class UltimateMessagingService {
     this.notificationSettingsCache.clear();
     this.dedupeMemoryCache.clear();
     this.messageKeysByConversation.clear();
-    console.log('[Messaging] Cache cleared');
+//     console.warn('[Messaging] Cache cleared');
   }
 
   destroy() {
@@ -2822,7 +2822,7 @@ class UltimateMessagingService {
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-    console.log('[Messaging] Destroyed');
+//     console.warn('[Messaging] Destroyed');
   }
 }
 

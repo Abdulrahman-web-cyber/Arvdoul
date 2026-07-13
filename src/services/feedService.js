@@ -485,7 +485,7 @@ class UltimateFeedService {
       paginated._nextCursor = nextCursor;
       return paginated;
     } catch (error) {
-      console.warn('Following feed efficient error:', error);
+//       console.warn('Following feed efficient error:', error);
       return [];
     }
   }
@@ -502,7 +502,7 @@ class UltimateFeedService {
         return result.data.feed.map(p => ({ ...p, _source: 'for_you', createdAt: new Date(p.createdAt) }));
       }
     } catch (error) {
-      console.warn('For you feed server error, falling back to local', error);
+//       console.warn('For you feed server error, falling back to local', error);
     }
     return this._getForYouFeedPaginated(userId, {}, options);
   }
@@ -543,7 +543,7 @@ class UltimateFeedService {
       });
       return posts;
     } catch (error) {
-      console.warn('For you feed error:', error.message);
+//       console.warn('For you feed error:', error.message);
       return this._getFallbackSimpleFeed(userId, options, 'for_you');
     }
   }
@@ -622,7 +622,7 @@ class UltimateFeedService {
       if (posts.length === 0) return this._getFallbackSimpleFeed(userId, options, 'trending');
       return posts;
     } catch (error) {
-      console.warn('Trending feed error:', error.message);
+//       console.warn('Trending feed error:', error.message);
       return this._getFallbackSimpleFeed(userId, options, 'trending');
     }
   }
@@ -703,7 +703,7 @@ class UltimateFeedService {
       });
       return posts;
     } catch (error) {
-      console.warn('Video feed error:', error.message);
+//       console.warn('Video feed error:', error.message);
       return [];
     }
   }
@@ -739,7 +739,7 @@ class UltimateFeedService {
       this.sponsoredCache = { posts, timestamp: now };
       return posts.slice(0, options.limit);
     } catch (error) {
-      console.warn('Sponsored posts error:', error);
+//       console.warn('Sponsored posts error:', error);
       return [];
     }
   }
@@ -813,7 +813,7 @@ class UltimateFeedService {
         return { feed, nextCursor: result.data.nextCursor };
       }
     } catch (error) {
-      console.warn('ML feed unavailable, falling back to hybrid', error);
+//       console.warn('ML feed unavailable, falling back to hybrid', error);
     }
     return null;
   }
@@ -1014,7 +1014,7 @@ class UltimateFeedService {
       sourcePromises.push(
         promise
           .then(posts => { sources[sourceName] = posts; })
-          .catch(err => { console.warn(`${sourceName} feed error:`, err); sources[sourceName] = []; })
+//           .catch(err => { console.warn(`${sourceName} feed error:`, err); sources[sourceName] = []; })
       );
     };
 
@@ -1265,7 +1265,7 @@ class UltimateFeedService {
         _source: 'monetisation',
       };
     } catch (error) {
-      console.warn('Failed to fetch ad:', error);
+//       console.warn('Failed to fetch ad:', error);
       return null;
     }
   }
@@ -1438,7 +1438,7 @@ class UltimateFeedService {
       this.userPreferences.set(cacheKey, { data: behavior, timestamp: Date.now() });
       return behavior;
     } catch (error) {
-      console.warn('Failed to fetch user behavior, using neutral defaults:', error);
+//       console.warn('Failed to fetch user behavior, using neutral defaults:', error);
       return { engagementRate: 0.3, timeOnPlatform: 0, likesGiven: 0 };
     }
   }
@@ -1727,7 +1727,7 @@ class UltimateFeedService {
   }
 
   async triggerRealTimeReRanking(userId, interactionType, postId) {
-    console.log(`🔄 Re‑ranking triggered for user ${userId} after ${interactionType} on post ${postId}`);
+//     console.warn(`🔄 Re‑ranking triggered for user ${userId} after ${interactionType} on post ${postId}`);
     this.clearUserCache(userId);
     this.mlCache.delete(`ml_${userId}_20`);
     return { success: true };
@@ -1852,7 +1852,7 @@ class UltimateFeedService {
       }
       this._processAllPendingAwards();
     } catch (e) {
-      console.warn('Could not load pending awards:', e);
+//       console.warn('Could not load pending awards:', e);
     }
   }
 
@@ -1869,7 +1869,7 @@ class UltimateFeedService {
           this.pendingAwards.delete(key);
           await this._deleteAwardFromDB(key);
         } catch (err) {
-          console.warn(`Failed to process pending award ${key}, will retry later:`, err.message);
+//           console.warn(`Failed to process pending award ${key}, will retry later:`, err.message);
         }
       })());
     }
@@ -1978,7 +1978,7 @@ class UltimateFeedService {
       );
       ads.forEach((ad, idx) => { if (ad) this._cacheAd(ad, userId, idx); });
     } catch (error) {
-      console.warn('Ad prefetch failed:', error);
+//       console.warn('Ad prefetch failed:', error);
     }
   }
 

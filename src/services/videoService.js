@@ -333,7 +333,7 @@ class OfflineVideoQueue {
         }
         await this.delete(item.id);
       } catch (err) {
-        console.warn('Offline sync failed', err);
+//         console.warn('Offline sync failed', err);
         if (Date.now() - item.timestamp > 7 * 24 * 60 * 60 * 1000) await this.delete(item.id);
       }
     }
@@ -408,7 +408,7 @@ class UltimateVideoService {
         this.fns.updateViralScore = httpsCallable(this.functions, 'updateViralScore');
 
         this.initialized = true;
-        console.log('[Video] ✅ V28 Engine ready');
+// ✅ V28 Engine ready');
       } catch (err) {
         console.error('[Video] ❌ Init failed', err);
         this.initPromise = null;
@@ -489,12 +489,12 @@ class UltimateVideoService {
     };
     await setDoc(videoRef, videoDoc);
 
-    this.fns.processVideoEvent({ eventType: 'video.created', videoId }).catch(console.warn);
-    this.fns.moderateVideo({ videoId }).catch(console.warn);
+//     this.fns.processVideoEvent({ eventType: 'video.created', videoId }).catch(console.warn);
+//     this.fns.moderateVideo({ videoId }).catch(console.warn);
     if (VIDEO_CONFIG.WATERMARK.ENABLED && !videoDoc.watermarkDisabled) {
-      this.fns.watermarkVideo({ videoId }).catch(console.warn);
+//       this.fns.watermarkVideo({ videoId }).catch(console.warn);
     }
-    this.fns.generateAudioFingerprint({ videoId }).catch(console.warn);
+//     this.fns.generateAudioFingerprint({ videoId }).catch(console.warn);
 
     this.cache.invalidateVideo(videoId);
     return { success: true, videoId, playbackId };
@@ -952,14 +952,14 @@ class UltimateVideoService {
       videoListenerCounts: this.videoListenerCounts.size,
     };
   }
-  clearCache() { this.cache.clear(); console.log('[Video] Cache cleared'); }
+  clearCache() { this.cache.clear(); console.warn('// Cache cleared'); }
   destroy() {
     for (const unsub of this.realtimeUnsubscribes.values()) unsub();
     this.realtimeUnsubscribes.clear();
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-    console.log('[Video] Service destroyed');
+    console.warn('// Service destroyed');
   }
 }
 

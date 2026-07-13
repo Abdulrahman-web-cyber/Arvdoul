@@ -103,7 +103,7 @@ class UltimateAnalyticsService {
       this._cacheCleanupInterval = setInterval(() => this.clearExpiredCache(), 5 * 60 * 1000);
     }
 
-    this.initialize().catch(err => console.warn('Analytics service init warning:', err.message));
+//     this.initialize().catch(err => console.warn('Analytics service init warning:', err.message));
   }
 
   // ==================== INITIALIZATION ====================
@@ -111,16 +111,16 @@ class UltimateAnalyticsService {
     if (this.initialized && this.firestore) return this.firestore;
 
     try {
-      console.log('📊 Initializing Analytics Service...');
+      // Analytics service initializing
       const firebase = await import('../firebase/firebase.js');
       this.firestore = await firebase.getFirestoreInstance();
 
       const { enableIndexedDbPersistence } = await import('firebase/firestore');
       try {
         await enableIndexedDbPersistence(this.firestore);
-        console.log('✅ Analytics Firestore persistence enabled');
+        // Analytics persistence enabled
       } catch (e) {
-        console.warn('⚠️ Analytics persistence not available:', e.message);
+//         console.warn('⚠️ Analytics persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -345,7 +345,7 @@ class UltimateAnalyticsService {
       this.cache.delete(`analytics_${profileOwnerId}_90d`);
       this.cache.delete(`analytics_${profileOwnerId}_365d`);
     } catch (error) {
-      console.warn('⚠️ Track profile view failed:', error);
+//       console.warn('⚠️ Track profile view failed:', error);
       // Don't throw - this is a non-critical operation
     }
   }
@@ -395,7 +395,7 @@ class UltimateAnalyticsService {
       
       return ranking;
     } catch (error) {
-      console.warn('⚠️ Get creator ranking failed:', error);
+//       console.warn('⚠️ Get creator ranking failed:', error);
       return {
         position: null,
         percentile: null,
@@ -476,7 +476,7 @@ class UltimateAnalyticsService {
         }
       });
     } catch (error) {
-      console.warn('⚠️ Track post analytics failed:', error);
+//       console.warn('⚠️ Track post analytics failed:', error);
     }
   }
 
@@ -742,7 +742,7 @@ class UltimateAnalyticsService {
     this.initialized = false;
     this.firestore = null;
     
-    console.log('📊 Analytics service destroyed');
+    // Analytics service destroyed
   }
 }
 

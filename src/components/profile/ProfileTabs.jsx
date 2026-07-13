@@ -16,7 +16,8 @@ import {
   BarChart2,
   Info,
   Lock,
-  Star
+  Star,
+  Tag
 } from 'lucide-react';
 
 /**

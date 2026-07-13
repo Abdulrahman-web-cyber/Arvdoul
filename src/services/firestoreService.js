@@ -99,15 +99,15 @@ class EnterpriseFirestoreService {
     this.isOnline = navigator.onLine;
     this.firestoreModule = null;
     this.firebaseApp = null;
-    this.initialize().catch(err => console.warn('Firestore service init warning:', err.message));
-    window.addEventListener('online', () => { this.isOnline = true; console.log('🌐 Firestore: Back online'); });
-    window.addEventListener('offline', () => { this.isOnline = false; console.log('🌐 Firestore: Offline mode'); });
+//     this.initialize().catch(err => console.warn('Firestore service init warning:', err.message));
+    window.addEventListener('online', () => { this.isOnline = true; console.warn('// Firestore: Back online'); });
+    window.addEventListener('offline', () => { this.isOnline = false; console.warn('// Firestore: Offline mode'); });
   }
 
   async initialize() {
     if (this.initialized && this.firestore) return this.firestore;
     try {
-      console.log('🚀 Initializing Enterprise Firestore Service...');
+      console.warn('// Initializing Enterprise Firestore Service...');
       this.firebaseApp = await import('../firebase/firebase.js');
       this.firestore = await this.firebaseApp.getFirestoreInstance();
       if (!this.firestore) throw new Error('Failed to get Firestore instance');
@@ -128,9 +128,9 @@ class EnterpriseFirestoreService {
       };
       try {
         await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
-        console.log('✅ Firestore persistence enabled');
+        console.warn('// Firestore persistence enabled');
       } catch (persistenceError) {
-        console.warn('⚠️ Firestore persistence warning:', persistenceError.message);
+//         console.warn('⚠️ Firestore persistence warning:', persistenceError.message);
       }
       this.initialized = true;
       return this.firestore;
@@ -199,7 +199,7 @@ class EnterpriseFirestoreService {
       const postsRef = collection(this.firestore, 'posts');
       const docRef = await addDoc(postsRef, postDoc);
       const postId = docRef.id;
-      this.updateUserPostCount(postData.authorId).catch(console.warn);
+//       this.updateUserPostCount(postData.authorId).catch(console.warn);
       this.cache.set(postId, { ...postDoc, id: postId, _cachedAt: Date.now() });
       this.invalidateCachePattern(`user_posts_${postData.authorId}`);
       return {
@@ -299,7 +299,7 @@ class EnterpriseFirestoreService {
         isDeleted: true, deletedAt: serverTimestamp(), updatedAt: serverTimestamp(),
         status: 'deleted', deletedBy: userId
       });
-      await this.updateUserPostCount(userId, -1).catch(console.warn);
+//       await this.updateUserPostCount(userId, -1).catch(console.warn);
       this.cache.delete(postId);
       this.invalidateCachePattern(`user_posts_`);
       return { success: true };
@@ -374,7 +374,7 @@ class EnterpriseFirestoreService {
       });
       this.cache.delete(postId);
       if (!alreadySaved) {
-        this._notifySave(postId, userId).catch(console.warn);
+//         this._notifySave(postId, userId).catch(console.warn);
       }
       return { success: true, alreadySaved };
     } catch (error) { throw enhanceError(error, 'Failed to save post'); }
@@ -463,7 +463,7 @@ class EnterpriseFirestoreService {
       });
       this.cache.delete(postId);
       if (!alreadyLiked && authorId && authorId !== userId) {
-        this._notifyLike(postId, userId, authorId).catch(console.warn);
+//         this._notifyLike(postId, userId, authorId).catch(console.warn);
       }
       return { success: true, alreadyLiked };
     } catch (error) { throw enhanceError(error, 'Failed to like post'); }
@@ -521,7 +521,7 @@ class EnterpriseFirestoreService {
       const userShareRef = doc(this.firestore, 'users', userId, 'shared_posts', postId);
       await this.firestoreMethods.setDoc(userShareRef, { postId, sharedAt: serverTimestamp() }, { merge: true });
       this.cache.delete(postId);
-      this._notifyShare(postId, userId).catch(console.warn);
+//       this._notifyShare(postId, userId).catch(console.warn);
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to share post'); }
   }
@@ -556,8 +556,8 @@ class EnterpriseFirestoreService {
       // Spend coins (external service)
       const monetizationService = await import('./monetizationService.js').then(m => m.getMonetizationService());
       await monetizationService.spendCoins(userId, coinValue, 'gift', { postId, giftType, recipientId: authorId })
-        .catch(console.warn);
-      this._notifyGift(postId, userId, authorId, giftType, coinValue).catch(console.warn);
+//         .catch(console.warn);
+//       this._notifyGift(postId, userId, authorId, giftType, coinValue).catch(console.warn);
       this.cache.delete(postId);
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to send gift'); }
@@ -609,7 +609,7 @@ class EnterpriseFirestoreService {
       });
       this.cache.delete(postId);
       if (action !== 'removed' && authorId && authorId !== userId) {
-        this._notifyReaction(postId, userId, reactionType, authorId).catch(console.warn);
+//         this._notifyReaction(postId, userId, reactionType, authorId).catch(console.warn);
       }
       return { success: true, action, previousReaction: oldReaction };
     } catch (error) {
@@ -743,7 +743,7 @@ class EnterpriseFirestoreService {
       });
       return { success: true };
     } catch (error) {
-      console.warn(`recordPostView failed for ${postId}:`, error);
+//       console.warn(`recordPostView failed for ${postId}:`, error);
       return { success: false, error: error.message };
     }
   }
@@ -826,7 +826,9 @@ class EnterpriseFirestoreService {
       const { doc, updateDoc, increment, serverTimestamp } = this.firestoreMethods;
       const userRef = doc(this.firestore, 'users', userId);
       await updateDoc(userRef, { postCount: increment(delta), updatedAt: serverTimestamp() });
-    } catch (error) { console.warn('Update user post count failed:', error); }
+    } catch (error) {
+      // Update user post count failed
+    }
   }
 
   invalidateCache(key) { this.cache.delete(key); }
@@ -841,7 +843,7 @@ class EnterpriseFirestoreService {
     };
   }
 
-  clearCache() { this.cache.clear(); console.log('🧹 Firestore cache cleared'); }
+  clearCache() { this.cache.clear(); console.warn('// Firestore cache cleared'); }
 
   destroy() {
     for (const unsub of this.subscriptions.values()) try { unsub(); } catch (e) {}
@@ -851,7 +853,7 @@ class EnterpriseFirestoreService {
     this.firestore = null;
     this.firestoreMethods = null;
     this.firebaseApp = null;
-    console.log('🔥 Firestore service destroyed');
+    console.warn('// Firestore service destroyed');
   }
 
   // ---------- Notification helpers (lazy import) ----------
@@ -860,7 +862,9 @@ class EnterpriseFirestoreService {
     try {
       const ns = await import('./notificationsService.js').then(m => m.getNotificationsService());
       await ns.createLikeNotification(postId, senderId, recipientId);
-    } catch (err) { console.warn('Like notification failed:', err); }
+    } catch (err) {
+      // Like notification failed
+    }
   }
 
   async _notifyShare(postId, senderId) {
@@ -878,7 +882,9 @@ class EnterpriseFirestoreService {
         message: 'Your post has been shared!',
         metadata: { postId }
       });
-    } catch (err) { console.warn('Share notification failed:', err); }
+    } catch (err) {
+      // Share notification failed
+    }
   }
 
   async _notifySave(postId, senderId) {
@@ -896,7 +902,9 @@ class EnterpriseFirestoreService {
         message: 'Your post was saved!',
         metadata: { postId }
       });
-    } catch (err) { console.warn('Save notification failed:', err); }
+    } catch (err) {
+      // Save notification failed
+    }
   }
 
   async _notifyGift(postId, senderId, recipientId, giftType, coinValue) {
@@ -909,7 +917,9 @@ class EnterpriseFirestoreService {
         message: `${giftType} (${coinValue} coins)`,
         metadata: { postId, giftType, coinValue }
       });
-    } catch (err) { console.warn('Gift notification failed:', err); }
+    } catch (err) {
+      // Gift notification failed
+    }
   }
 
   async _notifyReaction(postId, senderId, reactionType, recipientId) {
@@ -922,7 +932,9 @@ class EnterpriseFirestoreService {
         message: `reacted ${reactionType} to your post`,
         metadata: { postId, reactionType }
       });
-    } catch (err) { console.warn('Reaction notification failed:', err); }
+    } catch (err) {
+      // Reaction notification failed
+    }
   }
 }
 
@@ -964,8 +976,8 @@ const firestoreService = {
   getStats: () => getFirestoreService().getStats(),
   ensureInitialized: () => getFirestoreService().ensureInitialized(),
   // For backward compatibility (client‑side scheduled jobs are removed – use Cloud Functions)
-  publishScheduledPosts: () => { console.warn('publishScheduledPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); },
-  expireOldPosts: () => { console.warn('expireOldPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); }
+//   publishScheduledPosts: () => { console.warn('publishScheduledPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); },
+//   expireOldPosts: () => { console.warn('expireOldPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); }
 };
 
 export default firestoreService;

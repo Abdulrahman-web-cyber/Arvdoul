@@ -139,7 +139,7 @@ class UltimateLiveService {
     this._viewerListeners = new Map();
     this._userLevelCache = new Map();
 
-    this.initialize().catch(err => console.warn('Live service init warning:', err.message));
+//     this.initialize().catch(err => console.warn('Live service init warning:', err.message));
   }
 
   // ==================== INITIALIZATION ====================
@@ -147,7 +147,7 @@ class UltimateLiveService {
     if (this.initialized && this.firestore) return this.firestore;
 
     try {
-      console.log('🎬 Initializing Live Streaming Service...');
+      // Live streaming service initializing
       const firebase = await import('../firebase/firebase.js');
       this.firestore = await firebase.getFirestoreInstance();
       this.auth = await firebase.getAuthInstance();
@@ -155,9 +155,9 @@ class UltimateLiveService {
       const { enableIndexedDbPersistence } = await import('firebase/firestore');
       try {
         await enableIndexedDbPersistence(this.firestore);
-        console.log('✅ Live Firestore persistence enabled');
+        // Live persistence enabled
       } catch (e) {
-        console.warn('⚠️ Live persistence not available:', e.message);
+//         console.warn('⚠️ Live persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -663,7 +663,7 @@ class UltimateLiveService {
         }
       });
     } catch (error) {
-      console.warn('⚠️ Leave live stream failed:', error);
+//       console.warn('⚠️ Leave live stream failed:', error);
     }
   }
 
@@ -1108,7 +1108,7 @@ class UltimateLiveService {
     this.firestore = null;
     this.auth = null;
     
-    console.log('🎬 Live streaming service destroyed');
+    // Live service destroyed
   }
 }
 

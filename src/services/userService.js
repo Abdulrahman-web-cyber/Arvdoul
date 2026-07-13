@@ -49,7 +49,7 @@ class ProfessionalUserService {
     this.recommendationCache = new Map();
     this._cacheCleanupInterval = null;
 
-    console.log('👤 Professional User Service – v6.0 billion-scale ready');
+    // User service ready
 
     if (typeof window !== 'undefined') {
       this._cacheCleanupInterval = setInterval(() => this._cleanupExpiredCache(), 10 * 60 * 1000);
@@ -60,16 +60,16 @@ class ProfessionalUserService {
   async initialize() {
     if (this.initialized) return this.firestore;
     try {
-      console.log('🔄 Initializing user service...');
+      // User service initializing
       const firebase = await import('../firebase/firebase.js');
       this.firestore = await firebase.getFirestoreInstance();
 
       const { enableIndexedDbPersistence } = await import('firebase/firestore');
       try {
         await enableIndexedDbPersistence(this.firestore);
-        console.log('✅ Firestore persistence enabled');
+        // Persistence enabled
       } catch (e) {
-        console.warn('⚠️ Persistence not available:', e.message);
+//         console.warn('⚠️ Persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -157,7 +157,7 @@ class ProfessionalUserService {
       const base64 = btoa(unescape(encodeURIComponent(svg)));
       return `data:image/svg+xml;base64,${base64}`;
     } catch (error) {
-      console.warn('Avatar fallback used');
+//       console.warn('Avatar fallback used');
       return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(
         '<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#3B82F6" rx="20"/><text x="100" y="110" text-anchor="middle" font-family="Arial" font-size="80" font-weight="bold" fill="white">U</text></svg>'
       )))}`;
@@ -181,7 +181,6 @@ class ProfessionalUserService {
       compressImages: true,
       maxSize: 2 * 1024 * 1024,
       userId,
-      onProgress: (progress) => console.log(`Avatar upload: ${progress.progress}%`),
     });
     await this.updateUserProfile(userId, { photoURL: result.downloadURL });
     this.avatarCache.set(`avatar_${userId}`, result.downloadURL);
@@ -211,7 +210,7 @@ class ProfessionalUserService {
 
       return { available: false, exists: true, username: normalized, existingUserId, checkedAt: Date.now() };
     } catch (error) {
-      console.warn('Username check failed, assuming available (will be verified during profile creation):', error);
+//       console.warn('Username check failed, assuming available (will be verified during profile creation):', error);
       const normalized = username?.toLowerCase().trim() || '';
       if (normalized.length < 3) return { available: false, error: 'Too short' };
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: 'Too long' };
@@ -418,18 +417,17 @@ class ProfessionalUserService {
       appearance: { theme: 'system' },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    }).catch(e => console.warn('Settings doc failed', e));
+    }).catch(() => {});
 
     const prefsDoc = doc(this.firestore, 'user_preferences', userId);
     await setDoc(prefsDoc, {
       muted: false, blockedTypes: [], priorityMap: {}, soundEnabled: true, vibrationEnabled: true,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    }).catch(e => console.warn('Prefs doc failed', e));
+    }).catch(() => {});
 
     this.avatarCache.set(`avatar_${userId}`, profile.photoURL);
     this._invalidateUserCache(userId);
 
-    console.log(`✅ Profile created: ${userId} (${username})`);
     return { success: true, profile, username };
   }
 
@@ -552,7 +550,9 @@ class ProfessionalUserService {
       try {
         const notifications = await this._getNotificationsService();
         await notifications.createFollowNotification(followerId, followingId);
-      } catch (e) { console.warn('Follow notification failed:', e); }
+      } catch (e) {
+        // Follow notification failed
+      }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
     }
@@ -666,7 +666,7 @@ class ProfessionalUserService {
       const res = await func({ userId, otherUserId });
       return { success: true, mutualFriends: res.data.mutualFriends || [] };
     } catch (cloudError) {
-      console.warn('Cloud Function getMutualFriends unavailable, using client fallback.');
+//       console.warn('Cloud Function getMutualFriends unavailable, using client fallback.');
       const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
       const followsRef = collection(this.firestore, 'follows');
       const max = USER_CONFIG.MUTUAL_FRIENDS_MAX_FOLLOWS;
@@ -705,7 +705,7 @@ class ProfessionalUserService {
       }
     } catch (_) { /* fallback */ }
 
-    console.log('Using local friend recommendation algorithm');
+    // Using local algorithm
     const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
     const followsRef = collection(this.firestore, 'follows');
 
@@ -812,7 +812,9 @@ class ProfessionalUserService {
           message: `${accepter?.displayName || 'Someone'} accepted your request`,
           metadata: { friendId: userId }
         });
-      } catch (e) { console.warn('Friend notification failed:', e); }
+      } catch (e) {
+        // Friend notification failed
+      }
     }
     this._invalidateUserCache(requesterId);
     this._invalidateUserCache(userId);
@@ -939,14 +941,16 @@ class ProfessionalUserService {
       const { getAuth, signOut } = await import('firebase/auth');
       const auth = getAuth();
       if (auth.currentUser?.uid === userId) await signOut(auth);
-    } catch (e) { console.warn('Could not sign out user', e); }
+    } catch (e) {
+      // Sign out error
+    }
 
     try {
       const functions = getFunctions();
       const func = httpsCallable(functions, 'deleteUserData');
       await func({ userId });
     } catch (e) {
-      console.warn('deleteUserData function unavailable – background cleanup will be needed.');
+      // deleteUserData function unavailable
     }
 
     this._invalidateUserCache(userId);

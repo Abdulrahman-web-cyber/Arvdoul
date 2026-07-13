@@ -11,7 +11,7 @@ import {
   X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTheme } from "@context/ThemeContext";
+import { useTheme } from "../../context/ThemeContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { cn } from "../../lib/utils";

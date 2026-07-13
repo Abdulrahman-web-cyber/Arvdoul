@@ -37,11 +37,11 @@ class UltimateCommentService {
     this.lastCleanup = Date.now();
     this.cleanupInterval = null;
 
-    console.log('💬 Ultimate Comment Service V10 - Billion‑User Scale');
+    console.warn('// Ultimate Comment Service V10 - Billion‑User Scale');
 
     // Auto-initialize
     this.initialize().catch(err => {
-      console.warn('Comment service initialization warning:', err.message);
+//       console.warn('Comment service initialization warning:', err.message);
     });
 
     // Periodic cleanup
@@ -53,7 +53,7 @@ class UltimateCommentService {
     if (this.initialized) return this.firestore;
 
     try {
-      console.log('🚀 Initializing Comment Service...');
+      console.warn('// Initializing Comment Service...');
 
       // Load Firebase
       const firebase = await import('../firebase/firebase.js');
@@ -107,13 +107,13 @@ class UltimateCommentService {
           synchronizeTabs: true,
           forceOwnership: false
         });
-        console.log('✅ Comment service persistence enabled');
+        console.warn('// Comment service persistence enabled');
       } catch (persistenceError) {
-        console.warn('⚠️ Comment service persistence warning:', persistenceError.message);
+//         console.warn('⚠️ Comment service persistence warning:', persistenceError.message);
       }
 
       this.initialized = true;
-      console.log('✅ Comment service initialized successfully');
+      console.warn('// Comment service initialized successfully');
       return this.firestore;
 
     } catch (error) {
@@ -137,7 +137,7 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      console.log('💬 Creating comment:', {
+      console.warn('// Creating comment:', {
         operationId,
         postId,
         userId,
@@ -245,22 +245,15 @@ class UltimateCommentService {
           userId,
           userName: options.userName,
           content: content.substring(0, 100)
-        }).catch(err => console.warn('Mention processing failed:', err));
+        }).catch(() => {});
       }
 
       // Auto-moderation
       if (COMMENTS_CONFIG.AUTO_MODERATION) {
         setTimeout(() => {
-          this._autoModerate(commentId, content, userId).catch(console.warn);
+          this._autoModerate(commentId, content, userId).catch(() => {});
         }, 1000);
       }
-
-      console.log('✅ Comment created successfully:', {
-        id: commentId,
-        postId,
-        userId,
-        depth: options.depth || 0
-      });
 
       // Invalidate cache
       this._invalidatePostCache(postId);
@@ -715,7 +708,7 @@ class UltimateCommentService {
           replyAuthorName: options.userName || `User_${userId.slice(0, 8)}`,
           postId: parentComment.comment.postId,
           content: content.substring(0, 100)
-        }).catch(console.warn);
+        }).catch(() => {});
       }
 
       return result;
@@ -862,10 +855,8 @@ class UltimateCommentService {
       try {
         subscription.unsubscribe();
         this.realtimeSubscriptions.delete(subscriptionId);
-        console.log(`✅ Unsubscribed from ${subscriptionId}`);
         return true;
       } catch (error) {
-        console.warn(`Failed to unsubscribe ${subscriptionId}:`, error);
         return false;
       }
     }
@@ -913,7 +904,7 @@ class UltimateCommentService {
       // Auto-moderation check
       const comment = await this.getComment(commentId);
       if (comment.success && comment.comment.reports >= 3) {
-        this._autoHideComment(commentId).catch(console.warn);
+        this._autoHideComment(commentId).catch(() => {});
       }
 
       return { success: true, commentId, reported: true };
@@ -1145,7 +1136,6 @@ class UltimateCommentService {
 
       return { allowed: true, count: totalCount + 1, waitTime: 0 };
     } catch (error) {
-      console.warn('Spam check failed, allowing comment as fallback', error);
       return { allowed: true, count: 0, waitTime: 0 };
     }
   }
@@ -1195,7 +1185,7 @@ class UltimateCommentService {
       await batch.commit();
 
     } catch (error) {
-      console.warn('Mention processing failed:', error);
+      // Mention processing failed
     }
   }
 
@@ -1266,10 +1256,8 @@ class UltimateCommentService {
         updatedAt: this.firestoreMethods.serverTimestamp()
       });
 
-      console.log(`🤖 Auto-moderation for ${commentId}: score=${moderationScore}, status=${moderationStatus}`);
-
     } catch (error) {
-      console.warn('Auto-moderation failed:', error);
+      // Auto-moderation failed
     }
   }
 
@@ -1285,10 +1273,8 @@ class UltimateCommentService {
         updatedAt: this.firestoreMethods.serverTimestamp()
       });
 
-      console.log(`🤖 Auto-hid comment ${commentId} due to reports`);
-
     } catch (error) {
-      console.warn('Auto-hide failed:', error);
+      // Auto-hide failed
     }
   }
 
@@ -1318,7 +1304,7 @@ class UltimateCommentService {
       await batch.commit();
 
     } catch (error) {
-      console.warn('Update report status failed:', error);
+      // Update report status failed
     }
   }
 
@@ -1388,7 +1374,7 @@ class UltimateCommentService {
     }
 
     if (now - this.lastCleanup > 60 * 1000) {
-      console.log('🧹 Comment service cleanup completed');
+      console.warn('// Comment service cleanup completed');
       this.lastCleanup = now;
     }
   }
@@ -1529,7 +1515,7 @@ class UltimateCommentService {
 
   clearCache() {
     this.cache.clear();
-    console.log('🧹 Comment service cache cleared');
+    console.warn('// Comment service cache cleared');
   }
 
   destroy() {
@@ -1553,7 +1539,7 @@ class UltimateCommentService {
     this.firestoreMethods = null;
     this.firestoreModule = null;
 
-    console.log('🔥 Comment service destroyed');
+    console.warn('// Comment service destroyed');
   }
 }
 

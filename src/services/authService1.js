@@ -43,13 +43,13 @@ class ProductionAuthService {
     }, 60 * 60 * 1000); // run every hour
     // =======================================================================
     
-    console.log('🔐 PRODUCTION Auth Service V6 - PERFECT EMAIL FLOW');
+    console.warn('// PRODUCTION Auth Service V6 - PERFECT EMAIL FLOW');
   }
 
   async initialize() {
     if (this.initialized) return this.auth;
     
-    console.log('🚀 Initializing production auth service...');
+    console.warn('// Initializing production auth service...');
     
     try {
       const firebaseApp = await import('../firebase/firebase.js');
@@ -62,7 +62,7 @@ class ProductionAuthService {
       }
       
       this.initialized = true;
-      console.log('✅ Production auth service ready');
+      console.warn('// Production auth service ready');
       return this.auth;
       
     } catch (error) {
@@ -85,14 +85,14 @@ class ProductionAuthService {
         fetchSignInMethodsForEmail
       } = await import('firebase/auth');
       
-      console.log('📧 Creating user with email:', email);
+      console.warn('// Creating user with email:', email);
       
       // Check if email already exists - FIXED: Proper error handling
       let existingMethods = [];
       try {
         existingMethods = await fetchSignInMethodsForEmail(this.auth, email);
       } catch (error) {
-        console.warn('Error checking email existence:', error);
+//         console.warn('Error checking email existence:', error);
       }
       
       if (existingMethods.length > 0) {
@@ -147,14 +147,14 @@ class ProductionAuthService {
       const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
       const user = userCredential.user;
       
-      console.log('✅ Firebase user created:', user.uid);
+      console.warn('// Firebase user created:', user.uid);
       
       if (profileData.displayName) {
         await updateProfile(user, {
           displayName: profileData.displayName,
           photoURL: profileData.photoURL || null
         });
-        console.log('✅ User profile updated');
+        console.warn('// User profile updated');
       }
       
       // Send verification email
@@ -164,7 +164,7 @@ class ProductionAuthService {
       };
       
       await sendEmailVerification(user, actionCodeSettings);
-      console.log('✅ Verification email sent');
+      console.warn('// Verification email sent');
       
       // ========== FIX: Create user profile in Firestore ==========
       const userService = await import('./userService.js');
@@ -176,7 +176,7 @@ class ProductionAuthService {
           emailVerified: false,
           photoURL: profileData.photoURL,
         });
-        console.log('✅ User profile created in Firestore');
+        console.warn('// User profile created in Firestore');
       } catch (profileError) {
         console.error('❌ Failed to create user profile', profileError);
         // Do not throw – still return success, but log the error
@@ -232,7 +232,7 @@ class ProductionAuthService {
         sendEmailVerification
       } = await import('firebase/auth');
       
-      console.log('🔐 Attempting email login:', email);
+      console.warn('// Attempting email login:', email);
       
       await setPersistence(this.auth, browserLocalPersistence);
       
@@ -240,11 +240,11 @@ class ProductionAuthService {
       const userCredential = await signInWithEmailAndPassword(this.auth, email, password);
       const user = userCredential.user;
       
-      console.log('✅ Email login successful for:', user.uid);
+      console.warn('// Email login successful for:', user.uid);
       
       // Check email verification
       if (!user.emailVerified) {
-        console.warn('⚠️ User logged in but email not verified:', email);
+//         console.warn('⚠️ User logged in but email not verified:', email);
         
         // Check if we already have this as unverified
         if (!this.unverifiedUsers.has(email)) {
@@ -428,7 +428,7 @@ class ProductionAuthService {
       
       await sendPasswordResetEmail(this.auth, email, actionCodeSettings);
       
-      console.log('✅ Password reset email sent to:', email);
+      console.warn('// Password reset email sent to:', email);
       
       return {
         success: true,
@@ -449,7 +449,7 @@ class ProductionAuthService {
       
       await confirmPasswordReset(this.auth, actionCode, newPassword);
       
-      console.log('✅ Password reset successful');
+      console.warn('// Password reset successful');
       
       return {
         success: true,
@@ -476,7 +476,7 @@ class ProductionAuthService {
           await reload(user);
           
           if (user.emailVerified) {
-            console.log('✅ Email verified detected for user:', userId);
+            console.warn('// Email verified detected for user:', userId);
             
             // Clean up
             for (const [email, data] of this.unverifiedUsers.entries()) {
@@ -496,7 +496,7 @@ class ProductionAuthService {
           }
         }
       } catch (error) {
-        console.warn('Email verification listener error:', error);
+//         console.warn('Email verification listener error:', error);
       }
     }, 5000);
     
@@ -552,7 +552,7 @@ class ProductionAuthService {
         signInWithPhoneNumber
       } = await import('firebase/auth');
       
-      console.log('📱 Starting phone verification:', phoneNumber);
+      console.warn('// Starting phone verification:', phoneNumber);
       
       let formattedPhone = phoneNumber.trim();
       if (!formattedPhone.startsWith('+')) {
@@ -566,7 +566,7 @@ class ProductionAuthService {
       
       let verifier = recaptchaVerifier;
       if (!verifier) {
-        console.log('🔄 Creating reCAPTCHA verifier...');
+        console.warn('// Creating reCAPTCHA verifier...');
         
         let container = document.getElementById('signup-recaptcha-container');
         if (!container) {
@@ -582,9 +582,9 @@ class ProductionAuthService {
           {
             size: 'normal',
             theme: 'light',
-            callback: (response) => console.log('✅ reCAPTCHA verified:', response),
+            callback: (response) => console.warn('// reCAPTCHA verified:', response),
             'expired-callback': () => {
-              console.log('❌ reCAPTCHA expired');
+//               console.warn('❌ reCAPTCHA expired');
               this.cleanupRecaptchaVerifier();
             }
           },
@@ -611,7 +611,7 @@ class ProductionAuthService {
         attempts: 0
       });
       
-      console.log('✅ SMS sent to:', formattedPhone);
+      console.warn('// SMS sent to:', formattedPhone);
       
       return {
         success: true,
@@ -636,7 +636,7 @@ class ProductionAuthService {
         signInWithCredential 
       } = await import('firebase/auth');
       
-      console.log('🔢 Verifying phone OTP...');
+//       console.warn('🔢 Verifying phone OTP...');
       
       const cleanOTP = otp.replace(/\D/g, '');
       if (cleanOTP.length !== 6) {
@@ -651,7 +651,7 @@ class ProductionAuthService {
       const userCredential = await signInWithCredential(this.auth, credential);
       const user = userCredential.user;
       
-      console.log('✅ Phone verification successful:', user.uid);
+      console.warn('// Phone verification successful:', user.uid);
       
       // ========== FIX: Create user profile in Firestore ==========
       const userService = await import('./userService.js');
@@ -663,7 +663,7 @@ class ProductionAuthService {
           email: user.email || '',
           photoURL: user.photoURL,
         });
-        console.log('✅ User profile created in Firestore');
+        console.warn('// User profile created in Firestore');
       } catch (profileError) {
         console.error('❌ Profile creation failed', profileError);
       }
@@ -714,7 +714,7 @@ class ProductionAuthService {
         browserLocalPersistence
       } = await import('firebase/auth');
       
-      console.log('🔐 Starting Google authentication...');
+      console.warn('// Starting Google authentication...');
       
       const provider = new GoogleAuthProvider();
       provider.addScope('profile');
@@ -731,7 +731,7 @@ class ProductionAuthService {
       const additionalInfo = getAdditionalUserInfo(result);
       const isNewUser = additionalInfo?.isNewUser || false;
       
-      console.log('✅ Google auth successful. New user:', isNewUser);
+      console.warn('// Google auth successful. New user:', isNewUser);
       
       if (isNewUser && additionalInfo?.profile) {
         await updateProfile(user, {
@@ -749,7 +749,7 @@ class ProductionAuthService {
             authProvider: 'google',
             emailVerified: user.emailVerified,
           });
-          console.log('✅ User profile created in Firestore');
+          console.warn('// User profile created in Firestore');
         } catch (profileError) {
           console.error('❌ Profile creation failed', profileError);
         }
@@ -784,7 +784,7 @@ class ProductionAuthService {
       
       const { RecaptchaVerifier } = await import('firebase/auth');
       
-      console.log('🔄 Creating reCAPTCHA for:', containerId);
+      console.warn('// Creating reCAPTCHA for:', containerId);
       
       this.cleanupRecaptchaVerifier(containerId);
       
@@ -804,11 +804,11 @@ class ProductionAuthService {
           size: options.size || 'normal',
           theme: options.theme || 'light',
           callback: (response) => {
-            console.log('✅ reCAPTCHA solved:', response);
+            console.warn('// reCAPTCHA solved:', response);
             if (options.callback) options.callback(response);
           },
           'expired-callback': () => {
-            console.log('❌ reCAPTCHA expired');
+//             console.warn('❌ reCAPTCHA expired');
             if (options.expiredCallback) options.expiredCallback();
           }
         },
@@ -818,14 +818,14 @@ class ProductionAuthService {
       await recaptchaVerifier.render();
       this.recaptchaVerifiers.set(containerId, recaptchaVerifier);
       
-      console.log('✅ reCAPTCHA created successfully');
+      console.warn('// reCAPTCHA created successfully');
       return recaptchaVerifier;
       
     } catch (error) {
       console.error('❌ Failed to create reCAPTCHA:', error);
       
       if (process.env.NODE_ENV !== 'production') {
-        console.warn('⚠️ Using mock reCAPTCHA for development');
+//         console.warn('⚠️ Using mock reCAPTCHA for development');
         return {
           verify: () => Promise.resolve('mock-recaptcha-token'),
           clear: () => this.cleanupRecaptchaVerifier(containerId),
@@ -843,7 +843,7 @@ class ProductionAuthService {
       try {
         verifier.clear();
       } catch (error) {
-        console.warn('Failed to clear reCAPTCHA:', error);
+//         console.warn('Failed to clear reCAPTCHA:', error);
       }
       this.recaptchaVerifiers.delete(containerId);
     }
@@ -853,7 +853,7 @@ class ProductionAuthService {
       container.innerHTML = '';
     }
     
-    console.log('✅ reCAPTCHA cleaned up');
+    console.warn('// reCAPTCHA cleaned up');
   }
 
   // ========== SIGN OUT ==========

@@ -282,7 +282,7 @@ class UltimateStoryService {
     if (this.initialized) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
-      console.log('[Story] Initializing...');
+      console.warn('// Initializing...');
       const firestore = await getFirestoreInstance();
       const storage = await getStorageInstance();
       const auth = await getAuthInstance();
@@ -297,7 +297,7 @@ class UltimateStoryService {
       this.st = { ref: storageRef, uploadBytesResumable, getDownloadURL, deleteObject };
       try { await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true }); } catch (err) {}
       this.initialized = true;
-      console.log('[Story] ✅ Initialized');
+// ✅ Initialized');
       this._onlineHandler(); // flush queue
     })();
     return this.initPromise;
@@ -323,7 +323,7 @@ class UltimateStoryService {
         const callable = httpsCallable(this.functions, STORY_CONFIG.AI_CAPTION.CLOUD_FUNCTION);
         const result = await callable({ imageUrl: URL.createObjectURL(storyData.mediaFile) });
         storyData.content = result.data.caption;
-      } catch (err) { console.warn('[Story] AI caption failed', err); }
+      } catch (err) { console.warn('// AI caption failed', err); }
     }
 
     const mod = this._moderateContent(storyData);
@@ -872,7 +872,7 @@ class UltimateStoryService {
       const data = await res.json();
       return data.tracks || [];
     } catch (err) {
-      console.warn('[Story] Music search failed', err);
+      console.warn('// Music search failed', err);
       return [];
     }
   }
@@ -1225,7 +1225,7 @@ class UltimateStoryService {
   // ========== EXPIRED STORIES CLEANUP (called by Cloud Function) ==========
   async cleanupExpiredStories() {
     await this.ensureInitialized();
-    console.log('[Story] Running expired story cleanup...');
+    console.warn('// Running expired story cleanup...');
     const now = new Date();
     const q = this.fs.query(
       this.fs.collection(this.firestore, 'stories'),
@@ -1248,7 +1248,7 @@ class UltimateStoryService {
         processed++;
       } catch (err) { console.error(`[Story] Cleanup error ${storyId}:`, err); }
     }
-    console.log(`[Story] Cleaned ${processed} expired stories`);
+//     console.warn(`[Story] Cleaned ${processed} expired stories`);
     return { success: true, processed };
   }
 
@@ -1542,7 +1542,7 @@ class UltimateStoryService {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     const items = await this.uploadQueue.getAll();
     if (!items.length) return;
-    console.log(`[Story] Flushing ${items.length} queued stories`);
+//     console.warn(`[Story] Flushing ${items.length} queued stories`);
     const CONCURRENCY = 2;
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const batch = items.slice(i, i + CONCURRENCY);
@@ -1574,7 +1574,9 @@ class UltimateStoryService {
           priority: 'high',
         }).catch(() => {});
       }
-    } catch (err) { console.warn('Tag notification error:', err); }
+    } catch (err) {
+      // Tag notification error
+    }
   }
 
   async _logSponsoredStory(storyId, userId) {

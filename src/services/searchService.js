@@ -243,7 +243,7 @@ class AnalyticsBuffer {
         await this.service._sendAnalyticsEvent(event);
         return;
       } catch (err) {
-        console.warn(`Analytics send failed (attempt ${attempt})`, err);
+//         console.warn(`Analytics send failed (attempt ${attempt})`, err);
         if (attempt < SEARCH_CONFIG.ANALYTICS.RETRY_ATTEMPTS) {
           await new Promise(r => setTimeout(r, SEARCH_CONFIG.ANALYTICS.RETRY_BACKOFF_MS * attempt));
         }
@@ -355,14 +355,14 @@ class UltimateSearchService {
         this.monetizationService = getMonetizationService();
 
         if (SEARCH_CONFIG.VECTOR_ENABLED && !SEARCH_CONFIG.VECTOR_API_KEY) {
-          console.warn('[Search] VECTOR_ENABLED is true but VECTOR_API_KEY missing – disabling vector search');
+//           console.warn('[Search] VECTOR_ENABLED is true but VECTOR_API_KEY missing – disabling vector search');
           SEARCH_CONFIG.VECTOR_ENABLED = false;
         }
         if (SEARCH_CONFIG.VECTOR_ENABLED) {
-          console.log('[Search] Vector search configuration found (integration required)');
+//           console.warn('[Search] Vector search configuration found (integration required)');
         }
         this.initialized = true;
-        console.log('[Search] V8.3 Engine ready');
+//         console.warn('[Search] V8.3 Engine ready');
       } catch (err) {
         console.error('[Search] Init failed', err);
         this.initPromise = null;
@@ -472,7 +472,7 @@ class UltimateSearchService {
         source = 'algolia';
       } catch (algoliaError) {
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
-        console.warn('[Search] Algolia failed, fallback to Firestore', algoliaError);
+//         console.warn('[Search] Algolia failed, fallback to Firestore', algoliaError);
         if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
           const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
@@ -698,7 +698,7 @@ class UltimateSearchService {
 
   async _vectorSearch(query, userId) {
     if (!SEARCH_CONFIG.VECTOR_ENABLED) return { hits: [] };
-    console.warn('[Search] Vector search not implemented – feature flag ignored. Set VITE_VECTOR_SEARCH_ENABLED=false to disable.');
+//     console.warn('[Search] Vector search not implemented – feature flag ignored. Set VITE_VECTOR_SEARCH_ENABLED=false to disable.');
     return { hits: [] };
   }
 
@@ -781,7 +781,7 @@ class UltimateSearchService {
       const suggestions = res.hits.map(h => h.query);
       return { success: true, suggestions, query: normalized };
     } catch (err) {
-      console.warn('[Search] Suggestions fallback to search', err);
+//       console.warn('[Search] Suggestions fallback to search', err);
       const searchRes = await this.search(normalized, { ...options, hitsPerPage: 5, cache: false });
       if (!searchRes.success) return { success: false, suggestions: [] };
       const suggestions = searchRes.items.map(item => item.raw?.displayName || item.raw?.title || item.raw?.content?.slice(0, 50));
@@ -878,7 +878,7 @@ class UltimateSearchService {
         metadata: { advertiser: sponsored.data.advertiser },
       };
     } catch (err) {
-      console.warn('[Search] Sponsored fetch failed', err);
+//       console.warn('[Search] Sponsored fetch failed', err);
       return null;
     }
   }
@@ -902,12 +902,12 @@ class UltimateSearchService {
     this.localCache.clear();
     this.indexNameCache.clear();
     this.userProfileCache.clear();
-    console.log('[Search] Local cache cleared');
+//     console.warn('[Search] Local cache cleared');
   }
 
   async invalidateDistributedCache(prefix = null) {
     if (this.ttlCache) {
-      console.log('[Search] TTL cache invalidation requested (not implemented)');
+//       console.warn('[Search] TTL cache invalidation requested (not implemented)');
     }
   }
 
@@ -929,7 +929,7 @@ class UltimateSearchService {
     this.insightsClient = null;
     this.initialized = false;
     this.initPromise = null;
-    console.log('[Search] Destroyed');
+//     console.warn('[Search] Destroyed');
   }
 }
 
