@@ -1,0 +1,1 @@
+import{t as e}from"./immer-xfzjiO0w.js";var t=t=>(n,r,i)=>(i.setState=(t,r,...i)=>n(typeof t==`function`?e(t):t,r,...i),t(i.setState,r,i));export{t};
