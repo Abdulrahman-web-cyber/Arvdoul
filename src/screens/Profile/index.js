@@ -5,6 +5,8 @@
  */
 
 export { default as ProfileScreen } from './ProfileScreen';
+export { default as ProfileMyScreen } from './ProfileMyScreen';
+export { default as ProfilePublicScreen } from './ProfilePublicScreen';
 export { default as EditProfileScreen } from './EditProfileScreen';
 export { default as CreatorDashboardScreen } from './CreatorDashboardScreen';
 export { default as FollowersScreen } from './FollowersScreen';

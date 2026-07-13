@@ -1,8 +1,8 @@
 /**
  * src/screens/Profile/ProfileScreen.jsx - ARVDOUL Main Profile Screen
  * 
- * Primary profile screen showing user profile with posts, stats, and actions.
- * Handles both owner and visitor views.
+ * Dynamic delegator component to render either `ProfileMyScreen` (owner)
+ * or `ProfilePublicScreen` (public view) based on current viewer ID.
  * 
  * @component
  */
@@ -14,20 +14,10 @@ import { useProfileStore } from '../../store/profileStore';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
-import {
-  ProfileHeader,
-  ProfileHighlights,
-  ProfileFeatured,
-  ProfileTabs,
-  ProfileTabContent,
-  CreatorDashboard,
-  ProfileMutualFriends,
-  ProfileSkeleton,
-} from '../../components/profile';
+import { ProfileSkeleton } from '../../components/profile';
+import ProfileMyScreen from './ProfileMyScreen';
+import ProfilePublicScreen from './ProfilePublicScreen';
 
-/**
- * ProfileScreen Component
- */
 export default function ProfileScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -43,19 +33,13 @@ export default function ProfileScreen() {
     loading,
     error,
     isOwner,
-    followStatus,
-    followLoading,
     mutualFriends,
     posts,
     postsLoading,
     postsHasMore,
-    postsCursor,
     highlights,
-    highlightsLoading,
     level,
-    balance,
     position,
-    activeTab,
     refreshKey,
     loadProfile,
     loadPosts,
@@ -64,7 +48,6 @@ export default function ProfileScreen() {
     loadMutualFriends,
     follow,
     unfollow,
-    setActiveTab,
     clear,
   } = useProfileStore();
   
@@ -250,92 +233,59 @@ export default function ProfileScreen() {
     );
   }
   
+  // Delegate rendering based on isOwner
+  if (isOwner) {
+    return (
+      <ProfileMyScreen
+        profile={profile}
+        level={level}
+        position={position}
+        theme={theme}
+        posts={posts}
+        postsLoading={postsLoading}
+        postsHasMore={postsHasMore}
+        highlights={highlights}
+        analytics={analytics}
+        ranking={ranking}
+        timeframe={timeframe}
+        analyticsLoading={analyticsLoading}
+        activeProfileTab={activeProfileTab}
+        handleTabChange={handleTabChange}
+        handleAvatarPress={handleAvatarPress}
+        handleCoverPress={handleCoverPress}
+        handleStatPress={handleStatPress}
+        handlePostPress={handlePostPress}
+        handleLoadMorePosts={handleLoadMorePosts}
+        handleHighlightPress={handleHighlightPress}
+        handleAddHighlight={handleAddHighlight}
+        handleMutualFriendPress={handleMutualFriendPress}
+        loadAnalytics={loadAnalytics}
+        setTimeframe={setTimeframe}
+        viewingUserId={viewingUserId}
+      />
+    );
+  }
+
   return (
-    <div className={cn(
-      'min-h-screen pb-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-    )}>
-      {/* Main Content */}
-      <div className="max-w-2xl mx-auto">
-        {/* Profile Header */}
-        <div className="px-4 pt-4">
-          <ProfileHeader
-            profile={profile}
-            isOwner={isOwner}
-            level={level || profile.level}
-            position={position}
-            theme={theme}
-            onAvatarPress={handleAvatarPress}
-            onCoverPress={handleCoverPress}
-            onStatPress={handleStatPress}
-            onMutualFriendPress={handleMutualFriendPress}
-          />
-        </div>
-        
-        {/* Mutual Friends (for non-owner) */}
-        {mutualFriends.length > 0 && (
-          <div className="px-4">
-            <ProfileMutualFriends
-              mutualFriends={mutualFriends}
-              onFriendPress={handleMutualFriendPress}
-              theme={theme}
-            />
-          </div>
-        )}
-        
-        {/* Creator Dashboard (for owner) */}
-        {isOwner && analytics && (
-          <div className="px-4 mt-4">
-            <CreatorDashboard
-              analytics={analytics}
-              ranking={ranking}
-              theme={theme}
-              timeframe={timeframe}
-              onTimeframeChange={setTimeframe}
-              loading={analyticsLoading}
-              onRefresh={() => loadAnalytics(viewingUserId, timeframe)}
-              onViewDetails={() => navigate('/profile/analytics')}
-            />
-          </div>
-        )}
-        
-        {/* Highlights */}
-        {(highlights.length > 0 || isOwner) && (
-          <div className="px-4 mt-4">
-            <ProfileHighlights
-              highlights={highlights}
-              isOwner={isOwner}
-              onHighlightPress={handleHighlightPress}
-              onAddHighlight={handleAddHighlight}
-              theme={theme}
-            />
-          </div>
-        )}
-        
-        {/* Tabs */}
-        <div className="mt-4">
-          <ProfileTabs
-            activeTab={activeProfileTab}
-            onTabChange={handleTabChange}
-            isOwner={isOwner}
-            theme={theme}
-            hasAnalytics={isOwner}
-            hasShop={isOwner}
-          />
-        </div>
-        
-        {/* Tab Content */}
-        <ProfileTabContent
-          activeTab={activeProfileTab}
-          posts={posts}
-          postsLoading={postsLoading}
-          isOwner={isOwner}
-          onPostPress={handlePostPress}
-          onLoadMore={handleLoadMorePosts}
-          hasMore={postsHasMore}
-          theme={theme}
-        />
-      </div>
-    </div>
+    <ProfilePublicScreen
+      profile={profile}
+      level={level}
+      position={position}
+      theme={theme}
+      posts={posts}
+      postsLoading={postsLoading}
+      postsHasMore={postsHasMore}
+      highlights={highlights}
+      mutualFriends={mutualFriends}
+      activeProfileTab={activeProfileTab}
+      handleTabChange={handleTabChange}
+      handleAvatarPress={handleAvatarPress}
+      handleCoverPress={handleCoverPress}
+      handleStatPress={handleStatPress}
+      handlePostPress={handlePostPress}
+      handleLoadMorePosts={handleLoadMorePosts}
+      handleHighlightPress={handleHighlightPress}
+      handleMutualFriendPress={handleMutualFriendPress}
+    />
   );
 }
