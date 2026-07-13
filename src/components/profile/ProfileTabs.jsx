@@ -6,110 +6,127 @@
  * @component
  */
 
+/**
+ * @typedef {Object} ProfileTabsProps
+ * @property {string} [activeTab='posts'] - Current active tab
+ * @property {Function} [onTabChange] - Tab change handler
+ * @property {boolean} [isOwner=false] - Whether viewing own profile
+ * @property {string} [theme='light'] - Current theme
+ * @property {boolean} [hasAnalytics=false] - Show analytics tab
+ * @property {boolean} [hasShop=false] - Show shop tab
+ */
+
 import React, { memo, useCallback } from 'react';
 import { cn } from '../../lib/utils';
 import { 
-  Grid3X3, 
-  ShoppingBag, 
+  Grid3x3, 
+  Video, 
   Bookmark, 
-  Heart, 
   BarChart2,
-  Info,
-  Lock,
-  Star,
-  Tag
+  ShoppingBag,
+  Heart,
+  Image
 } from 'lucide-react';
 
 /**
- * Default tabs configuration
- */
-const DEFAULT_TABS = [
-  { id: 'posts', label: 'Posts', icon: Grid3X3 },
-  { id: 'saved', label: 'Saved', icon: Bookmark },
-  { id: 'tagged', label: 'Tagged', icon: Tag || (() => <Heart className="w-4 h-4" />) },
-];
-
-/**
- * Owner-only tabs
- */
-const OWNER_TABS = [
-  { id: 'shop', label: 'Shop', icon: ShoppingBag },
-  { id: 'analytics', label: 'Analytics', icon: BarChart2 },
-];
-
-/**
  * ProfileTabs Component
- * @param {Object} props
+ * @type {React.FC<ProfileTabsProps>}
  */
-const ProfileTabs = ({
+const ProfileTabs = memo(({
   activeTab = 'posts',
   onTabChange,
   isOwner = false,
   theme = 'light',
-  tabs: customTabs = null,
   hasAnalytics = false,
   hasShop = false,
 }) => {
-  const tabs = customTabs || DEFAULT_TABS;
-  
-  // Add owner tabs if applicable
-  const allTabs = [
-    ...tabs,
-    ...(isOwner && hasAnalytics ? OWNER_TABS.filter(t => t.id === 'analytics') : []),
-    ...(isOwner && hasShop ? OWNER_TABS.filter(t => t.id === 'shop') : []),
+  // Tab definitions
+  const tabs = [
+    { key: 'posts', label: 'Posts', icon: Grid3x3 },
+    { key: 'videos', label: 'Videos', icon: Video },
+    { key: 'reels', label: 'Reels', icon: Video },
+    { key: 'photos', label: 'Photos', icon: Image },
+    { key: 'saved', label: 'Saved', icon: Bookmark },
+    { key: 'likes', label: 'Likes', icon: Heart },
   ];
-
-  const handleTabClick = useCallback((tabId) => {
+  
+  // Owner-only tabs
+  const ownerTabs = [
+    { key: 'shop', label: 'Shop', icon: ShoppingBag },
+    { key: 'analytics', label: 'Analytics', icon: BarChart2 },
+  ];
+  
+  // Filter tabs based on ownership
+  const visibleTabs = isOwner 
+    ? [...tabs, ...ownerTabs.filter(t => hasShop || t.key !== 'shop', t => hasAnalytics || t.key !== 'analytics')]
+    : tabs;
+  
+  // Handle tab click
+  const handleTabClick = useCallback((tabKey) => {
     if (onTabChange) {
-      onTabChange(tabId);
+      onTabChange(tabKey);
     }
   }, [onTabChange]);
-
+  
+  // ARVDOUL DNA Gradient
+  const activeGradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)';
+  
   return (
-    <div className={cn(
-      'border-b border-gray-200 dark:border-gray-700',
-      'sticky top-0 z-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-white'
-    )}>
-      <div className="flex items-center justify-around">
-        {allTabs.map((tab) => {
+    <nav 
+      className={cn(
+        'border-b border-gray-200 dark:border-gray-800',
+        'overflow-x-auto scrollbar-hide'
+      )}
+      role="tablist"
+      aria-label="Profile content tabs"
+    >
+      <div className={cn(
+        'flex items-center gap-1 px-2 min-w-max',
+        theme === 'dark' 
+          ? 'bg-gray-900/80 backdrop-blur-sm' 
+          : 'bg-white/80 backdrop-blur-sm'
+      )}>
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+          const isActive = activeTab === tab.key;
           
           return (
             <button
-              key={tab.id}
-              onClick={() => handleTabClick(tab.id)}
+              key={tab.key}
+              onClick={() => handleTabClick(tab.key)}
               className={cn(
-                'flex-1 py-3 px-2',
-                'flex items-center justify-center gap-1.5',
-                'text-sm font-medium',
-                'border-b-2 -mb-px',
-                'transition-colors relative',
+                'relative flex items-center gap-2 px-4 py-3',
+                'text-sm font-medium transition-all duration-200',
+                'border-b-2 -mb-[2px]',
                 isActive
                   ? 'text-purple-600 dark:text-purple-400 border-purple-600 dark:border-purple-400'
                   : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300'
               )}
-              aria-selected={isActive}
               role="tab"
+              aria-selected={isActive}
+              aria-controls={`tabpanel-${tab.key}`}
+              id={`tab-${tab.key}`}
             >
-              <Icon className={cn('w-4 h-4', isActive && 'text-purple-600 dark:text-purple-400')} />
-              <span>{tab.label}</span>
-              
-              {/* Active indicator */}
               {isActive && (
-                <div className={cn(
-                  'absolute bottom-0 left-1/2 -translate-x-1/2',
-                  'w-12 h-0.5 rounded-full',
-                  'bg-gradient-to-r from-purple-500 to-blue-500'
-                )} />
+                <div 
+                  className="absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                  style={{ background: activeGradient }}
+                  aria-hidden="true"
+                />
               )}
+              <Icon 
+                className={cn('w-4 h-4', isActive && 'text-purple-500')} 
+                aria-hidden="true" 
+              />
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           );
         })}
       </div>
-    </div>
+    </nav>
   );
-};
+});
 
-export default memo(ProfileTabs);
+ProfileTabs.displayName = 'ProfileTabs';
+
+export default ProfileTabs;

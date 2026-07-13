@@ -1,9 +1,19 @@
 /**
  * src/components/profile/FollowButton.jsx - ARVDOUL Follow Button Component
  * 
- * Follow/Unfollow button with loading state and optimistic updates.
+ * Follow/Unfollow button with loading state and ARVDOUL DNA gradient.
  * 
  * @component
+ */
+
+/**
+ * @typedef {Object} FollowButtonProps
+ * @property {boolean} [isFollowing=false] - Whether currently following
+ * @property {boolean} [loading=false] - Loading state
+ * @property {Function} [onFollow] - Follow click handler
+ * @property {Function} [onUnfollow] - Unfollow click handler
+ * @property {string} [theme='light'] - Current theme
+ * @property {'sm'|'md'|'lg'} [size='md'] - Button size
  */
 
 import React, { memo, useCallback } from 'react';
@@ -12,128 +22,116 @@ import { UserPlus, UserMinus, Loader2 } from 'lucide-react';
 
 /**
  * FollowButton Component
- * @param {Object} props
+ * @type {React.FC<FollowButtonProps>}
  */
-const FollowButton = ({
+const FollowButton = memo(({
   isFollowing = false,
   loading = false,
   onFollow,
   onUnfollow,
   theme = 'light',
-  size = 'default',
-  variant = 'primary', // 'primary' | 'outline' | 'ghost'
+  size = 'md',
 }) => {
+  // ARVDOUL DNA Gradient
+  const buttonGradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)';
+  
+  // Glow effect for following button
+  const glowEffect = '0 0 20px rgba(180, 22, 219, 0.4), 0 0 40px rgba(135, 47, 226, 0.2)';
+  
+  // Size classes
+  const sizeClasses = {
+    sm: 'px-3 py-1.5 text-xs gap-1',
+    md: 'px-4 py-2.5 text-sm gap-2',
+    lg: 'px-6 py-3 text-base gap-2',
+  };
+  
+  const iconSizes = {
+    sm: 'w-3 h-3',
+    md: 'w-4 h-4',
+    lg: 'w-5 h-5',
+  };
+  
+  // Handle click
   const handleClick = useCallback(() => {
     if (loading) return;
     
     if (isFollowing) {
-      onUnfollow?.();
+      if (onUnfollow) {
+        onUnfollow();
+      }
     } else {
-      onFollow?.();
+      if (onFollow) {
+        onFollow();
+      }
     }
   }, [loading, isFollowing, onFollow, onUnfollow]);
-
-  // ARVDOUL Button Gradient
-  const buttonGradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)';
-  const glowEffect = '0 0 20px rgba(180, 22, 219, 0.3), 0 0 40px rgba(75, 107, 255, 0.15)';
-
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-xs',
-    default: 'px-5 py-2.5 text-sm',
-    lg: 'px-6 py-3 text-base',
-  };
-
-  const iconSizeClasses = {
-    sm: 'w-3.5 h-3.5',
-    default: 'w-4 h-4',
-    lg: 'w-5 h-5',
-  };
-
-  if (variant === 'outline') {
+  
+  // Loading state
+  if (loading) {
     return (
       <button
-        onClick={handleClick}
-        disabled={loading}
+        disabled
         className={cn(
-          'flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
-          'border-2',
+          'flex items-center justify-center rounded-xl font-semibold',
+          'transition-all duration-200',
           sizeClasses[size],
-          isFollowing
-            ? 'border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
-            : 'border-purple-500 text-white hover:opacity-90',
-          loading && 'opacity-50 cursor-not-allowed',
-          !isFollowing && 'shadow-md hover:shadow-lg'
+          isFollowing 
+            ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' 
+            : theme === 'dark'
+              ? 'bg-gray-700 text-gray-400 border border-gray-600'
+              : 'bg-gray-100 text-gray-600 border border-gray-300',
+          'opacity-70 cursor-not-allowed'
         )}
-        style={!isFollowing ? { background: buttonGradient } : {}}
+        aria-busy="true"
+        aria-label="Loading"
       >
-        {loading ? (
-          <Loader2 className={cn(iconSizeClasses[size], 'animate-spin')} />
-        ) : isFollowing ? (
-          <UserMinus className={iconSizeClasses[size]} />
-        ) : (
-          <UserPlus className={iconSizeClasses[size]} />
-        )}
-        <span>{loading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}</span>
+        <Loader2 className={cn(iconSizes[size], 'animate-spin')} aria-hidden="true" />
       </button>
     );
   }
-
-  if (variant === 'ghost') {
+  
+  // Following state
+  if (isFollowing) {
     return (
       <button
         onClick={handleClick}
-        disabled={loading}
         className={cn(
-          'flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
-          'hover:bg-gray-100 dark:hover:bg-gray-800',
+          'flex items-center justify-center rounded-xl font-semibold',
+          'transition-all duration-200',
           sizeClasses[size],
-          loading && 'opacity-50 cursor-not-allowed'
+          'bg-gradient-to-r from-purple-500 to-blue-500 text-white',
+          'hover:scale-105 active:scale-95',
+          'shadow-lg hover:shadow-xl'
         )}
+        style={{ boxShadow: glowEffect }}
+        aria-label="Following - Click to unfollow"
       >
-        {loading ? (
-          <Loader2 className={cn(iconSizeClasses[size], 'animate-spin')} />
-        ) : isFollowing ? (
-          <UserMinus className={iconSizeClasses[size]} />
-        ) : (
-          <UserPlus className={iconSizeClasses[size]} />
-        )}
-        <span>{loading ? 'Loading...' : isFollowing ? 'Following' : 'Follow'}</span>
+        <UserMinus className={iconSizes[size]} aria-hidden="true" />
+        <span>Following</span>
       </button>
     );
   }
-
-  // Primary variant (default)
+  
+  // Not following state
   return (
     <button
       onClick={handleClick}
-      disabled={loading}
       className={cn(
-        'flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
-        'text-white hover:opacity-90',
+        'flex items-center justify-center rounded-xl font-semibold',
+        'text-white transition-all duration-200',
         sizeClasses[size],
-        loading && 'opacity-50 cursor-not-allowed',
-        !isFollowing && 'shadow-md hover:shadow-lg'
+        'hover:scale-105 active:scale-95',
+        'shadow-lg hover:shadow-xl'
       )}
-      style={{
-        background: isFollowing ? undefined : buttonGradient,
-        boxShadow: !isFollowing ? glowEffect : undefined,
-      }}
+      style={{ background: buttonGradient }}
+      aria-label="Follow"
     >
-      {loading ? (
-        <Loader2 className={cn(iconSizeClasses[size], 'animate-spin')} />
-      ) : isFollowing ? (
-        <>
-          <UserMinus className={iconSizeClasses[size]} />
-          <span>Following</span>
-        </>
-      ) : (
-        <>
-          <UserPlus className={iconSizeClasses[size]} />
-          <span>Follow</span>
-        </>
-      )}
+      <UserPlus className={iconSizes[size]} aria-hidden="true" />
+      <span>Follow</span>
     </button>
   );
-};
+});
 
-export default memo(FollowButton);
+FollowButton.displayName = 'FollowButton';
+
+export default FollowButton;

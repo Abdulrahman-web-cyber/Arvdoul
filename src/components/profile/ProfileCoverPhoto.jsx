@@ -1,50 +1,59 @@
 /**
  * src/components/profile/ProfileCoverPhoto.jsx - ARVDOUL Profile Cover Photo Component
  * 
- * Displays and manages profile cover photo.
+ * Displays profile cover photo with gradient fallback.
  * 
  * @component
  */
 
-import React, { memo, useCallback, useState } from 'react';
+/**
+ * @typedef {Object} ProfileCoverPhotoProps
+ * @property {string} [coverUrl] - Cover photo URL
+ * @property {Function} [onPress] - Click handler
+ * @property {boolean} [isOwner=false] - Whether viewing own profile
+ * @property {string} [theme='light'] - Current theme
+ */
+
+import React, { memo, useState } from 'react';
 import { cn } from '../../lib/utils';
-import { Camera, Upload } from 'lucide-react';
+import { Camera } from 'lucide-react';
 
 /**
  * ProfileCoverPhoto Component
- * @param {Object} props
+ * @type {React.FC<ProfileCoverPhotoProps>}
  */
-const ProfileCoverPhoto = ({
+const ProfileCoverPhoto = memo(({
   coverUrl,
   onPress,
   isOwner = false,
   theme = 'light',
-  height = 200,
 }) => {
   const [imageError, setImageError] = useState(false);
   
-  // ARVDOUL gradient placeholder
-  const gradientPlaceholder = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
+  // ARVDOUL DNA Gradient
+  const gradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
   
-  const handleClick = useCallback(() => {
+  // Handle click
+  const handleClick = () => {
     if (onPress) {
       onPress();
     }
-  }, [onPress]);
-
-  const handleError = useCallback(() => {
+  };
+  
+  // Handle image error
+  const handleError = () => {
     setImageError(true);
-  }, []);
-
+  };
+  
   return (
-    <div
-      className={cn(
-        'relative w-full overflow-hidden',
-        'bg-gray-200 dark:bg-gray-800'
-      )}
-      style={{ height }}
+    <div 
+      className="relative h-32 overflow-hidden cursor-pointer"
+      onClick={handleClick}
+      role={onPress ? 'button' : undefined}
+      tabIndex={onPress ? 0 : undefined}
+      onKeyDown={onPress ? (e) => e.key === 'Enter' && handleClick() : undefined}
+      aria-label={isOwner ? 'Change cover photo' : 'Cover photo'}
     >
-      {/* Cover Image or Gradient */}
       {coverUrl && !imageError ? (
         <img
           src={coverUrl}
@@ -53,50 +62,33 @@ const ProfileCoverPhoto = ({
           onError={handleError}
         />
       ) : (
-        <div
+        <div 
           className="w-full h-full"
-          style={{ background: gradientPlaceholder }}
+          style={{ background: gradient }}
         />
       )}
       
-      {/* Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-      
-      {/* Owner Edit Button */}
+      {/* Camera overlay for owner */}
       {isOwner && (
-        <button
-          onClick={handleClick}
-          className={cn(
-            'absolute bottom-3 right-3',
-            'p-2 rounded-full',
-            'bg-black/50 hover:bg-black/70',
-            'text-white transition-colors',
-            'flex items-center gap-1.5',
-            'text-sm font-medium'
-          )}
-        >
-          <Camera className="w-4 h-4" />
-          <span>Edit</span>
-        </button>
-      )}
-      
-      {/* View Indicator (Non-owner) */}
-      {!isOwner && (
-        <button
-          onClick={handleClick}
-          className={cn(
-            'absolute bottom-3 right-3',
-            'p-2 rounded-full opacity-0 hover:opacity-100',
-            'bg-black/50 transition-opacity',
-            'text-white'
-          )}
-          aria-label="View cover photo"
-        >
-          <Upload className="w-4 h-4" />
-        </button>
+        <div className={cn(
+          'absolute inset-0 flex items-center justify-center',
+          'bg-black/0 hover:bg-black/40',
+          'transition-colors duration-200'
+        )}>
+          <div className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center',
+            'bg-white/90 dark:bg-gray-800/90',
+            'opacity-0 hover:opacity-100 transition-opacity duration-200',
+            'shadow-lg'
+          )}>
+            <Camera className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+          </div>
+        </div>
       )}
     </div>
   );
-};
+});
 
-export default memo(ProfileCoverPhoto);
+ProfileCoverPhoto.displayName = 'ProfileCoverPhoto';
+
+export default ProfileCoverPhoto;

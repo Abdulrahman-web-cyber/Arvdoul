@@ -1,194 +1,167 @@
 /**
  * src/components/profile/ProfileMediaGrid.jsx - ARVDOUL Profile Media Grid Component
  * 
- * Grid display of user's media posts.
+ * Grid display for profile media items with lazy loading.
  * 
  * @component
  */
 
+/**
+ * @typedef {Object} ProfileMediaGridProps
+ * @property {Array} [items=[]] - Media items
+ * @property {Function} [onItemPress] - Item press handler
+ * @property {Function} [onLoadMore] - Load more handler
+ * @property {boolean} [hasMore=false] - Has more items
+ * @property {boolean} [loading=false] - Loading state
+ * @property {string} [theme='light'] - Current theme
+ */
+
 import React, { memo, useCallback, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
-import { Image, Video, Play, Loader2 } from 'lucide-react';
-
-/**
- * Format number
- */
-const formatNumber = (num) => {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num?.toString() || '0';
-};
+import { Image, Video, Heart, MessageCircle, Loader2 } from 'lucide-react';
 
 /**
  * ProfileMediaGrid Component
- * @param {Object} props
+ * @type {React.FC<ProfileMediaGridProps>}
  */
-const ProfileMediaGrid = ({
+const ProfileMediaGrid = memo(({
   items = [],
   onItemPress,
   onLoadMore,
   hasMore = false,
   loading = false,
   theme = 'light',
-  columns = 3,
 }) => {
   const observerRef = useRef(null);
-  const lastItemRef = useRef(null);
-
+  const loadMoreRef = useRef(null);
+  
   // Intersection observer for infinite scroll
   useEffect(() => {
-    if (hasMore && onLoadMore) {
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && hasMore && !loading) {
-            onLoadMore();
-          }
-        },
-        { threshold: 0.1 }
-      );
-      
-      if (lastItemRef.current) {
-        observerRef.current.observe(lastItemRef.current);
-      }
-      
-      return () => {
-        if (observerRef.current) {
-          observerRef.current.disconnect();
+    if (!hasMore || !onLoadMore) return;
+    
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          onLoadMore();
         }
-      };
+      },
+      { threshold: 0.1 }
+    );
+    
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current);
     }
-  }, [hasMore, onLoadMore, loading]);
-
-  const handleItemPress = useCallback((item) => {
+    
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+    };
+  }, [hasMore, loading, onLoadMore]);
+  
+  // Handle item click
+  const handleItemClick = useCallback((item) => {
     if (onItemPress) {
       onItemPress(item);
     }
   }, [onItemPress]);
-
-  if (items.length === 0 && !loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 px-4">
-        <div className={cn(
-          'w-20 h-20 rounded-full',
-          'bg-gray-100 dark:bg-gray-800',
-          'flex items-center justify-center mb-4'
-        )}>
-          <Image className="w-10 h-10 text-gray-400" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-          No Posts Yet
-        </h3>
-        <p className="text-gray-500 dark:text-gray-400 text-sm text-center">
-          Share your first post with the world!
-        </p>
-      </div>
-    );
-  }
-
+  
+  // Get media type icon
+  const getMediaIcon = (item) => {
+    if (item.type === 'video' || item.hasVideo) {
+      return <Video className="w-4 h-4" />;
+    }
+    return <Image className="w-4 h-4" />;
+  };
+  
+  // Calculate grid columns
+  const gridCols = 'grid-cols-3';
+  
   return (
-    <div className="p-0.5">
-      <div
-        className="grid gap-0.5"
-        style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
-      >
-        {items.map((item, index) => {
-          const isLastItem = index === items.length - 1;
-          const hasVideo = item.type === 'video' || item.media?.some(m => m.type === 'video');
-          const likeCount = item.likeCount || item.likes || 0;
-          const commentCount = item.commentCount || item.comments || 0;
-          
-          return (
-            <div
-              key={item.id || index}
-              ref={isLastItem ? lastItemRef : null}
-              className={cn(
-                'relative aspect-square overflow-hidden',
-                'bg-gray-100 dark:bg-gray-800',
-                'cursor-pointer',
-                'hover:opacity-90 transition-opacity',
-                'group'
-              )}
-              onClick={() => handleItemPress(item)}
-            >
-              {/* Media */}
-              {item.media?.[0]?.url || item.thumbnail || item.mediaUrl ? (
-                <img
-                  src={item.media?.[0]?.url || item.thumbnail || item.mediaUrl}
-                  alt={item.content || 'Post'}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500/20 to-blue-500/20">
-                  <span className="text-4xl opacity-50">
-                    {item.type === 'text' ? '📝' : item.type === 'poll' ? '📊' : '📷'}
-                  </span>
+    <div className="p-1">
+      <div className={cn('grid', gridCols, 'gap-1')}>
+        {items.map((item, index) => (
+          <button
+            key={item.id || index}
+            onClick={() => handleItemClick(item)}
+            className={cn(
+              'relative aspect-square rounded-lg overflow-hidden',
+              'bg-gray-100 dark:bg-gray-800',
+              'transition-all duration-200',
+              'hover:scale-105 active:scale-95',
+              'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2'
+            )}
+            aria-label={`Post by ${item.authorName || 'user'}`}
+          >
+            {/* Media */}
+            {item.mediaUrl ? (
+              <img
+                src={item.mediaUrl}
+                alt={item.caption || 'Post image'}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : item.type === 'text' ? (
+              <div className="w-full h-full flex items-center justify-center p-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-4 text-center">
+                  {item.text || item.caption || ''}
+                </p>
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Image className="w-8 h-8 text-gray-400" />
+              </div>
+            )}
+            
+            {/* Video indicator */}
+            {(item.type === 'video' || item.hasVideo) && (
+              <div className="absolute top-2 left-2">
+                <div className={cn(
+                  'w-6 h-6 rounded-full flex items-center justify-center',
+                  'bg-black/50 backdrop-blur-sm'
+                )}>
+                  <Video className="w-3 h-3 text-white" />
                 </div>
-              )}
-              
-              {/* Video Indicator */}
-              {hasVideo && (
-                <div className="absolute top-2 left-2">
-                  <div className={cn(
-                    'w-6 h-6 rounded-full',
-                    'bg-black/50',
-                    'flex items-center justify-center'
-                  )}>
-                    <Play className="w-3 h-3 text-white fill-white" />
-                  </div>
-                </div>
-              )}
-              
-              {/* Multi-media Indicator */}
-              {item.media?.length > 1 && (
-                <div className="absolute top-2 right-2">
-                  <div className={cn(
-                    'w-6 h-6 rounded-full',
-                    'bg-black/50',
-                    'flex items-center justify-center'
-                  )}>
-                    <span className="text-white text-xs font-bold">
-                      {item.media.length}
-                    </span>
-                  </div>
-                </div>
-              )}
-              
-              {/* Stats Overlay */}
+              </div>
+            )}
+            
+            {/* Stats overlay */}
+            {(item.likeCount > 0 || item.commentCount > 0) && (
               <div className={cn(
-                'absolute inset-0',
-                'bg-gradient-to-t from-black/60 via-transparent to-transparent',
-                'opacity-0 group-hover:opacity-100',
-                'transition-opacity',
-                'flex items-end justify-center pb-3 gap-4'
+                'absolute inset-x-0 bottom-0',
+                'flex items-center justify-center gap-3 p-2',
+                'bg-gradient-to-t from-black/70 to-transparent',
+                'opacity-0 hover:opacity-100 transition-opacity'
               )}>
-                <span className="flex items-center gap-1 text-white text-sm font-medium">
-                  <span>❤️</span>
-                  {formatNumber(likeCount)}
+                <span className="flex items-center gap-1 text-white text-xs font-medium">
+                  <Heart className="w-3 h-3" />
+                  {item.likeCount || 0}
                 </span>
-                <span className="flex items-center gap-1 text-white text-sm font-medium">
-                  <span>💬</span>
-                  {formatNumber(commentCount)}
+                <span className="flex items-center gap-1 text-white text-xs font-medium">
+                  <MessageCircle className="w-3 h-3" />
+                  {item.commentCount || 0}
                 </span>
               </div>
-            </div>
-          );
-        })}
+            )}
+          </button>
+        ))}
       </div>
       
-      {/* Loading Indicator */}
-      {loading && (
-        <div className="flex items-center justify-center py-6">
-          <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
+      {/* Load more trigger */}
+      {hasMore && (
+        <div 
+          ref={loadMoreRef} 
+          className="flex items-center justify-center py-4"
+        >
+          {loading && (
+            <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
+          )}
         </div>
-      )}
-      
-      {/* Load More Trigger */}
-      {hasMore && !loading && (
-        <div ref={lastItemRef} className="h-10" />
       )}
     </div>
   );
-};
+});
 
-export default memo(ProfileMediaGrid);
+ProfileMediaGrid.displayName = 'ProfileMediaGrid';
+
+export default ProfileMediaGrid;

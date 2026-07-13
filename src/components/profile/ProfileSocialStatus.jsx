@@ -1,93 +1,64 @@
 /**
  * src/components/profile/ProfileSocialStatus.jsx - ARVDOUL Profile Social Status Component
  * 
- * Displays social connection status.
+ * Displays social connection status (Follows you, etc.).
  * 
  * @component
  */
 
-import React, { memo, useCallback } from 'react';
+/**
+ * @typedef {Object} ProfileSocialStatusProps
+ * @property {Object} [followStatus] - Follow status
+ * @property {string} [theme='light'] - Current theme
+ */
+
+import React, { memo } from 'react';
 import { cn } from '../../lib/utils';
-import { 
-  UserCheck, 
-  UserPlus, 
-  UserX,
-  Clock,
-  Shield,
-  ShieldOff
-} from 'lucide-react';
+import { UserCheck } from 'lucide-react';
 
 /**
  * ProfileSocialStatus Component
- * @param {Object} props
+ * @type {React.FC<ProfileSocialStatusProps>}
  */
-const ProfileSocialStatus = ({
-  status = 'none', // 'none' | 'following' | 'follows_you' | 'mutual' | 'blocked' | 'pending'
+const ProfileSocialStatus = memo(({
+  followStatus,
   theme = 'light',
-  onAction,
 }) => {
-  const getStatusConfig = useCallback(() => {
-    switch (status) {
-      case 'following':
-        return {
-          icon: UserCheck,
-          label: 'Following',
-          color: 'text-green-600',
-          bg: 'bg-green-100 dark:bg-green-900/20',
-        };
-      case 'follows_you':
-        return {
-          icon: Clock,
-          label: 'Follows You',
-          color: 'text-blue-600',
-          bg: 'bg-blue-100 dark:bg-blue-900/20',
-        };
-      case 'mutual':
-        return {
-          icon: UserCheck,
-          label: 'Mutual Follow',
-          color: 'text-purple-600',
-          bg: 'bg-purple-100 dark:bg-purple-900/20',
-        };
-      case 'blocked':
-        return {
-          icon: ShieldOff,
-          label: 'Blocked',
-          color: 'text-red-600',
-          bg: 'bg-red-100 dark:bg-red-900/20',
-        };
-      case 'pending':
-        return {
-          icon: Clock,
-          label: 'Pending',
-          color: 'text-yellow-600',
-          bg: 'bg-yellow-100 dark:bg-yellow-900/20',
-        };
-      default:
-        return {
-          icon: UserPlus,
-          label: 'Not Following',
-          color: 'text-gray-600',
-          bg: 'bg-gray-100 dark:bg-gray-800',
-        };
-    }
-  }, [status]);
+  const followsYou = followStatus?.followsYou || false;
+  const youFollow = followStatus?.isFollowing || false;
+  
+  if (followsYou && youFollow) {
+    return (
+      <div 
+        className={cn(
+          'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium',
+          'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+        )}
+        role="status"
+      >
+        <UserCheck className="w-3 h-3" />
+        <span>Follows you</span>
+      </div>
+    );
+  }
+  
+  if (followsYou) {
+    return (
+      <div 
+        className={cn(
+          'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium',
+          'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+        )}
+        role="status"
+      >
+        <span>Follows you</span>
+      </div>
+    );
+  }
+  
+  return null;
+});
 
-  const config = getStatusConfig();
-  const Icon = config.icon;
+ProfileSocialStatus.displayName = 'ProfileSocialStatus';
 
-  return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-        config.bg,
-        config.color
-      )}
-    >
-      <Icon className="w-3.5 h-3.5" />
-      <span>{config.label}</span>
-    </div>
-  );
-};
-
-export default memo(ProfileSocialStatus);
+export default ProfileSocialStatus;
