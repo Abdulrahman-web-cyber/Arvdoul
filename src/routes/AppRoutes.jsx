@@ -30,6 +30,8 @@ const NotificationsScreen = lazy(() => import("../screens/NotificationsScreen.js
 const CreateStory = lazy(() => import("../screens/CreateStory.jsx"));
 // Profile screens - using new Profile directory
 const ProfileScreen = lazy(() => import("../screens/Profile/ProfileScreen.jsx"));
+const ProfilePublicScreen = lazy(() => import("../screens/Profile/ProfilePublicScreen.jsx"));
+const ProfileMyScreen = lazy(() => import("../screens/Profile/ProfileMyScreen.jsx"));
 const EditProfile = lazy(() => import("../screens/Profile/EditProfileScreen.jsx"));
 const CreatorDashboardScreen = lazy(() => import("../screens/Profile/CreatorDashboardScreen.jsx"));
 const FollowersScreen = lazy(() => import("../screens/Profile/FollowersScreen.jsx"));
@@ -285,7 +287,25 @@ export default function AppRoutes() {
       <Route path="/profile" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
-            <ProfileScreen />
+            <ProfileMyScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* My profile (owner view) */}
+      <Route path="/profile/me" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProfileMyScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Public profile view (for other users) */}
+      <Route path="/profile/public/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProfilePublicScreen />
           </Suspense>
         </ProtectedRoute>
       } />

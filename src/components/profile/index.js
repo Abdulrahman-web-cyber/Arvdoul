@@ -27,3 +27,4 @@ export { default as ProfileMediaGrid } from './ProfileMediaGrid';
 export { default as ProfileAbout } from './ProfileAbout';
 export { default as ProfilePrivacyBadge } from './ProfilePrivacyBadge';
 export { default as ProfileSkeleton } from './ProfileSkeleton';
+export { default as AvatarUploadModal } from './AvatarUploadModal';
