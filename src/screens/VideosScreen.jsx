@@ -17,7 +17,7 @@ import { toast } from 'sonner';
  */
 const VideosScreen = () => {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const {
     videos,
     setVideos,

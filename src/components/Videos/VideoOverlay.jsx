@@ -37,6 +37,7 @@ const VideoOverlay = memo(({
   onToggleMute,
   onToggleLoop,
 }) => {
+  const { isDark } = useTheme();
   const { volume, isMuted, isLooping, isFullscreen, isPip, toggleMute, toggleLoop } = useVideoStore();
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 

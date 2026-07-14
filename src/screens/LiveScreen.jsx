@@ -36,7 +36,7 @@ import { toast } from 'sonner';
  * Supports: start live, watch live, chat, gifts, analytics
  */
 const LiveScreen = () => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [isStreaming, setIsStreaming] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
   const [showStartOptions, setShowStartOptions] = useState(false);

@@ -34,7 +34,7 @@ const VideoEditor = memo(({
   onCancel,
   maxDuration = 90,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

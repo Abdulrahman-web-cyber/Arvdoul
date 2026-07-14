@@ -32,7 +32,7 @@ const VideoBottomSheet = memo(({
   onClose,
   video,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [copied, setCopied] = useState(false);

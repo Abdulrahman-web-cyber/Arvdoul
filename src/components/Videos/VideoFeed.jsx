@@ -32,7 +32,7 @@ const VideoFeed = memo(({
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [preloadedVideos, setPreloadedVideos] = useState({});
 
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { setCurrentIndex: storeSetIndex } = useVideoStore();
 
   // Preload next videos

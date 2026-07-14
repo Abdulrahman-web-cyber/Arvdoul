@@ -29,7 +29,7 @@ import { toast } from 'sonner';
  * Shows video performance, audience insights, and revenue
  */
 const VideoAnalyticsScreen = () => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(false);

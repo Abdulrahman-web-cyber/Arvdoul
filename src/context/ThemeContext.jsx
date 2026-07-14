@@ -86,13 +86,16 @@ export const ThemeProvider = ({ children }) => {
     return <div style={{ visibility: 'hidden' }}>{children}</div>;
   }
 
+  const isDark = resolvedTheme === 'dark';
+
   return (
     <ThemeContext.Provider value={{
       theme,
       systemTheme,
       toggleTheme,
       setTheme,
-      resolvedTheme
+      resolvedTheme,
+      isDark
     }}>
       {children}
     </ThemeContext.Provider>
@@ -108,7 +111,8 @@ export const useTheme = () => {
       systemTheme: 'light',
       toggleTheme: () => {},
       setTheme: () => {},
-      resolvedTheme: 'light'
+      resolvedTheme: 'light',
+      isDark: false
     };
   }
   return context;

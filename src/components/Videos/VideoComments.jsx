@@ -25,7 +25,7 @@ const VideoComments = memo(({
   onClose,
   video,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const inputRef = useRef(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');

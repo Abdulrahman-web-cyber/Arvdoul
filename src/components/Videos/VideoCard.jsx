@@ -57,7 +57,7 @@ const VideoCard = memo(({
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
 
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const {
     volume,
     speed,
