@@ -10,42 +10,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout the repository
-      - name: Checkout repo
+      # Checkout the repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js 20 with npm caching
-      - name: Setup Node.js 20
+      # Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      # 3️⃣ Install dependencies
+      # Install dependencies
       - name: Install dependencies
         run: npm ci
 
-      # 4️⃣ Build the project with Vite
+      # Build the Vite app
       - name: Build project
         run: npm run build
 
-      # 5️⃣ Install Firebase CLI globally (under Node 20)
+      # Install Firebase CLI
       - name: Install Firebase CLI
-        run: npm install -g firebase-tools@latest
+        run: npm install -g firebase-tools
 
-      # 6️⃣ Deploy to Firebase Hosting using the service account
+      # Authenticate and deploy
       - name: Deploy to Firebase Hosting
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ARVDOUL_8057B }}
         run: |
-          # ✅ Write the raw service account JSON to a local file
           echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
 
-          # ✅ Set Google SDK credentials
-          export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/serviceAccountKey.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$PWD/serviceAccountKey.json"
 
-          # Optional confirmation (safe, does NOT print the secret)
-          echo "GOOGLE_APPLICATION_CREDENTIALS set."
+          echo "Using service account authentication..."
 
-          # ✅ Deploy hosting with Firebase CLI (uses service account)
-          firebase deploy --only hosting --project arvdoul-8057b --token "$(cat serviceAccountKey.json)"
+          firebase deploy \
+            --project arvdoul-8057b \
+            --only hosting
