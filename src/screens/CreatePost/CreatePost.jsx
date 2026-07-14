@@ -15,6 +15,7 @@ import { useAppStore } from "../store/appStore";
 import { openDB } from "idb";
 import { v4 as uuidv4 } from "uuid";
 import * as Icons from "lucide-react";
+import DOMPurify from "dompurify";
 import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import ContentEditor from "./ContentEditor";
 import PostSettings from "../PostSettings";
@@ -488,8 +489,8 @@ function ReviewStep({ state, isDark, user }) {
         <img src={user?.photoURL || "/assets/default-profile.png"} className="w-12 h-12 rounded-full" />
         <div><p className="font-bold">{user?.displayName}</p><p className="text-xs">@{user?.username}</p></div>
       </div>
-      {/* Simplified preview: show text */}
-      <div className="prose dark:prose-invert max-w-none mb-4" dangerouslySetInnerHTML={{ __html: state.contentText }} />
+      {/* Simplified preview: show text - with XSS protection */}
+      <div className="prose dark:prose-invert max-w-none mb-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(state.contentText, { ALLOWED_TAGS: ['p','br','strong','em','u','s','blockquote','ul','ol','li','a','h1','h2','h3','h4','h5','h6'], ALLOWED_ATTR: ['href','target','rel'] }) }} />
       {state.mediaItems.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {state.mediaItems.slice(0,3).map(m => (
