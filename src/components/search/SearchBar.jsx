@@ -1,9 +1,15 @@
 // src/components/search/SearchBar.jsx - ARVDOUL Premium Search Bar
+// Pixel-perfect design with ARVDOUL DNA gradient and glassmorphism
 import React, { memo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Mic, QrCode, SlidersHorizontal, X } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
+
+/**
+ * ARVDOUL Design Tokens
+ */
+const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
 
 /**
  * Premium floating search bar with ARVDOUL design
@@ -21,7 +27,7 @@ const SearchBar = memo(({
   placeholder = 'Search Arvdoul...',
   className = '',
 }) => {
-  const { isDark, glass, spring, gradient, colors } = useTheme();
+  const { isDark, spring, gradient } = useTheme();
 
   // Handle input change
   const handleChange = useCallback((e) => {
@@ -65,25 +71,38 @@ const SearchBar = memo(({
       {/* Search Bar Container */}
       <motion.div
         animate={{
-          scale: isFocused ? 1.02 : 1,
-          boxShadow: isFocused
-            ? '0 0 0 3px rgba(180, 22, 219, 0.3), 0 25px 80px rgba(138, 43, 226, 0.45)'
-            : '0 25px 80px rgba(138, 43, 226, 0.25)',
+          scale: isFocused ? 1.01 : 1,
         }}
         transition={spring.button}
         className={cn(
           'relative h-[60px] rounded-full overflow-hidden',
-          'backdrop-blur-[28px] bg-white/8 border border-white/12',
+          'backdrop-blur-[28px] border',
           'flex items-center px-5 gap-3',
-          isDark ? 'shadow-[0_25px_80px_rgba(138,43,226,0.45)]' : 'shadow-lg'
+          isDark 
+            ? 'bg-white/[0.08] border-white/[0.12]' 
+            : 'bg-white/80 border-gray-200/50',
         )}
+        style={{
+          boxShadow: isFocused 
+            ? `0 0 0 3px rgba(180, 22, 219, 0.3), 0 25px 80px rgba(138, 43, 226, 0.4)`
+            : isDark
+              ? '0 25px 80px rgba(138, 43, 226, 0.35)'
+              : '0 10px 40px rgba(138, 43, 226, 0.15)',
+        }}
       >
-        {/* Search Icon */}
-        <div className="flex-shrink-0">
+        {/* Search Icon with Gradient Background */}
+        <div className={cn(
+          'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
+          'transition-all duration-300'
+        )}
+        style={{
+          background: isFocused ? ARVDOUL_GRADIENT : 'rgba(180, 22, 219, 0.1)',
+        }}
+        >
           <Search 
             className={cn(
-              'w-6 h-6 transition-colors duration-200',
-              isFocused ? 'text-[#B416DB]' : 'text-gray-400'
+              'w-5 h-5 transition-all duration-300',
+              isFocused ? 'text-white' : 'text-[#B416DB]'
             )} 
           />
         </div>
@@ -102,7 +121,7 @@ const SearchBar = memo(({
           aria-controls="search-suggestions"
           className={cn(
             'flex-1 h-full bg-transparent outline-none',
-            'text-base placeholder:text-gray-500',
+            'text-base placeholder:text-gray-400 font-medium',
             isDark ? 'text-white' : 'text-gray-900'
           )}
         />
@@ -113,21 +132,23 @@ const SearchBar = memo(({
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0 }}
+            whileTap={{ scale: 0.9 }}
             onClick={handleClear}
             className={cn(
-              'flex-shrink-0 p-1.5 rounded-full',
-              'hover:bg-white/10 transition-colors duration-200',
+              'flex-shrink-0 w-8 h-8 rounded-full',
+              'flex items-center justify-center',
+              'bg-gray-500/20 hover:bg-red-500/30 transition-colors duration-200',
               'focus:outline-none focus:ring-2 focus:ring-[#B416DB]/50'
             )}
             aria-label="Clear search"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-4 h-4 text-gray-400 hover:text-red-400" />
           </motion.button>
         )}
 
         {/* Divider */}
         <div className={cn(
-          'w-px h-8',
+          'w-px h-8 flex-shrink-0',
           isDark ? 'bg-white/20' : 'bg-gray-300/50'
         )} />
 
@@ -139,6 +160,7 @@ const SearchBar = memo(({
             label="Voice search"
             onClick={handleVoiceSearch}
             isDark={isDark}
+            isActive={false}
           />
 
           {/* QR Scanner */}
@@ -147,6 +169,7 @@ const SearchBar = memo(({
             label="Scan QR code"
             onClick={handleQRScan}
             isDark={isDark}
+            isActive={false}
           />
 
           {/* Filters */}
@@ -155,19 +178,21 @@ const SearchBar = memo(({
             label="Search filters"
             onClick={handleFilters}
             isDark={isDark}
-            highlight={isFocused}
+            isActive={isFocused}
           />
         </div>
 
-        {/* Gradient Focus Ring */}
+        {/* Gradient Glow on Focus */}
         {isFocused && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute inset-0 rounded-full pointer-events-none"
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 rounded-full pointer-events-none -z-10"
             style={{
-              background: gradient,
-              opacity: 0.1,
+              background: ARVDOUL_GRADIENT,
+              filter: 'blur(20px)',
+              opacity: 0.15,
             }}
           />
         )}
@@ -181,15 +206,15 @@ SearchBar.displayName = 'SearchBar';
 /**
  * Action Button Component
  */
-const ActionButton = memo(({ icon: Icon, label, onClick, isDark, highlight }) => (
+const ActionButton = memo(({ icon: Icon, label, onClick, isDark, isActive }) => (
   <motion.button
     whileHover={{ scale: 1.1 }}
-    whileTap={{ scale: 0.95 }}
+    whileTap={{ scale: 0.9 }}
     onClick={onClick}
     className={cn(
-      'relative p-2.5 rounded-full transition-colors duration-200',
+      'relative p-2 rounded-xl transition-all duration-200',
       'focus:outline-none focus:ring-2 focus:ring-[#B416DB]/50',
-      highlight
+      isActive
         ? 'bg-gradient-to-r from-[#B416DB]/20 to-[#4B6BFF]/20'
         : 'hover:bg-white/10'
     )}
@@ -198,12 +223,23 @@ const ActionButton = memo(({ icon: Icon, label, onClick, isDark, highlight }) =>
   >
     <Icon 
       className={cn(
-        'w-5 h-5 transition-colors duration-200',
-        highlight
+        'w-5 h-5 transition-all duration-200',
+        isActive
           ? 'text-[#B416DB]'
           : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700'
       )} 
     />
+    {isActive && (
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        className="absolute inset-0 rounded-xl -z-10"
+        style={{
+          background: ARVDOUL_GRADIENT,
+          opacity: 0.2,
+        }}
+      />
+    )}
   </motion.button>
 ));
 

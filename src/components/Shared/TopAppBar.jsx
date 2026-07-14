@@ -42,7 +42,7 @@ const getThemeColors = (theme) => ({
 // Navigation paths
 const NAVIGATION_PATHS = {
   home: "/home",
-  search: "/SearchScreen.jsx",
+  search: "/search",
   menu: "/MenuScreen.jsx",
   profile: "/profile",
   settings: "/settings"
