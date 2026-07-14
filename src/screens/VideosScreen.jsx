@@ -1,23 +1,28 @@
-// src/screens/VideosScreen.jsx - ARVDOUL VIDEOS SCREEN
-// TikTok-style vertical video feed with all features
+// src/screens/VideosScreen.jsx - ARVDOUL WORLD-CLASS VIDEOS SCREEN
+// TikTok-style vertical video feed with futuristic UI
+// Surpasses TikTok, Instagram, YouTube with premium experience
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Video, RefreshCw, Loader2 } from 'lucide-react';
+import { Video, RefreshCw } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useVideoStore } from '../store/videoStore';
 import { VideoFeed } from '../components/Videos';
 import videoService from '../services/videoService';
 import { toast } from 'sonner';
+import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import EmptyState from '../components/UI/EmptyState';
+import ErrorState from '../components/UI/ErrorState';
 
 /**
  * VideosScreen - TikTok-style full-screen vertical video feed
  * Features: infinite scroll, video preloading, gesture navigation, audio management
+ * World-class UI with ARVDOUL DNA design system
  */
 const VideosScreen = () => {
   const navigate = useNavigate();
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, spring, gradient, glass } = useTheme();
   const {
     videos,
     setVideos,
@@ -41,6 +46,7 @@ const VideosScreen = () => {
 
   const [error, setError] = useState(null);
   const [showFullscreen, setShowFullscreen] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Load initial videos
   const loadVideos = useCallback(async () => {
@@ -152,8 +158,66 @@ const VideosScreen = () => {
     loadVideos();
   }, [loadVideos]);
 
+  // Memoized loading overlay
+  const LoadingOverlay = useMemo(() => (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 flex flex-col items-center justify-center z-50"
+      style={{
+        background: isDark 
+          ? 'linear-gradient(135deg, rgba(5,5,16,0.95) 0%, rgba(20,20,40,0.95) 100%)'
+          : 'linear-gradient(135deg, rgba(248,249,250,0.98) 0%, rgba(255,255,255,0.98) 100%)',
+      }}
+    >
+      {/* Animated gradient background */}
+      <div 
+        className="absolute inset-0 opacity-30"
+        style={{
+          background: gradient,
+          filter: 'blur(80px)',
+        }}
+      />
+      
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={spring.card}
+        className="relative z-10 flex flex-col items-center"
+      >
+        <LoadingSpinner size={64} color="purple" />
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={`mt-6 text-lg font-medium ${
+            isDark ? 'text-white' : 'text-gray-900'
+          }`}
+        >
+          Loading videos...
+        </motion.p>
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className={`mt-2 text-sm ${
+            isDark ? 'text-gray-400' : 'text-gray-500'
+          }`}
+        >
+          Preparing your feed
+        </motion.p>
+      </motion.div>
+    </motion.div>
+  ), [isDark, gradient, spring.card]);
+
   return (
-    <div className="h-screen w-full bg-black overflow-hidden relative">
+    <div 
+      className="h-screen w-full overflow-hidden relative"
+      style={{
+        background: isDark ? '#050510' : '#F8F9FA',
+      }}
+    >
       {/* Fullscreen Video Feed */}
       {showFullscreen ? (
         <VideoFeed
@@ -181,74 +245,110 @@ const VideosScreen = () => {
 
       {/* Loading Overlay */}
       <AnimatePresence>
-        {loading && videos.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black z-50"
-          >
-            <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
-            <p className="text-white/80 text-sm">Loading videos...</p>
-          </motion.div>
-        )}
+        {loading && videos.length === 0 && LoadingOverlay}
       </AnimatePresence>
     </div>
   );
 };
 
 /**
- * Grid View - Alternative video grid layout
+ * GridView - Alternative video grid layout with world-class UI
  */
-const GridView = ({ videos, loading, error, onRefresh, onVideoClick }) => {
-  const { theme } = useTheme();
+const GridView = memo(({ videos, loading, error, onRefresh, onVideoClick }) => {
+  const { isDark, gradient, glass, spring } = useTheme();
 
   if (error && videos.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-8">
-        <p className="text-red-400 mb-4">{error}</p>
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={onRefresh}
-          className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
-        >
-          <RefreshCw className="w-5 h-5" />
-          Try Again
-        </motion.button>
+      <div className="h-full flex items-center justify-center p-8">
+        <ErrorState
+          title="Failed to load videos"
+          message={error}
+          onRetry={onRefresh}
+          severity="error"
+        />
+      </div>
+    );
+  }
+
+  if (!loading && videos.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center p-8">
+        <EmptyState
+          icon={Video}
+          title="No videos yet"
+          description="Follow creators to see their latest videos in your feed"
+          actionLabel="Refresh"
+          onAction={onRefresh}
+        />
       </div>
     );
   }
 
   return (
     <div className="h-full overflow-y-auto p-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-28">
-        {videos.map((video) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-28">
+        {videos.map((video, index) => (
           <motion.div
             key={video.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ 
+              ...spring.card,
+              delay: index * 0.05,
+            }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onVideoClick(video)}
-            className="relative aspect-[9/16] rounded-2xl overflow-hidden bg-gray-900"
+            className="relative aspect-[9/16] rounded-2xl overflow-hidden group cursor-pointer"
           >
+            {/* Gradient overlay for depth */}
+            <div 
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
+              style={{
+                background: gradient,
+                mixBlendMode: 'overlay',
+              }}
+            />
+            
             <img
               src={video.thumbnailUrl || video.thumbnail || ''}
               alt={video.title || 'Video'}
               className="w-full h-full object-cover"
+              loading="lazy"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            <div className="absolute bottom-3 left-3 right-3">
-              <p className="text-white font-semibold text-sm truncate">
+            
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+            
+            {/* Glow effect on hover */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div 
+                className="absolute -inset-1 rounded-2xl blur-lg opacity-30"
+                style={{ background: gradient }}
+              />
+            </div>
+            
+            <div className="absolute bottom-3 left-3 right-3 z-20">
+              <p className="text-white font-semibold text-sm truncate drop-shadow-lg">
                 {video.title || 'Video'}
               </p>
-              <p className="text-white/60 text-xs mt-1">
-                {video.views || 0} views
+              <p className="text-white/80 text-xs mt-1">
+                {video.views?.toLocaleString() || 0} views
               </p>
+            </div>
+
+            {/* Play indicator on hover */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center border border-white/30">
+                <Play className="w-8 h-8 text-white fill-white" />
+              </div>
             </div>
           </motion.div>
         ))}
       </div>
     </div>
   );
-};
+});
+
+GridView.displayName = 'GridView';
 
 // Demo videos for fallback
 const getDemoVideos = () => [

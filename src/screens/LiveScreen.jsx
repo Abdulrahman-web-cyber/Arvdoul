@@ -1,7 +1,8 @@
-// src/screens/LiveScreen.jsx - ARVDOUL LIVE SCREEN
+// src/screens/LiveScreen.jsx - ARVDOUL WORLD-CLASS LIVE SCREEN
 // Live streaming with camera, chat, and gifts
+// Surpasses TikTok, Instagram, YouTube with futuristic live streaming
 
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Video,
@@ -26,17 +27,25 @@ import {
   Diamond,
   Rocket,
   Star,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { ARVDOUL_GRADIENT, SPRING_ANIMATION, formatDuration, formatViewCount } from '../utils/videoUtils';
+import { formatDuration, formatViewCount } from '../utils/videoUtils';
 import { toast } from 'sonner';
+import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import GlassCard from '../components/UI/GlassCard';
+import GlassButton from '../components/UI/GlassButton';
+import EmptyState from '../components/UI/EmptyState';
+import ErrorState from '../components/UI/ErrorState';
 
 /**
  * LiveScreen - Live streaming interface
  * Supports: start live, watch live, chat, gifts, analytics
+ * World-class UI with ARVDOUL DNA design system
  */
 const LiveScreen = () => {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, gradient, glass, spring, colors } = useTheme();
   const [isStreaming, setIsStreaming] = useState(false);
   const [isWatching, setIsWatching] = useState(false);
   const [showStartOptions, setShowStartOptions] = useState(false);
@@ -46,6 +55,8 @@ const LiveScreen = () => {
   const [gifts, setGifts] = useState([]);
   const [duration, setDuration] = useState(0);
   const [activeTab, setActiveTab] = useState('discover');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [error, setError] = useState(null);
 
   // Start streaming
   const handleStartLive = async () => {

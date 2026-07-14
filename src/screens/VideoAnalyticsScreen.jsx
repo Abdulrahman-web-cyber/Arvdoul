@@ -1,7 +1,8 @@
-// src/screens/VideoAnalyticsScreen.jsx - ARVDOUL VIDEO ANALYTICS SCREEN
+// src/screens/VideoAnalyticsScreen.jsx - ARVDOUL WORLD-CLASS VIDEO ANALYTICS SCREEN
 // Creator dashboard with video performance metrics
+// Surpasses TikTok, Instagram, YouTube with futuristic analytics
 
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Video,
@@ -18,21 +19,29 @@ import {
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
+  BarChart3,
+  PieChart,
+  TrendingUp as TrendingUpIcon,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { ARVDOUL_GRADIENT, formatViewCount, formatDuration, formatWatchTime } from '../utils/videoUtils';
-import { SPRING_ANIMATION } from '../utils/videoUtils';
+import { formatViewCount, formatDuration, formatWatchTime } from '../utils/videoUtils';
 import { toast } from 'sonner';
+import LoadingSpinner from '../components/Shared/LoadingSpinner';
+import GlassCard from '../components/UI/GlassCard';
+import GlassButton from '../components/UI/GlassButton';
+import EmptyState from '../components/UI/EmptyState';
 
 /**
  * VideoAnalyticsScreen - Creator dashboard with analytics
  * Shows video performance, audience insights, and revenue
+ * World-class UI with ARVDOUL DNA design system
  */
 const VideoAnalyticsScreen = () => {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, gradient, glass, spring, colors } = useTheme();
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Demo analytics data
   const [analytics] = useState({
