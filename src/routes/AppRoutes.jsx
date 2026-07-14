@@ -46,6 +46,8 @@ const SearchScreen = lazy(() => import("../screens/SearchScreen.jsx"));
 const SavedScreen = lazy(() => import("../screens/SavedScreen.jsx"));
 const CollectionsScreen = lazy(() => import("../screens/CollectionsScreen.jsx"));
 const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
+// Video Analytics Screen
+const VideoAnalyticsScreen = lazy(() => import("../screens/VideoAnalyticsScreen.jsx"));
 
 // ==================== LOADING COMPONENT ====================
 const RouteFallback = () => (
@@ -428,6 +430,15 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <LiveScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Video Analytics */}
+      <Route path="/video-analytics" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VideoAnalyticsScreen />
           </Suspense>
         </ProtectedRoute>
       } />
