@@ -586,4 +586,4 @@ const RevenueTab = ({ revenue }) => {
   );
 };
 
-export default VideoAnalyticsScreen;
+export default React.memo(VideoAnalyticsScreen);

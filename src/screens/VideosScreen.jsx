@@ -354,4 +354,4 @@ const getDemoVideos = () => [
   },
 ];
 
-export default VideosScreen;
+export default React.memo(VideosScreen);
