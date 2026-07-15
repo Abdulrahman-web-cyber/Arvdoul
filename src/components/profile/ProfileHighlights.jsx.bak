@@ -73,7 +73,7 @@ const ProfileHighlights = ({
     <div className="py-4">
       <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
         {/* Highlights */}
-        {(Array.isArray(highlights) ? highlights : Object.values(highlights || {})).map((highlight) => (
+        {highlights.map((highlight) => (
           <button
             key={highlight.id}
             onClick={() => handlePress(highlight)}

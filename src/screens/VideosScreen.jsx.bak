@@ -2,7 +2,7 @@
 // TikTok-style vertical video feed with futuristic UI
 // Surpasses TikTok, Instagram, YouTube with premium experience
 
-import React, { useState, useEffect, useCallback, useRef, useMemo, memo} from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Video, RefreshCw } from 'lucide-react';
