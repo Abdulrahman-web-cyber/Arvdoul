@@ -17,7 +17,7 @@ export const useMediaQuery = (query) => {
     const mediaQuery = window.matchMedia(query);
     const handleChange = () => setMatches(mediaQuery.matches);
 
-    handleChange(); \/\/ Set initial match
+    handleChange(); // Set initial match
     mediaQuery.addEventListener("change", handleChange);
 
     return () => mediaQuery.removeEventListener("change", handleChange);
@@ -25,3 +25,5 @@ export const useMediaQuery = (query) => {
 
   return matches;
 };
+
+export default useMediaQuery;
