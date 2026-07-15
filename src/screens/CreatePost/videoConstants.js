@@ -246,32 +246,32 @@ export const TRANSITIONS_TYPES = {
 
 export const TRANSITIONS = [
   // Basic
-  { id: 'none', name: 'None', type: TRANSITION_TYPES.CUT, duration: 0, icon: 'scissors' },
-  { id: 'dissolve', name: 'Dissolve', type: TRANSITION_TYPES.DISSOLVE, duration: 500, icon: 'droplets' },
-  { id: 'fade', name: 'Fade', type: TRANSITION_TYPES.FADE, duration: 500, icon: 'sunset' },
-  { id: 'black-fade', name: 'Black Fade', type: TRANSITION_TYPES.FADE, duration: 500, icon: 'moon' },
-  { id: 'white-fade', name: 'White Fade', type: TRANSITION_TYPES.FADE, duration: 500, icon: 'sun' },
+  { id: 'none', name: 'None', type: TRANSITIONS_TYPES.CUT, duration: 0, icon: 'scissors' },
+  { id: 'dissolve', name: 'Dissolve', type: TRANSITIONS_TYPES.DISSOLVE, duration: 500, icon: 'droplets' },
+  { id: 'fade', name: 'Fade', type: TRANSITIONS_TYPES.FADE, duration: 500, icon: 'sunset' },
+  { id: 'black-fade', name: 'Black Fade', type: TRANSITIONS_TYPES.FADE, duration: 500, icon: 'moon' },
+  { id: 'white-fade', name: 'White Fade', type: TRANSITIONS_TYPES.FADE, duration: 500, icon: 'sun' },
   // Wipes
-  { id: 'wipe-left', name: 'Wipe Left', type: TRANSITION_TYPES.WIPE, duration: 400, icon: 'arrow-left' },
-  { id: 'wipe-right', name: 'Wipe Right', type: TRANSITION_TYPES.WIPE, duration: 400, icon: 'arrow-right' },
-  { id: 'wipe-up', name: 'Wipe Up', type: TRANSITION_TYPES.WIPE, duration: 400, icon: 'arrow-up' },
-  { id: 'wipe-down', name: 'Wipe Down', type: TRANSITION_TYPES.WIPE, duration: 400, icon: 'arrow-down' },
-  { id: 'wipe-circle', name: 'Circle Wipe', type: TRANSITION_TYPES.WIPE, duration: 500, icon: 'circle' },
-  { id: 'wipe-star', name: 'Star Wipe', type: TRANSITION_TYPES.WIPE, duration: 500, icon: 'star' },
+  { id: 'wipe-left', name: 'Wipe Left', type: TRANSITIONS_TYPES.WIPE, duration: 400, icon: 'arrow-left' },
+  { id: 'wipe-right', name: 'Wipe Right', type: TRANSITIONS_TYPES.WIPE, duration: 400, icon: 'arrow-right' },
+  { id: 'wipe-up', name: 'Wipe Up', type: TRANSITIONS_TYPES.WIPE, duration: 400, icon: 'arrow-up' },
+  { id: 'wipe-down', name: 'Wipe Down', type: TRANSITIONS_TYPES.WIPE, duration: 400, icon: 'arrow-down' },
+  { id: 'wipe-circle', name: 'Circle Wipe', type: TRANSITIONS_TYPES.WIPE, duration: 500, icon: 'circle' },
+  { id: 'wipe-star', name: 'Star Wipe', type: TRANSITIONS_TYPES.WIPE, duration: 500, icon: 'star' },
   // Slides
-  { id: 'slide-left', name: 'Slide Left', type: TRANSITION_TYPES.SLIDE, duration: 400, icon: 'chevron-left' },
-  { id: 'slide-right', name: 'Slide Right', type: TRANSITION_TYPES.SLIDE, duration: 400, icon: 'chevron-right' },
-  { id: 'slide-up', name: 'Slide Up', type: TRANSITION_TYPES.SLIDE, duration: 400, icon: 'chevron-up' },
-  { id: 'slide-down', name: 'Slide Down', type: TRANSITION_TYPES.SLIDE, duration: 400, icon: 'chevron-down' },
+  { id: 'slide-left', name: 'Slide Left', type: TRANSITIONS_TYPES.SLIDE, duration: 400, icon: 'chevron-left' },
+  { id: 'slide-right', name: 'Slide Right', type: TRANSITIONS_TYPES.SLIDE, duration: 400, icon: 'chevron-right' },
+  { id: 'slide-up', name: 'Slide Up', type: TRANSITIONS_TYPES.SLIDE, duration: 400, icon: 'chevron-up' },
+  { id: 'slide-down', name: 'Slide Down', type: TRANSITIONS_TYPES.SLIDE, duration: 400, icon: 'chevron-down' },
   // Zooms
-  { id: 'zoom-in', name: 'Zoom In', type: TRANSITION_TYPES.ZOOM, duration: 400, icon: 'zoom-in' },
-  { id: 'zoom-out', name: 'Zoom Out', type: TRANSITION_TYPES.ZOOM, duration: 400, icon: 'zoom-out' },
-  { id: 'cross-zoom', name: 'Cross Zoom', type: TRANSITION_TYPES.ZOOM, duration: 500, icon: 'maximize-2' },
+  { id: 'zoom-in', name: 'Zoom In', type: TRANSITIONS_TYPES.ZOOM, duration: 400, icon: 'zoom-in' },
+  { id: 'zoom-out', name: 'Zoom Out', type: TRANSITIONS_TYPES.ZOOM, duration: 400, icon: 'zoom-out' },
+  { id: 'cross-zoom', name: 'Cross Zoom', type: TRANSITIONS_TYPES.ZOOM, duration: 500, icon: 'maximize-2' },
   // Effects
-  { id: 'blur', name: 'Blur', type: TRANSITION_TYPES.BLUR, duration: 500, icon: 'blur' },
-  { id: 'pixelate', name: 'Pixelate', type: TRANSITION_TYPES.BLUR, duration: 500, icon: 'grid' },
-  { id: 'glitch', name: 'Glitch', type: TRANSITION_TYPES.BLUR, duration: 400, icon: 'zap' },
-  { id: 'flash', name: 'Flash', type: TRANSITION_TYPES.FADE, duration: 200, icon: 'lightning' },
+  { id: 'blur', name: 'Blur', type: TRANSITIONS_TYPES.BLUR, duration: 500, icon: 'blur' },
+  { id: 'pixelate', name: 'Pixelate', type: TRANSITIONS_TYPES.BLUR, duration: 500, icon: 'grid' },
+  { id: 'glitch', name: 'Glitch', type: TRANSITIONS_TYPES.BLUR, duration: 400, icon: 'zap' },
+  { id: 'flash', name: 'Flash', type: TRANSITIONS_TYPES.FADE, duration: 200, icon: 'lightning' },
 ];
 
 // ==================== EFFECTS PRESETS ====================
@@ -503,6 +503,7 @@ export function generateVideoId() {
   }
   return `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
+
 
 /**
  * Format time in milliseconds to MM:SS:FF format
