@@ -1,0 +1,1 @@
+import{n as e,t}from"./jsx-runtime-eu958idE.js";e();var n=t();function r(){return(0,n.jsx)(`div`,{className:`w-full max-w-md text-center text-gray-400 text-sm py-6`,children:`GIF picker coming soon – search and add GIFs to your image.`})}export{r as default};

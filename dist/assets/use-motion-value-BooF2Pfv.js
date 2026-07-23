@@ -1,1 +1,0 @@
-import{c as e,n as t}from"./jsx-runtime-eu958idE.js";import{_ as n,c as r,p as i}from"./motion-B3q5-htu.js";var a=e(t(),1);function o(e){let t=i(()=>r(e)),{isStatic:o}=(0,a.useContext)(n);if(o){let[,n]=(0,a.useState)(e);(0,a.useEffect)(()=>t.on(`change`,n),[])}return t}export{o as t};
