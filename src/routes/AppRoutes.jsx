@@ -66,6 +66,19 @@ const AdminUserManagementScreen = lazy(() => import("../screens/Admin/AdminUserM
 const AdminContentManagementScreen = lazy(() => import("../screens/Admin/AdminContentManagementScreen.jsx"));
 const AdminModerationQueueScreen = lazy(() => import("../screens/Admin/AdminModerationQueueScreen.jsx"));
 
+// Video Editor Screen
+const VideoEditorScreen = lazy(() => import("../screens/VideoEditor/VideoEditorScreen.jsx"));
+
+// Audio Editor Screen
+const AudioEditorScreen = lazy(() => import("../screens/AudioEditor/AudioEditorScreen.jsx"));
+
+// Thumbnail Designer Screen
+const ThumbnailDesignerScreen = lazy(() => import("../screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx"));
+
+// Rankings Screen
+const RankingsScreen = lazy(() => import("../screens/Rankings/RankingsScreen.jsx"));
+const ReputationScreen = lazy(() => import("../screens/Rankings/ReputationScreen.jsx"));
+
 // ==================== LOADING COMPONENT ====================
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
@@ -547,6 +560,50 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <AdminModerationQueueScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Video Editor Route */}
+      <Route path="/video-editor" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VideoEditorScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Audio Editor Route */}
+      <Route path="/audio-editor" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AudioEditorScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Thumbnail Designer Route */}
+      <Route path="/thumbnail-designer" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ThumbnailDesignerScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Rankings Routes */}
+      <Route path="/rankings" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <RankingsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/reputation/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ReputationScreen />
           </Suspense>
         </ProtectedRoute>
       } />
