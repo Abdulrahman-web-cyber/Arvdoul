@@ -49,6 +49,23 @@ const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
 // Video Analytics Screen
 const VideoAnalyticsScreen = lazy(() => import("../screens/VideoAnalyticsScreen.jsx"));
 
+// Community Screens
+const CommunityDirectoryScreen = lazy(() => import("../screens/Community/CommunityDirectoryScreen.jsx"));
+const CreateCommunityScreen = lazy(() => import("../screens/Community/CreateCommunityScreen.jsx"));
+const CommunityDetailScreen = lazy(() => import("../screens/Community/CommunityDetailScreen.jsx"));
+const CommunitySettingsScreen = lazy(() => import("../screens/Community/CommunitySettingsScreen.jsx"));
+
+// Event Screens
+const EventDiscoveryScreen = lazy(() => import("../screens/Event/EventDiscoveryScreen.jsx"));
+const CreateEventScreen = lazy(() => import("../screens/Event/CreateEventScreen.jsx"));
+const EventDetailScreen = lazy(() => import("../screens/Event/EventDetailScreen.jsx"));
+
+// Admin Screens
+const AdminDashboardScreen = lazy(() => import("../screens/Admin/AdminDashboardScreen.jsx"));
+const AdminUserManagementScreen = lazy(() => import("../screens/Admin/AdminUserManagementScreen.jsx"));
+const AdminContentManagementScreen = lazy(() => import("../screens/Admin/AdminContentManagementScreen.jsx"));
+const AdminModerationQueueScreen = lazy(() => import("../screens/Admin/AdminModerationQueueScreen.jsx"));
+
 // ==================== LOADING COMPONENT ====================
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
@@ -439,6 +456,97 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <VideoAnalyticsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* ========== COMMUNITY ROUTES ========== */}
+      <Route path="/community" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CommunityDirectoryScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/community/create" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreateCommunityScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/community/:communityId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CommunityDetailScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/community/:communityId/settings" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CommunitySettingsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* ========== EVENT ROUTES ========== */}
+      <Route path="/event" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <EventDiscoveryScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/event/create" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreateEventScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/event/:eventId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <EventDetailScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* ========== ADMIN ROUTES ========== */}
+      <Route path="/admin" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminDashboardScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/admin/users" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminUserManagementScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/admin/content" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminContentManagementScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/admin/moderation" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminModerationQueueScreen />
           </Suspense>
         </ProtectedRoute>
       } />
