@@ -82,6 +82,9 @@ const ReputationScreen = lazy(() => import("../screens/Rankings/ReputationScreen
 // Collaboration Screen
 const CollaborationScreen = lazy(() => import("../screens/Collaboration/CollaborationScreen.jsx"));
 
+// Menu Screen
+const MenuScreen = lazy(() => import("../screens/Menu/MenuScreen.jsx"));
+
 // ==================== LOADING COMPONENT ====================
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
@@ -616,6 +619,15 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <CollaborationScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Menu Route */}
+      <Route path="/menu" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <MenuScreen />
           </Suspense>
         </ProtectedRoute>
       } />
