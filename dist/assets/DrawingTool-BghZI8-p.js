@@ -1,1 +1,0 @@
-import{n as e,t}from"./jsx-runtime-eu958idE.js";e();var n=t();function r(){return(0,n.jsx)(`div`,{className:`w-full max-w-md text-center text-gray-400 text-sm py-6`,children:`Drawing tools will be available in a future update.`})}export{r as default};
