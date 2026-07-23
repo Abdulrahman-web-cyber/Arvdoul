@@ -20,8 +20,28 @@
 
 import { getFirestoreInstance, getAuthInstance, getMessagingInstance } from '../firebase/firebase.js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { openDB } from 'idb'; // ✅ real IndexedDB promise library
-import QuickLRU from 'quick-lru'; // ✅ proper LRU
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  arrayUnion,
+  arrayRemove,
+  increment,
+  writeBatch,
+  runTransaction
+} from 'firebase/firestore';
+import { openDB } from 'idb';
+import QuickLRU from 'quick-lru';
 
 // ----------------------------------------------------------------------
 // SAFE BROWSER GLOBALS

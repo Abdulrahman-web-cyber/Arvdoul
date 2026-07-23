@@ -3,8 +3,8 @@
 // ✅ Registration management
 // ✅ Event analytics
 
+import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
-  getFirestoreInstance,
   collection,
   doc,
   getDoc,
@@ -21,7 +21,7 @@ import {
   arrayUnion,
   arrayRemove,
   increment
-} from '../firebase/firebase.js';
+} from 'firebase/firestore';
 
 const EVENTS_PER_PAGE = 20;
 

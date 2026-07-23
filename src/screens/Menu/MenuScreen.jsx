@@ -10,13 +10,13 @@ import {
   FaUsers, FaVideo, FaMusic, FaImage, FaCalendar, FaComments,
   FaCrown, FaShieldAlt, FaPaintBrush, FaQuestionCircle, FaInfo,
   FaSignOutAlt, FaChevronRight, FaStar, FaHeart, FaBookmark,
-  FaPlay, FaTrophy, FaRocket, FaPaintRoller, FaMicrophone,
-  FaLayerGroup, FaPuzzlePiece, FaGift, FaCoins, FaGem, FaDiamond, 
+  FaPlay, FaTrophy, FaRocket, FaMicrophone,
+  FaLayerGroup, FaPuzzlePiece, FaGift, FaCoins, FaGem, 
   FaFire, FaBolt, FaGlobe, FaClock, FaHistory,
   FaPlayCircle, FaMicrophoneAlt, FaPlusCircle, FaArrowUp, FaArrowDown,
   FaTwitter, FaInstagram, FaDiscord, FaYoutube, FaTiktok,
   FaFacebook, FaGithub, FaLinkedin, FaReddit, FaSnapchat, FaSpotify,
-  FaTimes
+  FaTimes, FaMedal, FaGem as FaGemAlt, FaRocket as FaRocketAlt
 } from 'react-icons/fa';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';

@@ -4,8 +4,8 @@
 // ✅ Role-based permissions
 // ✅ Moderation features
 
+import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
-  getFirestoreInstance,
   collection,
   doc,
   getDoc,
@@ -22,7 +22,7 @@ import {
   arrayUnion,
   arrayRemove,
   increment
-} from '../firebase/firebase.js';
+} from 'firebase/firestore';
 
 const COMMUNITIES_PER_PAGE = 20;
 
