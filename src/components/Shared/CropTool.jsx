@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, memo } from "react";
+import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion } from "framer-motion";
 import {
@@ -44,6 +45,7 @@ const AspectButton = memo(({
   isActive,
   onClick,
 }) => {
+    const { isDark } = useTheme();
   const Icon = ratio.icon || Maximize;
   
   return (
@@ -105,6 +107,7 @@ const CropTool = memo(({
   flipH = false,
   flipV = false,
 }) => {
+    const { isDark } = useTheme();
   const [showAdvanced, setShowAdvanced] = useState(false);
   
   const handleAspectChange = useCallback((newAspect) => {
@@ -129,7 +132,7 @@ const CropTool = memo(({
       {/* Aspect Ratio Selection */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+          <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
             Aspect Ratio
           </span>
           <button
@@ -178,7 +181,7 @@ const CropTool = memo(({
         {/* Current aspect indicator */}
         <div className="flex items-center justify-center gap-2 py-2">
           <Grid3X3 className="w-4 h-4 text-white/40" />
-          <span className="text-xs text-white/60">
+          <span className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'}`}>
             {aspect ? ASPECT_RATIOS.find(r => r.value === aspect)?.label : 'Free'}
           </span>
         </div>
@@ -187,7 +190,7 @@ const CropTool = memo(({
       {/* Zoom Control */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+          <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
             Zoom
           </span>
           <span className="text-xs text-white/50 tabular-nums">
@@ -198,14 +201,14 @@ const CropTool = memo(({
         <div className="flex items-center gap-3">
           <button
             onClick={() => handleZoomChange(Math.max(1, zoom - 0.1))}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            className={`w-8 h-8 flex items-center justify-center rounded-lg \${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 transition-colors`}
             aria-label="Zoom out"
           >
-            <ZoomOut className="w-4 h-4 text-white/70" />
+            <ZoomOut className={`w-4 h-4 \${isDark ? 'text-white/70' : 'text-gray-600'}`} />
           </button>
           
           <div className="relative flex-1 h-8 flex items-center">
-            <div className="absolute inset-x-0 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className={`absolute inset-x-0 h-1.5 rounded-full \${isDark ? 'bg-white/10' : 'bg-black/5'} overflow-hidden`}>
               <motion.div
                 className="h-full rounded-full"
                 style={{
@@ -238,10 +241,10 @@ const CropTool = memo(({
           
           <button
             onClick={() => handleZoomChange(Math.min(3, zoom + 0.1))}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            className={`w-8 h-8 flex items-center justify-center rounded-lg \${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 transition-colors`}
             aria-label="Zoom in"
           >
-            <ZoomIn className="w-4 h-4 text-white/70" />
+            <ZoomIn className={`w-4 h-4 \${isDark ? 'text-white/70' : 'text-gray-600'}`} />
           </button>
         </div>
       </div>
@@ -249,7 +252,7 @@ const CropTool = memo(({
       {/* Rotation & Flip Controls */}
       {(onRotateLeft || onRotateRight || onFlipH || onFlipV) && (
         <div className="space-y-2">
-          <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+          <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
             Adjust
           </span>
           
@@ -259,11 +262,11 @@ const CropTool = memo(({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={onRotateLeft}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 transition-colors`}
                 aria-label="Rotate left 90 degrees"
               >
-                <RotateCcw className="w-4 h-4 text-white/70" />
-                <span className="text-xs text-white/70">-90°</span>
+                <RotateCcw className={`w-4 h-4 \${isDark ? 'text-white/70' : 'text-gray-600'}`} />
+                <span className={`text-xs \${isDark ? 'text-white/70' : 'text-gray-600'}`}>-90°</span>
               </motion.button>
             )}
             
@@ -272,11 +275,11 @@ const CropTool = memo(({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={onRotateRight}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 transition-colors`}
                 aria-label="Rotate right 90 degrees"
               >
-                <RotateCw className="w-4 h-4 text-white/70" />
-                <span className="text-xs text-white/70">+90°</span>
+                <RotateCw className={`w-4 h-4 \${isDark ? 'text-white/70' : 'text-gray-600'}`} />
+                <span className={`text-xs \${isDark ? 'text-white/70' : 'text-gray-600'}`}>+90°</span>
               </motion.button>
             )}
           </div>
@@ -328,7 +331,7 @@ const CropTool = memo(({
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         onClick={handleReset}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+        className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 text-white/80 transition-colors`}
       >
         <RefreshCw className="w-4 h-4" />
         <span className="text-sm font-medium">Reset Crop</span>

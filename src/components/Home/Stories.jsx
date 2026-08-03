@@ -2,6 +2,8 @@
 import PropTypes from 'prop-types';
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Plus, X, Volume2, VolumeX } from "lucide-react";
+import { lazy, Suspense } from "react";
+const AddStoryModal = lazy(() => import("../Stories/AddStoryModal"));
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
@@ -18,6 +20,7 @@ export default function Stories() {
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeStory, setActiveStory] = useState(null);
+  const [showAddStory, setShowAddStory] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [muted, setMuted] = useState(true);
   const { currentUser } = useAuth();
@@ -119,8 +122,7 @@ export default function Stories() {
 
   // ---------------- Add Story Modal ----------------
   const handleAddStory = () => {
-    // TODO: integrate Add Story modal
-    console.log("Trigger Add Story Modal");
+    setShowAddStory(true);
   };
 
   // ---------------- Progress bars ----------------
@@ -218,6 +220,12 @@ export default function Stories() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {showAddStory && (
+        <Suspense fallback={null}>
+          <AddStoryModal onClose={() => setShowAddStory(false)} />
+        </Suspense>
+      )}
     </>
   );
 }

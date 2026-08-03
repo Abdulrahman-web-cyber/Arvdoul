@@ -2,8 +2,20 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+// Strips console.* statements from production bundles (keeps dev logs).
+function stripConsolePlugin() {
+  return {
+    name: 'strip-console',
+    transform(code, id) {
+      if (id.includes('node_modules')) return null;
+      // Only strip simple calls (no nested parens) — safe against mangling.
+      return code.replace(/\bconsole\.(log|debug|info)\([^()\n]*\)\s*;/g, '');
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), process.env.NODE_ENV === 'production' ? stripConsolePlugin() : null].filter(Boolean),
   server: {
     host: true,
     port: 5173,

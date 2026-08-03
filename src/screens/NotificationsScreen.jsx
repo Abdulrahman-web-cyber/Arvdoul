@@ -4,6 +4,7 @@ import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import * as ReactWindow from 'react-window';
 const { FixedSizeList: List } = ReactWindow;
 import {
@@ -108,7 +109,7 @@ const SettingsModal = ({ isOpen, onClose, preferences, onUpdate, loading }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+      <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto border border-gray-200/50 dark:border-gray-800/50 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Notification Settings</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
@@ -218,6 +219,7 @@ class ErrorBoundary extends React.Component {
 // Main Component
 // ----------------------------------------------------------------------
 const NotificationsScreen = ({ userId }) => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -438,6 +440,7 @@ const NotificationsScreen = ({ userId }) => {
   }, [currentUserId, isServiceReady]);
 
   // Handle notification click
+  // Deep-link every notification type to its real destination.
   const handleNotificationClick = useCallback(
     (notification) => {
       if (notification.sponsored && notification.actionUrl) {
@@ -447,12 +450,73 @@ const NotificationsScreen = ({ userId }) => {
       if (!notification.read) {
         handleMarkAsRead(notification.id);
       }
-      if (notification.targetId) {
-        // Navigate (replace with your router)
-        console.log('Navigate to:', notification.targetId, notification.type);
+      const { type, targetId, senderId, metadata = {} } = notification;
+      const postId = targetId || metadata?.postId;
+      const conversationId = metadata?.conversationId || targetId;
+      const userId = targetId || senderId;
+
+      switch (type) {
+        // Content engagement → the post
+        case NOTIFICATION_TYPES.LIKE:
+        case NOTIFICATION_TYPES.COMMENT:
+        case NOTIFICATION_TYPES.REPLY:
+        case NOTIFICATION_TYPES.MENTION:
+        case NOTIFICATION_TYPES.SHARE:
+        case NOTIFICATION_TYPES.REPOST:
+        case NOTIFICATION_TYPES.QUOTE:
+          if (postId) navigate(`/post/${postId}`);
+          break;
+        // Social graph → the user's profile (follow requests → network)
+        case NOTIFICATION_TYPES.FOLLOW:
+        case NOTIFICATION_TYPES.FOLLOW_ACCEPTED:
+        case NOTIFICATION_TYPES.FRIEND_REQUEST:
+        case NOTIFICATION_TYPES.FRIEND_ACCEPTED:
+          if (userId && userId !== 'system') navigate(`/profile/${userId}`);
+          else navigate('/network');
+          break;
+        case NOTIFICATION_TYPES.FOLLOW_REQUEST:
+          navigate('/network');
+          break;
+        // Messaging → the conversation
+        case NOTIFICATION_TYPES.MESSAGE:
+        case NOTIFICATION_TYPES.GROUP_MESSAGE:
+        case NOTIFICATION_TYPES.MESSAGE_REQUEST:
+          if (conversationId) navigate(`/messages/${conversationId}`);
+          else navigate('/messages');
+          break;
+        // Monetization → wallet
+        case NOTIFICATION_TYPES.COINS_EARNED:
+        case NOTIFICATION_TYPES.COIN_REWARD:
+        case NOTIFICATION_TYPES.GIFT_RECEIVED:
+        case NOTIFICATION_TYPES.PAYMENT_RECEIVED:
+          navigate('/coins');
+          break;
+        // Live → live directory
+        case NOTIFICATION_TYPES.LIVE_STARTED:
+          navigate('/live');
+          break;
+        // Achievements / levels → own profile
+        case NOTIFICATION_TYPES.ACHIEVEMENT_UNLOCKED:
+        case NOTIFICATION_TYPES.LEVEL_UP:
+        case NOTIFICATION_TYPES.BADGE_EARNED:
+        case NOTIFICATION_TYPES.ROYALTY_PROMOTION:
+          navigate('/profile/me');
+          break;
+        // System / security / moderation → settings
+        case NOTIFICATION_TYPES.SYSTEM_ALERT:
+        case NOTIFICATION_TYPES.SECURITY_ALERT:
+        case NOTIFICATION_TYPES.POST_APPROVED:
+        case NOTIFICATION_TYPES.POST_DENIED:
+        case NOTIFICATION_TYPES.VIDEO_UPLOADED:
+        case NOTIFICATION_TYPES.TRENDING:
+          navigate('/settings');
+          break;
+        default:
+          if (postId) navigate(`/post/${postId}`);
+          else if (userId && userId !== 'system') navigate(`/profile/${userId}`);
       }
     },
-    [handleMarkAsRead]
+    [handleMarkAsRead, navigate]
   );
 
   // Toggle selection for batch
@@ -485,10 +549,12 @@ const NotificationsScreen = ({ userId }) => {
       <div style={style} className="relative">
         <div
           className={`
-            flex items-start gap-3 p-4 border-b border-gray-100 dark:border-gray-800
-            hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors cursor-pointer
-            ${isUnread ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-            ${isSponsored ? 'bg-pink-50 dark:bg-pink-900/10' : ''}
+            flex items-start gap-3 p-4 my-1.5 mx-2 rounded-2xl border border-gray-200/50 dark:border-gray-800/50
+            bg-white/70 dark:bg-gray-900/60 backdrop-blur-md
+            shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)]
+            hover:shadow-[0_8px_30px_rgba(139,92,246,0.12)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer
+            ${isUnread ? 'bg-blue-50/80 dark:bg-blue-900/30 ring-1 ring-blue-400/30' : ''}
+            ${isSponsored ? 'bg-pink-50/80 dark:bg-pink-900/20' : ''}
             ${isSelected ? 'ring-2 ring-blue-500' : ''}
           `}
           onClick={() => handleNotificationClick(notification)}
@@ -583,8 +649,8 @@ const NotificationsScreen = ({ userId }) => {
   // Loading states
   if (!isServiceReady && !error) {
     return (
-      <div className="max-w-3xl mx-auto bg-white dark:bg-gray-950 min-h-screen">
-        <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div className="max-w-3xl mx-auto min-h-screen bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] dark:from-[#060816] dark:via-[#0b1220] dark:to-[#02040a]">
+        <div className="sticky top-0 z-10 bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60 px-4 py-3 flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Notifications</h1>
         </div>
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -619,8 +685,8 @@ const NotificationsScreen = ({ userId }) => {
 
   // Main render
   return (
-    <div className="max-w-3xl mx-auto bg-white dark:bg-gray-950 min-h-screen">
-      <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
+    <div className="max-w-3xl mx-auto min-h-screen bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] dark:from-[#060816] dark:via-[#0b1220] dark:to-[#02040a]">
+      <div className="sticky top-0 z-10 bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60 px-4 py-3 flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900 dark:text-white">Notifications</h1>
         <div className="flex items-center gap-2">
           {selectedIds.size > 0 && (

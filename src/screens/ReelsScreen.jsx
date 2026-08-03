@@ -1,307 +1,220 @@
-// src/screens/ReelsScreen.jsx
-import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, Share2, Volume2, VolumeX, Play, Pause, Loader2, MoreVertical } from "lucide-react";
-import { toast } from "sonner";
+// src/screens/ReelsScreen.jsx - ARVDOUL REELS (PRODUCTION)
+// Full-screen vertical video feed backed by the videos collection and
+// videoService (real views, real likes, cursor pagination).
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { Heart, MessageCircle, Share2, Volume2, VolumeX, Loader2, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '@context/ThemeContext';
+import { getFirestoreInstance } from '../firebase/firebase';
+import { collection, query, where, orderBy, limit, startAfter, getDocs, doc as fDoc, getDoc } from 'firebase/firestore';
+import videoService from '../services/videoService';
 
-import { db } from "../firebase/firebase";
-import { collection, query, orderBy, limit, getDocs, doc, updateDoc, arrayUnion, arrayRemove, increment, onSnapshot } from "firebase/firestore";
-
-import { useAuth } from "../context/AuthContext";
-import { cn } from "../lib/utils";
-
-import CommentsDrawer from "../components/Videos/CommentsDrawer";
-import Watermark from "../components/Videos/Watermark";
-import AdsSlot from "../components/Ads/AdsSlot";
-import * as recsService from "../lib/recsService";
-
-/** utils */
-const isVideoItem = (m) => m?.type === "video" || (m?.mime && m.mime.startsWith?.("video/"));
-const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
-const fmt = (s) => {
-  if (!Number.isFinite(s)) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec < 10 ? "0" : ""}${sec}`;
-};
-const VIEW_MS = 1000;
+const PAGE_SIZE = 10;
 
 export default function ReelsScreen() {
   const navigate = useNavigate();
-  const { user, followUser } = useAuth();
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
-  const [posts, setPosts] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [commentsFor, setCommentsFor] = useState(null);
-
-  const rewarded = useRef(new Set());
-  const containerRef = useRef(null);
-  const ioRef = useRef(null);
+  const [muted, setMuted] = useState(true);
+  const lastDocRef = useRef(null);
+  const hasMoreRef = useRef(true);
+  const loadingMoreRef = useRef(false);
   const videoRefs = useRef({});
-  const progressRefs = useRef({});
-  const impressed = useRef(new Set());
+  const viewedRef = useRef(new Set());
 
-  // Load feed: recommended or fallback to recent
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
+  const loadPage = useCallback(async (next = false) => {
+    if (loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    if (!next) setLoading(true);
+    try {
+      const firestore = await getFirestoreInstance();
+      const videosRef = collection(firestore, 'videos');
+      let q = query(
+        videosRef,
+        where('isDeleted', '==', false),
+        where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'),
+        limit(PAGE_SIZE)
+      );
+      if (next && lastDocRef.current) q = query(q, startAfter(lastDocRef.current));
 
-    (async () => {
-      try {
-        const recs = await recsService.getRecommendations({ userId: user?.uid });
-        if (!mounted) return;
-        setPosts(recs);
-      } catch (e) {
-        console.warn("recs failed, fallback", e);
-        const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
-        const snap = await getDocs(q);
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => Array.isArray(p?.media) && p.media.some(isVideoItem));
-        if (!mounted) return;
-        setPosts(list);
-      } finally {
-        if (mounted) setLoading(false);
+      const snap = await getDocs(q);
+      if (snap.empty && !next) { setVideos([]); hasMoreRef.current = false; }
+      else {
+        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setVideos((prev) => (next ? [...prev, ...items] : items));
+        lastDocRef.current = snap.docs[snap.docs.length - 1] || null;
+        hasMoreRef.current = snap.docs.length === PAGE_SIZE;
       }
-    })();
+    } catch (err) {
+      setError('Could not load reels.');
+    } finally {
+      loadingMoreRef.current = false;
+      setLoading(false);
+    }
+  }, []);
 
-    return () => (mounted = false);
-  }, [user?.uid]);
+  useEffect(() => { loadPage(false); }, [loadPage]);
 
-  // Real-time meta updates (likes/comments)
+  // Record a real view when a reel becomes active.
   useEffect(() => {
-    const unsubscribers = [];
-    const ids = posts.map(p => p.id).slice(0, 30);
-    ids.forEach(id => {
-      const refDoc = doc(db, "posts", id);
-      const unsub = onSnapshot(refDoc, snap => {
-        const data = snap.exists() ? snap.data() : null;
-        if (data) setPosts(prev => prev.map(p => (p.id === id ? { ...p, ...data } : p)));
-      }, err => console.warn("post meta onSnapshot err", err));
-      unsubscribers.push(unsub);
+    const video = videos[activeIndex];
+    if (!video || !user?.uid || viewedRef.current.has(video.id)) return;
+    viewedRef.current.add(video.id);
+    videoService.recordVideoView(video.id, { duration: 3 }).catch(() => {});
+    // Pause off-screen videos.
+    Object.entries(videoRefs.current).forEach(([id, el]) => {
+      if (el && id !== video.id) el.pause();
     });
-    return () => unsubscribers.forEach(u => u());
-  }, [posts.map?.(p => p.id).join?.(",")]);
+  }, [activeIndex, videos, user?.uid]);
 
-  // IntersectionObserver for autoplay & active index
-  useEffect(() => {
-    if (!containerRef.current) return;
-    if (ioRef.current) ioRef.current.disconnect();
-
-    const io = new IntersectionObserver(entries => {
-      let topCandidate = { idx: activeIndex, ratio: -1 };
-      entries.forEach(e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        if (e.intersectionRatio > topCandidate.ratio) topCandidate = { idx, ratio: e.intersectionRatio };
-
-        const postId = e.target.getAttribute("data-id");
-        const v = videoRefs.current[postId];
-        if (!v) return;
-
-        if (e.isIntersecting && e.intersectionRatio >= 0.8) v.play().catch(() => {});
-        else v.pause();
-      });
-
-      if (topCandidate.ratio >= 0.8 && topCandidate.idx !== activeIndex) setActiveIndex(topCandidate.idx);
-    }, { root: containerRef.current, threshold: [0, 0.25, 0.5, 0.8, 1] });
-
-    Array.from(containerRef.current.querySelectorAll("[data-slide]")).forEach(el => io.observe(el));
-    ioRef.current = io;
-    return () => io.disconnect();
-  }, [posts.length]);
-
-  // Reward view count
-  useEffect(() => {
-    const post = posts[activeIndex];
-    if (!post || rewarded.current.has(post.id)) return;
-
-    const timer = setTimeout(async () => {
-      try {
-        rewarded.current.add(post.id);
-        await updateDoc(doc(db, "posts", post.id), { viewCount: increment(1) });
-        recsService.reportView(post.id, { viewerId: user?.uid || null }).catch(() => {});
-      } catch (e) { console.warn("view increment failed", e); }
-    }, VIEW_MS);
-
-    return () => clearTimeout(timer);
-  }, [activeIndex, posts, user?.uid]);
-
-  // Preload next video
-  useEffect(() => {
-    const next = posts[activeIndex + 1];
-    if (!next) return;
-    const src = next.media?.find(isVideoItem)?.url;
-    if (!src) return;
-    const vid = document.createElement("video");
-    vid.src = src;
-    vid.preload = "auto";
-  }, [activeIndex, posts]);
-
-  // ------------------- Handlers -------------------
-  const toggleLike = useCallback(async post => {
-    if (!user) return toast("Please sign in to like");
-    const postRef = doc(db, "posts", post.id);
-    const liked = post.likedBy?.includes?.(user.uid);
-
-    setPosts(prev => prev.map(p => p.id === post.id
-      ? { ...p, likedBy: liked ? p.likedBy.filter(u => u !== user.uid) : [...(p.likedBy || []), user.uid], likesCount: clamp((p.likesCount || 0) + (liked ? -1 : 1), 0, Infinity) }
-      : p
-    ));
-
+  const handleLike = async (video) => {
+    if (!user?.uid) { toast.info('Sign in to like reels.'); return; }
     try {
-      await updateDoc(postRef, { likedBy: liked ? arrayRemove(user.uid) : arrayUnion(user.uid), likesCount: increment(liked ? -1 : 1) });
-      recsService.reportInteraction(post.id, { userId: user.uid, interaction: liked ? "unlike" : "like" }).catch(() => {});
-    } catch {
-      setPosts(prev => prev.map(p => (p.id === post.id ? post : p)));
-      toast.error("Could not update like");
+      const res = await videoService.likeVideo(video.id);
+      const liked = res?.data?.liked ?? res?.liked ?? !video.likedByMe;
+      setVideos((prev) => prev.map((v) => {
+        if (v.id !== video.id) return v;
+        const delta = liked ? 1 : -1;
+        return { ...v, likedByMe: liked, stats: { ...(v.stats || {}), likes: Math.max(0, (v.stats?.likes || 0) + delta) } };
+      }));
+    } catch (err) {
+      toast.error(err?.message || 'Could not like reel.');
     }
-  }, [user]);
-
-  const handleShare = useCallback(post => {
-    const url = `${window.location.origin}/post/${post.id}`;
-    if (navigator.share) navigator.share({ title: "Check this on Arvdoul", text: post.caption || "", url }).catch(() => {});
-    else navigator.clipboard.writeText(url).then(() => toast.success("Link copied"), () => toast.error("Could not copy link"));
-  }, []);
-
-  const handleFollow = useCallback(async post => {
-    if (!user || !followUser) return toast("Login required");
-    if (user.uid === post.userId) return;
-    try {
-      await followUser(post.userId);
-      toast.success("Followed");
-      recsService.reportInteraction(post.id, { userId: user.uid, interaction: "follow" }).catch(() => {});
-    } catch { toast.error("Could not follow"); }
-  }, [user, followUser]);
-
-  const togglePlayPause = useCallback(postId => {
-    const v = videoRefs.current[postId]; if (!v) return; if (v.paused) v.play().catch(() => {}); else v.pause();
-  }, []);
-
-  const toggleMute = useCallback(postId => {
-    const v = videoRefs.current[postId]; if (!v) return; v.muted = !v.muted;
-  }, []);
-
-  const onTimeUpdate = useCallback(postId => {
-    const v = videoRefs.current[postId]; if (!v) return;
-    const pct = v.duration ? (v.currentTime / v.duration) * 100 : 0;
-    progressRefs.current[postId] = pct;
-    const bar = document.querySelector(`[data-progress="${postId}"]`);
-    if (bar) bar.style.width = `${pct}%`;
-  }, []);
-
-  const onVideoRef = useCallback((postId, node) => {
-    if (node) {
-      videoRefs.current[postId] = node;
-      const handler = () => onTimeUpdate(postId);
-      node.addEventListener("timeupdate", handler);
-      node.addEventListener("ended", () => {
-        const idx = posts.findIndex(p => p.id === postId);
-        const nextIdx = clamp(idx + 1, 0, posts.length - 1);
-        if (nextIdx !== idx) containerRef.current?.querySelector(`[data-idx="${nextIdx}"]`)?.scrollIntoView({ behavior: "smooth" });
-      });
-      node.__arvdoul_handler = handler;
-    } else {
-      const v = videoRefs.current[postId];
-      if (v) try { v.removeEventListener("timeupdate", v.__arvdoul_handler); } catch {}
-      delete videoRefs.current[postId];
-    }
-  }, [posts, onTimeUpdate]);
-
-  const pingAdImpression = useCallback(adId => {
-    if (!adId || impressed.current.has(adId)) return;
-    impressed.current.add(adId);
-    recsService.reportAdImpression(adId, { userId: user?.uid || null }).catch(() => {});
-  }, [user?.uid]);
-
-  const videoPosts = useMemo(() => posts.filter(p => p.media?.some(isVideoItem)), [posts]);
-
-  if (loading) return (
-    <div className="h-screen w-full grid place-items-center bg-black text-white">
-      <div className="flex items-center gap-3 opacity-80"><Loader2 className="w-6 h-6 animate-spin" /> Loading videos…</div>
-    </div>
-  );
-
-  if (!videoPosts.length) return (
-    <div className="h-screen w-full grid place-items-center bg-black text-white text-center opacity-80">
-      <div className="text-xl font-semibold">No videos yet</div>
-      <div className="text-sm mt-1">Follow creators or explore trending content.</div>
-    </div>
-  );
-
-  return (
-    <>
-      <CommentsDrawer postId={commentsFor} onClose={() => setCommentsFor(null)} />
-      <div ref={containerRef} className="relative h-screen w-full overflow-y-scroll snap-y snap-mandatory bg-black">
-        {videoPosts.map((post, idx) => {
-          const videoSrc = post.media.find(isVideoItem)?.url;
-          const liked = !!post.likedBy?.includes?.(user?.uid);
-          const isAd = post.__ad === true;
-
-          return (
-            <section key={post.id} data-slide data-idx={idx} data-id={post.id} className="relative h-screen w-full snap-start">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/70 to-transparent z-[1]" />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/80 to-transparent z-[1]" />
-
-              {isAd ? <div className="h-full w-full grid place-items-center"><AdsSlot ad={post.ad} onImpression={() => pingAdImpression(post.ad?.id)} /></div> :
-                <>
-                  <video ref={n => onVideoRef(post.id, n)} src={videoSrc} className="absolute inset-0 h-full w-full object-cover" playsInline loop muted preload="auto" onClick={() => togglePlayPause(post.id)} />
-                  <Watermark text={user?.displayName || "Arvdoul"} />
-
-                  {/* right controls */}
-                  <div className="absolute right-3 top-1/3 z-[2] flex flex-col items-center gap-5 text-white">
-                    <IconButton label={post.likesCount || 0} active={liked} onClick={() => toggleLike(post)}><Heart className={`cn("w-9 h-9", liked && "text-red-500 fill-red-500")`} /></IconButton>
-                    <IconButton label={post.commentsCount || 0} onClick={() => setCommentsFor(post.id)}><MessageCircle className="w-9 h-9" /></IconButton>
-                    <IconButton onClick={() => handleShare(post)}><Share2 className="w-9 h-9" /></IconButton>
-                    {user?.uid !== post.userId && <IconButton onClick={() => handleFollow(post)}><MoreVertical className="w-9 h-9" /></IconButton>}
-                    <IconButton onClick={() => toggleMute(post.id)}>{videoRefs.current[post.id]?.muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}</IconButton>
-                    <IconButton onClick={() => togglePlayPause(post.id)}>{videoRefs.current[post.id]?.paused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}</IconButton>
-                  </div>
-
-                  {/* bottom progress */}
-                  <div className="absolute z-[2] bottom-3 left-3 right-3 text-white">
-                    {post.caption && <p className="text-sm leading-snug opacity-95"><span className="font-semibold mr-1">{post.displayName || "@" + (post.username || "user")}</span>{post.caption}</p>}
-                    <div className="mt-2 h-1.5 w-full bg-white/20 rounded-full overflow-hidden">
-                      <div data-progress={`post.id} className="h-full w-0 bg-white transition-[width] duration-150 will-change-[width]" style={`{ width: `${progressRefs.current[post.id] || 0}%` ``}} />
-                    </div>
-                  </div>
-
-                  <DoubleTapLayer onDoubleTap={() => toggleLike(post)} />
-                </>
-              }
-            </section>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-/** UI Helpers */
-function IconButton({ children, label, onClick, active }) {
-  return (
-    <button onClick={onClick} className={`cn("flex flex-col items-center gap-1 active:scale-[0.96] transition-transform")`}>
-      <div className={`cn("grid place-items-center rounded-full p-2", active ? "bg-white/20" : "bg-white/10", "backdrop-blur")}>{children`}</div>
-      {label !== undefined && <span className="text-xs opacity-90">{label}</span>}
-    </button>
-  );
-}
-
-function DoubleTapLayer({ onDoubleTap }) {
-  const [pulse, setPulse] = useState(false);
-  const handle = () => {
-    setPulse(true);
-    onDoubleTap?.();
-    setTimeout(() => setPulse(false), 650);
   };
+
+  const handleShare = async (video) => {
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/videos?video=${video.id}`;
+    try {
+      if (navigator.share) await navigator.share({ title: video.title || 'Reel', url });
+      else { await navigator.clipboard.writeText(url); toast.success('Link copied!'); }
+    } catch (err) { /* canceled */ }
+  };
+
+  const handleScroll = (e) => {
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80 && hasMoreRef.current) loadPage(true);
+    const idx = Math.round(el.scrollTop / el.clientHeight);
+    if (idx !== activeIndex) setActiveIndex(idx);
+  };
+
+  const colors = {
+    card: isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white/90 border-gray-200',
+    text: isDark ? 'text-white' : 'text-gray-900',
+    secondary: isDark ? 'text-gray-400' : 'text-gray-600',
+  };
+
   return (
-    <div className="absolute inset-0 z-[1]" onDoubleClick={handle} style={{ background: "transparent" }}>
-      <AnimatePresence>
-        {pulse && (
-          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.4, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={{ duration: 0.35 }} className="absolute inset-0 grid place-items-center">
-            <Heart className="w-24 h-24 text-white drop-shadow-[0_0_12px_rgba(0,0,0,0.6)] fill-white" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className={cnRoot(isDark, colors)}>
+      {/* Header */}
+      <div className={cnHeader(isDark, colors)}>
+        <button onClick={() => navigate(-1)} aria-label="Back" className="p-2 rounded-full hover:bg-white/10 text-white">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-bold text-white">Reels</h1>
+        <div className="w-9" />
+      </div>
+
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center"><Loader2 className="w-8 h-8 text-violet-500 animate-spin" /></div>
+      ) : error ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-white">
+          <p>{error}</p>
+          <button onClick={() => loadPage(false)} className="px-5 py-2 rounded-xl bg-white/10">Retry</button>
+        </div>
+      ) : videos.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-white gap-2">
+          <p className="text-lg font-semibold">No reels yet</p>
+          <p className="text-sm opacity-70">Create a short video and it will appear here.</p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto snap-y snap-mandatory" onScroll={handleScroll}>
+          {videos.map((video, idx) => (
+            <div key={video.id} className="h-full snap-start relative flex items-center justify-center bg-black">
+              <video
+                ref={(el) => { videoRefs.current[video.id] = el; }}
+                src={video.playbackUrl || video.mediaUrl || video.url}
+                poster={video.thumbnails?.[0] || video.thumbnailUrl || null}
+                loop
+                muted={muted}
+                autoPlay={idx === activeIndex}
+                playsInline
+                className="max-h-full w-full object-contain"
+              />
+
+              {/* Tap toggles playback */}
+              <button
+                onClick={() => {
+                  const el = videoRefs.current[video.id];
+                  if (el) { if (el.paused) el.play(); else el.pause(); }
+                }}
+                aria-label="Play/Pause"
+                className="absolute inset-0"
+              />
+
+              {/* Mute toggle */}
+              <button
+                onClick={() => setMuted((m) => !m)}
+                aria-label={muted ? 'Unmute' : 'Mute'}
+                className="absolute top-4 right-4 p-2.5 rounded-full bg-black/50 text-white backdrop-blur"
+              >
+                {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              </button>
+
+              {/* Caption */}
+              <div className="absolute bottom-6 left-4 right-20 text-white">
+                <p className="font-semibold drop-shadow">{video.displayName || video.userName || 'Creator'}</p>
+                {video.title && <p className="text-sm opacity-90 drop-shadow line-clamp-2">{video.title}</p>}
+              </div>
+
+              {/* Action rail */}
+              <div className="absolute bottom-6 right-3 flex flex-col items-center gap-5">
+                <button onClick={() => handleLike(video)} aria-label="Like" className="flex flex-col items-center gap-1 text-white">
+                  <Heart className={`w-8 h-8 drop-shadow ${video.likedByMe ? 'fill-red-500 text-red-500' : ''}`} />
+                  <span className="text-xs font-semibold">{video.stats?.likes || 0}</span>
+                </button>
+                <button onClick={() => handleShare(video)} aria-label="Share" className="flex flex-col items-center gap-1 text-white">
+                  <Share2 className="w-8 h-8 drop-shadow" />
+                  <span className="text-xs font-semibold">{video.stats?.shares || 0}</span>
+                </button>
+                <div className="flex flex-col items-center gap-1 text-white">
+                  <MessageCircle className="w-8 h-8 drop-shadow" />
+                  <span className="text-xs font-semibold">{video.stats?.comments || 0}</span>
+                </div>
+              </div>
+
+              {/* Progress indicator */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                <motion.div
+                  className="h-full bg-violet-500"
+                  animate={{ width: idx === activeIndex ? '100%' : '0%' }}
+                  transition={{ duration: 30, ease: 'linear' }}
+                  key={`${video.id}-${idx === activeIndex}`}
+                />
+              </div>
+            </div>
+          ))}
+          {hasMoreRef.current && (
+            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 text-violet-500 animate-spin" /></div>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+function cnRoot(isDark, colors) {
+  return `h-screen w-full flex flex-col overflow-hidden ${isDark ? 'bg-black' : 'bg-gray-950'}`;
+}
+function cnHeader(isDark, colors) {
+  return `sticky top-0 z-30 flex items-center justify-between px-4 py-3 backdrop-blur-xl bg-black/70 border-b border-white/10`;
 }

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, useMemo, memo } from "react";
+import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -60,6 +61,7 @@ const AdjustmentSlider = memo(({
   showPercentage = false,
   showDegrees = false,
 }) => {
+    const { isDark } = useTheme();
   const percentage = useMemo(() => {
     return Math.round(((value - min) / (max - min)) * 100);
   }, [value, min, max]);
@@ -91,7 +93,7 @@ const AdjustmentSlider = memo(({
           {isModified && (
             <button
               onClick={handleReset}
-              className="p-0.5 rounded hover:bg-white/10 transition-colors"
+              className={`p-0.5 rounded hover:${isDark ? 'bg-white/10' : 'bg-black/5'} transition-colors`}
               aria-label={`Reset ${label}`}
             >
               <RotateCcw className="w-3 h-3 text-purple-400" />
@@ -100,7 +102,7 @@ const AdjustmentSlider = memo(({
         </div>
       </div>
       <div className="relative h-8 flex items-center">
-        <div className="absolute inset-x-0 h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div className={`absolute inset-x-0 h-1.5 rounded-full \${isDark ? 'bg-white/10' : 'bg-black/5'} overflow-hidden`}>
           <div
             className="h-full rounded-full transition-all duration-75"
             style={{
@@ -160,6 +162,7 @@ const AdjustTool = memo(({
   pushUndo,
   presets = PRESETS,
 }) => {
+    const { isDark } = useTheme();
   const [expandedSections, setExpandedSections] = useState({
     basic: true,
     color: true,
@@ -227,7 +230,7 @@ const AdjustTool = memo(({
       {/* Presets Section */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+          <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
             Presets
           </span>
           <Wand2 className="w-4 h-4 text-white/40" />
@@ -495,7 +498,7 @@ const AdjustTool = memo(({
       </Section>
 
       {/* Reset Button */}
-      <div className="flex items-center justify-between pt-2 border-t border-white/10">
+      <div className={`flex items-center justify-between pt-2 border-t \${isDark ? 'border-white/10' : 'border-gray-200'}`}>
         <span className="text-xs text-white/50">
           {modifiedCount > 0 ? `${modifiedCount} adjustments modified` : 'No changes'}
         </span>
@@ -507,7 +510,7 @@ const AdjustTool = memo(({
             setActivePreset(null);
             pushUndo?.();
           }}
-          className="px-4 py-2 text-xs font-medium rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition-colors flex items-center gap-2"
+          className={`px-4 py-2 text-xs font-medium rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 text-white/80 transition-colors flex items-center gap-2`}
         >
           <RotateCcw className="w-3.5 h-3.5" />
           Reset All
@@ -549,15 +552,16 @@ const Section = memo(({
   modified,
   children,
 }) => {
+    const { isDark } = useTheme();
   return (
-    <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+    <div className={`rounded-2xl ${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} border ${isDark ? 'border-white/10' : 'border-gray-200'} overflow-hidden`}>
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 hover:bg-white/5 transition-colors"
+        className={`w-full flex items-center justify-between p-3 hover:${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} transition-colors`}
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-white/60" />
+          <Icon className={`w-4 h-4 text-white/60`} />
           <span className="text-sm font-medium text-white">{title}</span>
           <span className="text-xs text-white/40">({count})</span>
           {modified > 0 && (

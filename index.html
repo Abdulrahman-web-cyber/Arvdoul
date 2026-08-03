@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -48,17 +48,9 @@
         display: none !important;
       }
       
-      /* Prevent selection and tap highlights */
+      /* Prevent tap highlights (a11y: selection is allowed app-wide) */
       * {
         -webkit-tap-highlight-color: transparent;
-        -webkit-touch-callout: none;
-        user-select: none;
-      }
-      
-      /* Allow selection in input fields */
-      input, textarea {
-        user-select: text;
-        -webkit-user-select: text;
       }
       
       /* Loading state for root */

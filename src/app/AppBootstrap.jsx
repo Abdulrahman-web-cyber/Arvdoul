@@ -53,6 +53,77 @@ const SystemInitializer = ({ onReady }) => {
         
         // Don't await - let it run in background
         firebaseInit();
+
+        // Wire the global offline-queue drain: every queued operation
+        // (comments, live joins/leaves, gift/upload retries, welcome
+        // notifications, search analytics) is retried when connectivity
+        // returns, with per-type handlers dispatching to the services.
+        const wireOfflineDrain = async () => {
+          try {
+            const { offlineQueue } = await import('../utils/OfflineQueue.js');
+            const drain = async (op) => {
+              try {
+                switch (op.type) {
+                  case 'comment.create':
+                    await import('../services/commentService.js').then(m =>
+                      m.getCommentService().createComment(op.payload.postId, op.payload.userId, op.payload.content, op.payload.options || {}));
+                    break;
+                  case 'live.join':
+                    await import('../services/liveService.js').then(m =>
+                      m.getLiveService().joinLiveStream(op.payload.streamId, op.payload.viewerId));
+                    break;
+                  case 'live.leave':
+                    await import('../services/liveService.js').then(m =>
+                      m.getLiveService().leaveLiveStream(op.payload.streamId, op.payload.viewerId));
+                    break;
+                  case 'live_gift':
+                  case 'live.gift':
+                    await import('../services/liveService.js').then(m =>
+                      m.getLiveService().sendLiveGift(
+                        op.payload.streamId,
+                        op.payload.senderId,
+                        op.payload.recipientId,
+                        op.payload.giftType
+                      ));
+                    break;
+                  case 'notification.welcome':
+                    await import('../services/notificationsService.js').then(m =>
+                      m.getNotificationsService().sendNotification({
+                        type: 'welcome',
+                        recipientId: op.payload.userId,
+                        title: 'Welcome to Arvdoul!',
+                        message: `Hi ${op.payload.userName || 'there'}! Start exploring, connect with friends, and enjoy the experience.`,
+                        priority: 'normal',
+                        channel: 'in_app',
+                      }));
+                    break;
+                  case 'search.analytics':
+                    // Analytics events are best-effort; dropping after retry is acceptable.
+                    return true;
+                  case 'purchaseCoins':
+                    await import('../services/monetizationService.js').then((m) =>
+                      m.getMonetizationService().purchaseCoins(op.payload.packageId, op.payload.paymentMethodId, op.payload.deviceMetadata || {}));
+                    break;
+                  case 'watchAd':
+                    await import('../services/monetizationService.js').then((m) =>
+                      m.getMonetizationService().watchAd(op.payload.placement, op.payload.adId, op.payload.watchDurationSeconds, op.payload.deviceMetadata || {}));
+                    break;
+                  default:
+                    return true; // unknown ops are dropped (not retried forever)
+                }
+                return true;
+              } catch (err) {
+                return false; // will retry with backoff
+              }
+            };
+            // Drain on startup (after Firebase is ready) and whenever we come online.
+            offlineQueue.process(drain).catch(() => {});
+            offlineQueue.onOnline(drain);
+          } catch (err) {
+            console.warn('Offline drain wiring skipped:', err.message);
+          }
+        };
+        wireOfflineDrain();
         
         // Stage 3: Complete
         setInitializationStage('complete');

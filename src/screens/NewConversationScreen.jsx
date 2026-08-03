@@ -130,7 +130,9 @@ const NewConversationScreen = () => {
   return (
     <div className={cn(
       'flex flex-col h-full',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Header */}
       <div className={cn(

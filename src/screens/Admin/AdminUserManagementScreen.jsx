@@ -24,10 +24,22 @@ const AdminUserManagementScreen = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
 
-  // Load users
+  // Load users from Firestore (paged)
   useEffect(() => {
-    setLoading(false);
-    // TODO: Load users from Firestore
+    const loadUsers = async () => {
+      try {
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+        const firestore = await getFirestoreInstance();
+        const snap = await getDocs(query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), limit(100)));
+        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (error) {
+        toast.error('Could not load users.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUsers();
   }, []);
 
   // Filter users
@@ -44,15 +56,29 @@ const AdminUserManagementScreen = () => {
            u.username?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // User action
+  // User action — real Firestore updates (ban/suspend/verify/restore)
   const handleUserAction = async (userId, action) => {
     try {
-      // TODO: Implement actual actions
-      toast.success(`Action "${action}" performed on user`);
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+      const firestore = await getFirestoreInstance();
+      const ref = doc(firestore, 'users', userId);
+      const payload = { updatedAt: serverTimestamp() };
+      switch (action) {
+        case 'ban': payload.accountStatus = 'banned'; break;
+        case 'suspend': payload.accountStatus = 'suspended'; break;
+        case 'unban':
+        case 'restore': payload.accountStatus = 'active'; break;
+        case 'verify': payload.isVerified = true; break;
+        case 'unverify': payload.isVerified = false; break;
+        default: break;
+      }
+      await updateDoc(ref, payload);
+      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...payload } : u)));
+      toast.success(`User ${action.replace(/([A-Z])/g, ' $1').toLowerCase()}d`);
       setShowUserModal(false);
     } catch (error) {
-      console.error('Action failed:', error);
-      toast.error('Action failed');
+      toast.error('Action failed — check admin permissions.');
     }
   };
 
@@ -120,7 +146,7 @@ const AdminUserManagementScreen = () => {
         </div>
 
         {/* Users Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-white/80 dark:bg-gray-800/70 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>

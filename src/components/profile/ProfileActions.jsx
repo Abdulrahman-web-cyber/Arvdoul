@@ -18,8 +18,9 @@
  * @property {string} [theme='light'] - Current theme
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { cn } from '../../lib/utils';
+import ProfileOptionsMenu from './ProfileOptionsMenu';
 import { 
   UserPlus, 
   UserMinus, 
@@ -43,7 +44,9 @@ const ProfileActions = memo(({
   onMessage,
   onShare,
   theme = 'light',
+  profile = null,
 }) => {
+  const [showOptions, setShowOptions] = useState(false);
   // ARVDOUL DNA Gradient
   const buttonGradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)';
   
@@ -77,7 +80,7 @@ const ProfileActions = memo(({
   
   // Handle more options
   const handleMoreOptions = useCallback(() => {
-    // TODO: Show more options menu
+    setShowOptions(prev => !prev);
   }, []);
   
   // Owner view - show Edit Profile and Settings
@@ -182,6 +185,9 @@ const ProfileActions = memo(({
       >
         <MoreHorizontal className="w-5 h-5 text-gray-600 dark:text-gray-400" aria-hidden="true" />
       </button>
+        {showOptions && (
+          <ProfileOptionsMenu profile={profile} isOwner={isOwner} onClose={() => setShowOptions(false)} theme={theme} />
+        )}
     </div>
   );
 });

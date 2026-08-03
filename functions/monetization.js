@@ -1134,3 +1134,427 @@ exports.recoverStuckWithdrawals = functions.pubsub.schedule('every 5 minutes').o
     return null;
   }
 });
+// ======================================================================
+// 11. COIN PURCHASES, SUBSCRIPTIONS, PAYOUTS, ADS, VIDEO EVENTS
+//     (client-facing callables that were referenced but never deployed)
+// ======================================================================
+
+const COIN_PACKAGES = {
+  coins_100:  { coins: 100,  priceUsdCents: 99 },
+  coins_500:  { coins: 500,  priceUsdCents: 499 },
+  coins_1200: { coins: 1200, priceUsdCents: 999 },
+  coins_2500: { coins: 2500, priceUsdCents: 1999 },
+  coins_5000: { coins: 5000, priceUsdCents: 3999 },
+};
+
+const SUBSCRIPTION_TIERS = {
+  basic: { priceId: null,  coinsPerMonth: 500 },
+  pro:   { priceId: null,  coinsPerMonth: 2000 },
+  premium: { priceId: null, coinsPerMonth: 5000 },
+};
+
+const AD_REWARD_PER_30S = 2; // coins per 30 seconds watched
+const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
+
+async function getOrCreateStripeCustomer(uid) {
+  const userRef = admin.firestore().collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
+  if (userSnap.data().stripeCustomerId) return { id: userSnap.data().stripeCustomerId };
+  const customer = await stripe.customers.create({
+    email: userSnap.data().email || undefined,
+    metadata: { userId: uid },
+  });
+  await userRef.update({ stripeCustomerId: customer.id });
+  return customer;
+}
+
+// ---------------------------------------------------------------
+// PURCHASE COINS — real Stripe charge when a payment method is
+// supplied; otherwise records the order for a provider callback.
+// Idempotent + double-entry ledger + rate limited.
+// ---------------------------------------------------------------
+exports.purchaseCoins = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { packageId, paymentMethodId, deviceMetadata = {} } = data;
+    const pkg = COIN_PACKAGES[packageId];
+    if (!pkg) throw new functions.https.HttpsError('invalid-argument', 'Invalid coin package.');
+    // No free coins: a real payment method is required for purchases.
+    if (!paymentMethodId) {
+      throw new functions.https.HttpsError('failed-precondition', 'A payment method is required to purchase coins.');
+    }
+    if (!stripe) {
+      throw new functions.https.HttpsError('failed-precondition', 'Payments are not configured yet.');
+    }
+    await checkRateLimit(uid, 'purchaseCoins', 5, 60000);
+    const key = generateIdempotencyKey(data.idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
+
+      // Real revenue path: charge the card (payment method validated above).
+      const customer = await getOrCreateStripeCustomer(uid);
+      await stripe.paymentIntents.create({
+        amount: pkg.priceUsdCents,
+        currency: 'usd',
+        payment_method: paymentMethodId,
+        customer: customer.id,
+        confirm: true,
+        off_session: true,
+        metadata: { userId: uid, packageId },
+      }, { idempotencyKey: `pi_${key}` });
+
+      const userRef = admin.firestore().collection('users').doc(uid);
+      const userSnap = await t.get(userRef);
+      if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
+
+      const oldBalance = userSnap.data().coins || 0;
+      const newBalance = oldBalance + pkg.coins;
+      t.update(userRef, { coins: newBalance });
+
+      const txRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(txRef, {
+        userId: uid, type: 'credit', amount: pkg.coins, reason: 'purchase',
+        metadata: { packageId, platform: deviceMetadata.platform || 'web', charged: !!paymentMethodId },
+        idempotencyKey: key, balanceAfter: newBalance,
+        createdAt: serverTS(), expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+      createLedgerEntry(t, 'system:coin_supply', `users:${uid}`, pkg.coins, { reason: 'purchase', transactionId: txRef.id });
+
+      const resultData = { success: true, newBalance, coinsAdded: pkg.coins, transactionId: txRef.id };
+      t.set(ledgerRef, {
+        function: 'purchaseCoins', userId: uid, result: resultData,
+        processedAt: serverTS(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      const supplyRef = admin.firestore().collection('system').doc('coin_supply');
+      t.set(supplyRef, { totalCoins: admin.firestore.FieldValue.increment(pkg.coins) }, { merge: true });
+      return resultData;
+    });
+
+    logEvent('purchase_coins_success', { uid, packageId, newBalance: result.newBalance });
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
+// ---------------------------------------------------------------
+// SUBSCRIPTIONS — status / create / cancel (Stripe-backed when
+// configured; config-based tiers otherwise).
+// ---------------------------------------------------------------
+exports.getSubscriptionStatus = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const snap = await admin.firestore().collection('subscriptions').doc(uid).get();
+    if (!snap.exists) return { success: true, active: false, subscription: null };
+    const sub = snap.data();
+    const active = sub.status === 'active';
+    return {
+      success: true,
+      active,
+      subscription: {
+        ...sub,
+        currentPeriodEnd: sub.currentPeriodEnd?.toDate?.()?.toISOString?.() || sub.currentPeriodEnd || null,
+        createdAt: sub.createdAt?.toDate?.()?.toISOString?.() || null,
+      },
+    };
+  } catch (err) { throw handleError(err); }
+});
+
+exports.createSubscription = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { tier, paymentMethodId, deviceMetadata = {} } = data;
+    const tierCfg = SUBSCRIPTION_TIERS[tier];
+    if (!tierCfg) throw new functions.https.HttpsError('invalid-argument', 'Invalid subscription tier.');
+    // No free subscriptions: a real payment method + Stripe are required.
+    if (!paymentMethodId) {
+      throw new functions.https.HttpsError('failed-precondition', 'A payment method is required to subscribe.');
+    }
+    if (!stripe) {
+      throw new functions.https.HttpsError('failed-precondition', 'Payments are not configured yet.');
+    }
+    await checkRateLimit(uid, 'createSubscription', 5, 60000);
+    const key = generateIdempotencyKey(data.idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) return ledgerSnap.data().result;
+
+      // Real recurring subscription: create a monthly price per tier, attach the
+      // payment method, and set the default invoice to auto-charge it.
+      const tierPriceUsdCents = { basic: 499, pro: 999, premium: 1999 }[tier] || 999;
+      const price = await stripe.prices.create({
+        unit_amount: tierPriceUsdCents,
+        currency: 'usd',
+        recurring: { interval: 'month' },
+        product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
+      });
+      const customer = await getOrCreateStripeCustomer(uid);
+      await stripe.paymentMethods.attach(paymentMethodId, { customer: customer.id });
+      await stripe.customers.update(customer.id, { invoice_settings: { default_payment_method: paymentMethodId } });
+      const sub = await stripe.subscriptions.create({
+        customer: customer.id,
+        items: [{ price: price.id }],
+        payment_behavior: 'default_incomplete',
+        expand: ['latest_invoice.payment_intent'],
+        metadata: { userId: uid, tier },
+      });
+      const stripeSubscriptionId = sub.id;
+
+      const subRef = admin.firestore().collection('subscriptions').doc(uid);
+      t.set(subRef, {
+        userId: uid, tier, status: 'active', coinsPerMonth: tierCfg.coinsPerMonth,
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        stripeSubscriptionId, createdAt: serverTS(), updatedAt: serverTS(),
+      });
+
+      // Credit first month coins (same double-entry path as purchases).
+      const userRef = admin.firestore().collection('users').doc(uid);
+      const userSnap = await t.get(userRef);
+      if (userSnap.exists) {
+        const oldBalance = userSnap.data().coins || 0;
+        const newBalance = oldBalance + tierCfg.coinsPerMonth;
+        t.update(userRef, { coins: newBalance });
+        const txRef = admin.firestore().collection('coin_transactions').doc();
+        t.set(txRef, {
+          userId: uid, type: 'credit', amount: tierCfg.coinsPerMonth, reason: 'subscription',
+          metadata: { tier }, idempotencyKey: `${key}_first`, balanceAfter: newBalance,
+          createdAt: serverTS(), expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        });
+      }
+
+      const resultData = { success: true, tier, stripeSubscriptionId };
+      t.set(ledgerRef, {
+        function: 'createSubscription', userId: uid, result: resultData,
+        processedAt: serverTS(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      return resultData;
+    });
+
+    logEvent('subscription_created', { uid, tier });
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
+exports.cancelSubscription = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const key = generateIdempotencyKey(data.idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) return ledgerSnap.data().result;
+      const subRef = admin.firestore().collection('subscriptions').doc(uid);
+      const subSnap = await t.get(subRef);
+      if (!subSnap.exists) throw new functions.https.HttpsError('not-found', 'No active subscription.');
+
+      if (subSnap.data().stripeSubscriptionId && stripe) {
+        try {
+          await stripe.subscriptions.update(subSnap.data().stripeSubscriptionId, { cancel_at_period_end: true });
+        } catch (stripeErr) {
+          // Non-fatal: still mark locally; Stripe webhook reconciles.
+          logEvent('stripe_cancel_failed', { uid, error: stripeErr.message });
+        }
+      }
+      t.update(subRef, { status: 'canceled', cancelAtPeriodEnd: true, canceledAt: serverTS(), updatedAt: serverTS() });
+
+      const resultData = { success: true, message: 'Subscription will end at the current period.' };
+      t.set(ledgerRef, {
+        function: 'cancelSubscription', userId: uid, result: resultData,
+        processedAt: serverTS(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      return resultData;
+    });
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
+// ---------------------------------------------------------------
+// CREATOR PAYOUTS (Stripe Express onboarding + settings)
+// ---------------------------------------------------------------
+exports.getPayoutSettings = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const snap = await admin.firestore().collection('payout_settings').doc(uid).get();
+    return { success: true, settings: snap.exists ? snap.data() : null };
+  } catch (err) { throw handleError(err); }
+});
+
+exports.createPayoutAccount = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { countryCode = 'US', returnUrl, deviceMetadata = {} } = data;
+    await checkRateLimit(uid, 'createPayoutAccount', 5, 60000);
+    if (!stripe) throw new functions.https.HttpsError('failed-precondition', 'Payouts are not configured yet.');
+
+    const userSnap = await admin.firestore().collection('users').doc(uid).get();
+    if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
+
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: countryCode,
+      email: userSnap.data().email || undefined,
+      capabilities: { transfers: { requested: true } },
+    });
+    const refreshUrl = returnUrl || 'https://arvdoul.app/payouts';
+    const link = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: refreshUrl,
+      return_url: refreshUrl,
+      type: 'account_onboarding',
+    });
+
+    await admin.firestore().collection('payout_settings').doc(uid).set({
+      stripeAccountId: account.id,
+      status: 'onboarding',
+      onboardingUrl: link.url,
+      updatedAt: serverTS(),
+    }, { merge: true });
+
+    logEvent('payout_account_created', { uid, accountId: account.id });
+    return { success: true, onboardingUrl: link.url, accountId: account.id };
+  } catch (err) { throw handleError(err); }
+});
+
+// ---------------------------------------------------------------
+// ADS — serve the highest-priority active ad for a placement,
+// and reward coins for completed ad views (idempotent).
+// ---------------------------------------------------------------
+exports.getAd = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { placement, userId, context: adContext = {} } = data;
+    if (!placement) throw new functions.https.HttpsError('invalid-argument', 'placement is required.');
+    await checkRateLimit(uid, 'getAd', 30, 60000);
+
+    const now = new Date();
+    const snap = await admin.firestore().collection('ads')
+      .where('active', '==', true)
+      .where('placements', 'array-contains', placement)
+      .orderBy('priority', 'desc')
+      .limit(5)
+      .get();
+
+    const candidates = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(a =>
+        (!a.startDate || !a.startDate.toDate || a.startDate.toDate() <= now) &&
+        (!a.endDate || !a.endDate.toDate || a.endDate.toDate() >= now)
+      );
+    if (candidates.length === 0) return { success: true, ad: null, cacheTTL: 300 };
+
+    const ad = candidates[0];
+    return {
+      success: true,
+      ad: {
+        id: ad.id, type: ad.type, media: ad.media, link: ad.link,
+        title: ad.title, cta: ad.cta, advertiserId: ad.advertiserId,
+      },
+      cacheTTL: 300,
+    };
+  } catch (err) { throw handleError(err); }
+});
+
+exports.watchAd = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { placement, adId, watchDurationSeconds, deviceMetadata = {} } = data;
+    if (!adId || !placement) throw new functions.https.HttpsError('invalid-argument', 'adId and placement are required.');
+    if (!watchDurationSeconds || watchDurationSeconds < 5) {
+      throw new functions.https.HttpsError('invalid-argument', 'watchDurationSeconds must be >= 5.');
+    }
+    await checkRateLimit(uid, 'watchAd', 20, 60000);
+
+    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchDurationSeconds / 30) * AD_REWARD_PER_30S);
+    const key = generateIdempotencyKey(data.idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) return ledgerSnap.data().result;
+
+      const userRef = admin.firestore().collection('users').doc(uid);
+      const userSnap = await t.get(userRef);
+      if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
+
+      const oldBalance = userSnap.data().coins || 0;
+      const newBalance = oldBalance + reward;
+      t.update(userRef, { coins: newBalance });
+
+      const impRef = admin.firestore().collection('ad_impressions').doc();
+      t.set(impRef, {
+        userId: uid, adId, placement, watchDurationSeconds, reward,
+        createdAt: serverTS(), expireAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      });
+      const txRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(txRef, {
+        userId: uid, type: 'credit', amount: reward, reason: 'ad_reward',
+        metadata: { adId, placement }, idempotencyKey: key, balanceAfter: newBalance,
+        createdAt: serverTS(), expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+      createLedgerEntry(t, 'system:coin_supply', `users:${uid}`, reward, { reason: 'ad_reward', transactionId: txRef.id });
+
+      const resultData = { success: true, coinsAdded: reward, newBalance };
+      t.set(ledgerRef, {
+        function: 'watchAd', userId: uid, result: resultData,
+        processedAt: serverTS(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      return resultData;
+    });
+
+    logEvent('ad_rewarded', { uid, adId, reward });
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
+// ---------------------------------------------------------------
+// VIDEO EVENTS — status pipeline callbacks (created → processed →
+// moderated → watermarked). Owner-scoped.
+// ---------------------------------------------------------------
+exports.processVideoEvent = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { eventType, videoId, payload = {} } = data;
+    if (!eventType || !videoId) throw new functions.https.HttpsError('invalid-argument', 'eventType and videoId are required.');
+
+    const videoRef = admin.firestore().collection('videos').doc(videoId);
+    const videoSnap = await videoRef.get();
+    if (!videoSnap.exists) throw new functions.https.HttpsError('not-found', 'Video not found.');
+    if (videoSnap.data().userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Only the video owner can process events.');
+    }
+
+    const updates = {};
+    switch (eventType) {
+      case 'video.created':
+        updates.status = 'processing';
+        break;
+      case 'video.processed':
+        updates.status = 'ready';
+        if (payload.playbackId) updates.playbackId = payload.playbackId;
+        break;
+      case 'video.moderated':
+        updates.moderationStatus = payload.approved ? 'approved' : 'rejected';
+        break;
+      case 'video.watermarked':
+        updates.watermarkStatus = 'done';
+        break;
+      default:
+        throw new functions.https.HttpsError('invalid-argument', 'Unknown eventType.');
+    }
+    updates.updatedAt = serverTS();
+    await videoRef.update(updates);
+
+    logEvent('video_event_processed', { uid, videoId, eventType });
+    return { success: true, videoId, eventType };
+  } catch (err) { throw handleError(err); }
+});

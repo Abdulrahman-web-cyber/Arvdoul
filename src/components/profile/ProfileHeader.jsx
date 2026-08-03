@@ -25,7 +25,7 @@
  * @property {Function} [onMutualFriendPress] - Mutual friend click handler
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Settings, 
@@ -43,6 +43,7 @@ import ProfileCoverPhoto from './ProfileCoverPhoto';
 import ProfileLevel from './ProfileLevel';
 import ProfileBadges from './ProfileBadges';
 import ProfileStats from './ProfileStats';
+import ProfileOptionsMenu from './ProfileOptionsMenu';
 
 /**
  * ProfileHeader Component
@@ -108,9 +109,12 @@ const ProfileHeader = memo(({
     }
   }, [navigate, profile?.uid, profile?.id]);
 
+  // More options menu state
+  const [showOptions, setShowOptions] = useState(false);
+
   // Handle more options
   const handleMoreOptions = useCallback(() => {
-    // TODO: Show more options menu
+    setShowOptions(prev => !prev);
   }, []);
 
   // Loading state
@@ -255,6 +259,9 @@ const ProfileHeader = memo(({
                 >
                   <MoreHorizontal className="w-5 h-5 text-gray-600 dark:text-gray-400" aria-hidden="true" />
                 </button>
+                {showOptions && (
+                  <ProfileOptionsMenu profile={{ ...profile }} isOwner={isOwner} onClose={() => setShowOptions(false)} theme={theme} />
+                )}
               </>
             )}
           </div>
@@ -318,6 +325,7 @@ const ProfileHeader = memo(({
             friends={profile.friendCount || 0}
             likes={profile.likesReceived || 0}
             coins={profile.coins || 0}
+            reputation={profile.reputation || profile.reputationScore || 0}
             theme={theme}
             onStatPress={onStatPress}
           />

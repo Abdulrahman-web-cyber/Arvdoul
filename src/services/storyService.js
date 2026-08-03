@@ -10,6 +10,9 @@
 // ✅ ADDED: AI‑generated captions (Cloud Vision), user‑created templates
 // ✅ ADDED: Story reach analytics (completion rate, forward/back taps)
 
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
@@ -240,7 +243,8 @@ class UltimateStoryService {
     this.rateLimiter = new RateLimiter();
     this.uploadQueue = new StoryUploadQueue();
 
-    this.feedCache = new Map(); this.storyCache = new Map();
+    this.feedCache = cacheManager.namespace('stories_feed', STORY_CONFIG.FEED.CACHE_TTL);
+    this.storyCache = cacheManager.namespace('stories', STORY_CONFIG.CACHE_TTL || 5 * 60 * 1000);
     this.followedUsersCache = new Map(); this.archivedStoriesCache = new Map();
     this.highlightsCache = new Map();
     this.sponsoredStoriesCache = { stories: [], lastFetched: 0 };
@@ -404,6 +408,7 @@ class UltimateStoryService {
     if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
     if (storyData.isSponsored) this._logSponsoredStory(storyId, currentUser.uid);
     this.metrics.storiesCreated++;
+    auditLogger.log('story.created', { userId: currentUser.uid, meta: { storyId, type: storyData.type || null } });
     return { success: true, storyId, story };
   }
 
@@ -635,6 +640,7 @@ class UltimateStoryService {
     } else if (actionResult.action === 'added') {
       await this._recordReactionShard(storyId, actionResult.reaction, 1);
     }
+    auditLogger.log('story.reacted', { userId: currentUser.uid, meta: { storyId, reactionType, action: actionResult.action } });
     return actionResult;
   }
 
@@ -710,6 +716,7 @@ class UltimateStoryService {
     this._invalidateFeedCache(currentUser.uid);
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
     this.metrics.storiesDeleted++;
+    auditLogger.log('story.deleted', { userId: currentUser.uid, meta: { storyId } });
     return { success: true };
   }
 
@@ -1604,6 +1611,7 @@ class UltimateStoryService {
     for (const key of this.feedCache.keys()) {
       if (key.startsWith(`feed_${userId}`)) this.feedCache.delete(key);
     }
+    cacheManager.invalidateUser(userId);
   }
 
   _invalidateStoryCache(storyId) {

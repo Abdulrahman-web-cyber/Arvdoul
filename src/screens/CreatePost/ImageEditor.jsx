@@ -48,6 +48,7 @@ import AdjustTool from '../../components/Shared/AdjustTool';
 import FilterTool from '../../components/Shared/FilterTool';
 import CropTool from '../../components/Shared/CropTool';
 import TextTool from '../../components/Shared/TextTool';
+import DrawingTool from '../../components/Shared/DrawingTool';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -481,7 +482,7 @@ const ExportDialog = memo(({ onClose, onExport, canvasWidth, canvasHeight, token
 
 // ==================== MAIN EDITOR ====================
 const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }, ref) => {
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, theme } = useTheme();
   const tokens = isDark ? DARK : LIGHT;
 
   const [doc, dispatchDoc] = useReducer(documentReducer, INITIAL_DOCUMENT);
@@ -1221,12 +1222,23 @@ const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }
           })()}
         </div>
 
-        {/* Drawing controls (floating) */}
+        {/* Drawing controls (floating) — real DrawingTool */}
         {activeTool === 'draw' && (
-          <div className="absolute top-4 left-24 z-30 flex items-center gap-3 p-2 rounded-xl bg-black/70 backdrop-blur-md">
-            <input type="color" value={drawColor} onChange={e => setDrawColor(e.target.value)} className="w-8 h-8 rounded-full cursor-pointer" />
-            <input type="range" min={1} max={20} value={drawBrushSize} onChange={e => setDrawBrushSize(+e.target.value)} className="w-24 accent-purple-500" />
-            <span style={{ color: tokens.textPrimary, fontSize: 12 }}>{drawBrushSize}px</span>
+          <div className="absolute top-4 left-24 z-30">
+            <DrawingTool
+              color={drawColor}
+              brushSize={drawBrushSize}
+              onColorChange={setDrawColor}
+              onBrushSizeChange={setDrawBrushSize}
+              onUndo={() => dispatchDoc({ type: 'UNDO' })}
+              onClear={() => {
+                // Remove all drawing objects (best-effort; history preserved via UNDO).
+                Object.values(doc.objects).forEach((obj) => {
+                  if (obj.type === 'drawing' || obj.type === 'path') dispatchDoc({ type: 'DELETE_OBJECT', payload: { id: obj.id } });
+                });
+              }}
+              theme={theme}
+            />
           </div>
         )}
 

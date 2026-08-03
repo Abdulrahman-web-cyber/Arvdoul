@@ -105,7 +105,7 @@ export default function CreatorDashboardScreen() {
       {/* Header */}
       <div className={cn(
         'sticky top-0 z-20',
-        'bg-white dark:bg-gray-900',
+        'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
         'border-b border-gray-200 dark:border-gray-800'
       )}>
         <div className="flex items-center justify-between px-4 py-3">
@@ -234,8 +234,8 @@ export default function CreatorDashboardScreen() {
                     key={metric.key}
                     className={cn(
                       'p-4 rounded-xl',
-                      'bg-white dark:bg-gray-900',
-                      'border border-gray-200 dark:border-gray-800'
+                      'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+                      'border border-gray-200/60 dark:border-gray-800/60'
                     )}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -268,8 +268,8 @@ export default function CreatorDashboardScreen() {
             {/* Daily Stats Chart */}
             <div className={cn(
               'p-4 rounded-2xl',
-              'bg-white dark:bg-gray-900',
-              'border border-gray-200 dark:border-gray-800'
+              'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+              'border border-gray-200/60 dark:border-gray-800/60'
             )}>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Daily Performance
@@ -304,8 +304,8 @@ export default function CreatorDashboardScreen() {
             {analytics?.growthRate !== undefined && (
               <div className={cn(
                 'p-4 rounded-2xl',
-                'bg-white dark:bg-gray-900',
-                'border border-gray-200 dark:border-gray-800'
+                'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+                'border border-gray-200/60 dark:border-gray-800/60'
               )}>
                 <div className="flex items-center justify-between">
                   <div>
@@ -337,8 +337,8 @@ export default function CreatorDashboardScreen() {
             {analytics?.activeDays !== undefined && (
               <div className={cn(
                 'p-4 rounded-2xl',
-                'bg-white dark:bg-gray-900',
-                'border border-gray-200 dark:border-gray-800'
+                'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+                'border border-gray-200/60 dark:border-gray-800/60'
               )}>
                 <div className="flex items-center justify-between">
                   <div>

@@ -24,7 +24,7 @@ import {
   TrendingUp as TrendingUpIcon,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { formatViewCount, formatDuration, formatWatchTime } from '../utils/videoUtils';
+import { formatViewCount, formatDuration, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
 import { toast } from 'sonner';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import GlassCard from '../components/UI/GlassCard';
@@ -150,7 +150,7 @@ const VideoAnalyticsScreen = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className={`min-h-screen pb-20 ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
       {/* Header */}
       <div className="sticky top-0 z-30 backdrop-blur-xl bg-black/80 border-b border-white/10">
         <div className="max-w-5xl mx-auto px-4 py-4">
@@ -230,7 +230,8 @@ const VideoAnalyticsScreen = () => {
  * Overview Tab - High-level metrics
  */
 const OverviewTab = ({ analytics }) => {
-  const { overview } = analytics;
+
+  const { isDark } = useTheme();  const { overview } = analytics;
 
   const stats = [
     {
@@ -287,7 +288,7 @@ const OverviewTab = ({ analytics }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl"
+            className={`p-4 rounded-2xl border backdrop-blur-xl ${isDark ? 'bg-white/5 border-white/10' : 'bg-white/90 border-gray-200'}`}
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center`}>
@@ -510,7 +511,8 @@ const AudienceTab = ({ audience }) => {
  * Revenue Tab - Earnings breakdown
  */
 const RevenueTab = ({ revenue }) => {
-  const revenueItems = [
+
+  const { isDark } = useTheme();  const revenueItems = [
     { label: 'Subscriptions', value: revenue.subscriptions, icon: Users },
     { label: 'Tips', value: revenue.tips, icon: Heart },
     { label: 'Pay Per View', value: revenue.payPerView, icon: Video },
@@ -549,7 +551,7 @@ const RevenueTab = ({ revenue }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl"
+            className={`p-4 rounded-2xl border backdrop-blur-xl ${isDark ? 'bg-white/5 border-white/10' : 'bg-white/90 border-gray-200'}`}
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">

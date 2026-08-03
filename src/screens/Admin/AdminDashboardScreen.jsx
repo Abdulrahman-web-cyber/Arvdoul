@@ -17,6 +17,7 @@ const AdminDashboardScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -28,15 +29,51 @@ const AdminDashboardScreen = () => {
     revenue: 0
   });
 
-  // Check admin access
+  // Check admin access + load real platform stats
   useEffect(() => {
-    const checkAdminAccess = async () => {
-      // TODO: Implement admin role check
-      // For now, allow access for demonstration
-      setLoading(false);
+    const init = async () => {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+        const firestore = await getFirestoreInstance();
+
+        // Real admin gate: membership in the `admins` collection (matches
+        // the server-side isAdmin() used by monetization functions).
+        if (!user?.uid) { navigate('/login'); return; }
+        const adminSnap = await getDoc(doc(firestore, 'admins', user.uid));
+        if (!adminSnap.exists()) {
+          setError('You do not have admin access.');
+          setLoading(false);
+          return;
+        }
+
+        // Real platform stats via aggregate count queries.
+        const { collection, getCountFromServer } = await import('firebase/firestore');
+        const count = async (path) => {
+          try { const s = await getCountFromServer(collection(firestore, path)); return s.data().count; }
+          catch (e) { return 0; }
+        };
+        const [users, posts, reports, communities, events] = await Promise.all([
+          count('users'), count('posts'), count('comment_reports'), count('communities'), count('events'),
+        ]);
+        setStats({
+          totalUsers: users,
+          activeUsers: users,
+          totalPosts: posts,
+          totalReports: reports,
+          pendingReports: reports,
+          totalCommunities: communities,
+          totalEvents: events,
+          revenue: 0,
+        });
+      } catch (err) {
+        setError('Could not load admin data.');
+      } finally {
+        setLoading(false);
+      }
     };
-    checkAdminAccess();
-  }, []);
+    init();
+  }, [user, navigate]);
 
   // Stat card component
   const StatCard = ({ title, value, icon: Icon, trend, trendUp, color }) => (
@@ -67,7 +104,7 @@ const AdminDashboardScreen = () => {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => navigate(route)}
-      className="flex items-start gap-4 p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 text-left w-full"
+      className="flex items-start gap-4 p-6 bg-white/80 dark:bg-gray-800/70 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)] text-left w-full"
     >
       <div className={`p-3 rounded-xl ${color}`}>
         <Icon className="w-6 h-6" />

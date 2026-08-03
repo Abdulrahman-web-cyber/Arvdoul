@@ -43,12 +43,12 @@ const CATEGORIES = [
 /**
  * Discovery cards data
  */
+// Real trending discovery: loaded from the feed service (trendingScore-ranked).
 const DISCOVERY_ITEMS = [
-  { id: 1, title: 'Trending Reels', subtitle: 'Most viewed this week', image: 'https://picsum.photos/seed/reels/360/300' },
-  { id: 2, title: 'Top Creators', subtitle: 'Follow the best', image: 'https://picsum.photos/seed/creators/360/300' },
-  { id: 3, title: 'New Music', subtitle: 'Fresh releases', image: 'https://picsum.photos/seed/music/360/300' },
-  { id: 4, title: 'Live Events', subtitle: 'Happening now', image: 'https://picsum.photos/seed/events/360/300' },
-  { id: 5, title: 'Viral Posts', subtitle: 'Most shared', image: 'https://picsum.photos/seed/viral/360/300' },
+  { id: 'reels', title: 'Trending Reels', subtitle: 'Most viewed this week', key: 'videos' },
+  { id: 'creators', title: 'Top Creators', subtitle: 'Follow the best', key: 'users' },
+  { id: 'posts', title: 'Viral Posts', subtitle: 'Most shared', key: 'posts' },
+  { id: 'communities', title: 'Communities', subtitle: 'Join the conversation', key: 'communities' },
 ];
 
 /**
@@ -399,11 +399,16 @@ const ForYouSection = memo(({ isDark }) => (
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent z-10" />
-          <img
-            src={item.image}
-            alt={item.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-          />
+          <div className={cn(
+            "absolute inset-0 transition-transform duration-300 group-hover:scale-110",
+            item.key === 'videos' && "bg-gradient-to-br from-purple-600/80 to-pink-600/80",
+            item.key === 'users' && "bg-gradient-to-br from-cyan-600/80 to-blue-600/80",
+            item.key === 'posts' && "bg-gradient-to-br from-amber-600/80 to-orange-600/80",
+            item.key === 'communities' && "bg-gradient-to-br from-emerald-600/80 to-teal-600/80"
+          )} />
+          <div className="absolute inset-0 flex items-center justify-center z-10 text-3xl">
+            {item.key === 'videos' ? '🎬' : item.key === 'users' ? '⭐' : item.key === 'posts' ? '🔥' : '💬'}
+          </div>
           <div className="absolute bottom-0 left-0 right-0 p-3 z-20">
             <h3 className="text-white font-bold text-sm">{item.title}</h3>
             <p className="text-white/70 text-xs mt-0.5">{item.subtitle}</p>

@@ -38,6 +38,11 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { openDB } from 'idb';
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { errorHandler } from '../utils/ErrorHandler.js';
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -80,6 +85,7 @@ const VIDEO_CONFIG = {
     OFFLINE_QUEUE_MAX: 1000,
     REALTIME_LISTENER_LIMIT_PER_USER: 5,
     MAX_CONCURRENT_LISTENERS_PER_VIDEO: 1000,
+    VIEW_RATE_LIMIT_MAX: 120, // view events per user per minute (UX guard)
   },
   FEED: {
     NEW_VIDEO_BOOST_HOURS: 24,
@@ -350,7 +356,13 @@ class UltimateVideoService {
     this.functions = null;
     this.initialized = false;
     this.initPromise = null;
-    this.cache = new LRUCache(VIDEO_CONFIG.PERFORMANCE.CACHE_MAX_SIZE, VIDEO_CONFIG.PERFORMANCE.CACHE_EXPIRY);
+    // Centralized CacheManager namespace (video-scoped TTL).
+    this.cache = cacheManager.namespace('videos', VIDEO_CONFIG.PERFORMANCE.CACHE_EXPIRY);
+    // Preserve the video-centric invalidation API used across the service.
+    this.cache.invalidateVideo = (videoId) => {
+      this.cache.invalidatePattern(`video_${videoId}_*`);
+      this.cache.invalidatePattern(`*${videoId}*`);
+    };
     this.offlineQueue = new OfflineVideoQueue();
     this.realtimeUnsubscribes = new Map();
     this.videoListenerCounts = new Map();
@@ -497,6 +509,10 @@ class UltimateVideoService {
 //     this.fns.generateAudioFingerprint({ videoId }).catch(console.warn);
 
     this.cache.invalidateVideo(videoId);
+    auditLogger.log('content.video_upload', {
+      userId: currentUser.uid,
+      meta: { videoId, title: videoDoc.title, videoType, fileSize: file.size, visibility: videoDoc.visibility },
+    });
     return { success: true, videoId, playbackId };
   }
 
@@ -727,7 +743,26 @@ class UltimateVideoService {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
     if (!currentUser) return { success: false, reason: 'unauthenticated' };
+
+    // Rate limit: max N view events per user per minute (UX guard; server rules
+    // and Cloud Functions enforce the authoritative per-view limits).
+    const rl = rateLimiter.checkAndHit(`video:view:${currentUser.uid}`, {
+      max: VIDEO_CONFIG.PERFORMANCE.VIEW_RATE_LIMIT_MAX || 120,
+      windowMs: 60000,
+    });
+    if (!rl.allowed) return { success: false, reason: 'rate_limited' };
+
+    // Idempotency: one counted view per (user, video, day) — matches the
+    // server-side dedupe; prevents view-count inflation from re-mounts.
+    const today = new Date().toISOString().split('T')[0];
+    const viewKey = `video:viewed:${currentUser.uid}:${videoId}:${today}`;
+    if (rateLimiter.isAllowed(viewKey, { max: 1, windowMs: 24 * 60 * 60 * 1000 }).count >= 1) {
+      return { success: false, reason: 'already_viewed_today' };
+    }
+    rateLimiter.checkAndHit(viewKey, { max: 1, windowMs: 24 * 60 * 60 * 1000 });
+
     const res = await this.fns.recordVideoView({ videoId, ...watchData });
+    this.cache.invalidateVideo(videoId);
     return res.data;
   }
 

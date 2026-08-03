@@ -59,13 +59,15 @@ export default function FriendsScreen() {
   return (
     <div className={cn(
       'min-h-screen pb-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Header */}
       <div className={cn(
-        'sticky top-0 z-20',
-        'bg-white dark:bg-gray-900',
-        'border-b border-gray-200 dark:border-gray-800'
+        'sticky top-0 z-20 backdrop-blur-xl',
+        'bg-white/80 dark:bg-gray-900/80',
+        'border-b border-gray-200/60 dark:border-gray-800/60'
       )}>
         <div className="flex items-center gap-3 px-4 py-3">
           <button
@@ -87,8 +89,9 @@ export default function FriendsScreen() {
         {/* Search */}
         <div className="px-4 pb-3">
           <div className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-xl',
-            'bg-gray-100 dark:bg-gray-800'
+            'flex items-center gap-2 px-3 py-2 rounded-2xl',
+            'bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-md border',
+            'border-gray-200/60 dark:border-gray-700/60 shadow-sm'
           )}>
             <Search className="w-4 h-4 text-gray-400" />
             <input
@@ -110,8 +113,10 @@ export default function FriendsScreen() {
           </div>
         ) : friends.length === 0 ? (
           <div className="text-center py-20">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400">
+            <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center mx-auto mb-4">
+              <Users className="w-8 h-8 text-violet-500" />
+            </div>
+            <p className="text-gray-500 dark:text-gray-400 font-medium">
               No mutual friends yet
             </p>
           </div>
@@ -121,9 +126,11 @@ export default function FriendsScreen() {
               <div
                 key={friend.id}
                 className={cn(
-                  'flex items-center gap-3 p-3 rounded-xl',
-                  'bg-white dark:bg-gray-900',
-                  'border border-gray-200 dark:border-gray-800'
+                  'group flex items-center gap-3 p-4 rounded-2xl',
+                  'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+                  'border border-gray-200/60 dark:border-gray-800/60',
+                  'shadow-[0_8px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.35)]',
+                  'hover:shadow-[0_12px_40px_rgba(139,92,246,0.15)] hover:-translate-y-0.5 transition-all duration-300'
                 )}
               >
                 <button
@@ -131,8 +138,9 @@ export default function FriendsScreen() {
                   className="flex-shrink-0"
                 >
                   <div className={cn(
-                    'w-12 h-12 rounded-full overflow-hidden',
-                    'bg-gradient-to-br from-purple-500 to-blue-500'
+                    'w-12 h-12 rounded-full overflow-hidden ring-2 ring-offset-2',
+                    'ring-violet-500/40 ring-offset-transparent',
+                    'bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500'
                   )}>
                     {friend.photoURL ? (
                       <img

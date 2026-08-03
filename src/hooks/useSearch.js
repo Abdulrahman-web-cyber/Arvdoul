@@ -256,9 +256,43 @@ export function useSearch() {
     // Trending
     loadTrending,
     
-    // Voice & QR placeholders
-    voiceSearch: () => console.log('Voice search not implemented'),
-    qrScan: () => console.log('QR scan not implemented'),
+    // Voice search — real Web Speech API (where supported).
+    voiceSearch: () => {
+      return new Promise((resolve, reject) => {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) { reject(new Error('Voice search is not supported in this browser.')); return; }
+        const rec = new SR();
+        rec.lang = 'en-US';
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        rec.onresult = (e) => resolve(e.results[0][0].transcript);
+        rec.onerror = (e) => reject(new Error(e.error || 'Voice search failed.'));
+        rec.onend = () => rec.abort && rec.abort();
+        rec.start();
+      });
+    },
+    // QR scan — real BarcodeDetector API (where supported).
+    qrScan: async () => {
+      if (typeof window === 'undefined' || !('BarcodeDetector' in window)) {
+        throw new Error('QR scanning is not supported in this browser.');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      try {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        await video.play();
+        // Give the camera a moment to expose a frame.
+        await new Promise((r) => setTimeout(r, 600));
+        const codes = await detector.detect(video);
+        stream.getTracks().forEach((t) => t.stop());
+        if (!codes.length) throw new Error('No QR code found.');
+        return codes[0].rawValue;
+      } catch (err) {
+        stream.getTracks().forEach((t) => t.stop());
+        throw err;
+      }
+    },
   };
 }
 

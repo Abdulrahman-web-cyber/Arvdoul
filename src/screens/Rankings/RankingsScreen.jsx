@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
 import { 
   FaTrophy, FaCrown, FaMedal, FaChevronLeft, FaChevronRight,
   FaArrowUp, FaArrowDown, FaMinus, FaStar, FaUsers, FaFire,
@@ -166,6 +167,7 @@ const RankCard = ({ rank, item, type }) => {
 
 // ==================== MAIN RANKINGS SCREEN ====================
 export default function RankingsScreen() {
+  const { theme, isDark } = useTheme();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('creators');
   const [activeCategory, setActiveCategory] = useState('engagement');
@@ -251,7 +253,7 @@ export default function RankingsScreen() {
     const icons = {
       engagement: <FaChartLine />,
       views: <FaUsers />,
-      growth: <FaTrendingUp />,
+      growth: <FaArrowUp />,
       revenue: <FaCoins />,
       net_worth: <FaCrown />,
       coins: <FaCoins />,
@@ -266,9 +268,9 @@ export default function RankingsScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className={`min-h-screen ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-4">
+      <header className={`border-b px-4 py-4 backdrop-blur-xl ${isDark ? 'bg-gray-800/80 border-gray-700/60' : 'bg-white/80 border-gray-200/60'}`}>
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">

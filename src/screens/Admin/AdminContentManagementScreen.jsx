@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -15,14 +16,31 @@ import {
 
 const AdminContentManagementScreen = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    setLoading(false);
-  }, []);
+    const load = async () => {
+      try {
+        const { collection, query, orderBy, limit, getDocs, doc, getDoc } = await import('firebase/firestore');
+        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+        const firestore = await getFirestoreInstance();
+        if (!user?.uid) { setLoading(false); return; }
+        const adminSnap = await getDoc(doc(firestore, 'admins', user.uid));
+        if (!adminSnap.exists()) { setLoading(false); return; }
+        const snap = await getDocs(query(collection(firestore, 'posts'), orderBy('createdAt', 'desc'), limit(100)));
+        setContent(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        toast.error('Could not load content.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [user]);
 
   const filteredContent = content.filter(c => {
     if (filter === 'all') return true;
@@ -35,9 +53,20 @@ const AdminContentManagementScreen = () => {
 
   const handleContentAction = async (contentId, action) => {
     try {
-      toast.success(`Content ${action}ed successfully`);
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+      const firestore = await getFirestoreInstance();
+      const ref = doc(firestore, 'posts', contentId);
+      await updateDoc(ref, {
+        isDeleted: action === 'remove',
+        moderationStatus: action === 'remove' ? 'removed' : 'approved',
+        updatedAt: serverTimestamp(),
+        moderatedBy: user?.uid || null,
+      });
+      setContent(prev => prev.map(c => (c.id === contentId ? { ...c, isDeleted: action === 'remove' } : c)));
+      toast.success(action === 'remove' ? 'Content removed.' : 'Content restored.');
     } catch (error) {
-      toast.error(`Failed to ${action} content`);
+      toast.error('Action failed.');
     }
   };
 
@@ -55,7 +84,7 @@ const AdminContentManagementScreen = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <button
@@ -77,7 +106,7 @@ const AdminContentManagementScreen = () => {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 mb-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -115,7 +144,7 @@ const AdminContentManagementScreen = () => {
               key={item.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700"
+              className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
             >
               <div className="flex gap-4">
                 <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
@@ -190,7 +219,7 @@ const AdminContentManagementScreen = () => {
           ))}
 
           {filteredContent.length === 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700">
+            <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
               <FileText className="w-12 h-12 mx-auto text-gray-400 mb-3" />
               <p className="text-gray-500">No content found</p>
             </div>

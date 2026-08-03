@@ -146,17 +146,17 @@ const VideoBottomSheet = memo(({
           exit={{ y: '100%' }}
           transition={SPRING_ANIMATION.bottomSheet}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 rounded-t-3xl backdrop-blur-2xl bg-gray-900/95 border-t border-white/10 p-6"
+          className={`absolute bottom-0 left-0 right-0 rounded-t-3xl backdrop-blur-2xl p-6 border-t ${isDark ? 'bg-gray-900/95 border-white/10' : 'bg-white/95 border-gray-200'}`}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-white font-bold text-lg">Share</h2>
+            <h2 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>Share</h2>
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={onClose}
-              className="p-2 rounded-full bg-white/10"
+              className={`p-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}
             >
-              <X className="w-5 h-5 text-white" />
+              <X className={`w-5 h-5 ${isDark ? 'text-white' : 'text-gray-700'}`} />
             </motion.button>
           </div>
 
@@ -166,16 +166,16 @@ const VideoBottomSheet = memo(({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleCopyLink}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
+              className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} transition-colors`}
             >
-              <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+              <div className={`w-14 h-14 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-100'} flex items-center justify-center`}>
                 {copied ? (
                   <Check className="w-6 h-6 text-green-400" />
                 ) : (
-                  <LinkIcon className="w-6 h-6 text-white" />
+                  <LinkIcon className={`w-6 h-6 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                 )}
               </div>
-              <span className="text-white/80 text-xs">
+              <span className={`${isDark ? 'text-white/80' : 'text-gray-600'} text-xs`}>
                 {copied ? 'Copied!' : 'Copy Link'}
               </span>
             </motion.button>
@@ -184,36 +184,36 @@ const VideoBottomSheet = memo(({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => handleExternalShare('twitter')}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
+              className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} transition-colors`}
             >
               <div className="w-14 h-14 rounded-full bg-[#1DA1F2]/20 flex items-center justify-center">
                 <Twitter className="w-6 h-6 text-[#1DA1F2]" />
               </div>
-              <span className="text-white/80 text-xs">Twitter</span>
+              <span className={`${isDark ? 'text-white/80' : 'text-gray-600'} text-xs`}>Twitter</span>
             </motion.button>
 
             {/* Facebook */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => handleExternalShare('facebook')}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
+              className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} transition-colors`}
             >
               <div className="w-14 h-14 rounded-full bg-[#4267B2]/20 flex items-center justify-center">
                 <Facebook className="w-6 h-6 text-[#4267B2]" />
               </div>
-              <span className="text-white/80 text-xs">Facebook</span>
+              <span className={`${isDark ? 'text-white/80' : 'text-gray-600'} text-xs`}>Facebook</span>
             </motion.button>
 
             {/* WhatsApp */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => handleExternalShare('whatsapp')}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
+              className={`flex flex-col items-center gap-2 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} transition-colors`}
             >
               <div className="w-14 h-14 rounded-full bg-[#25D366]/20 flex items-center justify-center">
                 <MessageCircle className="w-6 h-6 text-[#25D366]" />
               </div>
-              <span className="text-white/80 text-xs">WhatsApp</span>
+              <span className={`${isDark ? 'text-white/80' : 'text-gray-600'} text-xs`}>WhatsApp</span>
             </motion.button>
           </div>
 
@@ -223,7 +223,7 @@ const VideoBottomSheet = memo(({
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleShare}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 ${isDark ? 'text-white' : 'text-gray-900'} font-semibold`}
             >
               <Share2 className="w-5 h-5" />
               <span>Share to...</span>
@@ -233,7 +233,7 @@ const VideoBottomSheet = memo(({
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleSave}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-colors"
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} text-white transition-colors`}
             >
               <Clock className="w-5 h-5 text-yellow-400" />
               <span>Save to Watch Later</span>
@@ -243,7 +243,7 @@ const VideoBottomSheet = memo(({
             {/* Save to Collection */}
             <motion.button
               whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-colors"
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} text-white transition-colors`}
             >
               <Bookmark className="w-5 h-5 text-purple-400" />
               <span>Add to Collection</span>
@@ -254,7 +254,7 @@ const VideoBottomSheet = memo(({
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleDownload}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white transition-colors"
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} text-white transition-colors`}
             >
               <Download className="w-5 h-5 text-green-400" />
               <span>Download Video</span>
@@ -264,7 +264,7 @@ const VideoBottomSheet = memo(({
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleReport}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 text-red-400 transition-colors"
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-black/[0.03] hover:bg-black/5'} text-red-400 transition-colors`}
             >
               <Flag className="w-5 h-5" />
               <span>Report Video</span>
@@ -282,20 +282,20 @@ const VideoBottomSheet = memo(({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                  <h2 className={`${isDark ? 'text-white' : 'text-gray-900'} font-bold text-lg flex items-center gap-2`}>
                     <AlertTriangle className="w-5 h-5 text-yellow-400" />
                     Report Video
                   </h2>
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setShowReportModal(false)}
-                    className="p-2 rounded-full bg-white/10"
+                    className={`p-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-100'}`}
                   >
-                    <X className="w-5 h-5 text-white" />
+                    <X className={`w-5 h-5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                   </motion.button>
                 </div>
 
-                <p className="text-white/60 mb-4">
+                <p className={`${isDark ? 'text-white/60' : 'text-gray-500'} mb-4`}>
                   Help us understand what's wrong with this video
                 </p>
 
@@ -319,7 +319,7 @@ const VideoBottomSheet = memo(({
                         }`}
                       >
                         {reportReason === reason.value && (
-                          <Check className="w-3 h-3 text-white" />
+                          <Check className={`w-3 h-3 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                         )}
                       </div>
                       <span>{reason.label}</span>
@@ -331,7 +331,7 @@ const VideoBottomSheet = memo(({
                   whileTap={{ scale: 0.98 }}
                   onClick={submitReport}
                   disabled={!reportReason}
-                  className="w-full p-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold disabled:opacity-50"
+                  className={`w-full p-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 ${isDark ? 'text-white' : 'text-gray-900'} font-semibold disabled:opacity-50`}
                 >
                   Submit Report
                 </motion.button>

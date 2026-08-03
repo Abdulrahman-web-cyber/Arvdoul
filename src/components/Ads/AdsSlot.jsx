@@ -15,7 +15,7 @@ export default function AdsSlot({ ad = {}, onImpression = () => {} }) {
   return (
     <div className="max-w-md w-full p-4 bg-gray-800 rounded-xl text-white">
       <div className="text-xs mb-2">Sponsored</div>
-      {ad.mediaUrl && <img src={ad.mediaUrl} alt={`ad.title || "ad"} className="w-full h-56 object-cover rounded-md mb-2" />`}
+      {ad.mediaUrl && <img src={ad.mediaUrl} alt={ad.title || "ad"} className="w-full h-56 object-cover rounded-md mb-2" />}
       <div className="font-semibold">{ad.title}</div>
       <a href={ad.clickUrl || "#"} target="_blank" rel="noreferrer" className="text-sm underline mt-2 inline-block">Visit</a>
     </div>

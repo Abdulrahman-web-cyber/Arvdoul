@@ -7,6 +7,12 @@
 // ✅ Cursor compressed & URL‑safe
 // ✅ Pending awards processed in parallel with error isolation
 
+import { cacheManager } from '../utils/CacheManager.js';
+import { countersManager } from '../utils/CountersManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+
 const FEED_CONFIG = {
   FEED_TYPES: {
     FOLLOWING: 'following',
@@ -182,10 +188,10 @@ class UltimateFeedService {
     this.initialized = false;
     this.offlineMode = false;
 
-    this.cache = new Map();
+    this.cache = cacheManager.namespace('feed', FEED_CONFIG.PERFORMANCE.PAGE_CACHE_TTL || 30 * 1000);
     this.userFeedState = new Map();
     this.userPreferences = new Map();
-    this.blockCache = new Map();
+    this.blockCache = cacheManager.namespace('blocks_feed', FEED_CONFIG.BLOCK_CACHE_TTL);
     this.configCache = { weights: null, timestamp: 0 };
     this.sponsoredCache = { posts: [], timestamp: 0 };
     this.adCache = new Map();
@@ -736,6 +742,9 @@ class UltimateFeedService {
       if (FEED_CONFIG.MONETISATION.SPONSORED_AUCTION_ENABLED) {
         posts = posts.sort((a, b) => (b.bidAmount || 0) - (a.bidAmount || 0));
       }
+      await Promise.all(posts.map(p => countersManager.apply({
+        data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
+      }).catch(() => p)));
       this.sponsoredCache = { posts, timestamp: now };
       return posts.slice(0, options.limit);
     } catch (error) {
@@ -832,13 +841,22 @@ class UltimateFeedService {
     }
 
     try {
+      // Rate limit: feed requests per user per minute (UX guard).
+      rateLimiter.checkAndHit(`feed:req:${userId}`, { max: 60, windowMs: 60000 });
+
       const result = await Promise.race([
         this._generateFeed(userId, options, startTime, operationId, limit, lastDoc, forceRefresh, feedType),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
       ]);
+
+      // Rate-limited, privacy-aware feed-generation audit.
+      const auditRl = rateLimiter.checkAndHit(`feed:audit:${userId}`, { max: 1, windowMs: 60000 });
+      if (auditRl.allowed) {
+        auditLogger.log('feed.generated', { userId, meta: { feedType, limit, operationId } });
+      }
       return result;
     } catch (error) {
-      console.error('❌ Feed generation failed:', error);
+      logger.error('Feed generation failed', { error: error.message, userId, feedType });
       const fallback = await this._getFallbackFeed(userId, { limit });
       return {
         success: true,
@@ -1502,10 +1520,8 @@ class UltimateFeedService {
   _cachePage(userId, limit, cursor, data) {
     const key = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
     this.cache.set(key, { data, timestamp: Date.now() });
-    if (this.cache.size > FEED_CONFIG.PERFORMANCE.MAX_CACHE_SIZE) {
-      const oldest = Array.from(this.cache.keys()).sort((a, b) => this.cache.get(a).timestamp - this.cache.get(b).timestamp)[0];
-      this.cache.delete(oldest);
-    }
+    // Central TTLs handle expiry; defensive purge for the page namespace.
+    if (this.cache.size > FEED_CONFIG.PERFORMANCE.MAX_CACHE_SIZE) cacheManager.purgeExpired();
   }
 
   _countSources(sources) {
@@ -1622,7 +1638,12 @@ class UltimateFeedService {
       const postsRef = collection(this.firestore, 'posts');
       const q = query(postsRef, where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), firestoreLimit(limit));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fallback', createdAt: doc.data().createdAt?.toDate?.() || new Date() }));
+      const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fallback', createdAt: doc.data().createdAt?.toDate?.() || new Date() }));
+      // Overlay shard-backed engagement counts (legacy fallback keeps old data).
+      await Promise.all(posts.map(p => countersManager.apply({
+        data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
+      }).catch(() => p)));
+      return posts;
     } catch { return []; }
   }
 
@@ -1751,7 +1772,8 @@ class UltimateFeedService {
     this.userPreferences.delete(userId);
     this.userFeedState.delete(userId);
     this.feedHistory.delete(userId);
-    this.blockCache.delete(`blocked_${userId}`);
+    this.blockCache.delete(`block_${userId}`);
+    cacheManager.invalidateUser(userId);
     this.sessionBoosts.delete(userId);
     this.lastBoostTimes.delete(userId);
     this.boostCounters.delete(userId);

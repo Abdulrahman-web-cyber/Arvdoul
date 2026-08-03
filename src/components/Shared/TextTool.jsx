@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, useMemo, memo, useEffect } from "react";
+import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -124,6 +125,7 @@ const IconButton = memo(({
   disabled = false,
   size = 'md',
 }) => {
+    const { isDark } = useTheme();
   const sizeClasses = {
     sm: 'w-7 h-7',
     md: 'w-8 h-8',
@@ -174,15 +176,16 @@ const Section = memo(({
   children,
   badge,
 }) => {
+    const { isDark } = useTheme();
   return (
-    <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+    <div className={`rounded-2xl ${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} border ${isDark ? 'border-white/10' : 'border-gray-200'} overflow-hidden`}>
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-3 hover:bg-white/5 transition-colors"
+        className={`w-full flex items-center justify-between p-3 hover:${isDark ? 'bg-white/5' : 'bg-black/[0.03]'} transition-colors`}
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-white/60" />}
+          {Icon && <Icon className={`w-4 h-4 text-white/60`} />}
           <span className="text-sm font-medium text-white">{title}</span>
           {badge && (
             <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-purple-500/30 text-purple-300">
@@ -236,6 +239,7 @@ const FontSelector = memo(({
   onSizeChange,
   pushUndo,
 }) => {
+    const { isDark } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('popular');
@@ -255,12 +259,12 @@ const FontSelector = memo(({
       {/* Selected font display */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-3 rounded-xl bg-white/10 border border-white/10 hover:bg-white/15 transition-colors"
+        className={`w-full flex items-center justify-between p-3 rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} border ${isDark ? 'border-white/10' : 'border-gray-200'} ${isDark ? 'hover:bg-white/15' : 'hover:bg-black/10'} transition-colors`}
       >
         <span className="text-sm text-white truncate" style={{ fontFamily }}>
           {fontFamily}
         </span>
-        <ChevronDown className="w-4 h-4 text-white/60" />
+        <ChevronDown className={`w-4 h-4 text-white/60`} />
       </button>
 
       {/* Font dropdown */}
@@ -273,7 +277,7 @@ const FontSelector = memo(({
             className="absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl bg-gray-900 border border-white/20 shadow-2xl overflow-hidden"
           >
             {/* Search */}
-            <div className="p-2 border-b border-white/10">
+            <div className={`p-2 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
                 <input
@@ -281,7 +285,7 @@ const FontSelector = memo(({
                   placeholder="Search fonts..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/40 text-sm outline-none"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg ${isDark ? 'bg-white/10' : 'bg-black/5'} text-white ${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} text-sm outline-none`}
                 />
               </div>
             </div>
@@ -337,6 +341,7 @@ const TextTool = memo(({
   onDuplicateLayer,
   onDeleteLayer,
 }) => {
+    const { isDark } = useTheme();
   const [quickText, setQuickText] = useState("");
   const [expandedSections, setExpandedSections] = useState({
     text: true,
@@ -426,7 +431,7 @@ const TextTool = memo(({
             onKeyDown={(e) => {
               if (e.key === "Enter") onQuickAdd();
             }}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-white/10 text-white placeholder-white/40 border border-white/10 focus:border-purple-500 outline-none text-sm transition-colors"
+            className={`flex-1 px-4 py-2.5 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white \${isDark ? 'placeholder-white/40' : 'placeholder-gray-400'} border \${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-sm transition-colors`}
             aria-label="Quick text input"
           />
           <motion.button
@@ -458,7 +463,7 @@ const TextTool = memo(({
               value={selectedText.text || ''}
               onChange={(e) => handleUpdate({ text: e.target.value })}
               onBlur={() => pushUndo?.()}
-              className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border border-white/10 focus:border-purple-500 outline-none text-lg"
+              className={`w-full px-4 py-3 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white border \${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-lg`}
               aria-label="Edit text content"
               placeholder="Enter text..."
             />
@@ -473,7 +478,7 @@ const TextTool = memo(({
           >
             {/* Font Family */}
             <div className="space-y-2">
-              <label className="text-xs text-white/60 font-medium">Font Family</label>
+              <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Font Family</label>
               <FontSelector
                 fontFamily={selectedText.fontFamily || 'Poppins'}
                 onChange={(font) => handleUpdate({ fontFamily: font }, true)}
@@ -483,7 +488,7 @@ const TextTool = memo(({
             {/* Font Size */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Size</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Size</label>
                 <span className="text-xs text-white/50">{selectedText.fontSize || 48}px</span>
               </div>
               <div className="flex items-center gap-2">
@@ -501,7 +506,7 @@ const TextTool = memo(({
 
             {/* Text Styles */}
             <div className="space-y-2">
-              <label className="text-xs text-white/60 font-medium">Style</label>
+              <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Style</label>
               <div className="flex items-center gap-2">
                 <IconButton
                   icon={Bold}
@@ -532,7 +537,7 @@ const TextTool = memo(({
 
             {/* Alignment */}
             <div className="space-y-2">
-              <label className="text-xs text-white/60 font-medium">Alignment</label>
+              <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Alignment</label>
               <div className="flex items-center gap-2">
                 <IconButton
                   icon={AlignLeft}
@@ -563,7 +568,7 @@ const TextTool = memo(({
 
             {/* Color */}
             <div className="space-y-2">
-              <label className="text-xs text-white/60 font-medium">Color</label>
+              <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Color</label>
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => setShowColorPicker(!showColorPicker)}
@@ -595,7 +600,7 @@ const TextTool = memo(({
             {/* Opacity */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Opacity</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Opacity</label>
                 <span className="text-xs text-white/50">{selectedText.opacity ?? 100}%</span>
               </div>
               <input
@@ -612,7 +617,7 @@ const TextTool = memo(({
             {/* Letter Spacing */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Letter Spacing</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Letter Spacing</label>
                 <span className="text-xs text-white/50">{selectedText.letterSpacing ?? 0}px</span>
               </div>
               <input
@@ -629,7 +634,7 @@ const TextTool = memo(({
             {/* Line Height */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Line Height</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Line Height</label>
                 <span className="text-xs text-white/50">{(selectedText.lineHeight ?? 1.2).toFixed(1)}</span>
               </div>
               <input
@@ -647,7 +652,7 @@ const TextTool = memo(({
             {/* Rotation */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Rotation</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Rotation</label>
                 <span className="text-xs text-white/50">
                   {Math.round(((selectedText.rotation || 0) * 180 / Math.PI))}°
                 </span>
@@ -680,7 +685,7 @@ const TextTool = memo(({
             {/* Shadow */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Shadow</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Shadow</label>
                 <button
                   onClick={() => handleUpdate({ shadowEnabled: !selectedText.shadowEnabled }, true)}
                   className={`
@@ -703,7 +708,7 @@ const TextTool = memo(({
                         type="number"
                         value={selectedText.shadowX ?? 2}
                         onChange={(e) => handleUpdate({ shadowX: Number(e.target.value) })}
-                        className="w-full px-2 py-1 rounded bg-white/10 text-white text-xs"
+                        className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                       />
                     </div>
                     <div>
@@ -712,7 +717,7 @@ const TextTool = memo(({
                         type="number"
                         value={selectedText.shadowY ?? 2}
                         onChange={(e) => handleUpdate({ shadowY: Number(e.target.value) })}
-                        className="w-full px-2 py-1 rounded bg-white/10 text-white text-xs"
+                        className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                       />
                     </div>
                     <div>
@@ -721,7 +726,7 @@ const TextTool = memo(({
                         type="number"
                         value={selectedText.shadowBlur ?? 4}
                         onChange={(e) => handleUpdate({ shadowBlur: Number(e.target.value) })}
-                        className="w-full px-2 py-1 rounded bg-white/10 text-white text-xs"
+                        className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                       />
                     </div>
                   </div>
@@ -741,7 +746,7 @@ const TextTool = memo(({
             {/* Stroke */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-white/60 font-medium">Stroke</label>
+                <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Stroke</label>
                 <button
                   onClick={() => handleUpdate({ 
                     strokeWidth: selectedText.strokeWidth > 0 ? 0 : 2 
@@ -767,7 +772,7 @@ const TextTool = memo(({
                       max={20}
                       value={selectedText.strokeWidth ?? 2}
                       onChange={(e) => handleUpdate({ strokeWidth: Number(e.target.value) })}
-                      className="w-full px-2 py-1 rounded bg-white/10 text-white text-xs"
+                      className={`w-full px-2 py-1 rounded \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white text-xs`}
                     />
                   </div>
                   <div>
@@ -828,7 +833,7 @@ const TextTool = memo(({
                   }
                 `}
               >
-                <Type className="w-4 h-4 text-white/60 flex-shrink-0" />
+                <Type className={`w-4 h-4 text-white/60 flex-shrink-0`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate">{layer.text}</p>
                   <p className="text-[10px] text-white/40">{layer.fontFamily} • {layer.fontSize}px</p>
@@ -839,10 +844,10 @@ const TextTool = memo(({
                       e.stopPropagation();
                       onDuplicateLayer?.(layer.id);
                     }}
-                    className="p-1.5 rounded hover:bg-white/20"
+                    className={`p-1.5 rounded ${isDark ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
                     aria-label="Duplicate layer"
                   >
-                    <Copy className="w-3.5 h-3.5 text-white/60" />
+                    <Copy className={`w-3.5 h-3.5 ${isDark ? 'text-white/60' : 'text-gray-500'}`} />
                   </button>
                   <button
                     onClick={(e) => {

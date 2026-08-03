@@ -649,50 +649,6 @@ exports.cleanupExpiredStories = functions.pubsub
   });
 
 // ----------------------------------------------------------------------
-//  6. recoverStuckFanoutTasks – reset stuck tasks and reprocess
-// ----------------------------------------------------------------------
-exports.recoverStuckFanoutTasks = functions.pubsub
-  .schedule('every 10 minutes')
-  .onRun(async (context) => {
-    const stuckTimeout = new Date(Date.now() - STUCK_TASK_TIMEOUT_MS);
-    const stuckSnap = await db.collection('fanout_tasks')
-      .where('status', '==', 'processing')
-      .where('processingStartedAt', '<', Timestamp.fromDate(stuckTimeout))
-      .limit(50)
-      .get();
-
-    for (const doc of stuckSnap.docs) {
-      let shouldProcess = false;
-      try {
-        await db.runTransaction(async (t) => {
-          const fresh = await t.get(doc.ref);
-          if (fresh.data().status === 'processing') {
-            t.update(doc.ref, {
-              status: 'pending',
-              processingError: 'Recovered from stuck state',
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-            shouldProcess = true;
-          }
-        });
-      } catch (err) {
-        log('error', 'Stuck task recovery transaction failed', { taskId: doc.id, error: err.message });
-        continue;
-      }
-
-      if (shouldProcess) {
-        const taskData = (await doc.ref.get()).data();
-        await processFanoutTaskInternal(doc.ref, doc.id, taskData);
-      }
-    }
-
-    if (stuckSnap.size > 0) {
-      log('info', 'Recovered stuck fan‑out tasks', { count: stuckSnap.size });
-    }
-    return null;
-  });
-
-// ----------------------------------------------------------------------
 //  7. retryFailedFanoutTasks – retry recent failed tasks
 // ----------------------------------------------------------------------
 exports.retryFailedFanoutTasks = functions.pubsub
@@ -904,5 +860,5 @@ exports.onStoryReactionCreate = functions.firestore
   7. fanout_tasks: status ASC, processingStartedAt ASC
 
   TTL POLICY:
-  Enable TTL on rate_limits/*/shards.expireAt to automatically clean up old rate limit documents.
+  Enable TTL on rate_limits/<shard>/shards.expireAt to automatically clean up old rate limit documents.
 */

@@ -15,6 +15,12 @@
  */
 
 import { produce } from 'immer';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { cacheManager } from '../utils/CacheManager.js';
+import { countersManager } from '../utils/CountersManager.js';
+import { errorHandler } from '../utils/ErrorHandler.js';
 
 // ==================== CONFIGURATION ====================
 const ANALYTICS_CONFIG = {
@@ -26,7 +32,14 @@ const ANALYTICS_CONFIG = {
     age: ['13-17', '18-24', '25-34', '35-44', '45-54', '55-64', '65+'],
     gender: ['male', 'female', 'other', 'prefer_not_to_say'],
   },
-  RANKING_TOP_N: 100, // Compare against top 100 creators
+  // Configurable via VITE_ANALYTICS_RANKING_TOP_N (env) - no hardcoded value.
+  RANKING_TOP_N: Number(import.meta.env?.VITE_ANALYTICS_RANKING_TOP_N) || 100,
+  // Rate limits (generous - UX guard; server enforces the real boundary)
+  RATE_LIMITS: {
+    TRACK_VIEW_MAX: 120, // profile view writes per minute per viewer
+    HISTORY_READ_MAX: 60, // coin history reads per minute per user
+  },
+  SNAPSHOT_COLLECTION: 'user_daily_stats', // follower-count snapshots (migration: REFACTOR_PROGRESS.md)
 };
 
 // ==================== LRU CACHE ====================
@@ -95,7 +108,8 @@ class UltimateAnalyticsService {
   constructor() {
     this.firestore = null;
     this.initialized = false;
-    this.cache = new LRUCache(100, ANALYTICS_CONFIG.CACHE_TTL);
+    // Centralized cache (CacheManager namespace) - replaces local LRU Map.
+    this.cache = cacheManager.namespace('analytics', ANALYTICS_CONFIG.CACHE_TTL);
     this.subscriptions = new Map();
     this._cacheCleanupInterval = null;
 
@@ -103,7 +117,7 @@ class UltimateAnalyticsService {
       this._cacheCleanupInterval = setInterval(() => this.clearExpiredCache(), 5 * 60 * 1000);
     }
 
-//     this.initialize().catch(err => console.warn('Analytics service init warning:', err.message));
+//     this.initialize().catch(err => logger.warn('Analytics service init warning:', err.message));
   }
 
   // ==================== INITIALIZATION ====================
@@ -126,7 +140,7 @@ class UltimateAnalyticsService {
       this.initialized = true;
       return this.firestore;
     } catch (error) {
-      console.error('❌ Analytics initialization failed:', error);
+      logger.error('Analytics initialization failed', { error: error.message });
       throw enhanceError(error, 'Failed to initialize analytics service');
     }
   }
@@ -209,10 +223,17 @@ class UltimateAnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
+        // Shard-backed totals with legacy fallback (no shards = old doc value).
+        const docPath = `profile_analytics/${userId}`;
+        const [totalViews, totalReach] = await Promise.all([
+          countersManager.get({ docPath, field: 'totalViews', fallback: data.totalViews || 0 }),
+          countersManager.get({ docPath, field: 'totalReach', fallback: data.totalReach || 0 }),
+        ]);
+
         analytics = {
           ...analytics,
-          totalViews: data.totalViews || 0,
-          totalReach: data.totalReach || 0,
+          totalViews,
+          totalReach,
           totalEngagement: data.totalEngagement || 0,
           coinsEarned: data.coinsEarned || 0,
           dailyStats: this._extractDailyStats(data.dailyStats, startDate),
@@ -248,7 +269,7 @@ class UltimateAnalyticsService {
       this.cache.set(cacheKey, analytics);
       return analytics;
     } catch (error) {
-      console.error('❌ Get user analytics failed:', error);
+      logger.error('Get user analytics failed', { error: error.message });
       throw enhanceError(error, 'Failed to get user analytics');
     }
   }
@@ -279,31 +300,42 @@ class UltimateAnalyticsService {
   async trackProfileView(viewerId, profileOwnerId) {
     if (!viewerId || viewerId === profileOwnerId) return; // Don't track self-views
 
+    // Client-side UX guard against view-write storms (server rules enforce the real boundary).
+    const rl = rateLimiter.checkAndHit(`analytics:view:${viewerId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.TRACK_VIEW_MAX, windowMs: 60000 });
+    if (!rl.allowed) return; // silently drop excess view events
+
     try {
       await this._ensureInitialized();
-      
-      const { doc, setDoc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
+
+      const { doc, getDoc, setDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
       const today = this._getDateString();
       const viewDocId = this._generateDocId(viewerId, profileOwnerId, today);
-      
-      // Record the view
+
+      // Dedupe: one analytics write per (viewer, owner, day) - no per-view hot writes.
       const viewRef = doc(this.firestore, 'profile_views', viewDocId);
+      const existingView = await getDoc(viewRef);
+      if (existingView.exists()) return;
+
+      // Record the view
       await setDoc(viewRef, {
         viewerId,
         profileOwnerId,
         viewedAt: serverTimestamp(),
         date: today,
-      }, { merge: true });
+      });
 
-      // Update profile analytics
+      // Sharded counters for totalViews/totalReach (no hot profile_analytics doc).
+      const docPath = `profile_analytics/${profileOwnerId}`;
+      await countersManager.increment({ docPath, field: 'totalViews' });
+      await countersManager.increment({ docPath, field: 'totalReach' });
+
+      // Daily stats: bounded map (365 days), written at most once per viewer per day.
       const analyticsRef = doc(this.firestore, 'profile_analytics', profileOwnerId);
       await runTransaction(this.firestore, async (transaction) => {
         const analyticsDoc = await transaction.get(analyticsRef);
-        
+
         if (!analyticsDoc.exists()) {
           transaction.set(analyticsRef, {
-            totalViews: 1,
-            totalReach: 1,
             totalEngagement: 0,
             coinsEarned: 0,
             dailyStats: {
@@ -324,10 +356,8 @@ class UltimateAnalyticsService {
           const data = analyticsDoc.data();
           const dailyStats = data.dailyStats || {};
           const todayStats = dailyStats[today] || { views: 0, reach: 0, engagement: 0, coins: 0 };
-          
+
           transaction.update(analyticsRef, {
-            totalViews: (data.totalViews || 0) + 1,
-            totalReach: (data.totalReach || 0) + 1,
             [`dailyStats.${today}`]: {
               views: (todayStats.views || 0) + 1,
               reach: (todayStats.reach || 0) + 1,
@@ -339,13 +369,12 @@ class UltimateAnalyticsService {
         }
       });
 
-      // Invalidate cache
-      this.cache.delete(`analytics_${profileOwnerId}_7d`);
-      this.cache.delete(`analytics_${profileOwnerId}_30d`);
-      this.cache.delete(`analytics_${profileOwnerId}_90d`);
-      this.cache.delete(`analytics_${profileOwnerId}_365d`);
+      // Invalidate cache (centralized CacheManager)
+      this.cache.invalidatePattern(`analytics_${profileOwnerId}_*`);
+      countersManager.invalidate({ docPath, field: 'totalViews' });
+      countersManager.invalidate({ docPath, field: 'totalReach' });
     } catch (error) {
-//       console.warn('⚠️ Track profile view failed:', error);
+      logger.warn('Track profile view failed', { error: error.message, profileOwnerId });
       // Don't throw - this is a non-critical operation
     }
   }
@@ -439,17 +468,18 @@ class UltimateAnalyticsService {
       const dailyField = dailyFieldMap[eventType];
       
       if (!totalField || !dailyField) return;
-      
+
+      // Totals via sharded counters (no hot post_analytics doc).
+      const docPath = `post_analytics/${postId}`;
+      await countersManager.increment({ docPath, field: totalField });
+
+      // Daily stats: bounded per-day map, written via transaction.
       await runTransaction(this.firestore, async (transaction) => {
         const analyticsDoc = await transaction.get(analyticsRef);
         
         if (!analyticsDoc.exists()) {
           const newData = {
             postId,
-            totalViews: eventType === 'view' ? 1 : 0,
-            totalLikes: eventType === 'like' ? 1 : 0,
-            totalComments: eventType === 'comment' ? 1 : 0,
-            totalShares: eventType === 'share' ? 1 : 0,
             dailyStats: {
               [today]: {
                 views: eventType === 'view' ? 1 : 0,
@@ -467,7 +497,6 @@ class UltimateAnalyticsService {
           const todayStats = dailyStats[today] || { views: 0, likes: 0, comments: 0, shares: 0 };
           
           const updates = {
-            [totalField]: increment(1),
             [`dailyStats.${today}.${dailyField}`]: increment(1),
             lastUpdated: serverTimestamp(),
           };
@@ -475,6 +504,7 @@ class UltimateAnalyticsService {
           transaction.update(analyticsRef, updates);
         }
       });
+      countersManager.invalidate({ docPath, field: totalField });
     } catch (error) {
 //       console.warn('⚠️ Track post analytics failed:', error);
     }
@@ -511,17 +541,24 @@ class UltimateAnalyticsService {
       }
       
       const data = snap.data();
-      const totalEngagement = (data.totalLikes || 0) + (data.totalComments || 0) + (data.totalShares || 0);
-      const engagementRate = data.totalViews > 0 
-        ? (totalEngagement / data.totalViews) * 100 
+      const docPath = `post_analytics/${postId}`;
+      const [totalViews, totalLikes, totalComments, totalShares] = await Promise.all([
+        countersManager.get({ docPath, field: 'totalViews', fallback: data.totalViews || 0 }),
+        countersManager.get({ docPath, field: 'totalLikes', fallback: data.totalLikes || 0 }),
+        countersManager.get({ docPath, field: 'totalComments', fallback: data.totalComments || 0 }),
+        countersManager.get({ docPath, field: 'totalShares', fallback: data.totalShares || 0 }),
+      ]);
+      const totalEngagement = totalLikes + totalComments + totalShares;
+      const engagementRate = totalViews > 0
+        ? (totalEngagement / totalViews) * 100
         : 0;
       
       const analytics = {
         postId,
-        totalViews: data.totalViews || 0,
-        totalLikes: data.totalLikes || 0,
-        totalComments: data.totalComments || 0,
-        totalShares: data.totalShares || 0,
+        totalViews,
+        totalLikes,
+        totalComments,
+        totalShares,
         dailyStats: this._extractDailyStats(data.dailyStats, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
         engagementRate: Math.round(engagementRate * 100) / 100,
         lastUpdated: data.lastUpdated?.toDate?.()?.toISOString() || new Date().toISOString(),
@@ -530,7 +567,7 @@ class UltimateAnalyticsService {
       this.cache.set(cacheKey, analytics);
       return analytics;
     } catch (error) {
-      console.error('❌ Get post analytics failed:', error);
+      logger.error('Get post analytics failed', { error: error.message });
       throw enhanceError(error, 'Failed to get post analytics');
     }
   }
@@ -561,7 +598,7 @@ class UltimateAnalyticsService {
       
       return snap.data().demographics;
     } catch (error) {
-      console.error('❌ Get audience demographics failed:', error);
+      logger.error('Get audience demographics failed', { error: error.message });
       return {
         ageGroups: {},
         gender: {},
@@ -582,16 +619,38 @@ class UltimateAnalyticsService {
     try {
       await this._ensureInitialized();
       
-      const { doc, getDoc, collection, query, where, getDocs, orderBy } = await import('firebase/firestore');
+      const { doc, getDoc, collection, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
       
-      // Get user profile for follower count history
+      // Real historical follower snapshots (user_daily_stats) when available.
+      const snapshotsRef = collection(this.firestore, ANALYTICS_CONFIG.SNAPSHOT_COLLECTION);
+      const q = query(
+        snapshotsRef,
+        where('userId', '==', userId),
+        where('type', '==', 'follower_count'),
+        orderBy('date', 'desc'),
+        limit(days)
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const growthData = snapshot.docs
+          .map(d => d.data())
+          .reverse()
+          .map(s => ({
+            date: s.date,
+            followers: s.value || 0,
+            newFollowers: s.delta || 0,
+          }));
+        return growthData;
+      }
+
+      // Fallback (legacy behavior): estimated growth from current follower count.
+      // NOTE: keep until snapshot collection is populated (migration plan:
+      // userService.followUser/unfollowUser record daily snapshots).
       const userRef = doc(this.firestore, 'users', userId);
       const userSnap = await getDoc(userRef);
       
       if (!userSnap.exists()) return [];
       
-      // For now, return estimated growth based on current follower count
-      // In production, this would track historical follower counts
       const currentFollowers = userSnap.data().followerCount || 0;
       const estimatedDailyGrowth = currentFollowers / Math.max(days, 1);
       
@@ -610,8 +669,33 @@ class UltimateAnalyticsService {
       
       return growthData;
     } catch (error) {
-      console.error('❌ Get follower growth failed:', error);
+      logger.error('Get follower growth failed', { error: error.message, userId });
       return [];
+    }
+  }
+
+  /**
+   * Record a daily follower-count snapshot (called by userService on
+   * follow/unfollow changes). New export - no existing behavior removed.
+   * @param {string} userId
+   * @param {number} followerCount
+   */
+  async recordFollowerSnapshot(userId, followerCount) {
+    if (!userId || typeof followerCount !== 'number') return;
+    try {
+      await this._ensureInitialized();
+      const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const today = this._getDateString();
+      const ref = doc(this.firestore, ANALYTICS_CONFIG.SNAPSHOT_COLLECTION, `${userId}_${today}`);
+      await setDoc(ref, {
+        userId,
+        type: 'follower_count',
+        date: today,
+        value: followerCount,
+        recordedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (error) {
+      logger.warn('Record follower snapshot failed', { error: error.message, userId });
     }
   }
 
@@ -626,15 +710,18 @@ class UltimateAnalyticsService {
       await this._ensureInitialized();
       
       const analytics = await this.getUserAnalytics(userId, `${days}d`);
+      // Real per-day engagement from stored daily stats (no fabricated ratios).
       return analytics.dailyStats.map(stat => ({
         date: stat.date,
         engagement: stat.engagement || 0,
-        likes: Math.round((stat.engagement || 0) * 0.6), // Estimated
-        comments: Math.round((stat.engagement || 0) * 0.3), // Estimated
-        shares: Math.round((stat.engagement || 0) * 0.1), // Estimated
+        likes: stat.likes || 0,
+        comments: stat.comments || 0,
+        shares: stat.shares || 0,
+        views: stat.views || 0,
+        reach: stat.reach || 0,
       }));
     } catch (error) {
-      console.error('❌ Get engagement trends failed:', error);
+      logger.error('Get engagement trends failed', { error: error.message, userId });
       return [];
     }
   }
@@ -650,6 +737,15 @@ class UltimateAnalyticsService {
     try {
       await this._ensureInitialized();
       
+      // Client-side UX guard against history-scraping storms.
+      const rl = rateLimiter.checkAndHit(`analytics:history:${userId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.HISTORY_READ_MAX, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Rate limit exceeded for analytics history'), { code: 5001, defaultMessage: 'Too many analytics requests. Please try again shortly.' });
+      }
+
+      // Audit analytics data access (GDPR/CCPA compliance).
+      auditLogger.log('analytics.read', { userId, meta: { resource: 'coin_earning_history', limit: limitCount } });
+
       const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
       
       const transactionsRef = collection(this.firestore, 'transactions');
@@ -662,14 +758,65 @@ class UltimateAnalyticsService {
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const results = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
       }));
+      // Cursor pagination support: nextCursor attached to the array (backward-compatible).
+      results.nextCursor = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : null;
+      return results;
     } catch (error) {
-      console.error('❌ Get coin earning history failed:', error);
+      if (error?.errorCode) throw error;
+      logger.error('Get coin earning history failed', { error: error.message, userId });
       return [];
+    }
+  }
+
+  /**
+   * Cursor-paginated coin earning history (new export - additive).
+   * @param {string} userId
+   * @param {Object} [options] { limit, cursor }
+   * @returns {Promise<{items: Array, nextCursor: string|null, hasMore: boolean}>}
+   */
+  async getCoinEarningHistoryPage(userId, options = {}) {
+    const { limit: limitCount = 50, cursor = null } = options;
+    try {
+      await this._ensureInitialized();
+
+      const rl = rateLimiter.checkAndHit(`analytics:history:${userId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.HISTORY_READ_MAX, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Rate limit exceeded for analytics history'), { code: 5001, defaultMessage: 'Too many analytics requests. Please try again shortly.' });
+      }
+
+      auditLogger.log('analytics.read', { userId, meta: { resource: 'coin_earning_history', limit: limitCount, cursor } });
+
+      const { collection, query, where, orderBy, limit, getDocs, startAfter, doc: fDoc, getDoc } = await import('firebase/firestore');
+      const transactionsRef = collection(this.firestore, 'transactions');
+      let q = query(
+        transactionsRef,
+        where('userId', '==', userId),
+        where('type', 'in', ['earn', 'receive_gift', 'receive_tip', 'ad_reward']),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      if (cursor) {
+        const cursorRef = fDoc(this.firestore, 'transactions', cursor);
+        const cursorSnap = await getDoc(cursorRef);
+        if (cursorSnap.exists()) q = query(q, startAfter(cursorSnap));
+      }
+      const snapshot = await getDocs(q);
+      const items = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
+      }));
+      const hasMore = snapshot.docs.length === limitCount;
+      return { items, hasMore, nextCursor: hasMore ? snapshot.docs[snapshot.docs.length - 1].id : null };
+    } catch (error) {
+      if (error?.errorCode) throw error;
+      logger.error('Get coin earning history page failed', { error: error.message, userId });
+      return { items: [], hasMore: false, nextCursor: null };
     }
   }
 
@@ -682,7 +829,14 @@ class UltimateAnalyticsService {
   async getCoinSpendingHistory(userId, limitCount = 50) {
     try {
       await this._ensureInitialized();
-      
+
+      const rl = rateLimiter.checkAndHit(`analytics:history:${userId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.HISTORY_READ_MAX, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Rate limit exceeded for analytics history'), { code: 5001, defaultMessage: 'Too many analytics requests. Please try again shortly.' });
+      }
+
+      auditLogger.log('analytics.read', { userId, meta: { resource: 'coin_spending_history', limit: limitCount } });
+
       const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
       
       const transactionsRef = collection(this.firestore, 'transactions');
@@ -695,33 +849,81 @@ class UltimateAnalyticsService {
       );
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const results = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
       }));
+      results.nextCursor = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : null;
+      return results;
     } catch (error) {
-      console.error('❌ Get coin spending history failed:', error);
+      if (error?.errorCode) throw error;
+      logger.error('Get coin spending history failed', { error: error.message, userId });
       return [];
+    }
+  }
+
+  /**
+   * Cursor-paginated coin spending history (new export - additive).
+   * @param {string} userId
+   * @param {Object} [options] { limit, cursor }
+   * @returns {Promise<{items: Array, nextCursor: string|null, hasMore: boolean}>}
+   */
+  async getCoinSpendingHistoryPage(userId, options = {}) {
+    const { limit: limitCount = 50, cursor = null } = options;
+    try {
+      await this._ensureInitialized();
+
+      const rl = rateLimiter.checkAndHit(`analytics:history:${userId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.HISTORY_READ_MAX, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Rate limit exceeded for analytics history'), { code: 5001, defaultMessage: 'Too many analytics requests. Please try again shortly.' });
+      }
+
+      auditLogger.log('analytics.read', { userId, meta: { resource: 'coin_spending_history', limit: limitCount, cursor } });
+
+      const { collection, query, where, orderBy, limit, getDocs, startAfter, doc: fDoc, getDoc } = await import('firebase/firestore');
+      const transactionsRef = collection(this.firestore, 'transactions');
+      let q = query(
+        transactionsRef,
+        where('userId', '==', userId),
+        where('type', 'in', ['spend', 'send_gift', 'send_tip', 'purchase', 'boost']),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+      );
+      if (cursor) {
+        const cursorRef = fDoc(this.firestore, 'transactions', cursor);
+        const cursorSnap = await getDoc(cursorRef);
+        if (cursorSnap.exists()) q = query(q, startAfter(cursorSnap));
+      }
+      const snapshot = await getDocs(q);
+      const items = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
+      }));
+      const hasMore = snapshot.docs.length === limitCount;
+      return { items, hasMore, nextCursor: hasMore ? snapshot.docs[snapshot.docs.length - 1].id : null };
+    } catch (error) {
+      if (error?.errorCode) throw error;
+      logger.error('Get coin spending history page failed', { error: error.message, userId });
+      return { items: [], hasMore: false, nextCursor: null };
     }
   }
 
   // ==================== CACHE MANAGEMENT ====================
   clearExpiredCache() {
     const now = Date.now();
-    for (const [key, entry] of this.cache.cache.entries()) {
-      if (now - entry.timestamp > ANALYTICS_CONFIG.CACHE_TTL) {
-        this.cache.delete(key);
+    for (const [key, entry] of cacheManager.getStore().entries()) {
+      if (key.startsWith('analytics:') && entry.expiresAt && now > entry.expiresAt) {
+        cacheManager.getStore().delete(key);
       }
     }
   }
 
   clearCache(userId = null) {
     if (userId) {
-      this.cache.delete(`analytics_${userId}_7d`);
-      this.cache.delete(`analytics_${userId}_30d`);
-      this.cache.delete(`analytics_${userId}_90d`);
-      this.cache.delete(`analytics_${userId}_365d`);
+      this.cache.invalidatePattern(`analytics_${userId}_*`);
+      cacheManager.invalidateUser(userId);
     } else {
       this.cache.clear();
     }
@@ -786,6 +988,15 @@ export const getCoinEarningHistory = (userId, limitCount) =>
 
 export const getCoinSpendingHistory = (userId, limitCount) => 
   getAnalyticsService().getCoinSpendingHistory(userId, limitCount);
+
+export const getCoinEarningHistoryPage = (userId, options) =>
+  getAnalyticsService().getCoinEarningHistoryPage(userId, options);
+
+export const getCoinSpendingHistoryPage = (userId, options) =>
+  getAnalyticsService().getCoinSpendingHistoryPage(userId, options);
+
+export const recordFollowerSnapshot = (userId, followerCount) =>
+  getAnalyticsService().recordFollowerSnapshot(userId, followerCount);
 
 export const clearAnalyticsCache = (userId) => 
   getAnalyticsService().clearCache(userId);

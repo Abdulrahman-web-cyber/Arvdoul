@@ -45,6 +45,7 @@ const ProfileStats = memo(({
   friends = 0,
   likes = 0,
   coins = 0,
+  reputation = 0,
   theme = 'light',
   onStatPress,
 }) => {
@@ -56,6 +57,7 @@ const ProfileStats = memo(({
     { key: 'friends', label: 'Friends', value: friends },
     { key: 'likes', label: 'Likes', value: likes },
     { key: 'coins', label: 'Coins', value: coins, prefix: '🪙' },
+    { key: 'reputation', label: 'Reputation', value: reputation, prefix: '⭐' },
   ];
 
   // Handle stat click

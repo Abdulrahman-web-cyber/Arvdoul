@@ -12,6 +12,12 @@
 
 import { addCoins as monetizationAddCoins } from './monetizationService.js';
 import { getStorageService } from './storageService.js';
+import { countersManager } from '../utils/CountersManager.js';
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { errorHandler } from '../utils/ErrorHandler.js';
 
 const USER_CONFIG = {
   MAX_USERNAME_ATTEMPTS: 50,
@@ -102,6 +108,32 @@ class ProfessionalUserService {
     keysToDelete.forEach(k => this.cache.delete(k));
     this.avatarCache.delete(`avatar_${userId}`);
     this.recommendationCache.delete(userId);
+    // Centralized cross-service invalidation (CacheManager).
+    cacheManager.invalidateUser(userId);
+  }
+
+  /**
+   * Record today's follower-count snapshot (feeds real growth analytics).
+   * One write per user per day - cheap and bounded.
+   */
+  async _recordFollowerSnapshotIfDue(userId) {
+    try {
+      const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
+      const today = new Date().toISOString().split('T')[0];
+      const snapRef = doc(this.firestore, 'user_daily_stats', `${userId}_${today}`);
+      const existing = await getDoc(snapRef);
+      if (existing.exists()) return; // already recorded today
+      const followerCount = await countersManager.get({ docPath: `users/${userId}`, field: 'followerCount', fallback: 0 });
+      await setDoc(snapRef, {
+        userId,
+        type: 'follower_count',
+        date: today,
+        value: followerCount,
+        recordedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      logger.debug('Follower snapshot skipped', { error: e.message, userId });
+    }
   }
 
   // ==================== AVATAR SYSTEM ====================
@@ -184,6 +216,25 @@ class ProfessionalUserService {
     });
     await this.updateUserProfile(userId, { photoURL: result.downloadURL });
     this.avatarCache.set(`avatar_${userId}`, result.downloadURL);
+    return result;
+  }
+
+  /**
+   * Upload a profile cover photo (banner) to Storage and persist the URL.
+   * Mirrors uploadAvatar; path: banners/{userId} (covered by storage.rules).
+   * @param {string} userId
+   * @param {File} file
+   * @returns {Promise<{downloadURL: string}>}
+   */
+  async uploadCoverPhoto(userId, file) {
+    const storageService = getStorageService();
+    const result = await storageService.uploadFileWithProgress(file, `banners/${userId}`, {
+      compressImages: true,
+      maxSize: 5 * 1024 * 1024,
+      userId,
+    });
+    await this.updateUserProfile(userId, { coverPhotoURL: result.downloadURL });
+    this._invalidateUserCache(userId);
     return result;
   }
 
@@ -284,6 +335,9 @@ class ProfessionalUserService {
 
     const full = { id: snap.id, ...snap.data() };
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
+
+    // Overlay shard-backed follower/following counts (legacy fallback).
+    await countersManager.apply({ data: full, docPath: `users/${userId}`, fields: ['followerCount', 'followingCount'], scope: 'top' });
 
     // Privacy filter including block check
     if (full.isPrivate && requesterId && requesterId !== userId) {
@@ -527,10 +581,14 @@ class ProfessionalUserService {
     await this._ensureInitialized();
     await this._assertNotBlocked(followerId, followingId);
 
-    const { doc, runTransaction, increment, serverTimestamp } = await import('firebase/firestore');
+    // Client-side UX guard against follow-storm abuse (server enforces real limits).
+    const rl = rateLimiter.checkAndHit(`follow:${followerId}`, { max: 60, windowMs: 60000 });
+    if (!rl.allowed) {
+      throw errorHandler.enhance(new Error('Too many follows. Please slow down.'), { code: 5001, defaultMessage: 'Too many follows. Please slow down.' });
+    }
+
+    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
-    const fRef = doc(this.firestore, 'users', followerId);
-    const tRef = doc(this.firestore, 'users', followingId);
 
     const result = await runTransaction(this.firestore, async (transaction) => {
       // Re-check block inside transaction to avoid race
@@ -541,12 +599,17 @@ class ProfessionalUserService {
       const snap = await transaction.get(followRef);
       if (snap.exists()) return { success: true, alreadyFollowing: true };
       transaction.set(followRef, { followerId, followingId, createdAt: serverTimestamp() });
-      transaction.update(tRef, { followerCount: increment(1), updatedAt: serverTimestamp() });
-      transaction.update(fRef, { followingCount: increment(1), updatedAt: serverTimestamp() });
+      // Sharded follower/following counters - no hot user-doc increments.
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${followingId}`, field: 'followerCount' });
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${followerId}`, field: 'followingCount' });
       return { success: true, alreadyFollowing: false };
     });
 
     if (!result.alreadyFollowing) {
+      countersManager.invalidate({ docPath: `users/${followingId}`, field: 'followerCount' });
+      countersManager.invalidate({ docPath: `users/${followerId}`, field: 'followingCount' });
+      auditLogger.log('social.follow', { userId: followerId, meta: { followingId } });
+      this._recordFollowerSnapshotIfDue(followingId).catch(() => {});
       try {
         const notifications = await this._getNotificationsService();
         await notifications.createFollowNotification(followerId, followingId);
@@ -562,18 +625,21 @@ class ProfessionalUserService {
   async unfollowUser(followerId, followingId) {
     if (followerId === followingId) throw new Error('Cannot unfollow yourself');
     await this._ensureInitialized();
-    const { doc, runTransaction, increment, serverTimestamp } = await import('firebase/firestore');
+    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
-    const fRef = doc(this.firestore, 'users', followerId);
-    const tRef = doc(this.firestore, 'users', followingId);
     const result = await runTransaction(this.firestore, async (transaction) => {
       const snap = await transaction.get(followRef);
       if (!snap.exists()) return { success: true, alreadyNotFollowing: true };
       transaction.delete(followRef);
-      transaction.update(tRef, { followerCount: increment(-1), updatedAt: serverTimestamp() });
-      transaction.update(fRef, { followingCount: increment(-1), updatedAt: serverTimestamp() });
+      // Sharded counter decrements - no hot user-doc writes.
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${followingId}`, field: 'followerCount', amount: -1 });
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${followerId}`, field: 'followingCount', amount: -1 });
       return { success: true };
     });
+    countersManager.invalidate({ docPath: `users/${followingId}`, field: 'followerCount' });
+    countersManager.invalidate({ docPath: `users/${followerId}`, field: 'followingCount' });
+    auditLogger.log('social.unfollow', { userId: followerId, meta: { followingId } });
+    this._recordFollowerSnapshotIfDue(followingId).catch(() => {});
     this._invalidateUserCache(followerId);
     this._invalidateUserCache(followingId);
     return result;
@@ -748,6 +814,13 @@ class ProfessionalUserService {
     if (fromUserId === toUserId) throw new Error('Cannot send to yourself');
     await this._ensureInitialized();
     await this._assertNotBlocked(fromUserId, toUserId);
+
+    // Rate-limit friend requests (spam prevention UX guard).
+    const rl = rateLimiter.checkAndHit(`friend_request:${fromUserId}`, { max: 30, windowMs: 60000 });
+    if (!rl.allowed) {
+      throw errorHandler.enhance(new Error('Too many friend requests. Please slow down.'), { code: 5001, defaultMessage: 'Too many friend requests. Please slow down.' });
+    }
+
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const requestRef = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
     const fromUser = await this.getUserProfile(fromUserId);
@@ -765,7 +838,7 @@ class ProfessionalUserService {
 
   async acceptFriendRequest(requestId, userId) {
     await this._ensureInitialized();
-    const { doc, runTransaction, serverTimestamp, increment } = await import('firebase/firestore');
+    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const requestRef = doc(this.firestore, 'friend_requests', requestId);
     let requesterId = null;
     const result = await runTransaction(this.firestore, async (transaction) => {
@@ -784,20 +857,12 @@ class ProfessionalUserService {
       transaction.set(f1, { followerId: req.fromUserId, followingId: req.toUserId, createdAt: serverTimestamp() });
       transaction.set(f2, { followerId: req.toUserId, followingId: req.fromUserId, createdAt: serverTimestamp() });
 
-      const fromRef = doc(this.firestore, 'users', req.fromUserId);
-      const toRef = doc(this.firestore, 'users', req.toUserId);
-
-      // Correct mutual increments: each user gains one follower and one following
-      transaction.update(fromRef, {
-        followingCount: increment(1),
-        followerCount: increment(1),
-        updatedAt: serverTimestamp()
-      });
-      transaction.update(toRef, {
-        followingCount: increment(1),
-        followerCount: increment(1),
-        updatedAt: serverTimestamp()
-      });
+      // Correct mutual increments via sharded counters: each user gains one
+      // follower and one following (no hot user-doc increments).
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followingCount' });
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followerCount' });
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followingCount' });
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followerCount' });
 
       return { success: true };
     });
@@ -867,16 +932,21 @@ class ProfessionalUserService {
       const s2 = await transaction.get(f2);
       if (s1.exists()) {
         transaction.delete(f1);
-        transaction.update(b1Ref, { followingCount: increment(-1), updatedAt: serverTimestamp() });
-        transaction.update(b2Ref, { followerCount: increment(-1), updatedAt: serverTimestamp() });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${blockerId}`, field: 'followingCount', amount: -1 });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${blockedId}`, field: 'followerCount', amount: -1 });
       }
       if (s2.exists()) {
         transaction.delete(f2);
-        transaction.update(b2Ref, { followingCount: increment(-1), updatedAt: serverTimestamp() });
-        transaction.update(b1Ref, { followerCount: increment(-1), updatedAt: serverTimestamp() });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${blockedId}`, field: 'followingCount', amount: -1 });
+        await countersManager.incrementInTransaction(transaction, { docPath: `users/${blockerId}`, field: 'followerCount', amount: -1 });
       }
       return { success: true };
     });
+    countersManager.invalidate({ docPath: `users/${blockerId}`, field: 'followingCount' });
+    countersManager.invalidate({ docPath: `users/${blockedId}`, field: 'followerCount' });
+    countersManager.invalidate({ docPath: `users/${blockedId}`, field: 'followingCount' });
+    countersManager.invalidate({ docPath: `users/${blockerId}`, field: 'followerCount' });
+    auditLogger.log('social.block', { userId: blockerId, meta: { blockedId } });
     this._invalidateUserCache(blockerId);
     this._invalidateUserCache(blockedId);
     return result;
