@@ -362,16 +362,16 @@ class UltimateSearchService {
         this.monetizationService = getMonetizationService();
 
         if (SEARCH_CONFIG.VECTOR_ENABLED && !SEARCH_CONFIG.VECTOR_API_KEY) {
-//           console.warn('[Search] VECTOR_ENABLED is true but VECTOR_API_KEY missing – disabling vector search');
+//           logger.warn('[Search] VECTOR_ENABLED is true but VECTOR_API_KEY missing – disabling vector search');
           SEARCH_CONFIG.VECTOR_ENABLED = false;
         }
         if (SEARCH_CONFIG.VECTOR_ENABLED) {
-//           console.warn('[Search] Vector search configuration found (integration required)');
+//           logger.warn('[Search] Vector search configuration found (integration required)');
         }
         this.initialized = true;
-//         console.warn('[Search] V8.3 Engine ready');
+//         logger.warn('[Search] V8.3 Engine ready');
       } catch (err) {
-        console.error('[Search] Init failed', err);
+        logger.error('[Search] Init failed', err);
         this.initPromise = null;
         throw enhanceError(err, 'Failed to initialize search service');
       }
@@ -483,7 +483,7 @@ class UltimateSearchService {
         source = 'algolia';
       } catch (algoliaError) {
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
-//         console.warn('[Search] Algolia failed, fallback to Firestore', algoliaError);
+//         logger.warn('[Search] Algolia failed, fallback to Firestore', algoliaError);
         if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
           const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
@@ -882,7 +882,7 @@ class UltimateSearchService {
       const suggestions = res.hits.map(h => h.query);
       return { success: true, suggestions, query: normalized };
     } catch (err) {
-//       console.warn('[Search] Suggestions fallback to search', err);
+//       logger.warn('[Search] Suggestions fallback to search', err);
       const searchRes = await this.search(normalized, { ...options, hitsPerPage: 5, cache: false });
       if (!searchRes.success) return { success: false, suggestions: [] };
       const suggestions = searchRes.items.map(item => item.raw?.displayName || item.raw?.title || item.raw?.content?.slice(0, 50));
@@ -902,7 +902,7 @@ class UltimateSearchService {
       const result = await index.searchForFacetValues(facetName, query, options);
       return { success: true, facetValues: result.facetHits };
     } catch (error) {
-      console.error(`[Search] Facet values error`, error);
+      logger.error(`[Search] Facet values error`, error);
       return { success: false, facetValues: [] };
     }
   }
@@ -979,7 +979,7 @@ class UltimateSearchService {
         metadata: { advertiser: sponsored.data.advertiser },
       };
     } catch (err) {
-//       console.warn('[Search] Sponsored fetch failed', err);
+//       logger.warn('[Search] Sponsored fetch failed', err);
       return null;
     }
   }
@@ -1003,12 +1003,12 @@ class UltimateSearchService {
     this.localCache.clear();
     this.indexNameCache.clear();
     this.userProfileCache.clear();
-//     console.warn('[Search] Local cache cleared');
+//     logger.warn('[Search] Local cache cleared');
   }
 
   async invalidateDistributedCache(prefix = null) {
     if (this.ttlCache) {
-//       console.warn('[Search] TTL cache invalidation requested (not implemented)');
+//       logger.warn('[Search] TTL cache invalidation requested (not implemented)');
     }
   }
 
@@ -1030,7 +1030,7 @@ class UltimateSearchService {
     this.insightsClient = null;
     this.initialized = false;
     this.initPromise = null;
-//     console.warn('[Search] Destroyed');
+//     logger.warn('[Search] Destroyed');
   }
 }
 

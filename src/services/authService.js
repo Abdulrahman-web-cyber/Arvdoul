@@ -47,12 +47,12 @@ class ProductionAuthService {
     this.initialized = false;
     this.verificationStates = new Map();
     this.recaptchaVerifiers = new Map();
-    console.warn('// Auth Service V23 – ARVDOUL SUPREMACY (FINAL FIXED)');
+    logger.warn('// Auth Service V23 – ARVDOUL SUPREMACY (FINAL FIXED)');
   }
 
   async initialize() {
     if (this.initialized) return this.auth;
-    console.warn('// Initializing production auth service...');
+    logger.warn('// Initializing production auth service...');
     try {
       const firebaseApp = await import('../firebase/firebase.js');
       const { getAuthInstance } = firebaseApp;
@@ -63,17 +63,17 @@ class ProductionAuthService {
       // auth.settings.appVerificationDisabledForTesting, so settings
       // must be defined before any phone auth operation.
       if (!this.auth.settings) {
-//         console.warn('auth.settings missing – forcing creation to avoid RecaptchaVerifier crash');
+//         logger.warn('auth.settings missing – forcing creation to avoid RecaptchaVerifier crash');
         // Initialize as an empty object; the SDK will add its own properties as needed.
         this.auth.settings = {};
       }
 
       this.firebase = firebaseApp;
       this.initialized = true;
-      console.warn('// Auth service ready');
+      logger.warn('// Auth service ready');
       return this.auth;
     } catch (error) {
-      console.error('❌ Auth initialization failed:', error);
+      logger.error('❌ Auth initialization failed:', error);
       throw new AuthError('auth/initialization-failed', 'Failed to initialize auth service', error);
     }
   }
@@ -118,7 +118,7 @@ class ProductionAuthService {
       const data = await res.json();
       return { allowed: data.allowed, waitTime: data.waitTime || 0 };
     } catch (e) {
-//       console.warn('Server rate limit check failed, falling back to client', e);
+//       logger.warn('Server rate limit check failed, falling back to client', e);
       return { allowed: true };
     }
   }
@@ -147,7 +147,7 @@ class ProductionAuthService {
       }
       return { allowed: true, waitTime: 0 };
     } catch (e) {
-//       console.warn('Rate limit check failed, allowing', e);
+//       logger.warn('Rate limit check failed, allowing', e);
       return { allowed: true, waitTime: 0 };
     }
   }
@@ -172,7 +172,7 @@ class ProductionAuthService {
       }
       localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
-//       console.warn('Failed to record rate limit', e);
+//       logger.warn('Failed to record rate limit', e);
     }
   }
 
@@ -211,12 +211,12 @@ class ProductionAuthService {
         browserLocalPersistence
       } = await import('firebase/auth');
 
-      console.warn('// Creating user with email:', email);
+      logger.warn('// Creating user with email:', email);
       await setPersistence(this.auth, browserLocalPersistence);
 
       const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
       const user = userCredential.user;
-      console.warn('// Firebase user created:', user.uid);
+      logger.warn('// Firebase user created:', user.uid);
 
       const step1 = this._getSignupStep1Data();
       const firstName = profileData.firstName || step1.firstName || '';
@@ -238,9 +238,9 @@ class ProductionAuthService {
       };
       try {
         await sendEmailVerification(user, actionCodeSettings);
-        console.warn('// Verification email sent');
+        logger.warn('// Verification email sent');
       } catch (emailError) {
-        console.error('❌ Failed to send verification email', emailError);
+        logger.error('❌ Failed to send verification email', emailError);
       }
 
       const { createUserProfile } = await import('./userService.js');
@@ -260,9 +260,9 @@ class ProductionAuthService {
           photoURL: profileData.photoURL || null
         });
         profileCreated = true;
-        console.warn('// User profile created in Firestore');
+        logger.warn('// User profile created in Firestore');
       } catch (profileError) {
-        console.error('❌ Failed to create user profile', profileError);
+        logger.error('❌ Failed to create user profile', profileError);
         this._storePendingProfile(user.uid, {
           email: user.email,
           displayName,
@@ -304,7 +304,7 @@ class ProductionAuthService {
       };
 
     } catch (error) {
-      console.error('❌ Email signup failed:', error);
+      logger.error('❌ Email signup failed:', error);
       if (error.code === 'auth/email-already-in-use') {
         this._recordFailedAttempt(email);
       }
@@ -320,7 +320,7 @@ class ProductionAuthService {
         timestamp: Date.now()
       }));
     } catch (e) {
-//       console.warn('Failed to store pending profile', e);
+//       logger.warn('Failed to store pending profile', e);
     }
   }
 
@@ -370,7 +370,7 @@ class ProductionAuthService {
       try {
         profile = await getUserProfile(user.uid);
       } catch (err) {
-//         console.warn('Could not fetch user profile', err);
+//         logger.warn('Could not fetch user profile', err);
       }
 
       if (!profile) {
@@ -380,9 +380,9 @@ class ProductionAuthService {
             await createUserProfile(user.uid, pending);
             profile = await getUserProfile(user.uid);
             this._clearPendingProfile(user.uid);
-            console.warn('// Pending profile recovered');
+            logger.warn('// Pending profile recovered');
           } catch (e) {
-//             console.warn('Failed to recover pending profile', e);
+//             logger.warn('Failed to recover pending profile', e);
           }
         }
       }
@@ -413,7 +413,7 @@ class ProductionAuthService {
       return { success: true, user: userData };
 
     } catch (error) {
-      console.error('❌ Email sign in failed:', error);
+      logger.error('❌ Email sign in failed:', error);
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         this._recordFailedAttempt(email);
       }
@@ -457,7 +457,7 @@ class ProductionAuthService {
         } : null
       };
     } catch (error) {
-      console.error('Email verification check failed:', error);
+      logger.error('Email verification check failed:', error);
       return { verified: false, error: error.message, requiresLogin: true };
     }
   }
@@ -474,7 +474,7 @@ class ProductionAuthService {
       const { sendPasswordResetEmail, fetchSignInMethodsForEmail } = await import('firebase/auth');
       const methods = await fetchSignInMethodsForEmail(this.auth, email);
       if (methods.length === 0) {
-//         console.warn('Password reset requested for non-existent email (silent fail)');
+//         logger.warn('Password reset requested for non-existent email (silent fail)');
         return { success: true, message: 'If an account exists, a password reset email has been sent.' };
       }
       const actionCodeSettings = {
@@ -482,11 +482,11 @@ class ProductionAuthService {
         handleCodeInApp: true
       };
       await sendPasswordResetEmail(this.auth, email, actionCodeSettings);
-      console.warn('// Password reset email sent to:', email);
+      logger.warn('// Password reset email sent to:', email);
       this._clearRateLimit(`reset_${email}`);
       return { success: true, message: 'Password reset email sent. Check your inbox.' };
     } catch (error) {
-      console.error('❌ Password reset email failed:', error);
+      logger.error('❌ Password reset email failed:', error);
       if (error.code !== 'auth/user-not-found') {
         this._recordFailedAttempt(`reset_${email}`);
       }
@@ -499,10 +499,10 @@ class ProductionAuthService {
       await this.initialize();
       const { confirmPasswordReset } = await import('firebase/auth');
       await confirmPasswordReset(this.auth, actionCode, newPassword);
-      console.warn('// Password reset successful');
+      logger.warn('// Password reset successful');
       return { success: true, message: 'Password has been reset successfully.' };
     } catch (error) {
-      console.error('❌ Password reset confirmation failed:', error);
+      logger.error('❌ Password reset confirmation failed:', error);
       throw this.formatAuthError(error);
     }
   }
@@ -530,7 +530,7 @@ class ProductionAuthService {
       this._clearRateLimit(rateKey);
       return { success: true, message: 'Verification email resent successfully.' };
     } catch (error) {
-      console.error('❌ Failed to resend verification:', error);
+      logger.error('❌ Failed to resend verification:', error);
       if (error.code !== 'auth/user-not-authenticated') {
         this._recordFailedAttempt(`resend_${userId}`);
       }
@@ -565,7 +565,7 @@ class ProductionAuthService {
 
       const confirmationResult = await signInWithPhoneNumber(this.auth, formattedPhone, verifier);
       const verificationId = confirmationResult.verificationId;
-      console.warn('// SMS sent. Verification ID:', verificationId);
+      logger.warn('// SMS sent. Verification ID:', verificationId);
 
       this.verificationStates.set(formattedPhone, {
         verificationId,
@@ -583,7 +583,7 @@ class ProductionAuthService {
         message: 'Verification code sent successfully'
       };
     } catch (error) {
-      console.error('❌ Phone verification error:', error);
+      logger.error('❌ Phone verification error:', error);
       this._recordFailedAttempt(rateKey);
       this.cleanupRecaptchaVerifier('signup-recaptcha-container');
       throw this.formatPhoneAuthError(error);
@@ -595,7 +595,7 @@ class ProductionAuthService {
       await this.initialize();
       const { PhoneAuthProvider, signInWithCredential } = await import('firebase/auth');
 
-//       console.warn('🔢 Verifying phone OTP...');
+//       logger.warn('🔢 Verifying phone OTP...');
       if (!verificationId || typeof verificationId !== 'string' || verificationId.trim() === '') {
         throw new AuthError('auth/invalid-verification-id', 'Verification session missing or invalid.');
       }
@@ -607,7 +607,7 @@ class ProductionAuthService {
       const credential = PhoneAuthProvider.credential(verificationId, cleanOTP);
       const userCredential = await signInWithCredential(this.auth, credential);
       const user = userCredential.user;
-      console.warn('// Phone verification successful:', user.uid);
+      logger.warn('// Phone verification successful:', user.uid);
 
       const { createUserProfile } = await import('./userService.js');
       let profileCreated = false;
@@ -620,9 +620,9 @@ class ProductionAuthService {
           photoURL: user.photoURL,
         });
         profileCreated = true;
-        console.warn('// User profile created in Firestore');
+        logger.warn('// User profile created in Firestore');
       } catch (profileError) {
-        console.error('❌ Profile creation failed', profileError);
+        logger.error('❌ Profile creation failed', profileError);
         this._storePendingProfile(user.uid, {
           phoneNumber: user.phoneNumber,
           authProvider: 'phone',
@@ -656,7 +656,7 @@ class ProductionAuthService {
 
       return { success: true, user: userData, isNewUser };
     } catch (error) {
-      console.error('❌ OTP verification failed:', error);
+      logger.error('❌ OTP verification failed:', error);
       throw this.formatPhoneAuthError(error);
     }
   }
@@ -670,7 +670,7 @@ class ProductionAuthService {
         updateProfile, setPersistence, browserLocalPersistence
       } = await import('firebase/auth');
 
-      console.warn('// Starting Google authentication...');
+      logger.warn('// Starting Google authentication...');
       const provider = new GoogleAuthProvider();
       provider.addScope('profile');
       provider.addScope('email');
@@ -681,7 +681,7 @@ class ProductionAuthService {
       const user = result.user;
       const additionalInfo = getAdditionalUserInfo(result);
       const isNewUser = additionalInfo?.isNewUser || false;
-      console.warn('// Google auth successful. New user:', isNewUser);
+      logger.warn('// Google auth successful. New user:', isNewUser);
 
       let profileCreated = false;
       if (isNewUser && additionalInfo?.profile) {
@@ -699,9 +699,9 @@ class ProductionAuthService {
             emailVerified: user.emailVerified,
           });
           profileCreated = true;
-          console.warn('// User profile created in Firestore');
+          logger.warn('// User profile created in Firestore');
         } catch (profileError) {
-          console.error('❌ Profile creation failed', profileError);
+          logger.error('❌ Profile creation failed', profileError);
           this._storePendingProfile(user.uid, {
             displayName: user.displayName,
             email: user.email,
@@ -741,7 +741,7 @@ class ProductionAuthService {
         isNewUser
       };
     } catch (error) {
-      console.error('❌ Google authentication failed:', error);
+      logger.error('❌ Google authentication failed:', error);
       throw this.formatAuthError(error);
     }
   }
@@ -760,7 +760,7 @@ class ProductionAuthService {
       }
       
       const { RecaptchaVerifier } = await import('firebase/auth');
-      console.warn('// Creating reCAPTCHA for:', containerId);
+      logger.warn('// Creating reCAPTCHA for:', containerId);
 
       this.cleanupRecaptchaVerifier(containerId);
 
@@ -779,11 +779,11 @@ class ProductionAuthService {
           size: options.size || 'invisible',
           theme: options.theme || 'light',
           callback: (response) => {
-            console.warn('// reCAPTCHA solved:', response);
+            logger.warn('// reCAPTCHA solved:', response);
             if (options.callback) options.callback(response);
           },
           'expired-callback': () => {
-//             console.warn('❌ reCAPTCHA expired');
+//             logger.warn('❌ reCAPTCHA expired');
             if (options.expiredCallback) options.expiredCallback();
             this.cleanupRecaptchaVerifier(containerId);
           }
@@ -792,16 +792,16 @@ class ProductionAuthService {
       );
 
       recaptchaVerifier._reset = () => {
-        console.warn('// _reset called (no‑op)');
+        logger.warn('// _reset called (no‑op)');
       };
 
-      console.warn('// Rendering reCAPTCHA...');
+      logger.warn('// Rendering reCAPTCHA...');
       await recaptchaVerifier.render();
       this.recaptchaVerifiers.set(containerId, recaptchaVerifier);
-      console.warn('// reCAPTCHA rendered for', containerId);
+      logger.warn('// reCAPTCHA rendered for', containerId);
       return recaptchaVerifier;
     } catch (error) {
-      console.error('❌ Failed to create reCAPTCHA:', error);
+      logger.error('❌ Failed to create reCAPTCHA:', error);
       throw new AuthError('auth/recaptcha-failed', error.message || 'reCAPTCHA setup failed', error);
     }
   }
@@ -811,19 +811,19 @@ class ProductionAuthService {
       const verifier = this.recaptchaVerifiers.get(containerId);
       if (verifier && typeof verifier.clear === 'function') {
         verifier.clear();
-//         console.warn(`🧹 Called clear() on reCAPTCHA verifier for ${containerId}`);
+//         logger.warn(`🧹 Called clear() on reCAPTCHA verifier for ${containerId}`);
       }
       this.recaptchaVerifiers.delete(containerId);
     } catch (e) {
-//       console.warn(`Error during verifier cleanup for ${containerId}:`, e);
+//       logger.warn(`Error during verifier cleanup for ${containerId}:`, e);
     } finally {
       const container = document.getElementById(containerId);
       if (container && container.parentNode) {
         container.parentNode.removeChild(container);
-//         console.warn(`🗑️ Removed container #${containerId} from DOM`);
+//         logger.warn(`🗑️ Removed container #${containerId} from DOM`);
       } else if (container) {
         container.innerHTML = '';
-//         console.warn(`🧹 Cleared innerHTML of container #${containerId}`);
+//         logger.warn(`🧹 Cleared innerHTML of container #${containerId}`);
       }
     }
   }
@@ -998,7 +998,7 @@ class ProductionAuthService {
       const { getIdToken } = await import('firebase/auth');
       return await getIdToken(this.auth.currentUser);
     } catch (error) {
-      console.error('Failed to get auth token:', error);
+      logger.error('Failed to get auth token:', error);
       return null;
     }
   }

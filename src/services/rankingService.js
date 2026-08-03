@@ -1,3 +1,4 @@
+import { logger } from '../utils/Logger.js';
 // src/services/rankingService.js – ARVDOUL RANKINGS & REPUTATION SERVICE V1
 // 🏆 Ranking System for Creators, Content, Communities
 // ✅ Creator Rankings • Wealth Rankings • Reputation • Community Rankings
@@ -102,9 +103,9 @@ class RankingService {
       try {
         this.firestore = getFirestoreInstance();
         this.initialized = true;
-        console.log('[RankingService] Initialized successfully');
+        logger.info('[RankingService] Initialized successfully');
       } catch (error) {
-        console.error('[RankingService] Initialization failed:', error);
+        logger.error('[RankingService] Initialization failed:', error);
         throw error;
       }
     })();
@@ -188,7 +189,7 @@ class RankingService {
       this._setCache(cacheKey, rankings);
       return rankings;
     } catch (error) {
-      console.error('[RankingService] Failed to get creator rankings:', error);
+      logger.error('[RankingService] Failed to get creator rankings:', error);
       // Return mock data for demo
       return this._getMockCreatorRankings(category, offset);
     }
@@ -207,7 +208,7 @@ class RankingService {
       
       return null;
     } catch (error) {
-      console.error('[RankingService] Failed to get creator rank:', error);
+      logger.error('[RankingService] Failed to get creator rank:', error);
       return null;
     }
   }
@@ -259,7 +260,7 @@ class RankingService {
       this._setCache(cacheKey, rankings);
       return rankings;
     } catch (error) {
-      console.error('[RankingService] Failed to get wealth rankings:', error);
+      logger.error('[RankingService] Failed to get wealth rankings:', error);
       return this._getMockWealthRankings(category, offset);
     }
   }
@@ -312,7 +313,7 @@ class RankingService {
       this._setCache(cacheKey, rankings);
       return rankings;
     } catch (error) {
-      console.error('[RankingService] Failed to get reputation rankings:', error);
+      logger.error('[RankingService] Failed to get reputation rankings:', error);
       return this._getMockReputationRankings(category, offset);
     }
   }
@@ -354,7 +355,7 @@ class RankingService {
       this._setCache(cacheKey, rankings);
       return rankings;
     } catch (error) {
-      console.error('[RankingService] Failed to get community rankings:', error);
+      logger.error('[RankingService] Failed to get community rankings:', error);
       return this._getMockCommunityRankings(category, offset);
     }
   }
@@ -387,7 +388,7 @@ class RankingService {
       this._setCache(cacheKey, trending);
       return trending;
     } catch (error) {
-      console.error('[RankingService] Failed to get trending content:', error);
+      logger.error('[RankingService] Failed to get trending content:', error);
       return this._getMockTrendingContent(type, offset);
     }
   }
@@ -439,7 +440,7 @@ class RankingService {
       this._setCache(cacheKey, rising);
       return rising;
     } catch (error) {
-      console.error('[RankingService] Failed to get rising creators:', error);
+      logger.error('[RankingService] Failed to get rising creators:', error);
       return this._getMockRisingCreators(offset);
     }
   }
@@ -468,7 +469,7 @@ class RankingService {
         history: [],
       };
     } catch (error) {
-      console.error('[RankingService] Failed to get user reputation:', error);
+      logger.error('[RankingService] Failed to get user reputation:', error);
       return null;
     }
   }
@@ -494,7 +495,7 @@ class RankingService {
 
       return badges;
     } catch (error) {
-      console.error('[RankingService] Failed to get user badges:', error);
+      logger.error('[RankingService] Failed to get user badges:', error);
       return [];
     }
   }
@@ -601,7 +602,7 @@ class RankingService {
 
   refresh() {
     this._clearCache();
-    console.log('[RankingService] Cache cleared');
+    logger.info('[RankingService] Cache cleared');
   }
 }
 

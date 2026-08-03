@@ -21,6 +21,32 @@ const FIREBASE_CONFIG = {
   measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || "G-MQL0JXL584"
 };
 
+// ==================== EAGER SYNCHRONOUS INITIALIZATION ====================
+// Several components import `db` / `auth` / `storage` as *live* SDK instances and
+// use them synchronously (e.g. `collection(db, …)`, `signInWithPhoneNumber(auth, …)`).
+// We initialize the app and these services eagerly at module load so those bindings
+// are never `undefined`. `getFirestore(app)` / `getAuth(app)` / `getStorage(app)` are
+// cached per-app, so these are the exact same instances the lazy manager returns below.
+import { initializeApp as _fbInitializeApp, getApps as _fbGetApps, getApp as _fbGetApp } from 'firebase/app';
+import { getFirestore as _fbGetFirestore } from 'firebase/firestore';
+import { getAuth as _fbGetAuth, setPersistence as _fbSetPersistence, browserLocalPersistence as _fbBrowserLocalPersistence } from 'firebase/auth';
+import { getStorage as _fbGetStorage } from 'firebase/storage';
+
+const _fbApp = _fbGetApps().length ? _fbGetApp() : _fbInitializeApp(FIREBASE_CONFIG);
+export const db = _fbGetFirestore(_fbApp);
+export const auth = _fbGetAuth(_fbApp);
+export const storage = _fbGetStorage(_fbApp);
+
+// Mirror the manager's auth hardening so phone/SMS auth keeps working.
+try {
+  _fbSetPersistence(auth, _fbBrowserLocalPersistence);
+  if (!auth.settings) auth.settings = {};
+  auth.settings.appVerificationDisabledForTesting = false;
+  auth.languageCode = (typeof navigator !== 'undefined' && navigator.language) || 'en';
+} catch (_eagerAuthErr) {
+  /* Persistence may be unavailable in some environments (e.g. private mode). */
+}
+
 // ==================== ULTIMATE SINGLETON MANAGER ====================
 class UltimateFirebaseManager {
   constructor() {

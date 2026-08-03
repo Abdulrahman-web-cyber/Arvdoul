@@ -18,6 +18,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
+import { offlineQueue } from '../utils/OfflineQueue.js';
 
 const USER_CONFIG = {
   MAX_USERNAME_ATTEMPTS: 50,
@@ -75,13 +76,13 @@ class ProfessionalUserService {
         await enableIndexedDbPersistence(this.firestore);
         // Persistence enabled
       } catch (e) {
-//         console.warn('⚠️ Persistence not available:', e.message);
+//         logger.warn('⚠️ Persistence not available:', e.message);
       }
 
       this.initialized = true;
       return this.firestore;
     } catch (error) {
-      console.error('❌ Init failed:', error);
+      logger.error('❌ Init failed:', error);
       throw error;
     }
   }
@@ -189,7 +190,7 @@ class ProfessionalUserService {
       const base64 = btoa(unescape(encodeURIComponent(svg)));
       return `data:image/svg+xml;base64,${base64}`;
     } catch (error) {
-//       console.warn('Avatar fallback used');
+//       logger.warn('Avatar fallback used');
       return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(
         '<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#3B82F6" rx="20"/><text x="100" y="110" text-anchor="middle" font-family="Arial" font-size="80" font-weight="bold" fill="white">U</text></svg>'
       )))}`;
@@ -261,7 +262,7 @@ class ProfessionalUserService {
 
       return { available: false, exists: true, username: normalized, existingUserId, checkedAt: Date.now() };
     } catch (error) {
-//       console.warn('Username check failed, assuming available (will be verified during profile creation):', error);
+//       logger.warn('Username check failed, assuming available (will be verified during profile creation):', error);
       const normalized = username?.toLowerCase().trim() || '';
       if (normalized.length < 3) return { available: false, error: 'Too short' };
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: 'Too long' };
@@ -314,7 +315,7 @@ class ProfessionalUserService {
       if (!/[a-z0-9]$/.test(fallback)) fallback += '0';
       return fallback;
     } catch (error) {
-      console.error('Username generation failed, using emergency fallback:', error);
+      logger.error('Username generation failed, using emergency fallback:', error);
       const emergency = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       return emergency.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
     }
@@ -587,6 +588,13 @@ class ProfessionalUserService {
       throw errorHandler.enhance(new Error('Too many follows. Please slow down.'), { code: 5001, defaultMessage: 'Too many follows. Please slow down.' });
     }
 
+    // Offline-first: queue the op and resolve optimistically when the device is offline.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await offlineQueue.enqueue({ type: 'user.follow', payload: { followerId, followingId } });
+      auditLogger.log('social.follow.queued', { userId: followerId, meta: { followingId } });
+      return { success: true, queued: true };
+    }
+
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
 
@@ -625,6 +633,11 @@ class ProfessionalUserService {
   async unfollowUser(followerId, followingId) {
     if (followerId === followingId) throw new Error('Cannot unfollow yourself');
     await this._ensureInitialized();
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await offlineQueue.enqueue({ type: 'user.unfollow', payload: { followerId, followingId } });
+      auditLogger.log('social.unfollow.queued', { userId: followerId, meta: { followingId } });
+      return { success: true, queued: true };
+    }
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
     const result = await runTransaction(this.firestore, async (transaction) => {
@@ -732,7 +745,7 @@ class ProfessionalUserService {
       const res = await func({ userId, otherUserId });
       return { success: true, mutualFriends: res.data.mutualFriends || [] };
     } catch (cloudError) {
-//       console.warn('Cloud Function getMutualFriends unavailable, using client fallback.');
+//       logger.warn('Cloud Function getMutualFriends unavailable, using client fallback.');
       const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
       const followsRef = collection(this.firestore, 'follows');
       const max = USER_CONFIG.MUTUAL_FRIENDS_MAX_FOLLOWS;

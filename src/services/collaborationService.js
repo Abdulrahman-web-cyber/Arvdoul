@@ -1,3 +1,4 @@
+import { logger } from '../utils/Logger.js';
 // src/services/collaborationService.js – ARVDOUL COLLABORATION SERVICE V1
 // 🤝 Content Collaboration with Roles, Permissions, Review Workflow
 // ✅ Invite System • Role Management • Permission Evaluation • Review Workflow
@@ -114,9 +115,9 @@ class CollaborationService {
       try {
         this.firestore = getFirestoreInstance();
         this.initialized = true;
-        console.log('[CollaborationService] Initialized successfully');
+        logger.info('[CollaborationService] Initialized successfully');
       } catch (error) {
-        console.error('[CollaborationService] Initialization failed:', error);
+        logger.error('[CollaborationService] Initialization failed:', error);
         throw error;
       }
     })();
@@ -536,7 +537,7 @@ class CollaborationService {
   destroy() {
     this.initialized = false;
     this.initPromise = null;
-    console.warn('[CollaborationService] Destroyed');
+    logger.warn('[CollaborationService] Destroyed');
   }
 }
 

@@ -466,6 +466,12 @@ export function AuthProvider({ children }) {
     if (!authService || listenerSetUp.current || !isMounted.current) return;
     
     const abortController = new AbortController();
+
+    // Safety net: never leave the app stuck on an infinite loading/blank screen
+    // if auth initialization hangs (e.g. a dynamic import that never resolves).
+    const authReadyTimer = setTimeout(() => {
+      setAuthInitialized(true);
+    }, 10000);
     
     const setupAuthListener = async () => {
       try {
@@ -583,6 +589,7 @@ export function AuthProvider({ children }) {
     
     return () => {
       abortController.abort();
+      clearTimeout(authReadyTimer);
       if (unsubscribeAuthRef.current) unsubscribeAuthRef.current();
       if (unsubscribeIdTokenRef.current) unsubscribeIdTokenRef.current();
       if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();

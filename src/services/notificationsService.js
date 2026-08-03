@@ -127,7 +127,7 @@ class OfflineNotificationQueue {
         }
         await this.delete(item.id);
       } catch (err) {
-//         console.warn('Offline notification queue: retry later', err);
+//         logger.warn('Offline notification queue: retry later', err);
         if (Date.now() - item.timestamp > 7 * 24 * 60 * 60 * 1000) {
           await this.delete(item.id);
         }
@@ -342,7 +342,7 @@ class UltimateNotificationsService {
       tokensRefreshed: 0,
     };
 
-//     console.warn('[Notifications] Service instantiated – v30');
+//     logger.warn('[Notifications] Service instantiated – v30');
   }
 
   // --------------------------------------------------------------------
@@ -354,7 +354,7 @@ class UltimateNotificationsService {
 
     this.initPromise = (async () => {
       try {
-//         console.warn('[Notifications] Initializing...');
+//         logger.warn('[Notifications] Initializing...');
         const firebase = await import('firebase/firestore');
         const authMod = await import('firebase/auth');
         const messagingMod = await import('firebase/messaging');
@@ -432,9 +432,9 @@ class UltimateNotificationsService {
 
         this.offlineQueue.processAll();
         this.initialized = true;
-//         console.warn('[Notifications] ✅ Initialized (v30)');
+//         logger.warn('[Notifications] ✅ Initialized (v30)');
       } catch (err) {
-        console.error('[Notifications] ❌ Init failed', err);
+        logger.error('[Notifications] ❌ Init failed', err);
         this.initPromise = null;
         throw enhanceError(err, 'Failed to initialize notifications service');
       }
@@ -576,7 +576,7 @@ class UltimateNotificationsService {
           // Also register our custom SW for background pushes
           await navigator.serviceWorker.register(`${base}sw-notifications.js`);
         } catch (err) {
-//           console.warn('[Notifications] SW registration failed', err);
+//           logger.warn('[Notifications] SW registration failed', err);
         }
       }
       const token = await this._getFreshPushToken();
@@ -593,11 +593,11 @@ class UltimateNotificationsService {
   async _getFreshPushToken() {
     try {
       const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-//       if (!vapidKey) console.warn('[Notifications] VAPID key missing');
+//       if (!vapidKey) logger.warn('[Notifications] VAPID key missing');
       const token = await this.messagingMethods.getToken(this.messaging, { vapidKey });
       return token;
     } catch (err) {
-      console.error('[Notifications] Failed to get token', err);
+      logger.error('[Notifications] Failed to get token', err);
       return null;
     }
   }
@@ -609,7 +609,7 @@ class UltimateNotificationsService {
     if (oldToken !== newToken) {
       await this._savePushToken(userId, newToken);
       this.metrics.tokensRefreshed++;
-//       console.warn('[Notifications] Token refreshed for user', userId);
+//       logger.warn('[Notifications] Token refreshed for user', userId);
     }
   }
 
@@ -689,7 +689,7 @@ class UltimateNotificationsService {
   _setupPushMessageListener() {
     if (!this.messaging || !this.messagingMethods.onMessage) return;
     this.messagingMethods.onMessage(this.messaging, (payload) => {
-//       console.warn('[Notifications] Foreground push received', payload);
+//       logger.warn('[Notifications] Foreground push received', payload);
       if (payload.notification) {
         this._showNativeNotification({
           id: payload.data?.notificationId || Date.now().toString(),
@@ -717,7 +717,7 @@ class UltimateNotificationsService {
         'https://app.arvdoul.com',
       ];
       if (allowedOrigins.includes(parsed.origin)) return parsed.href;
-//       console.warn('[Notifications] Blocked unsafe action URL:', url);
+//       logger.warn('[Notifications] Blocked unsafe action URL:', url);
       return null;
     } catch { return null; }
   }
@@ -1047,7 +1047,7 @@ class UltimateNotificationsService {
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-//     console.warn('[Notifications] Service destroyed');
+//     logger.warn('[Notifications] Service destroyed');
   }
 }
 

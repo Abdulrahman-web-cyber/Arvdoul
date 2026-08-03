@@ -1,3 +1,4 @@
+import { logger } from '../utils/Logger.js';
 // src/services/eventService.js - ARVDOUL EVENT SERVICE
 // ✅ Complete CRUD for events
 // ✅ Registration management
@@ -605,7 +606,7 @@ class EventService {
           createdAt: serverTimestamp()
         });
       } catch (err) {
-        console.warn(`Failed to notify user ${userId}:`, err);
+        logger.warn(`Failed to notify user ${userId}:`, err);
       }
     }
   }

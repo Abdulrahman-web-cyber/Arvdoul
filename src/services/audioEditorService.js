@@ -1,3 +1,4 @@
+import { logger } from '../utils/Logger.js';
 // src/services/audioEditorService.js – ARVDOUL AUDIO EDITOR SERVICE V1
 // 🎵 Professional Audio Editor with Waveform, Trim, Effects, Export
 // ✅ Waveform Visualization • Audio Effects • Volume Control • Export
@@ -149,9 +150,9 @@ class AudioEditorService {
       try {
         this.storage = getStorageInstance();
         this.initialized = true;
-        console.log('[AudioEditorService] Initialized successfully');
+        logger.info('[AudioEditorService] Initialized successfully');
       } catch (error) {
-        console.error('[AudioEditorService] Initialization failed:', error);
+        logger.error('[AudioEditorService] Initialization failed:', error);
         throw error;
       }
     })();
@@ -769,7 +770,7 @@ class AudioEditorService {
     this.currentProject = null;
     this.initialized = false;
     this.initPromise = null;
-    console.warn('[AudioEditorService] Destroyed');
+    logger.warn('[AudioEditorService] Destroyed');
   }
 }
 

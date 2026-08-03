@@ -97,6 +97,14 @@ const SystemInitializer = ({ onReady }) => {
                         channel: 'in_app',
                       }));
                     break;
+                  case 'user.follow':
+                    await import('../services/userService.js').then(m =>
+                      m.getUserService().followUser(op.payload.followerId, op.payload.followingId));
+                    break;
+                  case 'user.unfollow':
+                    await import('../services/userService.js').then(m =>
+                      m.getUserService().unfollowUser(op.payload.followerId, op.payload.followingId));
+                    break;
                   case 'search.analytics':
                     // Analytics events are best-effort; dropping after retry is acceptable.
                     return true;

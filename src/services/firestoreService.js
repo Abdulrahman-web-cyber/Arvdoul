@@ -87,7 +87,7 @@ function enhanceError(error, defaultMessage) {
   if (code === 'failed-precondition' && error.message?.includes('index')) {
     const match = error.message.match(/https:\/\/console\.firebase\.google\.com[^\s]*/);
     const url = match ? match[0] : 'Check Firebase console';
-    console.error(`[FirestoreService] Missing index: ${url}`);
+    logger.error(`[FirestoreService] Missing index: ${url}`);
     message = `Missing Firestore index. Please create it: ${url}`;
   }
   const enhanced = new Error(message);
@@ -107,15 +107,15 @@ class EnterpriseFirestoreService {
     this.isOnline = navigator.onLine;
     this.firestoreModule = null;
     this.firebaseApp = null;
-//     this.initialize().catch(err => console.warn('Firestore service init warning:', err.message));
-    window.addEventListener('online', () => { this.isOnline = true; console.warn('// Firestore: Back online'); });
-    window.addEventListener('offline', () => { this.isOnline = false; console.warn('// Firestore: Offline mode'); });
+//     this.initialize().catch(err => logger.warn('Firestore service init warning:', err.message));
+    window.addEventListener('online', () => { this.isOnline = true; logger.warn('// Firestore: Back online'); });
+    window.addEventListener('offline', () => { this.isOnline = false; logger.warn('// Firestore: Offline mode'); });
   }
 
   async initialize() {
     if (this.initialized && this.firestore) return this.firestore;
     try {
-      console.warn('// Initializing Enterprise Firestore Service...');
+      logger.warn('// Initializing Enterprise Firestore Service...');
       this.firebaseApp = await import('../firebase/firebase.js');
       this.firestore = await this.firebaseApp.getFirestoreInstance();
       if (!this.firestore) throw new Error('Failed to get Firestore instance');
@@ -136,14 +136,14 @@ class EnterpriseFirestoreService {
       };
       try {
         await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
-        console.warn('// Firestore persistence enabled');
+        logger.warn('// Firestore persistence enabled');
       } catch (persistenceError) {
-//         console.warn('⚠️ Firestore persistence warning:', persistenceError.message);
+//         logger.warn('⚠️ Firestore persistence warning:', persistenceError.message);
       }
       this.initialized = true;
       return this.firestore;
     } catch (error) {
-      console.error('❌ Firestore initialization failed:', error);
+      logger.error('❌ Firestore initialization failed:', error);
       throw enhanceError(error, 'Failed to initialize database');
     }
   }
@@ -215,7 +215,7 @@ class EnterpriseFirestoreService {
         duration: Date.now() - startTime
       };
     } catch (error) {
-      console.error('❌ Create post failed:', error);
+      logger.error('❌ Create post failed:', error);
       throw enhanceError(error, 'Failed to create post');
     }
   }
@@ -644,7 +644,7 @@ class EnterpriseFirestoreService {
       }
       return { success: true, action, previousReaction: oldReaction };
     } catch (error) {
-      console.error(`❌ Add reaction failed for ${postId}:`, error);
+      logger.error(`❌ Add reaction failed for ${postId}:`, error);
       throw enhanceError(error, 'Failed to add reaction');
     }
   }
@@ -774,7 +774,7 @@ class EnterpriseFirestoreService {
       });
       return { success: true };
     } catch (error) {
-//       console.warn(`recordPostView failed for ${postId}:`, error);
+//       logger.warn(`recordPostView failed for ${postId}:`, error);
       return { success: false, error: error.message };
     }
   }
@@ -834,7 +834,7 @@ class EnterpriseFirestoreService {
         callback(null);
       }
     }, error => {
-      console.error(`Post subscription error for ${postId}:`, error);
+      logger.error(`Post subscription error for ${postId}:`, error);
     });
     this.subscriptions.set(subKey, unsubscribe);
     return unsubscribe;
@@ -874,7 +874,7 @@ class EnterpriseFirestoreService {
     };
   }
 
-  clearCache() { this.cache.clear(); console.warn('// Firestore cache cleared'); }
+  clearCache() { this.cache.clear(); logger.warn('// Firestore cache cleared'); }
 
   destroy() {
     for (const unsub of this.subscriptions.values()) try { unsub(); } catch (e) {}
@@ -884,7 +884,7 @@ class EnterpriseFirestoreService {
     this.firestore = null;
     this.firestoreMethods = null;
     this.firebaseApp = null;
-    console.warn('// Firestore service destroyed');
+    logger.warn('// Firestore service destroyed');
   }
 
   // ---------- Notification helpers (lazy import) ----------
@@ -1007,8 +1007,8 @@ const firestoreService = {
   getStats: () => getFirestoreService().getStats(),
   ensureInitialized: () => getFirestoreService().ensureInitialized(),
   // For backward compatibility (client‑side scheduled jobs are removed – use Cloud Functions)
-//   publishScheduledPosts: () => { console.warn('publishScheduledPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); },
-//   expireOldPosts: () => { console.warn('expireOldPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); }
+//   publishScheduledPosts: () => { logger.warn('publishScheduledPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); },
+//   expireOldPosts: () => { logger.warn('expireOldPosts moved to Cloud Function'); return Promise.resolve({ success: false, error: 'Use Cloud Function' }); }
 };
 
 export default firestoreService;

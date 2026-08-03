@@ -1,3 +1,4 @@
+import { logger } from '../utils/Logger.js';
 // src/services/thumbnailService.js – ARVDOUL THUMBNAIL DESIGNER SERVICE V1
 // 🖼️ Professional Thumbnail Designer with Auto-generation, Editor, Export
 // ✅ Canvas-based Editing • Text Overlays • Filters • Export Presets
@@ -97,9 +98,9 @@ class ThumbnailService {
       try {
         this.storage = getStorageInstance();
         this.initialized = true;
-        console.log('[ThumbnailService] Initialized successfully');
+        logger.info('[ThumbnailService] Initialized successfully');
       } catch (error) {
-        console.error('[ThumbnailService] Initialization failed:', error);
+        logger.error('[ThumbnailService] Initialization failed:', error);
         throw error;
       }
     })();
@@ -378,7 +379,7 @@ class ThumbnailService {
   generateThumbnailsFromVideo(videoUrl, frameCount = 5) {
     // Placeholder for auto-generation from video frames
     // In production, this would use video frame extraction
-    console.log('[ThumbnailService] Generating thumbnails from video:', videoUrl);
+    logger.info('[ThumbnailService] Generating thumbnails from video:', videoUrl);
     
     const thumbnails = [];
     for (let i = 0; i < frameCount; i++) {
@@ -543,7 +544,7 @@ class ThumbnailService {
     this.currentThumbnail = null;
     this.initialized = false;
     this.initPromise = null;
-    console.warn('[ThumbnailService] Destroyed');
+    logger.warn('[ThumbnailService] Destroyed');
   }
 }
 

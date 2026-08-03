@@ -50,11 +50,11 @@ class UltimateCommentService {
     this.lastCleanup = Date.now();
     this.cleanupInterval = null;
 
-    console.warn('// Ultimate Comment Service V10 - Billion‑User Scale');
+    logger.warn('// Ultimate Comment Service V10 - Billion‑User Scale');
 
     // Auto-initialize
     this.initialize().catch(err => {
-//       console.warn('Comment service initialization warning:', err.message);
+//       logger.warn('Comment service initialization warning:', err.message);
     });
 
     // Periodic cleanup
@@ -66,7 +66,7 @@ class UltimateCommentService {
     if (this.initialized) return this.firestore;
 
     try {
-      console.warn('// Initializing Comment Service...');
+      logger.warn('// Initializing Comment Service...');
 
       // Load Firebase
       const firebase = await import('../firebase/firebase.js');
@@ -120,17 +120,17 @@ class UltimateCommentService {
           synchronizeTabs: true,
           forceOwnership: false
         });
-        console.warn('// Comment service persistence enabled');
+        logger.warn('// Comment service persistence enabled');
       } catch (persistenceError) {
-//         console.warn('⚠️ Comment service persistence warning:', persistenceError.message);
+//         logger.warn('⚠️ Comment service persistence warning:', persistenceError.message);
       }
 
       this.initialized = true;
-      console.warn('// Comment service initialized successfully');
+      logger.warn('// Comment service initialized successfully');
       return this.firestore;
 
     } catch (error) {
-      console.error('❌ Comment service initialization failed:', error);
+      logger.error('❌ Comment service initialization failed:', error);
       throw this._enhanceError(error, 'Failed to initialize comment service');
     }
   }
@@ -395,7 +395,7 @@ class UltimateCommentService {
       };
 
     } catch (error) {
-      console.error(`❌ Get comments for post ${postId} failed:`, error);
+      logger.error(`❌ Get comments for post ${postId} failed:`, error);
       return {
         success: false,
         comments: [],
@@ -439,7 +439,7 @@ class UltimateCommentService {
       return { success: true, comment, cached: false };
 
     } catch (error) {
-      console.error(`❌ Get comment ${commentId} failed:`, error);
+      logger.error(`❌ Get comment ${commentId} failed:`, error);
       return { success: false, error: error.message, commentId };
     }
   }
@@ -489,7 +489,7 @@ class UltimateCommentService {
       return { success: true, commentId };
 
     } catch (error) {
-      console.error(`❌ Update comment ${commentId} failed:`, error);
+      logger.error(`❌ Update comment ${commentId} failed:`, error);
       throw this._enhanceError(error, 'Failed to update comment');
     }
   }
@@ -544,7 +544,7 @@ class UltimateCommentService {
       return { success: true, commentId };
 
     } catch (error) {
-      console.error(`❌ Delete comment ${commentId} failed:`, error);
+      logger.error(`❌ Delete comment ${commentId} failed:`, error);
       throw this._enhanceError(error, 'Failed to delete comment');
     }
   }
@@ -749,7 +749,7 @@ class UltimateCommentService {
       return result;
 
     } catch (error) {
-      console.error(`❌ Reply to comment ${parentCommentId} failed:`, error);
+      logger.error(`❌ Reply to comment ${parentCommentId} failed:`, error);
       throw this._enhanceError(error, 'Failed to reply to comment');
     }
   }
@@ -862,7 +862,7 @@ class UltimateCommentService {
             timestamp: new Date().toISOString()
           });
         }, (error) => {
-          console.error(`❌ Comment subscription error for post ${postId}:`, error);
+          logger.error(`❌ Comment subscription error for post ${postId}:`, error);
           callback({
             type: 'error',
             error: error.message,
@@ -882,7 +882,7 @@ class UltimateCommentService {
         return subscriptionId;
 
       } catch (error) {
-        console.error(`❌ Setup subscription for post ${postId} failed:`, error);
+        logger.error(`❌ Setup subscription for post ${postId} failed:`, error);
         callback({
           type: 'error',
           error: error.message,
@@ -958,7 +958,7 @@ class UltimateCommentService {
       return { success: true, commentId, reported: true };
 
     } catch (error) {
-      console.error(`❌ Report comment ${commentId} failed:`, error);
+      logger.error(`❌ Report comment ${commentId} failed:`, error);
       throw this._enhanceError(error, 'Failed to report comment');
     }
   }
@@ -1001,7 +1001,7 @@ class UltimateCommentService {
       return { success: true, commentId, action };
 
     } catch (error) {
-      console.error(`❌ Moderate comment ${commentId} failed:`, error);
+      logger.error(`❌ Moderate comment ${commentId} failed:`, error);
       throw this._enhanceError(error, 'Failed to moderate comment');
     }
   }
@@ -1434,7 +1434,7 @@ class UltimateCommentService {
     }
 
     if (now - this.lastCleanup > 60 * 1000) {
-      console.warn('// Comment service cleanup completed');
+      logger.warn('// Comment service cleanup completed');
       this.lastCleanup = now;
     }
   }
@@ -1515,7 +1515,7 @@ class UltimateCommentService {
       };
 
     } catch (error) {
-      console.error('❌ Batch delete comments failed:', error);
+      logger.error('❌ Batch delete comments failed:', error);
       throw this._enhanceError(error, 'Failed to batch delete comments');
     }
   }
@@ -1595,7 +1595,7 @@ class UltimateCommentService {
     this.firestoreMethods = null;
     this.firestoreModule = null;
 
-    console.warn('// Comment service destroyed');
+    logger.warn('// Comment service destroyed');
   }
 }
 
