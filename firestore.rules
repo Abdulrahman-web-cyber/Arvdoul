@@ -40,7 +40,8 @@ service cloud.firestore {
     // usernames registry: created/updated via owner flows
     match /usernames/{username} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      // Only the owner may create/update/delete a username doc that belongs to them.
+      allow create, update, delete: if isSignedIn() && request.resource.data.userId == uid();
     }
     match /user_settings/{userId} {
       allow read, update, delete: if isOwner(userId);
@@ -120,7 +121,8 @@ service cloud.firestore {
       }
       match /comments/{commentId} {
         allow read: if true;
-        allow write: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && resource.data.userId == uid();
       }
     }
     match /archived_stories/{storyId} {
@@ -253,7 +255,9 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
       match /{subcollection}/{docId} {
         allow read: if true;
-        allow write: if isSignedIn();
+        // Members may create their own content; only the author (or admin) may edit/delete.
+        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
       }
     }
 
@@ -264,7 +268,8 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.organizerId;
       match /{subcollection}/{docId} {
         allow read: if true;
-        allow write: if isSignedIn();
+        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
       }
     }
 
@@ -275,7 +280,8 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
       match /{subcollection}/{docId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
       }
     }
     match /collaboration_invites/{inviteId} {
@@ -305,7 +311,8 @@ service cloud.firestore {
     }
     match /post_analytics/{postId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      // Aggregate post analytics are server-computed (sharded counters); never client-written.
+      allow write: if false;
     }
     match /profile_views/{viewId} {
       allow read: if isSignedIn();
@@ -342,9 +349,14 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == uid();
     }
     match /calls/{callId} {
-      allow read, write: if isSignedIn();
+      function callParticipants() {
+        return get(/databases/$(database)/documents/calls/$(callId)).data.participants;
+      }
+      // Calls are private to participants (prevents reading others' call/SDP data).
+      allow read, update, delete: if isSignedIn() && uid() in resource.data.participants;
+      allow create: if isSignedIn() && uid() in request.resource.data.participants;
       match /ice/{candidateId} {
-        allow read, write: if isSignedIn();
+        allow read, write: if isSignedIn() && uid() in callParticipants();
       }
     }
     match /rate_limits/{key} {

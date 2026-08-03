@@ -1,3 +1,4 @@
+import { logger } from '../utils/Logger.js';
 // src/services/videoEditorService.js – ARVDOUL VIDEO EDITOR SERVICE V1
 // 🎬 Professional Video Editor with Timeline, Trim, Split, Transitions, Filters
 // ✅ Timeline Management • Clip Operations • Text Overlays • Stickers
@@ -155,9 +156,9 @@ class VideoEditorService {
       try {
         this.storage = getStorageInstance();
         this.initialized = true;
-        console.log('[VideoEditorService] Initialized successfully');
+        logger.info('[VideoEditorService] Initialized successfully');
       } catch (error) {
-        console.error('[VideoEditorService] Initialization failed:', error);
+        logger.error('[VideoEditorService] Initialization failed:', error);
         throw error;
       }
     })();
@@ -742,7 +743,7 @@ class VideoEditorService {
   generateCaptionsFromAudio(language = 'en') {
     // Placeholder for AI-powered caption generation
     // In production, this would use a speech-to-text API
-    console.log('[VideoEditorService] Generating captions for language:', language);
+    logger.info('[VideoEditorService] Generating captions for language:', language);
     return [];
   }
 
@@ -1042,7 +1043,7 @@ class VideoEditorService {
     this.currentProject = null;
     this.initialized = false;
     this.initPromise = null;
-    console.warn('[VideoEditorService] Destroyed');
+    logger.warn('[VideoEditorService] Destroyed');
   }
 }
 

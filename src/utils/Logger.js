@@ -41,17 +41,20 @@ function sanitizeValue(key, value) {
   return value;
 }
 
-function sanitizeMeta(meta) {
+function sanitizeMeta(meta, seen = new Set()) {
   if (!meta || typeof meta !== 'object') return meta;
+  if (seen.has(meta)) return '[CIRCULAR]';
+  seen.add(meta);
   const out = {};
   for (const [k, v] of Object.entries(meta)) {
     if (v && typeof v === 'object' && !(v instanceof Date)) {
-      out[k] = sanitizeMeta(v);
+      out[k] = sanitizeMeta(v, seen);
     } else {
       out[k] = sanitizeValue(k, v);
       if (PII_KEYS.test(k)) out[`${k}_pii`] = true;
     }
   }
+  seen.delete(meta);
   return out;
 }
 

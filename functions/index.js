@@ -65,6 +65,57 @@ const MONETIZATION_CONFIG = {
   BOOST_COST_PER_DAY: 10,
 };
 
+// ==================== LINK PREVIEW (scrapeLink) ====================
+// Client invokes this via httpsCallable to render rich link cards.
+exports.scrapeLink = functions.https.onCall(async (data) => {
+  const url = data && data.url;
+  if (typeof url !== 'string' || !url) {
+    throw new functions.https.HttpsError('invalid-argument', 'url is required');
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (_) {
+    throw new functions.https.HttpsError('invalid-argument', 'invalid url');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new functions.https.HttpsError('invalid-argument', 'unsupported protocol');
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(parsed.href, {
+      signal: controller.signal,
+      headers: { 'user-agent': 'ArvdoulBot/1.0 (+https://arvdoul.web.app)' },
+    });
+    clearTimeout(timeout);
+    const html = await res.text();
+
+    const meta = (prop) => {
+      const a = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'));
+      const b = html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
+      return (a && a[1]) || (b && a && b[1]) || null;
+    };
+
+    const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = (meta('og:title') || (titleTag && titleTag[1]) || '').trim();
+    const description = (meta('og:description') || meta('description') || '').trim();
+    const image = (meta('og:image') || '').trim();
+    const siteName = (meta('og:site_name') || parsed.hostname || '').trim();
+
+    return {
+      url: parsed.href,
+      title,
+      description,
+      image,
+      siteName,
+    };
+  } catch (err) {
+    throw new functions.https.HttpsError('unavailable', 'Could not fetch link preview');
+  }
+});
+
 // ==================== HELPER FUNCTIONS ====================
 async function isAdmin(uid) {
   const adminDoc = await db.doc(`admins/${uid}`).get();

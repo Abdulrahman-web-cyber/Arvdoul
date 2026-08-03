@@ -137,7 +137,7 @@ class StorageLogger {
         SECURITY: 'color: #9C27B0;',
         PERFORMANCE: 'color: #FF9800;'
       };
-//       console.warn(`%c[${this.serviceName} ${level}] ${action}`, colors[level] || 'color: #666;', data);
+//       logger.warn(`%c[${this.serviceName} ${level}] ${action}`, colors[level] || 'color: #666;', data);
     }
 
     // Store log
@@ -2062,7 +2062,7 @@ export {
 if (import.meta.env.PROD) {
   setTimeout(() => {
     getStorageService().initialize().catch(error => {
-//       console.warn('Storage service auto-initialization failed:', error.message);
+//       logger.warn('Storage service auto-initialization failed:', error.message);
     });
   }, 3000);
 }

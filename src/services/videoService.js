@@ -339,7 +339,7 @@ class OfflineVideoQueue {
         }
         await this.delete(item.id);
       } catch (err) {
-//         console.warn('Offline sync failed', err);
+//         logger.warn('Offline sync failed', err);
         if (Date.now() - item.timestamp > 7 * 24 * 60 * 60 * 1000) await this.delete(item.id);
       }
     }
@@ -422,7 +422,7 @@ class UltimateVideoService {
         this.initialized = true;
 // ✅ V28 Engine ready');
       } catch (err) {
-        console.error('[Video] ❌ Init failed', err);
+        logger.error('[Video] ❌ Init failed', err);
         this.initPromise = null;
         throw enhanceError(err, 'Failed to initialize video service');
       }
@@ -987,14 +987,14 @@ class UltimateVideoService {
       videoListenerCounts: this.videoListenerCounts.size,
     };
   }
-  clearCache() { this.cache.clear(); console.warn('// Cache cleared'); }
+  clearCache() { this.cache.clear(); logger.warn('// Cache cleared'); }
   destroy() {
     for (const unsub of this.realtimeUnsubscribes.values()) unsub();
     this.realtimeUnsubscribes.clear();
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-    console.warn('// Service destroyed');
+    logger.warn('// Service destroyed');
   }
 }
 

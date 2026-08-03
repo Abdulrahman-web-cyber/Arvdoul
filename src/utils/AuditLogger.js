@@ -14,7 +14,7 @@
  */
 
 import { openDB } from 'idb';
-import { Logger } from './Logger.js';
+import { Logger, getCorrelationId } from './Logger.js';
 
 const AUDIT_DB = 'arvdoul_audit';
 const AUDIT_STORE = 'events';
@@ -53,11 +53,14 @@ class AuditLogger {
    */
   async log(action, data = {}) {
     if (!this.enabled) return;
+    if (!data.userId) {
+      this.logger.warn('Audit event recorded without userId', { action });
+    }
     const entry = {
       action,
       userId: data.userId || null,
       timestamp: new Date().toISOString(),
-      correlationId: data.correlationId || null,
+      correlationId: data.correlationId || getCorrelationId() || null,
       ip: data.ip || null,
       userAgent: data.userAgent || null,
       meta: data.meta || {},
@@ -122,24 +125,64 @@ class AuditLogger {
    */
   async flushToFirestore(firestore, collectionName = 'audit_events') {
     if (!firestore) return { flushed: 0 };
-    const { collection, addDoc } = await import('firebase/firestore');
-    const pending = await this.getPending();
+    const { collection, writeBatch, doc } = await import('firebase/firestore');
     const ref = collection(firestore, collectionName);
-    const flushed = [];
-    for (const entry of pending) {
+    const pending = await this.getPending();
+    if (!pending.length) return { flushed: 0 };
+
+    // Batched writes (100/commit) instead of one addDoc per event.
+    const BATCH_SIZE = 100;
+    let flushed = 0;
+    for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+      const chunk = pending.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(firestore);
+      const ids = [];
+      for (const entry of chunk) {
+        const docRef = doc(ref);
+        batch.set(docRef, { ...entry, flushedAt: new Date().toISOString() });
+        ids.push(entry.id);
+      }
       try {
-        const docRef = await addDoc(ref, {
-          ...entry,
-          flushedAt: new Date().toISOString(),
-        });
-        flushed.push(entry.id ?? docRef.id);
+        await batch.commit();
+        flushed += chunk.length;
+        await this.clearPending(ids);
       } catch (err) {
-        this.logger.warn('Audit flush failed (event kept locally)', { error: err.message });
+        this.logger.warn('Audit batch flush failed (events kept locally)', { error: err.message });
         break; // stop on first failure; retry later
       }
     }
-    await this.clearPending(flushed);
-    return { flushed: flushed.length };
+    return { flushed };
+  }
+
+  /**
+   * Start automatic flushing on an interval and on page-hide (best-effort).
+   * @param {Object} firestore
+   * @param {Object} [opts]
+   * @param {number} [opts.intervalMs=300000] flush cadence (5 min)
+   */
+  startAutoFlush(firestore, { intervalMs = 300000 } = {}) {
+    this.stopAutoFlush();
+    this._flushTimer = setInterval(() => {
+      this.flushToFirestore(firestore).catch(() => {});
+    }, intervalMs);
+    if (typeof window !== 'undefined') {
+      this._flushOnHide = () => this.flushToFirestore(firestore).catch(() => {});
+      window.addEventListener('pagehide', this._flushOnHide);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') this._flushOnHide();
+      });
+    }
+  }
+
+  stopAutoFlush() {
+    if (this._flushTimer) {
+      clearInterval(this._flushTimer);
+      this._flushTimer = null;
+    }
+    if (typeof window !== 'undefined' && this._flushOnHide) {
+      window.removeEventListener('pagehide', this._flushOnHide);
+      this._flushOnHide = null;
+    }
   }
 }
 

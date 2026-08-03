@@ -147,7 +147,7 @@ class UltimateLiveService {
     this._viewerListeners = new Map();
     this._userLevelCache = new Map();
 
-//     this.initialize().catch(err => console.warn('Live service init warning:', err.message));
+//     this.initialize().catch(err => logger.warn('Live service init warning:', err.message));
   }
 
   // ==================== INITIALIZATION ====================
@@ -165,13 +165,13 @@ class UltimateLiveService {
         await enableIndexedDbPersistence(this.firestore);
         // Live persistence enabled
       } catch (e) {
-//         console.warn('⚠️ Live persistence not available:', e.message);
+//         logger.warn('⚠️ Live persistence not available:', e.message);
       }
 
       this.initialized = true;
       return this.firestore;
     } catch (error) {
-      console.error('❌ Live service initialization failed:', error);
+      logger.error('❌ Live service initialization failed:', error);
       throw enhanceError(error, 'Failed to initialize live streaming service');
     }
   }
@@ -315,7 +315,7 @@ class UltimateLiveService {
         viewerLimit: this._getViewerLimit(userLevel),
       };
     } catch (error) {
-      console.error('❌ Check can start live failed:', error);
+      logger.error('❌ Check can start live failed:', error);
       return {
         canStart: false,
         reason: 'Failed to check live stream eligibility.',
@@ -390,7 +390,7 @@ class UltimateLiveService {
         },
       };
     } catch (error) {
-      console.error('❌ Start live stream failed:', error);
+      logger.error('❌ Start live stream failed:', error);
       throw enhanceError(error, 'Failed to start live stream');
     }
   }
@@ -531,7 +531,7 @@ class UltimateLiveService {
         startTime: doc.data().startTime?.toDate?.()?.toISOString(),
       }));
     } catch (error) {
-      console.error('❌ Get active live streams failed:', error);
+      logger.error('❌ Get active live streams failed:', error);
       return [];
     }
   }
@@ -574,7 +574,7 @@ class UltimateLiveService {
         createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
       }));
     } catch (error) {
-      console.error('❌ Get live history failed:', error);
+      logger.error('❌ Get live history failed:', error);
       return [];
     }
   }
@@ -782,7 +782,7 @@ class UltimateLiveService {
         createdAt: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('❌ Send live comment failed:', error);
+      logger.error('❌ Send live comment failed:', error);
       throw enhanceError(error, 'Failed to send comment');
     }
   }
@@ -996,7 +996,7 @@ class UltimateLiveService {
         },
       };
     } catch (error) {
-      console.error('❌ Send live tip failed:', error);
+      logger.error('❌ Send live tip failed:', error);
       throw enhanceError(error, 'Failed to send tip');
     }
   }
@@ -1038,7 +1038,7 @@ class UltimateLiveService {
         duration: data.duration || 0,
       };
     } catch (error) {
-      console.error('❌ Get live earnings failed:', error);
+      logger.error('❌ Get live earnings failed:', error);
       throw enhanceError(error, 'Failed to get earnings');
     }
   }
@@ -1076,7 +1076,7 @@ class UltimateLiveService {
         monetization: data.monetization,
       };
     } catch (error) {
-      console.error('❌ Get live analytics failed:', error);
+      logger.error('❌ Get live analytics failed:', error);
       return null;
     }
   }
@@ -1132,7 +1132,7 @@ class UltimateLiveService {
         averageDuration: totalStreams > 0 ? Math.round(totalDuration / totalStreams) : 0,
       };
     } catch (error) {
-      console.error('❌ Get user live analytics failed:', error);
+      logger.error('❌ Get user live analytics failed:', error);
       return {
         userId,
         period: `${days} days`,

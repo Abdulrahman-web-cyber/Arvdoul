@@ -286,7 +286,7 @@ class UltimateStoryService {
     if (this.initialized) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
-      console.warn('// Initializing...');
+      logger.warn('// Initializing...');
       const firestore = await getFirestoreInstance();
       const storage = await getStorageInstance();
       const auth = await getAuthInstance();
@@ -327,7 +327,7 @@ class UltimateStoryService {
         const callable = httpsCallable(this.functions, STORY_CONFIG.AI_CAPTION.CLOUD_FUNCTION);
         const result = await callable({ imageUrl: URL.createObjectURL(storyData.mediaFile) });
         storyData.content = result.data.caption;
-      } catch (err) { console.warn('// AI caption failed', err); }
+      } catch (err) { logger.warn('// AI caption failed', err); }
     }
 
     const mod = this._moderateContent(storyData);
@@ -879,7 +879,7 @@ class UltimateStoryService {
       const data = await res.json();
       return data.tracks || [];
     } catch (err) {
-      console.warn('// Music search failed', err);
+      logger.warn('// Music search failed', err);
       return [];
     }
   }
@@ -1232,7 +1232,7 @@ class UltimateStoryService {
   // ========== EXPIRED STORIES CLEANUP (called by Cloud Function) ==========
   async cleanupExpiredStories() {
     await this.ensureInitialized();
-    console.warn('// Running expired story cleanup...');
+    logger.warn('// Running expired story cleanup...');
     const now = new Date();
     const q = this.fs.query(
       this.fs.collection(this.firestore, 'stories'),
@@ -1253,9 +1253,9 @@ class UltimateStoryService {
         this.storyCache.delete(storyId);
         this._invalidateFeedCache(story.userId);
         processed++;
-      } catch (err) { console.error(`[Story] Cleanup error ${storyId}:`, err); }
+      } catch (err) { logger.error(`[Story] Cleanup error ${storyId}:`, err); }
     }
-//     console.warn(`[Story] Cleaned ${processed} expired stories`);
+//     logger.warn(`[Story] Cleaned ${processed} expired stories`);
     return { success: true, processed };
   }
 
@@ -1549,7 +1549,7 @@ class UltimateStoryService {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     const items = await this.uploadQueue.getAll();
     if (!items.length) return;
-//     console.warn(`[Story] Flushing ${items.length} queued stories`);
+//     logger.warn(`[Story] Flushing ${items.length} queued stories`);
     const CONCURRENCY = 2;
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const batch = items.slice(i, i + CONCURRENCY);
@@ -1557,7 +1557,7 @@ class UltimateStoryService {
         try {
           await this.createStory(item.storyData, item.options);
           await this.uploadQueue.delete(item.id);
-        } catch (err) { console.error('[Story] Failed to upload queued story', err); }
+        } catch (err) { logger.error('[Story] Failed to upload queued story', err); }
       }));
     }
   }

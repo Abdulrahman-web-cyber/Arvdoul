@@ -636,20 +636,20 @@ const PostWithTracking = React.memo(({
 const FeedSkeleton = () => (
   <div className="space-y-4 px-4">
     {[1, 2, 3].map(i => (
-      <div key={i} className="rounded-3xl overflow-hidden border bg-gray-100 dark:bg-gray-800 animate-pulse">
+      <div key={i} className="rounded-3xl overflow-hidden border border-gray-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-sm">
         <div className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gray-300 dark:bg-gray-700" />
+          <div className="w-12 h-12 rounded-full shimmer" />
           <div className="flex-1 space-y-2">
-            <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-1/3" />
-            <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-1/4" />
+            <div className="h-4 shimmer rounded-lg w-1/3" />
+            <div className="h-3 shimmer rounded-lg w-1/4" />
           </div>
         </div>
         <div className="p-4 space-y-2">
-          <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-full" />
-          <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-5/6" />
-          <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-4/6" />
+          <div className="h-4 shimmer rounded-lg w-full" />
+          <div className="h-4 shimmer rounded-lg w-5/6" />
+          <div className="h-4 shimmer rounded-lg w-4/6" />
         </div>
-        <div className="h-64 bg-gray-300 dark:bg-gray-700" />
+        <div className="h-64 shimmer mx-4 mb-4 rounded-2xl" />
       </div>
     ))}
   </div>
@@ -1163,9 +1163,14 @@ export default function HomeScreen() {
     );
   }
 
-  const isInitialLoading = status === STATUS.LOADING && feed.length === 0;
-  const showEmptyState = feed.length === 0 && status === STATUS.SUCCESS;
-  const showErrorState = error && feed.length === 0 && !fallbackMode;
+  // Render gating: the feed list (Virtuoso) is only rendered when we actually have
+  // posts. Every empty-feed state (loading / refreshing / preloading / error / success
+  // with no posts) shows a dedicated state instead of an empty Virtuoso, which would
+  // otherwise paint a completely blank screen.
+  const hasFeed = feed.length > 0;
+  const isInitialLoading = !hasFeed && status !== STATUS.SUCCESS && status !== STATUS.ERROR;
+  const showEmptyState = !hasFeed && status === STATUS.SUCCESS && !error;
+  const showErrorState = !hasFeed && !!error && !fallbackMode;
   const hasPendingRealtime = pendingNewPostIdsRef.current.length > 0;
   const hasPendingPreload = preloadLockRef.current;
   const isTrulyIdle = !hasMore && feed.length > 0 && !hasPendingRealtime && !hasPendingPreload && status === STATUS.SUCCESS;
@@ -1173,7 +1178,7 @@ export default function HomeScreen() {
   return (
     <VisibilityProvider scrollerRef={scrollerRef}>
       <div className={cn(
-        'h-screen w-full flex flex-col overflow-hidden max-w-2xl mx-auto',
+        'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto',
         isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         {/* Banners */}

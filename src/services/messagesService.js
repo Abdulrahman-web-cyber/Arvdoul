@@ -436,7 +436,7 @@ class UltimateMessagingService {
       this.typingTimers.forEach(timer => clearTimeout(timer));
       this.typingTimers.clear();
     });
-//     console.warn('[Messaging] Supreme V41 (Complete) instantiated');
+//     logger.warn('[Messaging] Supreme V41 (Complete) instantiated');
   }
 
   async ensureInitialized() {
@@ -445,7 +445,7 @@ class UltimateMessagingService {
 
     this.initPromise = (async () => {
       try {
-//         console.warn('[Messaging] Initializing...');
+//         logger.warn('[Messaging] Initializing...');
 
         this.firestore = await getFirestoreInstance();
         this.storage = getStorage();
@@ -456,7 +456,7 @@ class UltimateMessagingService {
         try {
           await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
         } catch (err) {
-//           if (err.code !== 'failed-precondition') console.warn('[Messaging] Persistence:', err.message);
+//           if (err.code !== 'failed-precondition') logger.warn('[Messaging] Persistence:', err.message);
         }
 
         this.fs = {
@@ -473,9 +473,9 @@ class UltimateMessagingService {
         await this.offlineQueue.sync();
 
         this.initialized = true;
-//         console.warn('[Messaging] ✅ Initialized');
+//         logger.warn('[Messaging] ✅ Initialized');
       } catch (err) {
-        console.error('[Messaging] ❌ Init failed', err);
+        logger.error('[Messaging] ❌ Init failed', err);
         this.initPromise = null;
         throw enhanceError(err, 'Failed to initialize messaging');
       }
@@ -544,7 +544,7 @@ class UltimateMessagingService {
     await this.fs.setDoc(userSettingsRef, { publicKey }, { merge: true });
 
     this.unlockedPrivateKeys.set(userId, privateKey);
-//     console.warn('[E2EE] Keys generated and stored securely');
+//     logger.warn('[E2EE] Keys generated and stored securely');
     return { success: true };
   }
 
@@ -2280,7 +2280,7 @@ class UltimateMessagingService {
 
   async _getMessage(conversationId, messageId, timestamp = new Date()) {
     if (!conversationId) {
-//       console.warn('_getMessage called without conversationId');
+//       logger.warn('_getMessage called without conversationId');
       return null;
     }
     const conv = await this.getConversation(conversationId);
@@ -2694,7 +2694,7 @@ class UltimateMessagingService {
         return { sent: true, result: result.data };
       } catch (err) {
         if (i === maxRetries - 1) {
-//           console.warn(`Push notification failed after ${maxRetries} attempts. Is the Cloud Function deployed?`);
+//           logger.warn(`Push notification failed after ${maxRetries} attempts. Is the Cloud Function deployed?`);
           return { sent: false, error: err };
         }
         const delay = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.INITIAL_DELAY_MS *
@@ -2807,7 +2807,7 @@ class UltimateMessagingService {
         lastActivity: new Date().toISOString(),
       };
     } catch (err) {
-//       console.warn('[Messaging] Failed to fetch conversation list ad:', err);
+//       logger.warn('[Messaging] Failed to fetch conversation list ad:', err);
       return null;
     }
   }
@@ -2838,7 +2838,7 @@ class UltimateMessagingService {
     this.notificationSettingsCache.clear();
     this.dedupeMemoryCache.clear();
     this.messageKeysByConversation.clear();
-//     console.warn('[Messaging] Cache cleared');
+//     logger.warn('[Messaging] Cache cleared');
   }
 
   destroy() {
@@ -2848,7 +2848,7 @@ class UltimateMessagingService {
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-//     console.warn('[Messaging] Destroyed');
+//     logger.warn('[Messaging] Destroyed');
   }
 }
 

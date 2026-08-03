@@ -134,7 +134,7 @@ class UltimateAnalyticsService {
         await enableIndexedDbPersistence(this.firestore);
         // Analytics persistence enabled
       } catch (e) {
-//         console.warn('⚠️ Analytics persistence not available:', e.message);
+//         logger.warn('⚠️ Analytics persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -424,7 +424,7 @@ class UltimateAnalyticsService {
       
       return ranking;
     } catch (error) {
-//       console.warn('⚠️ Get creator ranking failed:', error);
+//       logger.warn('⚠️ Get creator ranking failed:', error);
       return {
         position: null,
         percentile: null,
@@ -506,7 +506,7 @@ class UltimateAnalyticsService {
       });
       countersManager.invalidate({ docPath, field: totalField });
     } catch (error) {
-//       console.warn('⚠️ Track post analytics failed:', error);
+//       logger.warn('⚠️ Track post analytics failed:', error);
     }
   }
 
