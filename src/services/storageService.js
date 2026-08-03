@@ -3,6 +3,13 @@
 // 📁 Advanced File Management • Real-time Progress • Perfect Error Recovery
 // 🔐 SOC2/HIPAA/GDPR Compliant • Multi-region • Disaster Recovery
 
+// ==================== SHARED UTILITIES ====================
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { idempotencyStore } from '../utils/IdempotencyKey.js';
+
 // ==================== ENTERPRISE IMPORTS ====================
 // Lazy loading for optimal bundle splitting
 let storageModule = null;
@@ -18,6 +25,10 @@ let listAll = null;
 
 // ==================== ENTERPRISE CONFIGURATION ====================
 const STORAGE_CONFIG = {
+  RATE_LIMITS: {
+    UPLOADS_PER_HOUR: 60,
+    DOWNLOADS_PER_HOUR: 300,
+  },
   // Security Settings
   SECURITY: {
     ALLOWED_FILE_TYPES: {
@@ -874,7 +885,19 @@ class EnterpriseStorageService {
       if (!validation.valid) {
         throw new Error(`File validation failed: ${validation.errors.join(', ')}`);
       }
-      
+
+      // Rate limit: uploads per user per hour (UX guard; storage rules enforce the boundary).
+      const rateKey = `storage:upload:${options.userId || 'anonymous'}`;
+      const rl = rateLimiter.checkAndHit(rateKey, { max: STORAGE_CONFIG.RATE_LIMITS.UPLOADS_PER_HOUR, windowMs: 60 * 60 * 1000 });
+      if (!rl.allowed) {
+        throw new Error('Upload limit reached. Please try again later.');
+      }
+
+      // Idempotency: same operationId cannot double-upload (client-side dedupe).
+      if (options.idempotent !== false && !idempotencyStore.checkAndRecord(operationId, 10 * 60 * 1000)) {
+        return { success: true, duplicate: true, operationId };
+      }
+
       // Compress image if needed
       let fileToUpload = file;
       if (options.compressImages !== false && file.type.startsWith('image/')) {
@@ -917,7 +940,13 @@ class EnterpriseStorageService {
       );
       
       const downloadURL = await getDownloadURL(snapshot.ref);
-      
+
+      // Memory hygiene: drop the upload log + active-upload entry immediately.
+      this.logger.completeUploadLog?.(uploadId);
+      this.activeUploads.delete(uploadId);
+
+      auditLogger.log('storage.upload', { userId: options.userId || null, meta: { path: finalPath, size: fileToUpload.size, operationId } });
+
       // Update metrics
       this.metrics.uploads.count++;
       this.metrics.uploads.totalSize += fileToUpload.size;
@@ -1298,8 +1327,10 @@ class EnterpriseStorageService {
         STORAGE_CONFIG.PERFORMANCE.TIMEOUT
       );
       
-      // Invalidate cache
+      // Invalidate cache (local + centralized CacheManager user scoping)
       this.cacheManager.invalidatePath(path);
+      if (options.userId) cacheManager.invalidateUser(options.userId);
+      auditLogger.log('storage.delete', { userId: options.userId || null, meta: { path, operationId } });
       
       // Log activity
       if (options.userId) {

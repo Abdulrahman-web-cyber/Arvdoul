@@ -38,12 +38,20 @@ export default function CreateAudio() {
     <div className="space-y-4 h-full">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400">Audio Post</h3>
-        <button
-          onClick={saveDraft}
-          className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-        >
-          💾 Save Draft
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => window.location.assign('/audio-editor')}
+            className="px-3 py-1 text-sm bg-violet-500/15 text-violet-500 rounded-full hover:bg-violet-500/25 transition"
+          >
+            🎛️ Open Audio Editor
+          </button>
+          <button
+            onClick={saveDraft}
+            className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            💾 Save Draft
+          </button>
+        </div>
       </div>
 
       <button

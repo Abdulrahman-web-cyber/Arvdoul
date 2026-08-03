@@ -3,6 +3,7 @@
 // ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   FaChevronLeft, FaUsers, FaUserPlus, FaUserMinus, FaCrown,
@@ -196,6 +197,7 @@ const ContentVersionCard = ({ version, onReview, canReview }) => {
 
 // ==================== MAIN COLLABORATION SCREEN ====================
 export default function CollaborationScreen() {
+  const { theme, isDark } = useTheme();
   const navigate = useNavigate();
   const { projectId } = useParams();
   const [project, setProject] = useState(null);
@@ -286,6 +288,7 @@ export default function CollaborationScreen() {
 
   const handleAcceptInvite = async (inviteId) => {
     try {
+      const invite = invites.find(inv => inv.id === inviteId) || pendingInvites.find(inv => inv.id === inviteId) || {};
       await collaborationService.acceptInvite(inviteId, project.ownerId, invite.email);
       await loadProject();
     } catch (err) {
@@ -304,7 +307,7 @@ export default function CollaborationScreen() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'}`}>
         <div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
       </div>
     );
@@ -312,7 +315,7 @@ export default function CollaborationScreen() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'}`}>
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button
@@ -329,7 +332,7 @@ export default function CollaborationScreen() {
   const canManageTeam = collaborationService.canManageTeam(currentUserRole);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className={`min-h-screen ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">

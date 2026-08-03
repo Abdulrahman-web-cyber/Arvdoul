@@ -15,6 +15,14 @@
  */
 
 import { produce } from 'immer';
+import { cacheManager } from '../utils/CacheManager.js';
+import { countersManager } from '../utils/CountersManager.js';
+import { offlineQueue } from '../utils/OfflineQueue.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { errorHandler } from '../utils/ErrorHandler.js';
+import { idempotencyStore } from '../utils/IdempotencyKey.js';
 
 // ==================== CONFIGURATION ====================
 const LIVE_CONFIG = {
@@ -132,7 +140,7 @@ class UltimateLiveService {
     this.firestore = null;
     this.auth = null;
     this.initialized = false;
-    this.cache = new LRUCache(50, LIVE_CONFIG.CACHE_TTL);
+    this.cache = cacheManager.namespace('live', LIVE_CONFIG.CACHE_TTL);
     this.subscriptions = new Map();
     this._activeStreamListeners = new Map();
     this._commentListeners = new Map();
@@ -220,6 +228,7 @@ class UltimateLiveService {
       MAX_DURATION_HOURS: LIVE_CONFIG.MAX_DURATION_HOURS,
       COOLDOWN_MINUTES: LIVE_CONFIG.COOLDOWN_MINUTES,
       MAX_COMMENTS_PER_MINUTE: LIVE_CONFIG.MAX_COMMENTS_PER_MINUTE,
+      GIFT_TYPES: LIVE_CONFIG.GIFT_TYPES,
       GIFT_TYPES: LIVE_CONFIG.GIFT_TYPES,
       TIPS: LIVE_CONFIG.TIPS,
     };
@@ -428,10 +437,12 @@ class UltimateLiveService {
         updatedAt: serverTimestamp(),
       });
       
-      // Get final viewer count
-      const viewerCount = streamData.viewerCount || 0;
+      // Final viewer count (shard-backed with legacy fallback).
+      const viewerCount = await countersManager.get({ docPath: `live_streams/${streamId}`, field: 'viewerCount', fallback: streamData.viewerCount || 0 });
       const peakViewers = streamData.stats?.peakViewers || 0;
       const coinsEarned = streamData.stats?.coinsEarned || 0;
+
+      auditLogger.log('live.ended', { userId, meta: { streamId, duration: durationMinutes, peakViewers, coinsEarned } });
       
       return {
         success: true,
@@ -442,10 +453,11 @@ class UltimateLiveService {
           totalViewers: streamData.stats?.totalViewers || 0,
           peakViewers,
           coinsEarned,
+          viewerCount,
         },
       };
     } catch (error) {
-      console.error('❌ End live stream failed:', error);
+      logger.error('End live stream failed', { error: error.message, streamId, userId });
       throw enhanceError(error, 'Failed to end live stream');
     }
   }
@@ -478,11 +490,13 @@ class UltimateLiveService {
         endTime: snap.data().endTime?.toDate?.()?.toISOString(),
         createdAt: snap.data().createdAt?.toDate?.()?.toISOString(),
       };
+      // Overlay shard-backed live viewer count (legacy fallback keeps old data working).
+      await countersManager.apply({ data: stream, docPath: `live_streams/${streamId}`, fields: ['viewerCount'], scope: 'top' });
       
       this.cache.set(cacheKey, stream);
       return stream;
     } catch (error) {
-      console.error('❌ Get live stream failed:', error);
+      logger.error('Get live stream failed', { error: error.message, streamId });
       throw enhanceError(error, 'Failed to get live stream');
     }
   }
@@ -577,6 +591,12 @@ class UltimateLiveService {
       await this._ensureInitialized();
       
       const { doc, setDoc, getDoc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
+
+      // Offline: queue the join for delivery when connectivity returns.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await offlineQueue.enqueue({ type: 'live.join', payload: { streamId, viewerId } });
+        return { success: true, offlineQueued: true };
+      }
       
       // Check if stream exists and is live
       const streamRef = doc(this.firestore, 'live_streams', streamId);
@@ -612,17 +632,18 @@ class UltimateLiveService {
           });
         }
         
-        // Increment viewer count
+        // Sharded viewer count (no hot stream-doc write) + cumulative totalViewers.
+        await countersManager.incrementInTransaction(transaction, { docPath: `live_streams/${streamId}`, field: 'viewerCount' });
         transaction.update(streamRef, {
-          viewerCount: (streamSnap.data().viewerCount || 0) + 1,
           'stats.totalViewers': ((streamSnap.data().stats?.totalViewers) || 0) + 1,
           updatedAt: serverTimestamp(),
         });
       });
+      countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
       
       return { success: true };
     } catch (error) {
-      console.error('❌ Join live stream failed:', error);
+      logger.error('Join live stream failed', { error: error.message, streamId, viewerId });
       throw enhanceError(error, 'Failed to join live stream');
     }
   }
@@ -637,6 +658,12 @@ class UltimateLiveService {
       await this._ensureInitialized();
       
       const { doc, updateDoc, getDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
+
+      // Offline: queue the leave; viewer cleanup is idempotent.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await offlineQueue.enqueue({ type: 'live.leave', payload: { streamId, viewerId } });
+        return { success: true, offlineQueued: true };
+      }
       
       const viewerRef = doc(this.firestore, 'live_viewers', `${streamId}_${viewerId}`);
       const streamRef = doc(this.firestore, 'live_streams', streamId);
@@ -655,15 +682,16 @@ class UltimateLiveService {
             watchDuration: (viewerData.watchDuration || 0) + watchDuration,
           });
           
-          // Decrement viewer count
+          // Sharded viewer count decrement (floored at 0 by counter reads).
+          await countersManager.incrementInTransaction(transaction, { docPath: `live_streams/${streamId}`, field: 'viewerCount', amount: -1 });
           transaction.update(streamRef, {
-            viewerCount: Math.max(0, (streamSnap.data().viewerCount || 1) - 1),
             updatedAt: serverTimestamp(),
           });
         }
       });
+      countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
     } catch (error) {
-//       console.warn('⚠️ Leave live stream failed:', error);
+      logger.debug('Leave live stream failed', { error: error.message, streamId, viewerId });
     }
   }
 
@@ -677,7 +705,7 @@ class UltimateLiveService {
     try {
       await this._ensureInitialized();
       
-      const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const { collection, query, where, orderBy, limit, startAfter, getDocs } = await import('firebase/firestore');
       
       const viewersRef = collection(this.firestore, 'live_viewers');
       let q = query(
@@ -688,18 +716,29 @@ class UltimateLiveService {
       
       q = query(q, orderBy('joinedAt', 'desc'));
       
-      if (options.limit) {
-        q = query(q, limit(options.limit));
+      const pageSize = options.limit || 50;
+      q = query(q, limit(pageSize));
+      
+      // Cursor pagination: options.cursor is the last viewer doc id.
+      if (options.cursor) {
+        const { doc: fDoc, getDoc } = await import('firebase/firestore');
+        const cursorRef = fDoc(this.firestore, 'live_viewers', options.cursor);
+        const cursorSnap = await getDoc(cursorRef);
+        if (cursorSnap.exists()) q = query(q, startAfter(cursorSnap));
       }
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const viewers = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         joinedAt: doc.data().joinedAt?.toDate?.()?.toISOString(),
       }));
+      const hasMore = snapshot.docs.length === pageSize;
+      viewers.nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
+      viewers.hasMore = hasMore;
+      return viewers;
     } catch (error) {
-      console.error('❌ Get live viewers failed:', error);
+      logger.error('Get live viewers failed', { error: error.message, streamId });
       return [];
     }
   }
@@ -758,7 +797,7 @@ class UltimateLiveService {
     try {
       await this._ensureInitialized();
       
-      const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+      const { collection, query, where, orderBy, limit, startAfter, getDocs } = await import('firebase/firestore');
       
       const commentsRef = collection(this.firestore, 'live_comments');
       let q = query(
@@ -769,20 +808,29 @@ class UltimateLiveService {
       
       q = query(q, orderBy('createdAt', 'desc'));
       
-      if (options.limit) {
-        q = query(q, limit(options.limit));
-      } else {
-        q = query(q, limit(LIVE_CONFIG.COMMENTS_LIMIT));
+      const pageSize = options.limit || LIVE_CONFIG.COMMENTS_LIMIT;
+      q = query(q, limit(pageSize));
+      
+      // Cursor pagination: options.cursor is the last comment doc id.
+      if (options.cursor) {
+        const { doc: fDoc, getDoc } = await import('firebase/firestore');
+        const cursorRef = fDoc(this.firestore, 'live_comments', options.cursor);
+        const cursorSnap = await getDoc(cursorRef);
+        if (cursorSnap.exists()) q = query(q, startAfter(cursorSnap));
       }
       
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const comments = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.()?.toISOString(),
       })).reverse();
+      const hasMore = snapshot.docs.length === pageSize;
+      comments.nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
+      comments.hasMore = hasMore;
+      return comments;
     } catch (error) {
-      console.error('❌ Get live comments failed:', error);
+      logger.error('Get live comments failed', { error: error.message, streamId });
       return [];
     }
   }
@@ -803,6 +851,16 @@ class UltimateLiveService {
       const giftConfig = LIVE_CONFIG.GIFT_TYPES.find(g => g.id === giftType);
       if (!giftConfig) {
         throw new Error('Invalid gift type');
+      }
+
+      // UX guard against gift spam + client-side idempotency (server validates the spend).
+      const rl = rateLimiter.checkAndHit(`live:gift:${senderId}`, { max: 30, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Too many gifts. Please slow down.'), { code: 5001, defaultMessage: 'Too many gifts. Please slow down.' });
+      }
+      const idemKey = idempotencyStore.generate('live_gift', [streamId, senderId, giftType]);
+      if (!idempotencyStore.checkAndRecord(idemKey, 30000)) {
+        return { success: true, duplicate: true };
       }
       
       const { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
@@ -828,6 +886,7 @@ class UltimateLiveService {
         giftType,
         coinValue: giftConfig.coinValue,
         createdAt: serverTimestamp(),
+        idempotencyKey: idemKey,
       };
       
       await addDoc(giftsRef, giftData);
@@ -843,6 +902,21 @@ class UltimateLiveService {
           updatedAt: serverTimestamp(),
         });
       });
+
+      // Delegate coin deduction to monetizationService (single economy pipeline).
+      try {
+        const { getMonetizationService } = await import('./monetizationService.js');
+        await getMonetizationService().spendCoins(senderId, giftConfig.coinValue, 'live_gift', {
+          streamId, giftType, recipientId,
+        });
+      } catch (err) {
+        logger.warn('Gift coin deduction failed (server will reconcile)', { error: err.message });
+      }
+
+      auditLogger.log('monetization.live_gift', {
+        userId: senderId,
+        meta: { streamId, recipientId, giftType, coinValue: giftConfig.coinValue },
+      });
       
       return {
         success: true,
@@ -852,7 +926,8 @@ class UltimateLiveService {
         },
       };
     } catch (error) {
-      console.error('❌ Send live gift failed:', error);
+      if (error?.errorCode) throw error;
+      logger.error('Send live gift failed', { error: error.message, streamId, senderId });
       throw enhanceError(error, 'Failed to send gift');
     }
   }

@@ -195,7 +195,9 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         'min-h-screen pb-20',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <Suspense fallback={
           <div className="flex items-center justify-center min-h-screen">
@@ -213,7 +215,9 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         'min-h-screen pb-20 flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <div className="text-center p-6 max-w-md">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
@@ -245,7 +249,9 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         'min-h-screen pb-20 flex items-center justify-center',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <div className="text-center p-6 max-w-md">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
@@ -278,7 +284,9 @@ export default function ProfilePublicScreen() {
     <ErrorBoundary>
       <div className={cn(
         'min-h-screen pb-20',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         {/* Main Content */}
         <div className="max-w-2xl mx-auto">

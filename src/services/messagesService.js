@@ -17,6 +17,10 @@
 // 4. Firestore TTL policies on `message_dedupe`, `rate_limits`, `calls/*/signals`.
 // =================================================================================
 
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp, increment,
@@ -399,8 +403,8 @@ class UltimateMessagingService {
     this.initPromise = null;
 
     // Caches
-    this.conversationsCache = new LRUCache(100, MESSAGING_CONFIG.PERFORMANCE.CACHE_EXPIRY.CONVERSATIONS * 1000);
-    this.messagesCache = new LRUCache(200, MESSAGING_CONFIG.PERFORMANCE.CACHE_EXPIRY.MESSAGES * 1000);
+    this.conversationsCache = cacheManager.namespace('msg_conversations', MESSAGING_CONFIG.PERFORMANCE.CACHE_EXPIRY.CONVERSATIONS * 1000);
+    this.messagesCache = cacheManager.namespace('msg_messages', MESSAGING_CONFIG.PERFORMANCE.CACHE_EXPIRY.MESSAGES * 1000);
     this.messageKeysByConversation = new Map();
     this.profileCache = new LRUCache(500, MESSAGING_CONFIG.PERFORMANCE.CACHE_EXPIRY.PROFILES * 1000);
     this.blockCache = new LRUCache(200, 5 * 60 * 1000);
@@ -906,12 +910,14 @@ class UltimateMessagingService {
       finalConversations = await this._injectConversationListAds(enriched, userId, options);
     }
 
+    const hasMore = snap.docs.length >= (options.limit || 50);
     const result = {
       success: true,
       conversations: finalConversations.slice(0, options.limit || 50),
       total: finalConversations.length,
       unreadCount: finalConversations.reduce((sum, c) => sum + (c.unreadCounts?.[userId] || 0), 0),
-      hasMore: snap.docs.length >= (options.limit || 50),
+      hasMore,
+      nextCursor: hasMore && snap.docs.length ? snap.docs[snap.docs.length - 1].id : null,
     };
 
     if (!this.messageKeysByConversation.has('user_convs')) this.messageKeysByConversation.set('user_convs', new Set());
@@ -1048,6 +1054,18 @@ class UltimateMessagingService {
 
     this.metrics.messagesSent++;
     this.dedupeMemoryCache.set(idempotencyKey, true);
+
+    // Rate limit: messages per user per minute (UX guard; server/RTDB rules enforce).
+    rateLimiter.checkAndHit(`msg:send:${currentUser.uid}`, { max: MESSAGING_CONFIG.PERFORMANCE.SEND_RATE_LIMIT_MAX || 60, windowMs: 60000 });
+    // Audit metadata only - never message content (privacy by design).
+    auditLogger.log('message.sent', {
+      userId: currentUser.uid,
+      meta: {
+        conversationIdHash: String(conversationId).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7).toString(36),
+        type: messageData.type || 'text',
+        encrypted: !!messageData.encryptedPayload || !!messageData.encryptedContent,
+      },
+    });
 
     // Ephemeral auto‑delete timer
     if (conv.conversation.ephemeral && conv.conversation.disappearAfter) {
@@ -1938,11 +1956,13 @@ class UltimateMessagingService {
 
   async joinGroupViaInvite(inviteId, userId) {
     await this.ensureInitialized();
+    let inviteData = null;
     await this.fs.runTransaction(this.firestore, async (transaction) => {
       const inviteRef = this.fs.doc(this.firestore, 'group_invites', inviteId);
       const inviteSnap = await transaction.get(inviteRef);
       if (!inviteSnap.exists()) throw new Error('Invite not found');
       const invite = inviteSnap.data();
+      inviteData = invite;
       if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) throw new Error('Invite expired');
       if (invite.maxUses && invite.uses >= invite.maxUses) throw new Error('Invite max uses reached');
 
@@ -1970,8 +1990,10 @@ class UltimateMessagingService {
         isSystem: true,
       });
     });
-    this.conversationsCache.delete(invite.conversationId);
-    return { success: true, conversationId: invite.conversationId };
+    this.conversationsCache.delete(inviteData.conversationId);
+    cacheManager.invalidateUser(userId);
+    auditLogger.log('messaging.group_joined', { userId, meta: { inviteId } });
+    return { success: true, conversationId: inviteData.conversationId };
   }
 
   // ========== PIN MESSAGES ==========
@@ -2070,11 +2092,14 @@ class UltimateMessagingService {
   }
 
   async generateInviteQRCode(inviteId, adminId) {
-    const linkData = await this.listInviteLinks(conv.conversationId, adminId);
-    const invite = linkData.invites.find(inv => inv.id === inviteId);
-    if (!invite) throw new Error('Invite not found');
+    await this.ensureInitialized();
+    // Resolve the invite to find its conversation (fixes undefined `conv`).
+    const inviteRef = this.fs.doc(this.firestore, 'group_invites', inviteId);
+    const inviteSnap = await this.fs.getDoc(inviteRef);
+    if (!inviteSnap.exists()) throw new Error('Invite not found');
+    const invite = inviteSnap.data();
     const inviteUrl = `${MESSAGING_CONFIG.INVITE_BASE_URL}/join-group?invite=${inviteId}`;
-    return { success: true, inviteUrl };
+    return { success: true, inviteUrl, conversationId: invite.conversationId || null, code: inviteId };
   }
 
   // ========== DRAFTS ==========
@@ -2713,6 +2738,7 @@ class UltimateMessagingService {
         }
       });
     }
+    cacheManager.invalidateUser(userId);
   }
 
   async _getImageDimensions(file) {

@@ -455,7 +455,10 @@ export default function MessagingScreen() {
         onTouchEnd={handleTouchEnd}
         onClick={() => navigate(`/messages/${item.id}`)}
         className={cn(
-          'flex items-center p-4 border-b border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition group',
+          'flex items-center p-4 my-1.5 mx-2 rounded-2xl border border-gray-200/50 dark:border-gray-800/50 cursor-pointer',
+          'bg-white/70 dark:bg-gray-900/60 backdrop-blur-md',
+          'shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)]',
+          'hover:shadow-[0_8px_30px_rgba(139,92,246,0.12)] hover:-translate-y-0.5 transition-all duration-200 group',
           isUnread && 'bg-blue-50 dark:bg-blue-900/20'
         )}
         role="button"
@@ -471,7 +474,7 @@ export default function MessagingScreen() {
             loading="lazy"
           />
           {other?.online && (
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full ring-2 ring-white dark:ring-gray-900" />
+            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full ring-2 ring-white dark:ring-gray-800" />
           )}
         </div>
 
@@ -583,8 +586,8 @@ export default function MessagingScreen() {
   }, [user, loadConversations]);
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-950">
-      <div className="pt-12 pb-2 px-4 flex justify-between items-center bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
+    <div className="h-full flex flex-col bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] dark:from-[#060816] dark:via-[#0b1220] dark:to-[#02040a]">
+      <div className="pt-12 pb-2 px-4 flex justify-between items-center bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Messages</h1>
         <div className="flex space-x-3">
           <button onClick={() => navigate('/coins')} className="text-yellow-500"><Wallet size={24} /></button>
@@ -606,7 +609,7 @@ export default function MessagingScreen() {
           {searching && <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 animate-spin text-gray-500" />}
         </div>
         {searchResults.length > 0 && (
-          <div className="absolute z-10 mt-2 w-96 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="absolute z-10 mt-2 w-96 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.25)] border border-gray-200/60 dark:border-gray-700/60">
             {searchResults.map(user => (
               <div key={user.objectID} onClick={() => startDirectChat(user.objectID)} className="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
                 <img src={user.photoURL} alt={user.displayName} className="w-8 h-8 rounded-full" loading="lazy" />
@@ -688,7 +691,7 @@ export default function MessagingScreen() {
       </div>
 
       <Modal isOpen={showCreateGroup} onRequestClose={() => setShowCreateGroup(false)} className="absolute inset-0 flex items-center justify-center p-4" overlayClassName="fixed inset-0 bg-black/50" ariaHideApp={false}>
-        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto border border-gray-200/50 dark:border-gray-800/50 shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
           <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Create Group</h2>
           <div className="flex justify-center mb-4">
             <div className="relative w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center cursor-pointer overflow-hidden" onClick={() => groupPhotoInputRef.current?.click()}>

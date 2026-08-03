@@ -24,6 +24,11 @@ const GroupInfoScreen = () => {
   const [description, setDescription] = useState(conversation?.description || '');
   const [participants, setParticipants] = useState(conversation?.participants || []);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [memberQuery, setMemberQuery] = useState('');
+  const [memberResults, setMemberResults] = useState([]);
+  const [searchingMembers, setSearchingMembers] = useState(false);
+  const [addingMember, setAddingMember] = useState(null);
 
   useEffect(() => {
     if (conversation) {
@@ -99,7 +104,9 @@ const GroupInfoScreen = () => {
   return (
     <div className={cn(
       'flex flex-col h-full',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Header */}
       <div className={cn(
@@ -189,9 +196,7 @@ const GroupInfoScreen = () => {
             </h3>
             {isAdmin && (
               <button
-                onClick={() => {
-                  toast.info('Add members feature coming soon');
-                }}
+                onClick={() => setShowAddMembers((v) => !v)}
                 className={cn(
                   'p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors'
                 )}
@@ -301,6 +306,59 @@ const GroupInfoScreen = () => {
           </button>
         </div>
       </div>
+      {/* Add members panel */}
+      {showAddMembers && (
+        <div className="mt-4 space-y-3">
+          <input
+            value={memberQuery}
+            onChange={async (e) => {
+              setMemberQuery(e.target.value);
+              const q = e.target.value.trim();
+              if (q.length < 2) { setMemberResults([]); return; }
+              setSearchingMembers(true);
+              try {
+                const { getUserService } = await import('../services/userService.js');
+                const res = await getUserService().searchUsers(q, { limit: 8 });
+                const users = res?.users || res || [];
+                setMemberResults(users.filter((u) => u.id && !participants.some((p) => p.id === u.id || p === u.id)));
+              } catch (err) { setMemberResults([]); }
+              finally { setSearchingMembers(false); }
+            }}
+            placeholder="Search users to add…"
+            className="w-full px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-sm outline-none"
+          />
+          {searchingMembers && <p className="text-xs opacity-60">Searching…</p>}
+          <div className="space-y-2">
+            {memberResults.map((u) => (
+              <div key={u.id} className="flex items-center justify-between p-2 rounded-xl bg-gray-100/50 dark:bg-gray-800/50">
+                <span className="text-sm font-medium truncate">{u.displayName || u.username || u.id}</span>
+                <button
+                  onClick={async () => {
+                    setAddingMember(u.id);
+                    try {
+                      const messaging = await import('../services/messagesService.js');
+                      const svc = messaging.getMessagingService ? messaging.getMessagingService() : messaging.default;
+                      if (!conversationId) throw new Error('Conversation context missing');
+                      await svc.addParticipants(conversationId, [u.id], user?.uid);
+                      toast.success('Member added!');
+                      setMemberResults((r) => r.filter((x) => x.id !== u.id));
+                    } catch (err) {
+                      toast.error(err?.message || 'Could not add member.');
+                    } finally {
+                      setAddingMember(null);
+                    }
+                  }}
+                  disabled={addingMember === u.id}
+                  className="px-3 py-1.5 rounded-lg bg-violet-500 text-white text-xs font-semibold disabled:opacity-50"
+                >
+                  {addingMember === u.id ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

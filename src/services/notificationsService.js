@@ -19,6 +19,10 @@
 // ✅ ADDED: AI ranking stub (client can ask for sorted list)
 
 import { getFirestoreInstance, getAuthInstance, getMessagingInstance } from '../firebase/firebase.js';
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   collection,
@@ -461,8 +465,22 @@ class UltimateNotificationsService {
       return { success: true, offlineQueued: true };
     }
     try {
+      // UX guard against notification spam (server CF validates + rate-limits authoritatively).
+      const rl = rateLimiter.checkAndHit(`notif:send:${currentUser.uid}`, { max: 120, windowMs: 60000 });
+      if (!rl.allowed) {
+        return { skipped: true, reason: 'rate_limited' };
+      }
+
       const result = await this.cfSendNotification({ notificationData, options });
       this.metrics.notificationsSent++;
+      auditLogger.log('notification.sent', {
+        userId: currentUser.uid,
+        meta: {
+          type: notificationData.type || null,
+          recipientIdHash: notificationData.recipientId ? String(notificationData.recipientId).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7).toString(36) : null,
+          priority: notificationData.priority || 'normal',
+        },
+      });
       return result.data;
     } catch (err) {
       this.metrics.errors++;
@@ -761,6 +779,8 @@ class UltimateNotificationsService {
     const prefsRef = this.fs.doc(this.firestore, 'user_settings', userId);
     await this.fs.updateDoc(prefsRef, { notificationPreferences: merged });
     this.userPreferencesCache.delete(userId);
+    cacheManager.invalidateUser(userId);
+    auditLogger.log('notification.preferences_updated', { userId, meta: { keys: Object.keys(updates) } });
     return { success: true };
   }
 

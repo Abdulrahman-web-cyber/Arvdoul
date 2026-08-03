@@ -8,6 +8,14 @@
 // ✅ REMOVED: client‑side scheduled jobs (moved to Cloud Functions)
 // ✅ SCALABLE: savedBy/likedBy/poll.votes replaced with subcollections
 
+// ==================== SHARED UTILITIES ====================
+import { countersManager } from '../utils/CountersManager.js';
+import { cacheManager } from '../utils/CacheManager.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { errorHandler } from '../utils/ErrorHandler.js';
+
 // ==================== LRU CACHE ====================
 class LRUCache {
   constructor(maxSize = 100, ttl = 60000) {
@@ -94,7 +102,7 @@ class EnterpriseFirestoreService {
   constructor() {
     this.firestore = null;
     this.initialized = false;
-    this.cache = new LRUCache(100, 60000);
+    this.cache = cacheManager.namespace('posts', 60000);
     this.subscriptions = new Map();
     this.isOnline = navigator.onLine;
     this.firestoreModule = null;
@@ -230,6 +238,8 @@ class EnterpriseFirestoreService {
       const postSnap = await getDoc(postRef);
       if (!postSnap.exists()) return { success: false, error: 'Post not found', code: 'not-found' };
       const postData = { id: postSnap.id, ...postSnap.data() };
+      // Overlay shard-backed counters (falls back to legacy doc stats).
+      await countersManager.apply({ data: postData, docPath: `posts/${postId}`, fields: ['likes', 'saves', 'shares', 'gifts', 'giftValue'] });
       this.cache.set(postId, { ...postData, _cachedAt: Date.now() });
       return { success: true, post: postData, cached: false };
     } catch (error) {
@@ -267,7 +277,11 @@ class EnterpriseFirestoreService {
       
       const q = query(postsRef, ...conditions);
       const snap = await getDocs(q);
-      const posts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const posts = await Promise.all(snap.docs.map(async (doc) => {
+        const data = { id: doc.id, ...doc.data() };
+        await countersManager.apply({ data, docPath: `posts/${doc.id}`, fields: ['likes', 'saves', 'shares', 'gifts', 'giftValue'] });
+        return data;
+      }));
       const hasMore = snap.docs.length === (options.limit || 10);
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
       
@@ -336,7 +350,12 @@ class EnterpriseFirestoreService {
   async savePost(postId, userId) {
     await this.ensureInitialized();
     try {
-      const { doc, runTransaction, increment, serverTimestamp, setDoc, getDoc } = this.firestoreMethods;
+      const rl = rateLimiter.checkAndHit(`save:${userId}`, { max: 120, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Too many saves. Please slow down.'), { code: 5001, defaultMessage: 'Too many saves. Please slow down.' });
+      }
+
+      const { doc, runTransaction, serverTimestamp, setDoc } = this.firestoreMethods;
       const postRef = doc(this.firestore, 'posts', postId);
       const userSavedRef = doc(this.firestore, 'users', userId, 'saved_posts', postId);
       let alreadySaved;
@@ -346,11 +365,8 @@ class EnterpriseFirestoreService {
         const savedSnap = await transaction.get(userSavedRef);
         alreadySaved = savedSnap.exists();
         if (!alreadySaved) {
-          // Update post stats
-          transaction.update(postRef, {
-            'stats.saves': increment(1),
-            updatedAt: serverTimestamp()
-          });
+          // Sharded save counter - no hot-doc stats.saves write.
+          await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'saves' });
           // Store denormalised snapshot in user's saved_posts
           const postData = postSnap.data();
           transaction.set(userSavedRef, {
@@ -373,6 +389,8 @@ class EnterpriseFirestoreService {
         }
       });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'saves' });
+      auditLogger.log('content.save', { userId, meta: { postId, alreadySaved } });
       if (!alreadySaved) {
 //         this._notifySave(postId, userId).catch(console.warn);
       }
@@ -383,21 +401,20 @@ class EnterpriseFirestoreService {
   async unsavePost(postId, userId) {
     await this.ensureInitialized();
     try {
-      const { doc, runTransaction, increment, serverTimestamp, deleteDoc } = this.firestoreMethods;
+      const { doc, runTransaction, serverTimestamp, deleteDoc } = this.firestoreMethods;
       const postRef = doc(this.firestore, 'posts', postId);
       const userSavedRef = doc(this.firestore, 'users', userId, 'saved_posts', postId);
       await runTransaction(this.firestore, async (transaction) => {
         const savedSnap = await transaction.get(userSavedRef);
         if (!savedSnap.exists()) return;
-        transaction.update(postRef, {
-          'stats.saves': increment(-1),
-          updatedAt: serverTimestamp()
-        });
+        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'saves', amount: -1 });
         transaction.delete(userSavedRef);
         const postSaveRef = doc(this.firestore, 'posts', postId, 'saves', userId);
         transaction.delete(postSaveRef);
       });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'saves' });
+      auditLogger.log('content.unsave', { userId, meta: { postId } });
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to unsave post'); }
   }
@@ -425,7 +442,13 @@ class EnterpriseFirestoreService {
   async likePost(postId, userId) {
     await this.ensureInitialized();
     try {
-      const { doc, runTransaction, increment, serverTimestamp, setDoc, getDoc } = this.firestoreMethods;
+      // Client-side UX guard (server rules enforce the real boundary).
+      const rl = rateLimiter.checkAndHit(`like:${userId}`, { max: 120, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Too many likes. Please slow down.'), { code: 5001, defaultMessage: 'Too many likes. Please slow down.' });
+      }
+
+      const { doc, runTransaction, serverTimestamp, setDoc } = this.firestoreMethods;
       const postRef = doc(this.firestore, 'posts', postId);
       const userLikeRef = doc(this.firestore, 'users', userId, 'liked_posts', postId);
       const postLikeRef = doc(this.firestore, 'posts', postId, 'likes', userId);
@@ -438,10 +461,8 @@ class EnterpriseFirestoreService {
         const likeSnap = await transaction.get(userLikeRef);
         alreadyLiked = likeSnap.exists();
         if (!alreadyLiked) {
-          transaction.update(postRef, {
-            'stats.likes': increment(1),
-            updatedAt: serverTimestamp()
-          });
+          // Sharded like counter - no hot-doc stats.likes increment.
+          await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes' });
           // Denormalised snapshot for user's liked_posts
           const postData = postSnap.data();
           transaction.set(userLikeRef, {
@@ -462,6 +483,8 @@ class EnterpriseFirestoreService {
         }
       });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
+      auditLogger.log('content.like', { userId, meta: { postId, alreadyLiked } });
       if (!alreadyLiked && authorId && authorId !== userId) {
 //         this._notifyLike(postId, userId, authorId).catch(console.warn);
       }
@@ -472,21 +495,21 @@ class EnterpriseFirestoreService {
   async unlikePost(postId, userId) {
     await this.ensureInitialized();
     try {
-      const { doc, runTransaction, increment, serverTimestamp, deleteDoc } = this.firestoreMethods;
+      const { doc, runTransaction, serverTimestamp, deleteDoc } = this.firestoreMethods;
       const postRef = doc(this.firestore, 'posts', postId);
       const userLikeRef = doc(this.firestore, 'users', userId, 'liked_posts', postId);
       const postLikeRef = doc(this.firestore, 'posts', postId, 'likes', userId);
       await runTransaction(this.firestore, async (transaction) => {
         const likeSnap = await transaction.get(userLikeRef);
         if (!likeSnap.exists()) return;
-        transaction.update(postRef, {
-          'stats.likes': increment(-1),
-          updatedAt: serverTimestamp()
-        });
+        // Sharded like counter decrement - no hot-doc stats.likes write.
+        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes', amount: -1 });
         transaction.delete(userLikeRef);
         transaction.delete(postLikeRef);
       });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
+      auditLogger.log('content.unlike', { userId, meta: { postId } });
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to unlike post'); }
   }
@@ -512,15 +535,17 @@ class EnterpriseFirestoreService {
   async sharePost(postId, userId) {
     await this.ensureInitialized();
     try {
-      const { collection, addDoc, doc, updateDoc, increment, serverTimestamp } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      await updateDoc(postRef, { 'stats.shares': increment(1), updatedAt: serverTimestamp() });
+      const { collection, addDoc, doc, serverTimestamp } = this.firestoreMethods;
+      // Sharded share counter - no hot-doc stats.shares write.
+      await countersManager.increment({ docPath: `posts/${postId}`, field: 'shares' });
       const sharesRef = collection(this.firestore, 'shares');
       await addDoc(sharesRef, { postId, userId, sharedAt: serverTimestamp() });
       // Also add to user's shared_posts subcollection
       const userShareRef = doc(this.firestore, 'users', userId, 'shared_posts', postId);
       await this.firestoreMethods.setDoc(userShareRef, { postId, sharedAt: serverTimestamp() }, { merge: true });
       this.cache.delete(postId);
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'shares' });
+      auditLogger.log('content.share', { userId, meta: { postId } });
 //       this._notifyShare(postId, userId).catch(console.warn);
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to share post'); }
@@ -537,9 +562,12 @@ class EnterpriseFirestoreService {
         const postSnap = await transaction.get(postRef);
         if (!postSnap.exists()) throw new Error('Post not found');
         authorId = postSnap.data().authorId;
+        // Sharded gift counters - no hot-doc stats.gifts/stats.giftValue increments.
+        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'gifts' });
+        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'giftValue', amount: coinValue });
+        // Recent-gifts array (bounded intent, keep for backward compatibility);
+        // scalable source of truth is the gifts subcollection below.
         transaction.update(postRef, {
-          'stats.gifts': increment(1),
-          'stats.giftValue': increment(coinValue),
           gifts: arrayUnion({ userId, giftType, coinValue, sentAt: serverTimestamp() }),
           updatedAt: serverTimestamp()
         });
@@ -547,6 +575,9 @@ class EnterpriseFirestoreService {
         const giftDocRef = doc(this.firestore, 'posts', postId, 'gifts', `${userId}_${Date.now()}`);
         transaction.set(giftDocRef, { userId, giftType, coinValue, sentAt: serverTimestamp() });
       });
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'gifts' });
+      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'giftValue' });
+      auditLogger.log('monetization.gift', { userId, meta: { postId, giftType, coinValue, recipientId: authorId } });
       // Record transaction
       const giftsRef = collection(this.firestore, 'gift_transactions');
       await addDoc(giftsRef, {

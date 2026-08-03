@@ -324,7 +324,7 @@ const TopAppBar = () => {
   const location = useLocation();
   const { theme } = useTheme();
   const { track } = useAnalytics();
-  const { unreadCounts = {} } = useAppStore();
+  const { unreadCounts = {}, currentUser } = useAppStore();
   
   // States
   const [isVisible, setIsVisible] = useState(true);
@@ -386,6 +386,14 @@ const TopAppBar = () => {
   const isHomeActive = location.pathname === "/" || location.pathname === NAVIGATION_PATHS.home;
   const isSearchActive = location.pathname === NAVIGATION_PATHS.search;
   const isMenuActive = location.pathname === NAVIGATION_PATHS.menu;
+
+  const handleProfileClick = useCallback(() => {
+    track("top_nav_profile_click");
+    navigate(currentUser?.uid ? `/profile/${currentUser.uid}` : NAVIGATION_PATHS.profile);
+  }, [navigate, track, currentUser?.uid]);
+
+  const isProfileActive = location.pathname === NAVIGATION_PATHS.profile ||
+    (currentUser?.uid && location.pathname === `/profile/${currentUser.uid}`);
   
   // Get notification counts
   const notificationCount = unreadCounts.notifications || 0;
@@ -454,6 +462,34 @@ const TopAppBar = () => {
                 
                 {/* Right: Action Icons */}
                 <div className="flex items-center gap-3">
+                  {/* Profile avatar — premium presence in the app bar */}
+                  <button
+                    onClick={handleProfileClick}
+                    aria-label="Profile"
+                    className={cn(
+                      "relative w-10 h-10 rounded-full overflow-hidden transition-all duration-200",
+                      "ring-2 ring-offset-2",
+                      isProfileActive
+                        ? "ring-blue-500 ring-offset-transparent"
+                        : "ring-white/20 hover:ring-blue-400",
+                      theme === "dark" ? "ring-offset-gray-900" : "ring-offset-white"
+                    )}
+                  >
+                    {currentUser?.photoURL || currentUser?.avatar ? (
+                      <img
+                        src={currentUser.photoURL || currentUser.avatar}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <span className="text-sm font-bold text-white">
+                          {(currentUser?.displayName || currentUser?.username || "U").charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </button>
+
                   <PerfectCircularIcon
                     icon={Search}
                     onClick={handleSearchClick}

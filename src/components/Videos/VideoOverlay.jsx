@@ -15,6 +15,7 @@ import {
   SkipForward,
 } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
+import { useTheme } from '../../context/ThemeContext';
 import { ARVDOUL_GRADIENT, SPRING_ANIMATION, formatDuration } from '../../utils/videoUtils';
 import PropTypes from 'prop-types';
 

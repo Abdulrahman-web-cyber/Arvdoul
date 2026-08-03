@@ -354,9 +354,22 @@ const MessageInput = React.memo(({
             <span className="text-xs">File</span>
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               setShowAttachments(false);
-              toast.info('Location sharing coming soon');
+              try {
+                if (!navigator.geolocation) { toast.error('Location is not supported.'); return; }
+                const pos = await new Promise((res, rej) =>
+                  navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 }));
+                const { latitude, longitude } = pos.coords;
+                await onSendMessage?.({
+                  type: 'location',
+                  content: `https://maps.google.com/?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`,
+                  media: null,
+                  location: { latitude, longitude },
+                });
+              } catch (err) {
+                toast.error('Could not get your location.');
+              }
             }}
             className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-700/50 transition-colors"
           >
@@ -364,9 +377,21 @@ const MessageInput = React.memo(({
             <span className="text-xs">Location</span>
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               setShowAttachments(false);
-              toast.info('Contact sharing coming soon');
+              // Share your own profile card (real, privacy-safe) — device contact
+              // pickers require native permissions unavailable on web.
+              try {
+                const { user } = await import('../../context/AuthContext.jsx').then(m => ({ user: m.useAuth().user }));
+                if (!user) { toast.error('Sign in to share your profile.'); return; }
+                await onSendMessage?.({
+                  type: 'contact',
+                  content: `profile:${user.uid}`,
+                  media: null,
+                });
+              } catch (err) {
+                toast.error('Could not share contact.');
+              }
             }}
             className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-700/50 transition-colors"
           >

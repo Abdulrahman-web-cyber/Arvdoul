@@ -25,6 +25,9 @@ export default function HighlightsScreen() {
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedHighlight, setSelectedHighlight] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [highlightName, setHighlightName] = useState('');
+  const [creating, setCreating] = useState(false);
   
   // Load highlights
   useEffect(() => {
@@ -45,9 +48,9 @@ export default function HighlightsScreen() {
   }, [currentUser?.uid]);
   
   const handleCreateHighlight = useCallback(() => {
-    // Navigate to create highlight screen
-    navigate('/create-highlight');
-  }, [navigate]);
+    // Open the in-screen create panel (no dead navigation).
+    setShowCreate(true);
+  }, []);
   
   const handleEditHighlight = useCallback((highlight) => {
     setSelectedHighlight(highlight);
@@ -75,7 +78,7 @@ export default function HighlightsScreen() {
       {/* Header */}
       <div className={cn(
         'sticky top-0 z-20',
-        'bg-white dark:bg-gray-900',
+        'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
         'border-b border-gray-200 dark:border-gray-800'
       )}>
         <div className="flex items-center justify-between px-4 py-3">
@@ -207,7 +210,7 @@ export default function HighlightsScreen() {
                   <div className={cn(
                     'absolute top-10 right-2 z-10',
                     'w-36 py-1 rounded-xl',
-                    'bg-white dark:bg-gray-800',
+                    'bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl',
                     'shadow-lg border border-gray-200 dark:border-gray-700'
                   )}>
                     <button
@@ -239,6 +242,51 @@ export default function HighlightsScreen() {
           </div>
         )}
       </div>
+      {/* Create highlight */}
+      {showCreate && (
+        <div className="mt-6 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 space-y-3">
+          <h3 className="font-semibold text-gray-900 dark:text-white">New Highlight</h3>
+          <input
+            value={highlightName}
+            onChange={(e) => setHighlightName(e.target.value)}
+            placeholder="Highlight name (e.g. Travel, Food, Vlog)"
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm outline-none"
+          />
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowCreate(false)}
+              className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!highlightName.trim()) { toast.error('Give your highlight a name.'); return; }
+                setCreating(true);
+                try {
+                  const { getStoryService } = await import('../../services/storyService.js');
+                  await getStoryService().createHighlight(currentUser?.uid, highlightName.trim().slice(0, 30), []);
+                  toast.success('Highlight created! Add stories to it from your profile.');
+                  setShowCreate(false); setHighlightName('');
+                  // reload highlights
+                  const { getStoryService: s2 } = await import('../../services/storyService.js');
+                  const res = await s2().getHighlights(currentUser?.uid);
+                  setHighlights(res?.highlights || []);
+                } catch (err) {
+                  toast.error(err?.message || 'Could not create highlight.');
+                } finally {
+                  setCreating(false);
+                }
+              }}
+              disabled={creating}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 text-white text-sm font-semibold disabled:opacity-50"
+            >
+              {creating ? 'Creating…' : 'Create Highlight'}
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

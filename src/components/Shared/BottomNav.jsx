@@ -5,7 +5,7 @@ import {
   Home, 
   PlayCircle, 
   MessageCircle, 
-  UserPlus, 
+  CircleUser, 
   Bell, 
   Plus,
   X
@@ -112,13 +112,14 @@ const BottomNav = () => {
       isPlus: true,
       navigateTo: NAVIGATION_PATHS.createPost
     },
-    { 
-      to: "/requests", 
-      label: "Network", 
-      icon: UserPlus, 
-      notification: true, 
+    {
+      to: "/profile",
+      label: "Profile",
+      icon: CircleUser,
+      notification: false,
       index: 4,
-      navigateTo: NAVIGATION_PATHS.requests
+      isProfile: true,
+      navigateTo: NAVIGATION_PATHS.profile
     },
     { 
       to: "/coins", 
@@ -144,7 +145,7 @@ const BottomNav = () => {
       index: 6,
       navigateTo: NAVIGATION_PATHS.notifications
     },
-  ], [currentUser?.coins]);
+  ], [currentUser?.coins, currentUser?.photoURL, currentUser?.displayName]);
 
   // -------------------- Handlers --------------------
   const handleNavigation = useCallback((to, navigateTo) => {
@@ -257,6 +258,31 @@ const BottomNav = () => {
       );
     }
     
+    if (tab.isProfile) {
+      const photoURL = currentUser?.photoURL || currentUser?.avatar;
+      return photoURL ? (
+        <img
+          src={photoURL}
+          alt="Profile"
+          className={cn(
+            "w-7 h-7 rounded-full object-cover transition-all duration-200",
+            "ring-2",
+            isActive ? "ring-blue-500" : "ring-transparent"
+          )}
+        />
+      ) : (
+        <div className={cn(
+          "w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200",
+          "bg-gradient-to-br from-blue-500 to-cyan-500",
+          isActive ? "ring-2 ring-blue-400" : "ring-0"
+        )}>
+          <span className="text-xs font-bold text-white">
+            {(currentUser?.displayName || currentUser?.username || "U").charAt(0).toUpperCase()}
+          </span>
+        </div>
+      );
+    }
+
     if (tab.custom) {
       return tab.custom;
     }

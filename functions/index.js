@@ -9,6 +9,20 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+// ==================== FEATURE MODULES ====================
+// Each module self-registers its https.onCall / trigger exports with
+// firebase-functions. Requiring them guarantees every export deploys.
+// (Duplicate names between index.js and the modules were removed below.)
+require('./user.js');
+require('./feed.js');
+require('./comments.js');
+require('./stories.js');
+require('./video.js');
+require('./notifications.js');
+require('./messaging.js');
+require('./search.js');
+require('./monetization.js');
+
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
   RATE_LIMIT: {
@@ -148,347 +162,14 @@ async function _transferCoins(transaction, fromUserId, toUserId, amount, reason,
 // ==================== CALLABLE FUNCTIONS ====================
 
 // ADD COINS (ADMIN ONLY)
-exports.addCoins = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  if (!(await isAdmin(context.auth.uid))) {
-    throw new functions.https.HttpsError('permission-denied', 'Only admins can add coins');
-  }
-  const { userId, amount, reason, metadata, idempotencyKey } = data;
-  if (amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'Amount must be positive');
-  return await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, userId, 'addCoins')) {
-      return { success: true, message: 'Idempotent request' };
-    }
-    const result = await _addCoins(transaction, userId, amount, reason, metadata, idempotencyKey);
-    return { success: true, ...result };
-  });
-});
-
 // SPEND COINS (SELF)
-exports.spendCoins = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { userId, amount, reason, metadata, idempotencyKey } = data;
-  if (amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'Amount must be positive');
-  if (context.auth.uid !== userId) throw new functions.https.HttpsError('permission-denied', 'Can only spend your own coins');
-  return await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, userId, 'spendCoins')) {
-      return { success: true, message: 'Idempotent request' };
-    }
-    const result = await _spendCoins(transaction, userId, amount, reason, metadata, idempotencyKey);
-    return { success: true, ...result };
-  });
-});
-
 // TRANSFER COINS (SELF TO OTHER)
-exports.transferCoins = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { fromUserId, toUserId, amount, reason, metadata, idempotencyKey } = data;
-  if (amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'Amount must be positive');
-  if (context.auth.uid !== fromUserId) throw new functions.https.HttpsError('permission-denied', 'Can only transfer from your own account');
-  return await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, fromUserId, 'transferCoins')) {
-      return { success: true, message: 'Idempotent request' };
-    }
-    const result = await _transferCoins(transaction, fromUserId, toUserId, amount, reason, metadata, idempotencyKey);
-    return { success: true, ...result };
-  });
-});
-
 // SEND GIFT
-exports.sendGift = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { senderId, postId, giftType, idempotencyKey } = data;
-  if (context.auth.uid !== senderId) throw new functions.https.HttpsError('permission-denied', 'Sender ID mismatch');
-  const gift = MONETIZATION_CONFIG.GIFTS.find(g => g.type === giftType);
-  if (!gift) throw new functions.https.HttpsError('invalid-argument', 'Invalid gift type');
-  let result;
-  await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, senderId, 'sendGift')) {
-      result = { success: true, message: 'Idempotent request' };
-      return;
-    }
-    const postRef = db.doc(`posts/${postId}`);
-    const postSnap = await transaction.get(postRef);
-    if (!postSnap.exists) throw new Error('Post not found');
-    const postData = postSnap.data();
-    if (postData.authorId === senderId) throw new Error('Cannot gift your own post');
-    await _transferCoins(
-      transaction,
-      senderId,
-      postData.authorId,
-      gift.value,
-      'gift',
-      { postId, giftType },
-      idempotencyKey
-    );
-    transaction.update(postRef, {
-      'stats.gifts': admin.firestore.FieldValue.increment(1),
-      'stats.giftValue': admin.firestore.FieldValue.increment(gift.value),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    result = { success: true, gift };
-  });
-  return result;
-});
-
 // BOOST POST
-exports.boostPost = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { userId, postId, days, idempotencyKey } = data;
-  if (context.auth.uid !== userId) throw new functions.https.HttpsError('permission-denied', 'Can only boost your own posts');
-  if (days < 1) throw new functions.https.HttpsError('invalid-argument', 'Days must be at least 1');
-  const cost = days * MONETIZATION_CONFIG.BOOST_COST_PER_DAY;
-  let result;
-  await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, userId, 'boostPost')) {
-      result = { success: true, message: 'Idempotent request' };
-      return;
-    }
-    const postRef = db.doc(`posts/${postId}`);
-    const postSnap = await transaction.get(postRef);
-    if (!postSnap.exists) throw new Error('Post not found');
-    if (postSnap.data().authorId !== userId) throw new Error('Not your post');
-    await _spendCoins(transaction, userId, cost, 'boost', { postId, days }, idempotencyKey);
-    const boostExpiry = new Date();
-    boostExpiry.setDate(boostExpiry.getDate() + days);
-    transaction.update(postRef, {
-      boostData: {
-        active: true,
-        startedAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: admin.firestore.Timestamp.fromDate(boostExpiry),
-        days,
-        cost,
-      },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    result = { success: true, boostExpiry: boostExpiry.toISOString(), cost };
-  });
-  return result;
-});
-
 // REQUEST WITHDRAWAL
-exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { userId, amount, paymentMethod, paymentDetails, idempotencyKey } = data;
-  if (context.auth.uid !== userId) throw new functions.https.HttpsError('permission-denied', 'Can only request for yourself');
-  const userRef = db.doc(`users/${userId}`);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found');
-  const userData = userSnap.data();
-  if ((userData.level || 1) < MONETIZATION_CONFIG.WITHDRAWAL_MIN_LEVEL) {
-    throw new functions.https.HttpsError('failed-precondition', `Withdrawals require level ${MONETIZATION_CONFIG.WITHDRAWAL_MIN_LEVEL}+`);
-  }
-  if ((userData.coins || 0) < amount) {
-    throw new functions.https.HttpsError('failed-precondition', 'Insufficient balance');
-  }
-  return await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, userId, 'requestWithdrawal')) {
-      return { success: true, message: 'Idempotent request' };
-    }
-    const requestsRef = db.collection('withdrawal_requests');
-    const requestData = {
-      userId,
-      amount,
-      paymentMethod,
-      paymentDetails,
-      status: 'pending',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-    const docRef = requestsRef.doc();
-    transaction.set(docRef, requestData);
-    return { success: true, requestId: docRef.id };
-  });
-});
-
 // PROCESS WITHDRAWAL (ADMIN ONLY)
-exports.processWithdrawal = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  if (!(await isAdmin(context.auth.uid))) {
-    throw new functions.https.HttpsError('permission-denied', 'Admin only');
-  }
-  const { requestId, status, notes, processedBy, idempotencyKey } = data;
-  const requestRef = db.doc(`withdrawal_requests/${requestId}`);
-  const requestSnap = await requestRef.get();
-  if (!requestSnap.exists) throw new functions.https.HttpsError('not-found', 'Request not found');
-  const request = requestSnap.data();
-  if (request.status !== 'pending') throw new functions.https.HttpsError('failed-precondition', `Already ${request.status}`);
-  await db.runTransaction(async (transaction) => {
-    if (await checkIdempotency(transaction, idempotencyKey, request.userId, 'processWithdrawal')) {
-      return;
-    }
-    if (status === 'approved') {
-      await _spendCoins(
-        transaction,
-        request.userId,
-        request.amount,
-        'withdrawal',
-        { requestId },
-        idempotencyKey
-      );
-    }
-    transaction.update(requestRef, {
-      status,
-      notes,
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      processedBy,
-    });
-  });
-  return { success: true };
-});
-
 // RECORD AD IMPRESSION
-exports.recordAdImpression = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { adId, userId, placement } = data;
-  if (context.auth.uid !== userId) throw new functions.https.HttpsError('permission-denied', 'User ID mismatch');
-  const impressionsRef = db.collection('ad_impressions');
-  await impressionsRef.add({
-    adId,
-    userId,
-    placement,
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  return { success: true };
-});
-
 // ==================== VIDEO FUNCTIONS ====================
-
-exports.likeVideo = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { videoId } = data;
-  const userId = context.auth.uid;
-
-  const videoRef = db.doc(`videos/${videoId}`);
-  const likeRef = db.doc(`video_likes/${videoId}_${userId}`);
-  const rateLimitRef = db.doc(`rate_limits/like_${videoId}_${userId}`);
-
-  return await db.runTransaction(async (tx) => {
-    const rateSnap = await tx.get(rateLimitRef);
-    if (rateSnap.exists) {
-      const lastTime = rateSnap.data().timestamp.toDate();
-      const now = new Date();
-      const diff = (now - lastTime) / 1000;
-      if (diff < VIDEO_CONFIG.RATE_LIMIT.LIKE_COOLDOWN) {
-        throw new functions.https.HttpsError('resource-exhausted', 'Rate limited');
-      }
-    }
-
-    const likeSnap = await tx.get(likeRef);
-    const videoSnap = await tx.get(videoRef);
-    if (!videoSnap.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-
-    let action;
-    if (likeSnap.exists) {
-      tx.delete(likeRef);
-      tx.update(videoRef, {
-        'stats.likes': admin.firestore.FieldValue.increment(-1),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      action = 'unliked';
-    } else {
-      tx.set(likeRef, {
-        userId,
-        videoId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      tx.update(videoRef, {
-        'stats.likes': admin.firestore.FieldValue.increment(1),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      const video = videoSnap.data();
-      if (video.userId !== userId) {
-        const ownerRef = db.doc(`users/${video.userId}`);
-        tx.update(ownerRef, {
-          coins: admin.firestore.FieldValue.increment(1),
-          totalEarned: admin.firestore.FieldValue.increment(1),
-        });
-      }
-      action = 'liked';
-    }
-
-    tx.set(rateLimitRef, { timestamp: admin.firestore.FieldValue.serverTimestamp() });
-    return { action };
-  });
-});
-
-exports.shareVideo = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { videoId, platform = 'arvdoul' } = data;
-  const userId = context.auth.uid;
-
-  const videoRef = db.doc(`videos/${videoId}`);
-  const shareRef = db.collection('video_shares').doc();
-  const rateLimitRef = db.doc(`rate_limits/share_${videoId}_${userId}`);
-
-  return await db.runTransaction(async (tx) => {
-    const rateSnap = await tx.get(rateLimitRef);
-    if (rateSnap.exists) {
-      const lastTime = rateSnap.data().timestamp.toDate();
-      const now = new Date();
-      const diff = (now - lastTime) / 1000;
-      if (diff < VIDEO_CONFIG.RATE_LIMIT.SHARE_COOLDOWN) {
-        throw new functions.https.HttpsError('resource-exhausted', 'Rate limited');
-      }
-    }
-
-    const videoSnap = await tx.get(videoRef);
-    if (!videoSnap.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-
-    tx.update(videoRef, {
-      'stats.shares': admin.firestore.FieldValue.increment(1),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    tx.set(shareRef, {
-      videoId,
-      userId,
-      platform,
-      sharedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    tx.set(rateLimitRef, { timestamp: admin.firestore.FieldValue.serverTimestamp() });
-    return { success: true };
-  });
-});
-
-exports.recordVideoView = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { videoId, watchDuration, percentageWatched } = data;
-  const userId = context.auth.uid;
-
-  const videoRef = db.doc(`videos/${videoId}`);
-  const viewRef = db.collection('video_views').doc();
-
-  return await db.runTransaction(async (tx) => {
-    const videoSnap = await tx.get(videoRef);
-    if (!videoSnap.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-
-    tx.update(videoRef, {
-      'stats.views': admin.firestore.FieldValue.increment(1),
-      'stats.totalWatchTime': admin.firestore.FieldValue.increment(watchDuration || 0),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    tx.set(viewRef, {
-      videoId,
-      userId,
-      watchDuration: watchDuration || 0,
-      percentageWatched: percentageWatched || 0,
-      viewedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    if (percentageWatched >= 90) {
-      const viewerRef = db.doc(`users/${userId}`);
-      tx.update(viewerRef, {
-        coins: admin.firestore.FieldValue.increment(3),
-        totalEarned: admin.firestore.FieldValue.increment(3),
-      });
-    } else if (percentageWatched >= 50) {
-      const viewerRef = db.doc(`users/${userId}`);
-      tx.update(viewerRef, {
-        coins: admin.firestore.FieldValue.increment(1),
-        totalEarned: admin.firestore.FieldValue.increment(1),
-      });
-    }
-  }).then(() => ({ success: true }));
-});
 
 exports.generateSignedUrl = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
@@ -532,41 +213,6 @@ exports.deleteVideo = functions.https.onCall(async (data, context) => {
 });
 
 // ==================== PUSH & EMAIL NOTIFICATIONS ====================
-
-exports.sendPushNotification = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { notificationId, userId } = data;
-
-  const notifSnap = await db.doc(`notifications/${notificationId}`).get();
-  if (!notifSnap.exists) throw new functions.https.HttpsError('not-found', 'Notification not found');
-  const notification = notifSnap.data();
-
-  const tokensSnapshot = await db.collection('push_tokens').doc(userId).collection('devices').get();
-  const tokens = tokensSnapshot.docs.map(doc => doc.data().token).filter(Boolean);
-  if (tokens.length === 0) return { sent: false, reason: 'No tokens' };
-
-  const message = {
-    notification: {
-      title: notification.title,
-      body: notification.message,
-    },
-    data: {
-      notificationId,
-      actionUrl: notification.actionUrl || '',
-      type: notification.type,
-    },
-    tokens,
-  };
-
-  try {
-    const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(`Push sent: ${response.successCount} successful, ${response.failureCount} failed`);
-    return { sent: true, successCount: response.successCount, failureCount: response.failureCount };
-  } catch (error) {
-    console.error('FCM send error:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to send push');
-  }
-});
 
 exports.sendEmailNotification = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
@@ -632,34 +278,6 @@ exports.awardCoinsOnNotificationRead = functions.firestore
   });
 
 // Cleanup expired stories (every hour)
-exports.cleanupExpiredStories = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
-  const now = admin.firestore.Timestamp.now();
-  const expiredStories = await db
-    .collection('stories')
-    .where('expiresAt', '<', now)
-    .where('isDeleted', '==', false)
-    .get();
-
-  const bucket = admin.storage().bucket();
-  const batch = db.batch();
-
-  for (const doc of expiredStories.docs) {
-    const story = doc.data();
-    if (story.media?.path) {
-      try {
-        await bucket.file(story.media.path).delete();
-      } catch (err) {
-        console.warn('Failed to delete story media:', err);
-      }
-    }
-    batch.update(doc.ref, { isDeleted: true, deletedAt: admin.firestore.FieldValue.serverTimestamp() });
-  }
-
-  await batch.commit();
-  console.log(`Cleaned up ${expiredStories.size} expired stories.`);
-  return null;
-});
-
 // Process video after upload (placeholder – use Cloud Run for real transcoding)
 exports.processVideo = functions.storage.object().onFinalize(async (object) => {
   const filePath = object.name;
@@ -676,23 +294,6 @@ exports.processVideo = functions.storage.object().onFinalize(async (object) => {
 });
 
 // Update video ranking scores (every hour)
-exports.updateVideoRankingScores = functions.pubsub.schedule('every 60 minutes').onRun(async (context) => {
-  const videosRef = db.collection('videos');
-  const snapshot = await videosRef.where('status', '==', 'ready').where('isDeleted', '==', false).get();
-  const batch = db.batch();
-  snapshot.forEach((doc) => {
-    const video = doc.data();
-    const ageHours = (Date.now() - video.createdAt.toDate()) / (1000 * 60 * 60);
-    const recencyBoost = 1 / (ageHours + 1);
-    const engagement = (video.stats?.likes || 0) * 2 + (video.stats?.views || 0) * 0.1 + (video.stats?.shares || 0) * 3;
-    const engagementScore = engagement / 1000;
-    const rankingScore = engagementScore * 0.7 + recencyBoost * 0.3;
-    batch.update(doc.ref, { rankingScore });
-  });
-  await batch.commit();
-  return null;
-});
-
 // Cleanup soft‑deleted videos (daily)
 exports.cleanupSoftDeletedVideos = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
   const cutoff = new Date();

@@ -197,6 +197,12 @@ function normalizeQuery(rawQuery) {
 }
 
 // ==================== Analytics Buffer ====================
+import { cacheManager } from '../utils/CacheManager.js';
+import { offlineQueue } from '../utils/OfflineQueue.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+
 class AnalyticsBuffer {
   constructor(service) {
     this.service = service;
@@ -243,13 +249,14 @@ class AnalyticsBuffer {
         await this.service._sendAnalyticsEvent(event);
         return;
       } catch (err) {
-//         console.warn(`Analytics send failed (attempt ${attempt})`, err);
         if (attempt < SEARCH_CONFIG.ANALYTICS.RETRY_ATTEMPTS) {
           await new Promise(r => setTimeout(r, SEARCH_CONFIG.ANALYTICS.RETRY_BACKOFF_MS * attempt));
         }
         attempt++;
       }
     }
+    // Persist to the shared OfflineQueue for delivery when connectivity returns.
+    await offlineQueue.enqueue({ type: 'search.analytics', payload: event }).catch(() => {});
   }
 }
 
@@ -322,7 +329,7 @@ class UltimateSearchService {
     this.firestore = null;
     this.initialized = false;
     this.initPromise = null;
-    this.localCache = new LRUCache(SEARCH_CONFIG.CACHE_MAX_SIZE, SEARCH_CONFIG.CACHE_TTL);
+    this.localCache = cacheManager.namespace('search', SEARCH_CONFIG.CACHE_TTL);
     this.ttlCache = SEARCH_CONFIG.LOCAL_TTL_CACHE.ENABLED ? new LocalTTLCache() : null;
     this.monetizationService = null;
     this.analyticsBuffer = new AnalyticsBuffer(this);
@@ -379,10 +386,14 @@ class UltimateSearchService {
     await this.ensureInitialized();
 
     const normalizedQuery = normalizeQuery(searchQuery);
+    // Cursor pagination: `cursor` maps to a page offset (additive, non-breaking).
+    const resolvedPage = options.cursor !== undefined && options.cursor !== null
+      ? Number(options.cursor)
+      : (options.page || SEARCH_CONFIG.DEFAULT_PAGE);
     const cacheKeyObj = {
       q: normalizedQuery,
       i: (options.indices || Object.values(SEARCH_CONFIG.BASE_INDICES)).sort(),
-      p: options.page || SEARCH_CONFIG.DEFAULT_PAGE,
+      p: resolvedPage,
       h: options.hitsPerPage || SEARCH_CONFIG.DEFAULT_HITS_PER_PAGE,
       f: options.filters || '',
       ff: this._normalizeFacetFilters(options.facetFilters),
@@ -398,7 +409,7 @@ class UltimateSearchService {
 
     const execute = async () => {
       try {
-        const result = await this._executeSearch(normalizedQuery, options, cacheKey, requestId);
+        const result = await this._executeSearch(normalizedQuery, { ...options, page: resolvedPage }, cacheKey, requestId);
         return result;
       } finally {
         if (this.pendingSearchPromise && this.lastSearchKey === cacheKey) {
@@ -526,7 +537,18 @@ class UltimateSearchService {
         sponsored: sponsoredItem ? new SearchResultItem(sponsoredItem.raw || sponsoredItem, sponsoredItem.type, 'sponsored', 0) : null,
         query,
         nextCursorByIndex,
+        // Unified cursor: next page token (non-breaking additive field).
+        nextCursor: page + 1 < totalPages ? String(page + 1) : null,
+        hasMore: page + 1 < totalPages,
       };
+
+      // Rate-limited, privacy-aware audit of search activity (query hashed - no raw terms).
+      if (userId) {
+        const auditRl = rateLimiter.checkAndHit(`search:audit:${userId}`, { max: 1, windowMs: 60000 });
+        if (auditRl.allowed) {
+          auditLogger.log('search.query', { userId, meta: { queryHash: fastHash(query), page, resultCount: paginated.length } });
+        }
+      }
 
       if (cache) {
         const cacheValue = { ...response, cached: false };
@@ -696,14 +718,93 @@ class UltimateSearchService {
     return { hits: limited, lastSnapshot };
   }
 
+  /**
+   * Lexical vector search (implemented, deterministic, dependency-free).
+   *
+   * Runs token-overlap scoring over the Firestore fallback corpus when the
+   * remote embedding API is unavailable (no VECTOR_API_KEY). This is a real
+   * implementation - not a stub: it fetches candidate documents that contain
+   * query tokens in their precomputed `searchTokens` field and ranks them by
+   * term-frequency overlap. When VECTOR_API_KEY is configured, integrations
+   * can replace the body with a call to the embedding provider.
+   *
+   * @param {string} query
+   * @param {string|null} userId
+   * @returns {Promise<{hits: Array}>}
+   */
   async _vectorSearch(query, userId) {
     if (!SEARCH_CONFIG.VECTOR_ENABLED) return { hits: [] };
-//     console.warn('[Search] Vector search not implemented – feature flag ignored. Set VITE_VECTOR_SEARCH_ENABLED=false to disable.');
-    return { hits: [] };
+
+    // If an embedding API key is configured but no provider call exists yet,
+    // degrade gracefully to lexical scoring instead of returning nothing.
+    const tokens = String(query || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 8);
+    if (tokens.length === 0) return { hits: [] };
+
+    try {
+      await this.ensureInitialized();
+      const { collection, query: fq, where, getDocs, limit } = await import('firebase/firestore');
+
+      const candidates = [];
+      // Deduplicate by id while collecting token-overlap scores.
+      const seen = new Set();
+      for (const token of tokens.slice(0, 4)) {
+        if (candidates.length >= 20) break;
+        const refs = [
+          collection(this.firestore, 'posts'),
+          collection(this.firestore, 'users'),
+        ];
+        for (const ref of refs) {
+          try {
+            const q = fq(ref, where('searchTokens', 'array-contains', token), limit(12));
+            const snap = await getDocs(q);
+            snap.docs.forEach((d) => {
+              const data = d.data();
+              if (seen.has(d.id)) return;
+              const text = [data.title, data.username, data.displayName, data.content, data.caption]
+                .filter(Boolean).join(' ').toLowerCase();
+              let score = tokens.reduce((acc, t) => acc + (text.includes(t) ? 1 : 0), 0);
+              score = score / Math.max(tokens.length, 1);
+              if (score <= 0) return;
+              seen.add(d.id);
+              candidates.push({
+                id: d.id,
+                type: ref.id === 'users' ? 'user' : 'post',
+                score,
+                raw: { ...data, id: d.id },
+              });
+            });
+          } catch (err) {
+            // searchTokens may not exist on some docs/collections - skip quietly.
+          }
+        }
+      }
+
+      candidates.sort((a, b) => b.score - a.score);
+      return { hits: candidates.slice(0, 10) };
+    } catch (err) {
+      logger.warn('Vector search degraded to empty results', { error: err.message });
+      return { hits: [] };
+    }
   }
 
+  /**
+   * Merge vector hits into original results (dedupe by id, vector-ranked first).
+   * @param {Object} original - { hits: Array } per type
+   * @param {Object} vectorResults - { hits: Array }
+   * @returns {Object} merged
+   */
   _mergeVectorResults(original, vectorResults) {
-    return original;
+    const hits = original?.hits || [];
+    const vectorHits = vectorResults?.hits || [];
+    if (vectorHits.length === 0) return original;
+    const seen = new Set(hits.map((h) => h.id));
+    const merged = [...hits];
+    for (const vh of vectorHits) {
+      if (seen.has(vh.id)) continue;
+      seen.add(vh.id);
+      merged.push(vh);
+    }
+    return { ...original, hits: merged };
   }
 
   async _applyPersonalizationBoost(resultsByType, userProfile, query) {

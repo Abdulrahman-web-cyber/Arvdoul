@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo} from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Video, RefreshCw } from 'lucide-react';
+import { Video, RefreshCw, Play } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useVideoStore } from '../store/videoStore';
 import { VideoFeed } from '../components/Videos';
@@ -60,20 +60,18 @@ const VideosScreen = () => {
         limit: 20,
       });
 
-      if (result?.videos) {
-        setVideos(result.videos);
+      const feed = result?.feed || result?.videos;
+      if (Array.isArray(feed)) {
+        setVideos(feed);
         setHasMore(result.hasMore || false);
         setNextCursor(result.nextCursor || null);
       } else {
-        // Use demo videos if no real data
-        setVideos(getDemoVideos());
+        setVideos([]);
         setHasMore(false);
       }
     } catch (err) {
       console.error('Failed to load videos:', err);
-      // Fallback to demo videos
-      setVideos(getDemoVideos());
-      setError(null); // Don't show error since we have fallback
+      setError(err?.message || 'Could not load videos.');
     } finally {
       setLoading(false);
     }
@@ -93,8 +91,9 @@ const VideosScreen = () => {
         limit: 20,
       });
 
-      if (result?.videos) {
-        appendVideos(result.videos);
+      const feed = result?.feed || result?.videos;
+      if (Array.isArray(feed)) {
+        appendVideos(feed);
         setHasMore(result.hasMore || false);
         setNextCursor(result.nextCursor || null);
       }
@@ -218,6 +217,20 @@ const VideosScreen = () => {
         background: isDark ? '#050510' : '#F8F9FA',
       }}
     >
+      {/* Reels shortcut (full-screen vertical) */}
+      <button
+        onClick={() => navigate('/reels')}
+        className="absolute top-4 right-4 z-40 px-4 py-2 rounded-2xl text-sm font-bold backdrop-blur-xl border shadow-lg transition hover:scale-105"
+        style={{
+          background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.85)',
+          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)',
+          color: isDark ? '#fff' : '#111',
+          boxShadow: isDark ? '0 8px 30px rgba(0,0,0,0.4)' : '0 8px 30px rgba(0,0,0,0.1)',
+        }}
+      >
+        🎬 Reels
+      </button>
+
       {/* Fullscreen Video Feed */}
       {showFullscreen ? (
         <VideoFeed
@@ -350,108 +363,6 @@ const GridView = memo(({ videos, loading, error, onRefresh, onVideoClick }) => {
 
 GridView.displayName = 'GridView';
 
-// Demo videos for fallback
-const getDemoVideos = () => [
-  {
-    id: 'demo-1',
-    title: 'Amazing Sunset Timelapse',
-    description: 'Watch this beautiful sunset captured over the ocean',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=400',
-    creator: {
-      id: 'c1',
-      name: 'Nature Vibes',
-      username: 'naturevibes',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100',
-      isVerified: true,
-    },
-    likes: 12500,
-    commentsCount: 342,
-    shares: 156,
-    views: 89000,
-    isLiked: false,
-    isSaved: false,
-  },
-  {
-    id: 'demo-2',
-    title: 'City Lights at Night',
-    description: 'The city never sleeps, and neither should you',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=400',
-    creator: {
-      id: 'c2',
-      name: 'Urban Explorer',
-      username: 'urbanexplorer',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100',
-      isVerified: false,
-    },
-    likes: 8700,
-    commentsCount: 215,
-    shares: 89,
-    views: 56000,
-    isLiked: false,
-    isSaved: false,
-  },
-  {
-    id: 'demo-3',
-    title: 'Mountain Adventure',
-    description: 'Hiking through the most beautiful trails',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
-    creator: {
-      id: 'c3',
-      name: 'Adventure Seeker',
-      username: 'adventureseeker',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100',
-      isVerified: true,
-    },
-    likes: 15600,
-    commentsCount: 478,
-    shares: 234,
-    views: 112000,
-    isLiked: false,
-    isSaved: false,
-  },
-  {
-    id: 'demo-4',
-    title: 'Cooking Masterclass',
-    description: 'Learn to make the perfect pasta',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400',
-    creator: {
-      id: 'c4',
-      name: 'Chef Marco',
-      username: 'chefmarco',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100',
-      isVerified: false,
-    },
-    likes: 9800,
-    commentsCount: 567,
-    shares: 145,
-    views: 78000,
-    isLiked: false,
-    isSaved: false,
-  },
-  {
-    id: 'demo-5',
-    title: 'Dance Moves Tutorial',
-    description: 'Master these incredible dance moves',
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1504609813442-a8924e83f76e?w=400',
-    creator: {
-      id: 'c5',
-      name: 'Dance Pro',
-      username: 'dancepro',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100',
-      isVerified: true,
-    },
-    likes: 22000,
-    commentsCount: 890,
-    shares: 567,
-    views: 245000,
-    isLiked: false,
-    isSaved: false,
-  },
-];
+
 
 export default React.memo(VideosScreen);

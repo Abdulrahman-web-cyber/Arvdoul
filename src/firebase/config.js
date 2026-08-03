@@ -74,6 +74,7 @@ class ConfigValidator {
   
   static validateRecaptchaConfig(config) {
     const errors = [];
+    const warnings = [];
     
     if (config.enableRecaptchaEnterprise && !config.recaptchaSiteKey) {
       errors.push('Recaptcha Enterprise enabled but no site key provided');
@@ -83,7 +84,7 @@ class ConfigValidator {
       warnings.push('AppCheck enabled in local environment without debug token');
     }
     
-    return { valid: errors.length === 0, errors };
+    return { valid: errors.length === 0, errors, warnings };
   }
 }
 

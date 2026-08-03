@@ -201,7 +201,7 @@ const CommunitySettingsScreen = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -235,7 +235,7 @@ const CommunitySettingsScreen = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {/* Sidebar */}
           <div className="md:col-span-1">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-2 border border-gray-200 dark:border-gray-700 sticky top-24">
+            <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-2 border border-gray-200/60 dark:border-gray-700/60 sticky top-24 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
               {sections.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -261,7 +261,7 @@ const CommunitySettingsScreen = () => {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
+                className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
               >
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
                   General Settings
@@ -372,7 +372,7 @@ const CommunitySettingsScreen = () => {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
+                className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
               >
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
                   Privacy Settings
@@ -464,7 +464,7 @@ const CommunitySettingsScreen = () => {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700"
+                className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">
@@ -502,7 +502,7 @@ const CommunitySettingsScreen = () => {
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-red-200 dark:border-red-900"
+                className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-red-200 dark:border-red-900 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
               >
                 <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-4">
                   Danger Zone

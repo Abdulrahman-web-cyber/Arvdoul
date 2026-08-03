@@ -11,6 +11,7 @@
 import React, {
   useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCreatePostState, useCreatePostServices } from "../CreatePost";
 import { useDropzone } from "react-dropzone";
 import {
@@ -429,6 +430,7 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
 
 // ── MAIN COMPONENT ──────────────────────────────────────────────────
 export default function CreateVideo() {
+  const navigate = useNavigate();
   const { state, dispatch } = useCreatePostState();
   const { saveDraft, isDark } = useCreatePostServices();
   const fileInputRef = useRef(null);
@@ -617,12 +619,10 @@ export default function CreateVideo() {
   // ── Edit handler (opens VideoEditor) ─────────────────────────────
   const handleEdit = useCallback(
     (media) => {
-      // For now, we'll open a placeholder or navigate to the video editor.
-      // The actual VideoEditor will be built later.
-      toast.info("Video Editor coming soon. This will open the full editor.");
-      // In the future: setEditingId(media.id) and lazy load VideoEditor.
+      // Navigate to the real video editor with the asset id.
+      navigate(media?.id ? `/video-editor?video=${encodeURIComponent(media.id)}` : '/video-editor');
     },
-    []
+    [navigate]
   );
 
   // ── Caption update ──────────────────────────────────────────────
@@ -781,6 +781,14 @@ export default function CreateVideo() {
             </div>
 
             {/* Filmstrip */}
+            <div className="flex items-center justify-end mb-2">
+              <button
+                onClick={() => navigate('/thumbnail-designer')}
+                className="px-3 py-1.5 text-xs font-semibold bg-cyan-500/15 text-cyan-500 rounded-full hover:bg-cyan-500/25 transition"
+              >
+                🎨 Design Custom Thumbnail
+              </button>
+            </div>
             <Filmstrip
               items={mediaItems}
               selectedId={selectedId}

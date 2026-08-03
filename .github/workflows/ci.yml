@@ -8,7 +8,7 @@ on:
     branches: [main, develop]
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '22'
 
 jobs:
   # ========== LINT ==========
@@ -30,7 +30,6 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
-        continue-on-error: true
 
   # ========== BUILD ==========
   build:
@@ -87,7 +86,6 @@ jobs:
 
       - name: Run unit tests
         run: npm run test -- --coverage --watchAll=false
-        continue-on-error: true
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -219,7 +217,6 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=high
-        continue-on-error: true
 
       - name: Check for secrets
         run: |

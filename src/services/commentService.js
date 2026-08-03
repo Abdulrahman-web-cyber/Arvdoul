@@ -24,13 +24,26 @@ const COMMENTS_CONFIG = {
   ],
   // Sharded spam counter settings
   SPAM_COUNTER_SHARDS: 10,                 // number of shards per user/minute
+  // Legacy reaction arrays are mirrored on the comment doc for backward
+  // compatibility, but bounded - canonical membership lives in subcollections.
+  REACTION_ARRAY_CAP: 200,
 };
+
+import { cacheManager } from '../utils/CacheManager.js';
+import { countersManager } from '../utils/CountersManager.js';
+import { offlineQueue } from '../utils/OfflineQueue.js';
+import { logger } from '../utils/Logger.js';
+import { auditLogger } from '../utils/AuditLogger.js';
+import { rateLimiter } from '../utils/RateLimiter.js';
+import { errorHandler } from '../utils/ErrorHandler.js';
+
+const COMMENT_REACTION_ARRAY_CAP = COMMENTS_CONFIG.REACTION_ARRAY_CAP;
 
 class UltimateCommentService {
   constructor() {
     this.firestore = null;
     this.initialized = false;
-    this.cache = new Map();
+    this.cache = cacheManager.namespace('comments', COMMENTS_CONFIG.CACHE_EXPIRY);
     this.realtimeSubscriptions = new Map();
     this.activeUsers = new Map();
     this.batchOperations = [];
@@ -137,7 +150,17 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      console.warn('// Creating comment:', {
+      // Offline: queue the comment for delivery when connectivity returns.
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await offlineQueue.enqueue({
+          type: 'comment.create',
+          payload: { postId, userId, content, options },
+          idempotencyKey: operationId,
+        });
+        return { success: true, offlineQueued: true, operationId };
+      }
+
+      logger.debug('Creating comment', {
         operationId,
         postId,
         userId,
@@ -219,19 +242,14 @@ class UltimateCommentService {
       const docRef = await this.firestoreMethods.addDoc(commentsRef, commentData);
       const commentId = docRef.id;
 
-      // Update post comment count
-      const postRef = this.firestoreMethods.doc(this.firestore, 'posts', postId);
-      await this.firestoreMethods.updateDoc(postRef, {
-        'stats.comments': this.firestoreMethods.increment(1),
-        updatedAt: this.firestoreMethods.serverTimestamp(),
-        lastCommentedAt: this.firestoreMethods.serverTimestamp()
-      });
+      // Update post comment count via sharded counter (no hot post-doc write).
+      await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
 
-      // If it's a reply, update parent comment
+      // If it's a reply, update parent comment reply count via sharded counter.
       if (options.parentId) {
+        await countersManager.increment({ docPath: `comments/${options.parentId}`, field: 'replies' });
         const parentRef = this.firestoreMethods.doc(this.firestore, 'comments', options.parentId);
         await this.firestoreMethods.updateDoc(parentRef, {
-          replies: this.firestoreMethods.increment(1),
           updatedAt: this.firestoreMethods.serverTimestamp(),
           lastActivityAt: this.firestoreMethods.serverTimestamp()
         });
@@ -258,6 +276,8 @@ class UltimateCommentService {
       // Invalidate cache
       this._invalidatePostCache(postId);
 
+      auditLogger.log('content.comment', { userId, meta: { commentId, postId, parentId: options.parentId || null } });
+
       return {
         success: true,
         commentId,
@@ -267,7 +287,7 @@ class UltimateCommentService {
       };
 
     } catch (error) {
-      console.error('❌ Create comment failed:', error);
+      logger.error('Create comment failed', { error: error.message, postId, userId });
       throw this._enhanceError(error, 'Failed to create comment');
     }
   }
@@ -505,22 +525,14 @@ class UltimateCommentService {
         userAvatar: null
       });
 
-      // Update post comment count
+      // Update post comment count via sharded counter.
       if (postId) {
-        const postRef = this.firestoreMethods.doc(this.firestore, 'posts', postId);
-        await this.firestoreMethods.updateDoc(postRef, {
-          'stats.comments': this.firestoreMethods.increment(-1),
-          updatedAt: this.firestoreMethods.serverTimestamp()
-        });
+        await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments', amount: -1 });
       }
 
-      // Update parent comment if it's a reply
+      // Update parent comment reply count via sharded counter.
       if (comment.comment.parentId) {
-        const parentRef = this.firestoreMethods.doc(this.firestore, 'comments', comment.comment.parentId);
-        await this.firestoreMethods.updateDoc(parentRef, {
-          replies: this.firestoreMethods.increment(-1),
-          updatedAt: this.firestoreMethods.serverTimestamp()
-        });
+        await countersManager.increment({ docPath: `comments/${comment.comment.parentId}`, field: 'replies', amount: -1 });
       }
 
       // Invalidate cache
@@ -542,42 +554,57 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      // UX guard against reaction storms (server rules enforce the real limit).
+      const rl = rateLimiter.checkAndHit(`comment:react:${userId}`, { max: 120, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Too many reactions. Please slow down.'), { code: 5001, defaultMessage: 'Too many reactions. Please slow down.' });
+      }
 
-      // Check if already liked
-      const comment = await this.getComment(commentId);
-      if (comment.success && comment.comment.likesBy?.includes(userId)) {
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const likeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId);
+
+      // Authoritative "already liked" check: subcollection doc (scales; no array scan).
+      const likeSnap = await this.firestoreMethods.getDoc(likeRef);
+      const alreadyLiked = likeSnap.exists();
+
+      // Preserve legacy behavior: liking twice throws.
+      if (alreadyLiked) {
         throw new Error('You have already liked this comment');
       }
 
-      // Remove from dislikes if present
+      const comment = await this.getComment(commentId);
+      const hadDislike = comment.success && comment.comment.dislikesBy?.includes(userId);
+
+      // Sharded like count + subcollection membership (canonical).
+      await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes' });
+      await this.firestoreMethods.setDoc(likeRef, {
+        userId,
+        likedAt: this.firestoreMethods.serverTimestamp(),
+      }, { merge: true });
+
+      // Backward-compat mirror on the comment doc (bounded below).
       const updates = {
-        likes: this.firestoreMethods.increment(1),
         likesBy: this.firestoreMethods.arrayUnion(userId),
         updatedAt: this.firestoreMethods.serverTimestamp(),
         lastActivityAt: this.firestoreMethods.serverTimestamp()
       };
-
-      if (comment.success && comment.comment.dislikesBy?.includes(userId)) {
-        updates.dislikes = this.firestoreMethods.increment(-1);
+      if (hadDislike) {
+        updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
+        await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes', amount: -1 });
+        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId));
       }
-
       await this.firestoreMethods.updateDoc(commentRef, updates);
-
-      // Remove from dislikesBy
-      if (comment.success && comment.comment.dislikesBy?.includes(userId)) {
-        await this.firestoreMethods.updateDoc(commentRef, {
-          dislikesBy: this.firestoreMethods.arrayRemove(userId)
-        });
-      }
+      // Bound the legacy array (canonical state lives in the subcollection).
+      await this._trimReactionArray(commentId, 'likesBy', COMMENT_REACTION_ARRAY_CAP);
 
       // Invalidate cache
       this._invalidateCommentCache(commentId);
+      countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'likes' });
 
       return { success: true, commentId, action: 'liked' };
 
     } catch (error) {
-      console.error(`❌ Like comment ${commentId} failed:`, error);
+      logger.error('Like comment failed', { error: error.message, commentId, userId });
       throw this._enhanceError(error, 'Failed to like comment');
     }
   }
@@ -587,41 +614,45 @@ class UltimateCommentService {
       await this._ensureInitialized();
 
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const dislikeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId);
 
-      // Check if already disliked
-      const comment = await this.getComment(commentId);
-      if (comment.success && comment.comment.dislikesBy?.includes(userId)) {
+      // Authoritative check via subcollection (scales; no array scan).
+      const dislikeSnap = await this.firestoreMethods.getDoc(dislikeRef);
+      if (dislikeSnap.exists()) {
         throw new Error('You have already disliked this comment');
       }
 
-      // Remove from likes if present
+      const comment = await this.getComment(commentId);
+      const hadLike = comment.success && comment.comment.likesBy?.includes(userId);
+
+      // Sharded dislike count + subcollection membership (canonical).
+      await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes' });
+      await this.firestoreMethods.setDoc(dislikeRef, {
+        userId,
+        dislikedAt: this.firestoreMethods.serverTimestamp(),
+      }, { merge: true });
+
       const updates = {
-        dislikes: this.firestoreMethods.increment(1),
         dislikesBy: this.firestoreMethods.arrayUnion(userId),
         updatedAt: this.firestoreMethods.serverTimestamp(),
         lastActivityAt: this.firestoreMethods.serverTimestamp()
       };
-
-      if (comment.success && comment.comment.likesBy?.includes(userId)) {
-        updates.likes = this.firestoreMethods.increment(-1);
+      if (hadLike) {
+        updates.likesBy = this.firestoreMethods.arrayRemove(userId);
+        await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes', amount: -1 });
+        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId));
       }
-
       await this.firestoreMethods.updateDoc(commentRef, updates);
-
-      // Remove from likesBy
-      if (comment.success && comment.comment.likesBy?.includes(userId)) {
-        await this.firestoreMethods.updateDoc(commentRef, {
-          likesBy: this.firestoreMethods.arrayRemove(userId)
-        });
-      }
+      await this._trimReactionArray(commentId, 'dislikesBy', COMMENT_REACTION_ARRAY_CAP);
 
       // Invalidate cache
       this._invalidateCommentCache(commentId);
+      countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'dislikes' });
 
       return { success: true, commentId, action: 'disliked' };
 
     } catch (error) {
-      console.error(`❌ Dislike comment ${commentId} failed:`, error);
+      logger.error('Dislike comment failed', { error: error.message, commentId, userId });
       throw this._enhanceError(error, 'Failed to dislike comment');
     }
   }
@@ -641,27 +672,31 @@ class UltimateCommentService {
         lastActivityAt: this.firestoreMethods.serverTimestamp()
       };
 
-      // Remove like if present
+      // Remove like if present (sharded counter + subcollection + mirror)
       if (comment.comment.likesBy?.includes(userId)) {
-        updates.likes = this.firestoreMethods.increment(-1);
+        await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes', amount: -1 });
         updates.likesBy = this.firestoreMethods.arrayRemove(userId);
+        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId));
       }
 
       // Remove dislike if present
       if (comment.comment.dislikesBy?.includes(userId)) {
-        updates.dislikes = this.firestoreMethods.increment(-1);
+        await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes', amount: -1 });
         updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
+        await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId));
       }
 
       await this.firestoreMethods.updateDoc(commentRef, updates);
 
       // Invalidate cache
       this._invalidateCommentCache(commentId);
+      countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'likes' });
+      countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'dislikes' });
 
       return { success: true, commentId, action: 'removed' };
 
     } catch (error) {
-      console.error(`❌ Remove like/dislike ${commentId} failed:`, error);
+      logger.error('Remove like/dislike failed', { error: error.message, commentId, userId });
       throw this._enhanceError(error, 'Failed to remove reaction');
     }
   }
@@ -731,8 +766,16 @@ class UltimateCommentService {
         this.firestoreMethods.orderBy('createdAt', 'asc')
       ];
 
-      if (options.limit) {
-        conditions.push(this.firestoreMethods.limit(options.limit));
+      const pageSize = options.limit || COMMENTS_CONFIG.PAGINATION_LIMIT;
+      conditions.push(this.firestoreMethods.limit(pageSize));
+
+      // Cursor pagination: options.cursor is the last reply id from a previous page.
+      if (options.cursor) {
+        const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', options.cursor);
+        const cursorSnap = await this.firestoreMethods.getDoc(cursorRef);
+        if (cursorSnap.exists()) {
+          conditions.push(this.firestoreMethods.startAfter(cursorSnap));
+        }
       }
 
       const q = this.firestoreMethods.query(commentsRef, ...conditions);
@@ -749,15 +792,20 @@ class UltimateCommentService {
         });
       });
 
+      const hasMore = snapshot.size === pageSize;
+      const nextCursor = hasMore && snapshot.docs.length ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
       return {
         success: true,
         replies,
         total: snapshot.size,
-        parentCommentId: commentId
+        parentCommentId: commentId,
+        hasMore,
+        nextCursor
       };
 
     } catch (error) {
-      console.error(`❌ Get replies for ${commentId} failed:`, error);
+      logger.error('Get replies failed', { error: error.message, commentId });
       return { success: false, replies: [], error: error.message };
     }
   }
@@ -1191,13 +1239,13 @@ class UltimateCommentService {
 
   async _notifyReply(context) {
     try {
-      await this._ensureInitialized();
-
-      const notificationsRef = this.firestoreMethods.collection(this.firestore, 'notifications');
-
-      await this.firestoreMethods.addDoc(notificationsRef, {
+      // Delegate to notificationsService (single notification pipeline).
+      const { getNotificationsService } = await import('./notificationsService.js');
+      const notifications = getNotificationsService();
+      await notifications.sendNotification({
         type: 'reply',
-        userId: context.replyToId,
+        recipientId: context.replyToId,
+        senderId: context.replyAuthorId,
         title: 'New reply to your comment',
         message: `${context.replyAuthorName} replied to your comment`,
         data: {
@@ -1207,13 +1255,10 @@ class UltimateCommentService {
           authorId: context.replyAuthorId,
           authorName: context.replyAuthorName,
           preview: context.content
-        },
-        isRead: false,
-        createdAt: this.firestoreMethods.serverTimestamp()
+        }
       });
-
     } catch (err) {
-      console.error('Reply notification failed', err);
+      logger.warn('Reply notification failed', { error: err.message });
     }
   }
 
@@ -1356,15 +1401,30 @@ class UltimateCommentService {
     return enhanced;
   }
 
+  /**
+   * Bound a legacy reaction array (likesBy/dislikesBy) to REACTION_ARRAY_CAP.
+   * Canonical membership lives in the comments/{id}/likes and .../dislikes
+   * subcollections; this mirror exists only for backward-compatible readers.
+   */
+  async _trimReactionArray(commentId, field, cap) {
+    try {
+      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
+      const snap = await this.firestoreMethods.getDoc(commentRef);
+      if (!snap.exists()) return;
+      const arr = snap.data()[field] || [];
+      if (arr.length <= cap) return;
+      const trimmed = arr.slice(-cap);
+      await this.firestoreMethods.updateDoc(commentRef, { [field]: trimmed });
+    } catch (err) {
+      logger.debug('Reaction array trim skipped', { error: err.message, commentId });
+    }
+  }
+
   cleanupStaleData() {
     const now = Date.now();
 
-    // Clean up old cache entries
-    for (const [key, value] of this.cache.entries()) {
-      if (now - value.timestamp > 10 * 60 * 1000) {
-        this.cache.delete(key);
-      }
-    }
+    // CacheManager enforces TTLs centrally; here we only purge expired entries.
+    cacheManager.purgeExpired();
 
     // Clean up old subscriptions
     for (const [id, subscription] of this.realtimeSubscriptions.entries()) {
@@ -1440,13 +1500,9 @@ class UltimateCommentService {
       if (postUpdates.size > 0) {
         await batch.commit();
 
-        // Update post comment counts
+        // Update post comment counts via sharded counters
         for (const [postId, count] of postUpdates.entries()) {
-          const postRef = this.firestoreMethods.doc(this.firestore, 'posts', postId);
-          await this.firestoreMethods.updateDoc(postRef, {
-            'stats.comments': this.firestoreMethods.increment(-count),
-            updatedAt: this.firestoreMethods.serverTimestamp()
-          });
+          await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments', amount: -count });
           this._invalidatePostCache(postId);
         }
       }
@@ -1498,7 +1554,7 @@ class UltimateCommentService {
       };
 
     } catch (error) {
-      console.error('❌ Get comment stats failed:', error);
+      logger.error('Get comment stats failed', { error: error.message });
       return { success: false, stats: null, error: error.message };
     }
   }
@@ -1515,7 +1571,7 @@ class UltimateCommentService {
 
   clearCache() {
     this.cache.clear();
-    console.warn('// Comment service cache cleared');
+    logger.info('Comment service cache cleared');
   }
 
   destroy() {

@@ -296,7 +296,7 @@ const CommunityDetailScreen = () => {
               exit={{ opacity: 0, y: -20 }}
             >
               {!isMember && community.privacy !== 'public' ? (
-                <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl">
+                <div className="text-center py-16 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                   <Lock className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
                     Private Community
@@ -312,7 +312,7 @@ const CommunityDetailScreen = () => {
                   </button>
                 </div>
               ) : posts.length === 0 ? (
-                <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl">
+                <div className="text-center py-16 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                   <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
                     No posts yet
@@ -332,7 +332,7 @@ const CommunityDetailScreen = () => {
               ) : (
                 <div className="space-y-4">
                   {posts.map((post) => (
-                    <div key={post.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700">
+                    <div key={post.id} className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                       <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
                           {post.authorAvatar ? (
@@ -375,7 +375,7 @@ const CommunityDetailScreen = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                 {/* Cover */}
                 {community.cover && (
                   <div className="h-40 -mx-6 -mt-6 mb-6 rounded-t-2xl overflow-hidden">
@@ -460,7 +460,7 @@ const CommunityDetailScreen = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                     Members ({community.stats?.memberCount || 0})
@@ -508,7 +508,7 @@ const CommunityDetailScreen = () => {
             >
               {/* Pending Requests */}
               {pendingRequests.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 mb-6">
+                <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 mb-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                     Pending Requests ({pendingRequests.length})
                   </h2>
@@ -542,7 +542,7 @@ const CommunityDetailScreen = () => {
               )}
 
               {/* Moderation Actions */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
                   Moderation Tools
                 </h2>

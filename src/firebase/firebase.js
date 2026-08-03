@@ -6,15 +6,19 @@
 //    immediately after creating the Auth instance, so RecaptchaVerifier never crashes.
 
 // ==================== ENTERPRISE CONFIGURATION ====================
+// Environment-overridable Firebase config. VITE_FIREBASE_* takes precedence
+// (set in CI / .env); fallbacks keep local dev working. The committed values
+// are public client keys (not secrets) — rotate in the Firebase console and
+// deploy with env vars for production.
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDm9ks21qUT7vCVh6USGVtHJblBzEEPjxk",
-  authDomain: "arvdoul-8057b.firebaseapp.com",
-  databaseURL: "https://arvdoul-8057b-default-rtdb.firebaseio.com",
-  projectId: "arvdoul-8057b",
-  storageBucket: "arvdoul-8057b.firebasestorage.app",
-  messagingSenderId: "892956185588",
-  appId: "1:892956185588:web:5ca931799f5da7846b9fa1",
-  measurementId: "G-MQL0JXL584"
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "AIzaSyDm9ks21qUT7vCVh6USGVtHJblBzEEPjxk",
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "arvdoul-8057b.firebaseapp.com",
+  databaseURL: import.meta.env?.VITE_FIREBASE_DATABASE_URL || "https://arvdoul-8057b-default-rtdb.firebaseio.com",
+  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "arvdoul-8057b",
+  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "arvdoul-8057b.firebasestorage.app",
+  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "892956185588",
+  appId: import.meta.env?.VITE_FIREBASE_APP_ID || "1:892956185588:web:5ca931799f5da7846b9fa1",
+  measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || "G-MQL0JXL584"
 };
 
 // ==================== ULTIMATE SINGLETON MANAGER ====================

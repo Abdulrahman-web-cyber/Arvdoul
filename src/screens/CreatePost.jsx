@@ -11,7 +11,7 @@ import React, {
   useReducer, useEffect, useCallback, useRef, useState,
   createContext, useContext, useMemo, lazy, Suspense, useId
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "../context/ThemeContext";
@@ -2319,9 +2319,56 @@ function CreatePostShell({ children }) {
 }
 
 // ── DEFAULT EXPORT ─────────────────────────────────────────────────────
+// Loads a post for editing when /create-post?edit=<id> is used (from
+// PostOptionsDrawer "Edit"). Fetches the post and dispatches LOAD_DRAFT.
+function EditPostLoader() {
+  const [searchParams] = useSearchParams();
+  const { dispatch } = useCreatePostState();
+  const editId = searchParams.get("edit");
+  const loadedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!editId || loadedRef.current) return;
+    loadedRef.current = true;
+    (async () => {
+      try {
+        const { getFirestoreService } = await import("../services/firestoreService.js");
+        const res = await getFirestoreService().getPost(editId);
+        if (res?.success && res.post) {
+          const p = res.post;
+          dispatch({
+            type: "LOAD_DRAFT",
+            payload: {
+              postType: p.type || "text",
+              content: p.content || "",
+              contentJSON: null,
+              mediaItems: (p.media || []).map((m, i) => ({
+                id: `edit_${i}`, type: m.type === "video" ? "video" : "image",
+                url: m.url, preview: m.url, file: null, name: m.name || "", size: 0,
+              })),
+              visibility: p.visibility || "public",
+              draftId: null,
+              isDraftLoaded: true,
+              isDirty: false,
+              editPostId: editId,
+            },
+          });
+          dispatch({ type: "SET_POST_TYPE", payload: p.type || "text" });
+          dispatch({ type: "SET_STEP", payload: 2 });
+        }
+      } catch (err) {
+        console.warn("Could not load post for editing:", err?.message);
+      }
+    })();
+  }, [editId, dispatch]);
+
+  return null;
+}
+
 export default function CreatePostEntry() {
   return (
     <CreatePostProvider>
+      <EditPostLoader />
       <CreatePostContent />
     </CreatePostProvider>
   );

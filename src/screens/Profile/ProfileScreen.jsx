@@ -157,6 +157,9 @@ export default function ProfileScreen() {
       case 'posts':
         setActiveProfileTab('posts');
         break;
+      case 'reputation':
+        navigate(`/reputation/${viewingUserId}`);
+        break;
       default:
         break;
     }
@@ -193,7 +196,9 @@ export default function ProfileScreen() {
     return (
       <div className={cn(
         'min-h-screen pb-20',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <ProfileSkeleton theme={theme} />
       </div>
@@ -205,7 +210,9 @@ export default function ProfileScreen() {
     return (
       <div className={cn(
         'min-h-screen flex items-center justify-center pb-20',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <div className="text-center p-6">
           <p className="text-red-500 mb-4">{error}</p>
@@ -229,7 +236,9 @@ export default function ProfileScreen() {
     return (
       <div className={cn(
         'min-h-screen flex items-center justify-center pb-20',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <div className="text-center p-6">
           <p className="text-gray-500 dark:text-gray-400 mb-4">
@@ -253,7 +262,9 @@ export default function ProfileScreen() {
   return (
     <div className={cn(
       'min-h-screen pb-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Main Content */}
       <div className="max-w-2xl mx-auto">

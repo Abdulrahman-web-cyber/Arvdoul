@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService.js';
-import PostCard, { MediaGallery, PostHeader, PostContent, PostActions } from './PostCard.jsx';
+import PostCard from './PostCard.jsx';
 import { ArrowLeft, Share2 } from 'lucide-react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { triggerHaptic } from '../utils/haptics';
@@ -67,10 +67,16 @@ export default function PostDetails() {
 
       <motion.div drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.1} onDragEnd={handleDragEnd} style={{ x: dragX }} className={`flex-1 overflow-y-auto ${exitAnimating ? 'pointer-events-none' : ''}`} animate={exitAnimating ? { x: winWidth } : {}} transition={{ duration: 0.3 }}>
         <div className="max-w-3xl mx-auto pt-16 pb-24 px-4">
-          <ErrorBoundary><PostHeader post={post} currentUser={currentUser} navigate={navigate} onShowOptions={() => {}} /></ErrorBoundary>
-          {post.media?.length > 0 && <MediaGallery media={post.media} type={post.type} onDoubleTap={() => {}} theme={theme} isVisible={true} />}
-          <ErrorBoundary><PostContent post={post} /></ErrorBoundary>
-          <ErrorBoundary><PostActions post={post} currentUser={currentUser} onComment={() => setShowComments(true)} theme={theme} /></ErrorBoundary>
+          <ErrorBoundary>
+            <PostCard
+              post={post}
+              currentUser={currentUser}
+              navigate={navigate}
+              onOpenComments={() => setShowComments(true)}
+              onOpenOptions={() => {}}
+              isVisible
+            />
+          </ErrorBoundary>
         </div>
       </motion.div>
 

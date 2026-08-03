@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, memo } from "react";
+import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion } from "framer-motion";
 import {
@@ -28,6 +29,7 @@ const RotateButton = memo(({
   isActive = false,
   badge,
 }) => {
+    const { isDark } = useTheme();
   return (
     <motion.button
       whileHover={{ scale: 1.05 }}
@@ -78,6 +80,7 @@ const RotateTool = memo(({
   onRotateFree,
   freeRotation = 0,
 }) => {
+    const { isDark } = useTheme();
   const handleRotateLeft = useCallback(() => {
     onRotateLeft?.();
   }, [onRotateLeft]);
@@ -105,7 +108,7 @@ const RotateTool = memo(({
     <div className="w-full space-y-4">
       {/* Quick Rotation */}
       <div className="space-y-2">
-        <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+        <span className={`text-xs font-semibold text-white/60 uppercase tracking-wider`}>
           Quick Rotate
         </span>
         <div className="flex items-center gap-3">
@@ -130,7 +133,7 @@ const RotateTool = memo(({
       {/* Flip Controls */}
       {(onFlipH || onFlipV) && (
         <div className="space-y-2">
-          <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+          <span className={`text-xs font-semibold text-white/60 uppercase tracking-wider`}>
             Flip
           </span>
           <div className="flex items-center gap-3">
@@ -159,7 +162,7 @@ const RotateTool = memo(({
       {onRotateFree && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-white/60 uppercase tracking-wider">
+            <span className={`text-xs font-semibold text-white/60 uppercase tracking-wider`}>
               Free Rotation
             </span>
             <span className="text-xs text-white/50 tabular-nums">
@@ -172,14 +175,14 @@ const RotateTool = memo(({
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => onRotateFree(freeRotation - 15)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
+              className={`w-10 h-10 flex items-center justify-center rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 transition-colors`}
               aria-label="Rotate left 15 degrees"
             >
-              <RotateCcw className="w-5 h-5 text-white/70" />
+              <RotateCcw className={`w-5 h-5 ${isDark ? 'text-white/70' : 'text-gray-600'}`} />
             </motion.button>
             
             <div className="relative flex-1 h-10 flex items-center">
-              <div className="absolute inset-x-0 h-2 rounded-full bg-white/10 overflow-hidden">
+              <div className={`absolute inset-x-0 h-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-black/5'} overflow-hidden`}>
                 <motion.div
                   className="h-full rounded-full"
                   style={{
@@ -205,10 +208,10 @@ const RotateTool = memo(({
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => onRotateFree(freeRotation + 15)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
+              className={`w-10 h-10 flex items-center justify-center rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 transition-colors`}
               aria-label="Rotate right 15 degrees"
             >
-              <RotateCw className="w-5 h-5 text-white/70" />
+              <RotateCw className={`w-5 h-5 \${isDark ? 'text-white/70' : 'text-gray-600'}`} />
             </motion.button>
           </div>
           
@@ -235,10 +238,10 @@ const RotateTool = memo(({
 
       {/* Current rotation indicator */}
       {(rotation !== 0 || flipH || flipV) && (
-        <div className="flex items-center justify-center gap-4 py-2 rounded-xl bg-white/5">
+        <div className={`flex items-center justify-center gap-4 py-2 rounded-xl ${isDark ? 'bg-white/5' : 'bg-black/[0.03]'}`}>
           <span className="text-xs text-white/50">Current:</span>
           {rotation !== 0 && (
-            <span className="px-2 py-1 rounded-lg bg-white/10 text-xs text-white">
+            <span className={`px-2 py-1 rounded-lg ${isDark ? 'bg-white/10' : 'bg-black/5'} text-xs text-white`}>
               {normalizedRotation(rotation)}°
             </span>
           )}

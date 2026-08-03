@@ -3,6 +3,7 @@
 // ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   FaPlay, FaPause, FaUndo, FaRedo, FaUpload, FaDownload, FaSave,
@@ -264,6 +265,7 @@ const CanvasPreview = ({ thumbnail, selectedElement, onSelectElement, onUpdateEl
 
 // ==================== MAIN THUMBNAIL DESIGNER SCREEN ====================
 export default function ThumbnailDesignerScreen() {
+  const { theme, isDark } = useTheme();
   const navigate = useNavigate();
   const [thumbnail, setThumbnail] = useState(null);
   const [selectedElement, setSelectedElement] = useState(null);
@@ -450,14 +452,14 @@ export default function ThumbnailDesignerScreen() {
 
   if (!thumbnail) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'}`}>
         <div className="text-white">Loading designer...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
+    <div className={`min-h-screen flex flex-col ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">

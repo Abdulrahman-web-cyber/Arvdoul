@@ -143,9 +143,9 @@ const MessageBubble = React.memo(({
           {/* Bubble */}
           <div
             className={cn(
-              'px-4 py-2 rounded-xl max-w-xs break-words',
+              'px-4 py-2 rounded-xl max-w-xs break-words shadow-[0_4px_16px_rgba(0,0,0,0.12)]',
               isOwn
-                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-br-none'
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-br-none shadow-[0_4px_16px_rgba(168,85,247,0.35)]'
                 : (theme === 'dark'
                   ? 'bg-gray-800 text-white rounded-bl-none'
                   : 'bg-gray-200 text-gray-900 rounded-bl-none'),

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -15,14 +16,39 @@ import {
 
 const AdminModerationQueueScreen = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState('pending');
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
+  // Load real reports (comment_reports + user_reports), admin-gated.
   useEffect(() => {
-    setLoading(false);
+    const load = async () => {
+      try {
+        const { collection, query, orderBy, limit, getDocs, doc, getDoc } = await import('firebase/firestore');
+        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+        const firestore = await getFirestoreInstance();
+        const adminSnap = await getDoc(doc(firestore, 'admins', user?.uid || ''));
+        if (!adminSnap.exists()) { setLoading(false); return; }
+
+        const [commentReports, userReports] = await Promise.all([
+          getDocs(query(collection(firestore, 'comment_reports'), orderBy('createdAt', 'desc'), limit(100))),
+          getDocs(query(collection(firestore, 'user_reports'), orderBy('createdAt', 'desc'), limit(100))),
+        ]);
+        const mapped = [
+          ...commentReports.docs.map(d => ({ id: d.id, type: 'comment', status: d.data().status || 'pending', ...d.data() })),
+          ...userReports.docs.map(d => ({ id: d.id, type: 'user', status: d.data().status || 'pending', ...d.data() })),
+        ];
+        setReports(mapped.sort((a, b) => new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0)));
+      } catch (err) {
+        toast.error('Could not load moderation queue.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
   const filteredReports = reports.filter(r => {
@@ -30,11 +56,22 @@ const AdminModerationQueueScreen = () => {
     return r.status === filter;
   });
 
+  // Real moderation actions: update status + optionally remove content.
   const handleReportAction = async (reportId, action) => {
     try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+      const firestore = await getFirestoreInstance();
+      const report = reports.find(r => r.id === reportId);
+      const ref = doc(firestore, report?.type === 'user' ? 'user_reports' : 'comment_reports', reportId);
+      await updateDoc(ref, {
+        status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'pending',
+        resolvedAt: serverTimestamp(),
+        resolvedBy: user?.uid || null,
+      });
+      setReports(prev => prev.map(r => (r.id === reportId ? { ...r, status: action === 'resolve' ? 'resolved' : 'dismissed' } : r)));
       toast.success(`Report ${action}ed successfully`);
       setShowDetailModal(false);
-      // TODO: Update report status
     } catch (error) {
       toast.error(`Failed to ${action} report`);
     }
@@ -71,7 +108,7 @@ const AdminModerationQueueScreen = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <button
@@ -100,7 +137,7 @@ const AdminModerationQueueScreen = () => {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 mb-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
           <div className="flex gap-2">
             {['pending', 'reviewing', 'resolved', 'all'].map((status) => (
               <button
@@ -125,7 +162,7 @@ const AdminModerationQueueScreen = () => {
               key={report.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700"
+              className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
             >
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-xl">
@@ -175,7 +212,7 @@ const AdminModerationQueueScreen = () => {
           ))}
 
           {filteredReports.length === 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700">
+            <div className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
               <CheckCircle className="w-12 h-12 mx-auto text-green-400 mb-3" />
               <p className="text-gray-500">No reports to review</p>
             </div>
@@ -189,7 +226,7 @@ const AdminModerationQueueScreen = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6"
+            className="bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
           >
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
               Report Details

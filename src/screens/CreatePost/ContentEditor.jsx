@@ -54,7 +54,7 @@ export default function ContentEditor({
   const EmojiPicker = ({ onSelect }) => {
     const emojis = ["😀","😂","❤️","🔥","🎉","👍","😢","😡","🥳","😎","🤩","😍","🥺","😤","🤔","😴","👋","💪","🙌","👏"];
     return (
-      <div className="grid grid-cols-5 gap-1 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+      <div className="grid grid-cols-5 gap-1 p-2 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-xl shadow-lg border border-gray-200/60 dark:border-gray-700/60">
         {emojis.map(e => <button key={e} onClick={() => onSelect(e)} className="text-xl p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">{e}</button>)}
       </div>
     );
@@ -79,7 +79,7 @@ export default function ContentEditor({
     React.useEffect(() => { if (query) search(); }, [query, search]);
     if (!apiKey) return null;
     return (
-      <div className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border max-w-sm">
+      <div className="p-2 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl rounded-xl shadow-lg border max-w-sm">
         <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search GIFs..." className="w-full p-1 text-sm border rounded mb-2" />
         {loading && <div className="text-center p-2"><LoadingSpinner size="sm" /></div>}
         <div className="grid grid-cols-3 gap-1 max-h-64 overflow-auto">
@@ -126,7 +126,7 @@ export default function ContentEditor({
             </AnimatePresence>
           </div>
           {showMentionSuggestions && mentionSearchResults.length > 0 && (
-            <div className="absolute z-30 bg-white dark:bg-gray-800 border rounded-lg shadow-lg max-h-40 overflow-auto" style={{ bottom: "100%", left: 0, right: 0 }}>
+            <div className="absolute z-30 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border rounded-lg shadow-lg max-h-40 overflow-auto" style={{ bottom: "100%", left: 0, right: 0 }}>
               {mentionSearchResults.map((usr, idx) => (
                 <button key={usr.id} onClick={() => insertMention(usr)}
                   className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 ${idx === mentionSelectedIndex ? "bg-purple-100 dark:bg-purple-900/30" : ""}`}>

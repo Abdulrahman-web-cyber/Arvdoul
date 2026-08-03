@@ -46,7 +46,9 @@ export default function ProfilePreviewScreen({
     return (
       <div className={cn(
         'min-h-screen pb-20',
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+        theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
         <ProfileSkeleton theme={theme} />
       </div>
@@ -56,13 +58,15 @@ export default function ProfilePreviewScreen({
   return (
     <div className={cn(
       'min-h-screen pb-20',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+      theme === 'dark'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Header */}
       <div className={cn(
         'sticky top-0 z-20',
-        'bg-white dark:bg-gray-900',
-        'border-b border-gray-200 dark:border-gray-800'
+        'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl',
+        'border-b border-gray-200/60 dark:border-gray-800/60'
       )}>
         <div className="flex items-center justify-between px-4 py-3">
           <button

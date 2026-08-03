@@ -1,8 +1,9 @@
 // src/routes/AppRoutes.jsx - ULTIMATE PRODUCTION VERSION FIXED V2
 // 🏆 PERFECT ROUTING • COMPLETE MESSAGING • PRODUCTION READY
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
 
 // ==================== LAZY LOAD COMPONENTS ====================
@@ -41,6 +42,7 @@ const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.
 const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
 const ProfileSettingsScreen = lazy(() => import("../screens/Profile/ProfileSettingsScreen.jsx"));
 // Legacy screens
+const PostDetails = lazy(() => import("../screens/PostDetails.jsx"));
 const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
 const SearchScreen = lazy(() => import("../screens/SearchScreen.jsx"));
 const SavedScreen = lazy(() => import("../screens/SavedScreen.jsx"));
@@ -48,6 +50,10 @@ const CollectionsScreen = lazy(() => import("../screens/CollectionsScreen.jsx"))
 const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
 // Video Analytics Screen
 const VideoAnalyticsScreen = lazy(() => import("../screens/VideoAnalyticsScreen.jsx"));
+const ReelsScreen = lazy(() => import("../screens/ReelsScreen.jsx"));
+const VideoDetailScreen = lazy(() => import("../screens/VideoDetailScreen.jsx"));
+const CallScreen = lazy(() => import("../screens/CallScreen.jsx"));
+const GiftScreen = lazy(() => import("../screens/GiftScreen.jsx"));
 
 // Community Screens
 const CommunityDirectoryScreen = lazy(() => import("../screens/Community/CommunityDirectoryScreen.jsx"));
@@ -116,6 +122,38 @@ const MessagingLayout = ({ children }) => {
       <MainLayout>{children}</MainLayout>
     </AppStateGuard>
   );
+};
+
+// ==================== ADMIN ROUTE (server-verified gate) ====================
+// Any signed-in user reaching /admin is checked against the `admins`
+// collection (mirrors the server-side isAdmin() used by Cloud Functions).
+const AdminRoute = ({ children }) => {
+  const { user } = useAuth();
+  const [allowed, setAllowed] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const check = async () => {
+      if (!user?.uid) { if (mounted) setAllowed(false); return; }
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { getFirestoreInstance } = await import('../firebase/firebase.js');
+        const firestore = await getFirestoreInstance();
+        const snap = await getDoc(doc(firestore, 'admins', user.uid));
+        if (mounted) setAllowed(snap.exists());
+      } catch (err) {
+        if (mounted) setAllowed(false);
+      }
+    };
+    check();
+    return () => { mounted = false; };
+  }, [user?.uid]);
+
+  if (allowed === null) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>;
+  }
+  if (!allowed) return <Navigate to="/home" replace />;
+  return <AppStateGuard><MainLayout>{children}</MainLayout></AppStateGuard>;
 };
 
 // ==================== MAIN APP ROUTES ====================
@@ -199,19 +237,19 @@ export default function AppRoutes() {
       
       {/* Core App Routes */}
       <Route path="/home" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <HomeScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
       
       <Route path="/videos" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <VideosScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
       
       {/* ========== MESSAGING ROUTES (Ultimate Professional) ========== */}
@@ -263,23 +301,31 @@ export default function AppRoutes() {
       {/* Uncomment if you prefer separate routes instead of nested */}
       {/*
       <Route path="/messages" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <MessagingScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
       
       <Route path="/messages/:conversationId" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <ChatScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
       */}
       
       {/* ========== SOCIAL & CONTENT ROUTES ========== */}
+      <Route path="/post/:postId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PostDetails />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
       <Route path="/create-post" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -470,6 +516,49 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      {/* Reels (full-screen vertical video) */}
+      <Route path="/reels" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ReelsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Video detail (deep links from search, notifications, shares) */}
+      <Route path="/video/:videoId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <VideoDetailScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Call + Gift (from messaging) */}
+      <Route path="/call/:conversationId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CallScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/gift/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <GiftScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Edit post (from PostOptionsDrawer) */}
+      <Route path="/edit/:postId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreatePost />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
       {/* Video Analytics */}
       <Route path="/video-analytics" element={
         <ProtectedRoute>
@@ -647,6 +736,18 @@ export default function AppRoutes() {
       <Route path="/chat" element={<Navigate to="/messages" replace />} />
       <Route path="/inbox" element={<Navigate to="/messages" replace />} />
       <Route path="/dm" element={<Navigate to="/messages" replace />} />
+      {/* Legacy / dead-link targets now resolve to real destinations */}
+      <Route path="/challenges" element={<Navigate to="/rankings" replace />} />
+      <Route path="/change-password" element={<Navigate to="/settings" replace />} />
+      <Route path="/create-highlight" element={<Navigate to="/profile/highlights" replace />} />
+      <Route path="/explore" element={<Navigate to="/search" replace />} />
+      <Route path="/discover" element={<Navigate to="/search" replace />} />
+      <Route path="/trending" element={<Navigate to="/home" replace />} />
+      <Route path="/email-verification" element={<Navigate to="/verify-email" replace />} />
+      <Route path="/analytics" element={<Navigate to="/profile/analytics" replace />} />
+      <Route path="/followers" element={<Navigate to="/network" replace />} />
+      <Route path="/following" element={<Navigate to="/network" replace />} />
+      <Route path="/auth" element={<Navigate to="/login" replace />} />
       
       {/* ========== ERROR & CATCH-ALL ========== */}
       {/* 404 Page (Future Implementation) */}
