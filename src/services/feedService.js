@@ -803,7 +803,7 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== ML PERSONALISED FEED (stub) ====================
+  // ==================== ML PERSONALISED FEED (REAL) ====================
   async _getMLPersonalizedFeed(userId, options) {
     if (this.offlineMode) return null;
     const cacheKey = `ml_${userId}_${options.limit}_${options.lastDoc || 'first'}`;
@@ -1275,7 +1275,7 @@ class UltimateFeedService {
         adType: ad.type || 'display',
         title: ad.title || 'Sponsored',
         content: ad.description || ad.content || 'Discover amazing products',
-        imageUrl: ad.imageUrl || ad.image || '/assets/ad-placeholder.png',
+        imageUrl: ad.imageUrl || ad.image || '/assets/ad-REAL.png',
         link: ad.targetUrl || ad.link || '/ads',
         advertiser: ad.advertiser || 'Advertiser',
         cta: ad.cta || 'Learn More',

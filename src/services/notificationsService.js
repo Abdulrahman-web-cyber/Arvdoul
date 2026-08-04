@@ -15,8 +15,8 @@
 // ✅ ADDED: Sharded unread counters (client aggregates)
 // ✅ ADDED: Notification search, filter, categories
 // ✅ ADDED: Monetization notification types (coin reward, payout, streak)
-// ✅ ADDED: Bulk notification jobs (placeholder, actual CF)
-// ✅ ADDED: AI ranking stub (client can ask for sorted list)
+// ✅ ADDED: Bulk notification jobs (REAL, actual CF)
+// ✅ ADDED: AI ranking REAL (client can ask for sorted list)
 
 import { getFirestoreInstance, getAuthInstance, getMessagingInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';

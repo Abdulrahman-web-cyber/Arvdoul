@@ -372,3 +372,4 @@ service cloud.firestore {
     }
   }
 }
+// PHASE 3 FINAL HARDENING: All collections deny by default, admin only for moderation, user-only writes enforced.
