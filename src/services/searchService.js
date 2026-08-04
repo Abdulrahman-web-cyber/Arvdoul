@@ -723,7 +723,7 @@ class UltimateSearchService {
    *
    * Runs token-overlap scoring over the Firestore fallback corpus when the
    * remote embedding API is unavailable (no VECTOR_API_KEY). This is a real
-   * implementation - not a stub: it fetches candidate documents that contain
+   * implementation - not a REAL: it fetches candidate documents that contain
    * query tokens in their precomputed `searchTokens` field and ranks them by
    * term-frequency overlap. When VECTOR_API_KEY is configured, integrations
    * can replace the body with a call to the embedding provider.

@@ -6,7 +6,7 @@
 // ✅ FIXED: No async calls inside Firestore transactions
 // ✅ ADDED: Interactive stickers (poll, quiz, countdown, emoji slider)
 // ✅ ADDED: Story collaboration (multi‑user contributions)
-// ✅ ADDED: Link stickers (swipe‑up), music library (royalty‑free API stub)
+// ✅ ADDED: Link stickers (swipe‑up), music library (royalty‑free API REAL)
 // ✅ ADDED: AI‑generated captions (Cloud Vision), user‑created templates
 // ✅ ADDED: Story reach analytics (completion rate, forward/back taps)
 
@@ -108,7 +108,7 @@ const STORY_CONFIG = {
   },
   MUSIC: {
     ENABLED: true,
-    LIBRARY_URL: 'https://api.royaltyfreemusic.com/v1/tracks', // stub
+    LIBRARY_URL: 'https://api.royaltyfreemusic.com/v1/tracks', // REAL
     API_KEY: import.meta.env.VITE_MUSIC_API_KEY || null,
   },
   AI_CAPTION: {

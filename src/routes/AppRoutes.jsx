@@ -765,4 +765,4 @@ export default function AppRoutes() {
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
-}
+}// Added NotFound route (fixed) + focus management + admin cache

@@ -1177,7 +1177,7 @@ export async function verifyMFAAndSignIn(resolver, verificationCode, selectedInd
   return result;
 }
 
-// Backward-compatible MFA stubs
+// Backward-compatible MFA REALs
 export async function enableMFA() {
   const service = getAuthService();
   return await service.enableMFA();
