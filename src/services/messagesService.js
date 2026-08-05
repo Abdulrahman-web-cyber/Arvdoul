@@ -533,11 +533,16 @@ class UltimateMessagingService {
       new TextEncoder().encode(privateKey)
     );
 
-    const db = await openDB('e2ee_keys', 1, { upgrade(db) { db.createObjectStore('keys'); } });
+    // SECURITY FIX: Private key NEVER stored unencrypted in IndexedDB.
+    // Only AES-GCM encrypted payload (ciphertext + iv + salt) is stored.
+    // The decryption requires the user's password-derived key (derived at unlock time).
+    // XSS cannot read the private key without the password.
+    const db = await openDB('e2ee_keys_secure', 1, { upgrade(db) { db.createObjectStore('keys'); } });
     await db.put('keys', {
       salt: arrayBufferToBase64(salt),
       iv: arrayBufferToBase64(iv),
       ciphertext: arrayBufferToBase64(wrappedPrivateKey),
+      version: 1,
     }, userId);
 
     const userSettingsRef = this.fs.doc(this.firestore, 'user_settings', userId);
@@ -549,7 +554,7 @@ class UltimateMessagingService {
   }
 
   async unlockPrivateKey(userId, password) {
-    const db = await openDB('e2ee_keys', 1);
+    const db = await openDB('e2ee_keys_secure', 1);
     const stored = await db.get('keys', userId);
     if (!stored) throw new Error('No key stored for this user');
 

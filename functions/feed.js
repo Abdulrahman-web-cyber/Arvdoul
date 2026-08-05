@@ -667,4 +667,4 @@ exports.feedHealthCheck = functions.https.onCall(async (data, context) => {
   7. Collection group "feeds": postId ASC, __name__ ASC (for invalidation)
   8. fanout_tasks: status ASC, createdAt ASC (for cleanup)
   9. fanout_tasks: status ASC, updatedAt ASC (for stuck recovery)
-*/
+*//* AI RANKING PLACEHOLDER — Phase 5 T: Replace chronological query with ML-ranked feed using user embeddings, watch-time weights, and diversity filtering. TODO: integrate TensorFlow Lite / Python scoring service. */

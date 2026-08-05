@@ -12,6 +12,9 @@ arrayUnion,
 arrayRemove,
 serverTimestamp,
 runTransaction,
+query,
+orderBy,
+limit,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUser } from "./UserContext";
@@ -25,21 +28,14 @@ const [userPosts, setUserPosts] = useState({});
 const feedListenerRef = useRef(null);
 const userListenersRef = useRef({});
 
-// -------------------- Subscribe to feed posts --------------------
+// -------------------- Subscribe to feed posts (paginated, not full snapshot) --------------------
 const subscribeFeed = () => {
 if (feedListenerRef.current) return;
-const postsRef = collection(db, "posts");
-feedListenerRef.current = onSnapshot(postsRef, (snap) => {
-const posts = snap.docs
-.map((d) => ({ id: d.id, ...d.data() }))
-.sort((a, b) => {
-// weighted sort: engagement + timestamp
-const engagementA = (a.likes?.length || 0) + (a.commentsCount || 0) + (a.sharesCount || 0);
-const engagementB = (b.likes?.length || 0) + (b.commentsCount || 0) + (b.sharesCount || 0);
-return engagementB - engagementA || b.createdAt?.seconds - a.createdAt?.seconds;
-});
+const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(10));
+feedListenerRef.current = onSnapshot(q, (snap) => {
+const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 setFeedPosts(posts);
-});
+}, (err) => console.error("Feed snapshot error:", err));
 };
 
 // -------------------- Create a post --------------------

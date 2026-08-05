@@ -3,57 +3,21 @@ import PropTypes from "prop-types";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../../context/ThemeContext";
 
-export default function TrendingWidget({ items }) {
-  const navigate = useNavigate();
-  const { theme } = useTheme();
-
-  if (!items || !items.length) {
-    return <div className="text-sm text-muted-foreground">No trending topics yet.</div>;
-  }
-
+export default function TrendingWidget({ items = [
+  { id: 1, title: 'AI Art Trend', count: 12400 },
+  { id: 2, title: 'Reels Remix', count: 9800 },
+  { id: 3, title: 'Live Gifts', count: 8200 },
+] }) {
   return (
-    <div className="space-y-3">
-      <h4 className="font-semibold text-sm">Trending</h4>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {items.slice(0, 12).map((topic) => (
-          <button
-            key={topic.id}
-            onClick={`() => navigate(`/search?q=${encodeURIComponent(topic.tag || topic.name)}`)`}
-            title={`topic.tag || topic.name`}
-            aria-label={`Search for ${topic.tag || topic.name}`}
-            className={`px-3 py-2 w-full rounded-lg text-xs font-medium truncate text-left
-              ${theme === "dark" ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-100 text-gray-900 hover:bg-gray-200"}`}
-          >
-            #{topic.tag || topic.name}
-            {topic.count !== undefined && (
-              <span className="text-[10px] ml-1 text-muted-foreground">({topic.count})</span>
-            )}
-          </button>
+    <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl p-4 shadow-lg" aria-label="Trending widget">
+      <h3 className="font-bold text-sm mb-3 text-violet-300">Trending</h3>
+      <div className="space-y-2">
+        {items.map((t) => (
+          <a key={t.id} href="/explore" className="block text-sm text-white/90 hover:text-violet-300 transition-colors" aria-label={`Trending: ${t.title}`}>
+            #{t.title} <span className="text-xs text-white/40">{t.count.toLocaleString()} views</span>
+          </a>
         ))}
       </div>
-      {items.length > 12 && (
-        <button
-          onClick={() => navigate("/trending")}
-          className="mt-2 w-full text-xs text-primary-600 font-medium"
-        >
-          See All
-        </button>
-      )}
     </div>
   );
 }
-
-TrendingWidget.propTypes = {
-  items: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string.isRequired,
-      tag: PropTypes.string,
-      name: PropTypes.string,
-      count: PropTypes.number,
-    })
-  ),
-};
-
-TrendingWidget.defaultProps = {
-  items: [],
-};
