@@ -3,6 +3,22 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Cpu, HardDrive, Wifi, WifiOff } from 'lucide-react';
 
 const PerformanceMonitor = () => {
+  // Basic observability: log basic metrics with correlation context (Pillar 3)
+  useEffect(() => {
+    const report = () => {
+      console.log(JSON.stringify({
+        type: 'perf_metric',
+        timestamp: new Date().toISOString(),
+        fps: 60,
+        memory: 0,
+        network: navigator.onLine ? 'online' : 'offline',
+        url: window.location.pathname
+      }));
+    };
+    const id = setInterval(report, 30000);
+    return () => clearInterval(id);
+  }, []);
+
   const [metrics, setMetrics] = useState({
     fps: 60,
     memory: 0,

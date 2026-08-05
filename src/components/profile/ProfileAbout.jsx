@@ -57,14 +57,14 @@ const ProfileAbout = ({
   ].filter(item => item.value);
 
   return (
-    <div className={cn(
+    <div aria-label="Profile component" role="region" className={cn(
       'p-4 rounded-2xl',
       'bg-white dark:bg-gray-900',
       'border border-gray-200 dark:border-gray-800',
       'space-y-4'
     )}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-r from-violet-900/30 to-fuchsia-900/30 backdrop-blur-md rounded-xl border border-white/10 p-4 shadow-lg flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           About
         </h3>

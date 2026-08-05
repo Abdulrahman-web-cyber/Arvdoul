@@ -3,6 +3,7 @@
 
 import React, { Component } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import { ERROR_CODES, getPublicMessage } from '../utils/errorCodes';
 
 /**
  * Wrapper to inject theme into class component
@@ -183,9 +184,9 @@ class GlobalErrorBoundaryBase extends Component {
           {/* ERROR */}
           {this.renderSection(
             "Error Message",
-            <p className="text-red-400 font-medium break-words">
-              {this.state.error?.message || "Unknown error"}
-            </p>,
+              <p className="text-red-400 font-medium break-words">
+                {this.state.error?.message || "Unknown error"} <span className="text-xs opacity-60">(code: {ERROR_CODES.INTERNAL_ERROR})</span>
+              </p>,
             "red"
           )}
 

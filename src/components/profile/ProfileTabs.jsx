@@ -109,7 +109,7 @@ const ProfileTabs = memo(({
             >
               {isActive && (
                 <div 
-                  className="absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                  className="bg-gradient-to-b from-slate-900/80 via-slate-950/90 to-violet-950/80 backdrop-blur-xl rounded-2xl border border-white/10 shadow-xl absolute inset-x-0 bottom-0 h-0.5 rounded-full"
                   style={{ background: activeGradient }}
                   aria-hidden="true"
                 />

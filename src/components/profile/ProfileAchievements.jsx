@@ -13,7 +13,7 @@ const ProfileAchievements = memo(({
   if (!achievements || achievements.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div aria-label="Profile component" role="region" className="flex flex-wrap gap-2">
       {achievements.map((achievement) => (
         <span
           key={achievement.id}

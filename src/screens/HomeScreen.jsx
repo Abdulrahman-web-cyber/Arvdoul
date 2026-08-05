@@ -1247,7 +1247,7 @@ export default function HomeScreen() {
                 <Compass className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-xl font-bold mb-2 dark:text-white">Welcome to ARVDOUL!</h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-6">Follow creators to see content.</p>
-                <button onClick={() => navigate('/explore')} className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium shadow-lg">Discover</button>
+                <button onClick={() => navigate('/home')} className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium shadow-lg">Discover</button>
               </div>
             </div>
           ) : (

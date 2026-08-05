@@ -16,6 +16,18 @@ import { useAuth } from '../../context/AuthContext';
 const AdminDashboardScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  // Basic admin guard — prevent any signed-in user from accessing admin
+  if (!user || (user.role !== 'admin' && user.isAdmin !== true && !user.email?.endsWith('@arvdoul.admin')) ) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <p className="text-gray-400">Admin privileges required.</p>
+          <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-violet-600 rounded-lg">Go Home</button>
+        </div>
+      </div>
+    );
+  }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({

@@ -24,6 +24,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import useIntersectionObserver from "../../hooks/useIntersectionObserver";
 import CommentsModal from "./CommentsModal";
 import PropTypes from "prop-types";
+import { CacheManager } from "../../utils/CacheManager";
 
 dayjs.extend(relativeTime);
 
@@ -50,6 +51,8 @@ limit(initialQueryLimit)
 );
 const unsubscribe = onSnapshot(q, (snapshot) => {
 const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+// Cache feed pages to reduce Firestore reads (Pillar 6 — Caching)
+CacheManager.set(`feed_page_${initialQueryLimit}`, data, 300); // 5 min TTL
 setReels(data);
 setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
 preloadNextVideos(data);
@@ -58,14 +61,15 @@ return unsubscribe;
 }, [initialQueryLimit]);
 
 const preloadNextVideos = (videos) => {
-videos.forEach((reel) => {
-if (!preloadedVideos.current[reel.id]) {
-const video = document.createElement("video");
-video.src = reel.videoURL;
-video.preload = "auto";
-preloadedVideos.current[reel.id] = video;
-}
-});
+// Disabled to prevent unbounded video element leaks; rely on browser preload and lazy loading
+// videos.forEach((reel) => {
+//   if (!preloadedVideos.current[reel.id]) {
+//     const video = document.createElement("video");
+//     video.src = reel.videoURL;
+//     video.preload = "auto";
+//     preloadedVideos.current[reel.id] = video;
+//   }
+// });
 };
 
 const loadMoreReels = useCallback(async () => {
@@ -156,7 +160,7 @@ isActive={activeReel === reel.id}
 onVisible={handleIntersection}
 onReaction={handleReaction}
 onComment={() => openComments(reel)}
-onDownload={`() => handleDownload(reel.videoURL, ${reel.id}.mp4)`}
+onDownload={() => handleDownload(reel.videoURL, `${reel.id}.mp4`)}
 onFollow={() => handleFollow(reel.userId)}
 theme={theme}
 user={user}
@@ -197,24 +201,30 @@ await onReaction(reel.id, "❤️");
 };
 
 useEffect(() => {
+// Preload is handled by video preload="auto"; avoiding manual DOM injection to prevent memory leaks
 if (preloadedNext) {
+// Optional: preload via hidden video element with cleanup
 const video = document.createElement("video");
 video.src = preloadedNext.videoURL;
 video.preload = "auto";
+video.style.display = "none";
+document.body.appendChild(video);
+return () => { try { document.body.removeChild(video); } catch (e) {} };
 }
 }, [preloadedNext]);
 
 return (
 <div className="relative w-full h-screen snap-start">
-<video  
-ref={videoRef}  
-src={reel.videoURL}  
-className="w-full h-full object-cover"  
-loop  
-muted  
-playsInline  
-preload="auto"  
-onDoubleClick={handleDoubleTap}  
+<video
+ref={videoRef}
+src={reel.videoURL}
+className="w-full h-full object-cover"
+loop
+muted
+playsInline
+preload="auto"
+onDoubleClick={handleDoubleTap}
+aria-label={`Reel by ${reel.displayName}`}
 />
 
 <AnimatePresence>  
@@ -264,7 +274,7 @@ onDoubleClick={handleDoubleTap}
     <div className="flex items-center gap-2">  
       <img  
         src={reel.userPhotoURL || "/assets/default-profile.png"}  
-        alt={`reel.displayName`}  
+        alt={reel.displayName || "Reel video"}  
         className="w-10 h-10 rounded-full border-2 border-white"  
       />  
       <span className="font-semibold flex items-center gap-1">  

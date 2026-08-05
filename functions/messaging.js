@@ -556,4 +556,7 @@ exports.cleanupOldCalls = functions.pubsub
        content ASC, createdAt DESC  → search fallback
   4. calls: status ASC, createdAt ASC → cleanup (with status filter)
   5. user_settings: single‑field index on messagePermission (if needed)
-*/
+*/// E2E PLACEHOLDER — Phase 4 S
+// Implement Signal Protocol / ECDH + AES-GCM
+// Client encrypts payload; server stores only encrypted blobs
+// Rules enforce encrypted content only

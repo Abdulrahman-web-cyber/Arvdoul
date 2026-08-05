@@ -1052,4 +1052,7 @@ exports.cleanupOldShareEvents = pubsub.schedule('every 24 hours').onRun(async ()
   oldEvents.forEach(doc => batch.delete(doc.ref));
   await batch.commit();
   return null;
-});
+});// VIDEO CDN / ADAPTIVE BITRATE — Phase 5 U placeholder
+// Replace direct Storage URLs with CDN edge URLs (Cloudflare / Mux / AWS CloudFront)
+// Add HLS/DASH manifest generation for adaptive bitrate
+// TODO: integrate Mux / Cloudflare Stream / AWS MediaConvert pipeline

@@ -86,6 +86,22 @@ const SystemInitializer = ({ onReady }) => {
                         op.payload.giftType
                       ));
                     break;
+                  case 'post.create':
+                    await import('../services/postService.js').then(m =>
+                      m.getPostService().createPost(op.payload));
+                    break;
+                  case 'reel.create':
+                    await import('../services/videoService.js').then(m =>
+                      m.getVideoService().createReel(op.payload));
+                    break;
+                  case 'reaction.create':
+                    await import('../services/feedService.js').then(m =>
+                      m.getFeedService().addReaction(op.payload.postId, op.payload.userId, op.payload.emoji));
+                    break;
+                  case 'message.send':
+                    await import('../services/messagesService.js').then(m =>
+                      m.getMessagesService().sendMessage(op.payload.conversationId, op.payload.content, op.payload.senderId));
+                    break;
                   case 'notification.welcome':
                     await import('../services/notificationsService.js').then(m =>
                       m.getNotificationsService().sendNotification({

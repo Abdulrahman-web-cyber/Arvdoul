@@ -43,6 +43,7 @@ import ProfileCoverPhoto from './ProfileCoverPhoto';
 import ProfileLevel from './ProfileLevel';
 import ProfileBadges from './ProfileBadges';
 import ProfileStats from './ProfileStats';
+import { useUser } from "../../context/UserContext";
 import ProfileOptionsMenu from './ProfileOptionsMenu';
 
 /**
