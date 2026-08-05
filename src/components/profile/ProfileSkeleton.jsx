@@ -7,11 +7,9 @@
  */
 
 import React, { memo } from 'react';
-import { cn } from '../../lib/utils';
+import PropTypes from 'prop-types';
 
 const ProfileSkeleton = memo(({ theme = 'light' }) => {
-  const isDark = theme === 'dark';
-
   return (
     <div className="max-w-2xl mx-auto w-full space-y-6 px-4 pt-4">
       {/* Cover and Avatar Skeleton */}
@@ -70,5 +68,9 @@ const ProfileSkeleton = memo(({ theme = 'light' }) => {
 });
 
 ProfileSkeleton.displayName = 'ProfileSkeleton';
+
+ProfileSkeleton.propTypes = {
+  theme: PropTypes.string,
+};
 
 export default ProfileSkeleton;
