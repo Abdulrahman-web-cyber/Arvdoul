@@ -87,8 +87,8 @@ const SystemInitializer = ({ onReady }) => {
                       ));
                     break;
                   case 'post.create':
-                    await import('../services/postService.js').then(m =>
-                      m.getPostService().createPost(op.payload));
+                    await import('../services/firestoreService.js').then(m =>
+                      m.firestoreService.createPost(op.payload));
                     break;
                   case 'reel.create':
                     await import('../services/videoService.js').then(m =>
