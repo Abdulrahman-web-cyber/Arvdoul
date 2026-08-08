@@ -25,7 +25,7 @@ import {
   Users, User, Radio, Archive, MessageSquare, ChevronRight,
   MoreVertical, CheckCheck, Flame, Phone, Video
 } from 'lucide-react';
-import BottomNav from '../components/shared/BottomNav';
+import BottomNav from '../components/Shared/BottomNav';
 
 // Pinned Conversations data matching the exact screenshot
 const PINNED_ITEMS = [

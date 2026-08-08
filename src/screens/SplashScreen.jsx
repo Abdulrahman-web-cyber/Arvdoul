@@ -205,7 +205,7 @@ export default function SplashScreen() {
         setTimeout(() => {
           if (!mountedRef.current) return;
           
-          const target = isAuthenticated ? "/home" : "/intro";
+          const target = isAuthenticated ? "/home" : "/welcome";
           navigate(target, { 
             replace: true,
             state: { fromSplash: true }
