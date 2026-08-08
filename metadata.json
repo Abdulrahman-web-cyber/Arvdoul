@@ -1,0 +1,6 @@
+{
+  "name": "Arvdoul",
+  "description": "A feature-rich social network and creator suite featuring AI co-pilot studio, live audio spaces, viral sound discovery, creator marketplace, prediction markets, multi-track video editor, reels, and real-time feeds.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
