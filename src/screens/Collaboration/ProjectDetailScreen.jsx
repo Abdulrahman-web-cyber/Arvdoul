@@ -1,38 +1,16 @@
 // src/screens/Collaboration/ProjectDetailScreen.jsx - ARVDOUL PROJECT DETAIL
 // Per Constitution v5.0 - Team, content versions, review workflow
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '@context/ThemeContext';
+import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
+import collaborationService from '../../services/collaborationService';
 import { 
   ArrowLeft, Users, Clock, FileText, CheckCircle, XCircle, 
-  MessageCircle, Share2, MoreVertical, Plus, Eye, Download
+  MessageCircle, Share2, MoreVertical, Plus, Eye, Download, Loader2
 } from 'lucide-react';
-
-const MOCK_PROJECT = {
-  id: 'proj_1',
-  name: 'Summer Campaign 2024',
-  description: 'Social media campaign for summer product launch. Includes 5 posts, 3 stories, and 1 video.',
-  thumbnail: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800',
-  status: 'in_progress',
-  createdAt: 'Jan 15, 2024',
-  updatedAt: '2 hours ago',
-  team: [
-    { id: 'u1', name: 'Sarah Chen', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100', role: 'Owner', email: 'sarah@example.com' },
-    { id: 'u2', name: 'Mike Johnson', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100', role: 'Editor', email: 'mike@example.com' },
-    { id: 'u3', name: 'Emily Davis', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100', role: 'Viewer', email: 'emily@example.com' },
-  ],
-  content: [
-    { id: 'c1', title: 'Summer Sale Post 1', type: 'post', status: 'approved', updatedAt: '1 hour ago', thumbnail: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=100' },
-    { id: 'c2', title: 'Teaser Story', type: 'story', status: 'pending', updatedAt: '3 hours ago', thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=100' },
-    { id: 'c3', title: 'Product Video', type: 'video', status: 'review', updatedAt: '1 day ago', thumbnail: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=100' },
-  ],
-  reviews: [
-    { id: 'r1', user: 'Mike Johnson', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50', comment: 'Love the colors! Can we try a warmer tone?', status: 'comment', time: '2 hours ago' },
-    { id: 'r2', user: 'Emily Davis', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=50', comment: 'Approved for posting', status: 'approved', time: '1 day ago' },
-  ],
-};
 
 const STATUS_CONFIG = {
   draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', icon: FileText },
@@ -46,10 +24,65 @@ export default function ProjectDetailScreen() {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
   const [activeTab, setActiveTab] = useState('content');
+  const [project, setProject] = useState(null);
+  const [team, setTeam] = useState([]);
+  const [content, setContent] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const project = MOCK_PROJECT;
+  useEffect(() => {
+    const loadProject = async () => {
+      if (!projectId) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        const projectData = await collaborationService.getProject(projectId);
+        const teamData = await collaborationService.getTeam(projectId);
+        const contentData = await collaborationService.getContentVersions(projectId);
+        
+        setProject(projectData);
+        setTeam(teamData || []);
+        setContent(contentData || []);
+      } catch (err) {
+        console.error('Failed to load project:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProject();
+  }, [projectId]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={backgroundStyle}>
+        <Loader2 className="w-8 h-8 animate-spin text-arvdoul-purple" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !project) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center" style={backgroundStyle}>
+        <p className="text-red-400 mb-4">{error || 'Project not found'}</p>
+        <button 
+          onClick={() => navigate('/collaboration')}
+          className="px-4 py-2 rounded-lg bg-arvdoul-purple text-white"
+        >
+          Back to Projects
+        </button>
+      </div>
+    );
+  }
 
   const backgroundStyle = useMemo(() => ({
     background: isDark
@@ -120,7 +153,7 @@ export default function ProjectDetailScreen() {
             </div>
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              {project.team.length} members
+              {team.length} members
             </div>
           </div>
         </div>
@@ -154,7 +187,7 @@ export default function ProjectDetailScreen() {
       <div className="px-4">
         {activeTab === 'content' && (
           <div className="space-y-3">
-            {project.content.map((item, index) => {
+            {content.map((item, index) => {
               const status = STATUS_CONFIG[item.status];
               const StatusIcon = status?.icon || FileText;
               
