@@ -650,36 +650,37 @@ export default function AppRoutes() {
       } />
 
       {/* ========== ADMIN ROUTES ========== */}
+      {/* FIXED: Use AdminRoute instead of ProtectedRoute to enforce server-verified admin role */}
       <Route path="/admin" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <AdminDashboardScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
 
       <Route path="/admin/users" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <AdminUserManagementScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
 
       <Route path="/admin/content" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <AdminContentManagementScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
 
       <Route path="/admin/moderation" element={
-        <ProtectedRoute>
+        <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <AdminModerationQueueScreen />
           </Suspense>
-        </ProtectedRoute>
+        </AdminRoute>
       } />
 
       {/* Video Editor Route */}
