@@ -1,67 +1,13 @@
 // src/screens/Collaboration/ProjectDashboardScreen.jsx - ARVDOUL PROJECT DASHBOARD
 // Per Constitution v5.0 - Grid of collaboration projects
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '@context/ThemeContext';
+import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
-import { Plus, Folder, Clock, Users, MoreVertical, Search, Filter } from 'lucide-react';
-
-const MOCK_PROJECTS = [
-  {
-    id: 'proj_1',
-    name: 'Summer Campaign 2024',
-    description: 'Social media campaign for summer product launch',
-    thumbnail: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400',
-    status: 'in_progress',
-    team: [
-      { id: 'u1', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50' },
-      { id: 'u2', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50' },
-      { id: 'u3', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=50' },
-    ],
-    updatedAt: '2 hours ago',
-    members: 3,
-  },
-  {
-    id: 'proj_2',
-    name: 'Brand Video Series',
-    description: 'Monthly brand storytelling content',
-    thumbnail: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?w=400',
-    status: 'review',
-    team: [
-      { id: 'u1', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50' },
-      { id: 'u4', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=50' },
-    ],
-    updatedAt: '1 day ago',
-    members: 2,
-  },
-  {
-    id: 'proj_3',
-    name: 'Product Launch',
-    description: 'New app feature announcement',
-    thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400',
-    status: 'draft',
-    team: [
-      { id: 'u1', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50' },
-    ],
-    updatedAt: '3 days ago',
-    members: 1,
-  },
-  {
-    id: 'proj_4',
-    name: 'Influencer Collab',
-    description: 'Partner content with @creator',
-    thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400',
-    status: 'completed',
-    team: [
-      { id: 'u1', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50' },
-      { id: 'u5', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=50' },
-      { id: 'u6', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50' },
-    ],
-    updatedAt: '1 week ago',
-    members: 3,
-  },
-];
+import collaborationService from '../../services/collaborationService';
+import { Plus, Folder, Clock, Users, MoreVertical, Search, Filter, Loader2 } from 'lucide-react';
 
 const STATUS_COLORS = {
   draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Draft' },
@@ -73,18 +19,45 @@ const STATUS_COLORS = {
 export default function ProjectDashboardScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        // Get user's collaboration stats which includes their projects
+        const stats = await collaborationService.getStats();
+        setProjects(stats?.projects || []);
+      } catch (err) {
+        console.error('Failed to load projects:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProjects();
+  }, [user?.uid]);
 
   const filteredProjects = useMemo(() => {
-    return MOCK_PROJECTS.filter(project => {
-      const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return projects.filter(project => {
+      const matchesSearch = (project.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (project.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [searchQuery, statusFilter]);
+  }, [projects, searchQuery, statusFilter]);
 
   const backgroundStyle = useMemo(() => ({
     background: isDark
@@ -150,6 +123,37 @@ export default function ProjectDashboardScreen() {
 
       {/* Projects Grid */}
       <div className="px-4">
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-arvdoul-purple" />
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <div className="text-center py-12">
+            <p className="text-red-400 mb-4">Failed to load projects: {error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded-lg bg-arvdoul-purple text-white"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && filteredProjects.length === 0 && (
+          <div className="text-center py-12">
+            <Folder className="w-12 h-12 mx-auto text-arvdoul-text-secondary mb-4" />
+            <p className="text-arvdoul-text-secondary mb-2">No projects yet</p>
+            <p className="text-sm text-arvdoul-text-secondary/70">Create your first collaboration project</p>
+          </div>
+        )}
+
+        {/* Projects Grid */}
+        {!loading && !error && filteredProjects.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
           {filteredProjects.map((project, index) => {
             const status = STATUS_COLORS[project.status];
@@ -222,13 +226,6 @@ export default function ProjectDashboardScreen() {
             );
           })}
         </div>
-
-        {/* Empty State */}
-        {filteredProjects.length === 0 && (
-          <div className="text-center py-12">
-            <Folder className="w-12 h-12 mx-auto text-arvdoul-text-secondary mb-4" />
-            <p className="text-arvdoul-text-secondary">No projects found</p>
-          </div>
         )}
       </div>
     </div>

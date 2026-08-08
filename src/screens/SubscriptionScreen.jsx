@@ -1,12 +1,14 @@
 // src/screens/SubscriptionScreen.jsx - ARVDOUL SUBSCRIPTION TIERS
 // Per Constitution v5.0 - Premium/Creator/Enterprise tiers
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { cn } from '../lib/utils';
+import { getSubscriptionStatus, createSubscription, cancelSubscription } from '../services/monetizationService.js';
+import { Loader2 } from 'lucide-react';
 
 const TIERS = [
   {
@@ -71,6 +73,27 @@ export default function SubscriptionScreen() {
   const isDark = theme === 'dark';
   const [loading, setLoading] = useState(null);
   const [currentSubscription, setCurrentSubscription] = useState(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+
+  // Load current subscription status
+  useEffect(() => {
+    const loadSubscription = async () => {
+      try {
+        const status = await getSubscriptionStatus();
+        setCurrentSubscription(status?.tier || null);
+      } catch (err) {
+        console.error('Failed to load subscription:', err);
+      } finally {
+        setSubscriptionLoading(false);
+      }
+    };
+    
+    if (user?.uid) {
+      loadSubscription();
+    } else {
+      setSubscriptionLoading(false);
+    }
+  }, [user?.uid]);
 
   const handleSubscribe = useCallback(async (tier) => {
     if (!user) {
@@ -80,16 +103,30 @@ export default function SubscriptionScreen() {
     
     setLoading(tier.id);
     try {
-      // In production, this would call monetizationService.createSubscription()
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await createSubscription(tier.id);
       setCurrentSubscription(tier.id);
       toast.success(`Subscribed to ${tier.name}!`);
     } catch (error) {
-      toast.error('Subscription failed. Please try again.');
+      toast.error(error.message || 'Subscription failed. Please try again.');
     } finally {
       setLoading(null);
     }
   }, [user, navigate]);
+
+  const handleCancel = useCallback(async () => {
+    if (!user) return;
+    
+    setLoading('cancel');
+    try {
+      await cancelSubscription();
+      setCurrentSubscription(null);
+      toast.success('Subscription cancelled');
+    } catch (error) {
+      toast.error(error.message || 'Failed to cancel subscription');
+    } finally {
+      setLoading(null);
+    }
+  }, [user]);
 
   const handleManage = useCallback(() => {
     toast.info('Managing subscription...');
