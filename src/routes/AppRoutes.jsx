@@ -9,6 +9,11 @@ import MainLayout from "../layouts/MainLayout.jsx";
 // ==================== LAZY LOAD COMPONENTS ====================
 const SplashScreen = lazy(() => import("../screens/SplashScreen.jsx"));
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
+const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
+const BadgeScreen = lazy(() => import("../screens/BadgeScreen.jsx"));
+const DataUsageScreen = lazy(() => import("../screens/DataUsageScreen.jsx"));
+const ProjectDashboardScreen = lazy(() => import("../screens/Collaboration/ProjectDashboardScreen.jsx"));
+const ProjectDetailScreen = lazy(() => import("../screens/Collaboration/ProjectDetailScreen.jsx"));
 const LoginScreen = lazy(() => import("../screens/LoginScreen.jsx"));
 const SignupStep1Personal = lazy(() => import("../screens/SignupStep1Personal.jsx"));
 const SignupStep2VerifyContact = lazy(() => import("../screens/SignupStep2VerifyContact.jsx"));
@@ -357,6 +362,14 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/subscription" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <SubscriptionScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
       <Route path="/notifications" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -503,6 +516,14 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <SettingsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/settings/data-usage" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <DataUsageScreen />
           </Suspense>
         </ProtectedRoute>
       } />
@@ -733,6 +754,14 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/badges" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <BadgeScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
       <Route path="/reputation/:userId" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -741,11 +770,19 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* Collaboration Route */}
+      {/* Collaboration Routes */}
+      <Route path="/collaboration" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProjectDashboardScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
       <Route path="/collaboration/:projectId" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
-            <CollaborationScreen />
+            <ProjectDetailScreen />
           </Suspense>
         </ProtectedRoute>
       } />
