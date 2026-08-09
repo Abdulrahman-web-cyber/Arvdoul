@@ -25,15 +25,7 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase.js';
-
-function secureRandom() {
-  if (typeof window !== 'undefined' && window.crypto) {
-    const array = new Uint32Array(1);
-    window.crypto.getRandomValues(array);
-    return array[0] / 4294967296;
-  }
-  return Math.random();
-}
+import { secureRandom } from '../lib/utils.js';
 
 // ==================== CONFIGURATION ====================
 const LIVE_CONFIG = {
