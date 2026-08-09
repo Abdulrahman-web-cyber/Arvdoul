@@ -228,7 +228,7 @@ export default function LiveScreen() {
       {/* My live status bar */}
       {myStream && (
         <div className="max-w-5xl mx-auto px-4 pt-4">
-          <div className={cnCard("rounded-2xl p-4 flex flex-wrap items-center gap-4", colors)}>
+          <div className={cn("rounded-2xl p-4 flex flex-wrap items-center gap-4 border", colors.card, colors.border)}>
             <div className="flex items-center gap-2 text-red-400 font-semibold">
               <Camera className="w-5 h-5" /> You are live: {liveTitle}
             </div>
