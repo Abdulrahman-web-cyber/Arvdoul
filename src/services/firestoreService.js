@@ -16,6 +16,15 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 
+function secureRandom() {
+  if (typeof window !== 'undefined' && window.crypto) {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return array[0] / 4294967296;
+  }
+  return Math.random();
+}
+
 class LRUCache {
   constructor(maxSize = 100, ttl = 60000) {
     this.maxSize = maxSize;
@@ -211,7 +220,7 @@ class EnterpriseFirestoreService {
   async createPost(postData) {
     await this.ensureInitialized();
     const startTime = Date.now();
-    const operationId = `post_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+    const operationId = `post_${Date.now()}_${secureRandom().toString(36).substr(2,9)}`;
     try {
       const auth = await this.getAuthInstance();
       const currentUser = auth.currentUser;
@@ -750,7 +759,7 @@ class EnterpriseFirestoreService {
     await this.ensureInitialized();
     try {
       const { doc, runTransaction, increment, serverTimestamp } = this.firestoreMethods;
-      const shardId = Math.floor(Math.random() * CONFIG.VIEW_SHARDS);
+      const shardId = Math.floor(secureRandom() * CONFIG.VIEW_SHARDS);
       const viewShardRef = doc(this.firestore, 'posts', postId, 'view_shards', `shard_${shardId}`);
       const viewerRef = doc(this.firestore, 'posts', postId, CONFIG.VIEWERS_SUBCOLLECTION, userId);
       const today = new Date().toISOString().split('T')[0];

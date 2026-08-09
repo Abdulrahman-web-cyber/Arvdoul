@@ -26,6 +26,15 @@ import { errorHandler } from '../utils/ErrorHandler.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase.js';
 
+function secureRandom() {
+  if (typeof window !== 'undefined' && window.crypto) {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return array[0] / 4294967296;
+  }
+  return Math.random();
+}
+
 // ==================== CONFIGURATION ====================
 const LIVE_CONFIG = {
   MIN_LEVEL_TO_START: 5,
@@ -129,7 +138,7 @@ class UltimateLiveService {
   }
 
   _generateStreamId() {
-    return `live_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `live_${Date.now()}_${secureRandom().toString(36).substr(2, 9)}`;
   }
 
   _getViewerLimit(level) {

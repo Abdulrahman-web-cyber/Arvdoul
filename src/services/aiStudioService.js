@@ -6,6 +6,15 @@ import { svcLogger } from './ServiceKit.js';
 
 const log = svcLogger('aiStudioService');
 
+function secureRandom() {
+  if (typeof window !== 'undefined' && window.crypto) {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return array[0] / 4294967296;
+  }
+  return Math.random();
+}
+
 const TONES = {
   hype: { label: '🔥 Hype & Viral', emojis: ['🚀', '💥', '🔥', '⚡️', '🤯'] },
   casual: { label: '☕️ Casual & Friendly', emojis: ['✨', '🤙', '🙌', '💯', '😊'] },
@@ -139,7 +148,7 @@ class AIStudioService {
         log.warn('OpenAI output flagged by moderation filter', modCheck.reason);
       } else {
         const hashtags = realResponse.match(/#[a-zA-Z0-9]+/g) || [];
-        const viralScore = Math.floor(Math.random() * 15) + 85;
+        const viralScore = Math.floor(secureRandom() * 15) + 85;
 
         return {
           hook: realResponse.split('\n')[0] || `Secret of ${cleanTopic}`,
@@ -156,7 +165,7 @@ class AIStudioService {
     // Fallback logic (Advanced Template Model)
     await new Promise(r => setTimeout(r, 600));
 
-    const hook = VIRAL_HOOK_TEMPLATES[Math.floor(Math.random() * VIRAL_HOOK_TEMPLATES.length)]
+    const hook = VIRAL_HOOK_TEMPLATES[Math.floor(secureRandom() * VIRAL_HOOK_TEMPLATES.length)]
       .replace('{topic}', cleanTopic);
     
     const bodyVariants = [
@@ -165,7 +174,7 @@ class AIStudioService {
       `Most people overthink ${cleanTopic}. Here is the no-nonsense framework that works every single time.\n\nBookmark this post so you don't lose it when you need it.`
     ];
 
-    const chosenBody = bodyVariants[Math.floor(Math.random() * bodyVariants.length)];
+    const chosenBody = bodyVariants[Math.floor(secureRandom() * bodyVariants.length)];
     const emojis = selectedTone.emojis.join(' ');
     
     const hashtags = [
@@ -176,7 +185,7 @@ class AIStudioService {
       '#CreatorEconomy'
     ];
 
-    const viralScore = Math.floor(Math.random() * 15) + 85;
+    const viralScore = Math.floor(secureRandom() * 15) + 85;
 
     return {
       hook,
@@ -247,7 +256,7 @@ class AIStudioService {
         ratio,
         style,
         lighting,
-        seed: Math.floor(Math.random() * 9999999),
+        seed: Math.floor(secureRandom() * 9999999),
         source: 'openai-gpt-4o-mini'
       };
     }
@@ -264,7 +273,7 @@ class AIStudioService {
       ratio,
       style,
       lighting,
-      seed: Math.floor(Math.random() * 9999999),
+      seed: Math.floor(secureRandom() * 9999999),
       source: 'local-fallback-template'
     };
   }
@@ -279,7 +288,7 @@ class AIStudioService {
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
       return {
-        viralScore: Math.floor(Math.random() * 15) + 80,
+        viralScore: Math.floor(secureRandom() * 15) + 80,
         rawAnalysis: realResponse,
         sentiment: {
           positive: 78,
@@ -358,7 +367,7 @@ class AIStudioService {
     await new Promise(r => setTimeout(r, 650));
 
     const mockTranslations = {
-      es: `🇪🇸 Español: ${text ? text.slice(0, 100) : 'Descubre las mejores estrategias de creación de contenido en Arvdoul.'}`,
+      es: `🇪🇸 Español: ${text ? text.slice(0, 100) : 'Descubre las mejores estrategias de criação de conteúdo em Arvdoul.'}`,
       fr: `🇫🇷 Français: ${text ? text.slice(0, 100) : 'Découvrez les meilleures stratégies de création de contenu sur Arvdoul.'}`,
       ja: `🇯🇵 日本語: ${text ? text.slice(0, 100) : 'Arvdoulで最も効果的なコンテンツ作成の戦略を見つけましょう。'}`,
       pt: `🇧🇷 Português: ${text ? text.slice(0, 100) : 'Descubra as melhores estratégias de criação de conteúdo no Arvdoul.'}`,

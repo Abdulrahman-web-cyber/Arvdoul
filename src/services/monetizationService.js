@@ -34,13 +34,22 @@ const hasDocument = typeof document !== 'undefined';
 const hasWindow = typeof window !== 'undefined';
 const hasPerformance = typeof performance !== 'undefined' && 'performance' in window ? !!window.performance.now : false;
 
+function secureRandom() {
+  if (typeof window !== 'undefined' && window.crypto) {
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    return array[0] / 4294967296;
+  }
+  return Math.random();
+}
+
 // ---------- crypto‑strong idempotency key with fallback ----------
 function generateIdempotencyKey() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
   const perf = hasPerformance ? window.performance.now() : 0;
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${perf}`;
+  return `${Date.now()}-${secureRandom().toString(36).slice(2)}-${perf}`;
 }
 
 // ---------- DEFAULT CONFIG (all amounts in COINS or CENTS) ----------
@@ -173,7 +182,7 @@ async function retryOperation(fn, maxRetries = 3, baseDelay = 1000) {
     } catch (err) {
       lastError = err;
       if (attempt === maxRetries) break;
-      const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 200;
+      const delay = baseDelay * Math.pow(2, attempt - 1) + secureRandom() * 200;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -584,7 +593,7 @@ class MonetizationService {
     await new Promise(r => setTimeout(r, 800)); // Latency simulation
     const amountCoins = packageId === 'pack_gold' ? 1000 : 500;
     const mockReceipt = {
-      id: `rcpt_${Math.random().toString(36).substring(3, 11)}`,
+      id: `rcpt_${secureRandom().toString(36).substring(3, 11)}`,
       receipt_url: 'https://stripe.com/receipt/mock',
       success: true,
       amountPaidCents: packageId === 'pack_gold' ? 999 : 499,
