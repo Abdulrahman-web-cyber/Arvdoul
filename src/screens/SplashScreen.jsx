@@ -16,6 +16,7 @@ export default function SplashScreen() {
   const [status, setStatus] = useState("Initializing");
   const [isReady, setIsReady] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
   
   const mountedRef = useRef(true);
   const progressIntervalRef = useRef(null);
@@ -133,6 +134,12 @@ export default function SplashScreen() {
           if (!mountedRef.current) return;
           
           setProgress(prev => {
+            // If offline, pause progress at 85% to wait for connection
+            if (!navigator.onLine && prev >= 85) {
+              setStatus("Offline • Waiting for Connection");
+              return 85;
+            }
+
             if (prev >= 100) {
               clearInterval(progressIntervalRef.current);
               return 100;
@@ -191,9 +198,21 @@ export default function SplashScreen() {
     };
   }, [preloadLogo, statusSequence]);
 
+  // Real-time offline listener
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   // Navigation when everything is perfect
   useEffect(() => {
-    if (!isReady && progress >= 100 && logoLoaded && authInitialized) {
+    if (!isReady && progress >= 100 && logoLoaded && authInitialized && isOnline) {
       setShowComplete(true);
       
       completeTimerRef.current = setTimeout(() => {
@@ -205,7 +224,7 @@ export default function SplashScreen() {
         setTimeout(() => {
           if (!mountedRef.current) return;
           
-          const target = isAuthenticated ? "/home" : "/intro";
+          const target = isAuthenticated ? "/home" : "/welcome";
           navigate(target, { 
             replace: true,
             state: { fromSplash: true }
@@ -214,11 +233,29 @@ export default function SplashScreen() {
         
       }, 500);
     }
-  }, [progress, logoLoaded, authInitialized, isAuthenticated, navigate, isReady]);
+  }, [progress, logoLoaded, authInitialized, isAuthenticated, navigate, isReady, isOnline]);
 
-  // Perfect circular logo component
+  // Perfect circular logo component with animated gradient pulse
   const PerfectLogo = useMemo(() => (
     <div className="relative w-28 h-28">
+      {/* Animated gradient pulse aura around logo */}
+      <motion.div
+        animate={{
+          scale: [1, 1.15, 1],
+          opacity: [0.3, 0.6, 0.3],
+        }}
+        transition={{
+          duration: 2.5,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute -inset-4 rounded-full"
+        style={{
+          background: themeConfig.accentGradient,
+          filter: "blur(14px)",
+        }}
+      />
+
       {/* Circular container - PERFECT circle */}
       <motion.div
         initial={{ scale: 0.85, opacity: 0 }}
@@ -232,7 +269,7 @@ export default function SplashScreen() {
           damping: 22,
           mass: 0.8
         }}
-        className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-sm shadow-2xl"
+        className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-sm shadow-2xl relative z-10"
         style={{
           boxShadow: themeConfig.isDark
             ? '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)'
@@ -267,7 +304,7 @@ export default function SplashScreen() {
       
       {/* Loading placeholder */}
       {!logoLoaded && (
-        <div className="absolute inset-0 rounded-full animate-pulse"
+        <div className="absolute inset-0 rounded-full animate-pulse z-20"
           style={{ 
             background: themeConfig.isDark 
               ? 'linear-gradient(90deg, #334155, #475569, #334155)'
@@ -289,6 +326,21 @@ export default function SplashScreen() {
         className="fixed inset-0 z-[9999] flex flex-col items-center justify-center"
         style={{ background: themeConfig.background }}
       >
+        {/* Real-time Offline Detection Banner */}
+        <AnimatePresence>
+          {!isOnline && (
+            <motion.div
+              initial={{ y: -60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -60, opacity: 0 }}
+              className="absolute top-0 left-0 right-0 bg-red-600/90 backdrop-blur-md text-white py-3 px-6 text-center text-xs font-bold shadow-lg z-[10000] flex items-center justify-center gap-2"
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+              📡 You are offline. Waiting for connection to continue...
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Subtle animated gradient background */}
         <motion.div
           initial={{ opacity: 0 }}
