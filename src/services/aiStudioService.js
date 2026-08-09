@@ -3,17 +3,9 @@
 // Enterprise AI creation suite supporting real OpenAI/Anthropic calls & advanced localized fallback.
 
 import { svcLogger } from './ServiceKit.js';
+import { secureRandom } from '../lib/utils.js';
 
 const log = svcLogger('aiStudioService');
-
-function secureRandom() {
-  if (typeof window !== 'undefined' && window.crypto) {
-    const array = new Uint32Array(1);
-    window.crypto.getRandomValues(array);
-    return array[0] / 4294967296;
-  }
-  return Math.random();
-}
 
 const TONES = {
   hype: { label: '🔥 Hype & Viral', emojis: ['🚀', '💥', '🔥', '⚡️', '🤯'] },
