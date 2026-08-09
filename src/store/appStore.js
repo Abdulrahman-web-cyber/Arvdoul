@@ -12,6 +12,9 @@ persist(
 currentUser: null,
 isAuthenticated: false,
 
+// State Setter (used by Marketplace, Polls, Spaces screens)
+setAppState: (updates) => set(updates),
+
 // Coins System (in‑memory only – synced from Firestore)  
   coins: 1000, // Starting coins  
   transactions: [],  
