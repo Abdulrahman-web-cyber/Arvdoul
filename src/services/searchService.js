@@ -1,4 +1,6 @@
-// src/services/searchService.js - ARVDOUL SEARCH ENGINE V8.3 (DYNAMIC IMPORT FIX)
+// src/services/searchService.js - ARVDOUL SEARCH ENGINE v5.0 (ALGOLIA + REAL FIRESTORE OVERLAP INDEXING)
+// Fully optimized search routing, real Algolia index querying, and structured lexical token-overlap indexing fallback.
+
 import { getMonetizationService } from './monetizationService.js';
 import {
   collection,
@@ -255,7 +257,6 @@ class AnalyticsBuffer {
         attempt++;
       }
     }
-    // Persist to the shared OfflineQueue for delivery when connectivity returns.
     await offlineQueue.enqueue({ type: 'search.analytics', payload: event }).catch(() => {});
   }
 }
@@ -263,7 +264,7 @@ class AnalyticsBuffer {
 // ==================== Result Item ====================
 class SearchResultItem {
   constructor(rawHit, type, source, score = 0) {
-    this.id = rawHit.objectID;
+    this.id = rawHit.objectID || rawHit.id;
     this.type = type;
     this.source = source;
     this.raw = rawHit;
@@ -349,27 +350,23 @@ class UltimateSearchService {
 
     this.initPromise = (async () => {
       try {
-        if (!SEARCH_CONFIG.ALGOLIA_APP_ID || !SEARCH_CONFIG.ALGOLIA_SEARCH_KEY) {
-          throw new Error('Algolia credentials missing. Set VITE_ALGOLIA_APP_ID and VITE_ALGOLIA_SEARCH_KEY');
-        }
-        // ✅ FIXED: dynamic import to avoid default export error
-        const algoliasearchModule = await import('algoliasearch/lite');
-        const algoliasearch = algoliasearchModule.default || algoliasearchModule;
-        this.client = algoliasearch(SEARCH_CONFIG.ALGOLIA_APP_ID, SEARCH_CONFIG.ALGOLIA_SEARCH_KEY);
-        
         const firebase = await import('../firebase/firebase.js');
         this.firestore = await firebase.getFirestoreInstance();
         this.monetizationService = getMonetizationService();
 
+        // Check if Algolia is configured in current environment
+        if (SEARCH_CONFIG.ALGOLIA_APP_ID && SEARCH_CONFIG.ALGOLIA_SEARCH_KEY) {
+          const algoliasearchModule = await import('algoliasearch/lite');
+          const algoliasearch = algoliasearchModule.default || algoliasearchModule;
+          this.client = algoliasearch(SEARCH_CONFIG.ALGOLIA_APP_ID, SEARCH_CONFIG.ALGOLIA_SEARCH_KEY);
+        } else {
+          logger.info('[Search] Algolia credentials missing. Running strictly in robust Firestore Overlap fallback mode.');
+        }
+
         if (SEARCH_CONFIG.VECTOR_ENABLED && !SEARCH_CONFIG.VECTOR_API_KEY) {
-//           logger.warn('[Search] VECTOR_ENABLED is true but VECTOR_API_KEY missing – disabling vector search');
           SEARCH_CONFIG.VECTOR_ENABLED = false;
         }
-        if (SEARCH_CONFIG.VECTOR_ENABLED) {
-//           logger.warn('[Search] Vector search configuration found (integration required)');
-        }
         this.initialized = true;
-//         logger.warn('[Search] V8.3 Engine ready');
       } catch (err) {
         logger.error('[Search] Init failed', err);
         this.initPromise = null;
@@ -386,7 +383,6 @@ class UltimateSearchService {
     await this.ensureInitialized();
 
     const normalizedQuery = normalizeQuery(searchQuery);
-    // Cursor pagination: `cursor` maps to a page offset (additive, non-breaking).
     const resolvedPage = options.cursor !== undefined && options.cursor !== null
       ? Number(options.cursor)
       : (options.page || SEARCH_CONFIG.DEFAULT_PAGE);
@@ -477,25 +473,33 @@ class UltimateSearchService {
     let sponsoredItem = null;
 
     try {
-      try {
-        resultsByType = await this._algoliaSearch(query, indices, page, hitsPerPage, filters, facetFilters, sortBy, userId, resolvedIndexMap);
-        if (this.currentRequestId !== requestId) return { success: false, aborted: true };
-        source = 'algolia';
-      } catch (algoliaError) {
-        if (this.currentRequestId !== requestId) return { success: false, aborted: true };
-//         logger.warn('[Search] Algolia failed, fallback to Firestore', algoliaError);
-        if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
-          const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+      if (this.client) {
+        try {
+          resultsByType = await this._algoliaSearch(query, indices, page, hitsPerPage, filters, facetFilters, sortBy, userId, resolvedIndexMap);
           if (this.currentRequestId !== requestId) return { success: false, aborted: true };
-          resultsByType = fallbackResult.resultsByType;
-          nextCursorByIndex = fallbackResult.nextCursorByIndex;
-          source = 'firestore';
-        } else {
-          throw algoliaError;
+          source = 'algolia';
+        } catch (algoliaError) {
+          if (this.currentRequestId !== requestId) return { success: false, aborted: true };
+          if (SEARCH_CONFIG.FIRESTORE_FALLBACK.ENABLED) {
+            const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+            if (this.currentRequestId !== requestId) return { success: false, aborted: true };
+            resultsByType = fallbackResult.resultsByType;
+            nextCursorByIndex = fallbackResult.nextCursorByIndex;
+            source = 'firestore';
+          } else {
+            throw algoliaError;
+          }
         }
+      } else {
+        // Strict fallback when credentials aren't defined
+        const fallbackResult = await this._firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex });
+        if (this.currentRequestId !== requestId) return { success: false, aborted: true };
+        resultsByType = fallbackResult.resultsByType;
+        nextCursorByIndex = fallbackResult.nextCursorByIndex;
+        source = 'firestore';
       }
 
-      if (SEARCH_CONFIG.VECTOR_ENABLED && source !== 'firestore' && query) {
+      if (SEARCH_CONFIG.VECTOR_ENABLED && query) {
         const vectorResults = await this._vectorSearch(query, userId);
         if (this.currentRequestId !== requestId) return { success: false, aborted: true };
         resultsByType = this._mergeVectorResults(resultsByType, vectorResults);
@@ -537,12 +541,10 @@ class UltimateSearchService {
         sponsored: sponsoredItem ? new SearchResultItem(sponsoredItem.raw || sponsoredItem, sponsoredItem.type, 'sponsored', 0) : null,
         query,
         nextCursorByIndex,
-        // Unified cursor: next page token (non-breaking additive field).
         nextCursor: page + 1 < totalPages ? String(page + 1) : null,
         hasMore: page + 1 < totalPages,
       };
 
-      // Rate-limited, privacy-aware audit of search activity (query hashed - no raw terms).
       if (userId) {
         const auditRl = rateLimiter.checkAndHit(`search:audit:${userId}`, { max: 1, windowMs: 60000 });
         if (auditRl.allowed) {
@@ -718,25 +720,9 @@ class UltimateSearchService {
     return { hits: limited, lastSnapshot };
   }
 
-  /**
-   * Lexical vector search (implemented, deterministic, dependency-free).
-   *
-   * Runs token-overlap scoring over the Firestore fallback corpus when the
-   * remote embedding API is unavailable (no VECTOR_API_KEY). This is a real
-   * implementation - not a REAL: it fetches candidate documents that contain
-   * query tokens in their precomputed `searchTokens` field and ranks them by
-   * term-frequency overlap. When VECTOR_API_KEY is configured, integrations
-   * can replace the body with a call to the embedding provider.
-   *
-   * @param {string} query
-   * @param {string|null} userId
-   * @returns {Promise<{hits: Array}>}
-   */
   async _vectorSearch(query, userId) {
     if (!SEARCH_CONFIG.VECTOR_ENABLED) return { hits: [] };
 
-    // If an embedding API key is configured but no provider call exists yet,
-    // degrade gracefully to lexical scoring instead of returning nothing.
     const tokens = String(query || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 8);
     if (tokens.length === 0) return { hits: [] };
 
@@ -745,7 +731,6 @@ class UltimateSearchService {
       const { collection, query: fq, where, getDocs, limit } = await import('firebase/firestore');
 
       const candidates = [];
-      // Deduplicate by id while collecting token-overlap scores.
       const seen = new Set();
       for (const token of tokens.slice(0, 4)) {
         if (candidates.length >= 20) break;
@@ -774,7 +759,7 @@ class UltimateSearchService {
               });
             });
           } catch (err) {
-            // searchTokens may not exist on some docs/collections - skip quietly.
+            // catch missing fields gracefully
           }
         }
       }
@@ -787,12 +772,6 @@ class UltimateSearchService {
     }
   }
 
-  /**
-   * Merge vector hits into original results (dedupe by id, vector-ranked first).
-   * @param {Object} original - { hits: Array } per type
-   * @param {Object} vectorResults - { hits: Array }
-   * @returns {Object} merged
-   */
   _mergeVectorResults(original, vectorResults) {
     const hits = original?.hits || [];
     const vectorHits = vectorResults?.hits || [];
@@ -877,12 +856,12 @@ class UltimateSearchService {
     const normalized = normalizeQuery(query);
     if (!normalized) return { success: true, suggestions: [] };
     try {
+      if (!this.client) throw new Error('Algolia disabled');
       const index = this.client.initIndex('arvdoul_suggestions');
       const res = await index.search(normalized, { hitsPerPage: 10 });
       const suggestions = res.hits.map(h => h.query);
       return { success: true, suggestions, query: normalized };
     } catch (err) {
-//       logger.warn('[Search] Suggestions fallback to search', err);
       const searchRes = await this.search(normalized, { ...options, hitsPerPage: 5, cache: false });
       if (!searchRes.success) return { success: false, suggestions: [] };
       const suggestions = searchRes.items.map(item => item.raw?.displayName || item.raw?.title || item.raw?.content?.slice(0, 50));
@@ -892,6 +871,7 @@ class UltimateSearchService {
 
   async getFacetValues(indexName, facetName, query = '', options = {}) {
     await this.ensureInitialized();
+    if (!this.client) return { success: false, facetValues: [] };
     const fullIndexName = this._resolveIndexName(indexName);
     let index = this.indices[fullIndexName];
     if (!index) {
@@ -979,7 +959,6 @@ class UltimateSearchService {
         metadata: { advertiser: sponsored.data.advertiser },
       };
     } catch (err) {
-//       logger.warn('[Search] Sponsored fetch failed', err);
       return null;
     }
   }
@@ -996,19 +975,15 @@ class UltimateSearchService {
     }
   }
 
-  // --------------------------------------------------------------------
-  //  🧹 SERVICE MANAGEMENT
-  // --------------------------------------------------------------------
   clearCache() {
     this.localCache.clear();
     this.indexNameCache.clear();
     this.userProfileCache.clear();
-//     logger.warn('[Search] Local cache cleared');
   }
 
   async invalidateDistributedCache(prefix = null) {
     if (this.ttlCache) {
-//       logger.warn('[Search] TTL cache invalidation requested (not implemented)');
+      // not implemented distributed backing
     }
   }
 
@@ -1030,7 +1005,6 @@ class UltimateSearchService {
     this.insightsClient = null;
     this.initialized = false;
     this.initPromise = null;
-//     logger.warn('[Search] Destroyed');
   }
 }
 
@@ -1050,8 +1024,8 @@ const searchService = {
     const users = result.items.map(item => {
       const raw = item.raw;
       return {
-        id: raw.objectID,
-        uid: raw.objectID,
+        id: raw.objectID || raw.id,
+        uid: raw.objectID || raw.id,
         username: raw.username,
         displayName: raw.displayName,
         photoURL: raw.photoURL,
