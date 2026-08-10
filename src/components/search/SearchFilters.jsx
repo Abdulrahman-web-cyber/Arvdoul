@@ -72,7 +72,7 @@ const SearchFilters = memo(({
               'fixed bottom-0 left-0 right-0 z-50',
               'rounded-t-[32px] overflow-hidden',
               'backdrop-blur-2xl bg-white/10 border border-white/15',
-              'shadow-[0_-25px_80px_rgba(138,43,226,0.45)]'
+              'shadow-[0_-25px_80px_rgba(138,43,226,0.15)]'
             )}
             style={{ maxHeight: '85vh' }}
           >

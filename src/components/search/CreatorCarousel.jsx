@@ -145,9 +145,9 @@ const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
       className={cn(
         'flex-shrink-0 w-[190px] h-[240px] rounded-3xl overflow-hidden',
         'backdrop-blur-2xl bg-white/8 border border-white/12',
-        'shadow-[0_25px_80px_rgba(138,43,226,0.45)]',
+        'shadow-[0_25px_80px_rgba(138,43,226,0.15)]',
         'snap-start cursor-pointer',
-        'transition-shadow duration-300 hover:shadow-[0_35px_100px_rgba(138,43,226,0.55)]'
+        'transition-shadow duration-300 hover:shadow-[0_35px_100px_rgba(138,43,226,0.22)]'
       )}
     >
       <div className="h-full flex flex-col p-4">
