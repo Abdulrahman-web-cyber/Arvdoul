@@ -9,7 +9,6 @@ import MainLayout from "../layouts/MainLayout.jsx";
 // ==================== LAZY LOAD COMPONENTS ====================
 const SplashScreen = lazy(() => import("../screens/SplashScreen.jsx"));
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
-const WelcomeScreen = lazy(() => import("../screens/WelcomeScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
 const BadgeScreen = lazy(() => import("../screens/BadgeScreen.jsx"));
 const DataUsageScreen = lazy(() => import("../screens/DataUsageScreen.jsx"));
@@ -186,14 +185,6 @@ export default function AppRoutes() {
         <PublicRoute>
           <Suspense fallback={<RouteFallback />}>
             <IntroScreen />
-          </Suspense>
-        </PublicRoute>
-      } />
-
-      <Route path="/welcome" element={
-        <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <WelcomeScreen />
           </Suspense>
         </PublicRoute>
       } />
