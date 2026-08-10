@@ -32,7 +32,7 @@ const log = svcLogger('monetizationService');
 // ---------- safe browser globals ----------
 const hasDocument = typeof document !== 'undefined';
 const hasWindow = typeof window !== 'undefined';
-const hasPerformance = typeof performance !== 'undefined' && 'performance' in window ? !!window.performance.now : false;
+const hasPerformance = typeof performance !== 'undefined' && typeof window !== 'undefined' && 'performance' in window ? !!window.performance.now : false;
 
 function secureRandom() {
   if (typeof window !== 'undefined' && window.crypto) {
