@@ -49,7 +49,7 @@ const GlassCard = memo(({
   const shadowClass = useMemo(() => {
     if (glow) {
       return isDark 
-        ? 'shadow-[0_25px_80px_rgba(138,43,226,0.45)] hover:shadow-[0_35px_100px_rgba(138,43,226,0.55)]'
+        ? 'shadow-[0_25px_80px_rgba(138,43,226,0.15)] hover:shadow-[0_35px_100px_rgba(138,43,226,0.22)]'
         : 'shadow-[0_25px_80px_rgba(0,0,0,0.08)] hover:shadow-[0_35px_100px_rgba(0,0,0,0.12)]';
     }
     return isDark 

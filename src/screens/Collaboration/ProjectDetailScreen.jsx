@@ -26,6 +26,13 @@ export default function ProjectDetailScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const isDark = theme === 'dark';
+
+  const backgroundStyle = useMemo(() => ({
+    background: isDark
+      ? 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.1) 0%, transparent 50%), #03071B'
+      : 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.05) 0%, transparent 50%), #F6F8FC',
+  }), [isDark]);
+
   const [activeTab, setActiveTab] = useState('content');
   const [project, setProject] = useState(null);
   const [team, setTeam] = useState([]);
@@ -83,12 +90,6 @@ export default function ProjectDetailScreen() {
       </div>
     );
   }
-
-  const backgroundStyle = useMemo(() => ({
-    background: isDark
-      ? 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.1) 0%, transparent 50%), #03071B'
-      : 'radial-gradient(circle at 50% 0%, rgba(139, 30, 243, 0.05) 0%, transparent 50%), #F6F8FC',
-  }), [isDark]);
 
   const tabs = [
     { id: 'content', label: 'Content', count: project.content.length },

@@ -471,12 +471,7 @@ class ProductionAuthService {
     }
     try {
       await this.initialize();
-      const { sendPasswordResetEmail, fetchSignInMethodsForEmail } = await import('firebase/auth');
-      const methods = await fetchSignInMethodsForEmail(this.auth, email);
-      if (methods.length === 0) {
-//         logger.warn('Password reset requested for non-existent email (silent fail)');
-        return { success: true, message: 'If an account exists, a password reset email has been sent.' };
-      }
+      const { sendPasswordResetEmail } = await import('firebase/auth');
       const actionCodeSettings = {
         url: `${window.location.origin}/reset-password?email=${encodeURIComponent(email)}`,
         handleCodeInApp: true

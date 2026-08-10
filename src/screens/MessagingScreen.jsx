@@ -25,7 +25,6 @@ import {
   Users, User, Radio, Archive, MessageSquare, ChevronRight,
   MoreVertical, CheckCheck, Flame, Phone, Video
 } from 'lucide-react';
-import BottomNav from '../components/Shared/BottomNav';
 
 // Pinned Conversations data matching the exact screenshot
 const PINNED_ITEMS = [
@@ -539,9 +538,6 @@ export default function MessagingScreen() {
       >
         <MessageSquare className="w-6 h-6 fill-white/20" />
       </button>
-
-      {/* Bottom Navigation */}
-      <BottomNav />
     </div>
   );
 }

@@ -1,8 +1,9 @@
-// src/services/spacesService.js
+// src/services/spacesService.js - ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES SERVICE - PRODUCTION READY v5.0
 // 🎙️ ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES SERVICE
-// Enterprise multi-user audio rooms with speaker stages, reactions, and coin tipping
+// Enterprise multi-user audio rooms with speaker stages, reactions, coin tipping, and real serverless WebRTC signaling fallback.
 
 import { svcLogger } from './ServiceKit.js';
+import { getFirestoreInstance } from '../firebase/firebase.js';
 
 const log = svcLogger('spacesService');
 
@@ -89,6 +90,104 @@ class SpacesService {
     this.spaces = [...SAMPLE_SPACES];
     this.activeRoomId = null;
     this.listeners = new Set();
+
+    // WebRTC signaling
+    this.peerConnection = null;
+    this.localStream = null;
+    this.remoteStream = null;
+    this.signalingUnsubscribe = null;
+  }
+
+  /**
+   * Initializes RTCPeerConnection with STUN servers and links to Firestore signaling rooms.
+   */
+  async createSignalRoom(spaceId, isHost, onTrackCallback) {
+    const firestore = await getFirestoreInstance();
+    const { doc, setDoc, onSnapshot, collection, addDoc } = await import('firebase/firestore');
+
+    const configuration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    this.peerConnection = new RTCPeerConnection(configuration);
+
+    if (isHost && this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        this.peerConnection.addTrack(track, this.localStream);
+      });
+    }
+
+    this.peerConnection.ontrack = (event) => {
+      if (onTrackCallback && event.streams[0]) {
+        this.remoteStream = event.streams[0];
+        onTrackCallback(this.remoteStream);
+      }
+    };
+
+    const roomRef = doc(firestore, 'signaling_rooms', spaceId);
+
+    this.peerConnection.onicecandidate = async (event) => {
+      if (event.candidate) {
+        const candidateCol = collection(roomRef, isHost ? 'hostCandidates' : 'clientCandidates');
+        await addDoc(candidateCol, event.candidate.toJSON());
+      }
+    };
+
+    if (isHost) {
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(offer);
+
+      await setDoc(roomRef, {
+        offer: {
+          type: offer.type,
+          sdp: offer.sdp
+        }
+      });
+
+      this.signalingUnsubscribe = onSnapshot(roomRef, async (snapshot) => {
+        const data = snapshot.data();
+        if (data?.answer && !this.peerConnection.currentRemoteDescription) {
+          const rtcAnswer = new RTCSessionDescription(data.answer);
+          await this.peerConnection.setRemoteDescription(rtcAnswer);
+        }
+      });
+
+      const clientCandidatesCol = collection(roomRef, 'clientCandidates');
+      onSnapshot(clientCandidatesCol, (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
+          }
+        });
+      });
+
+    } else {
+      const roomSnap = doc(firestore, 'signaling_rooms', spaceId);
+      this.signalingUnsubscribe = onSnapshot(roomSnap, async (snapshot) => {
+        const data = snapshot.data();
+        if (data?.offer && !this.peerConnection.currentRemoteDescription) {
+          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+          const answer = await this.peerConnection.createAnswer();
+          await this.peerConnection.setLocalDescription(answer);
+
+          await setDoc(roomRef, { answer: { type: answer.type, sdp: answer.sdp } }, { merge: true });
+        }
+      });
+
+      const hostCandidatesCol = collection(roomRef, 'hostCandidates');
+      onSnapshot(hostCandidatesCol, (snapshot) => {
+        snapshot.docChanges().forEach(async (change) => {
+          if (change.type === 'added') {
+            const data = change.doc.data();
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(data));
+          }
+        });
+      });
+    }
   }
 
   async getActiveSpaces(category = 'All') {
@@ -136,6 +235,17 @@ class SpacesService {
       space.tipsTotalCoins = (space.tipsTotalCoins || 0) + Number(amount);
     }
     return { success: true, newTotal: space ? space.tipsTotalCoins : amount };
+  }
+
+  destroy() {
+    if (this.peerConnection) {
+      this.peerConnection.close();
+      this.peerConnection = null;
+    }
+    if (this.signalingUnsubscribe) {
+      this.signalingUnsubscribe();
+      this.signalingUnsubscribe = null;
+    }
   }
 }
 

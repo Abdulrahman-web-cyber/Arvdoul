@@ -57,7 +57,7 @@ const TrendingSection = memo(({
         className={cn(
           'rounded-3xl overflow-hidden',
           'backdrop-blur-2xl bg-white/8 border border-white/12',
-          'shadow-[0_25px_80px_rgba(138,43,226,0.45)]'
+          'shadow-[0_25px_80px_rgba(138,43,226,0.15)]'
         )}
       >
         {loading ? (

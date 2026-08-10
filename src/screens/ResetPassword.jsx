@@ -183,8 +183,7 @@ export default function ResetPasswordScreen() {
 
   useEffect(() => {
     const code = searchParams.get('oobCode');
-    const mode = searchParams.get('mode');
-    if (!code || mode !== 'resetPassword') {
+    if (!code) {
       setVerificationError("Invalid or missing reset link. Please request a new password reset.");
       setVerifying(false);
       return;
