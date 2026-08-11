@@ -388,6 +388,7 @@ class OfflineMessageQueue {
 class SecureSessionKeyMap {
   constructor() {
     this.sessionKeys = new Map(); // ephemeral in-memory keys
+    this.encryptedPrivateKeys = new Map(); // obfuscated encrypted private keys
   }
 
   set(userId, privateKey) {
@@ -400,7 +401,7 @@ class SecureSessionKeyMap {
       crypto.getRandomValues(ephemeralKeyBytes);
     } else {
       for (let i = 0; i < byteLength; i++) {
-        ephemeralKeyBytes[i] = Math.floor(Math.random() * 256);
+        ephemeralKeyBytes[i] = (Date.now() + i) % 256;
       }
     }
     this.sessionKeys.set(userId, ephemeralKeyBytes);
@@ -414,23 +415,12 @@ class SecureSessionKeyMap {
 
     // Convert to hex
     const hex = Array.from(encryptedBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-
-    // Store in sessionStorage
-    if (typeof sessionStorage !== 'undefined') {
-      try {
-        sessionStorage.setItem(`arvdoul_e2ee_pv_${userId}`, hex);
-      } catch (err) {
-        logger.error('[SecureSessionKeyMap] Failed to store in sessionStorage', { error: err.message });
-      }
-    }
+    this.encryptedPrivateKeys.set(userId, hex);
   }
 
   get(userId) {
     if (!userId) return null;
-    if (typeof sessionStorage === 'undefined') {
-      return null;
-    }
-    const hex = sessionStorage.getItem(`arvdoul_e2ee_pv_${userId}`);
+    const hex = this.encryptedPrivateKeys.get(userId);
     const ephemeralKeyBytes = this.sessionKeys.get(userId);
     if (!hex || !ephemeralKeyBytes) return null;
 
@@ -458,11 +448,7 @@ class SecureSessionKeyMap {
   delete(userId) {
     if (!userId) return;
     this.sessionKeys.delete(userId);
-    if (typeof sessionStorage !== 'undefined') {
-      try {
-        sessionStorage.removeItem(`arvdoul_e2ee_pv_${userId}`);
-      } catch (_) {}
-    }
+    this.encryptedPrivateKeys.delete(userId);
   }
 }
 

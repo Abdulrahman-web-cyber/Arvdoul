@@ -10,6 +10,8 @@
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
+import { getFirestoreInstance } from '../firebase/firebase.js';
+import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
 class APISecurityGatewayService {
   constructor() {
@@ -102,8 +104,6 @@ class APISecurityGatewayService {
       if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
         throw new Error('Skipping Firestore in tests');
       }
-      const { getFirestoreInstance } = await import('../firebase/firebase.js');
-      const { doc, setDoc } = await import('firebase/firestore');
       const db = await getFirestoreInstance();
       await setDoc(doc(db, 'api_keys', keyId), keyRecord);
       logger.info('[APIGateway] Persisted API Key ' + keyId + ' to Firestore.');
@@ -144,8 +144,6 @@ class APISecurityGatewayService {
         if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
           throw new Error('Skipping Firestore in tests');
         }
-        const { getFirestoreInstance } = await import('../firebase/firebase.js');
-        const { doc, getDoc } = await import('firebase/firestore');
         const db = await getFirestoreInstance();
         const snap = await getDoc(doc(db, 'api_keys', keyId));
         if (snap.exists()) {
@@ -189,8 +187,6 @@ class APISecurityGatewayService {
       if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
         throw new Error('Skipping Firestore in tests');
       }
-      const { getFirestoreInstance } = await import('../firebase/firebase.js');
-      const { doc, updateDoc, increment } = await import('firebase/firestore');
       const db = await getFirestoreInstance();
       await updateDoc(doc(db, 'api_keys', keyId), {
         requestCount: increment(1),

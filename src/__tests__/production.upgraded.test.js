@@ -67,7 +67,7 @@ describe('Upgraded Production Services Integration Tests', () => {
   });
 
   describe('SecureSessionKeyMap (E2EE Session-only Storage)', () => {
-    test('XOR encrypts and decrypts key using sessionStorage and memory ephemeral key', () => {
+    test('XOR encrypts and decrypts key using safe in-memory ephemeral keys', () => {
       const messagingServiceInstance = getMessagingService();
       const mockUserId = 'user_test_e2ee';
       const rawPrivateKey = 'my-secret-x25519-private-key-data';
@@ -75,19 +75,18 @@ describe('Upgraded Production Services Integration Tests', () => {
       // Store private key
       messagingServiceInstance.unlockedPrivateKeys.set(mockUserId, rawPrivateKey);
 
-      // Verify it was stored encrypted in sessionStorage (not raw plaintext)
-      const storedInSession = globalThis.sessionStorage.getItem(`arvdoul_e2ee_pv_${mockUserId}`);
-      expect(storedInSession).not.toBeNull();
-      expect(storedInSession).not.toContain('my-secret-x25519-private-key-data');
+      // Verify it was stored encrypted (not raw plaintext)
+      const encryptedHex = messagingServiceInstance.unlockedPrivateKeys.encryptedPrivateKeys.get(mockUserId);
+      expect(encryptedHex).not.toBeNull();
+      expect(encryptedHex).not.toContain('my-secret-x25519-private-key-data');
 
       // Decrypt and fetch
       const retrieved = messagingServiceInstance.unlockedPrivateKeys.get(mockUserId);
       expect(retrieved).toBe(rawPrivateKey);
 
-      // Delete should clear memory and storage
+      // Delete should clear memory
       messagingServiceInstance.unlockedPrivateKeys.delete(mockUserId);
       expect(messagingServiceInstance.unlockedPrivateKeys.get(mockUserId)).toBeNull();
-      expect(globalThis.sessionStorage.getItem(`arvdoul_e2ee_pv_${mockUserId}`)).toBeNull();
     });
   });
 

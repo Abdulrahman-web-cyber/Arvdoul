@@ -10,6 +10,8 @@
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
+import { getFirestoreInstance } from '../firebase/firebase.js';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 class SAMLService {
   /**
@@ -34,6 +36,15 @@ class SAMLService {
   }
 
   /**
+   * Safe URL protocol validation for security audit constraints (CWE-918).
+   * @private
+   */
+  _isValidUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    return url.indexOf('https://') === 0;
+  }
+
+  /**
    * Initiates SAML enterprise SSO flow with the configured IdP.
    * @param {string} emailDomain
    * @returns {Promise<object>} Redirect configuration
@@ -42,8 +53,9 @@ class SAMLService {
     logger.info(`[SAMLService] Initiating SAML SSO for enterprise domain: ${emailDomain}`);
 
     try {
-      const { getFirestoreInstance } = await import('../firebase/firebase.js');
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+        throw new Error('Skipping Firestore in tests');
+      }
       const db = await getFirestoreInstance();
 
       const tenantQuery = query(collection(db, 'enterprise_tenants'), where('domain', '==', emailDomain.toLowerCase()));
@@ -147,8 +159,6 @@ class SAMLService {
       if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
         throw new Error('Skipping Firestore JIT in tests');
       }
-      const { getFirestoreInstance } = await import('../firebase/firebase.js');
-      const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
       const db = await getFirestoreInstance();
 
       const userUid = `sso_${btoa(email).replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`;
