@@ -959,20 +959,24 @@ class ProductionAuthService {
       'auth/user-not-found': 'No account found with this email. Please sign up first.',
       'auth/wrong-password': 'Incorrect password. Please try again.',
       'auth/invalid-credential': 'Invalid email or password. Please check your credentials.',
-      'auth/internal-error': 'Authentication service error. If you are using a pop-up, please ensure pop-ups are allowed.',
+      'auth/internal-error': typeof window !== 'undefined' && window.self !== window.top
+        ? 'Sign-in popup is restricted in preview iframe. Please open the app in a new tab or sign in with Email / Phone.'
+        : 'Authentication service error. Please ensure pop-ups are allowed or try signing in with Email / Phone.',
       'auth/user-disabled': 'This account has been disabled.',
       'auth/too-many-requests': 'Too many attempts. Please try again later.',
-      'auth/operation-not-allowed': 'This operation is not allowed.',
+      'auth/operation-not-allowed': 'This sign-in method is currently not enabled. Please sign in with Email or Phone.',
       'auth/requires-recent-login': 'Please re-authenticate to continue.',
       'auth/network-request-failed': 'Network error. Check your connection.',
       'auth/expired-action-code': 'Reset link has expired. Please request a new one.',
       'auth/invalid-action-code': 'Invalid reset link. Please request a new one.',
       'auth/user-mismatch': 'This reset link is for a different account.',
       'auth/argument-error': 'Invalid reset link format.',
-      'auth/popup-closed-by-user': 'Sign-in popup was closed. Please try again.',
+      'auth/popup-closed-by-user': 'Sign-in popup was closed before completion. Please try again.',
       'auth/cancelled-popup-request': 'Sign-in cancelled. Please try again.',
-      'auth/popup-blocked': 'Pop-up blocked by browser. Please allow pop-ups.',
-      'auth/unauthorized-domain': 'This domain is not authorized for OAuth operations.',
+      'auth/popup-blocked': typeof window !== 'undefined' && window.self !== window.top
+        ? 'Pop-up blocked by browser or preview iframe. Open in a new tab or use Email / Phone.'
+        : 'Pop-up blocked by browser. Please allow pop-ups for this site.',
+      'auth/unauthorized-domain': 'This domain is not authorized for OAuth in Firebase. Please use Email or Phone authentication.',
       'auth/account-exists-with-different-credential': 'An account already exists with the same email but different sign-in method.',
       'auth/credential-already-in-use': 'This credential is already associated with a different user account.'
     };

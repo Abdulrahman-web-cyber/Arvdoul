@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '@context/ThemeContext';
 import { getLiveService } from '../services/liveService';
+import { cn } from '../lib/utils';
 import {
   Video, VideoOff, Mic, MicOff, Users, Gift, Heart, MessageCircle,
   X, Send, Phone, PhoneOff, Camera, Eye, Crown, Diamond, Rocket, Star,

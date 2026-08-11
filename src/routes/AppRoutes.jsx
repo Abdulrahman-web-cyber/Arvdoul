@@ -97,6 +97,7 @@ const CollaborationScreen = lazy(() => import("../screens/Collaboration/Collabor
 // Menu Screen
 const MenuScreen = lazy(() => import("../screens/Menu/MenuScreen.jsx"));
 const OfflineStatusScreen = lazy(() => import("../screens/OfflineStatusScreen.jsx"));
+const ConflictResolutionScreen = lazy(() => import("../screens/ConflictResolutionScreen.jsx"));
 const CreatorPayoutScreen = lazy(() => import("../screens/CreatorPayoutScreen.jsx"));
 
 // ARVDOUL ADVANCED SUITE SCREENS
@@ -802,6 +803,16 @@ export default function AppRoutes() {
           <OfflineStatusScreen />
         </Suspense>
       } />
+
+      {/* Sync Conflict Resolution */}
+      <Route path="/conflicts" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ConflictResolutionScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/sync-conflicts" element={<Navigate to="/conflicts" replace />} />
 
       {/* Creator Payouts */}
       <Route path="/creator-payout" element={

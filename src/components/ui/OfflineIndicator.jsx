@@ -1,33 +1,45 @@
-// src/components/ui/OfflineIndicator.jsx
-import React, { useState, useEffect, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { WifiOff, RefreshCw } from 'lucide-react';
-import { cn } from '../../lib/utils';
-import { offlineQueue } from '../../utils/OfflineQueue';
+/**
+ * src/components/ui/OfflineIndicator.jsx - ARVDOUL OFFLINE SYNC STATUS BANNER
+ *
+ * Implements:
+ * 1. Reactive network connectivity status (Online / Offline).
+ * 2. Pending background sync queue counter (posts, comments, likes queued for sync).
+ * 3. Instant manual sync trigger button with visual feedback.
+ */
 
-export const OfflineIndicator = memo(({ className = '' }) => {
+import React, { useState, useEffect } from 'react';
+import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
+
+export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+
+  const updateStatus = () => {
+    setIsOnline(navigator.onLine);
+    const count = backgroundSyncService.getPendingCount();
+    setPendingCount(count);
+  };
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    updateStatus();
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      updateStatus();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      updateStatus();
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    const updatePending = () => {
-      try {
-        if (offlineQueue && typeof offlineQueue.size === 'function') {
-          setPendingCount(offlineQueue.size());
-        }
-      } catch {
-        // Fallback gracefully
-      }
-    };
-
-    updatePending();
-    const interval = setInterval(updatePending, 3000);
+    const interval = setInterval(updateStatus, 3000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -36,54 +48,66 @@ export const OfflineIndicator = memo(({ className = '' }) => {
     };
   }, []);
 
-  if (isOnline && pendingCount === 0) return null;
+  const handleManualSync = async () => {
+    if (!isOnline || isSyncing) return;
+    setIsSyncing(true);
+    setSyncSuccess(false);
+
+    try {
+      const result = await backgroundSyncService.triggerSync();
+      setPendingCount(backgroundSyncService.getPendingCount());
+      if (result.syncedCount > 0) {
+        setSyncSuccess(true);
+        setTimeout(() => setSyncSuccess(false), 4000);
+      }
+    } catch {
+      // Sync error handled gracefully
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  if (isOnline && pendingCount === 0 && !syncSuccess) {
+    return null; // Clean aesthetic when fully online and synced
+  }
 
   return (
-    <AnimatePresence>
-      {!isOnline && (
-        <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -50, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-          className={cn(
-            'fixed top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full',
-            'bg-arvdoul-surface/95 backdrop-blur-xl border border-arvdoul-border shadow-arvdoul-glass',
-            'flex items-center gap-2.5 text-xs text-white select-none',
-            className
-          )}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-          <span className="font-medium">
-            📡 You are offline. {pendingCount > 0 ? `${pendingCount} item${pendingCount > 1 ? 's' : ''} pending sync.` : 'Changes will sync automatically.'}
-          </span>
-        </motion.div>
+    <div
+      id={id}
+      className={`fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full text-xs font-medium backdrop-blur-md shadow-lg border transition-all duration-300 ${
+        !isOnline
+          ? 'bg-amber-500/90 text-white border-amber-400/50'
+          : syncSuccess
+          ? 'bg-emerald-500/90 text-white border-emerald-400/50'
+          : 'bg-indigo-600/90 text-white border-indigo-400/50'
+      }`}
+    >
+      {!isOnline ? (
+        <>
+          <WifiOff className="w-4 h-4 animate-pulse shrink-0" />
+          <span>You are offline. Changes saved locally ({pendingCount} pending).</span>
+        </>
+      ) : syncSuccess ? (
+        <>
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>All offline changes successfully synced!</span>
+        </>
+      ) : (
+        <>
+          <RefreshCw className={`w-4 h-4 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
+          <span>{pendingCount} action{pendingCount > 1 ? 's' : ''} waiting to sync.</span>
+          <button
+            id="btn-trigger-manual-sync"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="ml-2 px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-full font-semibold transition"
+          >
+            {isSyncing ? 'Syncing...' : 'Sync Now'}
+          </button>
+        </>
       )}
-
-      {isOnline && pendingCount > 0 && (
-        <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -50, opacity: 0 }}
-          className={cn(
-            'fixed top-3 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 rounded-full',
-            'bg-arvdoul-surface/95 backdrop-blur-xl border border-arvdoul-border shadow-arvdoul-glass',
-            'flex items-center gap-2 text-xs text-white/90 select-none',
-            className
-          )}
-          role="status"
-        >
-          <RefreshCw className="w-3 h-3 text-arvdoul-glow-cyan animate-spin" />
-          <span>Syncing {pendingCount} item{pendingCount > 1 ? 's' : ''}...</span>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </div>
   );
-});
-
-OfflineIndicator.displayName = 'OfflineIndicator';
+};
 
 export default OfflineIndicator;
