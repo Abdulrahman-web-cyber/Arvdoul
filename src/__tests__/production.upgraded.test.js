@@ -49,6 +49,8 @@ import { childSafetyService } from '../services/childSafetyService.js';
 import { metricsService } from '../services/metricsService.js';
 import { alertingService } from '../services/alertingService.js';
 import { billingService } from '../services/billingService.js';
+import { disasterRecoveryService } from '../services/disasterRecoveryService.js';
+import { misinformationService } from '../services/misinformationService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -242,6 +244,40 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(invoice.pricing.subtotal).toBe(7.49);
       expect(invoice.pricing.vatAmount).toBe(1.50);
       expect(invoice.htmlInvoiceTemplate).toContain('ARVDOUL PLATFORM');
+    });
+  });
+
+  describe('DisasterRecoveryService (Archiving & PITR Restoration)', () => {
+    test('automated backup triggers export snapshots', async () => {
+      const result = await disasterRecoveryService.triggerAutomatedBackup({});
+      expect(result.success).toBe(true);
+      expect(result.backupId).toContain('bkp_');
+    });
+
+    test('failover updates active routing region', async () => {
+      const result = await disasterRecoveryService.triggerFailover();
+      expect(result.failoverActive).toBe(true);
+      expect(result.activeRegion).toBe('us-west2');
+    });
+
+    test('reverts database state back to specific snapshot ID', async () => {
+      const result = await disasterRecoveryService.restoreFromSnapshot('bkp_948a192');
+      expect(result.status).toBe('RESTORED_SUCCESSFUL');
+      expect(result.revertedBackupId).toBe('bkp_948a192');
+    });
+  });
+
+  describe('MisinformationService (Fact-checking & Badging)', () => {
+    test('flags matches against disputed medical election patterns', async () => {
+      const result = await misinformationService.evaluateMisinformation('Warning, microchips in vaccines verified!');
+      expect(result.hasMisinfoLabel).toBe(true);
+      expect(result.category).toBe('health_misinfo');
+      expect(result.correction).toContain('World Health Organization');
+    });
+
+    test('ignores non-misleading text without pattern matches', async () => {
+      const result = await misinformationService.evaluateMisinformation('Hello world, welcome to Arvdoul platform.');
+      expect(result.hasMisinfoLabel).toBe(false);
     });
   });
 });
