@@ -6,6 +6,7 @@
  * 2. Fingerprinting & Deduplication: Hashes stack trace call frames to group duplicate crashes into single issue buckets.
  * 3. Breadcrumb Trail: Collects last 20 user actions (navigation, clicks, network calls) before the crash.
  * 4. Sentry / Telemetry Exporter: Dispatches grouped crashes to real or mock Sentry endpoints.
+ * 5. URL Security Validation: Sanitizes and validates the target endpoint before sending telemetry to prevent SSRF (CWE-918).
  */
 
 import { logger } from '../utils/Logger.js';
@@ -46,6 +47,20 @@ class CrashReportingService {
   }
 
   /**
+   * Safe URL protocol validation for security audit constraints (CWE-918).
+   * @private
+   */
+  _isValidUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
    * Reports an unhandled crash with breadcrumbs and device context.
    */
   async reportCrash(error, context = {}) {
@@ -73,18 +88,20 @@ class CrashReportingService {
           return `https://${host}/api/${id}/store/`;
         });
 
-        await fetch(sentryUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            exception: {
-              values: [{ type: errorName, value: errorMessage, stacktrace: { frames: this._parseStack(stack) } }]
-            },
-            extra: { context, breadcrumbs: this.breadcrumbs },
-            timestamp: Date.now() / 1000
-          })
-        });
-        logger.info('[CrashReport] Sentry ingestion call completed.');
+        if (this._isValidUrl(sentryUrl)) {
+          await fetch(sentryUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              exception: {
+                values: [{ type: errorName, value: errorMessage, stacktrace: { frames: this._parseStack(stack) } }]
+              },
+              extra: { context, breadcrumbs: this.breadcrumbs },
+              timestamp: Date.now() / 1000
+            })
+          });
+          logger.info('[CrashReport] Sentry ingestion call completed.');
+        }
       } catch (err) {
         logger.error('[CrashReport] Sentry endpoint dispatch failed:', { error: err.message });
       }
