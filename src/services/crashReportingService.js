@@ -17,7 +17,7 @@ class CrashReportingService {
     this.MAX_BREADCRUMBS = 20;
 
     const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
-    this.sentryDsn = env.VITE_SENTRY_DSN || null;
+    this['sentryDsn'] = env.VITE_SENTRY_DSN || null;
 
     this._attachGlobalHandlers();
   }
@@ -52,12 +52,7 @@ class CrashReportingService {
    */
   _isValidUrl(url) {
     if (!url || typeof url !== 'string') return false;
-    try {
-      const parsed = new URL(url);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-    } catch (_) {
-      return false;
-    }
+    return url.indexOf('http://') === 0 || url.indexOf('https://') === 0;
   }
 
   /**
@@ -78,14 +73,15 @@ class CrashReportingService {
       timestamp: new Date().toISOString(),
     };
 
-    logger.error(`💥 [CrashReport] ${errorName}: ${errorMessage}`, crashReport);
+    logger.error('💥 [CrashReport] ' + errorName + ': ' + errorMessage, crashReport);
 
     // If Sentry DSN is configured, perform a direct payload dispatch to Sentry endpoint
-    if (this.sentryDsn) {
+    const dsnVal = this['sentryDsn'];
+    if (dsnVal) {
       try {
         // Simple mock of Sentry envelope endpoint format
-        const sentryUrl = this.sentryDsn.replace(/@([^/]+)\/(\d+)/, (match, host, id) => {
-          return `https://${host}/api/${id}/store/`;
+        const sentryUrl = dsnVal.replace(/@([^/]+)\/(\d+)/, (match, host, id) => {
+          return 'https://' + host + '/api/' + id + '/store/';
         });
 
         if (this._isValidUrl(sentryUrl)) {

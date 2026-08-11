@@ -73,10 +73,17 @@ class APISecurityGatewayService {
    * Generates a new API key pair (Raw Secret Key + Key ID) and persists it.
    */
   async generateAPIKey(userId, name = 'Default Key', scopes = ['read:posts', 'write:posts']) {
-    const rawKeySecret = `arv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 16)}_${Math.random().toString(36).slice(2, 16)}`;
-    const keyId = `key_${Math.random().toString(36).slice(2, 10)}`;
+    // Generate secure cryptographically robust key identifiers (CWE-330, S2245)
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    const secretPart = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+    const rawCredential = 'arv_' + Date.now().toString(36) + '_' + secretPart;
 
-    const keyHash = await this._hashSecretKey(rawKeySecret);
+    const idArray = new Uint8Array(4);
+    crypto.getRandomValues(idArray);
+    const keyId = 'key_' + Array.from(idArray).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const keyHash = await this._hashSecretKey(rawCredential);
 
     const keyRecord = {
       keyId,
@@ -99,21 +106,21 @@ class APISecurityGatewayService {
       const { doc, setDoc } = await import('firebase/firestore');
       const db = await getFirestoreInstance();
       await setDoc(doc(db, 'api_keys', keyId), keyRecord);
-      logger.info(`[APIGateway] Persisted API Key ${keyId} to Firestore.`);
+      logger.info('[APIGateway] Persisted API Key ' + keyId + ' to Firestore.');
     } catch (_) {
-      logger.warn(`[APIGateway] Firestore unavailable for Key ${keyId}. Storing in persistent localStorage fallback.`);
+      logger.warn('[APIGateway] Firestore unavailable for Key ' + keyId + '. Storing in persistent localStorage fallback.');
     }
 
     // Always store locally too for speed/offline/fallback
     this._localKeysStore.set(keyId, keyRecord);
     this._persistLocalKeys();
 
-    logger.info(`[APIGateway] Generated API Key ${keyId} for user ${userId}`);
+    logger.info('[APIGateway] Generated API Key ' + keyId + ' for user ' + userId);
     auditLogger.log('security.api_key_generated', { userId, meta: { keyId, scopes, name } });
 
     return {
       keyId,
-      rawKeySecret, // Displayed once to the user
+      rawKeySecret: rawCredential, // Displayed once to the user
       name,
       scopes,
     };
@@ -127,7 +134,7 @@ class APISecurityGatewayService {
    * @returns {Promise<boolean>}
    */
   async validateAPIKeySecret(keyId, rawKeySecret, requiredScope) {
-    logger.info(`[APIGateway] Validating credentials for key ${keyId}`);
+    logger.info('[APIGateway] Validating credentials for key ' + keyId);
 
     let record = this._localKeysStore.get(keyId);
 
@@ -149,27 +156,27 @@ class APISecurityGatewayService {
     }
 
     if (!record || !record.isActive) {
-      logger.warn(`[APIGateway] Key validation failed: Key ID "${keyId}" not found or inactive.`);
+      logger.warn('[APIGateway] Key validation failed: Key ID "' + keyId + '" not found or inactive.');
       return false;
     }
 
     // Cryptographic SHA-256 verification of the secret
     const inputHash = await this._hashSecretKey(rawKeySecret);
     if (inputHash !== record.keyHash) {
-      logger.warn(`[APIGateway] Cryptographic signature mismatch for Key ID "${keyId}".`);
+      logger.warn('[APIGateway] Cryptographic signature mismatch for Key ID "' + keyId + '".');
       return false;
     }
 
     // Quota limits checks
     if (record.requestCount >= this.quotaLimit) {
-      logger.error(`[APIGateway] Quota limit exceeded for key ID "${keyId}". limit: ${this.quotaLimit}`);
+      logger.error('[APIGateway] Quota limit exceeded for key ID "' + keyId + '". limit: ' + this.quotaLimit);
       auditLogger.log('security.api_key_quota_exceeded', { userId: record.userId, meta: { keyId } });
       return false;
     }
 
     // Scope check
     if (!this.hasScope(record, requiredScope)) {
-      logger.warn(`[APIGateway] Insufficient scope on Key "${keyId}". Required: ${requiredScope}`);
+      logger.warn('[APIGateway] Insufficient scope on Key "' + keyId + '". Required: ' + requiredScope);
       return false;
     }
 
