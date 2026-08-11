@@ -3,7 +3,7 @@
  *
  * Implements a high-throughput multi-tier caching architecture combining:
  * 1. L1 Micro-Cache: In-memory LRU with sub-millisecond lookups
- * 2. L2 Distributed Cache: Cloud Memorystore / Redis cluster interface with auto-reconnection
+ * 2. L2 Distributed Cache: Cloud Memorystore / Upstash Redis HTTP API with auto-fallback
  * 3. L3 Persistent Offline Cache: IndexedDB storage for offline persistence
  *
  * Supports cache-aside, write-through, probabilistic early expiration (X-Fetch algorithm to prevent cache stampedes),
@@ -20,7 +20,12 @@ const IDB_CACHE_STORE = 'cache_entries';
 class RedisCacheManager extends CacheManager {
   constructor(opts = {}) {
     super({ maxSize: opts.maxSize || 5000, defaultTtlMs: opts.defaultTtlMs || 300000 });
-    this.redisEndpoint = opts.redisEndpoint || null;
+
+    // Dynamic extraction of environment variables
+    const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+    this.redisRestUrl = env.VITE_REDIS_REST_URL || opts.redisRestUrl || null;
+    this.redisRestToken = env.VITE_REDIS_REST_TOKEN || opts.redisRestToken || null;
+
     this.usePersistentL3 = opts.usePersistentL3 ?? true;
     this._idbPromise = null;
     this._inFlightFetches = new Map(); // Request coalescing to prevent thundering herd
@@ -48,6 +53,7 @@ class RedisCacheManager extends CacheManager {
    * Evaluates probabilistic early expiration (X-Fetch) to eliminate cache stampedes on viral keys.
    * delta: computation time in ms
    * beta: > 0 (default 1.0)
+   * @private
    */
   _shouldProbabilisticEarlyRefresh(entry, deltaMs = 50) {
     if (!entry || !entry.expiresAt) return false;
@@ -60,7 +66,7 @@ class RedisCacheManager extends CacheManager {
   }
 
   /**
-   * Multi-tier fetch with request coalescing and X-Fetch early recomputation.
+   * Multi-tier fetch with request coalescing, Redis network call, and X-Fetch early recomputation.
    */
   async getOrFetchDistributed(namespace, key, fetcher, customTtlMs) {
     const fullKey = this._makeKey(namespace, key);
@@ -69,14 +75,36 @@ class RedisCacheManager extends CacheManager {
     const l1Entry = this._store.get(fullKey);
     if (l1Entry && Date.now() <= l1Entry.expiresAt) {
       this._stats.hits++;
-      // Check for probabilistic background refresh if key is getting close to expiry
       if (this._shouldProbabilisticEarlyRefresh(l1Entry, 100) && !this._inFlightFetches.has(fullKey)) {
         this._triggerBackgroundRecompute(namespace, key, fetcher, customTtlMs);
       }
       return l1Entry.value;
     }
 
-    // 2. Check L3 Persistent IndexedDB Store
+    // 2. Check L2 Distributed Cache (Redis HTTP endpoint if available)
+    if (this.redisRestUrl && this.redisRestToken) {
+      try {
+        const response = await fetch(`${this.redisRestUrl}/get/${encodeURIComponent(fullKey)}`, {
+          headers: { Authorization: `Bearer ${this.redisRestToken}` },
+        });
+        if (response.ok) {
+          const resBody = await response.json();
+          // Upstash format is { result: "stringified_value" }
+          if (resBody && resBody.result) {
+            const parsedVal = JSON.parse(resBody.result);
+            const ttl = customTtlMs || this.defaultTtlMs;
+            // Warm L1 micro-cache with retrieved Redis value
+            this.set(namespace, key, parsedVal, ttl);
+            this._stats.hits++;
+            return parsedVal;
+          }
+        }
+      } catch (err) {
+        logger.error('[RedisCacheManager] L2 Redis fetch failed, falling back to L3', { error: err.message });
+      }
+    }
+
+    // 3. Check L3 Persistent IndexedDB Store
     try {
       const idb = await this._getIdb();
       if (idb) {
@@ -92,7 +120,7 @@ class RedisCacheManager extends CacheManager {
       logger.debug('[RedisCacheManager] L3 IDB read bypassed', { error: err.message });
     }
 
-    // 3. Request Coalescing (Single-Flight Pattern): If a fetch is already in flight for this key, await it
+    // 4. Request Coalescing (Single-Flight Pattern): If a fetch is already in flight for this key, await it
     if (this._inFlightFetches.has(fullKey)) {
       return await this._inFlightFetches.get(fullKey);
     }
@@ -146,6 +174,23 @@ class RedisCacheManager extends CacheManager {
     // L1 Write
     this.set(namespace, key, value, ttl);
 
+    // L2 Redis Write (if available)
+    if (this.redisRestUrl && this.redisRestToken) {
+      try {
+        const ttlSeconds = Math.max(1, Math.round(ttl / 1000));
+        await fetch(`${this.redisRestUrl}/set/${encodeURIComponent(fullKey)}?EX=${ttlSeconds}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.redisRestToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(JSON.stringify(value))
+        });
+      } catch (err) {
+        logger.error('[RedisCacheManager] L2 Redis set failed', { error: err.message });
+      }
+    }
+
     // L3 Write
     try {
       const idb = await this._getIdb();
@@ -169,6 +214,26 @@ class RedisCacheManager extends CacheManager {
    */
   async invalidateDistributed(namespace, keyPattern) {
     this.invalidatePattern(`${namespace}:${keyPattern}`);
+
+    // Invalidate L2 Redis (if available)
+    if (this.redisRestUrl && this.redisRestToken) {
+      try {
+        const fullKeyPattern = `${namespace}:${keyPattern}`;
+        // Using HTTP DEL for specific key, or SCAN / keys pattern match if wildcard
+        const endpoint = keyPattern === '*'
+          ? `${this.redisRestUrl}/flushdb`
+          : `${this.redisRestUrl}/del/${encodeURIComponent(fullKeyPattern)}`;
+
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.redisRestToken}` }
+        });
+      } catch (err) {
+        logger.error('[RedisCacheManager] L2 Redis invalidation failed', { error: err.message });
+      }
+    }
+
+    // Invalidate L3 IndexedDB
     try {
       const idb = await this._getIdb();
       if (idb) {

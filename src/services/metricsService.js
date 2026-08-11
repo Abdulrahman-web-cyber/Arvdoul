@@ -5,6 +5,7 @@
  * 1. Counters, Gauges & Histograms: Records API latencies, query counts, memory allocations, and network payloads.
  * 2. Percentile Calculations: Computes p50, p90, p95, and p99 latency percentiles with reservoir sampling.
  * 3. Metrics Summary Export for Dashboards.
+ * 4. Prometheus Exporter Adapter: Exports current metrics state in a standard Prometheus scraping line format.
  */
 
 class MetricsService {
@@ -56,6 +57,42 @@ class MetricsService {
       p99: getP(99),
       count: samples.length,
     };
+  }
+
+  /**
+   * Formats current metric state into standard Prometheus scraping format (text/plain).
+   * @returns {string} Prometheus-compatible metric lines
+   */
+  getPrometheusMetrics() {
+    let lines = [];
+
+    // Counters
+    this.counters.forEach((val, name) => {
+      lines.push(`# HELP arvdoul_${name} Monitored counter ${name}`);
+      lines.push(`# TYPE arvdoul_${name} counter`);
+      lines.push(`arvdoul_${name} ${val}`);
+    });
+
+    // Gauges
+    this.gauges.forEach((val, name) => {
+      lines.push(`# HELP arvdoul_${name} Monitored gauge ${name}`);
+      lines.push(`# TYPE arvdoul_${name} gauge`);
+      lines.push(`arvdoul_${name} ${val}`);
+    });
+
+    // Histograms
+    this.histograms.forEach((samples, name) => {
+      const p = this.getPercentiles(name);
+      lines.push(`# HELP arvdoul_${name}_percentiles Percentile values of histogram ${name}`);
+      lines.push(`# TYPE arvdoul_${name}_percentiles gauge`);
+      lines.push(`arvdoul_${name}_percentiles{quantile="0.50"} ${p.p50}`);
+      lines.push(`arvdoul_${name}_percentiles{quantile="0.90"} ${p.p90}`);
+      lines.push(`arvdoul_${name}_percentiles{quantile="0.95"} ${p.p95}`);
+      lines.push(`arvdoul_${name}_percentiles{quantile="0.99"} ${p.p99}`);
+      lines.push(`arvdoul_${name}_count ${p.count}`);
+    });
+
+    return lines.join('\n');
   }
 }
 

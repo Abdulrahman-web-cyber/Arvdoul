@@ -5,6 +5,7 @@
  * 1. Velocity-Based Dynamic Sharding: Auto-scales shard count from 10 to 100+ when write velocity > 50 writes/sec
  * 2. Consistent Hashing Ring: Distributes counter writes smoothly with minimum key movement during resharding
  * 3. Shard Load Balancing: Detects hot partitions exceeding 120% average variance and redistributes write hashes
+ * 4. Scale Persistence: Persists all dynamic scaling decisions in persistent storage (localStorage) to survive restarts.
  */
 
 import { logger } from '../utils/Logger.js';
@@ -67,6 +68,53 @@ class ShardRebalancingService {
     this.MAX_SHARDS = 120;
     this.VELOCITY_THRESHOLD_HIGH = 50; // writes/second to upscale
     this.VELOCITY_THRESHOLD_LOW = 10;  // writes/second to downscale
+
+    this._loadPersistedScales();
+  }
+
+  /**
+   * Loads persisted scale configurations from persistent localStorage.
+   * @private
+   */
+  _loadPersistedScales() {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const data = window.localStorage.getItem('arvdoul_shard_scales');
+        if (data) {
+          const parsed = JSON.parse(data);
+          Object.keys(parsed).forEach((docPath) => {
+            const shardCount = parsed[docPath];
+            this.shardScales.set(docPath, shardCount);
+
+            // Rebuild the hash rings on startup using persisted config
+            const ring = new ConsistentHashRing();
+            ring.build(shardCount);
+            this.rings.set(docPath, ring);
+          });
+          logger.info('[ShardRebalancing] Persisted shard scales successfully reloaded.');
+        }
+      } catch (err) {
+        logger.error('[ShardRebalancing] Failed to load persisted shard scales:', { error: err.message });
+      }
+    }
+  }
+
+  /**
+   * Saves dynamic scaling decisions to persistent storage.
+   * @private
+   */
+  _persistScales() {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const obj = {};
+        this.shardScales.forEach((val, key) => {
+          obj[key] = val;
+        });
+        window.localStorage.setItem('arvdoul_shard_scales', JSON.stringify(obj));
+      } catch (err) {
+        logger.error('[ShardRebalancing] Failed to persist shard scales:', { error: err.message });
+      }
+    }
   }
 
   /**
@@ -101,6 +149,9 @@ class ShardRebalancingService {
     const ring = new ConsistentHashRing();
     ring.build(targetShards);
     this.rings.set(docPath, ring);
+
+    // Save decisions to persist across restarts
+    this._persistScales();
 
     // Invalidate cached counter totals to reflect new hash boundaries
     cacheManager.delete('counters', docPath);

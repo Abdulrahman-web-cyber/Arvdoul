@@ -4,7 +4,7 @@
  * Implements:
  * 1. Pro Creator Subscription Tiers: Manages Basic ($0), Creator Plus ($9.99/mo), and Studio Pro ($29.99/mo).
  * 2. Coin Bundle Catalog & Checkout: Secure pricing catalog for virtual coin top-ups (100 coins for $0.99, 1,000 for $8.99, 10,000 for $79.99).
- * 3. Structured Invoice PDF Generator: Generates downloadable VAT-compliant invoices with line items and transaction IDs.
+ * 3. Structured Invoice PDF/HTML Generator: Generates downloadable VAT-compliant HTML invoices and structured billing payloads.
  */
 
 import { logger } from '../utils/Logger.js';
@@ -51,25 +51,128 @@ class BillingService {
   }
 
   /**
-   * Generates a printable invoice payload.
+   * Generates a printable, compliant invoice payload with subtotal, VAT tax, and downloadable HTML.
    */
-  generateInvoice(transactionId, userProfile, bundleOrPlan, paymentMethod = 'card') {
+  generateInvoice(transactionId, userProfile, bundleOrPlan, paymentMethod = 'card', vatRate = 0.20) {
+    const rawPrice = bundleOrPlan.priceUSD || bundleOrPlan.priceMonthly || 0.00;
+    const subtotal = Number((rawPrice / (1 + vatRate)).toFixed(2));
+    const vatAmount = Number((rawPrice - subtotal).toFixed(2));
+    const totalUSD = rawPrice;
+
+    const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const customerName = userProfile?.displayName || userProfile?.username || 'Valued Customer';
+    const customerEmail = userProfile?.email || 'N/A';
+    const itemDescription = bundleOrPlan.name || `${bundleOrPlan.coins} Arvdoul Coins Bundle`;
+
+    const htmlInvoiceTemplate = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #2D3748; padding: 40px; line-height: 1.6; }
+    .header { display: flex; justify-content: space-between; border-bottom: 2px solid #E2E8F0; padding-bottom: 20px; }
+    .logo { font-size: 24px; font-weight: bold; background: linear-gradient(90deg, #805AD5, #D53F8C); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .invoice-details { text-align: right; }
+    .section { margin-top: 30px; display: flex; justify-content: space-between; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 40px; }
+    .table th { background: #EDF2F7; padding: 12px; text-align: left; border-bottom: 2px solid #CBD5E0; }
+    .table td { padding: 12px; border-bottom: 1px solid #E2E8F0; }
+    .totals { margin-top: 30px; text-align: right; width: 300px; margin-left: auto; }
+    .totals div { display: flex; justify-content: space-between; padding: 6px 0; }
+    .footer { margin-top: 60px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">ARVDOUL PLATFORM</div>
+      <div>Luxurious Glassmorphic Social Tech</div>
+    </div>
+    <div class="invoice-details">
+      <h3>INVOICE</h3>
+      <div><strong>Invoice #:</strong> ${invoiceNumber}</div>
+      <div><strong>Date:</strong> ${dateStr}</div>
+      <div><strong>Tx ID:</strong> ${transactionId}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div>
+      <strong>Billed To:</strong><br>
+      ${customerName}<br>
+      ${customerEmail}
+    </div>
+    <div>
+      <strong>Issued By:</strong><br>
+      Arvdoul Technologies Ltd.<br>
+      VAT Code: EU994819241<br>
+      Frankfurt, Germany
+    </div>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th>Quantity</th>
+        <th>Price (Inc. VAT)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>${itemDescription}</td>
+        <td>1</td>
+        <td>$${totalUSD.toFixed(2)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <div>
+      <span>Subtotal (Net):</span>
+      <span>$${subtotal.toFixed(2)}</span>
+    </div>
+    <div>
+      <span>VAT (${(vatRate * 100).toFixed(0)}%):</span>
+      <span>$${vatAmount.toFixed(2)}</span>
+    </div>
+    <div style="font-weight: bold; border-top: 2px solid #E2E8F0; padding-top: 10px; margin-top: 10px;">
+      <span>Total Paid (USD):</span>
+      <span>$${totalUSD.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    Thank you for choosing Arvdoul! This is a dynamic computer-generated compliant invoice document.<br>
+    All services are governed by the Arvdoul Terms of Service.
+  </div>
+</body>
+</html>`;
+
     return {
-      invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}`,
+      invoiceNumber,
       transactionId,
       date: new Date().toISOString(),
-      customerName: userProfile?.displayName || userProfile?.username || 'Valued Customer',
-      customerEmail: userProfile?.email || 'N/A',
+      customerName,
+      customerEmail,
       items: [
         {
-          description: bundleOrPlan.name || `${bundleOrPlan.coins} Arvdoul Coins Bundle`,
-          amountUSD: bundleOrPlan.priceUSD || bundleOrPlan.priceMonthly,
+          description: itemDescription,
+          amountUSD: totalUSD,
           quantity: 1,
         },
       ],
-      totalUSD: bundleOrPlan.priceUSD || bundleOrPlan.priceMonthly,
+      pricing: {
+        subtotal,
+        vatRate,
+        vatAmount,
+        totalUSD
+      },
       paymentMethod,
       vatNumber: 'EU994819241',
+      htmlInvoiceTemplate,
     };
   }
 }
