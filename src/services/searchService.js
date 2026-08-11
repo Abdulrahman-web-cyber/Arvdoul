@@ -37,11 +37,11 @@ function enhanceError(error, defaultMessage) {
 
 // ==================== CONFIGURATION ====================
 const SEARCH_CONFIG = {
-  ALGOLIA_APP_ID: import.meta.env.VITE_ALGOLIA_APP_ID,
-  ALGOLIA_SEARCH_KEY: import.meta.env.VITE_ALGOLIA_SEARCH_KEY,
+  ALGOLIA_APP_ID: import.meta.env?.VITE_ALGOLIA_APP_ID,
+  ALGOLIA_SEARCH_KEY: import.meta.env?.VITE_ALGOLIA_SEARCH_KEY,
 
-  VECTOR_ENABLED: import.meta.env.VITE_VECTOR_SEARCH_ENABLED === 'true',
-  VECTOR_API_KEY: import.meta.env.VITE_VECTOR_API_KEY,
+  VECTOR_ENABLED: import.meta.env?.VITE_VECTOR_SEARCH_ENABLED === 'true',
+  VECTOR_API_KEY: import.meta.env?.VITE_VECTOR_API_KEY,
   VECTOR_INDEX: 'arvdoul_embeddings',
 
   BASE_INDICES: {
