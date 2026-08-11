@@ -51,6 +51,7 @@ import { alertingService } from '../services/alertingService.js';
 import { billingService } from '../services/billingService.js';
 import { disasterRecoveryService } from '../services/disasterRecoveryService.js';
 import { misinformationService } from '../services/misinformationService.js';
+import { costMonitoringService } from '../services/costMonitoringService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -278,6 +279,23 @@ describe('Upgraded Production Services Integration Tests', () => {
     test('ignores non-misleading text without pattern matches', async () => {
       const result = await misinformationService.evaluateMisinformation('Hello world, welcome to Arvdoul platform.');
       expect(result.hasMisinfoLabel).toBe(false);
+    });
+  });
+
+  describe('CostMonitoringService (Quota Metering & Budgets)', () => {
+    test('accurately accumulates firestore reads and egress costs', () => {
+      costMonitoringService.recordFirestoreReads(200000); // 200k reads = $0.12
+      costMonitoringService.recordStorageEgress(1024 * 1024 * 1024 * 10); // 10 GB egress = $1.20
+
+      const summary = costMonitoringService.getCostSummary();
+      expect(summary.firestoreReads).toBe(200000);
+      expect(Number(summary.estimatedCostUSD)).toBeCloseTo(1.32, 2);
+    });
+
+    test('gracefully handles pricing fetch fallback when keys are omitted', async () => {
+      // Should exit cleanly without throwing errors
+      await costMonitoringService.fetchLivePricing();
+      expect(costMonitoringService.PRICING.READ_PER_100K).toBeDefined();
     });
   });
 });
