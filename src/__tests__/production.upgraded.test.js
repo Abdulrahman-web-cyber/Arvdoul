@@ -52,6 +52,7 @@ import { billingService } from '../services/billingService.js';
 import { disasterRecoveryService } from '../services/disasterRecoveryService.js';
 import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
+import { incidentService } from '../services/incidentService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -296,6 +297,42 @@ describe('Upgraded Production Services Integration Tests', () => {
       // Should exit cleanly without throwing errors
       await costMonitoringService.fetchLivePricing();
       expect(costMonitoringService.PRICING.READ_PER_100K).toBeDefined();
+    });
+  });
+
+  describe('IncidentService (Operational Incidents & Postmortems)', () => {
+    test('declaring a critical P0 incident triggers operations escalation alerts', async () => {
+      globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
+      const triggerSpy = jest.spyOn(alertingService, 'triggerAlert');
+
+      const result = await incidentService.declareIncident(
+        'p0',
+        'Database Outage',
+        'Firestore primary index corrupted.',
+        'commander_bob'
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.incidentId).toContain('inc_local_');
+      expect(triggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('incident_p0_'),
+        'p0_critical',
+        expect.stringContaining('CRITICAL OPERATIONAL INCIDENT DECLARED:'),
+        expect.any(Object)
+      );
+    });
+
+    test('generates compliant blameless postmortem templates', () => {
+      const template = incidentService.generatePostmortemTemplate({
+        title: 'Database Outage',
+        severity: 'p0',
+        commanderId: 'commander_bob',
+        summary: 'Firestore corruption'
+      });
+
+      expect(template).toContain('# Incident Postmortem: Database Outage');
+      expect(template).toContain('## 4. Root Cause (5 Whys)');
+      expect(template).toContain('Preventative Action Items');
     });
   });
 });
