@@ -92,8 +92,12 @@ setAppState: (updates) => set(updates),
     
   // Notification Management  
   addNotification: (notification) => {  
+    const randPart = typeof crypto !== 'undefined' && crypto.getRandomValues
+      ? Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, '0')).join('')
+      : (Date.now() % 1000).toString(16);
+
     const newNotification = {  
-      id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,  
+      id: 'notif_' + Date.now() + '_' + randPart,
       read: false,  
       timestamp: new Date().toISOString(),  
       ...notification  
