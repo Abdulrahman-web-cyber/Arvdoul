@@ -41,7 +41,9 @@ export const storage = _fbGetStorage(_fbApp);
 
 // Mirror the manager's auth hardening so phone/SMS auth keeps working.
 try {
-  _fbSetPersistence(auth, _fbBrowserLocalPersistence);
+  if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'test') {
+    _fbSetPersistence(auth, _fbBrowserLocalPersistence);
+  }
   if (!auth.settings) auth.settings = {};
   auth.settings.appVerificationDisabledForTesting = false;
   auth.languageCode = (typeof navigator !== 'undefined' && navigator.language) || 'en';

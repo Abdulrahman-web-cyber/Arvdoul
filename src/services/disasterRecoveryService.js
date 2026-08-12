@@ -19,12 +19,20 @@ class DisasterRecoveryService {
    * Spawns scheduled transactional archives (Pillar 9, 10, 207)
    */
   async triggerAutomatedBackup(firestoreInstance) {
-    const backupId = `bkp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    logger.info(`[DisasterRecovery] Initializing automated Firestore Point-In-Time (PITR) snapshot: ${backupId}`);
+    const arr = new Uint8Array(3);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(arr);
+    } else {
+      for (let i = 0; i < 3; i++) arr[i] = (Date.now() + i) % 256;
+    }
+    const randHex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    const backupId = 'bkp_' + Date.now() + '_' + randHex;
+
+    logger.info('[DisasterRecovery] Initializing automated Firestore Point-In-Time (PITR) snapshot: ' + backupId);
 
     try {
       // In production, triggers GCP export / Cloud Storage bucket pipeline
-      logger.info(`[DisasterRecovery] Snapshot metadata exported. Verified healthy. Region: ${this.activeRegion}`);
+      logger.info('[DisasterRecovery] Snapshot metadata exported. Verified healthy. Region: ' + this.activeRegion);
       this.backupSchedules.push({
         backupId,
         region: this.activeRegion,
@@ -42,11 +50,11 @@ class DisasterRecoveryService {
    * Triggers active-active regional failover routing (Pillar 207)
    */
   async triggerFailover() {
-    logger.warn(`[DisasterRecovery] Primary region "${this.primaryRegion}" SLA degraded. Commencing failover sequence.`);
+    logger.warn('[DisasterRecovery] Primary region "' + this.primaryRegion + '" SLA degraded. Commencing failover sequence.');
 
     this.activeRegion = this.failoverRegion;
 
-    logger.info(`[DisasterRecovery] Active routing updated. Traffic redirected to region: "${this.activeRegion}"`);
+    logger.info('[DisasterRecovery] Active routing updated. Traffic redirected to region: "' + this.activeRegion + '"');
     return {
       activeRegion: this.activeRegion,
       failoverActive: true
@@ -57,7 +65,7 @@ class DisasterRecoveryService {
    * Executes restoration from snapshot files (Pillar 9)
    */
   async restoreFromSnapshot(backupId) {
-    logger.warn(`[DisasterRecovery] Point-In-Time Recovery trigger registered. Reverting database state to: ${backupId}`);
+    logger.warn('[DisasterRecovery] Point-In-Time Recovery trigger registered. Reverting database state to: ' + backupId);
     // Simulated REST recovery
     return {
       revertedBackupId: backupId,

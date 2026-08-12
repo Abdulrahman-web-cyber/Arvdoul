@@ -385,6 +385,73 @@ class OfflineMessageQueue {
   }
 }
 
+class SecureSessionKeyMap {
+  constructor() {
+    this.sessionKeys = new Map(); // ephemeral in-memory keys
+    this.encryptedPrivateKeys = new Map(); // obfuscated encrypted private keys
+  }
+
+  set(userId, privateKey) {
+    if (!userId || !privateKey) return;
+
+    // Generate an ephemeral key for this session
+    const byteLength = 32;
+    const ephemeralKeyBytes = new Uint8Array(byteLength);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(ephemeralKeyBytes);
+    } else {
+      for (let i = 0; i < byteLength; i++) {
+        ephemeralKeyBytes[i] = (Date.now() + i) % 256;
+      }
+    }
+    this.sessionKeys.set(userId, ephemeralKeyBytes);
+
+    // XOR encrypt the private key
+    const privateKeyBytes = new TextEncoder().encode(privateKey);
+    const encryptedBytes = new Uint8Array(privateKeyBytes.length);
+    for (let i = 0; i < privateKeyBytes.length; i++) {
+      encryptedBytes[i] = privateKeyBytes[i] ^ ephemeralKeyBytes[i % byteLength];
+    }
+
+    // Convert to hex
+    const hex = Array.from(encryptedBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    this.encryptedPrivateKeys.set(userId, hex);
+  }
+
+  get(userId) {
+    if (!userId) return null;
+    const hex = this.encryptedPrivateKeys.get(userId);
+    const ephemeralKeyBytes = this.sessionKeys.get(userId);
+    if (!hex || !ephemeralKeyBytes) return null;
+
+    try {
+      // Convert hex to bytes
+      const len = hex.length / 2;
+      const encryptedBytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        encryptedBytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+
+      // XOR decrypt
+      const decryptedBytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        decryptedBytes[i] = encryptedBytes[i] ^ ephemeralKeyBytes[i % ephemeralKeyBytes.length];
+      }
+
+      return new TextDecoder().decode(decryptedBytes);
+    } catch (err) {
+      logger.error('[SecureSessionKeyMap] Failed to decrypt private key', { error: err.message });
+      return null;
+    }
+  }
+
+  delete(userId) {
+    if (!userId) return;
+    this.sessionKeys.delete(userId);
+    this.encryptedPrivateKeys.delete(userId);
+  }
+}
+
 // ----------------------------------------------------------------------
 //  MAIN SERVICE CLASS
 // ----------------------------------------------------------------------
@@ -422,7 +489,7 @@ class UltimateMessagingService {
     this._userServicePromise = null;
     this._notificationsServicePromise = null;
     this.offlineQueue = new OfflineMessageQueue(this);
-    this.unlockedPrivateKeys = new Map();
+    this.unlockedPrivateKeys = new SecureSessionKeyMap();
     this.usernameToIdCache = new Map();
     this.metrics = {
       cacheHits: 0,

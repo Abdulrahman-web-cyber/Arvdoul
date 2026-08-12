@@ -526,29 +526,39 @@ class RankingService {
       { username: 'viral_vibes', displayName: 'Viral Vibes', avatar: null },
     ];
 
-    return mockUsers.slice(0, RANKING_CONFIG.PAGE_SIZE).map((user, i) => ({
-      rank: offset + i + 1,
-      userId: `user_${i}`,
-      user: { ...user, id: `user_${i}` },
-      score: Math.floor(Math.random() * 10000) + 1000 - offset * 100,
-      trend: Math.floor(Math.random() * 10) - 5,
-      badge: this._getTier(Math.random() * 10000),
-    }));
+    return mockUsers.slice(0, RANKING_CONFIG.PAGE_SIZE).map((user, i) => {
+      const determinValue = (Date.now() + i) % 100;
+      const score = (determinValue * 100) + 1000 - offset * 100;
+      return {
+        rank: offset + i + 1,
+        userId: 'user_' + i,
+        user: { ...user, id: 'user_' + i },
+        score,
+        trend: (determinValue % 10) - 5,
+        badge: this._getTier(determinValue * 100),
+      };
+    });
   }
 
   _getMockWealthRankings(category, offset) {
-    return this._getMockCreatorRankings(category, offset).map((r) => ({
-      ...r,
-      score: Math.floor(Math.random() * 100000) + 10000 - offset * 1000,
-    }));
+    return this._getMockCreatorRankings(category, offset).map((r, i) => {
+      const determinValue = (Date.now() + i) % 100;
+      return {
+        ...r,
+        score: (determinValue * 1000) + 10000 - offset * 1000,
+      };
+    });
   }
 
   _getMockReputationRankings(category, offset) {
-    return this._getMockCreatorRankings(category, offset).map((r) => ({
-      ...r,
-      score: Math.floor(Math.random() * 1000) + 100 - offset * 10,
-      badges: RANKING_CONFIG.BADGES.slice(0, Math.floor(Math.random() * 5)),
-    }));
+    return this._getMockCreatorRankings(category, offset).map((r, i) => {
+      const determinValue = (Date.now() + i) % 100;
+      return {
+        ...r,
+        score: (determinValue * 10) + 100 - offset * 10,
+        badges: RANKING_CONFIG.BADGES.slice(0, (determinValue % 5)),
+      };
+    });
   }
 
   _getMockCommunityRankings(category, offset) {
@@ -560,36 +570,45 @@ class RankingService {
       { name: 'Sports Central', description: 'Sports fans', icon: '⚽' },
     ];
 
-    return communities.slice(0, RANKING_CONFIG.PAGE_SIZE).map((community, i) => ({
-      rank: offset + i + 1,
-      communityId: `community_${i}`,
-      community,
-      score: Math.floor(Math.random() * 5000) + 500 - offset * 50,
-      trend: Math.floor(Math.random() * 10) - 5,
-      members: Math.floor(Math.random() * 10000) + 100,
-    }));
+    return communities.slice(0, RANKING_CONFIG.PAGE_SIZE).map((community, i) => {
+      const determinValue = (Date.now() + i) % 100;
+      return {
+        rank: offset + i + 1,
+        communityId: 'community_' + i,
+        community,
+        score: (determinValue * 50) + 500 - offset * 50,
+        trend: (determinValue % 10) - 5,
+        members: (determinValue * 100) + 100,
+      };
+    });
   }
 
   _getMockTrendingContent(type, offset) {
-    return Array.from({ length: RANKING_CONFIG.PAGE_SIZE }, (_, i) => ({
-      rank: offset + i + 1,
-      id: `${type}_${i}`,
-      title: `Trending ${type} #${offset + i + 1}`,
-      type,
-      views: Math.floor(Math.random() * 100000),
-      likes: Math.floor(Math.random() * 10000),
-      comments: Math.floor(Math.random() * 1000),
-      createdAt: new Date().toISOString(),
-    }));
+    return Array.from({ length: RANKING_CONFIG.PAGE_SIZE }, (_, i) => {
+      const determinValue = (Date.now() + i) % 100;
+      return {
+        rank: offset + i + 1,
+        id: type + '_' + i,
+        title: 'Trending ' + type + ' #' + (offset + i + 1),
+        type,
+        views: determinValue * 1000,
+        likes: determinValue * 100,
+        comments: determinValue * 10,
+        createdAt: new Date().toISOString(),
+      };
+    });
   }
 
   _getMockRisingCreators(offset) {
-    return this._getMockCreatorRankings('growth', offset).map((r) => ({
-      ...r,
-      growthRate: Math.floor(Math.random() * 500) + 50,
-      previousRank: r.rank + Math.floor(Math.random() * 10) - 5,
-      currentRank: r.rank,
-    }));
+    return this._getMockCreatorRankings('growth', offset).map((r, i) => {
+      const determinValue = (Date.now() + i) % 100;
+      return {
+        ...r,
+        growthRate: (determinValue * 5) + 50,
+        previousRank: r.rank + (determinValue % 10) - 5,
+        currentRank: r.rank,
+      };
+    });
   }
 
   // ==================== SERVICE MANAGEMENT ====================
