@@ -53,6 +53,7 @@ import { disasterRecoveryService } from '../services/disasterRecoveryService.js'
 import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
 import { incidentService } from '../services/incidentService.js';
+import { aggregationCacheService } from '../services/AggregationCacheService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -119,6 +120,13 @@ describe('Upgraded Production Services Integration Tests', () => {
 
       // Active region should have switched to a healthy one
       expect(activeActiveService.activeRegion).not.toBe(targetRegion?.id);
+    });
+
+    test('manualFailover overrides and persists the active region selection', () => {
+      const result = activeActiveService.manualFailover('us-central1');
+      expect(result.success).toBe(true);
+      expect(result.activeRegion).toBe('us-central1');
+      expect(localStorage.getItem('arvdoul_active_region')).toBe('us-central1');
     });
   });
 
@@ -333,6 +341,42 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(template).toContain('# Incident Postmortem: Database Outage');
       expect(template).toContain('## 4. Root Cause (5 Whys)');
       expect(template).toContain('Preventative Action Items');
+    });
+  });
+
+  describe('AggregationCacheService (Stampede & Single-Flight Coalescing)', () => {
+    test('coalesces multiple simultaneous identical query executions', async () => {
+      let callCount = 0;
+      const mockCompute = jest.fn(async () => {
+        callCount++;
+        await new Promise(r => setTimeout(r, 10));
+        return { totalCount: 150 };
+      });
+
+      // Spawn 3 simultaneous identical aggregation requests
+      const promises = [
+        aggregationCacheService.getOrCompute('posts', 'count', { status: 'published' }, mockCompute, 5000),
+        aggregationCacheService.getOrCompute('posts', 'count', { status: 'published' }, mockCompute, 5000),
+        aggregationCacheService.getOrCompute('posts', 'count', { status: 'published' }, mockCompute, 5000)
+      ];
+
+      const results = await Promise.all(promises);
+      expect(results[0]).toEqual({ totalCount: 150 });
+      expect(results[1]).toEqual({ totalCount: 150 });
+      expect(results[2]).toEqual({ totalCount: 150 });
+      // Verify the compute function was invoked ONLY once!
+      expect(callCount).toBe(1);
+    });
+
+    test('invalidates the corresponding namespace pattern upon collections updates', async () => {
+      const mockCompute = jest.fn(async () => ({ data: 'new' }));
+      await aggregationCacheService.getOrCompute('users_stats', 'avg', { age: '20' }, mockCompute, 5000);
+
+      await aggregationCacheService.invalidateCollection('users_stats');
+      // Verify cache hit total changes after invalidation
+      const mockCompute2 = jest.fn(async () => ({ data: 'refreshed' }));
+      const result = await aggregationCacheService.getOrCompute('users_stats', 'avg', { age: '20' }, mockCompute2, 5000);
+      expect(result).toEqual({ data: 'refreshed' });
     });
   });
 });
