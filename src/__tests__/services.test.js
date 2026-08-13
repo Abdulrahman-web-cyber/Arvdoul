@@ -318,4 +318,55 @@ describe('Service Layer Tests', () => {
       expect(queue.size()).toBe(0);
     });
   });
+
+  describe('AIStudioService Upgrades (v8.0)', () => {
+    let aiService;
+
+    beforeAll(async () => {
+      const mod = await import('../services/aiStudioService.js');
+      aiService = mod.aiStudioService || mod.default;
+    });
+
+    test('correctly identifies toxic phrases in content moderation', () => {
+      const toxicText = 'You are an absolute idiot and a complete retard!';
+      const res = aiService.moderateOutput(toxicText);
+      expect(res.flagged).toBe(true);
+      expect(res.reason).toContain('contains blocked phrase');
+    });
+
+    test('passes clean texts through content moderation', () => {
+      const cleanText = 'The beautiful night sky is glowing over the futuristic neon city of Arvdoul.';
+      const res = aiService.moderateOutput(cleanText);
+      expect(res.flagged).toBe(false);
+    });
+
+    test('generates highly structured video script with multi-scene cues', async () => {
+      const script = await aiService.generateScript({ topic: 'artificial intelligence', style: 'tech', duration: 30 });
+      expect(script.title).toContain('Master artificial intelligence');
+      expect(script.targetDuration).toBe('30s');
+      expect(script.scenes).toBeDefined();
+      expect(script.scenes.length).toBeGreaterThan(0);
+    });
+
+    test('correctly calculates remaining daily AI budget and enforces limits', async () => {
+      // Artificially inflate spend by adding a massive log entry
+      aiService.usageLogs.push({
+        timestamp: Date.now(),
+        promptTokens: 10000,
+        completionTokens: 20000,
+        totalTokens: 30000,
+        estimatedCost: 6.50 // Exceeds the $5 limit
+      });
+
+      const spend = aiService.getDailySpendUSD();
+      expect(spend).toBeGreaterThan(5.00);
+
+      // Call should immediately abort and trigger local fallback without fetch
+      const result = await aiService._callOpenAI('Write some text');
+      expect(result).toBeNull();
+
+      // Clear test logs
+      aiService.usageLogs = [];
+    });
+  });
 });
