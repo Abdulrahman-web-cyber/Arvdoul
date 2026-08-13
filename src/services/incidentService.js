@@ -6,14 +6,44 @@
  * 2. SLA Timeline Tracking: Measures Mean-Time-To-Detect (MTTD) and Mean-Time-To-Resolve (MTTR).
  * 3. Blameless Postmortem Generator: Creates structured root-cause analysis templates with 5-whys and prevention action items.
  * 4. Alerting Integration: Automatically escalates high-priority (P0/P1) incidents through PagerDuty and Ops channels.
+ * 5. Persistent LocalForage Incident Store: Saves incident statuses to local storage to persist across sessions.
  */
 
 import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { alertingService } from './alertingService.js';
+import localforage from 'localforage';
 
 class IncidentService {
+  constructor() {
+    this.incidentsLog = [];
+    this._initStore();
+  }
+
+  /**
+   * Initializes localForage incident logs store.
+   * @private
+   */
+  async _initStore() {
+    try {
+      const saved = await localforage.getItem('arvdoul_incident_logs');
+      if (Array.isArray(saved)) {
+        this.incidentsLog = saved;
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Persists the incidents log.
+   * @private
+   */
+  async _saveStore() {
+    try {
+      await localforage.setItem('arvdoul_incident_logs', this.incidentsLog);
+    } catch (_) {}
+  }
+
   /**
    * Declares a new operational incident and escalates high severities dynamically.
    */
@@ -64,11 +94,35 @@ class IncidentService {
 
       logger.error('[IncidentService] Incident declared: ' + incidentId + ' [' + severity.toUpperCase() + '] - ' + title);
 
+      // Save locally
+      this.incidentsLog.push({ id: incidentId, ...incident });
+      await this._saveStore();
+
       return { success: true, incidentId };
     } catch (err) {
       logger.error('[IncidentService] Failed to declare incident:', { error: err.message });
       throw err;
     }
+  }
+
+  /**
+   * Updates an incident status with MTTR timeline logs.
+   */
+  async updateIncidentStatus(incidentId, status, note = '') {
+    const matched = this.incidentsLog.find(i => i.id === incidentId);
+    if (matched) {
+      matched.status = status;
+      matched.timeline.push({
+        timestamp: new Date().toISOString(),
+        status,
+        note
+      });
+      if (status === 'resolved') {
+        matched.resolvedAt = new Date().toISOString();
+      }
+      await this._saveStore();
+    }
+    return { success: true };
   }
 
   /**

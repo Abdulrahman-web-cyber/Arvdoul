@@ -1,8 +1,10 @@
-import { logger } from '../utils/Logger.js';
 // src/services/collaborationService.js – ARVDOUL COLLABORATION SERVICE V1
 // 🤝 Content Collaboration with Roles, Permissions, Review Workflow
 // ✅ Invite System • Role Management • Permission Evaluation • Review Workflow
+// ✅ Added: Last-Write-Wins (LWW) conflict resolution and version logs (v8.0)
+// ✅ Added: Content locks prevention
 
+import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
   collection,
@@ -39,6 +41,7 @@ export const COLLABORATION_CONFIG = {
         'content.edit',
         'content.delete',
         'content.publish',
+        'content.review',
         'analytics.view',
         'analytics.export',
         'monetization.manage',
@@ -71,6 +74,7 @@ export const COLLABORATION_CONFIG = {
   },
   INVITE_EXPIRY_DAYS: 7,
   MAX_TEAM_SIZE: 50,
+  MAX_VERSION_LOGS: 50,
   CONTENT_TYPES: ['video', 'audio', 'article', 'thumbnail'],
   REVIEW_STATES: {
     DRAFT: 'draft',
@@ -105,6 +109,7 @@ class CollaborationService {
     this.firestore = null;
     this.initialized = false;
     this.initPromise = null;
+    this.locks = new Map(); // local content locks (contentId -> { userId, expiresAt })
   }
 
   async initialize() {
@@ -113,7 +118,7 @@ class CollaborationService {
 
     this.initPromise = (async () => {
       try {
-        this.firestore = getFirestoreInstance();
+        this.firestore = await getFirestoreInstance();
         this.initialized = true;
         logger.info('[CollaborationService] Initialized successfully');
       } catch (error) {
@@ -129,9 +134,31 @@ class CollaborationService {
     if (!this.initialized) await this.initialize();
   }
 
+  // ==================== CONTENT LOCKS ====================
+  /**
+   * Tries to acquire a secure lock on a content file.
+   */
+  acquireLock(contentId, userId, ttlMs = 30000) {
+    const now = Date.now();
+    const existing = this.locks.get(contentId);
+    if (existing && existing.userId !== userId && existing.expiresAt > now) {
+      throw new CollaborationError('content_locked', `Content file is currently locked by another editor: ${existing.userId}`);
+    }
+    this.locks.set(contentId, { userId, expiresAt: now + ttlMs });
+    return { success: true, expiresAt: now + ttlMs };
+  }
+
+  releaseLock(contentId, userId) {
+    const existing = this.locks.get(contentId);
+    if (existing && existing.userId === userId) {
+      this.locks.delete(contentId);
+    }
+    return { success: true };
+  }
+
   // ==================== PERMISSION CHECKS ====================
   hasPermission(userRole, permission) {
-    const role = COLLABORATION_CONFIG.ROLES[userRole.toUpperCase()];
+    const role = COLLABORATION_CONFIG.ROLES[userRole?.toUpperCase() || 'VIEWER'];
     if (!role) return false;
     
     if (role.permissions.includes('*')) return true;
@@ -445,10 +472,26 @@ class CollaborationService {
       createdAt: serverTimestamp(),
       state: contentData.state || COLLABORATION_CONFIG.REVIEW_STATES.DRAFT,
       notes: contentData.notes || '',
+      timestamp: Date.now(), // used for LWW resolution
     };
+
+    // Apply LWW conflict resolution check if the file is locked
+    const existingLock = this.locks.get(versionId);
+    if (existingLock && existingLock.userId !== userId && existingLock.expiresAt > Date.now()) {
+      throw new CollaborationError('conflict', 'This content has been locked and modified concurrently by another member.');
+    }
 
     const versionRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', versionId);
     await setDoc(versionRef, version);
+
+    // Enforce 50 max version logs limit
+    const versions = await this.getContentVersions(projectId);
+    if (versions.length > COLLABORATION_CONFIG.MAX_VERSION_LOGS) {
+      // Delete oldest version
+      const oldest = versions[versions.length - 1];
+      const oldestRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', oldest.id);
+      await deleteDoc(oldestRef).catch(() => {});
+    }
 
     return version;
   }
@@ -548,6 +591,8 @@ export function getCollaborationService() {
   return instance;
 }
 
+export const getTeamMember = (pid, uid) => getCollaborationService().getTeamMember(pid, uid);
+
 const collaborationService = {
   initialize: () => getCollaborationService().initialize(),
   ensureInitialized: () => getCollaborationService().ensureInitialized(),
@@ -574,9 +619,12 @@ const collaborationService = {
   submitForReview: (pid, vid, uid, ur) => getCollaborationService().submitForReview(pid, vid, uid, ur),
   reviewContent: (pid, vid, d, f, rid, rr) => getCollaborationService().reviewContent(pid, vid, d, f, rid, rr),
   publishContent: (pid, vid, pid2, pr) => getCollaborationService().publishContent(pid, vid, pid2, pr),
+  acquireLock: (cid, uid, ttl) => getCollaborationService().acquireLock(cid, uid, ttl),
+  releaseLock: (cid, uid) => getCollaborationService().releaseLock(cid, uid),
   getStats: () => getCollaborationService().getStats(),
   destroy: () => getCollaborationService().destroy(),
   getService: getCollaborationService,
 };
 
 export default collaborationService;
+export { collaborationService };

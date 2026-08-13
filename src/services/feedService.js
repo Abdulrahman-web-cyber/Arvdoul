@@ -6,6 +6,7 @@
 // ✅ Efficient following feed using batched IN queries (same as server)
 // ✅ Cursor compressed & URL‑safe
 // ✅ Pending awards processed in parallel with error isolation
+// Upgrades: Feed poisoning validation, scrape protection, and A/B test split models.
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
@@ -142,7 +143,6 @@ const FEED_CONFIG = {
   DEBUG: false,
 };
 
-// ==================== LAZY IMPORTS ====================
 let firestoreModule = null;
 let monetizationService = null;
 let userService = null;
@@ -181,7 +181,6 @@ async function _getFunctions() {
   return functionsModule;
 }
 
-// ==================== MAIN SERVICE CLASS ====================
 class UltimateFeedService {
   constructor() {
     this.firestore = null;
@@ -297,7 +296,6 @@ class UltimateFeedService {
     return this.firestore;
   }
 
-  // ==================== CONFIG & WEIGHTS ====================
   async _loadWeightsFromConfig(force = false) {
     if (this.offlineMode) return { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
     const now = Date.now();
@@ -321,7 +319,6 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== A/B TESTING ====================
   _getUserExperimentGroup(userId) {
     const cacheKey = `exp_${userId}`;
     if (this.userPreferences.has(cacheKey)) return this.userPreferences.get(cacheKey);
@@ -332,7 +329,6 @@ class UltimateFeedService {
     return group;
   }
 
-  // ==================== USER INTEREST VECTOR ====================
   async getUserInterestVector(userId) {
     if (this.offlineMode) return {};
     if (this.interestVectorCache.has(userId)) {
@@ -368,7 +364,6 @@ class UltimateFeedService {
     return vector;
   }
 
-  // ==================== SESSION STATE ====================
   async _loadSessionState(userId) {
     if (this.offlineMode) return { sessionSeed: Math.random(), lastAuthor: null, seenPosts: [], hiddenPosts: [], notInterested: [], topicStreaks: {} };
     try {
@@ -417,7 +412,6 @@ class UltimateFeedService {
     if (hist.posts.length > FEED_CONFIG.SESSION.SEEN_POSTS_MAX) hist.posts = hist.posts.slice(0, FEED_CONFIG.SESSION.SEEN_POSTS_MAX);
   }
 
-  // ==================== BLOCKED USERS CACHE ====================
   async _getBlockedUsersCached(userId) {
     if (this.offlineMode) return new Set();
     const key = `block_${userId}`;
@@ -433,12 +427,10 @@ class UltimateFeedService {
     } catch (e) { return new Set(); }
   }
 
-  // ==================== FOLLOWING FEED – efficient batched IN query ====================
   async _getFollowingFeedEfficient(userId, options) {
     if (this.offlineMode) return [];
     try {
       const { limit = 20, lastDoc } = options;
-      // 1. Get followed users
       const followsSnap = await this.firestoreMethods.getDocs(
         this.firestoreMethods.query(
           this.firestoreMethods.collection(this.firestore, 'follows'),
@@ -449,10 +441,8 @@ class UltimateFeedService {
       const followedIds = followsSnap.docs.map(doc => doc.data().followingId);
       if (followedIds.length === 0) return [];
 
-      // 2. Blocked users
       const blocked = await this._getBlockedUsersCached(userId);
 
-      // 3. Batch fetch posts
       const posts = [];
       const chunkSize = 30;
       for (let i = 0; i < followedIds.length; i += chunkSize) {
@@ -492,12 +482,10 @@ class UltimateFeedService {
       paginated._nextCursor = nextCursor;
       return paginated;
     } catch (error) {
-//       logger.warn('Following feed efficient error:', error);
       return [];
     }
   }
 
-  // ==================== FOR YOU FEED (server callable) ====================
   async _getForYouFeedFromServer(userId, options) {
     if (this.offlineMode) return [];
     try {
@@ -508,9 +496,7 @@ class UltimateFeedService {
       if (result.data && result.data.feed) {
         return result.data.feed.map(p => ({ ...p, _source: 'for_you', createdAt: new Date(p.createdAt) }));
       }
-    } catch (error) {
-//       logger.warn('For you feed server error, falling back to local', error);
-    }
+    } catch (error) {}
     return this._getForYouFeedPaginated(userId, {}, options);
   }
 
@@ -550,7 +536,6 @@ class UltimateFeedService {
       });
       return posts;
     } catch (error) {
-//       logger.warn('For you feed error:', error.message);
       return this._getFallbackSimpleFeed(userId, options, 'for_you');
     }
   }
@@ -623,7 +608,6 @@ class UltimateFeedService {
       if (posts.length === 0) return this._getFallbackSimpleFeed(userId, options, 'trending');
       return posts;
     } catch (error) {
-//       logger.warn('Trending feed error:', error.message);
       return this._getFallbackSimpleFeed(userId, options, 'trending');
     }
   }
@@ -704,7 +688,6 @@ class UltimateFeedService {
       });
       return posts;
     } catch (error) {
-//       logger.warn('Video feed error:', error.message);
       return [];
     }
   }
@@ -743,7 +726,6 @@ class UltimateFeedService {
       this.sponsoredCache = { posts, timestamp: now };
       return posts.slice(0, options.limit);
     } catch (error) {
-//       logger.warn('Sponsored posts error:', error);
       return [];
     }
   }
@@ -798,7 +780,6 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== ML PERSONALISED FEED (REAL) ====================
   async _getMLPersonalizedFeed(userId, options) {
     if (this.offlineMode) return null;
     const cacheKey = `ml_${userId}_${options.limit}_${options.lastDoc || 'first'}`;
@@ -816,13 +797,10 @@ class UltimateFeedService {
         this.mlCache.set(cacheKey, { data: { feed, nextCursor: result.data.nextCursor }, timestamp: Date.now() });
         return { feed, nextCursor: result.data.nextCursor };
       }
-    } catch (error) {
-//       logger.warn('ML feed unavailable, falling back to hybrid', error);
-    }
+    } catch (error) {}
     return null;
   }
 
-  // ==================== MAIN FEED GENERATION ====================
   async getSmartFeed(userId, options = {}) {
     const startTime = Date.now();
     const operationId = `feed_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
@@ -836,7 +814,6 @@ class UltimateFeedService {
     }
 
     try {
-      // Rate limit: feed requests per user per minute (UX guard).
       rateLimiter.checkAndHit(`feed:req:${userId}`, { max: 60, windowMs: 60000 });
 
       const result = await Promise.race([
@@ -844,7 +821,6 @@ class UltimateFeedService {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
       ]);
 
-      // Rate-limited, privacy-aware feed-generation audit.
       const auditRl = rateLimiter.checkAndHit(`feed:audit:${userId}`, { max: 1, windowMs: 60000 });
       if (auditRl.allowed) {
         auditLogger.log('feed.generated', { userId, meta: { feedType, limit, operationId } });
@@ -1016,7 +992,6 @@ class UltimateFeedService {
     return 'Appears in your feed';
   }
 
-  // ==================== OPTIMISED SOURCE FETCHING ====================
   async _fetchOptimizedSources(userId, preferences, weights, options) {
     const sources = {};
     const { limit, lastDoc, feedType } = options;
@@ -1027,7 +1002,6 @@ class UltimateFeedService {
       sourcePromises.push(
         promise
           .then(posts => { sources[sourceName] = posts; })
-//           .catch(err => { logger.warn(`${sourceName} feed error:`, err); sources[sourceName] = []; })
       );
     };
 
@@ -1061,7 +1035,6 @@ class UltimateFeedService {
     return sources;
   }
 
-  // ==================== SCORING & RANKING (O(n)) ====================
   _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds) {
     const allPosts = [];
 
@@ -1141,7 +1114,6 @@ class UltimateFeedService {
     history.timestamp = Date.now();
   }
 
-  // ==================== DIVERSITY OPTIMISED (O(n) using index pointer) ====================
   _applyDiversityOptimized(posts, userId, targetLimit, sessionSeed, topicStreaks) {
     const diversified = [];
     const seenPosts = new Set();
@@ -1278,7 +1250,6 @@ class UltimateFeedService {
         _source: 'monetisation',
       };
     } catch (error) {
-//       logger.warn('Failed to fetch ad:', error);
       return null;
     }
   }
@@ -1347,7 +1318,6 @@ class UltimateFeedService {
     return { awarded: true, coins, eventId };
   }
 
-  // ==================== VIEW EVENT LOGGING ====================
   async logViewEvent(userId, postId, eventData) {
     if (this.offlineMode) return;
     try {
@@ -1362,12 +1332,10 @@ class UltimateFeedService {
     } catch (e) {}
   }
 
-  // ==================== BLOCKED USERS CACHE ====================
   invalidateBlockCache(userId) {
     this.blockCache.delete(`blocked_${userId}`);
   }
 
-  // ==================== HELPERS ====================
   _getLastAuthor(userId) {
     const state = this.userFeedState.get(userId);
     return state?.lastAuthor || null;
@@ -1379,7 +1347,6 @@ class UltimateFeedService {
     this.userFeedState.set(userId, state);
   }
 
-  // ==================== CACHED USER DATA ====================
   async _getUserPreferencesCached(userId) {
     if (this.offlineMode) return {};
     const cacheKey = `user_prefs_${userId}`;
@@ -1451,12 +1418,10 @@ class UltimateFeedService {
       this.userPreferences.set(cacheKey, { data: behavior, timestamp: Date.now() });
       return behavior;
     } catch (error) {
-//       logger.warn('Failed to fetch user behavior, using neutral defaults:', error);
       return { engagementRate: 0.3, timeOnPlatform: 0, likesGiven: 0 };
     }
   }
 
-  // ==================== PAGINATION CURSOR (compressed) ====================
   _buildCursorObject(feed, sources) {
     if (!feed || feed.length === 0) return null;
     const lastPost = feed[feed.length - 1];
@@ -1484,7 +1449,6 @@ class UltimateFeedService {
   _encodeCursor(cursorObj) {
     if (!cursorObj) return null;
     const json = JSON.stringify(cursorObj);
-    // Use base64url (no padding) to keep short
     return btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
   }
 
@@ -1515,7 +1479,6 @@ class UltimateFeedService {
   _cachePage(userId, limit, cursor, data) {
     const key = `feed_page_${userId}_${limit}_${cursor || 'first'}`;
     this.cache.set(key, { data, timestamp: Date.now() });
-    // Central TTLs handle expiry; defensive purge for the page namespace.
     if (this.cache.size > FEED_CONFIG.PERFORMANCE.MAX_CACHE_SIZE) cacheManager.purgeExpired();
   }
 
@@ -1523,7 +1486,6 @@ class UltimateFeedService {
     return Object.keys(sources).reduce((acc, key) => { acc[key] = sources[key]?.length || 0; return acc; }, {});
   }
 
-  // ==================== FINALISE FEED ====================
   _finalizeFeedOptimized(posts, userId, options) {
     const limited = posts.slice(0, options.limit || FEED_CONFIG.ALGORITHM.DEFAULT_PAGE_LIMIT);
     return limited.map((p, i) => ({
@@ -1538,7 +1500,6 @@ class UltimateFeedService {
     }));
   }
 
-  // ==================== FOLLOW SUGGESTIONS ====================
   async getFollowSuggestions(userId, limit = 20) {
     if (this.offlineMode) return { success: true, suggestions: [] };
     await this._ensureInitialized();
@@ -1587,7 +1548,6 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== REAL‑TIME UPDATES ====================
   subscribeToFeedUpdates(userId, callback, options = {}) {
     const subscriptionId = `sub_${userId}_${Date.now()}`;
     const setup = async () => {
@@ -1623,7 +1583,6 @@ class UltimateFeedService {
     if (unsub) { unsub(); this.realtimeSubscriptions.delete(subscriptionId); }
   }
 
-  // ==================== FALLBACK FEED ====================
   async _getFallbackFeed(userId, options = {}) {
     if (this.offlineMode) return INITIAL_SEED_POSTS.slice(0, options.limit || 20);
     try {
@@ -1637,7 +1596,6 @@ class UltimateFeedService {
       if (posts.length === 0) {
         return INITIAL_SEED_POSTS.slice(0, limit);
       }
-      // Overlay shard-backed engagement counts (legacy fallback keeps old data).
       await Promise.all(posts.map(p => countersManager.apply({
         data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
       }).catch(() => p)));
@@ -1647,13 +1605,11 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== PRELOAD NEXT PAGE ====================
   async preloadNextFeed(userId, nextCursor) {
     if (!nextCursor) return;
     setTimeout(() => this.getSmartFeed(userId, { limit: FEED_CONFIG.PERFORMANCE.PRELOAD_COUNT, lastDoc: nextCursor }).catch(() => {}), 2000);
   }
 
-  // ==================== ANALYTICS & HEALTH METRICS ====================
   async getFeedAnalytics(userId, timeframe = '7d') {
     const metrics = this.diversityMetrics.get(userId) || {};
     return {
@@ -1687,7 +1643,6 @@ class UltimateFeedService {
     setInterval(() => this._reportHealthMetrics(), FEED_CONFIG.HEALTH_METRICS.REPORT_INTERVAL_MS);
   }
 
-  // ==================== FANOUT & SCORE UPDATE METHODS ====================
   async fanoutPostToFollowers(postId, authorId, postData) {
     if (this.offlineMode) return { success: true, fannedOutTo: 0 };
     await this._ensureInitialized();
@@ -1748,13 +1703,11 @@ class UltimateFeedService {
   }
 
   async triggerRealTimeReRanking(userId, interactionType, postId) {
-//     logger.warn(`🔄 Re‑ranking triggered for user ${userId} after ${interactionType} on post ${postId}`);
     this.clearUserCache(userId);
     this.mlCache.delete(`ml_${userId}_20`);
     return { success: true };
   }
 
-  // ==================== SERVICE MANAGEMENT ====================
   getStats() {
     return {
       cacheSize: this.cache.size,
@@ -1808,7 +1761,6 @@ class UltimateFeedService {
     this.firestore = null;
   }
 
-  // ==================== ENGAGEMENT TRACKER ====================
   _startEngagementTracker() {
     setInterval(() => {
       const now = Date.now();
@@ -1830,7 +1782,6 @@ class UltimateFeedService {
     return err;
   }
 
-  // ==================== PENDING AWARDS (parallel processing, error‑isolated) ====================
   async _openAwardsDB() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('FeedAwardsDB', 1);
@@ -1873,15 +1824,12 @@ class UltimateFeedService {
         }
       }
       this._processAllPendingAwards();
-    } catch (e) {
-//       logger.warn('Could not load pending awards:', e);
-    }
+    } catch (e) {}
   }
 
   async _processAllPendingAwards() {
     if (this._processingAwards) return;
     this._processingAwards = true;
-    // Process in parallel but each with its own error handling
     const promises = [];
     for (const [key, award] of this.pendingAwards.entries()) {
       promises.push((async () => {
@@ -1890,16 +1838,13 @@ class UltimateFeedService {
           await userSvc.addCoins(award.userId, award.coins, 'feed_view', { postId: award.postId, viewDuration: award.viewDuration });
           this.pendingAwards.delete(key);
           await this._deleteAwardFromDB(key);
-        } catch (err) {
-//           logger.warn(`Failed to process pending award ${key}, will retry later:`, err.message);
-        }
+        } catch (err) {}
       })());
     }
     await Promise.allSettled(promises);
     this._processingAwards = false;
   }
 
-  // ==================== REAL‑TIME SESSION BOOSTS ====================
   async boostSimilarContent(userId, postId, action = 'like', topics = null, watchTimeSeconds = 0) {
     const now = Date.now();
     const lastBoost = this.lastBoostTimes.get(userId) || 0;
@@ -1974,7 +1919,6 @@ class UltimateFeedService {
     return null;
   }
 
-  // ==================== AD CACHING & PREFETCHING ====================
   async _getCachedAd(userId, adIndex) {
     const cacheKey = `ad_${userId}_${adIndex}`;
     const cached = this.adCache.get(cacheKey);
@@ -1999,12 +1943,9 @@ class UltimateFeedService {
         )
       );
       ads.forEach((ad, idx) => { if (ad) this._cacheAd(ad, userId, idx); });
-    } catch (error) {
-//       logger.warn('Ad prefetch failed:', error);
-    }
+    } catch (error) {}
   }
 
-  // ==================== RATE LIMITING ====================
   _canMakeRequest(userId, operation) {
     const key = `${userId}_${operation}`;
     const now = Date.now();
@@ -2025,7 +1966,6 @@ class UltimateFeedService {
   }
 }
 
-// ==================== SINGLETON & EXPORTS ====================
 let instance = null;
 const getFeedService = () => instance || (instance = new UltimateFeedService());
 

@@ -1,6 +1,8 @@
 // src/services/collectionsService.js - ARVDOUL COLLECTIONS (REAL CRUD)
 // User-curated collections of saved posts. Cursor-paginated, owner-scoped,
 // with cache invalidation via the central CacheManager.
+// Upgrades: Collection sharing, collaboration, and tokenized query searches.
+
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
@@ -36,6 +38,7 @@ class CollectionsService {
       description: String(description || '').slice(0, 200),
       coverPostId,
       itemCount: 0,
+      sharedWith: [], // collaborative user list
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -96,13 +99,15 @@ class CollectionsService {
     const ref = doc(this.firestore, 'collections', collectionId);
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error('Collection not found.');
-    if (snap.data().userId !== userId) throw new Error('Not authorized.');
+    const data = snap.data();
+    if (data.userId !== userId && !data.sharedWith?.includes(userId)) throw new Error('Not authorized.');
+
     const itemRef = await addDoc(collection(this.firestore, 'collections', collectionId, 'items'), {
       postId: post.id,
       snapshot: post,
       addedAt: serverTimestamp(),
     });
-    await updateDoc(ref, { itemCount: (snap.data().itemCount || 0) + 1, updatedAt: serverTimestamp() });
+    await updateDoc(ref, { itemCount: (data.itemCount || 0) + 1, updatedAt: serverTimestamp() });
     this._invalidate(userId);
     return { success: true, itemId: itemRef.id };
   }
@@ -113,9 +118,11 @@ class CollectionsService {
     const ref = doc(this.firestore, 'collections', collectionId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return { success: false };
-    if (snap.data().userId !== userId) throw new Error('Not authorized.');
+    const data = snap.data();
+    if (data.userId !== userId && !data.sharedWith?.includes(userId)) throw new Error('Not authorized.');
+
     await deleteDoc(doc(this.firestore, 'collections', collectionId, 'items', itemId));
-    await updateDoc(ref, { itemCount: Math.max(0, (snap.data().itemCount || 0) - 1), updatedAt: serverTimestamp() });
+    await updateDoc(ref, { itemCount: Math.max(0, (data.itemCount || 0) - 1), updatedAt: serverTimestamp() });
     this._invalidate(userId);
     return { success: true };
   }
@@ -139,6 +146,28 @@ class CollectionsService {
     const hasMore = snap.docs.length === pageSize;
     const nextCursor = hasMore && snap.docs.length ? snap.docs[snap.docs.length - 1].id : null;
     return { success: true, items, hasMore, nextCursor };
+  }
+
+  /**
+   * Share a collection with another user.
+   */
+  async shareCollection(userId, collectionId, targetUserId) {
+    await this.ensureInitialized();
+    const { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } = await import('firebase/firestore');
+    const ref = doc(this.firestore, 'collections', collectionId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Collection not found.');
+    if (snap.data().userId !== userId) throw new Error('Not authorized.');
+
+    await updateDoc(ref, {
+      sharedWith: arrayUnion(targetUserId),
+      updatedAt: serverTimestamp()
+    });
+
+    this._invalidate(userId);
+    this._invalidate(targetUserId);
+
+    return { success: true };
   }
 }
 

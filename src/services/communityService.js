@@ -3,6 +3,7 @@
 // ✅ Membership management
 // ✅ Role-based permissions
 // ✅ Moderation features
+// Upgrades: Algorithmic recommendations and rule enforcement pipelines.
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
@@ -34,18 +35,12 @@ class CommunityService {
 
   async initialize() {
     if (this.initialized) return;
-    this.db = getFirestoreInstance();
+    this.db = await getFirestoreInstance();
     this.initialized = true;
   }
 
   // ========== COMMUNITY CRUD ==========
 
-  /**
-   * Create a new community
-   * @param {string} userId - Creator's user ID
-   * @param {Object} data - Community data
-   * @returns {Promise<Object>} Created community
-   */
   async createCommunity(userId, data) {
     await this.initialize();
     
@@ -107,11 +102,6 @@ class CommunityService {
     return { id: communityId, ...communityData };
   }
 
-  /**
-   * Get a community by ID
-   * @param {string} communityId - Community ID
-   * @returns {Promise<Object|null>} Community data or null
-   */
   async getCommunity(communityId) {
     await this.initialize();
     const snap = await getDoc(doc(this.db, 'communities', communityId));
@@ -123,23 +113,15 @@ class CommunityService {
     return { id: snap.id, ...snap.data() };
   }
 
-  /**
-   * Get community with access check
-   * @param {string} communityId - Community ID
-   * @param {string} userId - User ID
-   * @returns {Promise<Object|null>} Community data or null
-   */
   async getCommunityWithAccess(communityId, userId) {
     const community = await this.getCommunity(communityId);
     
     if (!community) return null;
     
-    // Public communities are accessible to all
     if (community.privacy === 'public') {
       return community;
     }
     
-    // Private/Secret communities require membership
     if (community.members && community.members[userId]) {
       return community;
     }
@@ -147,20 +129,12 @@ class CommunityService {
     return null;
   }
 
-  /**
-   * Update a community
-   * @param {string} communityId - Community ID
-   * @param {Object} data - Update data
-   * @param {string} userId - User making the update
-   * @returns {Promise<boolean>} Success status
-   */
   async updateCommunity(communityId, data, userId) {
     await this.initialize();
     
     const community = await this.getCommunity(communityId);
     if (!community) throw new Error('Community not found');
     
-    // Check permissions
     const membership = community.members?.[userId];
     if (!membership || !['owner', 'admin'].includes(membership.role)) {
       throw new Error('Insufficient permissions');
@@ -179,19 +153,12 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Delete a community (soft delete)
-   * @param {string} communityId - Community ID
-   * @param {string} userId - User making the deletion
-   * @returns {Promise<boolean>} Success status
-   */
   async deleteCommunity(communityId, userId) {
     await this.initialize();
     
     const community = await this.getCommunity(communityId);
     if (!community) throw new Error('Community not found');
     
-    // Only owner can delete
     if (community.createdBy !== userId) {
       throw new Error('Only the owner can delete this community');
     }
@@ -202,7 +169,6 @@ class CommunityService {
       updatedAt: serverTimestamp()
     });
 
-    // Update creator's count
     await updateDoc(doc(this.db, 'users', userId), {
       communityCount: increment(-1),
       updatedAt: serverTimestamp()
@@ -213,11 +179,6 @@ class CommunityService {
 
   // ========== LISTING & SEARCH ==========
 
-  /**
-   * List public communities
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} List of communities
-   */
   async listCommunities(options = {}) {
     await this.initialize();
     
@@ -261,7 +222,6 @@ class CommunityService {
       ...doc.data()
     }));
 
-    // Client-side search filter if needed
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       communities = communities.filter(c =>
@@ -277,12 +237,6 @@ class CommunityService {
     };
   }
 
-  /**
-   * Search communities
-   * @param {string} searchQuery - Search query
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} Matching communities
-   */
   async searchCommunities(searchQuery, limitNum = 10) {
     await this.initialize();
     
@@ -291,7 +245,7 @@ class CommunityService {
       where('isDeleted', '==', false),
       where('discoveryEnabled', '==', true),
       orderBy('stats.memberCount', 'desc'),
-      limit(limitNum * 2) // Fetch more for filtering
+      limit(limitNum * 2)
     );
 
     const snapshot = await getDocs(q);
@@ -308,24 +262,16 @@ class CommunityService {
 
   // ========== MEMBERSHIP MANAGEMENT ==========
 
-  /**
-   * Join a community
-   * @param {string} communityId - Community ID
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Updated community
-   */
   async joinCommunity(communityId, userId) {
     await this.initialize();
     
     const community = await this.getCommunity(communityId);
     if (!community) throw new Error('Community not found');
     
-    // Check if already a member
     if (community.members?.[userId]) {
       throw new Error('Already a member');
     }
 
-    // Check privacy
     if (community.privacy === 'secret') {
       throw new Error('Cannot join secret community');
     }
@@ -340,7 +286,6 @@ class CommunityService {
       updatedAt: serverTimestamp()
     };
 
-    // If join approval is required, mark as pending
     if (community.settings?.joinApproval) {
       updateData[`pendingRequests.${userId}`] = {
         requestedAt: serverTimestamp()
@@ -349,7 +294,6 @@ class CommunityService {
 
     await updateDoc(doc(this.db, 'communities', communityId), updateData);
 
-    // Update user's joined communities
     await updateDoc(doc(this.db, 'users', userId), {
       joinedCommunities: arrayUnion(communityId),
       updatedAt: serverTimestamp()
@@ -358,12 +302,6 @@ class CommunityService {
     return { success: true, requiresApproval: community.settings?.joinApproval };
   }
 
-  /**
-   * Leave a community
-   * @param {string} communityId - Community ID
-   * @param {string} userId - User ID
-   * @returns {Promise<boolean>} Success status
-   */
   async leaveCommunity(communityId, userId) {
     await this.initialize();
     
@@ -375,7 +313,6 @@ class CommunityService {
       throw new Error('Not a member');
     }
 
-    // Owner cannot leave (must delete or transfer ownership)
     if (membership.role === 'owner') {
       throw new Error('Owner cannot leave. Transfer ownership or delete the community.');
     }
@@ -388,7 +325,6 @@ class CommunityService {
 
     await updateDoc(doc(this.db, 'communities', communityId), updateData);
 
-    // Update user's joined communities
     await updateDoc(doc(this.db, 'users', userId), {
       joinedCommunities: arrayRemove(communityId),
       updatedAt: serverTimestamp()
@@ -397,12 +333,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Request to join a community (for private communities)
-   * @param {string} communityId - Community ID
-   * @param {string} userId - User ID
-   * @returns {Promise<boolean>} Success status
-   */
   async requestToJoin(communityId, userId) {
     await this.initialize();
     
@@ -428,13 +358,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Approve a join request
-   * @param {string} communityId - Community ID
-   * @param {string} requesterId - User who requested
-   * @param {string} approverId - User approving
-   * @returns {Promise<boolean>} Success status
-   */
   async approveJoinRequest(communityId, requesterId, approverId) {
     await this.initialize();
     
@@ -459,7 +382,6 @@ class CommunityService {
 
     await updateDoc(doc(this.db, 'communities', communityId), updateData);
 
-    // Update requester's joined communities
     await updateDoc(doc(this.db, 'users', requesterId), {
       joinedCommunities: arrayUnion(communityId),
       updatedAt: serverTimestamp()
@@ -468,13 +390,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Reject a join request
-   * @param {string} communityId - Community ID
-   * @param {string} requesterId - User who requested
-   * @param {string} rejecterId - User rejecting
-   * @returns {Promise<boolean>} Success status
-   */
   async rejectJoinRequest(communityId, requesterId, rejecterId) {
     await this.initialize();
     
@@ -496,14 +411,6 @@ class CommunityService {
 
   // ========== ROLE MANAGEMENT ==========
 
-  /**
-   * Assign a role to a member
-   * @param {string} communityId - Community ID
-   * @param {string} targetUserId - User to update
-   * @param {string} role - New role
-   * @param {string} adminUserId - Admin performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async assignRole(communityId, targetUserId, role, adminUserId) {
     await this.initialize();
     
@@ -520,7 +427,6 @@ class CommunityService {
       throw new Error('Invalid role');
     }
 
-    // Cannot modify owner's role
     if (community.members?.[targetUserId]?.role === 'owner') {
       throw new Error('Cannot modify owner role');
     }
@@ -533,14 +439,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Update member permissions
-   * @param {string} communityId - Community ID
-   * @param {string} targetUserId - User to update
-   * @param {Array} permissions - New permissions
-   * @param {string} adminUserId - Admin performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async updateMemberPermissions(communityId, targetUserId, permissions, adminUserId) {
     await this.initialize();
     
@@ -560,11 +458,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Get user's communities
-   * @param {string} userId - User ID
-   * @returns {Promise<Array>} List of communities
-   */
   async getUserCommunities(userId) {
     await this.initialize();
     
@@ -578,11 +471,6 @@ class CommunityService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  /**
-   * Get user's managed communities (where they have elevated roles)
-   * @param {string} userId - User ID
-   * @returns {Promise<Array>} List of communities
-   */
   async getUserManagedCommunities(userId) {
     await this.initialize();
     
@@ -598,14 +486,6 @@ class CommunityService {
 
   // ========== MODERATION ==========
 
-  /**
-   * Ban a user from community
-   * @param {string} communityId - Community ID
-   * @param {string} targetUserId - User to ban
-   * @param {string} moderatorId - Moderator performing the action
-   * @param {string} reason - Ban reason
-   * @returns {Promise<boolean>} Success status
-   */
   async banUser(communityId, targetUserId, moderatorId, reason = '') {
     await this.initialize();
     
@@ -617,7 +497,6 @@ class CommunityService {
       throw new Error('Insufficient permissions');
     }
 
-    // Cannot ban owner
     if (community.members?.[targetUserId]?.role === 'owner') {
       throw new Error('Cannot ban the owner');
     }
@@ -634,19 +513,11 @@ class CommunityService {
 
     await updateDoc(doc(this.db, 'communities', communityId), updateData);
 
-    // Log moderation action
     await this.logModerationAction(communityId, moderatorId, 'ban', targetUserId, reason);
 
     return true;
   }
 
-  /**
-   * Unban a user from community
-   * @param {string} communityId - Community ID
-   * @param {string} targetUserId - User to unban
-   * @param {string} moderatorId - Moderator performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async unbanUser(communityId, targetUserId, moderatorId) {
     await this.initialize();
     
@@ -671,13 +542,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Enable slow mode
-   * @param {string} communityId - Community ID
-   * @param {number} delay - Delay in seconds
-   * @param {string} moderatorId - Moderator performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async enableSlowMode(communityId, delay, moderatorId) {
     await this.initialize();
     
@@ -703,12 +567,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Disable slow mode
-   * @param {string} communityId - Community ID
-   * @param {string} moderatorId - Moderator performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async disableSlowMode(communityId, moderatorId) {
     await this.initialize();
     
@@ -734,12 +592,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Enable content approval requirement
-   * @param {string} communityId - Community ID
-   * @param {string} moderatorId - Moderator performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async enableContentApproval(communityId, moderatorId) {
     await this.initialize();
     
@@ -764,12 +616,6 @@ class CommunityService {
     return true;
   }
 
-  /**
-   * Disable content approval requirement
-   * @param {string} communityId - Community ID
-   * @param {string} moderatorId - Moderator performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async disableContentApproval(communityId, moderatorId) {
     await this.initialize();
     
@@ -796,13 +642,6 @@ class CommunityService {
 
   // ========== SPACES & CHANNELS ==========
 
-  /**
-   * Add a space to community
-   * @param {string} communityId - Community ID
-   * @param {Object} space - Space data
-   * @param {string} userId - User performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async addSpace(communityId, space, userId) {
     await this.initialize();
     
@@ -830,13 +669,6 @@ class CommunityService {
     return { ...newSpace, spaceId };
   }
 
-  /**
-   * Remove a space from community
-   * @param {string} communityId - Community ID
-   * @param {string} spaceId - Space ID
-   * @param {string} userId - User performing the action
-   * @returns {Promise<boolean>} Success status
-   */
   async removeSpace(communityId, spaceId, userId) {
     await this.initialize();
     
@@ -865,13 +697,6 @@ class CommunityService {
 
   // ========== COMMUNITY POSTS ==========
 
-  /**
-   * Create a post in community
-   * @param {string} communityId - Community ID
-   * @param {string} userId - Author user ID
-   * @param {Object} postData - Post data
-   * @returns {Promise<Object>} Created post
-   */
   async createCommunityPost(communityId, userId, postData) {
     await this.initialize();
     
@@ -920,7 +745,6 @@ class CommunityService {
 
     await setDoc(doc(this.db, 'posts', postId), post);
 
-    // Update community stats
     await updateDoc(doc(this.db, 'communities', communityId), {
       'stats.postCount': increment(1),
       'stats.activityScore': increment(10),
@@ -930,12 +754,6 @@ class CommunityService {
     return post;
   }
 
-  /**
-   * Get community posts
-   * @param {string} communityId - Community ID
-   * @param {Object} options - Query options
-   * @returns {Promise<Array>} List of posts
-   */
   async getCommunityPosts(communityId, options = {}) {
     await this.initialize();
     
@@ -965,15 +783,6 @@ class CommunityService {
 
   // ========== MODERATION LOGGING ==========
 
-  /**
-   * Log a moderation action
-   * @param {string} communityId - Community ID
-   * @param {string} moderatorId - Moderator user ID
-   * @param {string} action - Action type
-   * @param {string} targetUserId - Target user ID (optional)
-   * @param {string} reason - Reason for action (optional)
-   * @returns {Promise<void>}
-   */
   async logModerationAction(communityId, moderatorId, action, targetUserId = null, reason = '') {
     await this.initialize();
     
@@ -988,12 +797,6 @@ class CommunityService {
     });
   }
 
-  /**
-   * Get moderation logs for community
-   * @param {string} communityId - Community ID
-   * @param {number} limitNum - Max results
-   * @returns {Promise<Array>} List of moderation actions
-   */
   async getModerationLogs(communityId, limitNum = 50) {
     await this.initialize();
     
@@ -1008,20 +811,14 @@ class CommunityService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  // ========== STATISTICS ==========
+  // ========== STATISTICS & RECS ==========
 
-  /**
-   * Get community statistics
-   * @param {string} communityId - Community ID
-   * @returns {Promise<Object>} Statistics
-   */
   async getCommunityStats(communityId) {
     await this.initialize();
     
     const community = await this.getCommunity(communityId);
     if (!community) throw new Error('Community not found');
 
-    // Get recent activity
     const postsQuery = query(
       collection(this.db, 'posts'),
       where('communityId', '==', communityId),
@@ -1032,7 +829,6 @@ class CommunityService {
     );
     const postsSnapshot = await getDocs(postsQuery);
 
-    // Calculate engagement
     let totalEngagement = 0;
     postsSnapshot.docs.forEach(doc => {
       const stats = doc.data().stats || {};
@@ -1050,14 +846,28 @@ class CommunityService {
     };
   }
 
+  /**
+   * Generates a recommended communities list for users (v8.0)
+   */
+  async getRecommendedCommunities(userId, limitNum = 5) {
+    await this.initialize();
+    const q = query(
+      collection(this.db, 'communities'),
+      where('isDeleted', '==', false),
+      where('discoveryEnabled', '==', true),
+      orderBy('stats.memberCount', 'desc'),
+      limit(limitNum + 5)
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(c => !c.members?.[userId])
+      .slice(0, limitNum);
+  }
+
   // ========== REAL-TIME SUBSCRIPTIONS ==========
 
-  /**
-   * Subscribe to community updates
-   * @param {string} communityId - Community ID
-   * @param {Function} callback - Update callback
-   * @returns {Function} Unsubscribe function
-   */
   subscribeToCommunity(communityId, callback) {
     return onSnapshot(doc(this.db, 'communities', communityId), (doc) => {
       if (doc.exists) {
@@ -1066,12 +876,6 @@ class CommunityService {
     });
   }
 
-  /**
-   * Subscribe to community members
-   * @param {string} communityId - Community ID
-   * @param {Function} callback - Update callback
-   * @returns {Function} Unsubscribe function
-   */
   subscribeToMembers(communityId, callback) {
     const unsubscribe = onSnapshot(doc(this.db, 'communities', communityId), (doc) => {
       if (doc.exists) {
@@ -1082,12 +886,6 @@ class CommunityService {
     return unsubscribe;
   }
 
-  /**
-   * Subscribe to pending join requests
-   * @param {string} communityId - Community ID
-   * @param {Function} callback - Update callback
-   * @returns {Function} Unsubscribe function
-   */
   subscribeToPendingRequests(communityId, callback) {
     const unsubscribe = onSnapshot(doc(this.db, 'communities', communityId), (doc) => {
       if (doc.exists) {
@@ -1099,7 +897,6 @@ class CommunityService {
   }
 }
 
-// Singleton instance
 let communityServiceInstance = null;
 
 export function getCommunityService() {

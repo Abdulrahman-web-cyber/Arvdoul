@@ -5,17 +5,46 @@
  * 1. Read-Repair Verification: Computes exact sum across all shards and compares against parent document summary.
  * 2. Automatic Drift Repair: Automatically synchronizes parent document stats when drift exceeds 5% or 10 units.
  * 3. Daily Scheduled Audit: Sweeps active posts, reels, and profiles to maintain 100% counter integrity.
+ * 4. LocalForage Reconciliation Logs: Securely logs audits and reparations locally to survive page refreshes.
  */
 
 import { logger } from '../utils/Logger.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { cacheManager } from '../utils/CacheManager.js';
+import { alertingService } from './alertingService.js';
+import localforage from 'localforage';
 
 class CounterReconciliationService {
   constructor() {
     this.DRIFT_PERCENT_THRESHOLD = 0.05; // 5% drift triggers repair
     this.DRIFT_ABSOLUTE_THRESHOLD = 5;   // 5 units drift triggers repair
     this.reconciledCount = 0;
+    this.auditLogs = [];
+
+    this._initLogs();
+  }
+
+  /**
+   * Initializes localForage persistent logs store.
+   * @private
+   */
+  async _initLogs() {
+    try {
+      const saved = await localforage.getItem('arvdoul_reconciliation_logs');
+      if (Array.isArray(saved)) {
+        this.auditLogs = saved;
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Persists the reconciliation logs.
+   * @private
+   */
+  async _saveLogs() {
+    try {
+      await localforage.setItem('arvdoul_reconciliation_logs', this.auditLogs);
+    } catch (_) {}
   }
 
   /**
@@ -46,6 +75,14 @@ class CounterReconciliationService {
           logger.info(`[CounterReconciliation] Drift detected on ${docPath}.${field}: recorded=${recordedVal}, actualShardedSum=${shardedSum} (diff=${diff})`);
           updates[`stats.${field}`] = shardedSum;
           driftFound = true;
+
+          // Dispatch automatic drift operations alerts
+          alertingService.triggerAlert(
+            `counter_drift_${field}_${docPath.replace(/\//g, '_')}`,
+            'p2_medium',
+            'Counter Drift Repaired Automatically',
+            { docPath, field, recordedVal, shardedSum, diff }
+          );
         }
       }
 
@@ -53,6 +90,15 @@ class CounterReconciliationService {
         await updateDoc(docRef, updates);
         cacheManager.delete('counters', docPath);
         this.reconciledCount++;
+
+        // Log locally
+        this.auditLogs.push({
+          docPath,
+          repairedAt: Date.now(),
+          updates
+        });
+        await this._saveLogs();
+
         logger.info(`[CounterReconciliation] Successfully repaired drifted counters on ${docPath}`, updates);
         return { success: true, repaired: true, updates };
       }
