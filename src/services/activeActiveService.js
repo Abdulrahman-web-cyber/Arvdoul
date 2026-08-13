@@ -12,6 +12,9 @@
 import { logger } from '../utils/Logger.js';
 import { alertingService } from './alertingService.js';
 
+/**
+ * Active‑Active Multi-Region Router & Health Service Engine
+ */
 class ActiveActiveService {
   constructor() {
     this.regions = [
