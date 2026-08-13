@@ -7,6 +7,7 @@
  * 3. TTL with sliding expiration for high-traffic analytical endpoints.
  * 4. Cache Stampede Protection (Single-Flight): Coalesces concurrent identical aggregation requests.
  * 5. Multi-Tier Distributed Cache backing (Redis support).
+ * 6. Cache Poisoning Sanitization: Validates and sanitizes dynamic query filter objects to prevent key attacks.
  */
 
 import { cacheManager } from '../utils/CacheManager.js';
@@ -21,12 +22,30 @@ class AggregationCacheService {
   }
 
   /**
+   * Sanitizes filter object to prevent cache poisoning and SQL/NoSQL injections (CWE-89).
+   * @private
+   */
+  _sanitizeFilters(filterObj) {
+    if (!filterObj || typeof filterObj !== 'object') return {};
+    const sanitized = {};
+    Object.entries(filterObj).forEach(([key, val]) => {
+      // Retain only safe alphanumeric keys & reject any control characters
+      const safeKey = key.replace(/[^a-zA-Z0-9_]/g, '');
+      if (safeKey && typeof val !== 'function' && typeof val !== 'symbol') {
+        sanitized[safeKey] = typeof val === 'string' ? val.replace(/[${}$]/g, '') : val;
+      }
+    });
+    return sanitized;
+  }
+
+  /**
    * Generates a deterministic key for an aggregation query.
    */
   _buildKey(collectionName, type, filterObj = {}) {
-    const sortedFilter = Object.keys(filterObj)
+    const sanitized = this._sanitizeFilters(filterObj);
+    const sortedFilter = Object.keys(sanitized)
       .sort()
-      .map((k) => `${k}=${filterObj[k]}`)
+      .map((k) => `${k}=${sanitized[k]}`)
       .join('&');
     return `${collectionName}:${type}:${sortedFilter || 'all'}`;
   }

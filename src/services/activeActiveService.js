@@ -3,18 +3,16 @@
  *
  * Implements:
  * 1. Region Health Probing: Continuously checks HTTP latency and availability across primary (europe-west3) and secondary regions (us-central1, asia-northeast1).
- * 2. Automatic Edge Failover: Seamlessly switches client-side endpoints to fallback region if primary region health drops below 99%.
+ * 2. Automatic Edge Failover: Seamlessly switches client-side endpoints to fallback region if primary region health drops below 95%.
  * 3. Cross-Region Read Replica Routing: Directs heavy read queries to closest healthy geographic replica.
  * 4. Manual Failover: Provides manual override controls with multi-tab localStorage persistence.
  * 5. Retry with Exponential Backoff: Robust fetch operations with exponential backoff timers.
+ * 6. Authenticated Probes: Attaches secure operational bearer tokens to regional checks.
  */
 
 import { logger } from '../utils/Logger.js';
 import { alertingService } from './alertingService.js';
 
-/**
- * Active‑Active Multi-Region Router & Health Service Engine
- */
 class ActiveActiveService {
   constructor() {
     this.regions = [
@@ -23,7 +21,8 @@ class ActiveActiveService {
       { id: 'asia-northeast1', name: 'Tokyo (Replica)', endpoint: 'https://asia-northeast1-arvdoul.cloudfunctions.net/health', isHealthy: true, latencyMs: 140, healthScore: 1.0 },
     ];
     this.activeRegion = 'europe-west3';
-    this.failoverThresholdScore = 0.99; // health drops below 99%
+    this.failoverThresholdScore = 0.95; // health drops below 95%
+    this.probeToken = 'arvdoul-ops-probe-v8'; // bearer token for regional health endpoint
 
     this._loadPersistedRegion();
   }
@@ -55,18 +54,24 @@ class ActiveActiveService {
         const timeoutId = setTimeout(() => controller.abort(), 1500);
 
         const response = await fetch(endpoint, {
-          method: 'HEAD',
-          mode: 'no-cors',
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.probeToken}`,
+            'X-Arvdoul-Ping': String(Date.now()),
+          },
           signal: controller.signal,
           cache: 'no-store'
         });
 
         clearTimeout(timeoutId);
+        if (!response.ok && response.status !== 404 && response.status !== 405) {
+          throw new Error(`Probe failed with status ${response.status}`);
+        }
         return response;
       } catch (err) {
         if (i === retries - 1) throw err;
-        const delay = (1 << i) * 1000; // Exponential: 1s, 2s, 4s...
-        logger.warn('[ActiveActiveService] Probe attempt failed. Retrying in ' + delay + 'ms.');
+        const delay = Math.pow(2, i) * 1000; // Exponential backoff: 1s, 2s, 4s...
+        logger.warn(`[ActiveActiveService] Probe attempt failed. Retrying in ${delay}ms.`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -79,7 +84,7 @@ class ActiveActiveService {
    * @returns {Promise<Array<object>>}
    */
   async probeRegions() {
-    logger.info('[ActiveActiveService] Starting active multi-region health probes.');
+    logger.info('[ActiveActiveService] Starting active authenticated multi-region health probes.');
     const isBrowser = typeof window !== 'undefined';
 
     for (const region of this.regions) {

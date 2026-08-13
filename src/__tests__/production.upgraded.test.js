@@ -128,6 +128,90 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(result.activeRegion).toBe('us-central1');
       expect(localStorage.getItem('arvdoul_active_region')).toBe('us-central1');
     });
+
+    test('fetches regional probes attaching custom bearer headers and ping timestamps', async () => {
+      const fetchMock = jest.fn(() => Promise.resolve({ ok: true, status: 200 }));
+      globalThis.fetch = fetchMock;
+
+      await activeActiveService._fetchWithRetry('https://europe-west3-arvdoul.cloudfunctions.net/health', 1);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': `Bearer ${activeActiveService.probeToken}`,
+            'X-Arvdoul-Ping': expect.any(String)
+          })
+        })
+      );
+    });
+  });
+
+  describe('botProtectionService (Biometrics & Trajectory Analysis)', () => {
+    let botService;
+
+    beforeAll(async () => {
+      const mod = await import('../services/botProtectionService.js');
+      botService = mod.botProtectionService || mod.default;
+    });
+
+    test('flags simulated headless browser environments instantly', () => {
+      // Mock navigator.webdriver
+      const originalWebdriver = globalThis.navigator.webdriver;
+      Object.defineProperty(globalThis.navigator, 'webdriver', { value: true, configurable: true });
+
+      const score = botService.calculateHumanConfidence();
+      expect(score).toBeLessThan(0.10);
+
+      // Restore
+      Object.defineProperty(globalThis.navigator, 'webdriver', { value: originalWebdriver, configurable: true });
+    });
+
+    test('detects keyboard flight-time scripting variance breaches', () => {
+      botService.keyEvents = [
+        { time: 1000, type: 'down', key: 'a' },
+        { time: 1010, type: 'down', key: 'b' },
+        { time: 1020, type: 'down', key: 'c' },
+        { time: 1030, type: 'down', key: 'd' }
+      ];
+
+      const score = botService.calculateHumanConfidence();
+      expect(score).toBeLessThan(0.30); // flagged as scripted typing
+      botService.keyEvents = [];
+    });
+  });
+
+  describe('copyrightDetectionService (Licensing & DMCA Notices)', () => {
+    let copyrightService;
+
+    beforeAll(async () => {
+      const mod = await import('../services/copyrightDetectionService.js');
+      copyrightService = mod.copyrightDetectionService || mod.default;
+    });
+
+    test('correctly calculates Hamming distances between pHash visual signatures', () => {
+      const hashA = '1111000011110000111100001111000011110000111100001111000011110000';
+      const hashB = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff
+
+      const dist = copyrightService.hammingDistance(hashA, hashB);
+      expect(dist).toBe(1);
+    });
+
+    test('flags licensed media matches within the Hamming threshold distance', () => {
+      const licensedHashMatch = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff (Licensed)
+      const res = copyrightService.checkCopyrightMatch(licensedHashMatch);
+
+      expect(res.match).toBe(true);
+      expect(res.owner).toBe('WarnerMedia Ltd.');
+      expect(res.action).toBe('FLAG_FOR_ATTRIBUTION_OR_TAKEDOWN');
+    });
+
+    test('processes and logs valid DMCA Takedown Notice claims', () => {
+      const res = copyrightService.processDMCANotice('WarnerMedia IP Agent', 'licensed_neon_workspace', 'violator_john');
+      expect(res.success).toBe(true);
+      expect(res.claimId).toContain('dmca_');
+      expect(res.status).toBe('TAKEDOWN_SUBMITTED_FOR_REVIEW');
+    });
   });
 
   describe('SAMLService (SSO & JIT)', () => {
