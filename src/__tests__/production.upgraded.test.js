@@ -227,17 +227,64 @@ describe('Upgraded Production Services Integration Tests', () => {
   });
 
   describe('AlertingService (Operations & Webhooks)', () => {
+    beforeEach(() => {
+      alertingService.alertCooldowns.clear();
+      alertingService.alertStatusStore.clear();
+    });
+
     test('triggers alert and suppresses secondary triggers within cooldown', async () => {
       globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
 
       // First alert trigger (should run)
-      const res1 = await alertingService.triggerAlert('disk_space_crit', 'p0_critical', 'Low disk space', { used: '98%' });
+      const res1 = await alertingService.triggerAlert('disk_space_crit', 'p1_high', 'Low disk space', { used: '98%' });
       expect(res1.triggered).toBe(true);
 
       // Second alert trigger for same key within cooldown (should be suppressed)
-      const res2 = await alertingService.triggerAlert('disk_space_crit', 'p0_critical', 'Low disk space', { used: '98%' });
+      const res2 = await alertingService.triggerAlert('disk_space_crit', 'p1_high', 'Low disk space', { used: '98%' });
       expect(res2.triggered).toBe(false);
       expect(res2.suppressed).toBe(true);
+    });
+
+    test('escalates severity to P0 on successive threshold breaches', async () => {
+      globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
+
+      // Simulate 5 successive trigger attempts
+      let finalRes;
+      for (let i = 0; i < 5; i++) {
+        // Disable cooldown check temporarily to test successive triggers
+        alertingService.alertCooldowns.clear();
+        finalRes = await alertingService.triggerAlert('rapid_errors', 'p1_high', 'High Error Rate');
+      }
+
+      expect(finalRes.triggered).toBe(true);
+      expect(finalRes.alert.severity).toBe('p0_critical');
+      expect(finalRes.alert.title).toContain('[ESCALATED]');
+    });
+
+    test('lifecycle allows acknowledging and resolving active alerts', async () => {
+      globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
+
+      await alertingService.triggerAlert('db_latency_high', 'p2_medium', 'DB Latency High');
+
+      // Acknowledge alert
+      const ackRes = alertingService.acknowledgeAlert('db_latency_high');
+      expect(ackRes.success).toBe(true);
+      expect(ackRes.alert.status).toBe('acknowledged');
+
+      // Resolve alert should allow triggering again
+      const resolveRes = alertingService.resolveAlert('db_latency_high');
+      expect(resolveRes.success).toBe(true);
+      expect(resolveRes.alert.status).toBe('resolved');
+
+      const triggerAgain = await alertingService.triggerAlert('db_latency_high', 'p2_medium', 'DB Latency High');
+      expect(triggerAgain.triggered).toBe(true);
+    });
+
+    test('computes valid HMAC SHA-256 signature for outgoing webhook payload verification', () => {
+      const payload = 'test-ops-payload';
+      const sig = alertingService._computeHMACSignedHeader(payload);
+      expect(sig).toBeDefined();
+      expect(sig.length).toBe(64); // 256 bits in hex format = 64 characters
     });
   });
 
