@@ -5,9 +5,12 @@
  * 1. Region Health Probing: Continuously checks HTTP latency and availability across primary (europe-west3) and secondary regions (us-central1, asia-northeast1).
  * 2. Automatic Edge Failover: Seamlessly switches client-side endpoints to fallback region if primary region health drops below 99%.
  * 3. Cross-Region Read Replica Routing: Directs heavy read queries to closest healthy geographic replica.
+ * 4. Manual Failover: Provides manual override controls with multi-tab localStorage persistence.
+ * 5. Retry with Exponential Backoff: Robust fetch operations with exponential backoff timers.
  */
 
 import { logger } from '../utils/Logger.js';
+import { alertingService } from './alertingService.js';
 
 class ActiveActiveService {
   constructor() {
@@ -18,6 +21,53 @@ class ActiveActiveService {
     ];
     this.activeRegion = 'europe-west3';
     this.failoverThresholdScore = 0.99; // health drops below 99%
+
+    this._loadPersistedRegion();
+  }
+
+  /**
+   * Loads custom active region override from persistent localStorage.
+   * @private
+   */
+  _loadPersistedRegion() {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('arvdoul_active_region');
+        if (saved && this.regions.find(r => r.id === saved)) {
+          this.activeRegion = saved;
+          logger.info('[ActiveActiveService] Loaded active region override: ' + saved);
+        }
+      } catch (_) {}
+    }
+  }
+
+  /**
+   * Helper to execute fetch operations with exponential backoff retry.
+   * @private
+   */
+  async _fetchWithRetry(endpoint, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+        const response = await fetch(endpoint, {
+          method: 'HEAD',
+          mode: 'no-cors',
+          signal: controller.signal,
+          cache: 'no-store'
+        });
+
+        clearTimeout(timeoutId);
+        return response;
+      } catch (err) {
+        if (i === retries - 1) throw err;
+        const delay = (1 << i) * 1000; // Exponential: 1s, 2s, 4s...
+        logger.warn('[ActiveActiveService] Probe attempt failed. Retrying in ' + delay + 'ms.');
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error('All probe retries exhausted');
   }
 
   /**
@@ -36,17 +86,7 @@ class ActiveActiveService {
           throw new Error('Offline');
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout
-
-        const response = await fetch(region.endpoint, {
-          method: 'HEAD',
-          mode: 'no-cors',
-          signal: controller.signal,
-          cache: 'no-store'
-        });
-
-        clearTimeout(timeoutId);
+        await this._fetchWithRetry(region.endpoint, 2);
 
         const latency = performance.now() - start;
         region.latencyMs = Math.round(latency);
@@ -98,10 +138,37 @@ class ActiveActiveService {
         const nextRegion = healthyCandidates[0].id;
         logger.info(`[ActiveActiveService] Failover completed successfully: ${this.activeRegion} -> ${nextRegion}`);
         this.activeRegion = nextRegion;
+
+        // Dispatch Operations alert for failover
+        alertingService.triggerAlert(
+          'region_failover_' + Date.now().toString(36),
+          'p1_high',
+          'Automated Region Failover Completed',
+          { fromRegion: current?.id, toRegion: nextRegion, reason: 'Health degraded' }
+        );
       } else {
         logger.error('[ActiveActiveService] DISASTER STATE: No regions met the healthy failover threshold! Keeping current region.');
       }
     }
+  }
+
+  /**
+   * Triggers manual override failover with multi-tab localStorage persistence.
+   */
+  manualFailover(regionId) {
+    if (!this.regions.find(r => r.id === regionId)) {
+      throw new Error('Invalid region identifier');
+    }
+    logger.warn('[ActiveActiveService] Manual override failover triggered: ' + regionId);
+    this.activeRegion = regionId;
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('arvdoul_active_region', regionId);
+      } catch (_) {}
+    }
+
+    return { success: true, activeRegion: this.activeRegion };
   }
 
   /**
