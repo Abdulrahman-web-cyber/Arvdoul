@@ -54,6 +54,7 @@ import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
 import { incidentService } from '../services/incidentService.js';
 import { aggregationCacheService } from '../services/AggregationCacheService.js';
+import { aiStudioService } from '../services/aiStudioService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -377,6 +378,32 @@ describe('Upgraded Production Services Integration Tests', () => {
       const mockCompute2 = jest.fn(async () => ({ data: 'refreshed' }));
       const result = await aggregationCacheService.getOrCompute('users_stats', 'avg', { age: '20' }, mockCompute2, 5000);
       expect(result).toEqual({ data: 'refreshed' });
+    });
+  });
+
+  describe('AIStudioService (Creative Copilot Generations)', () => {
+    test('generates viral captions and filters out toxic phrases', async () => {
+      const result = await aiStudioService.generateCaptions({
+        topic: 'autonomous systems engineering',
+        tone: 'hype',
+        platform: 'reels'
+      });
+
+      expect(result.hook).toBeDefined();
+      expect(result.body).toContain('#autonomoussystemsengineering');
+      expect(result.viralScore).toBeGreaterThanOrEqual(85);
+    });
+
+    test('generates script with visual and audio scene cues', async () => {
+      const result = await aiStudioService.generateScript({
+        topic: 'machine learning optimization',
+        duration: 30,
+        style: 'tech'
+      });
+
+      expect(result.title).toContain('How to Master machine learning optimization');
+      expect(result.scenes.length).toBeGreaterThan(0);
+      expect(result.scenes[0].visual).toBeDefined();
     });
   });
 });

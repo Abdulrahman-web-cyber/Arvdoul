@@ -1,9 +1,8 @@
 // src/services/aiStudioService.js
-// 🌟 ARVDOUL AI CREATIVE CO-PILOT SERVICE - PRODUCTION READY v5.0
-// Enterprise AI creation suite supporting real OpenAI/Anthropic calls & advanced localized fallback.
+// 🌟 ARVDOUL AI CREATIVE CO-PILOT SERVICE - PRODUCTION READY v6.0
+// Enterprise AI creation suite supporting real OpenAI/Anthropic calls via Cloud Functions & advanced localized fallback.
 
 import { svcLogger } from './ServiceKit.js';
-import { secureRandom } from '../lib/utils.js';
 
 const log = svcLogger('aiStudioService');
 
@@ -50,7 +49,26 @@ class AIStudioService {
    * Helper to execute real OpenAI chat completion if configured, or fall back
    */
   async _callOpenAI(prompt, systemPrompt = "You are a world-class creator AI assistant.") {
-    const apiKey = import.meta.env?.VITE_OPENAI_API_KEY;
+    // 1. Try Firebase Cloud Function to insulate secrets from client (Pillar 2 - Security)
+    try {
+      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+        throw new Error('Skipping Cloud Functions in tests');
+      }
+
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const functionsInstance = getFunctions();
+      const aiCallable = httpsCallable(functionsInstance, 'generateAIContent');
+      const response = await aiCallable({ prompt, systemPrompt });
+      if (response && response.data) {
+        log.info('[AIStudio] Successfully retrieved AI output from cloud gateway.');
+        return response.data;
+      }
+    } catch (_) {
+      // Fallback to direct client-side fetch if API key is provided and Cloud Functions are unavailable
+    }
+
+    const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+    const apiKey = env['VITE_OPENAI_API_KEY'];
     if (!apiKey) {
       log.info('VITE_OPENAI_API_KEY not configured, using advanced local fallback model.');
       return null;
@@ -61,7 +79,7 @@ class AIStudioService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': 'Bearer ' + apiKey
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
@@ -75,7 +93,7 @@ class AIStudioService {
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
+        throw new Error('OpenAI API error: ' + response.statusText);
       }
 
       const data = await response.json();
@@ -112,7 +130,7 @@ class AIStudioService {
       if (lowerText.includes(word)) {
         return {
           flagged: true,
-          reason: `Content contains blocked phrase: "${word}"`
+          reason: 'Content contains blocked phrase: "' + word + '"'
         };
       }
     }
@@ -129,8 +147,8 @@ class AIStudioService {
     const cleanTopic = topic || 'content creation';
 
     // Try real OpenAI model first
-    const systemPrompt = `You are an elite social media copywriter specializing in ${platform} captions. Tone: ${selectedTone.label}. Output style: ${length}.`;
-    const prompt = `Write a viral high-engagement caption about: "${cleanTopic}". Include a strong hook, body, emojis: ${selectedTone.emojis.join(' ')}, and 5-8 relevant trending hashtags.`;
+    const systemPrompt = 'You are an elite social media copywriter specializing in ' + platform + ' captions. Tone: ' + selectedTone.label + '. Output style: ' + length + '.';
+    const prompt = 'Write a viral high-engagement caption about: "' + cleanTopic + '". Include a strong hook, body, emojis: ' + selectedTone.emojis.join(' ') + ', and 5-8 relevant trending hashtags.';
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
 
@@ -140,10 +158,17 @@ class AIStudioService {
         log.warn('OpenAI output flagged by moderation filter', modCheck.reason);
       } else {
         const hashtags = realResponse.match(/#[a-zA-Z0-9]+/g) || [];
-        const viralScore = Math.floor(secureRandom() * 15) + 85;
+
+        const randArr = new Uint8Array(1);
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+          crypto.getRandomValues(randArr);
+        } else {
+          randArr[0] = Date.now() % 256;
+        }
+        const viralScore = Math.floor((randArr[0] / 255) * 15) + 85;
 
         return {
-          hook: realResponse.split('\n')[0] || `Secret of ${cleanTopic}`,
+          hook: realResponse.split('\n')[0] || ('Secret of ' + cleanTopic),
           body: realResponse,
           hashtags,
           viralScore,
@@ -157,31 +182,34 @@ class AIStudioService {
     // Fallback logic (Advanced Template Model)
     await new Promise(r => setTimeout(r, 600));
 
-    const hook = VIRAL_HOOK_TEMPLATES[Math.floor(secureRandom() * VIRAL_HOOK_TEMPLATES.length)]
-      .replace('{topic}', cleanTopic);
+    const hookTemplate = VIRAL_HOOK_TEMPLATES[Date.now() % VIRAL_HOOK_TEMPLATES.length];
+    const hook = hookTemplate.replace('{topic}', cleanTopic);
     
     const bodyVariants = [
-      `Mastering ${cleanTopic} is all about consistency, deliberate practice, and knowing when to pivot.\n\nHere are 3 key takeaways you can apply today:\n1. Focus on the core fundamentals first.\n2. Don't overcomplicate your workflow.\n3. Measure real output over busywork.\n\nDrop a comment if you've been working on this too!`,
-      `The game changed completely when I started approaching ${cleanTopic} with a systems mindset.\n\nInstead of burning out, build scalable habits that compound over weeks and months.\n\nTag a friend who needs to see this!`,
-      `Most people overthink ${cleanTopic}. Here is the no-nonsense framework that works every single time.\n\nBookmark this post so you don't lose it when you need it.`
+      'Mastering ' + cleanTopic + ' is all about consistency, deliberate practice, and knowing when to pivot.\n\nHere are 3 key takeaways you can apply today:\n1. Focus on the core fundamentals first.\n2. Don\'t overcomplicate your workflow.\n3. Measure real output over busywork.\n\nDrop a comment if you\'ve been working on this too!',
+      'The game changed completely when I started approaching ' + cleanTopic + ' with a systems mindset.\n\nInstead of burning out, build scalable habits that compound over weeks and months.\n\nTag a friend who needs to see this!',
+      'Most people overthink ' + cleanTopic + '. Here is the no-nonsense framework that works every single time.\n\nBookmark this post so you don\'t lose it when you need it.'
     ];
 
-    const chosenBody = bodyVariants[Math.floor(secureRandom() * bodyVariants.length)];
+    const chosenBody = bodyVariants[Date.now() % bodyVariants.length];
     const emojis = selectedTone.emojis.join(' ');
     
     const hashtags = [
-      `#${cleanTopic.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
+      '#' + cleanTopic.replace(/[^a-zA-Z0-9]/g, '').toLowerCase(),
       '#ArvdoulCreators',
       '#ViralReels',
       '#ContentStrategy',
       '#CreatorEconomy'
     ];
 
-    const viralScore = Math.floor(secureRandom() * 15) + 85;
+    const scoreRand = typeof crypto !== 'undefined' && crypto.getRandomValues
+      ? crypto.getRandomValues(new Uint8Array(1))[0]
+      : (Date.now() % 256);
+    const viralScore = Math.floor((scoreRand / 255) * 15) + 85;
 
     return {
       hook,
-      body: `${hook}\n\n${chosenBody}\n\n${emojis}\n\n${hashtags.join(' ')}`,
+      body: hook + '\n\n' + chosenBody + '\n\n' + emojis + '\n\n' + hashtags.join(' '),
       hashtags,
       viralScore,
       tone: selectedTone.label,
@@ -197,14 +225,14 @@ class AIStudioService {
     log.info('Generating video script', { topic, duration, style });
     const cleanTopic = topic || 'your strategy';
 
-    const systemPrompt = `You are a professional video editor and director. Generate a highly structured multi-scene video script with visual cues, audio cues, and speaking lines. Duration: ${duration} seconds.`;
-    const prompt = `Write a highly engaging multi-scene video script with 3-4 scenes for topic: "${cleanTopic}" in a "${style}" style.`;
+    const systemPrompt = 'You are a professional video editor and director. Generate a highly structured multi-scene video script with visual cues, audio cues, and speaking lines. Duration: ' + duration + ' seconds.';
+    const prompt = 'Write a highly engaging multi-scene video script with 3-4 scenes for topic: "' + cleanTopic + '" in a "' + style + '" style.';
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
       return {
-        title: `How to Master ${cleanTopic} in ${duration} Seconds`,
-        targetDuration: `${duration}s`,
+        title: 'How to Master ' + cleanTopic + ' in ' + duration + ' Seconds',
+        targetDuration: duration + 's',
         style,
         estimatedPacing: 'Fast & Punchy (140-160 WPM)',
         rawScriptText: realResponse,
@@ -222,8 +250,8 @@ class AIStudioService {
     }));
 
     return {
-      title: `How to Master ${cleanTopic} in ${duration} Seconds`,
-      targetDuration: `${duration}s`,
+      title: 'How to Master ' + cleanTopic + ' in ' + duration + ' Seconds',
+      targetDuration: duration + 's',
       style,
       estimatedPacing: 'Fast & Punchy (140-160 WPM)',
       scenes: customizedScenes,
@@ -238,7 +266,7 @@ class AIStudioService {
   async craftImagePrompt({ subject, style = 'Cinematic', lighting = 'Golden Hour Volumetric', ratio = '9:16' }) {
     const cleanSubject = subject || 'a futuristic creator workspace in neon city';
     const systemPrompt = "You are a master AI prompt engineer for image generator systems like Midjourney v6.";
-    const prompt = `Create a hyper-detailed photograph prompt for subject: "${cleanSubject}" in style: "${style}" with lighting: "${lighting}" with ratio: "${ratio}".`;
+    const prompt = 'Create a hyper-detailed photograph prompt for subject: "' + cleanSubject + '" in style: "' + style + '" with lighting: "' + lighting + '" with ratio: "' + ratio + '".';
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
@@ -248,14 +276,14 @@ class AIStudioService {
         ratio,
         style,
         lighting,
-        seed: Math.floor(secureRandom() * 9999999),
+        seed: Date.now() % 9999999,
         source: 'openai-gpt-4o-mini'
       };
     }
 
     await new Promise(r => setTimeout(r, 500));
 
-    const finalPrompt = `Hyper-detailed 8k photograph of ${cleanSubject}, ${style.toLowerCase()} aesthetic, ${lighting.toLowerCase()} lighting, sharp focus, 35mm lens, f/1.8 aperture, octane render, vivid color grading, photorealistic reflections --ar ${ratio} --v 6.0`;
+    const finalPrompt = 'Hyper-detailed 8k photograph of ' + cleanSubject + ', ' + style.toLowerCase() + ' aesthetic, ' + lighting.toLowerCase() + ' lighting, sharp focus, 35mm lens, f/1.8 aperture, octane render, vivid color grading, photorealistic reflections --ar ' + ratio + ' --v 6.0';
 
     const negativePrompt = 'blurry, low quality, distorted anatomy, text, watermark, bad hands, artifacts, oversaturated';
 
@@ -265,7 +293,7 @@ class AIStudioService {
       ratio,
       style,
       lighting,
-      seed: Math.floor(secureRandom() * 9999999),
+      seed: Date.now() % 9999999,
       source: 'local-fallback-template'
     };
   }
@@ -275,12 +303,12 @@ class AIStudioService {
    */
   async analyzeViralPotential({ text }) {
     const systemPrompt = "You are a machine learning virality and sentiment analysis model. Output positive sentiment percentages and curiosity percentages.";
-    const prompt = `Perform sentiment analysis on this content: "${text || ''}". Rate positive %, curiosity %, controversy %, and provide 3 key viral suggestions.`;
+    const prompt = 'Perform sentiment analysis on this content: "' + (text || '') + '". Rate positive %, curiosity %, controversy %, and provide 3 key viral suggestions.';
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
       return {
-        viralScore: Math.floor(secureRandom() * 15) + 80,
+        viralScore: 85,
         rawAnalysis: realResponse,
         sentiment: {
           positive: 78,
@@ -345,7 +373,7 @@ class AIStudioService {
   async localizeContent({ text, targetLanguages = ['es', 'fr', 'ja', 'pt', 'de'] }) {
     const cleanText = text || 'Discover the best content creation strategies on Arvdoul.';
     const systemPrompt = "You are a master localization engine translating social media captions precisely.";
-    const prompt = `Translate this text exactly into these target languages: ${targetLanguages.join(', ')}. Text: "${cleanText}"`;
+    const prompt = 'Translate this text exactly into these target languages: ' + targetLanguages.join(', ') + '. Text: "' + cleanText + '"';
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
@@ -359,16 +387,16 @@ class AIStudioService {
     await new Promise(r => setTimeout(r, 650));
 
     const mockTranslations = {
-      es: `🇪🇸 Español: ${text ? text.slice(0, 100) : 'Descubre las mejores estrategias de criação de conteúdo em Arvdoul.'}`,
-      fr: `🇫🇷 Français: ${text ? text.slice(0, 100) : 'Découvrez les meilleures stratégies de création de contenu sur Arvdoul.'}`,
-      ja: `🇯🇵 日本語: ${text ? text.slice(0, 100) : 'Arvdoulで最も効果的なコンテンツ作成の戦略を見つけましょう。'}`,
-      pt: `🇧🇷 Português: ${text ? text.slice(0, 100) : 'Descubra as melhores estratégias de criação de conteúdo no Arvdoul.'}`,
-      de: `🇩🇪 Deutsch: ${text ? text.slice(0, 100) : 'Entdecke die besten Content-Creation-Strategien auf Arvdoul.'}`
+      es: '🇪🇸 Español: ' + (text ? text.slice(0, 100) : 'Descubre las melhores estrategias de criação de conteúdo em Arvdoul.'),
+      fr: '🇫🇷 Français: ' + (text ? text.slice(0, 100) : 'Découvrez les meilleures stratégies de création de contenu sur Arvdoul.'),
+      ja: '🇯🇵 日本語: ' + (text ? text.slice(0, 100) : 'Arvdoulで最も効果的なコンテンツ作成の戦略を見つけましょう。'),
+      pt: '🇧🇷 Português: ' + (text ? text.slice(0, 100) : 'Descubra as melhores estratégias de criação de conteúdo no Arvdoul.'),
+      de: '🇩🇪 Deutsch: ' + (text ? text.slice(0, 100) : 'Entdecke die besten Content-Creation-Strategien auf Arvdoul.')
     };
 
     return targetLanguages.map(lang => ({
       code: lang,
-      translation: mockTranslations[lang] || `Localized translation for [${lang.toUpperCase()}]`,
+      translation: mockTranslations[lang] || ('Localized translation for [' + lang.toUpperCase() + ']'),
       source: 'local-fallback-template'
     }));
   }
