@@ -5,11 +5,41 @@
  * 1. Daily Active Streak Tracking: Computes consecutive daily logins and rewards streak milestone badges.
  * 2. Inactive User Re-engagement Triggers: Generates personalized push notification payloads for users inactive for 3, 7, or 14 days.
  * 3. Weekly Activity Digest: Aggregates weekly views, coin tips received, and top-performing post analytics.
+ * 4. LocalForage Streak History: Persists streak stats locally to survive offline restarts.
  */
 
 import { logger } from '../utils/Logger.js';
+import localforage from 'localforage';
 
 class ReengagementService {
+  constructor() {
+    this.streakHistory = {};
+    this._initStore();
+  }
+
+  /**
+   * Initializes localForage streak store.
+   * @private
+   */
+  async _initStore() {
+    try {
+      const saved = await localforage.getItem('arvdoul_user_streak_history');
+      if (saved && typeof saved === 'object') {
+        this.streakHistory = saved;
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Persists streak history.
+   * @private
+   */
+  async _saveStore() {
+    try {
+      await localforage.setItem('arvdoul_user_streak_history', this.streakHistory);
+    } catch (_) {}
+  }
+
   /**
    * Updates daily streak on user active session.
    */
@@ -17,10 +47,10 @@ class ReengagementService {
     try {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
-      const lastActiveDate = userProfile.lastActiveDate;
+      const lastActiveDate = userProfile.lastActiveDate || this.streakHistory[userId]?.lastActiveDate;
 
       if (lastActiveDate === todayStr) {
-        return { streakCount: userProfile.streakCount || 1, streakExtended: false };
+        return { streakCount: userProfile.streakCount || this.streakHistory[userId]?.streakCount || 1, streakExtended: false };
       }
 
       const { getFirestoreInstance } = await import('../firebase/firebase.js');
@@ -35,13 +65,24 @@ class ReengagementService {
       const yesterdayStr = yesterday.toISOString().split('T')[0];
 
       const isConsecutive = lastActiveDate === yesterdayStr;
-      const newStreak = isConsecutive ? (userProfile.streakCount || 0) + 1 : 1;
+      const newStreak = isConsecutive ? (userProfile.streakCount || this.streakHistory[userId]?.streakCount || 0) + 1 : 1;
 
-      await updateDoc(userRef, {
+      // Update Firestore if available
+      try {
+        await updateDoc(userRef, {
+          lastActiveDate: todayStr,
+          streakCount: newStreak,
+          lastActiveAt: serverTimestamp(),
+        });
+      } catch (_) {}
+
+      // Cache locally
+      this.streakHistory[userId] = {
         lastActiveDate: todayStr,
         streakCount: newStreak,
-        lastActiveAt: serverTimestamp(),
-      });
+        updatedAt: Date.now()
+      };
+      await this._saveStore();
 
       logger.info(`[Reengagement] User ${userId} streak updated: ${newStreak} days.`);
       return { streakCount: newStreak, streakExtended: true };

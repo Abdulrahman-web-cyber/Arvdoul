@@ -2,6 +2,10 @@
 // These tests verify core service logic without Firebase dependencies
 
 import { IdempotencyStore } from '../utils/IdempotencyKey';
+import { safeSearchService } from '../services/safeSearchService.js';
+import { scamDetectionService } from '../services/scamDetectionService.js';
+import { searchAbuseService } from '../services/searchAbuseService.js';
+import { searchIndexingService } from '../services/searchIndexingService.js';
 
 describe('Service Layer Tests', () => {
   
@@ -367,6 +371,137 @@ describe('Service Layer Tests', () => {
 
       // Clear test logs
       aiService.usageLogs = [];
+    });
+  });
+
+  describe('SafeSearchService Upgrades (v8.0)', () => {
+    test('correctly set/get safe search modes', () => {
+      safeSearchService.setMode('strict');
+      expect(safeSearchService.getMode()).toBe('strict');
+
+      safeSearchService.setMode('off');
+      expect(safeSearchService.getMode()).toBe('off');
+
+      safeSearchService.setMode('moderate');
+      expect(safeSearchService.getMode()).toBe('moderate');
+    });
+
+    test('redacts toxic phrases in queries under moderate/strict mode', () => {
+      safeSearchService.setMode('strict');
+      const sanitized = safeSearchService.sanitizeSearchQuery('Find user who said you are a retard');
+      expect(sanitized).toContain('[redacted]');
+    });
+
+    test('filters NSFW items correctly under moderate mode', () => {
+      safeSearchService.setMode('moderate');
+      const items = [
+        { title: 'Normal Post', isNsfw: false },
+        { title: 'Adult Content', isNsfw: true }
+      ];
+      const filtered = safeSearchService.filterResults(items);
+      expect(filtered.length).toBe(1);
+      expect(filtered[0].title).toBe('Normal Post');
+    });
+
+    test('filters sensitive/nsfw/violence correctly under strict mode', () => {
+      safeSearchService.setMode('strict');
+      const items = [
+        { title: 'Clean', isNsfw: false, isViolence: false, isSensitive: false },
+        { title: 'Violence Post', isViolence: true },
+        { title: 'Sensitive Post', isSensitive: true },
+        { title: 'Racy Post', isRacy: true }
+      ];
+      const filtered = safeSearchService.filterResults(items);
+      expect(filtered.length).toBe(1);
+      expect(filtered[0].title).toBe('Clean');
+    });
+  });
+
+  describe('ScamDetectionService Upgrades (v8.0)', () => {
+    test('detects classic double-your-crypto scam', () => {
+      const text = 'Send 1 BTC to this wallet and get 2 BTC back instantly guaranteed!';
+      const res = scamDetectionService.evaluateScam(text);
+      expect(res.isScam).toBe(true);
+      expect(res.score).toBeGreaterThanOrEqual(60);
+      expect(res.reasons.length).toBeGreaterThan(0);
+    });
+
+    test('detects seed phrase credential request threats', () => {
+      const text = 'Official support here. Please send me your seed phrase and private key for verification.';
+      const res = scamDetectionService.evaluateScam(text);
+      expect(res.isScam).toBe(true);
+      expect(res.score).toBeGreaterThanOrEqual(80);
+    });
+
+    test('ignores normal chat texts without scam markers', () => {
+      const text = 'Hey buddy, let meet for lunch at our favorite pizza place around 1pm today.';
+      const res = scamDetectionService.evaluateScam(text);
+      expect(res.isScam).toBe(false);
+      expect(res.score).toBe(0);
+    });
+  });
+
+  describe('SearchAbuseService Upgrades (v8.0)', () => {
+    test('enforces query length restriction limits', () => {
+      const longQuery = 'a'.repeat(200);
+      const res = searchAbuseService.validateSearchRequest('user123', longQuery);
+      expect(res.allowed).toBe(false);
+      expect(res.requiresCaptcha).toBe(true);
+    });
+
+    test('blocks sliding window search rate spikes', () => {
+      searchAbuseService.resetAbuseCounters('user_temp');
+      for (let i = 0; i < 30; i++) {
+        const check = searchAbuseService.validateSearchRequest('user_temp', `Query ${i}`);
+        expect(check.allowed).toBe(true);
+      }
+      const overLimit = searchAbuseService.validateSearchRequest('user_temp', 'One more search');
+      expect(overLimit.allowed).toBe(false);
+    });
+
+    test('detects dictionary sequential letter sweeps and triggers captcha', () => {
+      searchAbuseService.resetAbuseCounters('sweep_user');
+      // alphabetical sequence sweeps
+      searchAbuseService.validateSearchRequest('sweep_user', 'aaa');
+      searchAbuseService.validateSearchRequest('sweep_user', 'aab');
+      searchAbuseService.validateSearchRequest('sweep_user', 'aac');
+      const sweepCheck = searchAbuseService.validateSearchRequest('sweep_user', 'aad');
+      expect(sweepCheck.allowed).toBe(false);
+      expect(sweepCheck.requiresCaptcha).toBe(true);
+    });
+  });
+
+  describe('SearchIndexingService Upgrades (v8.0)', () => {
+    test('generates edge n-grams for prefix matching', () => {
+      const ngrams = searchIndexingService.generateNGrams('arvdoul');
+      expect(ngrams).toContain('ar');
+      expect(ngrams).toContain('arv');
+      expect(ngrams).toContain('arvd');
+    });
+
+    test('filters out common stop words during tokenization', () => {
+      const tokens = searchIndexingService.generateNGrams('this is the new post about arvdoul');
+      expect(tokens).toContain('po');
+      expect(tokens).toContain('pos');
+      expect(tokens).not.toContain('th'); // 'this', 'the' are stopwords
+    });
+
+    test('calculates multi-field weighted popularity scores correctly', () => {
+      const userDoc = searchIndexingService.buildSearchableDocument('user', {
+        id: 'u123',
+        followersCount: 100,
+        likesCount: 50
+      });
+      // 100 * 1.0 + 50 * 0.2 = 110
+      expect(userDoc.popularityScore).toBe(110);
+
+      const postDoc = searchIndexingService.buildSearchableDocument('post', {
+        id: 'p123',
+        likesCount: 100,
+        viewCount: 200
+      });
+      // 100 * 0.8 + 200 * 0.2 = 120
+      expect(postDoc.popularityScore).toBe(120);
     });
   });
 });

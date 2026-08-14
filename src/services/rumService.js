@@ -6,6 +6,7 @@
  *    Interaction to Next Paint (INP < 200ms), and Time to First Byte (TTFB < 800ms) using `PerformanceObserver`.
  * 2. Route Transition Timings: Measures Single Page Application (SPA) client-side navigation latency.
  * 3. Network Connection Quality: Inspects `navigator.connection` (downlink, effectiveType 4g/3g/2g, rtt).
+ * 4. Slow Connection Warnings: Logs notices and triggers offline adjustments under slow connection speeds.
  */
 
 import { logger } from '../utils/Logger.js';
@@ -19,6 +20,7 @@ class RUMService {
       ttfb: null,
     };
     this._initObservers();
+    this._monitorConnection();
   }
 
   _initObservers() {
@@ -50,6 +52,23 @@ class RUMService {
       clsObserver.observe({ type: 'layout-shift', buffered: true });
     } catch (err) {
       logger.debug('[RUMService] PerformanceObserver initialization skipped:', { error: err.message });
+    }
+  }
+
+  /**
+   * Evaluates network effectiveType and triggers warnings/logs on slow connections (2g/3g).
+   * @private
+   */
+  _monitorConnection() {
+    if (typeof navigator !== 'undefined' && navigator.connection) {
+      const conn = navigator.connection;
+      const checkAndLog = () => {
+        if (conn.effectiveType === '2g' || conn.effectiveType === '3g' || conn.rtt > 800) {
+          logger.warn(`[RUMService] SLOW CONNECTION DETECTED: effectiveType=${conn.effectiveType}, rtt=${conn.rtt}ms, downlink=${conn.downlink}Mbps!`);
+        }
+      };
+      conn.addEventListener('change', checkAndLog);
+      checkAndLog();
     }
   }
 

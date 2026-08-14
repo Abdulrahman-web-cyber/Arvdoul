@@ -1,8 +1,10 @@
 // src/services/pollService.js
 // 📊 ARVDOUL POLLS & PREDICTION MARKETS SERVICE
 // Real-time community voting, predictive coin markets, and creator opinion analytics
+// Upgrades: Persistent vote caching via localForage and outcomes analytics.
 
 import { svcLogger } from './ServiceKit.js';
+import localforage from 'localforage';
 
 const log = svcLogger('pollService');
 
@@ -73,6 +75,42 @@ const SAMPLE_POLLS = [
 class PollService {
   constructor() {
     this.polls = [...SAMPLE_POLLS];
+    this.votedHistory = new Map(); // pollId -> optionId
+
+    this._initVotes();
+  }
+
+  /**
+   * Initializes localForage persistent vote logs.
+   * @private
+   */
+  async _initVotes() {
+    try {
+      const saved = await localforage.getItem('arvdoul_polls_voted_history');
+      if (saved && typeof saved === 'object') {
+        Object.entries(saved).forEach(([key, val]) => {
+          this.votedHistory.set(key, val);
+          const matchedPoll = this.polls.find(p => p.id === key);
+          if (matchedPoll) {
+            matchedPoll.hasVoted = val;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Persists voted history.
+   * @private
+   */
+  async _saveVotes() {
+    try {
+      const obj = {};
+      this.votedHistory.forEach((val, key) => {
+        obj[key] = val;
+      });
+      await localforage.setItem('arvdoul_polls_voted_history', obj);
+    } catch (_) {}
   }
 
   async getPolls(category = 'All') {
@@ -87,7 +125,8 @@ class PollService {
     const poll = this.polls.find(p => p.id === pollId);
     if (!poll) throw new Error('Poll not found');
 
-    if (poll.hasVoted) {
+    const alreadyVoted = this.votedHistory.get(pollId);
+    if (alreadyVoted || poll.hasVoted) {
       throw new Error('You have already voted on this poll.');
     }
 
@@ -97,6 +136,8 @@ class PollService {
     selectedOption.votes += 1;
     poll.totalVotes += 1;
     poll.hasVoted = optionId;
+    this.votedHistory.set(pollId, optionId);
+    await this._saveVotes();
 
     if (wagerCoins > 0 && poll.isPredictionMarket) {
       poll.poolCoins += Number(wagerCoins);

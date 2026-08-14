@@ -5,6 +5,7 @@
  * 1. Policy Versioning & Changelog Registry: Tracks revisions of terms of service, safety policies, and copyright rules.
  * 2. Mandatory User Acceptance Gate: Forces re-acceptance on major policy updates (e.g. Terms v2.0).
  * 3. Policy Policy Rules Manifest.
+ * 4. User Acceptance Timestamps verification.
  */
 
 import { logger } from '../utils/Logger.js';
@@ -72,7 +73,7 @@ class PolicyAuthoringService {
       });
 
       logger.info(`[PolicyAuthoring] User ${userId} accepted policy v${this.currentPolicyVersion}`);
-      return { success: true };
+      return { success: true, timestamp: Date.now() };
     } catch (err) {
       logger.error(`[PolicyAuthoring] Failed to record policy acceptance for ${userId}:`, { error: err.message });
       throw err;

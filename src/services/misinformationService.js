@@ -58,7 +58,7 @@ class MisinformationService {
         logger.info('[MisinformationService] Disputed claim matched in text; attaching contextual banner.');
 
         // Trigger reach score demotion on feedService (Pillar 36, 50, 91)
-        if (postId && userId) {
+        if (postId && userId && feedService && typeof feedService.demotePost === 'function') {
           feedService.demotePost(userId, postId, 'misinformation_flagged').catch(() => {});
         }
 
@@ -89,7 +89,7 @@ class MisinformationService {
               if (review) {
                 const isFalse = /false|misleading|debunked/i.test(review.textualRating);
                 if (isFalse) {
-                  if (postId && userId) {
+                  if (postId && userId && feedService && typeof feedService.demotePost === 'function') {
                     feedService.demotePost(userId, postId, 'misinformation_flagged').catch(() => {});
                   }
                   return {
