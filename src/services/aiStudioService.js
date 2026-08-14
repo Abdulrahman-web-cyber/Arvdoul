@@ -10,7 +10,7 @@ const log = svcLogger('aiStudioService');
 
 const TONES = {
   hype: { label: '🔥 Hype & Viral', emojis: ['🚀', '💥', '🔥', '⚡️', '🤯'] },
-  casual: { label: '☕️ Casual & Friendly', emojis: ['✨', '🤙', '🙌', '💯', '😊'] },
+  casual: { label: '☕️ Casual & Friendly', emojis: ['✨', '🤙', '💯', '😊'] },
   educational: { label: '🧠 Educational & Insightful', emojis: ['💡', '📚', '🎯', '🔍', '📌'] },
   poetic: { label: '✨ Aesthetic & Poetic', emojis: ['🌙', '🪐', '🕊️', '🍃', '💫'] },
   story: { label: '📖 Storytelling', emojis: ['👀', '⏳', '🧵', '🎙️', '🏆'] },
@@ -44,6 +44,7 @@ const SAMPLE_SCRIPTS = {
 class AIStudioService {
   constructor() {
     this.usageLogs = [];
+    this.MAX_LOGS_LIMIT = 500;
     this.costPerToken = 0.000002; // Roughly $0.002 / 1K tokens standard
     this.dailyBudgetLimitUSD = 5.00; // Daily budget safety cap per user
     this.promptCache = new Map(); // local prompt cache
@@ -53,6 +54,16 @@ class AIStudioService {
 
     // Load persisted logs on startup
     this._initLogs();
+  }
+
+  /**
+   * Enforces max logs limit.
+   * @private
+   */
+  _enforceLogsLimit() {
+    if (this.usageLogs.length > this.MAX_LOGS_LIMIT) {
+      this.usageLogs.shift();
+    }
   }
 
   /**
@@ -182,6 +193,7 @@ class AIStudioService {
       const totalTokens = promptTokens + completionTokens;
       const estimatedCost = totalTokens * this.costPerToken;
 
+      this._enforceLogsLimit();
       this.usageLogs.push({
         timestamp: Date.now(),
         promptTokens,

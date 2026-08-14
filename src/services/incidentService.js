@@ -1,5 +1,5 @@
 /**
- * src/services/incidentService.js - ARVDOUL INCIDENT MANAGEMENT & POSTMORTEM ENGINE
+ * src/services/incidentService.js - ARVDOUL INCIDENT MANAGEMENT & POSTMORTEM ENGINE v8.0
  *
  * Implements:
  * 1. P0-P3 Incident Lifecycle: Tracks incident declaration, incident commander assignment, status updates, and resolution.
@@ -18,7 +18,20 @@ import localforage from 'localforage';
 class IncidentService {
   constructor() {
     this.incidentsLog = [];
+    this.MAX_INCIDENTS_LOG = 200;
     this._initStore();
+  }
+
+  /**
+   * Generates a cryptographically strong random token hex string (CWE-330).
+   * @private
+   */
+  _generateSecureHex(bytes = 4) {
+    const arr = new Uint8Array(bytes);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(arr);
+    }
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   /**
@@ -65,17 +78,19 @@ class IncidentService {
         ],
       };
 
+      const secureHex = this._generateSecureHex(4);
+
       // Trigger automatic high-priority operations alert and pager dispatch for P0/P1 incidents
       if (severity === 'p0' || severity === 'p1') {
         await alertingService.triggerAlert(
-          'incident_' + severity + '_' + Date.now().toString(36),
+          'incident_' + severity + '_' + secureHex,
           severity === 'p0' ? 'p0_critical' : 'p1_high',
           'CRITICAL OPERATIONAL INCIDENT DECLARED: ' + title,
           { summary, commanderId, declaredAt: incident.declaredAt }
         );
       }
 
-      let incidentId = 'inc_local_' + Date.now().toString(36);
+      let incidentId = 'inc_local_' + secureHex;
 
       try {
         if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
@@ -94,7 +109,10 @@ class IncidentService {
 
       logger.error('[IncidentService] Incident declared: ' + incidentId + ' [' + severity.toUpperCase() + '] - ' + title);
 
-      // Save locally
+      // Save locally with array bounding
+      if (this.incidentsLog.length >= this.MAX_INCIDENTS_LOG) {
+        this.incidentsLog.shift();
+      }
       this.incidentsLog.push({ id: incidentId, ...incident });
       await this._saveStore();
 

@@ -1,5 +1,5 @@
 /**
- * src/services/CounterReconciliationService.js - ARVDOUL COUNTER READ REPAIR & RECONCILIATION
+ * src/services/CounterReconciliationService.js - ARVDOUL COUNTER READ REPAIR & RECONCILIATION v8.0
  *
  * Implements:
  * 1. Read-Repair Verification: Computes exact sum across all shards and compares against parent document summary.
@@ -20,6 +20,7 @@ class CounterReconciliationService {
     this.DRIFT_ABSOLUTE_THRESHOLD = 5;   // 5 units drift triggers repair
     this.reconciledCount = 0;
     this.auditLogs = [];
+    this.MAX_AUDIT_LOGS = 500;
 
     this._initLogs();
   }
@@ -91,7 +92,10 @@ class CounterReconciliationService {
         cacheManager.delete('counters', docPath);
         this.reconciledCount++;
 
-        // Log locally
+        // Log locally with array bounding
+        if (this.auditLogs.length >= this.MAX_AUDIT_LOGS) {
+          this.auditLogs.shift();
+        }
         this.auditLogs.push({
           docPath,
           repairedAt: Date.now(),

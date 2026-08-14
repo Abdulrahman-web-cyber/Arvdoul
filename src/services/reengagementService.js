@@ -1,5 +1,5 @@
 /**
- * src/services/reengagementService.js - ARVDOUL USER RETENTION & STREAKS ENGINE
+ * src/services/reengagementService.js - ARVDOUL USER RETENTION & STREAKS ENGINE v8.0
  *
  * Implements:
  * 1. Daily Active Streak Tracking: Computes consecutive daily logins and rewards streak milestone badges.
@@ -13,8 +13,20 @@ import localforage from 'localforage';
 
 class ReengagementService {
   constructor() {
-    this.streakHistory = {};
+    this.streakHistory = Object.create(null);
+    this.MAX_STREAK_ENTRIES = 1000;
     this._initStore();
+  }
+
+  /**
+   * Enforces bounds on streak history object.
+   * @private
+   */
+  _enforceStoreCapacity() {
+    const keys = Object.keys(this.streakHistory);
+    if (keys.length > this.MAX_STREAK_ENTRIES) {
+      delete this.streakHistory[keys[0]];
+    }
   }
 
   /**
@@ -25,7 +37,7 @@ class ReengagementService {
     try {
       const saved = await localforage.getItem('arvdoul_user_streak_history');
       if (saved && typeof saved === 'object') {
-        this.streakHistory = saved;
+        this.streakHistory = Object.assign(Object.create(null), saved);
       }
     } catch (_) {}
   }
@@ -77,6 +89,7 @@ class ReengagementService {
       } catch (_) {}
 
       // Cache locally
+      this._enforceStoreCapacity();
       this.streakHistory[userId] = {
         lastActiveDate: todayStr,
         streakCount: newStreak,
