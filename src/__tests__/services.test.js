@@ -6,6 +6,25 @@ import { safeSearchService } from '../services/safeSearchService.js';
 import { scamDetectionService } from '../services/scamDetectionService.js';
 import { searchAbuseService } from '../services/searchAbuseService.js';
 import { searchIndexingService } from '../services/searchIndexingService.js';
+import { audioModerationService } from '../services/audioModerationService.js';
+import { childSafetyService } from '../services/childSafetyService.js';
+import { copyrightDetectionService } from '../services/copyrightDetectionService.js';
+import { costMonitoringService } from '../services/costMonitoringService.js';
+import { costOptimizationService } from '../services/costOptimizationService.js';
+import { extremismDetectionService } from '../services/extremismDetectionService.js';
+import { selfHarmDetectionService } from '../services/selfHarmDetectionService.js';
+import { fieldEncryptionService } from '../services/fieldEncryptionService.js';
+import { fraudDetectionService } from '../services/fraudDetectionService.js';
+import { imageModerationService } from '../services/imageModerationService.js';
+import { videoModerationService } from '../services/videoModerationService.js';
+import { liveModerationService } from '../services/liveModerationService.js';
+import { logAggregationService } from '../services/logAggregationService.js';
+import { tracingService } from '../services/tracingService.js';
+import { manipulatedMediaService } from '../services/manipulatedMediaService.js';
+import { phishingDetectionService } from '../services/phishingDetectionService.js';
+import { userIntegrityService } from '../services/userIntegrityService.js';
+import { vendorManagementService } from '../services/vendorManagementService.js';
+import { viralPredictionService } from '../services/viralPredictionService.js';
 
 describe('Service Layer Tests', () => {
   
@@ -502,6 +521,172 @@ describe('Service Layer Tests', () => {
       });
       // 100 * 0.8 + 200 * 0.2 = 120
       expect(postDoc.popularityScore).toBe(120);
+    });
+  });
+
+  describe('AudioModerationService Upgrades (v8.0)', () => {
+    test('evaluates transcribed audio toxic content correctly', () => {
+      const evaluation = audioModerationService.evaluateAudioTranscript('This is some clean audio transcript');
+      expect(evaluation.isClean).toBe(true);
+
+      const toxicEvaluation = audioModerationService.evaluateAudioTranscript('You are an absolute idiot and retard');
+      expect(toxicEvaluation.isClean).toBe(false);
+      expect(toxicEvaluation.score).toBeGreaterThan(90);
+    });
+  });
+
+  describe('ChildSafetyService Upgrades (v8.0)', () => {
+    test('scans safe signatures and approves them', async () => {
+      const res = await childSafetyService.scanMediaBytes(null, { signature: 'completely_safe_sig_abc' });
+      expect(res.cleared).toBe(true);
+    });
+
+    test('blocks CSAM and escalates reporting', async () => {
+      const res = await childSafetyService.scanMediaBytes(null, { signature: '31a788cb99120ff9c0d1e576572a11b9' });
+      expect(res.cleared).toBe(false);
+      expect(res.action).toBe('INSTANT_LOCKDOWN_AND_LEGAL_REPORT');
+      expect(res.legalEscalated).toBe(true);
+    });
+  });
+
+  describe('CopyrightDetectionService Upgrades (v8.0)', () => {
+    test('computes precise Hamming distance between visual signatures', () => {
+      const dist = copyrightDetectionService.computeHammingDistance('0000', '0001'); // 1 bit difference
+      expect(dist).toBe(1);
+
+      const identical = copyrightDetectionService.computeHammingDistance('abcdef', 'abcdef');
+      expect(identical).toBe(0);
+    });
+
+    test('screens fingerprints and flags copyright infringement', () => {
+      const res = copyrightDetectionService.evaluateCopyright(null, { fingerprint: 'arv_disney_logo_fingerprint_64' });
+      expect(res.isInfringed).toBe(true);
+      expect(res.action).toBe('BLOCK_AND_FLAG');
+    });
+
+    test('processes automated DMCA takedown filings', () => {
+      const res = copyrightDetectionService.processDmcaNotice('user123', 'post_infringed_456', 'Claimant Corp', 'Work Title');
+      expect(res.success).toBe(true);
+      expect(res.caseId).toBeDefined();
+    });
+  });
+
+  describe('CostMonitoringService Upgrades (v8.0)', () => {
+    test('aggregates db operations costs and estimates forecasts', () => {
+      costMonitoringService.resetDailySpend();
+      costMonitoringService.recordDatabaseOperations(100000, 50000); // 100k reads, 50k writes
+      const forecast = costMonitoringService.getDailyBudgetForecast();
+      expect(forecast.currentDailySpendUSD).toBeGreaterThan(0);
+      expect(forecast.projectedMonthlySpendUSD).toBeGreaterThan(0);
+    });
+  });
+
+  describe('CostOptimizationService Upgrades (v8.0)', () => {
+    test('profiles execution queries and flags high frequency patterns', () => {
+      costOptimizationService.resetProfiling();
+      for (let i = 0; i < 110; i++) {
+        costOptimizationService.profileQueryExecution('get_feed_query');
+      }
+      const recommendations = costOptimizationService.generateCostRecommendations();
+      const highFreqRec = recommendations.find(r => r.id === 'opt_high_freq_get_feed_query');
+      expect(highFreqRec).toBeDefined();
+    });
+  });
+
+  describe('ExtremismDetectionService Upgrades (v8.0)', () => {
+    test('intercepts violent extremist propaganda content', () => {
+      const res = extremismDetectionService.evaluateExtremism('Welcome and join isis strike force');
+      expect(res.isExtremistFlagged).toBe(true);
+      expect(res.action).toContain('LAW_ENFORCEMENT');
+    });
+  });
+
+  describe('SelfHarmDetectionService Upgrades (v8.0)', () => {
+    test('intercepts acute self-harm suicidal content and offers resources', () => {
+      const res = selfHarmDetectionService.evaluateSelfHarm('I want to commit suicide goodbye cruel world');
+      expect(res.isSelfHarmFlagged).toBe(true);
+      expect(res.recommendedResource).toContain('988');
+    });
+  });
+
+  describe('FieldEncryptionService Upgrades (v8.0)', () => {
+    test('generates secure backup seed arrays', () => {
+      const seed = fieldEncryptionService.generateRecoverySeed();
+      expect(seed).toContain('-');
+    });
+  });
+
+  describe('FraudDetectionService Upgrades (v8.0)', () => {
+    test('checks transaction velocity limits', () => {
+      // Warm up userPurchaseAttempts with 10 attempts to trigger the velocity alert
+      for (let i = 0; i < 10; i++) {
+        fraudDetectionService.evaluatePurchaseRisk('user123', 60000, '411111');
+      }
+      const risk = fraudDetectionService.evaluatePurchaseRisk('user123', 60000, '411111');
+      expect(risk.allowed).toBe(false);
+    });
+
+    test('detects circular loop wash transfers', () => {
+      // Setup transfers: A -> B, B -> A
+      fraudDetectionService.evaluateCoinTransferLoop('userA', 'userB', 100);
+      const clean = fraudDetectionService.evaluateCoinTransferLoop('userB', 'userA', 100);
+      expect(clean).toBe(false);
+    });
+  });
+
+  describe('ManipulatedMediaService Upgrades (v8.0)', () => {
+    test('scans metadata provenance for AI tools', async () => {
+      const mockBlob = {
+        slice: () => ({
+          text: async () => 'signed C2PA provenance with midjourney tags'
+        })
+      };
+      const res = await manipulatedMediaService.inspectMediaProvenance(mockBlob);
+      expect(res.isAIGenerated).toBe(true);
+    });
+  });
+
+  describe('PhishingDetectionService Upgrades (v8.0)', () => {
+    test('flags suspicious raw IP literal links', () => {
+      const res = phishingDetectionService.evaluateURL('http://192.168.1.1/login');
+      expect(res.safe).toBe(false);
+      expect(res.risk).toBe('high');
+    });
+
+    test('flags homoglyph lookalike brand domains', () => {
+      const res = phishingDetectionService.evaluateURL('https://arvd0ul.com/login');
+      expect(res.safe).toBe(false);
+      expect(res.risk).toBe('critical');
+    });
+  });
+
+  describe('UserIntegrityService Upgrades (v8.0)', () => {
+    test('evaluates dynamic multi-dimensional trust score', () => {
+      const profile = {
+        isVerifiedCreator: true,
+        emailVerified: true,
+        phoneNumber: '1234567890',
+        strikesCount: 0
+      };
+      const score = userIntegrityService.calculateTrustScore(profile);
+      expect(score).toBeGreaterThan(60);
+    });
+  });
+
+  describe('VendorManagementService Upgrades (v8.0)', () => {
+    test('records errors and degardes vendor health statuses', () => {
+      vendorManagementService.recordVendorError('stripe');
+      const vendors = vendorManagementService.getVendorsStatus();
+      const stripe = vendors.find(v => v.id === 'stripe');
+      expect(stripe.status).toBe('degraded');
+    });
+  });
+
+  describe('ViralPredictionService Upgrades (v8.0)', () => {
+    test('evaluates post early velocity potential', () => {
+      const res = viralPredictionService.predictViralPotential({ views: 100, likes: 80, shares: 30 });
+      expect(res.isHighViralPotential).toBe(true);
+      expect(res.recommendedDistributionTier).toBe('expanded_discovery');
     });
   });
 });

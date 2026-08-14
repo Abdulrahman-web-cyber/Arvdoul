@@ -1,5 +1,5 @@
 // src/services/watermarkService.js
-// 🎬 ENTERPRISE VIDEO WATERMARK SERVICE
+// 🎬 ENTERPRISE VIDEO WATERMARK SERVICE v8.0
 
 class WatermarkService {
   static async addWatermarkToVideo(videoFile, watermarkText = 'Arvdoul', username = null) {
@@ -10,10 +10,15 @@ class WatermarkService {
         
         video.onloadedmetadata = () => {
           const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
           const ctx = canvas.getContext('2d');
           
+          if (!ctx) {
+            reject(new Error('Canvas context unavailable'));
+            return;
+          }
+
           // Draw video frame
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           
@@ -60,6 +65,21 @@ class WatermarkService {
             }, 'image/png');
           };
           
+          logo.onerror = () => {
+            // If logo image fails to load, resolve with simple watermark anyway
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                reject(new Error('Failed to create watermarked video'));
+                return;
+              }
+              const watermarkedFile = new File([blob], `watermarked_${videoFile.name}`, {
+                type: 'image/png',
+                lastModified: Date.now()
+              });
+              resolve(watermarkedFile);
+            }, 'image/png');
+          };
+
           logo.src = '/public/icons/icon.png';
         };
         
@@ -82,6 +102,11 @@ class WatermarkService {
           canvas.height = img.height;
           const ctx = canvas.getContext('2d');
           
+          if (!ctx) {
+            reject(new Error('Canvas context unavailable'));
+            return;
+          }
+
           // Draw image
           ctx.drawImage(img, 0, 0);
           

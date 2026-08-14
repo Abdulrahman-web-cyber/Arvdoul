@@ -1,5 +1,5 @@
 /**
- * src/services/fraudDetectionService.js - ARVDOUL PAYMENT & COIN TRANSACTION FRAUD ENGINE
+ * src/services/fraudDetectionService.js - ARVDOUL PAYMENT & COIN TRANSACTION FRAUD ENGINE v8.0
  *
  * Implements:
  * 1. Card Velocity Checks: Flags multiple failed card purchase attempts within a 5-minute rolling window.
@@ -13,6 +13,7 @@ import { auditLogger } from '../utils/AuditLogger.js';
 class FraudDetectionService {
   constructor() {
     this.userPurchaseAttempts = new Map(); // userId -> Array<timestamp>
+    this.transactionTransferGraph = new Map(); // senderId -> Array<{ recipientId, amount, timestamp }>
   }
 
   /**
@@ -55,6 +56,50 @@ class FraudDetectionService {
       riskScore,
       reasons,
     };
+  }
+
+  /**
+   * Registers a coin transaction into the transfer graph and checks for circular loops (coin washing).
+   * @param {string} senderId
+   * @param {string} recipientId
+   * @param {number} amount
+   * @returns {boolean} - true if clean, false if circular/loop wash detected
+   */
+  evaluateCoinTransferLoop(senderId, recipientId, amount) {
+    const now = Date.now();
+    let history = this.transactionTransferGraph.get(senderId) || [];
+    // Keep past 1 hour transactions
+    history = history.filter(tx => now - tx.timestamp < 3600 * 1000);
+    history.push({ recipientId, amount, timestamp: now });
+    this.transactionTransferGraph.set(senderId, history);
+
+    // Simple BFS / DFS to check if recipient eventually transfers back to sender
+    const visited = new Set();
+    const detectLoop = (current, target) => {
+      if (current === target) return true;
+      if (visited.has(current)) return false;
+      visited.add(current);
+
+      const nextTxs = this.transactionTransferGraph.get(current) || [];
+      for (const tx of nextTxs) {
+        if (detectLoop(tx.recipientId, target)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // If recipient is already sending back to sender, flag as loop
+    if (detectLoop(recipientId, senderId)) {
+      logger.warn('[FraudDetection] Multi-account circular coin wash transfer loop detected!', { senderId, recipientId, amount });
+      auditLogger.log('fraud.coin_wash_loop_detected', {
+        userId: senderId,
+        meta: { senderId, recipientId, amount }
+      });
+      return false;
+    }
+
+    return true;
   }
 }
 
