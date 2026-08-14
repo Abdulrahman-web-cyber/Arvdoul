@@ -16,6 +16,18 @@ class SearchAbuseService {
     this.searchSequenceHistory = new Map(); // identifier -> Array<string>
     this.MAX_QUERIES_PER_MINUTE = 30;
     this.MAX_QUERY_LENGTH = 150;
+    this.MAX_MAP_ENTRIES = 1000;
+  }
+
+  /**
+   * Enforces max capacity on tracking Maps to prevent memory exhaustion (CWE-400).
+   * @private
+   */
+  _enforceMaxMapCapacity(map) {
+    if (map.size > this.MAX_MAP_ENTRIES) {
+      const firstKey = map.keys().next().value;
+      map.delete(firstKey);
+    }
   }
 
   /**
@@ -56,6 +68,8 @@ class SearchAbuseService {
     let seq = this.searchSequenceHistory.get(identifier) || [];
     seq.push(queryStr);
     if (seq.length > 5) seq.shift();
+
+    this._enforceMaxMapCapacity(this.searchSequenceHistory);
     this.searchSequenceHistory.set(identifier, seq);
 
     if (seq.length >= 4) {
@@ -92,6 +106,7 @@ class SearchAbuseService {
 
     // Record the current search request
     history.push(now);
+    this._enforceMaxMapCapacity(this.queryHistory);
     this.queryHistory.set(identifier, history);
 
     return { allowed: true };

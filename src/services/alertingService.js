@@ -1,5 +1,5 @@
 /**
- * src/services/alertingService.js - ARVDOUL THRESHOLD ALERTING & ANOMALY TRIGGER
+ * src/services/alertingService.js - ARVDOUL THRESHOLD ALERTING & ANOMALY TRIGGER v8.0
  *
  * Implements:
  * 1. Multi-Condition Threshold Alerting:
@@ -23,6 +23,7 @@ class AlertingService {
     this.alertCooldowns = new Map(); // alertKey -> lastFiredTimestamp
     this.alertStatusStore = new Map(); // alertKey -> { status: 'firing'|'acknowledged'|'resolved', count: number, severity: string }
     this.COOLDOWN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+    this.MAX_STORE_LIMIT = 500;
 
     const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
     this.pagerDutyIntegrationKey = env.VITE_PAGERDUTY_INTEGRATION_KEY || null;
@@ -30,6 +31,17 @@ class AlertingService {
     this.webhookSecret = env.VITE_OPERATIONS_WEBHOOK_SECRET || 'arvdoul-ops-secret';
 
     this._loadCooldowns();
+  }
+
+  /**
+   * Enforces max store size to prevent unbounded memory growth (CWE-400).
+   * @private
+   */
+  _enforceMaxStoreCapacity(map) {
+    if (map.size > this.MAX_STORE_LIMIT) {
+      const oldestKey = map.keys().next().value;
+      map.delete(oldestKey);
+    }
   }
 
   /**
@@ -156,6 +168,7 @@ class AlertingService {
       title = `[ESCALATED] ${title}`;
     }
 
+    this._enforceMaxStoreCapacity(this.alertStatusStore);
     this.alertStatusStore.set(alertKey, existingStatus);
 
     if (lastFired && now - lastFired < this.COOLDOWN_WINDOW_MS && existingStatus.status === 'firing') {
@@ -164,6 +177,7 @@ class AlertingService {
       return { triggered: false, suppressed: true, severity: activeSeverity };
     }
 
+    this._enforceMaxStoreCapacity(this.alertCooldowns);
     this.alertCooldowns.set(alertKey, now);
     existingStatus.status = 'firing';
     this._saveState();
@@ -205,9 +219,10 @@ class AlertingService {
     }
 
     // Dispatch PagerDuty event if configured
-    if (this.pagerDutyIntegrationKey) {
+    const pagerDutyUrl = 'https://events.pagerduty.com/v2/enqueue';
+    if (this.pagerDutyIntegrationKey && this._isValidUrl(pagerDutyUrl)) {
       try {
-        await fetch('https://events.pagerduty.com/v2/enqueue', {
+        await fetch(pagerDutyUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

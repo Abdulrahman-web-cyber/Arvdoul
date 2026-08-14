@@ -106,6 +106,18 @@ class MarketplaceService {
   }
 
   /**
+   * Generates a cryptographically strong random token hex string (CWE-330).
+   * @private
+   */
+  _generateSecureHex(bytes = 4) {
+    const arr = new Uint8Array(bytes);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(arr);
+    }
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
    * Initializes localForage persistent order logs.
    * @private
    */
@@ -159,12 +171,13 @@ class MarketplaceService {
     // Deduct stock
     product.stock--;
 
+    const secureHex = this._generateSecureHex(4);
     const order = {
-      orderId: `ARV-ORD-${Date.now().toString().slice(-6)}`,
+      orderId: `ARV-ORD-${Date.now().toString().slice(-6)}-${secureHex}`,
       product,
       purchasedAt: new Date().toISOString(),
       amountPaidCoins: product.priceCoins,
-      downloadUrl: product.isDigital ? 'https://arvdoul.cloud/downloads/pack-instant.zip' : null,
+      downloadUrl: product.isDigital ? `https://arvdoul.cloud/downloads/pack-${secureHex}.zip` : null,
       status: 'Completed'
     };
 
@@ -175,8 +188,9 @@ class MarketplaceService {
   }
 
   async listNewProduct(productData, creator) {
+    const secureHex = this._generateSecureHex(4);
     const newProd = {
-      id: `prod-${Date.now()}`,
+      id: `prod-${Date.now()}-${secureHex}`,
       title: productData.title,
       category: productData.category || 'Digital Assets',
       creator: {

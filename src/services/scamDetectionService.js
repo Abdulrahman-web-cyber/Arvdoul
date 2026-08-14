@@ -13,7 +13,7 @@ import { logger } from '../utils/Logger.js';
 
 class ScamDetectionService {
   constructor() {
-    // Highly comprehensive cryptocurrency wallet address matching patterns
+    // Highly comprehensive cryptocurrency wallet address matching patterns (ReDoS safe)
     this.cryptoAddresses = {
       btc: /\b(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})\b/i,
       eth: /\b(0x[a-fA-F0-9]{40})\b/i,
@@ -21,41 +21,41 @@ class ScamDetectionService {
       xrp: /\br[0-9a-zA-Z]{24,34}\b/,
     };
 
-    // Sophisticated matching array for common financial scams, fake investment pools, and phishing indicators
+    // ReDoS-safe matching array for common financial scams, fake investment pools, and phishing indicators
     this.scamPhrases = [
       // Double your crypto / Giveaway fraud
       {
-        pattern: /\b(send\s+(\d+|\w+)\s+(btc|eth|sol|crypto|coins|usd).+?and\s+get\s+(\d+|\w+)\s+(btc|eth|sol|crypto|coins|usd)?\s*back)\b/i,
+        pattern: /\bsend\s+\w+\s+(?:btc|eth|sol|crypto|coins|usd)[\s\S]{1,60}?\bget\s+\w+\s*(?:btc|eth|sol|crypto|coins|usd)?\s*back\b/i,
         weight: 60,
         reason: 'Matches classic double-your-money giveaway scam pattern'
       },
       // HYIP & guaranteed high-yield investment returns
       {
-        pattern: /\b(guaranteed\s+(returns|profit|income|yield)\s+of\s+\d+%\s+(daily|weekly|hourly|monthly))\b/i,
+        pattern: /\bguaranteed\s+(?:returns|profit|income|yield)\s+of\s+\d+%\s+(?:daily|weekly|hourly|monthly)\b/i,
         weight: 55,
         reason: 'Guaranteed high-yield investment scheme or high-risk ROI claims'
       },
       // Urgency gift card schemes
       {
-        pattern: /\b(claim\s+your\s+free\s+(\$|\d+)\s+gift\s+card|claim\s+free\s+rewards\s+immediately)\b/i,
+        pattern: /\b(?:claim\s+your\s+free\s+(?:\$|\d+)\s+gift\s+card|claim\s+free\s+rewards\s+immediately)\b/i,
         weight: 45,
         reason: 'High-probability reward phishing or gift card scheme'
       },
       // Seed phrase phishing / Security bypass solicitation
       {
-        pattern: /\b(send\s+me\s+your\s+seed\s+phrase|private\s+key|password\s+for\s+verification|provide\s+secret\s+key)\b/i,
+        pattern: /\b(?:send\s+me\s+your\s+seed\s+phrase|private\s+key|password\s+for\s+verification|provide\s+secret\s+key)\b/i,
         weight: 80,
         reason: 'Critical: Private security credential or seed phrase solicitation detected'
       },
       // Impersonating support desk, urgent account suspension threats
       {
-        pattern: /\b(official\s+support\s+desk|account\s+suspended\s+unless\s+you\s+pay|contact\s+security\s+agent\s+on\s+telegram)\b/i,
+        pattern: /\b(?:official\s+support\s+desk|account\s+suspended\s+unless\s+you\s+pay|contact\s+security\s+agent\s+on\s+telegram)\b/i,
         weight: 50,
         reason: 'Support desk impersonation or account block extortion'
       },
       // Pump & Dump / Quick rich token signals
       {
-        pattern: /\b(pump\s+and\s+dump|next\s+100x\s+gem|moon\s+shot\s+token|buy\s+now\s+before\s+listing|insider\s+trading\s+info)\b/i,
+        pattern: /\b(?:pump\s+and\s+dump|next\s+100x\s+gem|moon\s+shot\s+token|buy\s+now\s+before\s+listing|insider\s+trading\s+info)\b/i,
         weight: 40,
         reason: 'High-risk pump-and-dump or speculative token promotion'
       }

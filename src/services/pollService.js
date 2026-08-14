@@ -81,6 +81,18 @@ class PollService {
   }
 
   /**
+   * Generates a cryptographically strong random token hex string (CWE-330).
+   * @private
+   */
+  _generateSecureHex(bytes = 4) {
+    const arr = new Uint8Array(bytes);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(arr);
+    }
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
    * Initializes localForage persistent vote logs.
    * @private
    */
@@ -153,8 +165,9 @@ class PollService {
 
   async createPoll({ question, category = 'General', options = [], isPredictionMarket = false, creator }) {
     log.info('Creating poll', { question });
+    const secureHex = this._generateSecureHex(4);
     const newPoll = {
-      id: `poll-${Date.now()}`,
+      id: `poll-${Date.now()}-${secureHex}`,
       question,
       category,
       creator: {
