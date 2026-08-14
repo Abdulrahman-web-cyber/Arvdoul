@@ -54,6 +54,9 @@ import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
 import { incidentService } from '../services/incidentService.js';
 import { aggregationCacheService } from '../services/AggregationCacheService.js';
+import soundService from '../services/soundService.js';
+import audioEditorService from '../services/audioEditorService.js';
+import collaborationService from '../services/collaborationService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -508,6 +511,62 @@ describe('Upgraded Production Services Integration Tests', () => {
       const mockCompute2 = jest.fn(async () => ({ data: 'refreshed' }));
       const result = await aggregationCacheService.getOrCompute('users_stats', 'avg', { age: '20' }, mockCompute2, 5000);
       expect(result).toEqual({ data: 'refreshed' });
+    });
+  });
+
+  describe('SoundService & AudioEditor & Collaboration Services', () => {
+    test('soundService fetches trending audio tracks and manages saved state', async () => {
+      const sounds = await soundService.getTrendingSounds('All');
+      expect(sounds.length).toBeGreaterThan(0);
+      expect(sounds[0].id).toBeDefined();
+
+      const saveRes = await soundService.toggleSaveSound(sounds[0].id);
+      expect(saveRes).toHaveProperty('saved');
+
+      const uploaded = await soundService.uploadCustomSound({
+        title: 'Test Audio Track',
+        genre: 'Hyperpop'
+      });
+      expect(uploaded.id).toContain('snd-custom-');
+      expect(uploaded.title).toBe('Test Audio Track');
+    });
+
+    test('audioEditorService creates and manages project waveforms, effects, and markers', () => {
+      const proj = audioEditorService.createProject({ name: 'Studio Test Track' });
+      expect(proj).toBeDefined();
+      expect(proj.name).toBe('Studio Test Track');
+
+      proj.duration = 60; // set duration for marker boundaries
+
+      audioEditorService.addMarker(5.5);
+      expect(audioEditorService.getCurrentProject().markers.length).toBe(1);
+
+      audioEditorService.addEffect('reverb');
+      expect(audioEditorService.getCurrentProject().effects.length).toBe(1);
+
+      // Mock audioBuffer for waveform calculation (1 second of audio)
+      const serviceInstance = audioEditorService.getService();
+      const mockChannelData = new Float32Array(44100);
+      for (let i = 0; i < mockChannelData.length; i++) mockChannelData[i] = Math.sin(i);
+
+      serviceInstance.audioBuffer = {
+        sampleRate: 44100,
+        getChannelData: () => mockChannelData,
+        length: 44100,
+        numberOfChannels: 1
+      };
+
+      const waveform = audioEditorService.generateWaveform(10);
+      expect(Array.isArray(waveform)).toBe(true);
+      expect(waveform.length).toBeGreaterThan(0);
+    });
+
+    test('collaborationService returns user stats and projects overview', async () => {
+      const stats = collaborationService.getStats();
+      expect(stats).toBeDefined();
+      expect(Array.isArray(stats.projects)).toBe(true);
+      expect(stats.projects.length).toBeGreaterThan(0);
+      expect(stats.projects[0].id).toBe('proj-sample-1');
     });
   });
 });

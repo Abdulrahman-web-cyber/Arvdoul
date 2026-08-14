@@ -574,6 +574,20 @@ class CollaborationService {
   getStats() {
     return {
       initialized: this.initialized,
+      projects: [
+        {
+          id: 'proj-sample-1',
+          name: 'Arvdoul Launch Reel',
+          description: 'Collaboration project for platform launch promo',
+          status: 'in_progress',
+          thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=300&q=80',
+          team: [{ id: 'u1', name: 'Alex Owner', avatar: 'https://i.pravatar.cc/150?u=a' }],
+          members: 1,
+          updatedAt: 'Just now',
+          content: [],
+          reviews: []
+        }
+      ]
     };
   }
 
