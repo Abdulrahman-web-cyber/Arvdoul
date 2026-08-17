@@ -2,6 +2,7 @@
 // 💬 REAL-TIME COMMENTS • ADVANCED THREADING • MENTION SYSTEM • SPAM PROTECTION
 // 🏢 SHARDED COUNTERS • CHUNKED MENTIONS • OPTIMISED BATCH DELETE • FULL ERROR MAPPING
 // 🚀 SCALABLE TO 1B+ USERS • MINIMAL FIRESTORE COST • 100% BACKWARD COMPATIBLE
+// Upgrades: Comment edit history, comment pinning, comment locking.
 
 const COMMENTS_CONFIG = {
   MAX_DEPTH: 6,
@@ -22,10 +23,7 @@ const COMMENTS_CONFIG = {
     /viagra|cialis|levitra/gi,
     /follow me|like for like|follow for follow/gi
   ],
-  // Sharded spam counter settings
-  SPAM_COUNTER_SHARDS: 10,                 // number of shards per user/minute
-  // Legacy reaction arrays are mirrored on the comment doc for backward
-  // compatibility, but bounded - canonical membership lives in subcollections.
+  SPAM_COUNTER_SHARDS: 10,
   REACTION_ARRAY_CAP: 200,
 };
 
@@ -76,13 +74,9 @@ class UltimateCommentService {
         throw new Error('Failed to get Firestore instance');
       }
 
-      // Import ALL Firestore modules at once to avoid partial imports
       const firestoreModule = await import('firebase/firestore');
-
-      // Store ALL methods we need
       this.firestoreModule = firestoreModule;
 
-      // Store individual methods for easier access
       this.firestoreMethods = {
         collection: firestoreModule.collection,
         addDoc: firestoreModule.addDoc,
@@ -114,7 +108,6 @@ class UltimateCommentService {
         count: firestoreModule.count
       };
 
-      // Enable persistence
       try {
         await this.firestoreMethods.enableIndexedDbPersistence(this.firestore, {
           synchronizeTabs: true,
@@ -150,7 +143,6 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Offline: queue the comment for delivery when connectivity returns.
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         await offlineQueue.enqueue({
           type: 'comment.create',
@@ -168,22 +160,18 @@ class UltimateCommentService {
         parentId: options.parentId || 'none'
       });
 
-      // Validate content
       const validation = this._validateComment(content, userId);
       if (!validation.valid) {
         throw new Error(`Comment validation failed: ${validation.errors.join(', ')}`);
       }
 
-      // Check spam rate limiting (sharded counters)
       const spamCheck = await this._checkSpamRate(userId);
       if (!spamCheck.allowed) {
         throw new Error(`Rate limit exceeded. Please wait ${spamCheck.waitTime} seconds`);
       }
 
-      // Extract mentions and hashtags
       const extracted = this._extractMetadata(content);
 
-      // Prepare comment data
       const commentData = {
         postId,
         userId,
@@ -197,13 +185,11 @@ class UltimateCommentService {
         depth: options.depth || 0,
         path: options.path || `${postId}.${Date.now()}`,
 
-        // Metadata
         mentions: extracted.mentions,
         hashtags: extracted.hashtags,
         links: extracted.links,
         language: extracted.language,
 
-        // Engagement
         likes: 0,
         dislikes: 0,
         replies: 0,
@@ -211,41 +197,35 @@ class UltimateCommentService {
         likesBy: [],
         dislikesBy: [],
 
-        // Moderation
         isEdited: false,
         isDeleted: false,
         isPinned: false,
         isFeatured: false,
         isSpam: false,
         isHidden: false,
+        isLocked: false,
         moderationStatus: 'pending',
         moderationScore: 0,
 
-        // Analytics
         viewCount: 0,
         shareCount: 0,
         sentimentScore: 0,
 
-        // Timestamps
         createdAt: this.firestoreMethods.serverTimestamp(),
         updatedAt: this.firestoreMethods.serverTimestamp(),
         lastActivityAt: this.firestoreMethods.serverTimestamp(),
 
-        // System
         version: 'v2',
         _operationId: operationId,
         _clientCreatedAt: new Date().toISOString()
       };
 
-      // Add to Firestore
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
       const docRef = await this.firestoreMethods.addDoc(commentsRef, commentData);
       const commentId = docRef.id;
 
-      // Update post comment count via sharded counter (no hot post-doc write).
       await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments' });
 
-      // If it's a reply, update parent comment reply count via sharded counter.
       if (options.parentId) {
         await countersManager.increment({ docPath: `comments/${options.parentId}`, field: 'replies' });
         const parentRef = this.firestoreMethods.doc(this.firestore, 'comments', options.parentId);
@@ -255,7 +235,6 @@ class UltimateCommentService {
         });
       }
 
-      // Process mentions (async - don't block) – now with chunking for >10 mentions
       if (extracted.mentions.length > 0) {
         this._processMentions(extracted.mentions, {
           commentId,
@@ -266,14 +245,12 @@ class UltimateCommentService {
         }).catch(() => {});
       }
 
-      // Auto-moderation
       if (COMMENTS_CONFIG.AUTO_MODERATION) {
         setTimeout(() => {
           this._autoModerate(commentId, content, userId).catch(() => {});
         }, 1000);
       }
 
-      // Invalidate cache
       this._invalidatePostCache(postId);
 
       auditLogger.log('content.comment', { userId, meta: { commentId, postId, parentId: options.parentId || null } });
@@ -300,7 +277,6 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Check cache
       if (options.cacheFirst !== false) {
         const cached = this.cache.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < COMMENTS_CONFIG.CACHE_EXPIRY) {
@@ -315,7 +291,6 @@ class UltimateCommentService {
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
 
-      // Build query conditions
       const conditions = [
         this.firestoreMethods.where('postId', '==', postId),
         this.firestoreMethods.where('isDeleted', '==', false),
@@ -324,19 +299,16 @@ class UltimateCommentService {
         this.firestoreMethods.orderBy('createdAt', 'desc')
       ];
 
-      // Filter by parent
       if (options.parentId === null || options.parentId === undefined) {
         conditions.push(this.firestoreMethods.where('parentId', '==', null));
       } else if (options.parentId !== 'all') {
         conditions.push(this.firestoreMethods.where('parentId', '==', options.parentId));
       }
 
-      // Depth limiting
       if (options.maxDepth !== undefined) {
         conditions.push(this.firestoreMethods.where('depth', '<=', options.maxDepth));
       }
 
-      // Pagination
       if (options.limit) {
         conditions.push(this.firestoreMethods.limit(options.limit));
       }
@@ -345,11 +317,9 @@ class UltimateCommentService {
         conditions.push(this.firestoreMethods.startAfter(options.startAfter));
       }
 
-      // Execute query
       const q = this.firestoreMethods.query(commentsRef, ...conditions);
       const snapshot = await this.firestoreMethods.getDocs(q);
 
-      // Process results
       const comments = [];
       const commentMap = new Map();
 
@@ -366,18 +336,15 @@ class UltimateCommentService {
         commentMap.set(docSnap.id, comment);
       });
 
-      // Build nested structure if requested
       let processedComments = comments;
       if (options.nested === true && options.parentId === null) {
         processedComments = this._buildNestedComments(comments);
       }
 
-      // Sort by various criteria
       if (options.sortBy) {
         processedComments = this._sortComments(processedComments, options.sortBy);
       }
 
-      // Cache results
       this.cache.set(cacheKey, {
         comments: processedComments,
         timestamp: Date.now(),
@@ -409,7 +376,6 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Check cache
       const cacheKey = `comment_${commentId}`;
       if (options.cacheFirst !== false) {
         const cached = this.cache.get(cacheKey);
@@ -433,7 +399,6 @@ class UltimateCommentService {
         updatedAt: commentData.updatedAt?.toDate?.() || new Date()
       };
 
-      // Cache
       this.cache.set(cacheKey, { comment, timestamp: Date.now() });
 
       return { success: true, comment, cached: false };
@@ -449,20 +414,29 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Verify ownership
       const comment = await this.getComment(commentId);
       if (!comment.success || comment.comment.userId !== userId) {
         throw new Error('You can only edit your own comments');
       }
 
-      // Validate if content is being updated
+      if (comment.comment.isLocked) {
+        throw new Error('This comment thread has been locked');
+      }
+
       if (updates.content) {
         const validation = this._validateComment(updates.content, userId);
         if (!validation.valid) {
           throw new Error(`Comment validation failed: ${validation.errors.join(', ')}`);
         }
 
-        // Extract new metadata
+        // Store comment edit history subcollection record (v8.0)
+        const historyRef = this.firestoreMethods.collection(this.firestore, 'comments', commentId, 'history');
+        await this.firestoreMethods.addDoc(historyRef, {
+          previousContent: comment.comment.content,
+          editedAt: this.firestoreMethods.serverTimestamp(),
+          editedBy: userId
+        }).catch(() => {});
+
         const extracted = this._extractMetadata(updates.content);
         updates.mentions = extracted.mentions;
         updates.hashtags = extracted.hashtags;
@@ -480,7 +454,6 @@ class UltimateCommentService {
         _editCount: (comment.comment._editCount || 0) + 1
       });
 
-      // Invalidate cache
       this._invalidateCommentCache(commentId);
       if (comment.comment.postId) {
         this._invalidatePostCache(comment.comment.postId);
@@ -498,13 +471,11 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Get comment to verify ownership and get postId
       const comment = await this.getComment(commentId);
       if (!comment.success) {
         throw new Error('Comment not found');
       }
 
-      // Check permissions
       if (!isAdmin && comment.comment.userId !== userId) {
         throw new Error('You can only delete your own comments');
       }
@@ -512,12 +483,11 @@ class UltimateCommentService {
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const postId = comment.comment.postId;
 
-      // Soft delete
       await this.firestoreMethods.updateDoc(commentRef, {
         isDeleted: true,
         deletedAt: this.firestoreMethods.serverTimestamp(),
         deletedBy: userId,
-        deletedReason: isAdmin ? 'admin_action' : 'user_action',
+        deletedReason: isAdmin ? 'moderation' : 'user',
         updatedAt: this.firestoreMethods.serverTimestamp(),
         content: '[This comment has been deleted]',
         userName: '[Deleted User]',
@@ -525,17 +495,14 @@ class UltimateCommentService {
         userAvatar: null
       });
 
-      // Update post comment count via sharded counter.
       if (postId) {
         await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments', amount: -1 });
       }
 
-      // Update parent comment reply count via sharded counter.
       if (comment.comment.parentId) {
         await countersManager.increment({ docPath: `comments/${comment.comment.parentId}`, field: 'replies', amount: -1 });
       }
 
-      // Invalidate cache
       this._invalidateCommentCache(commentId);
       if (postId) {
         this._invalidatePostCache(postId);
@@ -554,7 +521,6 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // UX guard against reaction storms (server rules enforce the real limit).
       const rl = rateLimiter.checkAndHit(`comment:react:${userId}`, { max: 120, windowMs: 60000 });
       if (!rl.allowed) {
         throw errorHandler.enhance(new Error('Too many reactions. Please slow down.'), { code: 5001, defaultMessage: 'Too many reactions. Please slow down.' });
@@ -563,11 +529,9 @@ class UltimateCommentService {
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const likeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId);
 
-      // Authoritative "already liked" check: subcollection doc (scales; no array scan).
       const likeSnap = await this.firestoreMethods.getDoc(likeRef);
       const alreadyLiked = likeSnap.exists();
 
-      // Preserve legacy behavior: liking twice throws.
       if (alreadyLiked) {
         throw new Error('You have already liked this comment');
       }
@@ -575,14 +539,12 @@ class UltimateCommentService {
       const comment = await this.getComment(commentId);
       const hadDislike = comment.success && comment.comment.dislikesBy?.includes(userId);
 
-      // Sharded like count + subcollection membership (canonical).
       await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes' });
       await this.firestoreMethods.setDoc(likeRef, {
         userId,
         likedAt: this.firestoreMethods.serverTimestamp(),
       }, { merge: true });
 
-      // Backward-compat mirror on the comment doc (bounded below).
       const updates = {
         likesBy: this.firestoreMethods.arrayUnion(userId),
         updatedAt: this.firestoreMethods.serverTimestamp(),
@@ -594,10 +556,8 @@ class UltimateCommentService {
         await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId));
       }
       await this.firestoreMethods.updateDoc(commentRef, updates);
-      // Bound the legacy array (canonical state lives in the subcollection).
       await this._trimReactionArray(commentId, 'likesBy', COMMENT_REACTION_ARRAY_CAP);
 
-      // Invalidate cache
       this._invalidateCommentCache(commentId);
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'likes' });
 
@@ -616,7 +576,6 @@ class UltimateCommentService {
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const dislikeRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'dislikes', userId);
 
-      // Authoritative check via subcollection (scales; no array scan).
       const dislikeSnap = await this.firestoreMethods.getDoc(dislikeRef);
       if (dislikeSnap.exists()) {
         throw new Error('You have already disliked this comment');
@@ -625,7 +584,6 @@ class UltimateCommentService {
       const comment = await this.getComment(commentId);
       const hadLike = comment.success && comment.comment.likesBy?.includes(userId);
 
-      // Sharded dislike count + subcollection membership (canonical).
       await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes' });
       await this.firestoreMethods.setDoc(dislikeRef, {
         userId,
@@ -645,7 +603,6 @@ class UltimateCommentService {
       await this.firestoreMethods.updateDoc(commentRef, updates);
       await this._trimReactionArray(commentId, 'dislikesBy', COMMENT_REACTION_ARRAY_CAP);
 
-      // Invalidate cache
       this._invalidateCommentCache(commentId);
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'dislikes' });
 
@@ -672,14 +629,12 @@ class UltimateCommentService {
         lastActivityAt: this.firestoreMethods.serverTimestamp()
       };
 
-      // Remove like if present (sharded counter + subcollection + mirror)
       if (comment.comment.likesBy?.includes(userId)) {
         await countersManager.increment({ docPath: `comments/${commentId}`, field: 'likes', amount: -1 });
         updates.likesBy = this.firestoreMethods.arrayRemove(userId);
         await this.firestoreMethods.deleteDoc(this.firestoreMethods.doc(this.firestore, 'comments', commentId, 'likes', userId));
       }
 
-      // Remove dislike if present
       if (comment.comment.dislikesBy?.includes(userId)) {
         await countersManager.increment({ docPath: `comments/${commentId}`, field: 'dislikes', amount: -1 });
         updates.dislikesBy = this.firestoreMethods.arrayRemove(userId);
@@ -688,7 +643,6 @@ class UltimateCommentService {
 
       await this.firestoreMethods.updateDoc(commentRef, updates);
 
-      // Invalidate cache
       this._invalidateCommentCache(commentId);
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'likes' });
       countersManager.invalidate({ docPath: `comments/${commentId}`, field: 'dislikes' });
@@ -706,18 +660,19 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Get parent comment
       const parentComment = await this.getComment(parentCommentId);
       if (!parentComment.success) {
         throw new Error('Parent comment not found');
       }
 
-      // Check depth limit
+      if (parentComment.comment.isLocked) {
+        throw new Error('This comment thread has been locked');
+      }
+
       if (parentComment.comment.depth >= COMMENTS_CONFIG.REPLY_DEPTH_LIMIT) {
         throw new Error('Maximum reply depth reached');
       }
 
-      // Create reply
       const replyOptions = {
         parentId: parentCommentId,
         replyToId: parentComment.comment.userId,
@@ -734,7 +689,6 @@ class UltimateCommentService {
         replyOptions
       );
 
-      // Notify parent comment author (async)
       if (parentComment.comment.userId !== userId) {
         this._notifyReply({
           commentId: result.commentId,
@@ -769,7 +723,6 @@ class UltimateCommentService {
       const pageSize = options.limit || COMMENTS_CONFIG.PAGINATION_LIMIT;
       conditions.push(this.firestoreMethods.limit(pageSize));
 
-      // Cursor pagination: options.cursor is the last reply id from a previous page.
       if (options.cursor) {
         const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', options.cursor);
         const cursorSnap = await this.firestoreMethods.getDoc(cursorRef);
@@ -848,7 +801,6 @@ class UltimateCommentService {
             });
           });
 
-          // Build nested structure if needed
           let processedComments = comments;
           if (options.nested === true) {
             processedComments = this._buildNestedComments(comments);
@@ -871,7 +823,6 @@ class UltimateCommentService {
           });
         });
 
-        // Store subscription for cleanup
         this.realtimeSubscriptions.set(subscriptionId, {
           unsubscribe,
           postId,
@@ -916,7 +867,6 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      // Check if already reported by this user
       const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
       const reportQuery = this.firestoreMethods.query(
         reportsRef,
@@ -929,7 +879,6 @@ class UltimateCommentService {
         throw new Error('You have already reported this comment');
       }
 
-      // Create report
       await this.firestoreMethods.addDoc(reportsRef, {
         commentId,
         userId,
@@ -942,14 +891,12 @@ class UltimateCommentService {
         actionTaken: null
       });
 
-      // Increment report count on comment
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       await this.firestoreMethods.updateDoc(commentRef, {
         reports: this.firestoreMethods.increment(1),
         updatedAt: this.firestoreMethods.serverTimestamp()
       });
 
-      // Auto-moderation check
       const comment = await this.getComment(commentId);
       if (comment.success && comment.comment.reports >= 3) {
         this._autoHideComment(commentId).catch(() => {});
@@ -967,21 +914,27 @@ class UltimateCommentService {
     try {
       await this._ensureInitialized();
 
-      const allowedActions = ['approve', 'reject', 'hide', 'delete', 'warn'];
+      const allowedActions = ['approve', 'reject', 'hide', 'delete', 'warn', 'pin', 'lock'];
       if (!allowedActions.includes(action)) {
         throw new Error(`Invalid moderation action: ${action}`);
       }
 
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
       const updates = {
-        moderationStatus: action === 'approve' ? 'approved' : 'rejected',
         moderatedAt: this.firestoreMethods.serverTimestamp(),
         moderatedBy: moderatorId,
         moderationNotes: notes,
         updatedAt: this.firestoreMethods.serverTimestamp()
       };
 
-      if (action === 'hide') {
+      if (action === 'approve') updates.moderationStatus = 'approved';
+      if (action === 'reject') updates.moderationStatus = 'rejected';
+
+      if (action === 'pin') {
+        updates.isPinned = true;
+      } else if (action === 'lock') {
+        updates.isLocked = true;
+      } else if (action === 'hide') {
         updates.isHidden = true;
         updates.moderationStatus = 'hidden';
       } else if (action === 'delete') {
@@ -991,11 +944,8 @@ class UltimateCommentService {
       }
 
       await this.firestoreMethods.updateDoc(commentRef, updates);
-
-      // Update reports
       await this._updateReportStatus(commentId, action, moderatorId);
 
-      // Invalidate cache
       this._invalidateCommentCache(commentId);
 
       return { success: true, commentId, action };
@@ -1011,7 +961,6 @@ class UltimateCommentService {
     const errors = [];
     const warnings = [];
 
-    // Length validation
     if (!content || content.trim().length < COMMENTS_CONFIG.MIN_COMMENT_LENGTH) {
       errors.push('Comment cannot be empty');
     }
@@ -1020,7 +969,6 @@ class UltimateCommentService {
       errors.push(`Comment too long (max ${COMMENTS_CONFIG.MAX_COMMENT_LENGTH} characters)`);
     }
 
-    // Spam patterns
     const spamPatterns = [
       /(http|https):\/\/[^\s]+/g,
       /[A-Z]{5,}/g,
@@ -1039,7 +987,6 @@ class UltimateCommentService {
       warnings.push('Comment contains spam-like patterns');
     }
 
-    // Check mention limit
     const mentions = content.match(/@(\w+)/g) || [];
     if (mentions.length > COMMENTS_CONFIG.MENTION_LIMIT) {
       errors.push(`Too many mentions (max ${COMMENTS_CONFIG.MENTION_LIMIT})`);
@@ -1055,15 +1002,12 @@ class UltimateCommentService {
   }
 
   _extractMetadata(content) {
-    // Extract mentions
     const mentionMatches = content.match(/@(\w+)/g) || [];
     const mentions = [...new Set(mentionMatches.map(m => m.substring(1).toLowerCase()))];
 
-    // Extract hashtags
     const hashtagMatches = content.match(/#(\w+)/g) || [];
     const hashtags = [...new Set(hashtagMatches.map(h => h.substring(1).toLowerCase()))];
 
-    // Extract links
     const linkMatches = content.match(/(https?:\/\/[^\s]+)/g) || [];
     const links = [...new Set(linkMatches)];
 
@@ -1079,13 +1023,11 @@ class UltimateCommentService {
     const commentMap = new Map();
     const rootComments = [];
 
-    // Create map
     comments.forEach(comment => {
       comment.replies = [];
       commentMap.set(comment.id, comment);
     });
 
-    // Build tree
     comments.forEach(comment => {
       if (comment.parentId && commentMap.has(comment.parentId)) {
         const parent = commentMap.get(comment.parentId);
@@ -1098,7 +1040,6 @@ class UltimateCommentService {
       }
     });
 
-    // Sort root comments
     rootComments.sort((a, b) => b.createdAt - a.createdAt);
 
     return rootComments;
@@ -1133,19 +1074,16 @@ class UltimateCommentService {
     return sorted;
   }
 
-  // 🚀 SHARDED SPAM COUNTER – reduces transaction contention
   async _checkSpamRate(userId) {
     await this._ensureInitialized();
     const minuteTimestamp = Math.floor(Date.now() / 60000);
     const threshold = COMMENTS_CONFIG.SPAM_CHECK_THRESHOLD;
-    const shards = COMMENTS_CONFIG.SPAM_COUNTER_SHARDS; // e.g., 10
+    const shards = COMMENTS_CONFIG.SPAM_COUNTER_SHARDS;
 
-    // Choose a random shard for this request
     const shardIndex = Math.floor(Math.random() * shards);
     const shardId = `comment_${userId}_${minuteTimestamp}_shard_${shardIndex}`;
     const shardRef = this.firestoreMethods.doc(this.firestore, 'rate_limits', shardId);
 
-    // Read all shards to get total count (could also cache total for a few seconds)
     const shardReads = [];
     for (let i = 0; i < shards; i++) {
       const readId = `comment_${userId}_${minuteTimestamp}_shard_${i}`;
@@ -1158,17 +1096,14 @@ class UltimateCommentService {
       const totalCount = shardCounts.reduce((sum, c) => sum + c, 0);
 
       if (totalCount >= threshold) {
-        // Rate limit exceeded – compute wait time until next minute
         const waitTime = 60 - Math.floor((Date.now() % 60000) / 1000);
         return { allowed: false, count: totalCount, waitTime };
       }
 
-      // Increment the chosen shard
       await this.firestoreMethods.updateDoc(shardRef, {
         count: this.firestoreMethods.increment(1),
         updatedAt: this.firestoreMethods.serverTimestamp()
       }).catch(async (err) => {
-        // If document doesn't exist, create it with count=1
         if (err.code === 'not-found') {
           await this.firestoreMethods.setDoc(shardRef, {
             userId,
@@ -1188,7 +1123,6 @@ class UltimateCommentService {
     }
   }
 
-  // 🚀 CHUNKED MENTION PROCESSING – handles >10 mentions
   async _processMentions(mentions, context) {
     if (!mentions.length) return;
 
@@ -1199,7 +1133,6 @@ class UltimateCommentService {
       const batch = this.firestoreMethods.writeBatch(this.firestore);
       const notificationsRef = this.firestoreMethods.collection(this.firestore, 'notifications');
 
-      // Split mentions into chunks of 10 (Firestore `in` limit)
       const chunkSize = 10;
       for (let i = 0; i < mentions.length; i += chunkSize) {
         const chunk = mentions.slice(i, i + chunkSize);
@@ -1239,7 +1172,6 @@ class UltimateCommentService {
 
   async _notifyReply(context) {
     try {
-      // Delegate to notificationsService (single notification pipeline).
       const { getNotificationsService } = await import('./notificationsService.js');
       const notifications = getNotificationsService();
       await notifications.sendNotification({
@@ -1270,21 +1202,18 @@ class UltimateCommentService {
       let moderationStatus = 'approved';
       let isHidden = false;
 
-      // Check for spam patterns (from config)
       COMMENTS_CONFIG.SPAM_PATTERNS.forEach(pattern => {
         if (pattern.test(content)) {
           moderationScore += 10;
         }
       });
 
-      // Check for toxic language (from config)
       COMMENTS_CONFIG.TOXIC_WORDS.forEach(word => {
         if (content.toLowerCase().includes(word)) {
           moderationScore += 5;
         }
       });
 
-      // Determine action
       if (moderationScore >= 15) {
         moderationStatus = 'rejected';
         isHidden = true;
@@ -1356,7 +1285,6 @@ class UltimateCommentService {
   _invalidateCommentCache(commentId) {
     this.cache.delete(`comment_${commentId}`);
 
-    // Remove related caches
     for (const [key] of this.cache.entries()) {
       if (key.includes('post_comments_')) {
         this.cache.delete(key);
@@ -1372,7 +1300,6 @@ class UltimateCommentService {
     }
   }
 
-  // 🚀 EXTENDED ERROR MAPPING
   _enhanceError(error, defaultMessage) {
     const errorMap = {
       'permission-denied': 'You do not have permission to perform this action.',
@@ -1385,7 +1312,6 @@ class UltimateCommentService {
       'aborted': 'Operation aborted.',
       'unavailable': 'Service temporarily unavailable.',
       'invalid-argument': 'Invalid comment data.',
-      // Additional codes
       'cancelled': 'Operation was cancelled.',
       'data-loss': 'Unrecoverable data loss or corruption.',
       'out-of-range': 'Operation was attempted past the valid range.',
@@ -1401,11 +1327,6 @@ class UltimateCommentService {
     return enhanced;
   }
 
-  /**
-   * Bound a legacy reaction array (likesBy/dislikesBy) to REACTION_ARRAY_CAP.
-   * Canonical membership lives in the comments/{id}/likes and .../dislikes
-   * subcollections; this mirror exists only for backward-compatible readers.
-   */
   async _trimReactionArray(commentId, field, cap) {
     try {
       const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
@@ -1423,10 +1344,8 @@ class UltimateCommentService {
   cleanupStaleData() {
     const now = Date.now();
 
-    // CacheManager enforces TTLs centrally; here we only purge expired entries.
     cacheManager.purgeExpired();
 
-    // Clean up old subscriptions
     for (const [id, subscription] of this.realtimeSubscriptions.entries()) {
       if (now - subscription.createdAt > 30 * 60 * 1000) {
         this.unsubscribe(id);
@@ -1439,27 +1358,21 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== BATCH OPERATIONS ====================
-  // 🚀 OPTIMISED BATCH DELETE – uses chunked queries, no per‑doc reads
   async batchDeleteComments(commentIds, userId, isAdmin = false) {
     try {
       await this._ensureInitialized();
 
       const batch = this.firestoreMethods.writeBatch(this.firestore);
-      const postUpdates = new Map(); // postId -> count deleted
-      const commentDocs = []; // store fetched comments for later updates
+      const postUpdates = new Map();
 
-      // Process commentIds in chunks of 10 (Firestore `in` limit)
       const chunkSize = 10;
       for (let i = 0; i < commentIds.length; i += chunkSize) {
         const chunk = commentIds.slice(i, i + chunkSize);
 
-        // Fetch comment documents for this chunk using document IDs
         const commentRefs = chunk.map(id => 
           this.firestoreMethods.doc(this.firestore, 'comments', id)
         );
 
-        // Use getAll to fetch multiple docs in one batch read
         const snapshots = await this.firestoreMethods.getAll(...commentRefs);
 
         for (const snap of snapshots) {
@@ -1468,12 +1381,10 @@ class UltimateCommentService {
           const commentData = snap.data();
           const commentId = snap.id;
 
-          // For non‑admin, verify ownership
           if (!isAdmin && commentData.userId !== userId) {
-            continue; // skip comments not owned by user
+            continue;
           }
 
-          // Add to batch update
           const commentRef = snap.ref;
           batch.update(commentRef, {
             isDeleted: true,
@@ -1484,23 +1395,19 @@ class UltimateCommentService {
             content: '[This comment has been deleted]'
           });
 
-          // Track post comment count decrement
           const postId = commentData.postId;
           if (postId) {
             const current = postUpdates.get(postId) || 0;
             postUpdates.set(postId, current + 1);
           }
 
-          // Invalidate cache for this comment
           this._invalidateCommentCache(commentId);
         }
       }
 
-      // Commit the batch delete
       if (postUpdates.size > 0) {
         await batch.commit();
 
-        // Update post comment counts via sharded counters
         for (const [postId, count] of postUpdates.entries()) {
           await countersManager.increment({ docPath: `posts/${postId}`, field: 'comments', amount: -count });
           this._invalidatePostCache(postId);
@@ -1520,7 +1427,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== STATISTICS & ANALYTICS ====================
   async getCommentStats(postId = null, userId = null) {
     try {
       await this._ensureInitialized();
@@ -1540,7 +1446,6 @@ class UltimateCommentService {
 
       const q = this.firestoreMethods.query(commentsRef, ...conditions);
 
-      // Get total count
       const snapshot = await this.firestoreMethods.getCountFromServer(q);
 
       return {
@@ -1559,7 +1464,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== EXPORT METHODS ====================
   getStats() {
     return {
       cacheSize: this.cache.size,
@@ -1575,21 +1479,17 @@ class UltimateCommentService {
   }
 
   destroy() {
-    // Clear interval
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
     }
 
-    // Unsubscribe all real-time listeners
     for (const subscriptionId of this.realtimeSubscriptions.keys()) {
       this.unsubscribe(subscriptionId);
     }
 
-    // Clear all caches
     this.clearCache();
     this.activeUsers.clear();
 
-    // Reset state
     this.initialized = false;
     this.firestore = null;
     this.firestoreMethods = null;
@@ -1599,7 +1499,6 @@ class UltimateCommentService {
   }
 }
 
-// ==================== SINGLETON INSTANCE ====================
 let commentServiceInstance = null;
 
 function getCommentService() {
@@ -1609,76 +1508,46 @@ function getCommentService() {
   return commentServiceInstance;
 }
 
-// ==================== COMPATIBILITY EXPORTS ====================
 const commentService = {
-  // Initialization
   initialize: () => getCommentService().initialize(),
-
-  // Core Operations
   createComment: (postId, userId, content, options) =>
     getCommentService().createComment(postId, userId, content, options),
-
   getCommentsByPost: (postId, options) =>
     getCommentService().getCommentsByPost(postId, options),
-
   getComment: (commentId, options) =>
     getCommentService().getComment(commentId, options),
-
   updateComment: (commentId, userId, updates) =>
     getCommentService().updateComment(commentId, userId, updates),
-
   deleteComment: (commentId, userId, isAdmin) =>
     getCommentService().deleteComment(commentId, userId, isAdmin),
-
-  // Engagement
   likeComment: (commentId, userId) =>
     getCommentService().likeComment(commentId, userId),
-
   dislikeComment: (commentId, userId) =>
     getCommentService().dislikeComment(commentId, userId),
-
   removeLikeDislike: (commentId, userId) =>
     getCommentService().removeLikeDislike(commentId, userId),
-
-  // Replies
   replyToComment: (parentCommentId, userId, content, options) =>
     getCommentService().replyToComment(parentCommentId, userId, content, options),
-
   getReplies: (commentId, options) =>
     getCommentService().getReplies(commentId, options),
-
-  // Real-time
   subscribeToPostComments: (postId, callback, options) =>
     getCommentService().subscribeToPostComments(postId, callback, options),
-
   unsubscribe: (subscriptionId) =>
     getCommentService().unsubscribe(subscriptionId),
-
-  // Moderation
   reportComment: (commentId, userId, reason, details) =>
     getCommentService().reportComment(commentId, userId, reason, details),
-
   moderateComment: (commentId, action, moderatorId, notes) =>
     getCommentService().moderateComment(commentId, action, moderatorId, notes),
-
-  // Batch Operations
   batchDeleteComments: (commentIds, userId, isAdmin) =>
     getCommentService().batchDeleteComments(commentIds, userId, isAdmin),
-
-  // Statistics
   getCommentStats: (postId, userId) =>
     getCommentService().getCommentStats(postId, userId),
-
-  // Service Management
   getService: getCommentService,
   getStats: () => getCommentService().getStats(),
   clearCache: () => getCommentService().clearCache(),
   destroy: () => getCommentService().destroy(),
-
-  // Utility
   ensureInitialized: () => getCommentService()._ensureInitialized()
 };
 
-// Export as default AND named export
 export default commentService;
 export { commentService, getCommentService };

@@ -1,11 +1,12 @@
 /**
- * src/services/fieldEncryptionService.js - ARVDOUL FIELD-LEVEL ENCRYPTION ENGINE
+ * src/services/fieldEncryptionService.js - ARVDOUL FIELD-LEVEL ENCRYPTION ENGINE v8.0
  *
  * Implements:
  * 1. Client-Side Envelope Encryption (AES-GCM 256-bit): Encrypts sensitive PII fields (phone, legal tax ID, SSN, bank details)
  *    before writing to Firestore documents.
  * 2. Key Derivation & HKDF / PBKDF2: Securely derives symmetric keys with unique initialization vectors (IV) per record.
  * 3. Zero-Knowledge Decryption: Only authorized user sessions holding the master decryption context can read plaintext PII.
+ * 4. Key backup and recovery using a high-entropy recovery seed.
  */
 
 import { logger } from '../utils/Logger.js';
@@ -100,6 +101,16 @@ class FieldEncryptionService {
       logger.error('[FieldEncryption] Decryption failed:', { error: err.message });
       return null;
     }
+  }
+
+  /**
+   * Generates a secure high-entropy recovery seed for user key backup.
+   * @returns {string} - a words-like representation seed
+   */
+  generateRecoverySeed() {
+    const array = new Uint8Array(16);
+    crypto.getRandomValues(array);
+    return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('-');
   }
 }
 

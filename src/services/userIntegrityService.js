@@ -1,5 +1,5 @@
 /**
- * src/services/userIntegrityService.js - ARVDOUL USER INTEGRITY & TRUST ENGINE
+ * src/services/userIntegrityService.js - ARVDOUL USER INTEGRITY & TRUST ENGINE v8.0
  *
  * Implements:
  * 1. Multi-Dimensional Trust Score (0-100): Evaluates account age, phone/email verification, strike history,

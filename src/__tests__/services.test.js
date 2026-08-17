@@ -2,6 +2,29 @@
 // These tests verify core service logic without Firebase dependencies
 
 import { IdempotencyStore } from '../utils/IdempotencyKey';
+import { safeSearchService } from '../services/safeSearchService.js';
+import { scamDetectionService } from '../services/scamDetectionService.js';
+import { searchAbuseService } from '../services/searchAbuseService.js';
+import { searchIndexingService } from '../services/searchIndexingService.js';
+import { audioModerationService } from '../services/audioModerationService.js';
+import { childSafetyService } from '../services/childSafetyService.js';
+import { copyrightDetectionService } from '../services/copyrightDetectionService.js';
+import { costMonitoringService } from '../services/costMonitoringService.js';
+import { costOptimizationService } from '../services/costOptimizationService.js';
+import { extremismDetectionService } from '../services/extremismDetectionService.js';
+import { selfHarmDetectionService } from '../services/selfHarmDetectionService.js';
+import { fieldEncryptionService } from '../services/fieldEncryptionService.js';
+import { fraudDetectionService } from '../services/fraudDetectionService.js';
+import { imageModerationService } from '../services/imageModerationService.js';
+import { videoModerationService } from '../services/videoModerationService.js';
+import { liveModerationService } from '../services/liveModerationService.js';
+import { logAggregationService } from '../services/logAggregationService.js';
+import { tracingService } from '../services/tracingService.js';
+import { manipulatedMediaService } from '../services/manipulatedMediaService.js';
+import { phishingDetectionService } from '../services/phishingDetectionService.js';
+import { userIntegrityService } from '../services/userIntegrityService.js';
+import { vendorManagementService } from '../services/vendorManagementService.js';
+import { viralPredictionService } from '../services/viralPredictionService.js';
 
 describe('Service Layer Tests', () => {
   
@@ -316,6 +339,354 @@ describe('Service Layer Tests', () => {
       
       expect(queue.isEmpty()).toBe(true);
       expect(queue.size()).toBe(0);
+    });
+  });
+
+  describe('AIStudioService Upgrades (v8.0)', () => {
+    let aiService;
+
+    beforeAll(async () => {
+      const mod = await import('../services/aiStudioService.js');
+      aiService = mod.aiStudioService || mod.default;
+    });
+
+    test('correctly identifies toxic phrases in content moderation', () => {
+      const toxicText = 'You are an absolute idiot and a complete retard!';
+      const res = aiService.moderateOutput(toxicText);
+      expect(res.flagged).toBe(true);
+      expect(res.reason).toContain('contains blocked phrase');
+    });
+
+    test('passes clean texts through content moderation', () => {
+      const cleanText = 'The beautiful night sky is glowing over the futuristic neon city of Arvdoul.';
+      const res = aiService.moderateOutput(cleanText);
+      expect(res.flagged).toBe(false);
+    });
+
+    test('generates highly structured video script with multi-scene cues', async () => {
+      const script = await aiService.generateScript({ topic: 'artificial intelligence', style: 'tech', duration: 30 });
+      expect(script.title).toContain('Master artificial intelligence');
+      expect(script.targetDuration).toBe('30s');
+      expect(script.scenes).toBeDefined();
+      expect(script.scenes.length).toBeGreaterThan(0);
+    });
+
+    test('correctly calculates remaining daily AI budget and enforces limits', async () => {
+      // Artificially inflate spend by adding a massive log entry
+      aiService.usageLogs.push({
+        timestamp: Date.now(),
+        promptTokens: 10000,
+        completionTokens: 20000,
+        totalTokens: 30000,
+        estimatedCost: 6.50 // Exceeds the $5 limit
+      });
+
+      const spend = aiService.getDailySpendUSD();
+      expect(spend).toBeGreaterThan(5.00);
+
+      // Call should immediately abort and trigger local fallback without fetch
+      const result = await aiService._callOpenAI('Write some text');
+      expect(result).toBeNull();
+
+      // Clear test logs
+      aiService.usageLogs = [];
+    });
+  });
+
+  describe('SafeSearchService Upgrades (v8.0)', () => {
+    test('correctly set/get safe search modes', () => {
+      safeSearchService.setMode('strict');
+      expect(safeSearchService.getMode()).toBe('strict');
+
+      safeSearchService.setMode('off');
+      expect(safeSearchService.getMode()).toBe('off');
+
+      safeSearchService.setMode('moderate');
+      expect(safeSearchService.getMode()).toBe('moderate');
+    });
+
+    test('redacts toxic phrases in queries under moderate/strict mode', () => {
+      safeSearchService.setMode('strict');
+      const sanitized = safeSearchService.sanitizeSearchQuery('Find user who said you are a retard');
+      expect(sanitized).toContain('[redacted]');
+    });
+
+    test('filters NSFW items correctly under moderate mode', () => {
+      safeSearchService.setMode('moderate');
+      const items = [
+        { title: 'Normal Post', isNsfw: false },
+        { title: 'Adult Content', isNsfw: true }
+      ];
+      const filtered = safeSearchService.filterResults(items);
+      expect(filtered.length).toBe(1);
+      expect(filtered[0].title).toBe('Normal Post');
+    });
+
+    test('filters sensitive/nsfw/violence correctly under strict mode', () => {
+      safeSearchService.setMode('strict');
+      const items = [
+        { title: 'Clean', isNsfw: false, isViolence: false, isSensitive: false },
+        { title: 'Violence Post', isViolence: true },
+        { title: 'Sensitive Post', isSensitive: true },
+        { title: 'Racy Post', isRacy: true }
+      ];
+      const filtered = safeSearchService.filterResults(items);
+      expect(filtered.length).toBe(1);
+      expect(filtered[0].title).toBe('Clean');
+    });
+  });
+
+  describe('ScamDetectionService Upgrades (v8.0)', () => {
+    test('detects classic double-your-crypto scam', () => {
+      const text = 'Send 1 BTC to this wallet and get 2 BTC back instantly guaranteed!';
+      const res = scamDetectionService.evaluateScam(text);
+      expect(res.isScam).toBe(true);
+      expect(res.score).toBeGreaterThanOrEqual(60);
+      expect(res.reasons.length).toBeGreaterThan(0);
+    });
+
+    test('detects seed phrase credential request threats', () => {
+      const text = 'Official support here. Please send me your seed phrase and private key for verification.';
+      const res = scamDetectionService.evaluateScam(text);
+      expect(res.isScam).toBe(true);
+      expect(res.score).toBeGreaterThanOrEqual(80);
+    });
+
+    test('ignores normal chat texts without scam markers', () => {
+      const text = 'Hey buddy, let meet for lunch at our favorite pizza place around 1pm today.';
+      const res = scamDetectionService.evaluateScam(text);
+      expect(res.isScam).toBe(false);
+      expect(res.score).toBe(0);
+    });
+  });
+
+  describe('SearchAbuseService Upgrades (v8.0)', () => {
+    test('enforces query length restriction limits', () => {
+      const longQuery = 'a'.repeat(200);
+      const res = searchAbuseService.validateSearchRequest('user123', longQuery);
+      expect(res.allowed).toBe(false);
+      expect(res.requiresCaptcha).toBe(true);
+    });
+
+    test('blocks sliding window search rate spikes', () => {
+      searchAbuseService.resetAbuseCounters('user_temp');
+      for (let i = 0; i < 30; i++) {
+        const check = searchAbuseService.validateSearchRequest('user_temp', `Query ${i}`);
+        expect(check.allowed).toBe(true);
+      }
+      const overLimit = searchAbuseService.validateSearchRequest('user_temp', 'One more search');
+      expect(overLimit.allowed).toBe(false);
+    });
+
+    test('detects dictionary sequential letter sweeps and triggers captcha', () => {
+      searchAbuseService.resetAbuseCounters('sweep_user');
+      // alphabetical sequence sweeps
+      searchAbuseService.validateSearchRequest('sweep_user', 'aaa');
+      searchAbuseService.validateSearchRequest('sweep_user', 'aab');
+      searchAbuseService.validateSearchRequest('sweep_user', 'aac');
+      const sweepCheck = searchAbuseService.validateSearchRequest('sweep_user', 'aad');
+      expect(sweepCheck.allowed).toBe(false);
+      expect(sweepCheck.requiresCaptcha).toBe(true);
+    });
+  });
+
+  describe('SearchIndexingService Upgrades (v8.0)', () => {
+    test('generates edge n-grams for prefix matching', () => {
+      const ngrams = searchIndexingService.generateNGrams('arvdoul');
+      expect(ngrams).toContain('ar');
+      expect(ngrams).toContain('arv');
+      expect(ngrams).toContain('arvd');
+    });
+
+    test('filters out common stop words during tokenization', () => {
+      const tokens = searchIndexingService.generateNGrams('this is the new post about arvdoul');
+      expect(tokens).toContain('po');
+      expect(tokens).toContain('pos');
+      expect(tokens).not.toContain('th'); // 'this', 'the' are stopwords
+    });
+
+    test('calculates multi-field weighted popularity scores correctly', () => {
+      const userDoc = searchIndexingService.buildSearchableDocument('user', {
+        id: 'u123',
+        followersCount: 100,
+        likesCount: 50
+      });
+      // 100 * 1.0 + 50 * 0.2 = 110
+      expect(userDoc.popularityScore).toBe(110);
+
+      const postDoc = searchIndexingService.buildSearchableDocument('post', {
+        id: 'p123',
+        likesCount: 100,
+        viewCount: 200
+      });
+      // 100 * 0.8 + 200 * 0.2 = 120
+      expect(postDoc.popularityScore).toBe(120);
+    });
+  });
+
+  describe('AudioModerationService Upgrades (v8.0)', () => {
+    test('evaluates transcribed audio toxic content correctly', () => {
+      const evaluation = audioModerationService.evaluateAudioTranscript('This is some clean audio transcript');
+      expect(evaluation.isClean).toBe(true);
+
+      const toxicEvaluation = audioModerationService.evaluateAudioTranscript('You are an absolute idiot and retard');
+      expect(toxicEvaluation.isClean).toBe(false);
+      expect(toxicEvaluation.score).toBeGreaterThan(90);
+    });
+  });
+
+  describe('ChildSafetyService Upgrades (v8.0)', () => {
+    test('scans safe signatures and approves them', async () => {
+      const res = await childSafetyService.scanMediaBytes(null, { signature: 'completely_safe_sig_abc' });
+      expect(res.cleared).toBe(true);
+    });
+
+    test('blocks CSAM and escalates reporting', async () => {
+      const res = await childSafetyService.scanMediaBytes(null, { signature: '31a788cb99120ff9c0d1e576572a11b9' });
+      expect(res.cleared).toBe(false);
+      expect(res.action).toBe('INSTANT_LOCKDOWN_AND_LEGAL_REPORT');
+      expect(res.legalEscalated).toBe(true);
+    });
+  });
+
+  describe('CopyrightDetectionService Upgrades (v8.0)', () => {
+    test('computes precise Hamming distance between visual signatures', () => {
+      const dist = copyrightDetectionService.computeHammingDistance('0000', '0001'); // 1 bit difference
+      expect(dist).toBe(1);
+
+      const identical = copyrightDetectionService.computeHammingDistance('abcdef', 'abcdef');
+      expect(identical).toBe(0);
+    });
+
+    test('screens fingerprints and flags copyright infringement', () => {
+      const res = copyrightDetectionService.evaluateCopyright(null, { fingerprint: 'arv_disney_logo_fingerprint_64' });
+      expect(res.isInfringed).toBe(true);
+      expect(res.action).toBe('BLOCK_AND_FLAG');
+    });
+
+    test('processes automated DMCA takedown filings', () => {
+      const res = copyrightDetectionService.processDmcaNotice('user123', 'post_infringed_456', 'Claimant Corp', 'Work Title');
+      expect(res.success).toBe(true);
+      expect(res.caseId).toBeDefined();
+    });
+  });
+
+  describe('CostMonitoringService Upgrades (v8.0)', () => {
+    test('aggregates db operations costs and estimates forecasts', () => {
+      costMonitoringService.resetDailySpend();
+      costMonitoringService.recordDatabaseOperations(100000, 50000); // 100k reads, 50k writes
+      const forecast = costMonitoringService.getDailyBudgetForecast();
+      expect(forecast.currentDailySpendUSD).toBeGreaterThan(0);
+      expect(forecast.projectedMonthlySpendUSD).toBeGreaterThan(0);
+    });
+  });
+
+  describe('CostOptimizationService Upgrades (v8.0)', () => {
+    test('profiles execution queries and flags high frequency patterns', () => {
+      costOptimizationService.resetProfiling();
+      for (let i = 0; i < 110; i++) {
+        costOptimizationService.profileQueryExecution('get_feed_query');
+      }
+      const recommendations = costOptimizationService.generateCostRecommendations();
+      const highFreqRec = recommendations.find(r => r.id === 'opt_high_freq_get_feed_query');
+      expect(highFreqRec).toBeDefined();
+    });
+  });
+
+  describe('ExtremismDetectionService Upgrades (v8.0)', () => {
+    test('intercepts violent extremist propaganda content', () => {
+      const res = extremismDetectionService.evaluateExtremism('Welcome and join isis strike force');
+      expect(res.isExtremistFlagged).toBe(true);
+      expect(res.action).toContain('LAW_ENFORCEMENT');
+    });
+  });
+
+  describe('SelfHarmDetectionService Upgrades (v8.0)', () => {
+    test('intercepts acute self-harm suicidal content and offers resources', () => {
+      const res = selfHarmDetectionService.evaluateSelfHarm('I want to commit suicide goodbye cruel world');
+      expect(res.isSelfHarmFlagged).toBe(true);
+      expect(res.recommendedResource).toContain('988');
+    });
+  });
+
+  describe('FieldEncryptionService Upgrades (v8.0)', () => {
+    test('generates secure backup seed arrays', () => {
+      const seed = fieldEncryptionService.generateRecoverySeed();
+      expect(seed).toContain('-');
+    });
+  });
+
+  describe('FraudDetectionService Upgrades (v8.0)', () => {
+    test('checks transaction velocity limits', () => {
+      // Warm up userPurchaseAttempts with 10 attempts to trigger the velocity alert
+      for (let i = 0; i < 10; i++) {
+        fraudDetectionService.evaluatePurchaseRisk('user123', 60000, '411111');
+      }
+      const risk = fraudDetectionService.evaluatePurchaseRisk('user123', 60000, '411111');
+      expect(risk.allowed).toBe(false);
+    });
+
+    test('detects circular loop wash transfers', () => {
+      // Setup transfers: A -> B, B -> A
+      fraudDetectionService.evaluateCoinTransferLoop('userA', 'userB', 100);
+      const clean = fraudDetectionService.evaluateCoinTransferLoop('userB', 'userA', 100);
+      expect(clean).toBe(false);
+    });
+  });
+
+  describe('ManipulatedMediaService Upgrades (v8.0)', () => {
+    test('scans metadata provenance for AI tools', async () => {
+      const mockBlob = {
+        slice: () => ({
+          text: async () => 'signed C2PA provenance with midjourney tags'
+        })
+      };
+      const res = await manipulatedMediaService.inspectMediaProvenance(mockBlob);
+      expect(res.isAIGenerated).toBe(true);
+    });
+  });
+
+  describe('PhishingDetectionService Upgrades (v8.0)', () => {
+    test('flags suspicious raw IP literal links', () => {
+      const res = phishingDetectionService.evaluateURL('http://192.168.1.1/login');
+      expect(res.safe).toBe(false);
+      expect(res.risk).toBe('high');
+    });
+
+    test('flags homoglyph lookalike brand domains', () => {
+      const res = phishingDetectionService.evaluateURL('https://arvd0ul.com/login');
+      expect(res.safe).toBe(false);
+      expect(res.risk).toBe('critical');
+    });
+  });
+
+  describe('UserIntegrityService Upgrades (v8.0)', () => {
+    test('evaluates dynamic multi-dimensional trust score', () => {
+      const profile = {
+        isVerifiedCreator: true,
+        emailVerified: true,
+        phoneNumber: '1234567890',
+        strikesCount: 0
+      };
+      const score = userIntegrityService.calculateTrustScore(profile);
+      expect(score).toBeGreaterThan(60);
+    });
+  });
+
+  describe('VendorManagementService Upgrades (v8.0)', () => {
+    test('records errors and degardes vendor health statuses', () => {
+      vendorManagementService.recordVendorError('stripe');
+      const vendors = vendorManagementService.getVendorsStatus();
+      const stripe = vendors.find(v => v.id === 'stripe');
+      expect(stripe.status).toBe('degraded');
+    });
+  });
+
+  describe('ViralPredictionService Upgrades (v8.0)', () => {
+    test('evaluates post early velocity potential', () => {
+      const res = viralPredictionService.predictViralPotential({ views: 100, likes: 80, shares: 30 });
+      expect(res.isHighViralPotential).toBe(true);
+      expect(res.recommendedDistributionTier).toBe('expanded_discovery');
     });
   });
 });

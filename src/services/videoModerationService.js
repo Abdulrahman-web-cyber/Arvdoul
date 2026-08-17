@@ -1,5 +1,5 @@
 /**
- * src/services/videoModerationService.js - ARVDOUL VIDEO KEYFRAME MODERATION PIPELINE
+ * src/services/videoModerationService.js - ARVDOUL VIDEO KEYFRAME MODERATION PIPELINE v8.0
  *
  * Implements:
  * 1. HTML5 Canvas Keyframe Extraction: Samples video frames every 1.5 seconds across full video duration.

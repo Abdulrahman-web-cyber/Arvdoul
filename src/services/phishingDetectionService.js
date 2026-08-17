@@ -1,5 +1,5 @@
 /**
- * src/services/phishingDetectionService.js - ARVDOUL MALICIOUS URL & PHISHING SCANNER
+ * src/services/phishingDetectionService.js - ARVDOUL MALICIOUS URL & PHISHING SCANNER v8.0
  *
  * Implements:
  * 1. URL Domain Extraction: Extracts and normalizes links embedded in posts, bio fields, and direct messages.

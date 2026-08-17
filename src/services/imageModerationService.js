@@ -1,5 +1,5 @@
 /**
- * src/services/imageModerationService.js - ARVDOUL IMAGE SAFETY CLASSIFICATION ENGINE
+ * src/services/imageModerationService.js - ARVDOUL IMAGE SAFETY CLASSIFICATION ENGINE v8.0
  *
  * Implements:
  * 1. Multi-Class Visual Inspection: Evaluates images for Adult/NSFW Nudity, Graphic Violence/Gore,

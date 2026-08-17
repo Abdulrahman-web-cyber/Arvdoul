@@ -7,6 +7,7 @@
  * 3. Breadcrumb Trail: Collects last 20 user actions (navigation, clicks, network calls) before the crash.
  * 4. Sentry / Telemetry Exporter: Dispatches grouped crashes to real or mock Sentry endpoints.
  * 5. URL Security Validation: Sanitizes and validates the target endpoint before sending telemetry to prevent SSRF (CWE-918).
+ * 6. PII Redaction: Clears sensitive info (emails, phone, auth secrets) from metadata logs prior to export (CWE-209).
  */
 
 import { logger } from '../utils/Logger.js';
@@ -34,14 +35,41 @@ class CrashReportingService {
     });
   }
 
+  /**
+   * Sanitizes objects and strings to remove PII (CWE-209).
+   * @private
+   */
+  _redactPII(input) {
+    if (!input) return input;
+    if (typeof input === 'string') {
+      return input
+        .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]')
+        .replace(/\+?[0-9]{1,4}[-.\s]?[0-9]{1,10}/g, '[REDACTED_PHONE]')
+        .replace(/AIzaSy[a-zA-Z0-9-_]{33}/g, '[REDACTED_API_KEY]');
+    }
+    if (typeof input === 'object') {
+      const copy = {};
+      Object.entries(input).forEach(([key, val]) => {
+        const safeKey = key.toLowerCase();
+        if (safeKey.includes('email') || safeKey.includes('phone') || safeKey.includes('password') || safeKey.includes('key')) {
+          copy[key] = '[REDACTED]';
+        } else {
+          copy[key] = this._redactPII(val);
+        }
+      });
+      return copy;
+    }
+    return input;
+  }
+
   addBreadcrumb(category, message, data = {}) {
     if (this.breadcrumbs.length >= this.MAX_BREADCRUMBS) {
       this.breadcrumbs.shift();
     }
     this.breadcrumbs.push({
       category,
-      message,
-      data,
+      message: this._redactPII(message),
+      data: this._redactPII(data),
       timestamp: Date.now(),
     });
   }
@@ -65,9 +93,9 @@ class CrashReportingService {
 
     const crashReport = {
       errorName,
-      errorMessage,
+      errorMessage: this._redactPII(errorMessage),
       stack,
-      context,
+      context: this._redactPII(context),
       breadcrumbs: [...this.breadcrumbs],
       url: typeof window !== 'undefined' ? window.location.href : '',
       timestamp: new Date().toISOString(),
@@ -75,11 +103,9 @@ class CrashReportingService {
 
     logger.error('💥 [CrashReport] ' + errorName + ': ' + errorMessage, crashReport);
 
-    // If Sentry DSN is configured, perform a direct payload dispatch to Sentry endpoint
     const dsnVal = this['sentryDsn'];
     if (dsnVal) {
       try {
-        // Simple mock of Sentry envelope endpoint format
         const sentryUrl = dsnVal.replace(/@([^/]+)\/(\d+)/, (match, host, id) => {
           return 'https://' + host + '/api/' + id + '/store/';
         });
@@ -106,10 +132,6 @@ class CrashReportingService {
     return crashReport;
   }
 
-  /**
-   * Helper to parse error stack into standard frames.
-   * @private
-   */
   _parseStack(stack) {
     if (!stack) return [];
     return stack.split('\n').map((line) => {

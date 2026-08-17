@@ -9,6 +9,7 @@
  */
 
 import { logger } from '../utils/Logger.js';
+import { feedService } from './feedService.js';
 
 class MisinformationService {
   constructor() {
@@ -42,16 +43,25 @@ class MisinformationService {
 
   /**
    * Evaluates text against local false claims registry and optional Google Fact Check API.
+   * Also demotes post algorithms instantly if a match is found.
    * @param {string} text
+   * @param {string} postId - Optional post ID to demote reach score
+   * @param {string} userId - Optional author user ID
    * @returns {Promise<object>} Fact-check decision payload
    */
-  async evaluateMisinformation(text) {
+  async evaluateMisinformation(text, postId = null, userId = null) {
     if (!text || typeof text !== 'string') return { hasMisinfoLabel: false };
 
     // 1. Perform quick local static scans
     for (const claim of this.knownFalseClaims) {
       if (claim.pattern.test(text)) {
         logger.info('[MisinformationService] Disputed claim matched in text; attaching contextual banner.');
+
+        // Trigger reach score demotion on feedService (Pillar 36, 50, 91)
+        if (postId && userId && feedService && typeof feedService.demotePost === 'function') {
+          feedService.demotePost(userId, postId, 'misinformation_flagged').catch(() => {});
+        }
+
         return {
           hasMisinfoLabel: true,
           category: claim.category,
@@ -79,6 +89,9 @@ class MisinformationService {
               if (review) {
                 const isFalse = /false|misleading|debunked/i.test(review.textualRating);
                 if (isFalse) {
+                  if (postId && userId && feedService && typeof feedService.demotePost === 'function') {
+                    feedService.demotePost(userId, postId, 'misinformation_flagged').catch(() => {});
+                  }
                   return {
                     hasMisinfoLabel: true,
                     category: 'external_disputed_claim',

@@ -1,5 +1,5 @@
 /**
- * src/services/logAggregationService.js - ARVDOUL STRUCTURED LOG AGGREGATOR & RETENTION
+ * src/services/logAggregationService.js - ARVDOUL STRUCTURED LOG AGGREGATOR & RETENTION v8.0
  *
  * Implements:
  * 1. Unified JSON Structured Log Ingestion: Ingests trace-correlated logs with severity levels (DEBUG, INFO, WARN, ERROR, CRITICAL).

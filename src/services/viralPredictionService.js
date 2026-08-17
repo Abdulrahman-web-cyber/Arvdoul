@@ -1,5 +1,5 @@
 /**
- * src/services/viralPredictionService.js - ARVDOUL VIRAL CONTENT PREDICTION & ACCELERATION ENGINE
+ * src/services/viralPredictionService.js - ARVDOUL VIRAL CONTENT PREDICTION & ACCELERATION ENGINE v8.0
  *
  * Implements:
  * 1. Early Velocity Curve Extrapolation: Measures 5-minute initial engagement gradient against platform historical distribution.

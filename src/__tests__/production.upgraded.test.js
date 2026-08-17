@@ -54,6 +54,9 @@ import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
 import { incidentService } from '../services/incidentService.js';
 import { aggregationCacheService } from '../services/AggregationCacheService.js';
+import soundService from '../services/soundService.js';
+import audioEditorService from '../services/audioEditorService.js';
+import collaborationService from '../services/collaborationService.js';
 
 describe('Upgraded Production Services Integration Tests', () => {
   let originalFetch;
@@ -127,6 +130,90 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(result.success).toBe(true);
       expect(result.activeRegion).toBe('us-central1');
       expect(localStorage.getItem('arvdoul_active_region')).toBe('us-central1');
+    });
+
+    test('fetches regional probes attaching custom bearer headers and ping timestamps', async () => {
+      const fetchMock = jest.fn(() => Promise.resolve({ ok: true, status: 200 }));
+      globalThis.fetch = fetchMock;
+
+      await activeActiveService._fetchWithRetry('https://europe-west3-arvdoul.cloudfunctions.net/health', 1);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': `Bearer ${activeActiveService.probeToken}`,
+            'X-Arvdoul-Ping': expect.any(String)
+          })
+        })
+      );
+    });
+  });
+
+  describe('botProtectionService (Biometrics & Trajectory Analysis)', () => {
+    let botService;
+
+    beforeAll(async () => {
+      const mod = await import('../services/botProtectionService.js');
+      botService = mod.botProtectionService || mod.default;
+    });
+
+    test('flags simulated headless browser environments instantly', () => {
+      // Mock navigator.webdriver
+      const originalWebdriver = globalThis.navigator.webdriver;
+      Object.defineProperty(globalThis.navigator, 'webdriver', { value: true, configurable: true });
+
+      const score = botService.calculateHumanConfidence();
+      expect(score).toBeLessThan(0.10);
+
+      // Restore
+      Object.defineProperty(globalThis.navigator, 'webdriver', { value: originalWebdriver, configurable: true });
+    });
+
+    test('detects keyboard flight-time scripting variance breaches', () => {
+      botService.keyEvents = [
+        { time: 1000, type: 'down', key: 'a' },
+        { time: 1010, type: 'down', key: 'b' },
+        { time: 1020, type: 'down', key: 'c' },
+        { time: 1030, type: 'down', key: 'd' }
+      ];
+
+      const score = botService.calculateHumanConfidence();
+      expect(score).toBeLessThan(0.30); // flagged as scripted typing
+      botService.keyEvents = [];
+    });
+  });
+
+  describe('copyrightDetectionService (Licensing & DMCA Notices)', () => {
+    let copyrightService;
+
+    beforeAll(async () => {
+      const mod = await import('../services/copyrightDetectionService.js');
+      copyrightService = mod.copyrightDetectionService || mod.default;
+    });
+
+    test('correctly calculates Hamming distances between pHash visual signatures', () => {
+      const hashA = '1111000011110000111100001111000011110000111100001111000011110000';
+      const hashB = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff
+
+      const dist = copyrightService.hammingDistance(hashA, hashB);
+      expect(dist).toBe(1);
+    });
+
+    test('flags licensed media matches within the Hamming threshold distance', () => {
+      const licensedHashMatch = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff (Licensed)
+      const res = copyrightService.checkCopyrightMatch(licensedHashMatch);
+
+      expect(res.match).toBe(true);
+      expect(res.owner).toBe('WarnerMedia Ltd.');
+      expect(res.action).toBe('FLAG_FOR_ATTRIBUTION_OR_TAKEDOWN');
+    });
+
+    test('processes and logs valid DMCA Takedown Notice claims', () => {
+      const res = copyrightService.processDMCANotice('WarnerMedia IP Agent', 'licensed_neon_workspace', 'violator_john');
+      expect(res.success).toBe(true);
+      expect(res.claimId).toContain('dmca_');
+      expect(res.status).toBe('TAKEDOWN_SUBMITTED_FOR_REVIEW');
     });
   });
 
@@ -227,17 +314,64 @@ describe('Upgraded Production Services Integration Tests', () => {
   });
 
   describe('AlertingService (Operations & Webhooks)', () => {
+    beforeEach(() => {
+      alertingService.alertCooldowns.clear();
+      alertingService.alertStatusStore.clear();
+    });
+
     test('triggers alert and suppresses secondary triggers within cooldown', async () => {
       globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
 
       // First alert trigger (should run)
-      const res1 = await alertingService.triggerAlert('disk_space_crit', 'p0_critical', 'Low disk space', { used: '98%' });
+      const res1 = await alertingService.triggerAlert('disk_space_crit', 'p1_high', 'Low disk space', { used: '98%' });
       expect(res1.triggered).toBe(true);
 
       // Second alert trigger for same key within cooldown (should be suppressed)
-      const res2 = await alertingService.triggerAlert('disk_space_crit', 'p0_critical', 'Low disk space', { used: '98%' });
+      const res2 = await alertingService.triggerAlert('disk_space_crit', 'p1_high', 'Low disk space', { used: '98%' });
       expect(res2.triggered).toBe(false);
       expect(res2.suppressed).toBe(true);
+    });
+
+    test('escalates severity to P0 on successive threshold breaches', async () => {
+      globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
+
+      // Simulate 5 successive trigger attempts
+      let finalRes;
+      for (let i = 0; i < 5; i++) {
+        // Disable cooldown check temporarily to test successive triggers
+        alertingService.alertCooldowns.clear();
+        finalRes = await alertingService.triggerAlert('rapid_errors', 'p1_high', 'High Error Rate');
+      }
+
+      expect(finalRes.triggered).toBe(true);
+      expect(finalRes.alert.severity).toBe('p0_critical');
+      expect(finalRes.alert.title).toContain('[ESCALATED]');
+    });
+
+    test('lifecycle allows acknowledging and resolving active alerts', async () => {
+      globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true }));
+
+      await alertingService.triggerAlert('db_latency_high', 'p2_medium', 'DB Latency High');
+
+      // Acknowledge alert
+      const ackRes = alertingService.acknowledgeAlert('db_latency_high');
+      expect(ackRes.success).toBe(true);
+      expect(ackRes.alert.status).toBe('acknowledged');
+
+      // Resolve alert should allow triggering again
+      const resolveRes = alertingService.resolveAlert('db_latency_high');
+      expect(resolveRes.success).toBe(true);
+      expect(resolveRes.alert.status).toBe('resolved');
+
+      const triggerAgain = await alertingService.triggerAlert('db_latency_high', 'p2_medium', 'DB Latency High');
+      expect(triggerAgain.triggered).toBe(true);
+    });
+
+    test('computes valid HMAC SHA-256 signature for outgoing webhook payload verification', () => {
+      const payload = 'test-ops-payload';
+      const sig = alertingService._computeHMACSignedHeader(payload);
+      expect(sig).toBeDefined();
+      expect(sig.length).toBe(64); // 256 bits in hex format = 64 characters
     });
   });
 
@@ -377,6 +511,62 @@ describe('Upgraded Production Services Integration Tests', () => {
       const mockCompute2 = jest.fn(async () => ({ data: 'refreshed' }));
       const result = await aggregationCacheService.getOrCompute('users_stats', 'avg', { age: '20' }, mockCompute2, 5000);
       expect(result).toEqual({ data: 'refreshed' });
+    });
+  });
+
+  describe('SoundService & AudioEditor & Collaboration Services', () => {
+    test('soundService fetches trending audio tracks and manages saved state', async () => {
+      const sounds = await soundService.getTrendingSounds('All');
+      expect(sounds.length).toBeGreaterThan(0);
+      expect(sounds[0].id).toBeDefined();
+
+      const saveRes = await soundService.toggleSaveSound(sounds[0].id);
+      expect(saveRes).toHaveProperty('saved');
+
+      const uploaded = await soundService.uploadCustomSound({
+        title: 'Test Audio Track',
+        genre: 'Hyperpop'
+      });
+      expect(uploaded.id).toContain('snd-custom-');
+      expect(uploaded.title).toBe('Test Audio Track');
+    });
+
+    test('audioEditorService creates and manages project waveforms, effects, and markers', () => {
+      const proj = audioEditorService.createProject({ name: 'Studio Test Track' });
+      expect(proj).toBeDefined();
+      expect(proj.name).toBe('Studio Test Track');
+
+      proj.duration = 60; // set duration for marker boundaries
+
+      audioEditorService.addMarker(5.5);
+      expect(audioEditorService.getCurrentProject().markers.length).toBe(1);
+
+      audioEditorService.addEffect('reverb');
+      expect(audioEditorService.getCurrentProject().effects.length).toBe(1);
+
+      // Mock audioBuffer for waveform calculation (1 second of audio)
+      const serviceInstance = audioEditorService.getService();
+      const mockChannelData = new Float32Array(44100);
+      for (let i = 0; i < mockChannelData.length; i++) mockChannelData[i] = Math.sin(i);
+
+      serviceInstance.audioBuffer = {
+        sampleRate: 44100,
+        getChannelData: () => mockChannelData,
+        length: 44100,
+        numberOfChannels: 1
+      };
+
+      const waveform = audioEditorService.generateWaveform(10);
+      expect(Array.isArray(waveform)).toBe(true);
+      expect(waveform.length).toBeGreaterThan(0);
+    });
+
+    test('collaborationService returns user stats and projects overview', async () => {
+      const stats = collaborationService.getStats();
+      expect(stats).toBeDefined();
+      expect(Array.isArray(stats.projects)).toBe(true);
+      expect(stats.projects.length).toBeGreaterThan(0);
+      expect(stats.projects[0].id).toBe('proj-sample-1');
     });
   });
 });
