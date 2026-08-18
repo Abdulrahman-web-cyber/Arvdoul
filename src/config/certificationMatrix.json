@@ -1,0 +1,247 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-08-18T20:00:00.000Z",
+  "certificationRules": {
+    "functional": ["PASS", "FAIL"],
+    "security": ["PASS", "FAIL"],
+    "accessibility": ["PASS", "FAIL"],
+    "performance": ["PASS", "FAIL"],
+    "offline": ["PASS", "FAIL"],
+    "i18n": ["PASS", "FAIL"],
+    "responsive": ["PASS", "FAIL"],
+    "observability": ["PASS", "FAIL"],
+    "e2e": ["PASS", "FAIL"]
+  },
+  "screens": [
+    {
+      "id": "screen-home",
+      "name": "Home Feed",
+      "route": "/home",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["feedService", "storyService", "liveService", "userService"],
+        "stores": ["appStore", "feedStore"],
+        "components": ["PostCard", "StoriesRail", "LiveIndicator"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-search",
+      "name": "Universal Search",
+      "route": "/search",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["searchService", "searchAbuseService", "safeSearchService"],
+        "stores": ["searchStore"],
+        "components": ["SearchBar", "FilterChips"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-messaging",
+      "name": "Messages",
+      "route": "/messages",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["messagesService"],
+        "stores": ["messagingStore"],
+        "components": ["ChatList"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-chat",
+      "name": "Chat Conversation",
+      "route": "/messages/:conversationId",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["messagesService", "callService"],
+        "stores": ["chatStore"],
+        "components": ["MessageList", "Composer", "MessageBubble"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-reels",
+      "name": "Sparks / Reels Feed",
+      "route": "/reels",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["videoService", "feedService"],
+        "stores": ["sparksStore"],
+        "components": ["ReelsViewer", "ActionRail"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-sounds",
+      "name": "Sounds & Music Library",
+      "route": "/sounds",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["soundService", "audioEditorService"],
+        "stores": ["soundsStore"],
+        "components": ["Waveform", "SoundList"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-video-editor",
+      "name": "Video Editor Studio",
+      "route": "/video-editor",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["videoEditorService", "videoService", "storageService"],
+        "stores": ["editorStore"],
+        "components": ["PreviewCanvas", "MultiTrackTimeline", "ActionRibbon"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-[#27]",
+      "name": "Audio Editor Studio",
+      "route": "/audio-editor",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["audioEditorService", "storageService"],
+        "stores": ["editorStore"],
+        "components": ["Waveform", "EffectsPanel", "MarkersPanel"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-collaboration-dashboard",
+      "name": "Collaboration Projects Dashboard",
+      "route": "/collaboration",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["collaborationService"],
+        "stores": ["collaborationStore"],
+        "components": ["ProjectGrid", "FilterBar"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    },
+    {
+      "id": "screen-collaboration-detail",
+      "name": "Collaboration Project Details",
+      "route": "/collaboration/:projectId",
+      "status": "certified",
+      "version": "1.0.0",
+      "dependencies": {
+        "services": ["collaborationService"],
+        "stores": ["collaborationStore"],
+        "components": ["ContentList", "TeamList", "ReviewList"]
+      },
+      "checks": {
+        "functional": "PASS",
+        "security": "PASS",
+        "accessibility": "PASS",
+        "performance": "PASS",
+        "offline": "PASS",
+        "i18n": "PASS",
+        "responsive": "PASS",
+        "observability": "PASS",
+        "e2e": "PASS"
+      }
+    }
+  ]
+}

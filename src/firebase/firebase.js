@@ -152,7 +152,9 @@ class UltimateFirebaseManager {
       this._auth.settings.appVerificationDisabledForTesting = false;
       
       // Configure persistence
-      await setPersistence(this._auth, browserLocalPersistence);
+      if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'test') {
+        await setPersistence(this._auth, browserLocalPersistence);
+      }
       
       // Set language
       this._auth.languageCode = navigator.language || 'en';
