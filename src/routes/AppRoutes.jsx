@@ -106,6 +106,7 @@ const SpacesScreen = lazy(() => import("../screens/Spaces/SpacesScreen.jsx"));
 const SoundsScreen = lazy(() => import("../screens/Sounds/SoundsScreen.jsx"));
 const MarketplaceScreen = lazy(() => import("../screens/Marketplace/MarketplaceScreen.jsx"));
 const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
+const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
 
 // ==================== LOADING COMPONENT ====================
 const RouteFallback = () => (
@@ -911,8 +912,6 @@ export default function AppRoutes() {
       <Route path="/auth" element={<Navigate to="/login" replace />} />
       
       {/* ========== ERROR & CATCH-ALL ========== */}
-      {/* 404 Page (Future Implementation) */}
-      {/*
       <Route path="/404" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -920,10 +919,13 @@ export default function AppRoutes() {
           </Suspense>
         </ProtectedRoute>
       } />
-      */}
       
-      {/* Catch-all redirect - Use home for authenticated, intro for unauthenticated */}
-      <Route path="*" element={<Navigate to="/home" replace />} />
+      {/* Catch-all redirect */}
+      <Route path="*" element={
+        <Suspense fallback={<RouteFallback />}>
+          <NotFoundScreen />
+        </Suspense>
+      } />
     </Routes>
   );
-}// Added NotFound route (fixed) + focus management + admin cache
+}

@@ -1189,4 +1189,46 @@ export async function verifyMFA() {
   return await service.verifyMFA();
 }
 
+export async function createUserWithEmailPassword(email, password, profileData = {}) {
+  const correlationId = _newCorrelationId('signup');
+  try {
+    const service = getAuthService();
+    const result = await service.createUserWithEmailPassword(email, password, profileData);
+    auditLogger.log('auth.signup', { correlationId, meta: { userId: result?.user?.uid || null, method: 'email' } });
+    return result;
+  } catch (err) {
+    auditLogger.log('auth.signup_failed', { correlationId, meta: { identifierHash: _piiHash(email), method: 'email', code: err?.code || null } });
+    throw err;
+  }
+}
+
+export async function signOut() {
+  const correlationId = _newCorrelationId('logout');
+  try {
+    const service = getAuthService();
+    const result = await service.signOut();
+    auditLogger.log('auth.logout', { correlationId });
+    return result;
+  } catch (err) {
+    auditLogger.log('auth.logout_failed', { correlationId, error: err?.message || null });
+    throw err;
+  }
+}
+
+export function getCurrentUser() {
+  const service = getAuthService();
+  return service.getCurrentUser();
+}
+
+export function isAuthenticated() {
+  const service = getAuthService();
+  return service.isAuthenticated();
+}
+
+export async function getAuthToken() {
+  const service = getAuthService();
+  return await service.getAuthToken();
+}
+
+export { getAuthService, ProductionAuthService };
 export default getAuthService;

@@ -1287,6 +1287,34 @@ export default function HomeScreen() {
                   Header: () => (
                     <div className="pt-2 pb-2">
                       <VibeStrip currentUser={user} />
+                      {/* Feed Categories Filter */}
+                      <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto scrollbar-hide">
+                        {[
+                          { id: 'foryou', label: '✨ For You' },
+                          { id: 'following', label: '👥 Following' },
+                          { id: 'trending', label: '🔥 Trending' },
+                          { id: 'spaces', label: '🎙️ Live Spaces', action: () => navigate('/spaces') },
+                        ].map((tab) => (
+                          <button
+                            key={tab.id}
+                            onClick={() => {
+                              if (tab.action) {
+                                tab.action();
+                              } else {
+                                handleRefresh();
+                              }
+                            }}
+                            className={cn(
+                              "px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm",
+                              tab.id === 'foryou'
+                                ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-purple-500/20"
+                                : "bg-white/70 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-purple-500/10"
+                            )}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   ),
                   Footer: () => {

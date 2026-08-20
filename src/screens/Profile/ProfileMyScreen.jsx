@@ -381,7 +381,7 @@ export default function ProfileMyScreen() {
           </div>
 
           {/* Tabs */}
-          <div className="mt-4 sticky top-0 z-40 bg-gray-50 dark:bg-gray-900">
+          <div className="mt-4 sticky top-0 z-30 backdrop-blur-xl bg-white/80 dark:bg-[#0b1220]/80 border-y border-gray-200/50 dark:border-white/5 py-1">
             <Suspense fallback={
               <div className="h-12 bg-gray-200 dark:bg-gray-800 animate-pulse" />
             }>

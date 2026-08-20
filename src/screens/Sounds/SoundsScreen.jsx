@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 
@@ -35,12 +36,13 @@ const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Ci
 export default function SoundsScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
 
   const [sounds, setSounds] = useState([]);
   const [selectedGenre, setSelectedGenre] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [savedIds, setSavedIds] = useState(new Set(['snd-neon-pulse', 'snd-cyber-rush']));
+  const [savedIds, setSavedIds] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
   // Audio Playback state
@@ -66,6 +68,10 @@ export default function SoundsScreen() {
       setSounds(data);
       if (!currentSound && data.length > 0) {
         setCurrentSound(data[0]);
+      }
+      if (user?.uid) {
+        const saved = await soundService.getSavedSounds(user.uid);
+        setSavedIds(new Set(saved.map(s => s.id)));
       }
     } catch {
       toast.error('Failed to load audio library');
@@ -95,7 +101,8 @@ export default function SoundsScreen() {
   };
 
   const handleToggleSave = async (sndId) => {
-    const res = await soundService.toggleSaveSound(sndId);
+    const userId = user?.uid || 'anon-user';
+    const res = await soundService.toggleSaveSound(sndId, userId);
     setSavedIds(new Set(res.saved ? [...savedIds, sndId] : [...savedIds].filter(id => id !== sndId)));
     toast.success(res.saved ? 'Saved to your sound library! 🎧' : 'Removed from saved sounds');
   };
@@ -115,7 +122,9 @@ export default function SoundsScreen() {
     try {
       const uploaded = await soundService.uploadCustomSound({
         title: newTitle,
-        genre: newGenre
+        genre: newGenre,
+        creatorId: user?.uid || 'usr-creator',
+        artist: user?.displayName || 'Original Creator'
       });
       setSounds([uploaded, ...sounds]);
       setIsUploadOpen(false);

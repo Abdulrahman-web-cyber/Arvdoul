@@ -12,7 +12,7 @@ import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, Sparkles, Home, Bell } from "lucide-react";
+import { Search, Menu, X, ChevronLeft, Sparkles, Home, Bell, MessageSquare } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 
 // Animation config matching BottomNav
@@ -377,6 +377,16 @@ const TopAppBar = () => {
     navigate(NAVIGATION_PATHS.search);
   }, [navigate, track]);
   
+  const handleMessagesClick = useCallback(() => {
+    track("top_nav_messages_click");
+    navigate("/messages");
+  }, [navigate, track]);
+
+  const handleNotificationsClick = useCallback(() => {
+    track("top_nav_notifications_click");
+    navigate("/notifications");
+  }, [navigate, track]);
+
   const handleMenuClick = useCallback(() => {
     track("top_nav_menu_click");
     navigate(NAVIGATION_PATHS.menu);
@@ -385,6 +395,8 @@ const TopAppBar = () => {
   // Check active states
   const isHomeActive = location.pathname === "/" || location.pathname === NAVIGATION_PATHS.home;
   const isSearchActive = location.pathname === NAVIGATION_PATHS.search;
+  const isMessagesActive = location.pathname.startsWith("/messages");
+  const isNotificationsActive = location.pathname === "/notifications";
   const isMenuActive = location.pathname === NAVIGATION_PATHS.menu;
 
   const handleProfileClick = useCallback(() => {
@@ -397,6 +409,7 @@ const TopAppBar = () => {
   
   // Get notification counts
   const notificationCount = unreadCounts.notifications || 0;
+  const messagesCount = unreadCounts.messages || 0;
   
   return (
     <>
@@ -461,7 +474,25 @@ const TopAppBar = () => {
                 </div>
                 
                 {/* Right: Action Icons */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
+                  {/* Quick Coins Pill */}
+                  <button
+                    onClick={() => {
+                      track("top_nav_coins_click");
+                      navigate('/coins');
+                    }}
+                    className={cn(
+                      "hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm",
+                      theme === "dark"
+                        ? "bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25"
+                        : "bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100"
+                    )}
+                    aria-label="Coins Wallet"
+                  >
+                    <span className="text-sm">🪙</span>
+                    <span>{((currentUser?.coinsBalance || currentUser?.coins || 2450)).toLocaleString()}</span>
+                  </button>
+
                   {/* Profile avatar — premium presence in the app bar */}
                   <button
                     onClick={handleProfileClick}
@@ -499,6 +530,26 @@ const TopAppBar = () => {
                     isSearch={true}
                     showNotification={false}
                   />
+
+                  <PerfectCircularIcon
+                    icon={MessageSquare}
+                    onClick={handleMessagesClick}
+                    isActive={isMessagesActive}
+                    theme={theme}
+                    label="Messages"
+                    showNotification={messagesCount > 0}
+                    notificationCount={messagesCount}
+                  />
+
+                  <PerfectCircularIcon
+                    icon={Bell}
+                    onClick={handleNotificationsClick}
+                    isActive={isNotificationsActive}
+                    theme={theme}
+                    label="Notifications"
+                    showNotification={notificationCount > 0}
+                    notificationCount={notificationCount}
+                  />
                   
                   <PerfectCircularIcon
                     icon={Menu}
@@ -506,8 +557,7 @@ const TopAppBar = () => {
                     isActive={isMenuActive}
                     theme={theme}
                     label="Menu"
-                    showNotification={notificationCount > 0}
-                    notificationCount={notificationCount}
+                    showNotification={false}
                   />
                 </div>
               </div>

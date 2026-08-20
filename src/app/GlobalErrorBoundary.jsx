@@ -11,7 +11,7 @@ import { ERROR_CODES, getPublicMessage } from '../utils/errorCodes';
 function withTheme(ComponentClass) {
   return function Wrapper(props) {
     const theme = useTheme();
-    return <ComponentClass {...props} theme={theme} />;
+    return <ComponentClass {...props} theme={theme || { resolvedTheme: 'dark' }} />;
   };
 }
 

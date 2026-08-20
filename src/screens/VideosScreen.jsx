@@ -1,11 +1,23 @@
-// src/screens/VideosScreen.jsx - ARVDOUL WORLD-CLASS VIDEOS SCREEN
-// TikTok-style vertical video feed with futuristic UI
-// Surpasses TikTok, Instagram, YouTube with premium experience
+// src/screens/VideosScreen.jsx - ARVDOUL VIDEOS & REELS EXPERIENCE
+// Futuristic TikTok & Reels style immersive video ecosystem
 
-import React, { useState, useEffect, useCallback, useRef, useMemo, memo} from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Video, RefreshCw, Play } from 'lucide-react';
+import { 
+  Video, 
+  RefreshCw, 
+  Play, 
+  LayoutGrid, 
+  Smartphone, 
+  Sparkles, 
+  Search, 
+  Camera, 
+  TrendingUp, 
+  Flame, 
+  Radio, 
+  Plus 
+} from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useVideoStore } from '../store/videoStore';
 import { VideoFeed } from '../components/Videos';
@@ -16,13 +28,11 @@ import EmptyState from '../components/UI/EmptyState';
 import ErrorState from '../components/UI/ErrorState';
 
 /**
- * VideosScreen - TikTok-style full-screen vertical video feed
- * Features: infinite scroll, video preloading, gesture navigation, audio management
- * World-class UI with ARVDOUL DNA design system
+ * VideosScreen - World-Class video feed & discovery grid
  */
 const VideosScreen = () => {
   const navigate = useNavigate();
-  const { theme, isDark, spring, gradient, glass } = useTheme();
+  const { theme, isDark, spring, gradient } = useTheme();
   const {
     videos,
     setVideos,
@@ -40,28 +50,25 @@ const VideosScreen = () => {
     currentIndex,
     setCurrentIndex,
     updateVideo,
-    incrementViews,
     addToWatchLater,
   } = useVideoStore();
 
   const [error, setError] = useState(null);
-  const [showFullscreen, setShowFullscreen] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [viewMode, setViewMode] = useState('feed'); // 'feed' | 'grid'
 
-  // Load initial videos
-  const loadVideos = useCallback(async () => {
+  // Load videos from service
+  const loadVideos = useCallback(async (type = feedType) => {
     setLoading(true);
     setError(null);
 
     try {
-      const userId = null; // For unauthenticated feed
-      const result = await videoService.getVideoFeed(userId, {
-        feedType,
+      const result = await videoService.getVideoFeed(null, {
+        feedType: type,
         limit: 20,
       });
 
-      const feed = result?.feed || result?.videos;
-      if (Array.isArray(feed)) {
+      const feed = result?.feed || result?.videos || [];
+      if (Array.isArray(feed) && feed.length > 0) {
         setVideos(feed);
         setHasMore(result.hasMore || false);
         setNextCursor(result.nextCursor || null);
@@ -77,22 +84,21 @@ const VideosScreen = () => {
     }
   }, [feedType, setVideos, setLoading, setHasMore, setNextCursor]);
 
-  // Load more videos
+  // Load more pagination
   const loadMoreVideos = useCallback(async () => {
     if (loadingMore || !hasMore || !nextCursor) return;
 
     setLoadingMore(true);
 
     try {
-      const userId = null;
-      const result = await videoService.getVideoFeed(userId, {
+      const result = await videoService.getVideoFeed(null, {
         feedType,
         cursor: nextCursor,
         limit: 20,
       });
 
-      const feed = result?.feed || result?.videos;
-      if (Array.isArray(feed)) {
+      const feed = result?.feed || result?.videos || [];
+      if (Array.isArray(feed) && feed.length > 0) {
         appendVideos(feed);
         setHasMore(result.hasMore || false);
         setNextCursor(result.nextCursor || null);
@@ -105,110 +111,23 @@ const VideosScreen = () => {
     }
   }, [loadingMore, hasMore, nextCursor, feedType, appendVideos, setLoadingMore, setHasMore, setNextCursor]);
 
-  // Handle like
-  const handleLike = useCallback(async (video) => {
-    try {
-      await videoService.likeVideo(video.id);
-      updateVideo(video.id, {
-        isLiked: !video.isLiked,
-        likes: video.isLiked ? video.likes - 1 : video.likes + 1,
-      });
-    } catch (err) {
-      console.error('Failed to like:', err);
-    }
-  }, [updateVideo]);
+  // Tab change handler
+  const handleTabChange = useCallback((newTab) => {
+    setFeedType(newTab);
+    loadVideos(newTab);
+  }, [setFeedType, loadVideos]);
 
-  // Handle share
-  const handleShare = useCallback(async (video) => {
-    try {
-      await videoService.shareVideo(video.id);
-      updateVideo(video.id, { shares: (video.shares || 0) + 1 });
-    } catch (err) {
-      console.error('Failed to share:', err);
-    }
-  }, [updateVideo]);
-
-  // Handle save
-  const handleSave = useCallback((video) => {
-    addToWatchLater(video);
-    updateVideo(video.id, { isSaved: true });
-    toast.success('Added to Watch Later');
-  }, [addToWatchLater, updateVideo]);
-
-  // Handle report
-  const handleReport = useCallback((video) => {
-    // Opens bottom sheet for reporting
-  }, []);
+  // Refresh
+  const handleRefresh = useCallback(() => {
+    loadVideos(feedType);
+  }, [loadVideos, feedType]);
 
   // Initial load
   useEffect(() => {
     if (videos.length === 0) {
-      loadVideos();
+      loadVideos(feedType);
     }
   }, []);
-
-  // Reload on feed type change
-  useEffect(() => {
-    loadVideos();
-  }, [feedType]);
-
-  // Refresh handler
-  const handleRefresh = useCallback(() => {
-    loadVideos();
-  }, [loadVideos]);
-
-  // Memoized loading overlay
-  const LoadingOverlay = useMemo(() => (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="absolute inset-0 flex flex-col items-center justify-center z-50"
-      style={{
-        background: isDark 
-          ? 'linear-gradient(135deg, rgba(5,5,16,0.95) 0%, rgba(20,20,40,0.95) 100%)'
-          : 'linear-gradient(135deg, rgba(248,249,250,0.98) 0%, rgba(255,255,255,0.98) 100%)',
-      }}
-    >
-      {/* Animated gradient background */}
-      <div 
-        className="absolute inset-0 opacity-30"
-        style={{
-          background: gradient,
-          filter: 'blur(80px)',
-        }}
-      />
-      
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={spring.card}
-        className="relative z-10 flex flex-col items-center"
-      >
-        <LoadingSpinner size={64} color="purple" />
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className={`mt-6 text-lg font-medium ${
-            isDark ? 'text-white' : 'text-gray-900'
-          }`}
-        >
-          Loading videos...
-        </motion.p>
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className={`mt-2 text-sm ${
-            isDark ? 'text-gray-400' : 'text-gray-500'
-          }`}
-        >
-          Preparing your feed
-        </motion.p>
-      </motion.div>
-    </motion.div>
-  ), [isDark, gradient, spring.card]);
 
   return (
     <div 
@@ -217,22 +136,34 @@ const VideosScreen = () => {
         background: isDark ? '#050510' : '#F8F9FA',
       }}
     >
-      {/* Reels shortcut (full-screen vertical) */}
-      <button
-        onClick={() => navigate('/reels')}
-        className="absolute top-4 right-4 z-40 px-4 py-2 rounded-2xl text-sm font-bold backdrop-blur-xl border shadow-lg transition hover:scale-105"
-        style={{
-          background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.85)',
-          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)',
-          color: isDark ? '#fff' : '#111',
-          boxShadow: isDark ? '0 8px 30px rgba(0,0,0,0.4)' : '0 8px 30px rgba(0,0,0,0.1)',
-        }}
-      >
-        🎬 Reels
-      </button>
+      {/* Floating View Switcher Button (Feed / Grid toggle) */}
+      <div className="absolute top-4 left-4 z-40 flex items-center gap-2">
+        <button
+          onClick={() => setViewMode(prev => prev === 'feed' ? 'grid' : 'feed')}
+          className="px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105"
+          style={{
+            background: isDark ? 'rgba(0, 0, 0, 0.55)' : 'rgba(255, 255, 255, 0.85)',
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
+            color: isDark ? '#fff' : '#111',
+          }}
+          title="Toggle Grid / Feed view"
+        >
+          {viewMode === 'feed' ? (
+            <>
+              <LayoutGrid className="w-3.5 h-3.5 text-purple-400" />
+              <span>Grid</span>
+            </>
+          ) : (
+            <>
+              <Smartphone className="w-3.5 h-3.5 text-pink-400" />
+              <span>Reels</span>
+            </>
+          )}
+        </button>
+      </div>
 
-      {/* Fullscreen Video Feed */}
-      {showFullscreen ? (
+      {/* Main View Display */}
+      {viewMode === 'feed' ? (
         <VideoFeed
           videos={videos}
           loading={loading}
@@ -241,34 +172,44 @@ const VideosScreen = () => {
           onRefresh={handleRefresh}
           hasMore={hasMore}
           feedType={feedType}
+          onFeedTypeChange={handleTabChange}
+          onOpenSearch={() => navigate('/search')}
+          onCreateVideo={() => navigate('/create-post')}
         />
       ) : (
-        /* Grid View (Alternative) */
+        /* Discovery 4K Grid View */
         <GridView
           videos={videos}
           loading={loading}
           error={error}
           onRefresh={handleRefresh}
-          onVideoClick={(video) => {
-            setCurrentIndex(videos.findIndex((v) => v.id === video.id));
-            setShowFullscreen(true);
+          feedType={feedType}
+          onFeedTypeChange={handleTabChange}
+          onVideoClick={(video, index) => {
+            setCurrentIndex(index);
+            setViewMode('feed');
           }}
+          onCreateVideo={() => navigate('/create-post')}
         />
       )}
-
-      {/* Loading Overlay */}
-      <AnimatePresence>
-        {loading && videos.length === 0 && LoadingOverlay}
-      </AnimatePresence>
     </div>
   );
 };
 
 /**
- * GridView - Alternative video grid layout with world-class UI
+ * GridView - Curated 4K Discovery Video Grid
  */
-const GridView = memo(({ videos, loading, error, onRefresh, onVideoClick }) => {
-  const { isDark, gradient, glass, spring } = useTheme();
+const GridView = memo(({
+  videos = [],
+  loading = false,
+  error = null,
+  onRefresh,
+  feedType,
+  onFeedTypeChange,
+  onVideoClick,
+  onCreateVideo,
+}) => {
+  const { isDark, gradient, spring } = useTheme();
 
   if (error && videos.length === 0) {
     return (
@@ -283,86 +224,121 @@ const GridView = memo(({ videos, loading, error, onRefresh, onVideoClick }) => {
     );
   }
 
-  if (!loading && videos.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center p-8">
+  return (
+    <div className="h-full overflow-y-auto pt-16 pb-28 px-4 sm:px-6 max-w-7xl mx-auto select-none">
+      {/* Grid Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Explore Videos
+          </h1>
+          <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            Discover trending visual creators and original soundscapes
+          </p>
+        </div>
+
+        {/* Tab Filters */}
+        <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/20 dark:bg-white/5 border border-black/5 dark:border-white/10 backdrop-blur-xl">
+          {[
+            { id: 'for_you', label: 'For You' },
+            { id: 'trending', label: 'Trending' },
+            { id: 'following', label: 'Following' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => onFeedTypeChange?.(tab.id)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                feedType === tab.id
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md'
+                  : isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid Items */}
+      {videos.length === 0 && !loading ? (
         <EmptyState
           icon={Video}
-          title="No videos yet"
-          description="Follow creators to see their latest videos in your feed"
-          actionLabel="Refresh"
-          onAction={onRefresh}
+          title="No videos found"
+          description="Be the first to upload and share your video story!"
+          actionLabel="Create Video"
+          onAction={onCreateVideo}
         />
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full overflow-y-auto p-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-28">
-        {videos.map((video, index) => (
-          <motion.div
-            key={video.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ 
-              ...spring.card,
-              delay: index * 0.05,
-            }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onVideoClick(video)}
-            className="relative aspect-[9/16] rounded-2xl overflow-hidden group cursor-pointer"
-          >
-            {/* Gradient overlay for depth */}
-            <div 
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"
-              style={{
-                background: gradient,
-                mixBlendMode: 'overlay',
-              }}
-            />
-            
-            <img
-              src={video.thumbnailUrl || video.thumbnail || ''}
-              alt={video.title || 'Video'}
-              className="w-full h-full object-cover"
-              loading="lazy"
-            />
-            
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            
-            {/* Glow effect on hover */}
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <div 
-                className="absolute -inset-1 rounded-2xl blur-lg opacity-30"
-                style={{ background: gradient }}
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+          {videos.map((video, index) => (
+            <motion.div
+              key={video.id}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...spring.card, delay: index * 0.04 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => onVideoClick(video, index)}
+              className="relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-gray-900"
+            >
+              <img
+                src={video.thumbnailUrl || video.thumbnail || 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1080&auto=format&fit=crop&q=80'}
+                alt={video.title || 'Video'}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
               />
-            </div>
-            
-            <div className="absolute bottom-3 left-3 right-3 z-20">
-              <p className="text-white font-semibold text-sm truncate drop-shadow-lg">
-                {video.title || 'Video'}
-              </p>
-              <p className="text-white/80 text-xs mt-1">
-                {video.views?.toLocaleString() || 0} views
-              </p>
-            </div>
 
-            {/* Play indicator on hover */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center border border-white/30">
-                <Play className="w-8 h-8 text-white fill-white" />
+              {/* Gradient Vignette */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+
+              {/* Quality & Duration Badges */}
+              <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10">
+                <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-black text-cyan-300 border border-white/10 uppercase">
+                  {video.quality || '1080p'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white/90 border border-white/10 font-mono">
+                  {video.duration ? `${video.duration}s` : '0:30'}
+                </span>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+
+              {/* Play Button Icon on Hover */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <div className="w-12 h-12 rounded-full bg-white/30 backdrop-blur-xl border border-white/40 flex items-center justify-center shadow-xl">
+                  <Play className="w-6 h-6 text-white fill-white translate-x-0.5" />
+                </div>
+              </div>
+
+              {/* Bottom Creator & Video Title Details */}
+              <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <img
+                    src={video.creator?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'}
+                    alt={video.creator?.name}
+                    className="w-5 h-5 rounded-full object-cover ring-1 ring-white/40"
+                  />
+                  <span className="text-white text-xs font-bold truncate drop-shadow-md">
+                    @{video.creator?.username || 'user'}
+                  </span>
+                </div>
+
+                <p className="text-white/90 text-xs font-semibold line-clamp-1 drop-shadow-md">
+                  {video.title || 'Untitled Story'}
+                </p>
+
+                <div className="flex items-center gap-2 text-[11px] text-white/70 font-medium">
+                  <span>{video.likesFormatted || `${video.likes || 0}`} likes</span>
+                  <span>•</span>
+                  <span>{video.views?.toLocaleString() || '12.4K'} views</span>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 });
 
 GridView.displayName = 'GridView';
-
-
 
 export default React.memo(VideosScreen);

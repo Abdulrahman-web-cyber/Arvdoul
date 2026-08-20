@@ -36,7 +36,27 @@ export default defineConfig({
     sourcemap: false,
     chunkSizeWarningLimit: 1000
   },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react-router-dom',
+      'react-helmet-async',
+      'framer-motion',
+      'lucide-react',
+      'clsx',
+      'tailwind-merge',
+      'zustand',
+      'firebase/app',
+      'firebase/auth',
+      'firebase/firestore',
+      'firebase/storage',
+      'firebase/functions'
+    ]
+  },
   resolve: {
+    dedupe: ['react', 'react-dom', 'react-router-dom', 'react-router'],
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@components': path.resolve(__dirname, './src/components'),

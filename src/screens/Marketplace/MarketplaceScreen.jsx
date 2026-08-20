@@ -80,7 +80,8 @@ export default function MarketplaceScreen() {
               }
             });
           }
-        }
+        },
+        user
       );
       setPurchasedOrder(order);
       toast.success(`Purchased "${product.title}" with ${product.priceCoins} Coins! 🎁`);

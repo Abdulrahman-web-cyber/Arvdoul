@@ -367,6 +367,62 @@ service cloud.firestore {
       allow read, write: if false; // server-only
     }
 
+    // ==================== ADVANCED CREATOR SUITE (SPACES, SOUNDS, MARKETPLACE, POLLS, AI) ====================
+    match /spaces/{spaceId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.host.id == uid() || request.resource.data.userId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
+      match /signals/{signalId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+    match /sounds/{soundId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
+    }
+    match /marketplace_items/{itemId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+    }
+    match /marketplace_orders/{orderId} {
+      allow read: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.buyerId == uid();
+      allow update: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+    }
+    match /polls/{pollId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
+      match /votes/{voteId} {
+        allow read: if true;
+        allow write: if isSignedIn() && voteId == uid();
+      }
+    }
+    match /prediction_markets/{marketId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+      match /bets/{betId} {
+        allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+        allow create: if isSignedIn() && request.resource.data.userId == uid();
+      }
+    }
+    match /ai_creations/{creationId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || resource.data.isPublic == true);
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+    }
+    match /badges/{badgeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /user_badges/{userBadgeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ==================== DEFAULT DENY ====================
     match /{document=**} {
       allow read, write: if false;

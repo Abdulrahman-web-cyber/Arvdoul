@@ -337,15 +337,24 @@ export function AuthProvider({ children }) {
         const authModule = await import('../services/authService.js');
         const userModule = await import('../services/userService.js');
         if (!mounted || abortController.signal.aborted) return;
-        setAuthService(authModule.default ? authModule.default() : authModule.getAuthService());
-        setUserService(userModule.default ? userModule.default() : userModule.getUserService());
+        
+        const resolvedAuthService = authModule.getAuthService
+          ? authModule.getAuthService()
+          : (typeof authModule.default === 'function' ? authModule.default() : authModule.default);
+          
+        const resolvedUserService = userModule.getUserService
+          ? userModule.getUserService()
+          : (typeof userModule.default === 'function' ? userModule.default() : userModule.default);
+          
+        setAuthService(resolvedAuthService);
+        setUserService(resolvedUserService);
         setSecurityChecks(prev => ({ ...prev, servicesLoaded: true }));
-        console.log('✅ Auth services initialized');
+        console.log('✅ Auth services initialized successfully');
       } catch (error) {
         if (!mounted || abortController.signal.aborted) return;
         console.error('❌ Service initialization failed:', error);
         setError('Failed to initialize authentication services');
-        setAuthError(error.message);
+        setAuthError(error?.message || 'Service initialization error');
         debouncedToast('Authentication service unavailable. Please refresh.', 'error');
       }
     };

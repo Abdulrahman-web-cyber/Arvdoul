@@ -34,7 +34,7 @@ class EventService {
 
   async initialize() {
     if (this.initialized) return;
-    this.db = getFirestoreInstance();
+    this.db = await getFirestoreInstance();
     this.initialized = true;
   }
 
@@ -96,7 +96,7 @@ class EventService {
     await this.initialize();
     const snap = await getDoc(doc(this.db, 'events', eventId));
     
-    if (!snap.exists) {
+    if (!snap.exists()) {
       return null;
     }
     

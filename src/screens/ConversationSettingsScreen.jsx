@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '@context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2 } from 'lucide-react';
 

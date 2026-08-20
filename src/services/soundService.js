@@ -1,137 +1,116 @@
 // src/services/soundService.js
 // 🎵 ARVDOUL SOUNDS & MUSIC DISCOVERY SERVICE
-// Audio track catalog, viral trend metrics, waveform synthesis, and reel integration
+// Audio track catalog, viral trend metrics, waveform synthesis, and real Firestore persistence
 
 import { svcLogger } from './ServiceKit.js';
+import { getFirestoreInstance } from '../firebase/firebase.js';
 
 const log = svcLogger('soundService');
 
-const TRENDING_SOUNDS = [
-  {
-    id: 'snd-neon-pulse',
-    title: 'Neon Pulse (Hyperpop Edit)',
-    artist: 'Luna Nova & K-Synthetics',
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200',
-    duration: '0:28',
-    durationSec: 28,
-    bpm: 142,
-    key: 'F# Minor',
-    reelsCount: '1.4M',
-    isTrending: true,
-    genre: 'Hyperpop / Synth',
-    audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3',
-    waveformData: [12, 45, 68, 89, 95, 76, 54, 88, 92, 100, 85, 60, 42, 65, 80, 94, 70, 50, 65, 90, 85, 40]
-  },
-  {
-    id: 'snd-tokyo-rain',
-    title: 'Midnight in Tokyo (Lofi Study)',
-    artist: 'ChillHop Collective',
-    coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=200',
-    duration: '0:45',
-    durationSec: 45,
-    bpm: 82,
-    key: 'C Major',
-    reelsCount: '890K',
-    isTrending: true,
-    genre: 'Lo-Fi / Chill',
-    audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-sleepy-cat-135.mp3',
-    waveformData: [20, 30, 45, 50, 48, 52, 60, 58, 62, 65, 55, 50, 45, 40, 38, 42, 45, 50, 48, 35]
-  },
-  {
-    id: 'snd-cyber-rush',
-    title: 'Cyberpunk Overdrive',
-    artist: 'Vektor 99',
-    coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200',
-    duration: '0:34',
-    durationSec: 34,
-    bpm: 128,
-    key: 'A Minor',
-    reelsCount: '2.1M',
-    isTrending: true,
-    genre: 'Cyberpunk / EDM',
-    audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-game-level-music-689.mp3',
-    waveformData: [30, 60, 90, 100, 95, 80, 70, 95, 100, 85, 75, 90, 100, 95, 80, 60, 75, 95, 90, 70]
-  },
-  {
-    id: 'snd-lagos-groove',
-    title: 'Lagos Sunsets (Afro Rhythm)',
-    artist: 'Bayo & The Vibez',
-    coverUrl: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=200',
-    duration: '0:30',
-    durationSec: 30,
-    bpm: 106,
-    key: 'G Major',
-    reelsCount: '640K',
-    isTrending: false,
-    genre: 'Afrobeat',
-    audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-738.mp3',
-    waveformData: [25, 40, 65, 80, 75, 85, 90, 78, 82, 88, 70, 60, 75, 85, 90, 80, 70, 65, 50, 40]
-  },
-  {
-    id: 'snd-cinematic-horizon',
-    title: 'Beyond the Stars (Epic Strings)',
-    artist: 'Arvdoul Symphony Orch.',
-    coverUrl: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=200',
-    duration: '1:00',
-    durationSec: 60,
-    bpm: 90,
-    key: 'D Minor',
-    reelsCount: '410K',
-    isTrending: false,
-    genre: 'Cinematic / Film',
-    audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-valley-sunset-127.mp3',
-    waveformData: [15, 20, 35, 50, 65, 80, 95, 100, 90, 85, 75, 60, 50, 65, 80, 90, 85, 70, 55, 30]
-  }
-];
-
 class SoundService {
   constructor() {
-    this.sounds = [...TRENDING_SOUNDS];
-    this.savedSoundIds = new Set(['snd-neon-pulse', 'snd-cyber-rush']);
+    this.savedSoundIds = new Set();
   }
 
   async getTrendingSounds(genre = 'All') {
-    log.info('Fetching trending sounds', { genre });
-    await new Promise(r => setTimeout(r, 200));
-    if (genre === 'All') return this.sounds;
-    return this.sounds.filter(s => s.genre.toLowerCase().includes(genre.toLowerCase()));
-  }
+    log.info('Fetching trending sounds from Firestore', { genre });
+    try {
+      const firestore = await getFirestoreInstance();
+      const { collection, getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
-  async getSavedSounds() {
-    return this.sounds.filter(s => this.savedSoundIds.has(s.id));
-  }
+      const colRef = collection(firestore, 'sounds');
+      let q = query(colRef, orderBy('reelsCountNum', 'desc'), limit(40));
 
-  async toggleSaveSound(soundId) {
-    if (this.savedSoundIds.has(soundId)) {
-      this.savedSoundIds.delete(soundId);
-      return { saved: false };
-    } else {
-      this.savedSoundIds.add(soundId);
-      return { saved: true };
+      if (genre && genre !== 'All') {
+        q = query(colRef, where('genre', '==', genre), limit(40));
+      }
+
+      const snap = await getDocs(q);
+      const items = [];
+      snap.forEach(docSnap => {
+        items.push({ id: docSnap.id, ...docSnap.data() });
+      });
+
+      return items;
+    } catch (err) {
+      log.error('Error fetching sounds from Firestore', err);
+      return [];
     }
   }
 
-  async uploadCustomSound({ title, artist, genre, file }) {
-    log.info('Uploading custom sound', { title, artist });
-    const newSound = {
-      id: `snd-custom-${Date.now()}`,
-      title,
-      artist: artist || 'Original Creator',
-      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200',
-      duration: '0:30',
-      durationSec: 30,
-      bpm: 120,
-      key: 'C Major',
-      reelsCount: '1',
-      isTrending: false,
-      genre: genre || 'Original Audio',
-      audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3',
-      waveformData: [30, 50, 70, 85, 90, 75, 60, 80, 95, 85, 70, 50, 40]
-    };
-    this.sounds.unshift(newSound);
-    return newSound;
+  async getSavedSounds(userId) {
+    try {
+      const firestore = await getFirestoreInstance();
+      const { collection, getDocs, query, where } = await import('firebase/firestore');
+      const snap = await getDocs(query(collection(firestore, 'saved_sounds'), where('userId', '==', userId)));
+      const soundIds = snap.docs.map(d => d.data().soundId);
+      if (soundIds.length === 0) return [];
+
+      const soundsCol = collection(firestore, 'sounds');
+      const allSounds = await getDocs(soundsCol);
+      return allSounds.docs
+        .filter(d => soundIds.includes(d.id))
+        .map(d => ({ id: d.id, ...d.data() }));
+    } catch (err) {
+      log.error('Error fetching saved sounds', err);
+      return [];
+    }
+  }
+
+  async toggleSaveSound(soundId, userId) {
+    try {
+      const firestore = await getFirestoreInstance();
+      const { doc, setDoc, deleteDoc, getDoc } = await import('firebase/firestore');
+      const ref = doc(firestore, 'saved_sounds', `${userId}_${soundId}`);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        await deleteDoc(ref);
+        this.savedSoundIds.delete(soundId);
+        return { saved: false };
+      } else {
+        await setDoc(ref, { userId, soundId, savedAt: Date.now() });
+        this.savedSoundIds.add(soundId);
+        return { saved: true };
+      }
+    } catch (err) {
+      log.error('Error toggling saved sound', err);
+      return { saved: false, error: err.message };
+    }
+  }
+
+  async uploadCustomSound({ title, artist, genre, file, creatorId }) {
+    log.info('Uploading custom sound to Firestore', { title, artist });
+    try {
+      const firestore = await getFirestoreInstance();
+      const { collection, addDoc } = await import('firebase/firestore');
+
+      const newSound = {
+        title,
+        artist: artist || 'Original Creator',
+        creatorId: creatorId || 'usr-creator',
+        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200',
+        duration: '0:30',
+        durationSec: 30,
+        bpm: 120,
+        key: 'C Major',
+        reelsCount: '1',
+        reelsCountNum: 1,
+        isTrending: false,
+        genre: genre || 'Original Audio',
+        audioUrl: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3',
+        waveformData: [30, 50, 70, 85, 90, 75, 60, 80, 95, 85, 70, 50, 40],
+        createdAt: new Date().toISOString()
+      };
+
+      const docRef = await addDoc(collection(firestore, 'sounds'), newSound);
+      return { id: docRef.id, ...newSound };
+    } catch (err) {
+      log.error('Error creating sound in Firestore', err);
+      throw err;
+    }
   }
 }
 
 export const soundService = new SoundService();
 export default soundService;
+

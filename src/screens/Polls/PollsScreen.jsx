@@ -75,7 +75,7 @@ export default function PollsScreen() {
     }
 
     try {
-      const updated = await pollService.votePoll(poll.id, optionId, 0, 0);
+      const updated = await pollService.votePoll(poll.id, optionId, 0, 0, user);
       setPolls(polls.map(p => p.id === poll.id ? { ...updated } : p));
       toast.success('Your vote has been recorded! 🗳️');
     } catch (err) {
@@ -92,7 +92,7 @@ export default function PollsScreen() {
     }
 
     try {
-      const updated = await pollService.votePoll(wagerModalPoll.id, selectedOptionId, currentCoins, wagerCoins);
+      const updated = await pollService.votePoll(wagerModalPoll.id, selectedOptionId, currentCoins, wagerCoins, user);
       if (currentUser) {
         setAppState({
           currentUser: {

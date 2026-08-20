@@ -1,5 +1,5 @@
 // src/components/Videos/VideoFeed.jsx - ARVDOUL VIDEO FEED
-// TikTok-style vertical scrolling video feed with gesture support
+// TikTok-style vertical scrolling video feed with gesture support, interactive modals, and preloading
 
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,12 +9,15 @@ import { useTheme } from '../../context/ThemeContext';
 import VideoCard from './VideoCard';
 import VideoComments from './VideoComments';
 import VideoBottomSheet from './VideoBottomSheet';
+import VideoGiftModal from './VideoGiftModal';
+import VideoTopBar from './VideoTopBar';
+import videoService from '../../services/videoService';
 import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 
 /**
- * VideoFeed - TikTok-style vertical scrolling video feed
- * Supports infinite scroll, video preloading, gesture navigation, and audio management
+ * VideoFeed - Vertical snap video feed with gesture navigation and rich overlays
  */
 const VideoFeed = memo(({
   videos = [],
@@ -24,113 +27,160 @@ const VideoFeed = memo(({
   onRefresh,
   hasMore = true,
   feedType = 'for_you',
+  onFeedTypeChange,
+  onOpenSearch,
+  onCreateVideo,
 }) => {
   const containerRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
+  const [showGiftModal, setShowGiftModal] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [preloadedVideos, setPreloadedVideos] = useState({});
 
   const { theme, isDark } = useTheme();
-  const { setCurrentIndex: storeSetIndex } = useVideoStore();
+  const { setCurrentIndex: storeSetIndex, updateVideo, addToWatchLater } = useVideoStore();
 
-  // Preload next videos
+  // Keep selected video in sync
+  const currentVideo = videos[currentIndex] || videos[0] || null;
+
+  // Preload adjacent video assets for seamless scrolling
   useEffect(() => {
-    const preloadVideo = (video) => {
-      if (!video || preloadedVideos[video.id]) return;
-      
-      const videoEl = document.createElement('video');
-      videoEl.src = video.videoUrl || video.url || '';
-      videoEl.preload = 'auto';
-      videoEl.muted = true;
-      
-      setPreloadedVideos((prev) => ({ ...prev, [video.id]: videoEl }));
+    const preload = (vid) => {
+      if (!vid || preloadedVideos[vid.id]) return;
+      const el = document.createElement('video');
+      el.src = vid.videoUrl || vid.url || '';
+      el.preload = 'auto';
+      el.muted = true;
+      setPreloadedVideos((prev) => ({ ...prev, [vid.id]: el }));
     };
 
-    // Preload current and next 2 videos
     if (videos.length > 0) {
-      const currentVideo = videos[currentIndex];
-      const nextVideo1 = videos[currentIndex + 1];
-      const nextVideo2 = videos[currentIndex + 2];
-
-      if (currentVideo) preloadVideo(currentVideo);
-      if (nextVideo1) preloadVideo(nextVideo1);
-      if (nextVideo2) preloadVideo(nextVideo2);
+      if (videos[currentIndex]) preload(videos[currentIndex]);
+      if (videos[currentIndex + 1]) preload(videos[currentIndex + 1]);
+      if (videos[currentIndex + 2]) preload(videos[currentIndex + 2]);
     }
   }, [videos, currentIndex, preloadedVideos]);
 
-  // Handle scroll to determine current video
+  // Scroll to index
+  const scrollToIndex = useCallback((index) => {
+    if (!containerRef.current) return;
+    const clamped = Math.max(0, Math.min(index, videos.length - 1));
+    setCurrentIndex(clamped);
+    storeSetIndex(clamped);
+
+    containerRef.current.scrollTo({
+      top: clamped * containerRef.current.clientHeight,
+      behavior: 'smooth',
+    });
+  }, [videos.length, storeSetIndex]);
+
+  // Handle scroll detection
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
-    
     const { scrollTop, clientHeight } = containerRef.current;
     const newIndex = Math.round(scrollTop / clientHeight);
-    
+
     if (newIndex !== currentIndex && newIndex >= 0 && newIndex < videos.length) {
       setCurrentIndex(newIndex);
       storeSetIndex(newIndex);
 
-      // Load more when near end
-      if (newIndex >= videos.length - 3 && hasMore && onLoadMore && !loading) {
+      if (newIndex >= videos.length - 2 && hasMore && onLoadMore && !loading) {
         onLoadMore();
       }
     }
   }, [currentIndex, videos.length, hasMore, onLoadMore, loading, storeSetIndex]);
 
-  // Swipe handlers for vertical navigation
+  // Keyboard navigation for desktop (Arrow Up/Down, Space, M)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (showComments || showShareSheet || showGiftModal) return;
+
+      if (e.key === 'ArrowDown' || e.key === 'j') {
+        e.preventDefault();
+        scrollToIndex(currentIndex + 1);
+      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+        e.preventDefault();
+        scrollToIndex(currentIndex - 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, scrollToIndex, showComments, showShareSheet, showGiftModal]);
+
+  // Swipe gestures
   const handlers = useSwipeable({
     vertical: true,
     onSwipedUp: () => {
       if (currentIndex < videos.length - 1) {
-        const newIndex = currentIndex + 1;
-        setCurrentIndex(newIndex);
-        storeSetIndex(newIndex);
-        containerRef.current?.scrollTo({
-          top: newIndex * containerRef.current.clientHeight,
-          behavior: 'smooth',
-        });
+        scrollToIndex(currentIndex + 1);
       }
     },
     onSwipedDown: () => {
       if (currentIndex > 0) {
-        const newIndex = currentIndex - 1;
-        setCurrentIndex(newIndex);
-        storeSetIndex(newIndex);
-        containerRef.current?.scrollTo({
-          top: newIndex * containerRef.current.clientHeight,
-          behavior: 'smooth',
-        });
+        scrollToIndex(currentIndex - 1);
       }
-    },
-    onSwiping: ({ deltaY }) => {
-      if (!containerRef.current) return;
-      const startTop = currentIndex * containerRef.current.clientHeight;
-      containerRef.current.scrollTop = startTop - deltaY;
     },
     trackMouse: false,
     delta: 50,
   });
 
-  // Handle actions
-  const handleLike = useCallback((video) => {
-    setSelectedVideo(video);
-    // Like logic would be handled by parent or store
-  }, []);
+  // Action handlers with store updates & service integration
+  const handleLike = useCallback(async (video) => {
+    if (!video) return;
+    const wasLiked = video.isLiked;
+    const newLikes = wasLiked ? Math.max(0, (video.likes || 1) - 1) : (video.likes || 0) + 1;
+
+    updateVideo(video.id, {
+      isLiked: !wasLiked,
+      likes: newLikes,
+      likesFormatted: newLikes > 1000 ? `${(newLikes / 1000).toFixed(1)}K` : `${newLikes}`,
+    });
+
+    try {
+      await videoService.likeVideo(video.id);
+    } catch (err) {
+      // Revert if error
+      console.warn('Like request fallback:', err);
+    }
+  }, [updateVideo]);
 
   const handleComment = useCallback((video) => {
     setSelectedVideo(video);
     setShowComments(true);
   }, []);
 
-  const handleShare = useCallback((video) => {
+  const handleShare = useCallback(async (video) => {
     setSelectedVideo(video);
     setShowShareSheet(true);
-  }, []);
+    if (video) {
+      updateVideo(video.id, {
+        shares: (video.shares || 0) + 1,
+      });
+      videoService.shareVideo(video.id).catch(() => {});
+    }
+  }, [updateVideo]);
 
   const handleSave = useCallback((video) => {
+    if (!video) return;
+    const wasSaved = video.isSaved;
+    updateVideo(video.id, {
+      isSaved: !wasSaved,
+      saves: wasSaved ? Math.max(0, (video.saves || 1) - 1) : (video.saves || 0) + 1,
+    });
+    if (!wasSaved) {
+      addToWatchLater(video);
+      toast.success('Saved to your collection! 🌟');
+    } else {
+      toast.info('Removed from saved');
+    }
+  }, [updateVideo, addToWatchLater]);
+
+  const handleGift = useCallback((video) => {
     setSelectedVideo(video);
-    // Save logic would be handled by parent or store
+    setShowGiftModal(true);
   }, []);
 
   const handleReport = useCallback((video) => {
@@ -138,43 +188,29 @@ const VideoFeed = memo(({
     setShowShareSheet(true);
   }, []);
 
-  // Scroll to specific video
-  const scrollToVideo = useCallback((index) => {
-    if (!containerRef.current) return;
-    
-    const clampedIndex = Math.max(0, Math.min(index, videos.length - 1));
-    setCurrentIndex(clampedIndex);
-    storeSetIndex(clampedIndex);
-    
-    containerRef.current.scrollTo({
-      top: clampedIndex * containerRef.current.clientHeight,
-      behavior: 'smooth',
-    });
-  }, [videos.length, storeSetIndex]);
-
-  // Refresh handler
-  const handleRefresh = useCallback(() => {
-    if (onRefresh) {
-      onRefresh();
-    }
-  }, [onRefresh]);
-
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden">
-      {/* Main Feed Container */}
+    <div className="relative w-full h-full bg-black overflow-hidden select-none">
+      {/* Floating Top Bar Navigation */}
+      <VideoTopBar
+        activeTab={feedType}
+        onTabChange={onFeedTypeChange}
+        onOpenSearch={onOpenSearch}
+        onCreateVideo={onCreateVideo}
+      />
+
+      {/* Main Snap Feed Container */}
       <div
         ref={containerRef}
         {...handlers}
         onScroll={handleScroll}
-        className="h-full w-full overflow-y-auto snap-y snap-mandatory scroll-smooth"
-        style={{ scrollSnapType: 'y mandatory' }}
+        className="h-full w-full overflow-y-auto snap-y snap-mandatory scroll-smooth no-scrollbar"
+        style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {/* Videos */}
         {videos.length > 0 ? (
           videos.map((video, index) => (
             <div
               key={video.id}
-              className="h-screen w-full flex-shrink-0 snap-start"
+              className="h-full w-full flex-shrink-0 snap-start relative"
               style={{ scrollSnapAlign: 'start' }}
             >
               <VideoCard
@@ -185,33 +221,34 @@ const VideoFeed = memo(({
                 onComment={() => handleComment(video)}
                 onShare={() => handleShare(video)}
                 onSave={() => handleSave(video)}
+                onGift={() => handleGift(video)}
                 onReport={() => handleReport(video)}
               />
             </div>
           ))
         ) : !loading && !error ? (
-          <EmptyState onRefresh={handleRefresh} />
+          <EmptyState onRefresh={onRefresh} />
         ) : null}
 
         {/* Loading More Indicator */}
         {loading && videos.length > 0 && (
-          <div className="h-32 flex items-center justify-center bg-black/80 backdrop-blur-xl">
-            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          <div className="h-24 flex items-center justify-center bg-black/80 backdrop-blur-xl">
+            <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
           </div>
         )}
       </div>
 
-      {/* Loading State */}
+      {/* Loading Full Screen State */}
       <AnimatePresence>
         {loading && videos.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black z-30"
           >
             <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
-            <p className="text-white/80 text-sm">Loading videos...</p>
+            <p className="text-white/80 text-sm font-bold">Curating your feed...</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -223,61 +260,42 @@ const VideoFeed = memo(({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 backdrop-blur-xl p-8"
+            className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl p-8 z-30"
           >
             <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
-            <h3 className="text-white text-xl font-bold mb-2">Something went wrong</h3>
-            <p className="text-white/60 text-center mb-6 max-w-sm">{error}</p>
+            <h3 className="text-white text-xl font-black mb-2">Could Not Load Videos</h3>
+            <p className="text-white/60 text-center mb-6 max-w-sm text-sm">{error}</p>
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={handleRefresh}
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
+              onClick={onRefresh}
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-sm shadow-xl shadow-purple-500/30"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-4 h-4" />
               Try Again
             </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* End of Feed */}
-      {!hasMore && videos.length > 0 && (
-        <div className="absolute bottom-32 left-0 right-0 flex justify-center pointer-events-none">
-          <div className="px-6 py-2 rounded-full bg-white/10 backdrop-blur-xl text-white/80 text-sm">
-            You're all caught up! 🎉
-          </div>
-        </div>
-      )}
-
-      {/* Feed Type Tabs */}
-      <div className="absolute top-4 left-0 right-0 flex justify-center gap-8 z-10">
-        {['for_you', 'following', 'trending'].map((type) => (
-          <button
-            key={type}
-            onClick={() => {/* Feed type change */}}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              feedType === type
-                ? 'text-white border-b-2 border-white'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            {type === 'for_you' ? 'For You' : type === 'following' ? 'Following' : 'Trending'}
-          </button>
-        ))}
-      </div>
-
-      {/* Comments Drawer */}
+      {/* Comments Bottom Sheet */}
       <VideoComments
         isOpen={showComments}
         onClose={() => setShowComments(false)}
-        video={selectedVideo}
+        video={selectedVideo || currentVideo}
       />
 
       {/* Share Bottom Sheet */}
       <VideoBottomSheet
         isOpen={showShareSheet}
         onClose={() => setShowShareSheet(false)}
-        video={selectedVideo}
+        video={selectedVideo || currentVideo}
+      />
+
+      {/* Virtual Coin Gift Modal */}
+      <VideoGiftModal
+        isOpen={showGiftModal}
+        onClose={() => setShowGiftModal(false)}
+        creator={selectedVideo?.creator || currentVideo?.creator}
       />
     </div>
   );
@@ -285,45 +303,26 @@ const VideoFeed = memo(({
 
 VideoFeed.displayName = 'VideoFeed';
 
-/**
- * Empty state component when no videos are available
- */
 const EmptyState = memo(({ onRefresh }) => (
-  <div className="h-full flex flex-col items-center justify-center bg-black p-8">
-    <div className="w-32 h-32 mb-6 rounded-full bg-white/5 flex items-center justify-center">
-      <svg
-        className="w-16 h-16 text-white/30"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-        />
-      </svg>
+  <div className="h-full flex flex-col items-center justify-center bg-black p-8 text-center">
+    <div className="w-24 h-24 mb-6 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center shadow-2xl">
+      <RefreshCw className="w-10 h-10 text-white/30" />
     </div>
-    <h3 className="text-white text-2xl font-bold mb-2">No videos yet</h3>
-    <p className="text-white/60 text-center mb-6 max-w-xs">
-      Follow creators to see their latest videos in your feed
+    <h3 className="text-white text-2xl font-black mb-2 tracking-tight">No Videos in Feed</h3>
+    <p className="text-white/60 text-sm max-w-xs mb-6">
+      Explore new trending creators and discover fresh stories
     </p>
     <motion.button
       whileTap={{ scale: 0.95 }}
       onClick={onRefresh}
-      className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
+      className="px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-sm shadow-lg shadow-purple-500/25"
     >
-      <RefreshCw className="w-5 h-5" />
-      Refresh
+      Refresh Feed
     </motion.button>
   </div>
 ));
 
 EmptyState.displayName = 'EmptyState';
-EmptyState.propTypes = {
-  onRefresh: PropTypes.func,
-};
 
 VideoFeed.propTypes = {
   videos: PropTypes.arrayOf(PropTypes.object),
@@ -332,7 +331,10 @@ VideoFeed.propTypes = {
   onLoadMore: PropTypes.func,
   onRefresh: PropTypes.func,
   hasMore: PropTypes.bool,
-  feedType: PropTypes.oneOf(['for_you', 'following', 'trending']),
+  feedType: PropTypes.string,
+  onFeedTypeChange: PropTypes.func,
+  onOpenSearch: PropTypes.func,
+  onCreateVideo: PropTypes.func,
 };
 
 export default VideoFeed;
