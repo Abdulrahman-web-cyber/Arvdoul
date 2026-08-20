@@ -22,6 +22,16 @@ require('./notifications.js');
 require('./messaging.js');
 require('./search.js');
 require('./monetization.js');
+// GDPR compliance exports - MUST be required or they never deploy
+// (deleteUserData lives in user.js; exportUserData lives in userExport.js).
+require('./userExport.js');
+// AI gateway (client aiStudioService calls this via VITE_AI_GATEWAY_URL).
+require('./ai.js');
+// SAML assertion verification (client samlService requires
+// VITE_SAML_VERIFY_URL and fails closed without it).
+require('./saml.js');
+// Level system (server-authoritative XP; client prefers this callable).
+require('./levelSystem.js');
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {

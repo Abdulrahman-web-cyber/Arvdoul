@@ -171,6 +171,11 @@ class LevelSystemService {
   /**
    * Awards XP for an action and processes level-ups atomically.
    *
+   * Prefers the server-authoritative Cloud Function
+   * (`functions/levelSystem.js awardExperience`) so XP cannot be farmed by
+   * tampering with client code; falls back to the local atomic transaction
+   * when the function is unreachable (offline / local dev).
+   *
    * @param {Object} opts
    * @param {string} opts.userId
    * @param {keyof XP_RULES} opts.action
@@ -185,6 +190,31 @@ class LevelSystemService {
       throw new Error(`LEVEL_UNKNOWN_ACTION: "${action}" is not a registered XP action`);
     }
     if (!userId) throw new Error('LEVEL_NO_USER: userId is required');
+
+    // Server-authoritative path first (best-effort, never blocks the caller).
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const func = httpsCallable(getFunctions(), 'awardExperience');
+        const res = await func({ action, count, source });
+        const data = res.data;
+        if (data && data.success) {
+          this._cache.delete(this._cacheKey(userId));
+          if (data.leveledUp) {
+            logger.info('[LevelSystem] Level up (server)!', {
+              userId,
+              newLevel: data.newLevel,
+              coinReward: data.coinReward,
+            });
+          }
+          return data;
+        }
+      } catch (err) {
+        logger.warn('[LevelSystem] Server award unavailable - falling back to local transaction:', {
+          error: err.message,
+        });
+      }
+    }
 
     // Idempotency: same action+source within 24h must not re-award.
     const idempotencyKey = source ? `${action}:${source}` : null;

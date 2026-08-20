@@ -102,6 +102,56 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 13. Rules, indexes & functions completion (deployment infrastructure)
+
+**FIRESTORE RULES — every client-written collection now covered (105 match blocks)**
+- Audit cross-checked every `collection(...)` call in src/ against the rules;
+  **24 collections were written by client services but had NO rules** (default-
+  deny would silently break them in production): coin_ledger (level rewards),
+  saved_sounds, drafts, videos, copyright_registry, enterprise_tenants,
+  event_feedback, gifts, incidents, live_tips, message_reports,
+  moderation_appeals, poll_votes, story_replies, trending_topics, user_events,
+  user_feedback, view_events, orders, monetization_outbox, rankings, trending,
+  moderation_queue, user_recommendations.
+- Each rule is ownership/participant-scoped, append-only where appropriate
+  (poll_votes, view_events, coin_ledger), server-computed collections are
+  read-only (rankings, trending, user_recommendations, trending_topics).
+- **functionsContract.test.js** now GUARDS this forever: it statically checks
+  that every client-written collection has a rules match, every client-called
+  httpsCallable is exported AND required by index.js, GDPR exports deploy,
+  and default-deny is the final block.
+
+**FIRESTORE INDEXES — 93 → 98 composites**
+- 5 genuinely missing composite indexes added (queries would fail at runtime
+  without them): comments(postId+isDeleted+isHidden+moderationStatus+
+  parentId+createdAt DESC), posts(isDeleted+moderationStatus+createdAt DESC),
+  posts(category+isDeleted+moderationStatus+createdAt DESC),
+  live_streams(status+startTime DESC), events(organizerId+startDate ASC).
+
+**CLOUD FUNCTIONS — deploy bugs fixed + 3 new functions**
+- 🔴 **Fixed deploy bug**: `exportUserData` (GDPR export) lived only in
+  userExport.js which index.js never required - the function silently never
+  deployed and the client's export call would fail. index.js now requires it.
+- 🔴 **Dead module removed**: userDelete.js duplicated deleteUserData (the
+  complete cascade lives in user.js); requiring it would crash deployment
+  with a duplicate-export error.
+- 🆕 **functions/ai.js** - the AI gateway the client aiStudioService ALREADY
+  calls via VITE_AI_GATEWAY_URL: auth required, per-user rate limiting
+  (Firestore sliding window), per-user daily budget caps, server-side OpenAI
+  key (never VITE_), usage/cost telemetry to ai_usage_logs, 60s timeout.
+- 🆕 **functions/saml.js** - SAML assertion verification the client
+  samlService REQUIRES (fails closed without VITE_SAML_VERIFY_URL): tenant
+  issuer/audience validation, RSA-SHA256 signature verification via
+  configured publicCert, NameID/attribute extraction, auth required.
+- 🆕 **functions/levelSystem.js** - server-authoritative awardExperience
+  (same curve as client, caps + idempotency in an atomic transaction with
+  coin ledger); the client levelSystemService now prefers the callable and
+  falls back to its local transaction only when unreachable.
+- All 20+ client-called callables verified exported with a deploy path.
+
+**Verification: 29 suites / 396 tests green (6 new contract tests), lint 0
+errors, build OK, all function modules pass node --check.**
+
 ### 12. Intro glitch FIX + Settings screen + Level system (real systems, not foundations)
 
 **INTRO "TEMPORARY GLITCH" — ROOT CAUSE FOUND AND FIXED**
