@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import notificationsService from '../services/notificationsService';
 import { getMonetizationService } from '../services/monetizationService';
+import EmptyState from '../design-system/EmptyState.jsx';
+import Button from '../design-system/Button.jsx';
+import { Dialog } from '../components/ui/Dialog.jsx';
 
 // Fallback high-fidelity sample notifications matching the exact Arvdoul design
 const SAMPLE_NOTIFICATIONS = [
@@ -745,75 +748,66 @@ export default function NotificationsScreen() {
 
         {/* Empty State when filters yield no results */}
         {filteredNotifications.length === 0 && (
-          <div className="text-center py-16 space-y-3">
-            <div className="w-14 h-14 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto">
-              <Bell className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold">No notifications found</h3>
-            <p className="text-xs text-arvdoul-text-secondary max-w-xs mx-auto">
-              There are no notifications under the {activeFilter} filter at this moment.
-            </p>
-            <button
-              onClick={() => { setActiveFilter('All'); setSearchQuery(''); }}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-violet-600 text-white"
-            >
-              Reset Filters
-            </button>
-          </div>
+          <EmptyState
+            title="No notifications found"
+            description={`There are no notifications under the ${activeFilter} filter at this moment.`}
+            icon={<Bell className="w-7 h-7" />}
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => { setActiveFilter('All'); setSearchQuery(''); }}
+              >
+                Reset Filters
+              </Button>
+            }
+          />
         )}
       </main>
 
-      {/* Gift Detail Modal */}
-      <AnimatePresence>
-        {giftModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={cn(
-                "w-full max-w-sm rounded-3xl p-6 border shadow-2xl relative overflow-hidden text-center",
-                isDark ? "bg-[#0c0f24] border-violet-500/30 text-white" : "bg-white border-slate-200 text-slate-900"
-              )}
-            >
-              <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 ring-4 ring-amber-500/30">
-                <Gift className="w-8 h-8" />
-              </div>
-              <h2 className="text-xl font-bold font-display">Creator Coin Gift!</h2>
-              <p className="text-xs text-arvdoul-text-secondary mt-1">
-                {giftModal.user.name} gifted you {giftModal.amount || 250} ARVDOUL Coins.
-              </p>
-
-              <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
-                <span className="text-3xl font-black text-amber-400 font-display">
-                  +{giftModal.amount || 250}
-                </span>
-                <span className="text-sm font-bold text-arvdoul-text-secondary uppercase tracking-wider">
-                  Coins
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setGiftModal(null)}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/10 hover:bg-white/5"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    handleThankCreator(giftModal);
-                    setGiftModal(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg"
-                >
-                  Send Thank You 💜
-                </button>
-              </div>
-            </motion.div>
+      {/* Gift Detail Modal - accessible Dialog (focus trap, Escape, aria-modal) */}
+      <Dialog
+        isOpen={Boolean(giftModal)}
+        onClose={() => setGiftModal(null)}
+        title="Creator Coin Gift!"
+        size="sm"
+      >
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 ring-4 ring-amber-500/30">
+            <Gift className="w-8 h-8" aria-hidden="true" />
           </div>
-        )}
-      </AnimatePresence>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {giftModal?.user?.name || 'A creator'} gifted you {giftModal?.amount || 250} ARVDOUL Coins.
+          </p>
+
+          <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
+            <span className="text-3xl font-black text-amber-400 font-display">
+              +{giftModal?.amount || 250}
+            </span>
+            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Coins
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setGiftModal(null)}
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors min-h-[44px]"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                handleThankCreator(giftModal);
+                setGiftModal(null);
+              }}
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg min-h-[44px]"
+            >
+              Send Thank You 💜
+            </button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* Bottom Navigation Bar */}
       <nav className={cn(

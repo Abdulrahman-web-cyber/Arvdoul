@@ -102,6 +102,20 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 10. Screen build-out pass (missing primitives + screen wiring)
+
+| Area | Before | After |
+|---|---|---|
+| Input primitive | **missing entirely** | `src/components/ui/Input.jsx` - types (text/email/password/phone/search/number/otp), validation states (error/success/warning with icons), required/disabled/readonly/loading, label+hint+error wired via htmlFor/aria-describedby/aria-invalid, 44px min touch target. Exported from `components/ui/index.js` |
+| Dialog primitive | **missing** (screens used raw fixed divs) | `src/components/ui/Dialog.jsx` - role=dialog + aria-modal, cyclic focus trap (Tab/Shift+Tab wrap), Escape close, focus restore to trigger, body scroll lock, sizes (sm/md/lg/fullscreen), close button + overlay (reduced motion via global tokens.css kill-switch) |
+| NotificationsScreen gift modal | raw `<div class="fixed inset-0">` + framer-motion | replaced with accessible `Dialog` (focus trap, aria-modal, aria-labelledby) |
+| NotificationsScreen empty state | raw h3 + button | design-system `EmptyState` + `Button` (role=status, translated-ready) |
+| Tests | - | `inputDialog.test.jsx`: 17 tests (8 input + 9 dialog) - axe 0 violations, aria wiring, Escape/overlay close, focus trap cycling, focus restore on close |
+
+Audit confirmed: **zero mock data / hardcoded arrays / TODOs / FIXMEs remain in screens or components** (previous zero-mock pass held; every remaining "placeholder" hit is a legitimate input placeholder attribute). All screens wire to real services (marketplaceService, soundService, pollService, useSearch, commentService...).
+
+**Verification: 22 suites / 332 tests green, lint 0 errors, production build OK, dev server serves all new modules (HTTP 200).**
+
 ### 9. UI polish pass (design system, motion, analytics)
 
 | Area | Before | After |
