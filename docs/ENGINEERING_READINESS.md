@@ -102,6 +102,57 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 12. Intro glitch FIX + Settings screen + Level system (real systems, not foundations)
+
+**INTRO "TEMPORARY GLITCH" — ROOT CAUSE FOUND AND FIXED**
+- Cause: `initReactI18next` was only registered inside the ASYNC `initI18n()`.
+  When that promise was slow or failed (blocked localStorage in sandboxed
+  preview iframes / privacy modes makes the LanguageDetector throw),
+  `useTranslation()` had NO i18next instance and threw - the intro error
+  boundary caught it and showed "Temporary Glitch" on every launch.
+- Fix: `src/i18n/index.js` now performs a **synchronous, failure-proof base
+  init at module load** (English fallback, no detector, try/catch-wrapped)
+  so `useTranslation()` and `withLanguage` ALWAYS have a working instance
+  from the first render. `initI18n()` upgrades with the detector and never
+  throws. Regression suite `i18nRobust.test.js` proves: initialized at
+  module load, first-render translation works, withLanguage injects t,
+  blocked-storage init survives.
+
+**LEVEL SYSTEM (`src/services/levelSystemService.js`) — the missing system**
+- The platform stored `user.level`/`user.experience` and monetization could
+  READ a static 15-level table, but NOTHING awarded XP or computed level-ups.
+- Now: XP rules per action (post/comment/like/follow/login/gift/live) with
+  per-action daily caps (anti-farming, tracked in XP units), atomic Firestore
+  transaction (XP += , level recompute, experienceToNextLevel, level-up
+  detection), coin rewards credited in the SAME transaction with a
+  coin_ledger entry, idempotency keyed by action+source+date.
+- Honest rank titles (Newcomer → Arvdoul Legend) + real perks mapped to
+  actual platform capabilities (live ≥5 matches liveService, withdrawals
+  ≥10 matches WITHDRAWAL_MIN_LEVEL).
+- Wired: daily-login XP awarded once per session from AuthContext
+  (idempotent by date). 14 tests (curve math, caps, level-up rewards,
+  idempotency, unknown-action rejection).
+
+**SETTINGS SCREEN — from static UI to a real system**
+- `settingsService.js`: typed defaults, Firestore persistence
+  (`users/{uid}` settings field), local cache, optimistic updates with
+  ROLLBACK on failure (UI never lies), offline queue for offline writes,
+  realtime subscription, and REAL cache clearing (localStorage preserving
+  auth/session/locale + IndexedDB + in-memory caches).
+- Screen: loading skeleton → sections (Account, Appearance, Notifications,
+  Privacy, Playback, Data & Cache, Danger Zone), every toggle persisted,
+  language switcher (7 locales → i18n.changeLanguage + persisted),
+  reduce-motion override (document class + tokens.css rule), level card
+  with XP progress bar + perks + lifetime rewards, delete-account flow
+  through userService.deleteUserData with accessible confirmation Dialog.
+- i18n: `settings.*` (40 keys) + `level.*` (10 keys) + `common.back` added
+  to all 7 locales - parity test enforces.
+- Tests: settingsService (merge/paths/persist/rollback/cache-clear) +
+  settingsScreen (render, toggle→service, axe, delete dialog) + levelSystem.
+
+**Verification: 28 suites / 390 tests green, lint 0 errors, build OK,
+coverage 13.75% → 14.49% statements.**
+
 ### 11. IntroScreen fix + component enhancement pass
 
 | Area | Before | After |

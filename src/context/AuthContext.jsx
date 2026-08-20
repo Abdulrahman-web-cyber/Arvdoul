@@ -412,6 +412,19 @@ export function AuthProvider({ children }) {
               setUserProfile(profile);
               syncUserWithAppStore(firebaseUser, profile, setCurrentUserRef.current);
             }
+
+            // Level system: award daily-login XP once per session. The
+            // service idempotency key (daily_login:<date>) prevents any
+            // double-award across sessions/devices within the same day.
+            if (isFirstSnapshot) {
+              isFirstSnapshot = false;
+              const today = new Date().toISOString().slice(0, 10);
+              import('../services/levelSystemService.js')
+                .then(({ levelSystemService }) =>
+                  levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
+                )
+                .catch(() => {});
+            }
             
             // Enforce account status
             const status = profile.accountStatus;

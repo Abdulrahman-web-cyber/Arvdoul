@@ -106,3 +106,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * MANUAL OVERRIDE (user setting, not OS preference).
+ * SettingsScreen applies/removes `.arvdoul-reduce-motion` on <html> when the
+ * user toggles "Reduce animations" - same effect as the OS media query.
+ */
+html.arvdoul-reduce-motion *,
+html.arvdoul-reduce-motion *::before,
+html.arvdoul-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
