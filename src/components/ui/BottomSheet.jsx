@@ -1,8 +1,18 @@
 // src/components/ui/BottomSheet.jsx
-import React, { useEffect, memo } from 'react';
+/**
+ * ARVDOUL DESIGN SYSTEM — ACCESSIBLE BOTTOM SHEET
+ * Guide Part II: drag handle with spring physics, backdrop blur, reduced
+ * motion, PLUS: role=dialog, aria-modal, aria-labelledby, Escape close,
+ * focus trap (cyclic Tab/Shift+Tab), focus restore on close, scroll lock.
+ */
+
+import React, { useEffect, useRef, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
 export const BottomSheet = memo(({
   isOpen,
@@ -13,16 +23,51 @@ export const BottomSheet = memo(({
   className = '',
   showClose = true,
 }) => {
+  const sheetRef = useRef(null);
+  const previouslyFocused = useRef(null);
+
+  // Scroll lock + focus restore
   useEffect(() => {
     if (isOpen) {
+      previouslyFocused.current = document.activeElement;
       document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
+      const timer = requestAnimationFrame(() => sheetRef.current?.focus());
+      return () => {
+        cancelAnimationFrame(timer);
+        document.body.style.overflow = '';
+        previouslyFocused.current?.focus?.();
+      };
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    return undefined;
   }, [isOpen]);
+
+  // Escape + cyclic focus trap
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (!isOpen) return;
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onClose?.();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const focusables = Array.from(sheet.querySelectorAll(FOCUSABLE));
+      if (focusables.length === 0) {
+        event.preventDefault();
+        sheet.focus();
+        return;
+      }
+      event.preventDefault();
+      const currentIndex = focusables.indexOf(document.activeElement);
+      const nextIndex = event.shiftKey
+        ? (currentIndex - 1 + focusables.length) % focusables.length
+        : (currentIndex + 1) % focusables.length;
+      focusables[nextIndex].focus();
+    },
+    [isOpen, onClose]
+  );
 
   return (
     <AnimatePresence>
@@ -34,11 +79,17 @@ export const BottomSheet = memo(({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
+            aria-hidden="true"
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
           />
 
           {/* Sheet */}
           <motion.div
+            ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? 'arv-sheet-title' : undefined}
+            tabIndex={-1}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -50,32 +101,33 @@ export const BottomSheet = memo(({
                 onClose?.();
               }
             }}
+            onKeyDown={handleKeyDown}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             className={cn(
               'relative z-10 w-full max-w-xl max-h-[88vh]',
               'bg-arvdoul-bg/95 backdrop-blur-2xl border-t border-x border-arvdoul-border shadow-arvdoul-glass rounded-t-arvdoul-xl',
-              'flex flex-col overflow-hidden pb-safe-bottom',
+              'flex flex-col overflow-hidden pb-safe-bottom outline-none',
               className
             )}
           >
             {/* Drag Handle */}
-            <div className="w-full pt-3 pb-2 flex justify-center cursor-grab active:cursor-grabbing">
+            <div className="w-full pt-3 pb-2 flex justify-center cursor-grab active:cursor-grabbing" aria-hidden="true">
               <div className="w-12 h-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-colors" />
             </div>
 
             {/* Header */}
             {(title || showClose) && (
               <div className="flex items-center justify-between px-5 py-3 border-b border-arvdoul-border/60">
-                <h3 className="text-base font-semibold text-arvdoul-text-primary font-display">
+                <h3 id="arv-sheet-title" className="text-base font-semibold text-arvdoul-text-primary font-display">
                   {title}
                 </h3>
                 {showClose && (
                   <button
                     onClick={onClose}
-                    className="p-1.5 rounded-full text-arvdoul-text-secondary hover:text-white hover:bg-white/10 transition-colors"
+                    className="p-2 rounded-full text-arvdoul-text-secondary hover:text-white hover:bg-white/10 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                     aria-label="Close"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-5 h-5" aria-hidden="true" />
                   </button>
                 )}
               </div>

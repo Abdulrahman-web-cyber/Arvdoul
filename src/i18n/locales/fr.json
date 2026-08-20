@@ -60,5 +60,65 @@
     "title": "Page introuvable",
     "description": "Le lien que vous avez suivi est peut-être cassé ou la page a pu être supprimée.",
     "goHome": "Retour à l'accueil"
+  },
+  "intro": {
+    "loading": "Chargement d’Arvdoul...",
+    "glitchTitle": "Problème temporaire",
+    "glitchText": "L'écran d'introduction a rencontré un problème. Cela n'affectera pas l'application principale.",
+    "retry": "Réessayer",
+    "title1": "Connectez. Créez.",
+    "title2": "Communauté.",
+    "tagline": "Arvdoul est l’endroit où se créent des connexions significatives. Une plateforme sociale premium pour les créateurs, les communautés et les conversations qui comptent.",
+    "featuresTitle": "Tout ce dont vous avez besoin",
+    "features": {
+      "smartFeed": {
+        "title": "Fil intelligent",
+        "desc": "Fil de contenu organisé par IA qui apprend vos préférences et montre ce qui compte."
+      },
+      "privacy": {
+        "title": "Contrôle de la confidentialité",
+        "desc": "Paramètres de confidentialité granulaires avec contrôle total de votre empreinte numérique."
+      },
+      "communities": {
+        "title": "Communautés",
+        "desc": "Créez et rejoignez des communautés avec des outils de modération et d’engagement puissants."
+      },
+      "creation": {
+        "title": "Outils de création",
+        "desc": "Suite professionnelle de création de contenu avec modèles, planification et analyses."
+      },
+      "chat": {
+        "title": "Chat en temps réel",
+        "desc": "Messagerie instantanée avec groupes, messages vocaux et médias riches."
+      },
+      "platform": {
+        "title": "Multiplateforme",
+        "desc": "Expérience fluide sur le web, mobile et desktop."
+      }
+    },
+    "pillars": {
+      "e2ee": {
+        "title": "Chiffrement de bout en bout",
+        "desc": "Messagerie sécurisée par cryptographie moderne par défaut."
+      },
+      "privacy": {
+        "title": "Confidentialité dès la conception",
+        "desc": "Vous contrôlez vos données, votre empreinte et votre audience."
+      },
+      "creator": {
+        "title": "D’abord les créateurs",
+        "desc": "Monétisez avec des pièces, abonnements et paiements."
+      },
+      "realtime": {
+        "title": "Tout en temps réel",
+        "desc": "Streams en direct, espaces audio et messagerie instantanée."
+      }
+    },
+    "ctaTitle": "Prêt à commencer ?",
+    "ctaText": "Rejoignez les créateurs, communautés et conversations qui comptent.",
+    "createAccount": "Créer un compte",
+    "signIn": "Se connecter",
+    "footnote": "Plan gratuit disponible • Sans carte bancaire",
+    "srWelcome": "Bienvenue sur Arvdoul. Connectez-vous avec vos amis, créez des communautés et du contenu incroyable."
   }
 }

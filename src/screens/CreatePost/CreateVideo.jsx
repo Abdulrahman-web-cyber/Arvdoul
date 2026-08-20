@@ -63,7 +63,12 @@ const THUMBNAIL_INTERVAL = 0.5; // seconds
 async function generateVideoThumbnails(videoFile, count = 5) {
   const video = document.createElement("video");
   const canvas = document.createElement("canvas");
+  // getContext('2d') can return null when canvas is blocked - fail loudly
+  // with a clear error instead of crashing on ctx.drawImage.
   const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Canvas 2D context unavailable - cannot generate thumbnails");
+  }
   const thumbnails = [];
 
   return new Promise((resolve, reject) => {

@@ -13,6 +13,20 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/jest.setup.js'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '/functions/'],
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json', 'node'],
+  // Resolve the Vite `@`-aliases so screen/component tests work with the
+  // same import specifiers as the app.
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@components/(.*)$': '<rootDir>/src/components/$1',
+    '^@context/(.*)$': '<rootDir>/src/context/$1',
+    '^@screens/(.*)$': '<rootDir>/src/screens/$1',
+    '^@lib/(.*)$': '<rootDir>/src/lib/$1',
+    '^@hooks/(.*)$': '<rootDir>/src/hooks/$1',
+    '^@data/(.*)$': '<rootDir>/src/data/$1',
+    '^@assets/(.*)$': '<rootDir>/src/assets/$1',
+    '^@app-firebase/(.*)$': '<rootDir>/src/firebase/$1',
+    '^@styles/(.*)$': '<rootDir>/src/styles/$1',
+  },
   testTimeout: 15000,
   clearMocks: true,
   restoreMocks: true,

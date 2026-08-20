@@ -1098,7 +1098,13 @@ function CreatePostProvider({ children }) {
       const maxDim = 512; let w = img.width, h = img.height;
       if (w > h) { h = (h * maxDim) / w; w = maxDim; } else { w = (w * maxDim) / h; h = maxDim; }
       canvas.width = w; canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(objectUrl);
         if (blob) {
@@ -1126,7 +1132,13 @@ function CreatePostProvider({ children }) {
     video.onseeked = () => {
       const canvas = document.createElement("canvas");
       canvas.width = 512; canvas.height = (512 / video.videoWidth) * video.videoHeight;
-      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+        return;
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(objectUrl);
         if (blob) {

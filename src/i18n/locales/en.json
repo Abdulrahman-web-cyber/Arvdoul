@@ -60,5 +60,65 @@
     "title": "Page not found",
     "description": "The link you followed may be broken or the page may have been removed.",
     "goHome": "Go Home"
+  },
+  "intro": {
+    "loading": "Loading Arvdoul...",
+    "glitchTitle": "Temporary Glitch",
+    "glitchText": "The intro screen encountered an issue. This won't affect the main application.",
+    "retry": "Retry",
+    "title1": "Connect. Create.",
+    "title2": "Community.",
+    "tagline": "Arvdoul is where meaningful connections happen. A premium social platform built for creators, communities, and conversations that matter.",
+    "featuresTitle": "Everything You Need",
+    "features": {
+      "smartFeed": {
+        "title": "Smart Feed",
+        "desc": "AI-curated content feed that learns your preferences and shows what matters most."
+      },
+      "privacy": {
+        "title": "Privacy Control",
+        "desc": "Granular privacy settings with complete control over your digital footprint."
+      },
+      "communities": {
+        "title": "Communities",
+        "desc": "Build and join communities with powerful moderation and engagement tools."
+      },
+      "creation": {
+        "title": "Creation Tools",
+        "desc": "Professional content creation suite with templates, scheduling, and analytics."
+      },
+      "chat": {
+        "title": "Real-time Chat",
+        "desc": "Instant messaging with groups, voice messages, and rich media sharing."
+      },
+      "platform": {
+        "title": "Multi-platform",
+        "desc": "Seamless experience across web, mobile, and desktop applications."
+      }
+    },
+    "pillars": {
+      "e2ee": {
+        "title": "End-to-End Encrypted",
+        "desc": "Messaging secured with modern cryptography by default."
+      },
+      "privacy": {
+        "title": "Privacy by Design",
+        "desc": "You control your data, your footprint, and your audience."
+      },
+      "creator": {
+        "title": "Creator-First",
+        "desc": "Monetize with coins, subscriptions, and payouts."
+      },
+      "realtime": {
+        "title": "Real-Time Everything",
+        "desc": "Live streams, audio spaces, and instant messaging."
+      }
+    },
+    "ctaTitle": "Ready to Get Started?",
+    "ctaText": "Join the creators, communities, and conversations that matter.",
+    "createAccount": "Create Account",
+    "signIn": "Sign In",
+    "footnote": "Free forever plan available • No credit card required",
+    "srWelcome": "Welcome to Arvdoul. Connect with friends, build communities, and create amazing content."
   }
 }

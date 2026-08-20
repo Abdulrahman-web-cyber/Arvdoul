@@ -102,6 +102,23 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 11. IntroScreen fix + component enhancement pass
+
+| Area | Before | After |
+|---|---|---|
+| IntroScreen data | **Fabricated statistics**: "10M+ Active Users", "99.99% Uptime", "500K+ Communities", "<50ms Latency", "Join millions of users" - invented claims shown as facts | Stats grid replaced with **honest product pillars** (End-to-End Encrypted, Privacy by Design, Creator-First, Real-Time Everything) - all true platform capabilities. Enforced by test (fake claims must never return) |
+| IntroScreen i18n | ~25 hardcoded English strings | Full `intro.*` namespace in all 7 locales (headline, tagline, 6 features, 4 pillars, CTA, error boundary, sr-welcome, loading) |
+| IntroScreen a11y | h4 after h2 (heading-order violation, caught by axe), emojis exposed to screen readers, hover-only feature cards | FeatureCard h3 (valid h1→h2→h3 order), aria-hidden decorative emojis, keyboard focus parity on cards (focus=hover), focus-visible rings, role=progressbar on scroll indicator, role=alert boundary, role=img logo |
+| IntroScreen robustness | 🔴 **Real bug**: `canvas.getContext("2d")` unguarded - crashes the intro (into the error boundary) when canvas is blocked (privacy browsers/WebViews) | Null-guarded; particles skip gracefully. Same latent bug fixed in CreatePost (image + video thumbnails), CreateEvent (image compression), CreateVideo (thumbnail generator) - all now fail cleanly instead of crashing |
+| IntroScreen code quality | dead `isMobile` state, empty cleanup, unused imports, `useReducedMotion` imported but ignored | Dead code removed; particles + button shine disabled under prefers-reduced-motion |
+| Tabs primitive | plain buttons, no keyboard/ARIA | role=tablist/tab/tabpanel, aria-selected, roving tabindex, Arrow/Home/End keyboard nav, aria-controls/labelledby wiring via shared tabId, disabled handling. API-compatible |
+| BottomSheet | raw div, no dialog semantics | role=dialog + aria-modal + aria-labelledby, Escape close, cyclic focus trap, focus restore on close, scroll lock, 44px close target |
+| Avatar | image/initials/status only | **verified + creator badge overlays** (badge/status never collide), keyboard-operable click (Enter/Space), focus-visible ring, role=img on badges |
+| Card | single style | variants (elevated/glass/solid/bordered), padding variants (none/sm/md/lg), interactive (button role + Enter/Space + hover lift), selected ring. Default = previous look |
+| Jest infra | `@`-aliases unresolved in tests | `moduleNameMapper` maps all 10 Vite aliases - any screen/component is now testable with app-style imports |
+
+**Verification: 24 suites / 356 tests green (new: introScreen.test.jsx integrity + componentsEnhanced.test.jsx), lint 0 errors, production build OK.**
+
 ### 10. Screen build-out pass (missing primitives + screen wiring)
 
 | Area | Before | After |
