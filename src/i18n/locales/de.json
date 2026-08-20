@@ -55,5 +55,10 @@
     "like": "Gefällt mir",
     "comment": "Kommentieren",
     "share": "Teilen"
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "description": "Der Link, dem Sie gefolgt sind, ist möglicherweise defekt oder die Seite wurde entfernt.",
+    "goHome": "Zur Startseite"
   }
 }

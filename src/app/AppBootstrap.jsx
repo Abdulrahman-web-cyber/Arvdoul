@@ -5,6 +5,7 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
+import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '../context/ThemeContext.jsx';
 import { AuthProvider } from '../context/AuthContext.jsx';
 import { Toaster } from 'sonner';
@@ -213,9 +214,13 @@ export default function AppBootstrap() {
           {isReady && (
             <BrowserRouter>
               <AuthProvider>
-                <Suspense fallback={<div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950" />}>
-                  <AppRoutes />
-                </Suspense>
+                {/* Global motion policy: every Framer Motion animation respects
+                    prefers-reduced-motion (WCAG 2.2 2.3.3). */}
+                <MotionConfig reducedMotion="user">
+                  <Suspense fallback={<div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950" />}>
+                    <AppRoutes />
+                  </Suspense>
+                </MotionConfig>
                 
                 {/* Toast notifications */}
                 <Toaster 

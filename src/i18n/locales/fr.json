@@ -55,5 +55,10 @@
     "like": "J'aime",
     "comment": "Commenter",
     "share": "Partager"
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "description": "Le lien que vous avez suivi est peut-être cassé ou la page a pu être supprimée.",
+    "goHome": "Retour à l'accueil"
   }
 }

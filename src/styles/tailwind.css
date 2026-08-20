@@ -1,3 +1,6 @@
+/* Design tokens (CSS variables + global reduced-motion policy) - must precede all rules */
+@import url("../design-system/tokens.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

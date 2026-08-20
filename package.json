@@ -8,7 +8,9 @@
     "preview": "vite preview",
     "lint": "eslint src/ --ext .js,.jsx",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll=false",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll=false --coverage"
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll=false --coverage",
+    "analyze": "vite-bundle-visualizer",
+    "analyze:build": "npm run build && vite-bundle-visualizer"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

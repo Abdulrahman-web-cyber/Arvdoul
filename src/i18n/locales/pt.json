@@ -55,5 +55,10 @@
     "like": "Curtir",
     "comment": "Comentar",
     "share": "Compartilhar"
+  },
+  "notFound": {
+    "title": "Página não encontrada",
+    "description": "O link que você seguiu pode estar quebrado ou a página pode ter sido removida.",
+    "goHome": "Ir para o início"
   }
 }

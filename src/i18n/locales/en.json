@@ -55,5 +55,10 @@
     "like": "Like",
     "comment": "Comment",
     "share": "Share"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The link you followed may be broken or the page may have been removed.",
+    "goHome": "Go Home"
   }
 }

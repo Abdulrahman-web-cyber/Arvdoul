@@ -5,12 +5,16 @@ import { useTheme } from "@context/ThemeContext";
 import TopAppBar from "@components/Shared/TopAppBar";
 import BottomNav from "@components/Shared/BottomNav";
 import { OfflineIndicator } from "@components/ui/OfflineIndicator";
+import useScreenView from "../hooks/useScreenView.js";
 import { cn } from "../lib/utils";
 
 export default function MainLayout({ children }) {
   const { theme } = useTheme();
   const location = useLocation();
   const isDark = theme === "dark";
+
+  // Screen-view analytics + RUM route timing for every routed screen
+  useScreenView();
 
   const isImmersiveVideo = location.pathname.startsWith("/videos") || location.pathname.startsWith("/reels");
   const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || location.pathname.startsWith("/messages") || location.pathname.startsWith("/chat");

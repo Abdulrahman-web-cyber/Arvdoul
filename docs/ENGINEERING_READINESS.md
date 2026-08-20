@@ -102,6 +102,22 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 9. UI polish pass (design system, motion, analytics)
+
+| Area | Before | After |
+|---|---|---|
+| Design tokens | 2 tokens (`primary` color + `spacing.base`), placeholder `Button.jsx` | **Complete token system** `src/design-system/tokens.js` (versioned `1.0.0`): brand gradient, bg/text/semantic colors, 4px spacing scale, radii, shadows/glass, motion (durations/easings/stagger + `reduce: 'kill'` policy), typography, z-index, breakpoints, a11y minimums (44px touch target, 4.5:1 contrast). Mirrored 1:1 into `tokens.css` (CSS variables) and `tokens.json` (versioned, backend/tooling-usable). Enforced by `designTokens.test.js`: required groups, motion policy, CSS kill-switch, JS/JSON parity, no hardcoded brand hexes in design-system components |
+| Reduced motion (WCAG 2.2 2.3.3) | **Not supported** - every Framer Motion + Tailwind animation ran regardless of user preference | Global: `<MotionConfig reducedMotion="user">` in AppBootstrap + `tokens.css` `@media (prefers-reduced-motion: reduce)` that collapses ALL Tailwind animations/transitions to 0.01ms |
+| Screen analytics | none (no screen_view events, no route timing) | `useScreenView` hook wired once into MainLayout: `screen_view_total` + per-screen counters in metricsService, RUM start/end route timing, performance marks. Zero per-screen tracking code (guide Part XII) |
+| Design-system primitives | placeholder Button only | Real primitives: `Button` (6 variants x 3 sizes, loading/disabled/aria-busy, focus ring, active scale), `EmptyState` (role=status, explain/guide/action), `ErrorState` (role=alert, retry), `Skeleton` + `CardSkeleton` (shapes, pulse honoring reduced motion). 0 axe violations, enforced by `designSystem.test.jsx` |
+| NotFound screen | hardcoded English, plain link | Design-system Button + i18n (`notFound.*` in all 7 locales), aria-labelledby, translated |
+| i18n | 7 locales | `notFound` keys added to all 7 locales (parity test enforces) |
+| Bundle tooling | - | `npm run analyze` / `analyze:build` (vite-bundle-visualizer) for performance budgets |
+
+Also fixed: `jest-environment-jsdom` had been dropped from node_modules (reinstalled).
+
+**Verification: 21 suites / 315 tests green, lint 0 errors, production build OK, dev server serves tokens CSS + /metrics.**
+
 ### 8. Zero-mock pass (v8.0 constitution sweep - "no mock data, no stubs, no placeholders")
 
 Every claim in the v8.0 file-by-file analysis was verified against the actual

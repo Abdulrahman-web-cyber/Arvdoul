@@ -55,5 +55,10 @@
     "like": "Me gusta",
     "comment": "Comentar",
     "share": "Compartir"
+  },
+  "notFound": {
+    "title": "Página no encontrada",
+    "description": "El enlace que seguiste puede estar roto o la página puede haber sido eliminada.",
+    "goHome": "Ir al inicio"
   }
 }
