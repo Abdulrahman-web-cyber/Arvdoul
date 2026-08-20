@@ -274,6 +274,13 @@ class RedisCacheManager extends CacheManager {
   }
 
   /**
+   * Reads the active TTL multiplier for a namespace (1.0 when unset).
+   */
+  getNamespaceTtlMultiplier(namespace) {
+    return this._dynamicTtlMultipliers.get(namespace) || 1.0;
+  }
+
+  /**
    * Purges expired entries across memory and IndexedDB.
    */
   async purgeAllExpired() {

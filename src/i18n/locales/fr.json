@@ -1,0 +1,59 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "search": "Rechercher",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter",
+    "login": "Se connecter",
+    "signUp": "S'inscrire",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "offline": "Vous êtes hors ligne",
+    "online": "Vous êtes de nouveau en ligne"
+  },
+  "nav": {
+    "home": "Accueil",
+    "videos": "Vidéos",
+    "chat": "Discussion",
+    "create": "Créer",
+    "coins": "Pièces",
+    "alerts": "Alertes",
+    "profile": "Profil",
+    "openQuickMenu": "Ouvrir le menu rapide",
+    "closeQuickMenu": "Fermer le menu rapide"
+  },
+  "crash": {
+    "title": "Défaillance système détectée",
+    "subtitle": "La frontière d'exécution d'Arvdoul a capturé une exception fatale",
+    "crashId": "ID de la défaillance",
+    "errorMessage": "Message d'erreur",
+    "unknownError": "Erreur inconnue",
+    "stackTrace": "Trace de pile",
+    "componentTrace": "Trace du composant",
+    "autoRecover": "Récupérer le système automatiquement",
+    "copied": "Copié ✔",
+    "copyReport": "Copier le rapport d'erreur",
+    "reload": "Recharger l'application",
+    "clearCache": "Vider le cache et réinitialiser",
+    "recoveryAttempts": "Tentatives de récupération"
+  },
+  "auth": {
+    "welcomeBack": "Bon retour",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "createAccount": "Créer un compte"
+  },
+  "feed": {
+    "newPosts": "Nouvelles publications",
+    "seeAll": "Tout voir",
+    "noPosts": "Aucune publication",
+    "like": "J'aime",
+    "comment": "Commenter",
+    "share": "Partager"
+  }
+}

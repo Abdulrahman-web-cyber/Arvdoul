@@ -1,0 +1,50 @@
+# ops/docker-compose.observability.yml
+# Local observability stack for Arvdoul (dev/dogfood):
+#   - Prometheus   : scrapes the Vite dev server /metrics endpoint
+#   - Grafana      : pre-provisioned Arvdoul dashboard (http://localhost:3001)
+#
+# Usage:
+#   1. Start the dev server: npm run dev
+#   2. Start the stack:      docker compose -f ops/docker-compose.observability.yml up -d
+#   3. Open Grafana:         http://localhost:3001  (admin / admin - change on first login)
+#   4. Open Prometheus:      http://localhost:9090
+#
+# Production: push client metrics via OTLP/Pushgateway and deploy the same
+# dashboard to managed Grafana Cloud (see docs/OBSERVABILITY.md).
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: arvdoul-prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - '9090:9090'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: arvdoul-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - '3001:3000'
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

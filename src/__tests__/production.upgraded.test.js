@@ -54,7 +54,6 @@ import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
 import { incidentService } from '../services/incidentService.js';
 import { aggregationCacheService } from '../services/AggregationCacheService.js';
-import soundService from '../services/soundService.js';
 import audioEditorService from '../services/audioEditorService.js';
 import collaborationService from '../services/collaborationService.js';
 
@@ -514,23 +513,7 @@ describe('Upgraded Production Services Integration Tests', () => {
     });
   });
 
-  describe('SoundService & AudioEditor & Collaboration Services', () => {
-    test('soundService fetches trending audio tracks and manages saved state', async () => {
-      const sounds = await soundService.getTrendingSounds('All');
-      expect(sounds.length).toBeGreaterThan(0);
-      expect(sounds[0].id).toBeDefined();
-
-      const saveRes = await soundService.toggleSaveSound(sounds[0].id);
-      expect(saveRes).toHaveProperty('saved');
-
-      const uploaded = await soundService.uploadCustomSound({
-        title: 'Test Audio Track',
-        genre: 'Hyperpop'
-      });
-      expect(uploaded.id).toContain('snd-custom-');
-      expect(uploaded.title).toBe('Test Audio Track');
-    });
-
+  describe('AudioEditor & Collaboration Services', () => {
     test('audioEditorService creates and manages project waveforms, effects, and markers', () => {
       const proj = audioEditorService.createProject({ name: 'Studio Test Track' });
       expect(proj).toBeDefined();

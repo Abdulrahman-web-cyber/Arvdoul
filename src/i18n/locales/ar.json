@@ -1,0 +1,59 @@
+{
+  "common": {
+    "loading": "جار التحميل...",
+    "retry": "إعادة المحاولة",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "delete": "حذف",
+    "search": "بحث",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج",
+    "login": "تسجيل الدخول",
+    "signUp": "إنشاء حساب",
+    "confirm": "تأكيد",
+    "close": "إغلاق",
+    "offline": "أنت غير متصل",
+    "online": "عدت إلى الاتصال"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "videos": "الفيديوهات",
+    "chat": "الدردشة",
+    "create": "إنشاء",
+    "coins": "العملات",
+    "alerts": "التنبيهات",
+    "profile": "الملف الشخصي",
+    "openQuickMenu": "فتح القائمة السريعة",
+    "closeQuickMenu": "إغلاق القائمة السريعة"
+  },
+  "crash": {
+    "title": "تم اكتشاف عطل في النظام",
+    "subtitle": "التقطت حدود تشغيل Arvdoul استثناءً خطيرًا",
+    "crashId": "معرف العطل",
+    "errorMessage": "رسالة الخطأ",
+    "unknownError": "خطأ غير معروف",
+    "stackTrace": "تتبع المكدس",
+    "componentTrace": "تتبع المكوّن",
+    "autoRecover": "استعادة النظام تلقائيًا",
+    "copied": "تم النسخ ✔",
+    "copyReport": "نسخ تقرير الخطأ",
+    "reload": "إعادة تحميل التطبيق",
+    "clearCache": "مسح ذاكرة التخزين المؤقت وإعادة التعيين",
+    "recoveryAttempts": "محاولات الاستعادة"
+  },
+  "auth": {
+    "welcomeBack": "مرحبًا بعودتك",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "forgotPassword": "نسيت كلمة المرور؟",
+    "createAccount": "إنشاء حساب"
+  },
+  "feed": {
+    "newPosts": "منشورات جديدة",
+    "seeAll": "عرض الكل",
+    "noPosts": "لا توجد منشورات بعد",
+    "like": "إعجاب",
+    "comment": "تعليق",
+    "share": "مشاركة"
+  }
+}

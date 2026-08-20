@@ -1,9 +1,10 @@
 // 🛡️ ARVDOUL GLOBAL ERROR BOUNDARY v3
 // Theme-aware + Neon system + production-grade crash UI
 
-import React, { Component } from 'react';
+import React, { Component, createRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { ERROR_CODES, getPublicMessage } from '../utils/errorCodes';
+import { withLanguage } from '../i18n/index.js';
 
 /**
  * Wrapper to inject theme into class component
@@ -26,6 +27,15 @@ class GlobalErrorBoundaryBase extends Component {
       isRecovering: false,
       copied: false
     };
+    this.headingRef = createRef();
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    // Accessibility: move focus to the crash heading when a crash appears so
+    // screen readers announce it immediately.
+    if (!prevState.hasError && this.state.hasError && this.headingRef.current) {
+      this.headingRef.current.focus();
+    }
   }
 
   static getDerivedStateFromError(error) {
@@ -152,8 +162,10 @@ class GlobalErrorBoundaryBase extends Component {
       ? "bg-[#05060a] text-white"
       : "bg-gray-50 text-gray-900";
 
+    const { t } = this.props;
+
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${bg}`}>
+      <div role="alert" className={`min-h-screen flex items-center justify-center p-4 ${bg}`}>
 
         <div className="w-full max-w-xl">
 
@@ -164,28 +176,32 @@ class GlobalErrorBoundaryBase extends Component {
               className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center
               ${this.getGlow("red")} bg-red-500/20`}
             >
-              <span className="text-2xl">💥</span>
+              <span className="text-2xl" aria-hidden="true">💥</span>
             </div>
 
-            <h1 className="text-2xl font-bold mt-4">
-              System Crash Detected
+            <h1
+              ref={this.headingRef}
+              tabIndex={-1}
+              className="text-2xl font-bold mt-4 outline-none"
+            >
+              {t('crash.title')}
             </h1>
 
             <p className={`text-sm mt-1 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
-              Arvdoul runtime boundary captured a fatal exception
+              {t('crash.subtitle')}
             </p>
 
             <p className="text-[11px] text-gray-500 mt-2">
-              Crash ID: {Date.now()}
+              {t('crash.crashId')}: {Date.now()}
             </p>
 
           </div>
 
           {/* ERROR */}
           {this.renderSection(
-            "Error Message",
+            t('crash.errorMessage'),
               <p className="text-red-400 font-medium break-words">
-                {this.state.error?.message || "Unknown error"} <span className="text-xs opacity-60">(code: {ERROR_CODES.INTERNAL_ERROR})</span>
+                {this.state.error?.message || t('crash.unknownError')} <span className="text-xs opacity-60">(code: {ERROR_CODES.INTERNAL_ERROR})</span>
               </p>,
             "red"
           )}
@@ -193,7 +209,7 @@ class GlobalErrorBoundaryBase extends Component {
           {/* STACK */}
           {this.state.error?.stack &&
             this.renderSection(
-              "Stack Trace",
+              t('crash.stackTrace'),
               <pre className="text-[11px] text-purple-400 overflow-auto whitespace-pre-wrap">
                 {this.state.error.stack}
               </pre>,
@@ -203,7 +219,7 @@ class GlobalErrorBoundaryBase extends Component {
           {/* COMPONENT TRACE */}
           {this.state.errorInfo?.componentStack &&
             this.renderSection(
-              "Component Trace",
+              t('crash.componentTrace'),
               <pre className="text-[11px] text-blue-400 overflow-auto whitespace-pre-wrap">
                 {this.state.errorInfo.componentStack}
               </pre>,
@@ -215,11 +231,13 @@ class GlobalErrorBoundaryBase extends Component {
 
             <button
               onClick={this.handleRecover}
+              disabled={this.state.isRecovering}
               className={`w-full py-3 rounded-xl font-semibold text-white
               bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600
-              ${this.getGlow("purple")} transition hover:scale-[1.02]`}
+              ${this.getGlow("purple")} transition hover:scale-[1.02]
+              disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              Auto Recover System
+              {this.state.isRecovering ? t('common.loading') : t('crash.autoRecover')}
             </button>
 
             <button
@@ -228,7 +246,7 @@ class GlobalErrorBoundaryBase extends Component {
               bg-gradient-to-r from-blue-600 to-cyan-500
               ${this.getGlow("blue")} transition hover:scale-[1.02]`}
             >
-              {this.state.copied ? "Copied ✔" : "Copy Error Report"}
+              {this.state.copied ? t('crash.copied') : t('crash.copyReport')}
             </button>
 
             <button
@@ -237,7 +255,7 @@ class GlobalErrorBoundaryBase extends Component {
               ${isDark ? "bg-gray-800 text-white" : "bg-gray-200 text-gray-900"}
               transition hover:scale-[1.02]`}
             >
-              Reload App
+              {t('crash.reload')}
             </button>
 
             <button
@@ -247,14 +265,14 @@ class GlobalErrorBoundaryBase extends Component {
               ${this.getGlow("red")}
               transition hover:scale-[1.02]`}
             >
-              Clear Cache & Reset
+              {t('crash.clearCache')}
             </button>
 
           </div>
 
           {/* FOOTER */}
           <div className="mt-6 text-center text-[11px] text-gray-500">
-            Recovery Attempts: {this.state.recoveryAttempts}
+            {t('crash.recoveryAttempts')}: {this.state.recoveryAttempts}
           </div>
 
         </div>
@@ -263,4 +281,4 @@ class GlobalErrorBoundaryBase extends Component {
   }
 }
 
-export default withTheme(GlobalErrorBoundaryBase);
+export default withLanguage(withTheme(GlobalErrorBoundaryBase));

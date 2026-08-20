@@ -1,0 +1,59 @@
+{
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "retry": "पुनः प्रयास करें",
+    "cancel": "रद्द करें",
+    "save": "सहेजें",
+    "delete": "हटाएं",
+    "search": "खोजें",
+    "settings": "सेटिंग्स",
+    "logout": "लॉग आउट",
+    "login": "लॉग इन",
+    "signUp": "साइन अप",
+    "confirm": "पुष्टि करें",
+    "close": "बंद करें",
+    "offline": "आप ऑफ़लाइन हैं",
+    "online": "आप फिर से ऑनलाइन हैं"
+  },
+  "nav": {
+    "home": "होम",
+    "videos": "वीडियो",
+    "chat": "चैट",
+    "create": "बनाएं",
+    "coins": "सिक्के",
+    "alerts": "सूचनाएं",
+    "profile": "प्रोफ़ाइल",
+    "openQuickMenu": "त्वरित मेनू खोलें",
+    "closeQuickMenu": "त्वरित मेनू बंद करें"
+  },
+  "crash": {
+    "title": "सिस्टम क्रैश का पता चला",
+    "subtitle": "Arvdoul रनटाइम सीमा ने एक गंभीर त्रुटि पकड़ी",
+    "crashId": "क्रैश आईडी",
+    "errorMessage": "त्रुटि संदेश",
+    "unknownError": "अज्ञात त्रुटि",
+    "stackTrace": "स्टैक ट्रेस",
+    "componentTrace": "कंपोनेंट ट्रेस",
+    "autoRecover": "सिस्टम स्वतः पुनर्प्राप्त करें",
+    "copied": "कॉपी हो गया ✔",
+    "copyReport": "त्रुटि रिपोर्ट कॉपी करें",
+    "reload": "ऐप फिर से लोड करें",
+    "clearCache": "कैश साफ़ करें और रीसेट करें",
+    "recoveryAttempts": "पुनर्प्राप्ति प्रयास"
+  },
+  "auth": {
+    "welcomeBack": "वापसी पर स्वागत है",
+    "email": "ईमेल",
+    "password": "पासवर्ड",
+    "forgotPassword": "पासवर्ड भूल गए?",
+    "createAccount": "खाता बनाएं"
+  },
+  "feed": {
+    "newPosts": "नई पोस्ट",
+    "seeAll": "सभी देखें",
+    "noPosts": "अभी कोई पोस्ट नहीं",
+    "like": "पसंद करें",
+    "comment": "टिप्पणी",
+    "share": "साझा करें"
+  }
+}

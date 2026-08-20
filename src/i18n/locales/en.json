@@ -1,0 +1,59 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "search": "Search",
+    "settings": "Settings",
+    "logout": "Log out",
+    "login": "Log in",
+    "signUp": "Sign up",
+    "confirm": "Confirm",
+    "close": "Close",
+    "offline": "You are offline",
+    "online": "You are back online"
+  },
+  "nav": {
+    "home": "Home",
+    "videos": "Videos",
+    "chat": "Chat",
+    "create": "Create",
+    "coins": "Coins",
+    "alerts": "Alerts",
+    "profile": "Profile",
+    "openQuickMenu": "Open quick menu",
+    "closeQuickMenu": "Close quick menu"
+  },
+  "crash": {
+    "title": "System Crash Detected",
+    "subtitle": "Arvdoul runtime boundary captured a fatal exception",
+    "crashId": "Crash ID",
+    "errorMessage": "Error Message",
+    "unknownError": "Unknown error",
+    "stackTrace": "Stack Trace",
+    "componentTrace": "Component Trace",
+    "autoRecover": "Auto Recover System",
+    "copied": "Copied ✔",
+    "copyReport": "Copy Error Report",
+    "reload": "Reload App",
+    "clearCache": "Clear Cache & Reset",
+    "recoveryAttempts": "Recovery Attempts"
+  },
+  "auth": {
+    "welcomeBack": "Welcome back",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "createAccount": "Create account"
+  },
+  "feed": {
+    "newPosts": "New posts",
+    "seeAll": "See all",
+    "noPosts": "No posts yet",
+    "like": "Like",
+    "comment": "Comment",
+    "share": "Share"
+  }
+}

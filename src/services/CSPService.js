@@ -39,10 +39,14 @@ class CSPService {
    * Ingests and reports CSP violation payload.
    */
   handleCSPViolation(report) {
+    if (!report || typeof report !== 'object') {
+      logger.warn('[CSPService] Received malformed CSP violation report');
+      return;
+    }
     logger.warn('[CSPService] CSP Violation caught:', {
-      blockedURI: report['blocked-uri'],
-      violatedDirective: report['violated-directive'],
-      documentURI: report['document-uri'],
+      blockedURI: report['blocked-uri'] ?? 'unknown',
+      violatedDirective: report['violated-directive'] ?? 'unknown',
+      documentURI: report['document-uri'] ?? 'unknown',
     });
   }
 }

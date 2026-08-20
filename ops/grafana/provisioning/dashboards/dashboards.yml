@@ -1,0 +1,12 @@
+# ops/grafana/provisioning/dashboards/dashboards.yml
+apiVersion: 1
+
+providers:
+  - name: 'Arvdoul'
+    orgId: 1
+    folder: 'Arvdoul'
+    type: file
+    disableDeletion: true
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

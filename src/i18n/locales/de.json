@@ -1,0 +1,59 @@
+{
+  "common": {
+    "loading": "Laden...",
+    "retry": "Erneut versuchen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "search": "Suchen",
+    "settings": "Einstellungen",
+    "logout": "Abmelden",
+    "login": "Anmelden",
+    "signUp": "Registrieren",
+    "confirm": "Bestätigen",
+    "close": "Schließen",
+    "offline": "Sie sind offline",
+    "online": "Sie sind wieder online"
+  },
+  "nav": {
+    "home": "Start",
+    "videos": "Videos",
+    "chat": "Chat",
+    "create": "Erstellen",
+    "coins": "Münzen",
+    "alerts": "Alarme",
+    "profile": "Profil",
+    "openQuickMenu": "Schnellmenü öffnen",
+    "closeQuickMenu": "Schnellmenü schließen"
+  },
+  "crash": {
+    "title": "Systemfehler erkannt",
+    "subtitle": "Die Arvdoul-Laufzeitgrenze hat eine fatale Ausnahme abgefangen",
+    "crashId": "Fehler-ID",
+    "errorMessage": "Fehlermeldung",
+    "unknownError": "Unbekannter Fehler",
+    "stackTrace": "Stack-Trace",
+    "componentTrace": "Komponenten-Trace",
+    "autoRecover": "System automatisch wiederherstellen",
+    "copied": "Kopiert ✔",
+    "copyReport": "Fehlerbericht kopieren",
+    "reload": "App neu laden",
+    "clearCache": "Cache leeren & zurücksetzen",
+    "recoveryAttempts": "Wiederherstellungsversuche"
+  },
+  "auth": {
+    "welcomeBack": "Willkommen zurück",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "createAccount": "Konto erstellen"
+  },
+  "feed": {
+    "newPosts": "Neue Beiträge",
+    "seeAll": "Alle anzeigen",
+    "noPosts": "Noch keine Beiträge",
+    "like": "Gefällt mir",
+    "comment": "Kommentieren",
+    "share": "Teilen"
+  }
+}

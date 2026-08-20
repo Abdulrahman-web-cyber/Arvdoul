@@ -52,6 +52,32 @@ const SystemInitializer = ({ onReady }) => {
         // Don't await - let it run in background
         firebaseInit();
 
+        // Feature flags: pull Firebase Remote Config in the background. Until
+        // it resolves (or fails), the static defaults are active, so nothing
+        // blocks startup. Admin overrides (kill switches) are applied
+        // synchronously from localStorage by the service constructor.
+        const featureFlagsInit = async () => {
+          try {
+            const { featureFlagService } = await import('../services/featureFlagService.js');
+            await featureFlagService.init();
+          } catch (error) {
+            console.warn('⚠️ Feature flags init failed (defaults active):', error.message);
+          }
+        };
+        featureFlagsInit();
+
+        // Real User Monitoring: wire Core Web Vitals + route timings into the
+        // metrics pipeline (best-effort; never blocks startup).
+        const rumInit = async () => {
+          try {
+            const { rumService } = await import('../services/rumService.js');
+            rumService.attachToMetrics();
+          } catch (error) {
+            console.warn('⚠️ RUM init failed:', error.message);
+          }
+        };
+        rumInit();
+
         // Wire the global offline-queue drain: every queued operation
         // (comments, live joins/leaves, gift/upload retries, welcome
         // notifications, search analytics) is retried when connectivity

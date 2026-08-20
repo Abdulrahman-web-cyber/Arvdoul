@@ -1,0 +1,59 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "search": "Buscar",
+    "settings": "Ajustes",
+    "logout": "Cerrar sesión",
+    "login": "Iniciar sesión",
+    "signUp": "Registrarse",
+    "confirm": "Confirmar",
+    "close": "Cerrar",
+    "offline": "Estás sin conexión",
+    "online": "Has vuelto a estar en línea"
+  },
+  "nav": {
+    "home": "Inicio",
+    "videos": "Videos",
+    "chat": "Chat",
+    "create": "Crear",
+    "coins": "Monedas",
+    "alerts": "Alertas",
+    "profile": "Perfil",
+    "openQuickMenu": "Abrir menú rápido",
+    "closeQuickMenu": "Cerrar menú rápido"
+  },
+  "crash": {
+    "title": "Se detectó un fallo del sistema",
+    "subtitle": "El límite de ejecución de Arvdoul capturó una excepción fatal",
+    "crashId": "ID del fallo",
+    "errorMessage": "Mensaje de error",
+    "unknownError": "Error desconocido",
+    "stackTrace": "Traza de pila",
+    "componentTrace": "Traza del componente",
+    "autoRecover": "Recuperar sistema automáticamente",
+    "copied": "Copiado ✔",
+    "copyReport": "Copiar informe de error",
+    "reload": "Recargar aplicación",
+    "clearCache": "Borrar caché y restablecer",
+    "recoveryAttempts": "Intentos de recuperación"
+  },
+  "auth": {
+    "welcomeBack": "Bienvenido de nuevo",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "createAccount": "Crear cuenta"
+  },
+  "feed": {
+    "newPosts": "Publicaciones nuevas",
+    "seeAll": "Ver todo",
+    "noPosts": "Aún no hay publicaciones",
+    "like": "Me gusta",
+    "comment": "Comentar",
+    "share": "Compartir"
+  }
+}
