@@ -658,40 +658,57 @@ class MonetizationService {
           await this.stripe.redirectToCheckout({ sessionId: result.data.sessionId });
           return { success: true, stripeRedirect: true };
         }
+        if (result.data?.success) {
+          return {
+            success: true,
+            receipt: {
+              id: result.data.receiptId || `cf_${Date.now()}`,
+              provider: 'stripe',
+              serverVerified: true,
+              packageId,
+              coinsAdded: result.data.coinsAdded || 0,
+              timestamp: Date.now(),
+            },
+            coinsAdded: result.data.coinsAdded || 0,
+            newBalance: result.data.newBalance,
+          };
+        }
+        throw new Error(result.data?.error || 'Purchase was not completed');
       } catch (err) {
-        log.error('Real Stripe purchase flow error, falling back to ledger update', err);
+        // Hard fail: no fabricated receipts, no free coins. Coins are minted
+        // exclusively by the server-side double-entry ledger after a verified
+        // payment (functions/monetization.js purchaseCoins + stripeWebhook).
+        log.error('Real Stripe purchase flow error', err);
+        throw new Error(`PAYMENT_FAILED: ${err.message || 'payment could not be verified'}`);
       }
     }
 
-    // High fidelity ledger update & local simulator
-    const amountCoins = packageId === 'pack_gold' ? 1000 : (packageId === 'pack_platinum' ? 2500 : 500);
-    const amountPaidCents = packageId === 'pack_gold' ? 999 : (packageId === 'pack_platinum' ? 2499 : 499);
-    const uid = auth?.currentUser?.uid;
-
-    if (uid) {
-      await this.addCoins(uid, amountCoins, `Purchased coin pack (${packageId})`, {
-        packageId,
-        amountPaidCents,
-        paymentMethod: paymentMethodId || 'card'
-      });
+    // No Stripe SDK loaded (publishable key unconfigured): still attempt the
+    // Cloud Function - it performs server-side payment verification.
+    if (!this.cfPurchaseCoins) {
+      throw new Error('PAYMENT_GATEWAY_NOT_CONFIGURED: purchaseCoins Cloud Function is not reachable. Coins are never granted without server-side payment verification.');
     }
-
-    const mockReceipt = {
-      id: `rcpt_${secureRandom().toString(36).substring(3, 11)}`,
-      receipt_url: 'https://stripe.com/receipt/verified',
-      success: true,
-      amountPaidCents,
-      packageId,
-      coinsAdded: amountCoins,
-      timestamp: Date.now()
-    };
-
-    return {
-      success: true,
-      receipt: mockReceipt,
-      coinsAdded: amountCoins,
-      newBalance: amountCoins
-    };
+    try {
+      const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata }));
+      if (result.data?.success) {
+        return {
+          success: true,
+          receipt: {
+            id: result.data.receiptId || `cf_${Date.now()}`,
+            provider: 'stripe',
+            serverVerified: true,
+            packageId,
+            coinsAdded: result.data.coinsAdded || 0,
+            timestamp: Date.now(),
+          },
+          coinsAdded: result.data.coinsAdded || 0,
+          newBalance: result.data.newBalance,
+        };
+      }
+      throw new Error(result.data?.error || 'Purchase was not completed');
+    } catch (err) {
+      throw new Error(`PAYMENT_FAILED: ${err.message || 'payment could not be verified'}`);
+    }
   }
 
   // -------------------- SUBSCRIPTIONS --------------------

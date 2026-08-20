@@ -186,8 +186,13 @@ class UploadManager {
     const controller = new AbortController();
     this._abortControllers.set(item.id, controller);
 
+    // The upload itself is REAL (Firebase Storage, see storage.uploadFileWithProgress below).
+    // `fallbackProgress` is purely a UI progress-display fallback: if the storage
+    // SDK emits no progress events for a while, the indicator advances so the UI
+    // does not look frozen. It is capped at 99 and NEVER completes the upload -
+    // completion only happens from the real storage promise resolution.
     let fallbackInterval = null;
-    let simulatedProgress = 0;
+    let fallbackProgress = 0;
     let lastRealProgress = 0;
     let uploadTimeout = null;
 
@@ -224,11 +229,11 @@ class UploadManager {
             clearInterval(fallbackInterval);
             return;
           }
-          if (simulatedProgress < 99) {
-            simulatedProgress += 2 + Math.random() * 3;
-            simulatedProgress = Math.min(99, simulatedProgress);
-            if (simulatedProgress > lastRealProgress) {
-              this._updateState(item.id, UPLOAD_STATES.UPLOADING, simulatedProgress);
+          if (fallbackProgress < 99) {
+            fallbackProgress += 2 + Math.random() * 3;
+            fallbackProgress = Math.min(99, fallbackProgress);
+            if (fallbackProgress > lastRealProgress) {
+              this._updateState(item.id, UPLOAD_STATES.UPLOADING, fallbackProgress);
             }
           }
         }, 500);

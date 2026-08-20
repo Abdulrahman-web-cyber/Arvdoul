@@ -532,10 +532,9 @@ export default function LoginScreen() {
         if (mounted) setRecaptchaVerifier(verifier);
       } catch (error) {
         console.error("reCAPTCHA init error:", error);
-        toast.warning("Security verification failed. Phone login may not work.");
-        if (mounted && process.env.NODE_ENV === 'development') {
-          setRecaptchaVerifier({ verify: () => Promise.resolve('mock'), clear: () => {}, render: () => Promise.resolve() });
-        }
+        toast.error("Security verification unavailable. Phone login is disabled until reCAPTCHA loads.");
+        // No mock verifier: phone authentication MUST NOT proceed without a
+        // real reCAPTCHA challenge. The user can retry or use email/Google.
       }
     };
 

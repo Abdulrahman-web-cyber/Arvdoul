@@ -155,43 +155,35 @@ class AIStudioService {
       return this.promptCache.get(cacheKey);
     }
 
-    // 3. Model Fallback chain
-    const apiKey = import.meta.env?.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-      log.info('VITE_OPENAI_API_KEY not configured, using advanced local fallback model.');
+    // 3. Server-side AI gateway (Cloud Function / proxy). The OpenAI key NEVER
+    // ships to the client. The gateway authenticates the user, enforces per-
+    // user rate limits and budget caps, and holds the provider credentials.
+    const gatewayUrl = import.meta.env?.VITE_AI_GATEWAY_URL;
+    if (!gatewayUrl) {
+      log.warn('VITE_AI_GATEWAY_URL not configured - AI requests require a server-side gateway (functions/ai.js). Using local fallback templates.');
       return null;
     }
 
     const executeRequest = async () => {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(gatewayUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, systemPrompt, capability: 'chat' }),
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
+        throw new Error(`AI gateway error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
+      const content = data.content || data.choices?.[0]?.message?.content || null;
 
-      // Log usage and cost
+      // Server-reported usage/cost is authoritative; local estimate is a fallback.
       const promptTokens = data.usage?.prompt_tokens || 0;
       const completionTokens = data.usage?.completion_tokens || 0;
       const totalTokens = promptTokens + completionTokens;
-      const estimatedCost = totalTokens * this.costPerToken;
+      const estimatedCost = data.usage?.cost || totalTokens * this.costPerToken;
 
       this._enforceLogsLimit();
       this.usageLogs.push({
@@ -199,7 +191,8 @@ class AIStudioService {
         promptTokens,
         completionTokens,
         totalTokens,
-        estimatedCost
+        estimatedCost,
+        gateway: gatewayUrl,
       });
       await this._persistLogs();
 
@@ -469,24 +462,19 @@ class AIStudioService {
       return targetLanguages.map(lang => ({
         code: lang,
         translation: realResponse,
-        source: 'openai-gpt-4o-mini'
+        source: 'ai-gateway'
       }));
     }
 
-    await new Promise(r => setTimeout(r, 650));
-
-    const mockTranslations = {
-      es: `🇪🇸 Español: ${text ? text.slice(0, 100) : 'Descubre las melhores estrategias de criação de conteúdo em Arvdoul.'}`,
-      fr: `🇫🇷 Français: ${text ? text.slice(0, 100) : 'Découvrez les meilleures stratégies de création de contenu sur Arvdoul.'}`,
-      ja: `🇯🇵 日本語: ${text ? text.slice(0, 100) : 'Arvdoulで最も効果的なコンテンツ作成の戦略を見つけましょう。'}`,
-      pt: `🇧🇷 Português: ${text ? text.slice(0, 100) : 'Descubra as melhores estratégias de criação de conteúdo no Arvdoul.'}`,
-      de: `🇩🇪 Deutsch: ${text ? text.slice(0, 100) : 'Entdecke die besten Content-Creation-Strategien auf Arvdoul.'}`
-    };
-
+    // NO fabricated translations. When the AI gateway is unavailable the
+    // result is marked untranslated so the UI can show the original text
+    // honestly instead of presenting invented content as a translation.
     return targetLanguages.map(lang => ({
       code: lang,
-      translation: mockTranslations[lang] || `Localized translation for [${lang.toUpperCase()}]`,
-      source: 'local-fallback-template'
+      translation: null,
+      source: 'unavailable',
+      untranslated: true,
+      original: cleanText,
     }));
   }
 

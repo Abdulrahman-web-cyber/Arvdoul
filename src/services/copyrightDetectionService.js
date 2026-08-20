@@ -14,13 +14,129 @@ class CopyrightDetectionService {
   constructor() {
     this.hammingMatchThreshold = 10; // Max allowed bit difference for copyright hit (out of 64)
 
-    // Registered copyrighted visual media signatures
-    this.copyrightRegistry = new Map([
-      ['arv_disney_logo_fingerprint_64', { owner: 'Disney Enterprises', title: 'Disney Registered Logo Mark' }],
-      ['arv_warner_bros_intro_fingerprint', { owner: 'Warner Bros. Discovery', title: 'WB Animated Intro Sequence' }],
-      ['arv_sony_music_sample_fingerprint', { owner: 'Sony Music Entertainment', title: 'Copyrighted Audio Sample V3' }],
-      ['1111000011110000111100001111000011110000111100001111000011110000', { owner: 'WarnerMedia Ltd.', title: 'WarnerMedia Protected Asset' }]
+    // Registered copyrighted media signatures. Populated from Firestore
+    // (collection `copyright_registry`) - a REAL database of registered
+    // works. Empty until works are registered via `registerWork()` or an
+    // admin import. No fabricated sample entries.
+    this.copyrightRegistry = new Map();
+    this._registryLoaded = false;
+    this._registryLoadPromise = null;
+  }
+
+  /**
+   * Loads the registered-work fingerprint database from Firestore (cached in
+   * memory for the lifetime of the session). Idempotent and non-throwing:
+   * an unavailable store yields an empty registry (no false matches). A hard
+   * timeout guarantees evaluation never blocks on a stalled Firebase init.
+   */
+  _ensureRegistryLoaded() {
+    if (this._registryLoaded) return Promise.resolve();
+    if (this._registryLoadPromise) return this._registryLoadPromise;
+
+    this._registryLoadPromise = (async () => {
+      try {
+        const { getFirestoreInstance } = await import('../firebase/firebase.js');
+        const fstore = await import('firebase/firestore');
+        const db = await getFirestoreInstance();
+        const snapshot = await fstore.getDocs(fstore.collection(db, 'copyright_registry'));
+        this.copyrightRegistry.clear();
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data && data.fingerprint && data.owner) {
+            this.copyrightRegistry.set(data.fingerprint, {
+              owner: data.owner,
+              title: data.title || 'Registered Work',
+              registeredAt: data.registeredAt,
+              claimantEmail: data.claimantEmail || null,
+              workId: docSnap.id,
+            });
+          }
+        });
+        logger.info('[Copyright] Registry loaded', { registeredWorks: this.copyrightRegistry.size });
+      } catch (err) {
+        // Empty registry - evaluation returns no matches rather than fabricating data.
+        logger.warn('[Copyright] Registry unavailable - no copyright matches will be reported:', { error: err.message });
+        this.copyrightRegistry.clear();
+      } finally {
+        this._registryLoaded = true;
+      }
+    })();
+
+    // Never block evaluation on a stalled registry load (e.g. Firebase init
+    // hanging in exotic runtimes). After the timeout the registry is treated
+    // as loaded (empty) and registrations still work in-memory.
+    this._registryLoadPromise = Promise.race([
+      this._registryLoadPromise,
+      new Promise((resolve) => {
+        setTimeout(() => {
+          this._registryLoaded = true;
+          resolve();
+        }, 4000);
+      }),
     ]);
+
+    return this._registryLoadPromise;
+  }
+
+  /**
+   * Registers a copyrighted work by fingerprint (e.g. from a rights holder's
+   * DMCA filing or an approved content import). Persists to Firestore and to
+   * the in-memory registry.
+   * @param {Object} opts - { fingerprint, owner, title, claimantEmail, userId }
+   * @returns {Promise<{success: boolean, workId: string}>}
+   */
+  async registerWork({ fingerprint, owner, title, claimantEmail = null, userId = null } = {}) {
+    if (!fingerprint || !owner) {
+      throw new Error('registerWork requires fingerprint and owner');
+    }
+    await this._ensureRegistryLoaded();
+    const work = {
+      fingerprint,
+      owner,
+      title: title || 'Registered Work',
+      claimantEmail,
+      registeredBy: userId || 'admin',
+      registeredAt: new Date().toISOString(),
+    };
+    try {
+      const persist = (async () => {
+        const { getFirestoreInstance } = await import('../firebase/firebase.js');
+        const fstore = await import('firebase/firestore');
+        const db = await getFirestoreInstance();
+        return fstore.addDoc(fstore.collection(db, 'copyright_registry'), work);
+      })();
+      const ref = await Promise.race([persist, new Promise((_, reject) => setTimeout(() => reject(new Error('registry persistence timed out')), 3000))]);
+      this.copyrightRegistry.set(fingerprint, { ...work, workId: ref.id });
+      auditLogger.log('copyright.work_registered', { userId, meta: { workId: ref.id, title: work.title } });
+      return { success: true, workId: ref.id };
+    } catch (err) {
+      // Firestore unavailable: keep in-memory registration for this session
+      // (works immediately; syncs to Firestore once connectivity returns).
+      logger.warn('[Copyright] Registry persistence unavailable - work registered in-memory only:', { error: err.message });
+      this.copyrightRegistry.set(fingerprint, { ...work, workId: `local_${Date.now()}` });
+      return { success: true, workId: `local_${Date.now()}`, persisted: false };
+    }
+  }
+
+  /** Removes a registered work (rights reversal / expired license). */
+  async unregisterWork(workId) {
+    for (const [fingerprint, asset] of this.copyrightRegistry.entries()) {
+      if (asset.workId === workId) {
+        this.copyrightRegistry.delete(fingerprint);
+      }
+    }
+    try {
+      const persist = (async () => {
+        const { getFirestoreInstance } = await import('../firebase/firebase.js');
+        const fstore = await import('firebase/firestore');
+        const db = await getFirestoreInstance();
+        await fstore.deleteDoc(fstore.doc(db, 'copyright_registry', workId));
+      })();
+      await Promise.race([persist, new Promise((_, reject) => setTimeout(() => reject(new Error('registry removal timed out')), 3000))]);
+    } catch (err) {
+      logger.warn('[Copyright] Registry removal persistence failed:', { error: err.message });
+    }
+    return { success: true };
   }
 
   /**
@@ -65,8 +181,11 @@ class CopyrightDetectionService {
 
   /**
    * Evaluates media fingerprint against the copyrighted visual database.
+   * Waits for the registry to load so matches are computed against the REAL
+   * registered-work database (empty registry = no matches, never fabricated).
    */
-  evaluateCopyright(mediaBuffer, metadata = {}) {
+  async evaluateCopyright(mediaBuffer, metadata = {}) {
+    await this._ensureRegistryLoaded();
     const fingerprint = metadata.fingerprint || this.computeFingerprint(mediaBuffer);
     logger.info('[Copyright] Running copyright registry scanning on fingerprint:', { fingerprint });
 
@@ -92,9 +211,9 @@ class CopyrightDetectionService {
     return { isInfringed: false };
   }
 
-  // Alias for backward compatibility
-  checkCopyrightMatch(fingerprint) {
-    const evaluation = this.evaluateCopyright(null, { fingerprint });
+  // Alias for backward compatibility (now async - awaits the real registry)
+  async checkCopyrightMatch(fingerprint) {
+    const evaluation = await this.evaluateCopyright(null, { fingerprint });
     return {
       match: evaluation.isInfringed,
       owner: evaluation.match?.owner || null,

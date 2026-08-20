@@ -154,7 +154,11 @@ export default function AIStudioScreen() {
     try {
       const res = await aiStudioService.localizeContent({ text: localizeText });
       setTranslations(res);
-      toast.success('Content localized into 5 languages! 🌍');
+      if (res.some((item) => item.untranslated)) {
+        toast.warning('AI translation unavailable - showing original text');
+      } else {
+        toast.success('Content localized into 5 languages! 🌍');
+      }
     } catch {
       toast.error('Localization failed');
     } finally {
@@ -624,13 +628,17 @@ export default function AIStudioScreen() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {translations.map((item, idx) => (
                   <div key={idx} className={`p-4 rounded-2xl border ${isDark ? 'bg-gray-900/80 border-gray-800' : 'bg-white border-gray-200'} shadow-md space-y-2`}>
-                    <p className="text-xs text-gray-200 font-sans leading-relaxed">{item.translation}</p>
-                    <button
-                      onClick={() => handleCopy(item.translation)}
-                      className="text-[11px] text-amber-400 font-semibold flex items-center gap-1 hover:underline pt-1"
-                    >
-                      <Copy className="w-3 h-3" /> Copy translation
-                    </button>
+                    <p className="text-xs text-gray-200 font-sans leading-relaxed">
+                      {item.untranslated ? item.original : item.translation}
+                    </p>
+                    {!item.untranslated && (
+                      <button
+                        onClick={() => handleCopy(item.translation)}
+                        className="text-[11px] text-amber-400 font-semibold flex items-center gap-1 hover:underline pt-1"
+                      >
+                        <Copy className="w-3 h-3" /> Copy translation
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

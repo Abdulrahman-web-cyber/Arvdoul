@@ -558,10 +558,22 @@ describe('Service Layer Tests', () => {
       expect(identical).toBe(0);
     });
 
-    test('screens fingerprints and flags copyright infringement', () => {
-      const res = copyrightDetectionService.evaluateCopyright(null, { fingerprint: 'arv_disney_logo_fingerprint_64' });
-      expect(res.isInfringed).toBe(true);
-      expect(res.action).toBe('BLOCK_AND_FLAG');
+    test('screens fingerprints against the REAL registry (no fabricated works)', async () => {
+      // Empty registry on startup: no fabricated sample works exist.
+      expect(copyrightDetectionService.copyrightRegistry.size).toBe(0);
+      const miss = await copyrightDetectionService.evaluateCopyright(null, { fingerprint: 'arv_disney_logo_fingerprint_64' });
+      expect(miss.isInfringed).toBe(false);
+
+      // A genuinely registered work IS flagged.
+      await copyrightDetectionService.registerWork({
+        fingerprint: 'deadbeefdeadbeef',
+        owner: 'Test Rights Holder',
+        title: 'Registered Test Work',
+      });
+      const hit = await copyrightDetectionService.evaluateCopyright(null, { fingerprint: 'deadbeefdeadbeef' });
+      expect(hit.isInfringed).toBe(true);
+      expect(hit.action).toBe('BLOCK_AND_FLAG');
+      expect(hit.match.owner).toBe('Test Rights Holder');
     });
 
     test('processes automated DMCA takedown filings', () => {

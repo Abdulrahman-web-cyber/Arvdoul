@@ -189,9 +189,8 @@ class RankingService {
       this._setCache(cacheKey, rankings);
       return rankings;
     } catch (error) {
-      logger.error('[RankingService] Failed to get creator rankings:', error);
-      // Return mock data for demo
-      return this._getMockCreatorRankings(category, offset);
+      logger.error('[RankingService] Creator rankings unavailable (no fabricated data):', error);
+      return [];
     }
   }
 
@@ -261,7 +260,7 @@ class RankingService {
       return rankings;
     } catch (error) {
       logger.error('[RankingService] Failed to get wealth rankings:', error);
-      return this._getMockWealthRankings(category, offset);
+      return [];
     }
   }
 
@@ -314,7 +313,7 @@ class RankingService {
       return rankings;
     } catch (error) {
       logger.error('[RankingService] Failed to get reputation rankings:', error);
-      return this._getMockReputationRankings(category, offset);
+      return [];
     }
   }
 
@@ -356,7 +355,7 @@ class RankingService {
       return rankings;
     } catch (error) {
       logger.error('[RankingService] Failed to get community rankings:', error);
-      return this._getMockCommunityRankings(category, offset);
+      return [];
     }
   }
 
@@ -389,7 +388,7 @@ class RankingService {
       return trending;
     } catch (error) {
       logger.error('[RankingService] Failed to get trending content:', error);
-      return this._getMockTrendingContent(type, offset);
+      return [];
     }
   }
 
@@ -441,7 +440,7 @@ class RankingService {
       return rising;
     } catch (error) {
       logger.error('[RankingService] Failed to get rising creators:', error);
-      return this._getMockRisingCreators(offset);
+      return [];
     }
   }
 
@@ -514,101 +513,6 @@ class RankingService {
     return badgeIds
       .map((id) => RANKING_CONFIG.BADGES.find((b) => b.id === id))
       .filter(Boolean);
-  }
-
-  // ==================== MOCK DATA FOR DEMO ====================
-  _getMockCreatorRankings(category, offset) {
-    const mockUsers = [
-      { username: 'creator_one', displayName: 'Creative Creator', avatar: null },
-      { username: 'video_master', displayName: 'Video Master', avatar: null },
-      { username: 'content_king', displayName: 'Content King', avatar: null },
-      { username: 'trending_star', displayName: 'Trending Star', avatar: null },
-      { username: 'viral_vibes', displayName: 'Viral Vibes', avatar: null },
-    ];
-
-    return mockUsers.slice(0, RANKING_CONFIG.PAGE_SIZE).map((user, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      const score = (determinValue * 100) + 1000 - offset * 100;
-      return {
-        rank: offset + i + 1,
-        userId: 'user_' + i,
-        user: { ...user, id: 'user_' + i },
-        score,
-        trend: (determinValue % 10) - 5,
-        badge: this._getTier(determinValue * 100),
-      };
-    });
-  }
-
-  _getMockWealthRankings(category, offset) {
-    return this._getMockCreatorRankings(category, offset).map((r, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        ...r,
-        score: (determinValue * 1000) + 10000 - offset * 1000,
-      };
-    });
-  }
-
-  _getMockReputationRankings(category, offset) {
-    return this._getMockCreatorRankings(category, offset).map((r, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        ...r,
-        score: (determinValue * 10) + 100 - offset * 10,
-        badges: RANKING_CONFIG.BADGES.slice(0, (determinValue % 5)),
-      };
-    });
-  }
-
-  _getMockCommunityRankings(category, offset) {
-    const communities = [
-      { name: 'Tech Enthusiasts', description: 'Technology discussion', icon: '💻' },
-      { name: 'Creative Arts', description: 'Art and design community', icon: '🎨' },
-      { name: 'Gaming Hub', description: 'Gaming community', icon: '🎮' },
-      { name: 'Music Lovers', description: 'Music discussion', icon: '🎵' },
-      { name: 'Sports Central', description: 'Sports fans', icon: '⚽' },
-    ];
-
-    return communities.slice(0, RANKING_CONFIG.PAGE_SIZE).map((community, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        rank: offset + i + 1,
-        communityId: 'community_' + i,
-        community,
-        score: (determinValue * 50) + 500 - offset * 50,
-        trend: (determinValue % 10) - 5,
-        members: (determinValue * 100) + 100,
-      };
-    });
-  }
-
-  _getMockTrendingContent(type, offset) {
-    return Array.from({ length: RANKING_CONFIG.PAGE_SIZE }, (_, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        rank: offset + i + 1,
-        id: type + '_' + i,
-        title: 'Trending ' + type + ' #' + (offset + i + 1),
-        type,
-        views: determinValue * 1000,
-        likes: determinValue * 100,
-        comments: determinValue * 10,
-        createdAt: new Date().toISOString(),
-      };
-    });
-  }
-
-  _getMockRisingCreators(offset) {
-    return this._getMockCreatorRankings('growth', offset).map((r, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        ...r,
-        growthRate: (determinValue * 5) + 50,
-        previousRank: r.rank + (determinValue % 10) - 5,
-        currentRank: r.rank,
-      };
-    });
   }
 
   // ==================== SERVICE MANAGEMENT ====================

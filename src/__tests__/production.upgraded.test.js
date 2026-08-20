@@ -199,13 +199,24 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(dist).toBe(1);
     });
 
-    test('flags licensed media matches within the Hamming threshold distance', () => {
-      const licensedHashMatch = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff (Licensed)
-      const res = copyrightService.checkCopyrightMatch(licensedHashMatch);
+    test('flags licensed media matches within the Hamming threshold distance', async () => {
+      // Register a REAL work first - the registry is never seeded with fakes.
+      await copyrightService.registerWork({
+        fingerprint: '1111000011110000111100001111000011110000111100001111000011110000',
+        owner: 'Test Studio Ltd.',
+        title: 'Licensed Test Asset',
+      });
+
+      const licensedHashMatch = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff
+      const res = await copyrightService.checkCopyrightMatch(licensedHashMatch);
 
       expect(res.match).toBe(true);
-      expect(res.owner).toBe('WarnerMedia Ltd.');
+      expect(res.owner).toBe('Test Studio Ltd.');
       expect(res.action).toBe('FLAG_FOR_ATTRIBUTION_OR_TAKEDOWN');
+
+      // Unregistered fingerprints are NOT flagged (no false positives).
+      const miss = await copyrightService.checkCopyrightMatch('0000000000000000');
+      expect(miss.match).toBe(false);
     });
 
     test('processes and logs valid DMCA Takedown Notice claims', () => {
@@ -224,25 +235,64 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(xml).toContain('enterprise_okta');
     });
 
-    test('validates assertions and parses NameID attributes', async () => {
-      const mockAssertionBase64 = btoa('SAMLAssertion: email="test_jit@corp.com" name="JIT SSO Corporate User" role="admin"');
+    test('fails CLOSED without a server verification endpoint', async () => {
+      // No verifyUrl -> assertions are never trusted client-side.
+      await expect(
+        samlService.validateSAMLAssertion(btoa('SAMLAssertion: email="x@corp.com"'), 'tenant_okta_prod')
+      ).rejects.toThrow('SAML_ASSERTION_VALIDATION_REQUIRES_SERVER');
+    });
+
+    test('validates assertions server-side and parses NameID attributes', async () => {
+      const mockAssertionBase64 = btoa('<Assertion>email="test_jit@corp.com"</Assertion>');
 
       // Stub justInTimeProvisionUser to avoid Firebase initialization hanging
       jest.spyOn(samlService, 'justInTimeProvisionUser').mockImplementation(async (email, displayName, role) => {
         return { uid: 'sso_mock_123', email, displayName, role };
       });
 
-      const res = await samlService.validateSAMLAssertion(mockAssertionBase64, 'tenant_okta_prod');
-      expect(res.success).toBe(true);
-      expect(res.email).toBe('test_jit@corp.com');
-      expect(res.displayName).toBe('JIT SSO Corporate User');
-      expect(res.role).toBe('admin');
+      // The server verification endpoint is the source of truth.
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = jest.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          success: true,
+          email: 'test_jit@corp.com',
+          displayName: 'JIT SSO Corporate User',
+          role: 'admin',
+        }),
+      }));
+
+      try {
+        const res = await samlService.validateSAMLAssertion(mockAssertionBase64, 'tenant_okta_prod', {
+          verifyUrl: 'https://verify.example/saml',
+        });
+        expect(res.success).toBe(true);
+        expect(res.email).toBe('test_jit@corp.com');
+        expect(res.displayName).toBe('JIT SSO Corporate User');
+        expect(res.role).toBe('admin');
+        expect(res.serverVerified).toBe(true);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
 
-    test('assertion validation rejects expired assertion tokens', async () => {
-      const expiredAssertion = btoa('SAMLAssertion: ExpiredAssertionSignatureSpec');
-      await expect(samlService.validateSAMLAssertion(expiredAssertion, 'tenant_okta_prod'))
-        .rejects.toThrow('Assertion validation failed: SAML token lifetime expired');
+    test('assertion validation rejects server-side verification failures', async () => {
+      const expiredAssertion = btoa('<Assertion>ExpiredAssertionSignatureSpec</Assertion>');
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = jest.fn(async () => ({
+        ok: true,
+        json: async () => ({ success: false, error: 'SAML token lifetime expired' }),
+      }));
+
+      try {
+        await expect(
+          samlService.validateSAMLAssertion(expiredAssertion, 'tenant_okta_prod', {
+            verifyUrl: 'https://verify.example/saml',
+          })
+        ).rejects.toThrow('SAML token lifetime expired');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 

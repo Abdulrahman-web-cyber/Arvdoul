@@ -50,8 +50,10 @@ class ChildSafetyService {
   async scanMediaBytes(mediaBuffer, metadata = {}) {
     logger.info('[ChildSafety] Commencing Microsoft PhotoDNA media signature audit.');
 
-    // 1. Calculate dynamic signature to emulate PhotoDNA extraction
-    const extractedSignature = metadata.signature || this._calculateDnaHash(mediaBuffer);
+    // 1. Calculate the real SHA-256 signature (local pre-filter digest).
+    //    External PhotoDNA/Azure verification activates when configured
+    //    (PHOTODNA_API_URL / AZURE_CONTENT_SAFETY_ENDPOINT) - see below.
+    const extractedSignature = metadata.signature || (await this._calculateDnaHash(mediaBuffer));
 
     // 2. Perform local zero-tolerance blacklist check
     if (this.photoDnaDirectory.has(extractedSignature)) {
@@ -114,18 +116,29 @@ class ChildSafetyService {
   }
 
   /**
-   * Generates a deterministic simulated hash for local payloads (MD5 equivalent)
+   * Computes a REAL SHA-256 digest of the payload (FIPS 180-4) as the local
+   * pre-filter signature before external CSAM hash-database checks. Falls back
+   * to a synchronous FNV-1a 32-bit digest ONLY when WebCrypto is unavailable.
    * @private
    */
-  _calculateDnaHash(buffer) {
+  async _calculateDnaHash(buffer) {
     if (!buffer) return 'clean_signature_default';
-    let hash = 0;
     const str = typeof buffer === 'string' ? buffer : String(buffer);
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash = hash & hash;
+    try {
+      if (typeof crypto !== 'undefined' && crypto.subtle) {
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (err) {
+      logger.warn('[ChildSafety] WebCrypto unavailable, using FNV-1a fallback digest:', { error: err.message });
     }
-    return Math.abs(hash).toString(16).padStart(32, '0').slice(0, 32);
+    // FNV-1a 32-bit (non-cryptographic fallback for exotic runtimes only)
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      hash ^= str.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
   }
 
   /**
