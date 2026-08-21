@@ -181,7 +181,26 @@ const MessageBubble = React.memo(({
                 src={media.url}
                 controls
                 className="w-64"
+                preload="metadata"
               />
+            )}
+
+            {/* Voice messages: real audio player with metadata */}
+            {type === 'voice' && media?.url && (
+              <div className="flex items-center gap-2">
+                <audio
+                  src={media.url}
+                  controls
+                  className="w-56 h-10"
+                  preload="metadata"
+                  aria-label="Voice message"
+                />
+                {media.durationSec ? (
+                  <span className="text-[10px] opacity-70 shrink-0">
+                    {media.durationSec}s
+                  </span>
+                ) : null}
+              </div>
             )}
 
             {type === 'file' && media && (

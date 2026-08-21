@@ -553,7 +553,7 @@ export default function AIStudioScreen() {
                 disabled={loading}
                 className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><TrendingUp className="w-5 h-5" /> Simulate Viral Retention & Sentiment</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><TrendingUp className="w-5 h-5" /> Analyze Viral Retention & Sentiment</>}
               </button>
             </div>
 

@@ -102,6 +102,53 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 15. Messaging & engagement screens: real systems (mock-free)
+
+**ChatScreen REBUILT — was 100% simulation**
+- The old screen rendered hardcoded `INITIAL_MESSAGES` ("Hey! How are you
+  doing?", Unsplash media), a simulated "Isabella" auto-responder, a fake
+  voice-note player (setInterval progress), fake polls and reactions, and
+  NO service wiring at all.
+- Now: real conversation by :conversationId (title/participants/type),
+  realtime subscription (new messages, typing indicators, presence),
+  send text (E2EE handled by the service), send media + VOICE, reactions
+  via reactToMessage, read receipts (markMessageAsRead on view), voice
+  playback via real <audio> with duration metadata, optimistic send with
+  rollback, loading/error/empty states, conversation-info navigation.
+
+**Voice messages — real bug fixed**
+- `MessageInput` used `mediaRecorder.ondata` which NEVER fires - voice
+  messages captured zero audio chunks and sent empty blobs. Fixed to
+  `ondataavailable` with a size guard.
+- `MessageBubble` now renders `voice` type with a real audio player +
+  duration metadata (previously only 'audio' was handled).
+
+**CommentsDrawer — rebuilt on the real comment system with replies**
+- The old version wrote raw docs to `posts/{id}/comments` with a random doc
+  id - the security rules DENY that (docId must be the uid) and it bypassed
+  moderation, rate limits, notifications and XP entirely.
+- Now: commentService (flat `comments` collection) with realtime
+  subscription, REPLY TO ANY COMMENT (threaded, depth-limited, reply
+  notifications), like/reply actions, composer with reply target UI,
+  accessible dialog semantics.
+
+**PostCard — likes & reactions wired to the real service**
+- Old: raw `updateDoc` + `arrayUnion` on the post doc (hot-path array
+  append, duplicates on re-reaction, no toggle, no counters, no
+  notifications/XP).
+- Now: firestoreService.likePost (transaction + sharded counters + author
+  notification + like_received XP) with optimistic UI + rollback; reactions
+  via addReaction (validates emoji, toggles, maintains stats.reactions
+  counters); comment preview loads from the real commentService.
+
+**AI Studio label honesty**: "Simulate Viral Retention" -> "Analyze Viral
+Retention & Sentiment" (it calls the real AI gateway; the old label implied
+fabrication).
+
+**Tests**: chatScreen.test.jsx (6 tests - no-mock-content, real send, read
+receipts, empty + loading states). 31 suites / 412 tests green, lint 0
+errors, build OK.
+
 ### 14. Social systems completion: comments, follow, friends, gifts, likes
 
 The five named systems were already structurally solid (transactions, sharded
