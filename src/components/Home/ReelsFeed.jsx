@@ -130,20 +130,24 @@ if (scrollTop + clientHeight >= scrollHeight - 50) loadMoreReels();
 };
 
 const handleDownload = async (url, filename) => {
-try {
-const res = await fetch(url);
-const blob = await res.blob();
-const link = document.createElement("a");
-link.href = window.URL.createObjectURL(blob);
-link.download = filename || "reel.mp4";
-document.body.appendChild(link);
-link.click();
-link.remove();
-toast.success("Download started!");
-} catch (err) {
-console.error(err);
-toast.error("Failed to download");
-}
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = String(filename || "reel.mp4").replace(/[^a-zA-Z0-9._-]/g, "_");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Release the blob URL after the browser starts the download
+    setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    toast.success("Download started!");
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to download");
+  }
 };
 
 return (

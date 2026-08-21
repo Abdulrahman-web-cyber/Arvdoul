@@ -23,6 +23,11 @@ export const SyncProgress = ({
   return (
     <div
       id={id}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      aria-label={`Sync progress ${percent}%`}
       className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-white shadow-md space-y-3"
     >
       <div className="flex items-center justify-between text-xs">

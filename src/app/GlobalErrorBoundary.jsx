@@ -101,7 +101,19 @@ class GlobalErrorBoundaryBase extends Component {
       componentStack: this.state.errorInfo?.componentStack
     };
 
-    await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    } catch {
+      // Clipboard API unavailable (insecure context/webview) - manual fallback
+      const textarea = document.createElement("textarea");
+      textarea.value = JSON.stringify(data, null, 2);
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
     this.setState({ copied: true });
     setTimeout(() => this.setState({ copied: false }), 1500);
   };

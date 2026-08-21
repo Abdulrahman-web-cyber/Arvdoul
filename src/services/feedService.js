@@ -13,7 +13,6 @@ import { countersManager } from '../utils/CountersManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
-import { INITIAL_SEED_POSTS } from '../data/seedPosts.js';
 
 const FEED_CONFIG = {
   FEED_TYPES: {
@@ -541,7 +540,7 @@ class UltimateFeedService {
   }
 
   async _getFallbackSimpleFeed(userId, options, sourceName) {
-    if (this.offlineMode) return INITIAL_SEED_POSTS.slice(0, options.limit || 20);
+    if (this.offlineMode) return []; // honest empty feed - no fabricated posts
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20, lastDoc } = options;
@@ -563,11 +562,11 @@ class UltimateFeedService {
         });
       });
       if (posts.length === 0) {
-        return INITIAL_SEED_POSTS.slice(0, limit);
+        return []; // honest empty feed
       }
       return posts;
     } catch (error) {
-      return INITIAL_SEED_POSTS.slice(0, options.limit || 20);
+      return []; // honest empty feed
     }
   }
 
@@ -1584,7 +1583,7 @@ class UltimateFeedService {
   }
 
   async _getFallbackFeed(userId, options = {}) {
-    if (this.offlineMode) return INITIAL_SEED_POSTS.slice(0, options.limit || 20);
+    if (this.offlineMode) return []; // honest empty feed - no fabricated posts
     try {
       await this._ensureInitialized();
       const { limit = 20 } = options;
@@ -1594,14 +1593,14 @@ class UltimateFeedService {
       const snapshot = await getDocs(q);
       const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fallback', createdAt: doc.data().createdAt?.toDate?.() || new Date() }));
       if (posts.length === 0) {
-        return INITIAL_SEED_POSTS.slice(0, limit);
+        return []; // honest empty feed
       }
       await Promise.all(posts.map(p => countersManager.apply({
         data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
       }).catch(() => p)));
       return posts;
     } catch {
-      return INITIAL_SEED_POSTS.slice(0, options.limit || 20);
+      return []; // honest empty feed
     }
   }
 

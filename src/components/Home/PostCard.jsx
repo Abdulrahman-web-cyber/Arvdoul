@@ -1,5 +1,6 @@
 // src/components/Home/PostCard.jsx
 import PropTypes from "prop-types";
+import { toast } from "sonner";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
@@ -109,18 +110,33 @@ const handleReaction = async (emoji) => {
 const handleViewAllComments = () => setShowCommentsModal(true);
 
 // ---------------- Share ----------------
-const handleShare = () => {
-const postUrl = `${window.location.origin}/post/${post.id}`;
-if (navigator.share) {
-navigator.share({
-title: post.displayName,
-text: post.caption,
-url: postUrl,
-});
-} else {
-navigator.clipboard.writeText(postUrl);
-alert("Post link copied!");
-}
+const handleShare = async () => {
+  const postUrl = `${window.location.origin}/post/${post.id}`;
+  try {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      await navigator.share({ title: post.displayName, text: post.caption, url: postUrl });
+      return;
+    }
+    // Fallback: copy to clipboard (guarded - insecure contexts throw)
+    await navigator.clipboard.writeText(postUrl);
+    toast.success("Post link copied!");
+  } catch (err) {
+    if (err?.name === "AbortError") return; // user cancelled native share
+    // Last-resort fallback: manual copy via hidden input
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = postUrl;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      toast.success("Post link copied!");
+    } catch {
+      toast.error("Could not copy link");
+    }
+  }
 };
 
 return (

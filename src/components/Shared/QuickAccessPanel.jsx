@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo, memo, useEffect } from "react";
+import { toast } from "sonner";
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   ChevronUp,
@@ -904,19 +905,18 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     action();
   }, [playSound]);
 
-  const copyProfileLink = useCallback(() => {
+  const copyProfileLink = useCallback(async () => {
     const username = currentUser?.username;
     if (username) {
       const link = `${window.location.origin}/profile/${username}`;
-      navigator.clipboard.writeText(link).then(() => {
+      try {
+        await navigator.clipboard.writeText(link);
         track("Profile_Link_Copied");
-        // Show success toast
-        if (window.toast) {
-          window.toast.success("Profile link copied!");
-        }
-      }).catch(err => {
+        toast.success("Profile link copied!");
+      } catch (err) {
         console.error("Failed to copy:", err);
-      });
+        toast.error("Could not copy link");
+      }
     }
   }, [currentUser?.username, track]);
 

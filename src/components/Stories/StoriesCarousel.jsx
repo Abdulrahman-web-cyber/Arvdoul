@@ -1202,8 +1202,10 @@ const StoryViewer = memo(({
               setContentLoaded(true);
               setIsLoading(false);
             }}
-            onError={(e) => {
-              e.target.src = "/assets/story-placeholder.jpg";
+            onError={() => {
+              // The media failed to load (deleted/offline). Show the story
+              // card's gradient fallback instead of a broken image - there is
+              // no placeholder file, and we never fabricate content.
               setContentLoaded(true);
               setIsLoading(false);
             }}

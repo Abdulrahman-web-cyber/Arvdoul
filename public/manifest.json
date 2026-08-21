@@ -3,8 +3,8 @@
   "short_name": "Arvdoul",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0B0F17",
+  "theme_color": "#0B0F17",
   "icons": [
     {
       "src": "./logo/logo-light.png",
@@ -23,5 +23,16 @@
       "purpose": "maskable"
     }
   ],
-  "description": "Arvdoul \u2014 the next-generation social platform"
+  "description": "Arvdoul \u2014 the next-generation social platform",
+  "id": "arvdoul",
+  "categories": [
+    "social",
+    "entertainment"
+  ],
+  "lang": "en",
+  "orientation": "portrait-primary",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ]
 }

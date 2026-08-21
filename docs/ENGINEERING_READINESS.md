@@ -102,6 +102,62 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 17. 20-item hardening pass: mock removal, real bugs, honest utilities
+
+**MOCK DATA REMOVED (the last of it)**
+- feedService's offlineMode + catch blocks returned `INITIAL_SEED_POSTS`
+  (fabricated "Welcome to ARVDOUL!" posts) - replaced with honest empty
+  feeds. **Deleted `src/data/seedPosts.js` entirely** (193 lines of fake
+  posts) - it was only imported by feedService.
+
+**REAL BUGS FIXED**
+- `QuickAccessPanel`: `window.toast.success` was dead code (window.toast
+  doesn't exist) - the "Profile link copied!" toast never appeared. Now
+  uses sonner's real toast with error handling + async callback.
+- `PostCard.handleShare`: unguarded `navigator.clipboard.writeText` +
+  `alert()` - now a robust cascade (native share -> clipboard -> hidden
+  textarea fallback) with toasts, AbortError handling, no alert.
+- `GlobalErrorBoundary`: unguarded `navigator.clipboard.writeText` - now
+  falls back to a hidden-textarea copy when the API is unavailable.
+- `StoriesCarousel`: onError set src to `/assets/story-placeholder.jpg`
+  which DOES NOT EXIST (broken image icon) - removed; graceful gradient
+  state instead.
+- `useDoubleTap`: wired BOTH onClick AND onTouchEnd - on mobile a SINGLE
+  tap fired the callback twice (i.e. one tap triggered the "double tap"
+  like). Fixed to onClick-only with pair reset semantics + regression tests.
+- `src/firebase/emulators.js`: imported `./core.js` and `./config.js`
+  which DO NOT EXIST and was never imported anywhere - dead file deleted.
+- `ReelsFeed.handleDownload`: now validates the response, revokes the blob
+  URL after download, and sanitizes the filename.
+
+**HONEST UTILITIES (stub removal)**
+- `videoUtils.detectChapters` was an explicit stub (`// Placeholder -
+  would use AI analysis`) returning [] - now generates real duration-based
+  chapters (max 10, never fabricates when duration unknown).
+- `videoUtils.validateVideoFile` destructured maxDuration/minDuration but
+  never used them - now performs REAL duration validation via the browser
+  video element (async).
+- `videoUtils.compressVideo`/`extractAudio`/`generateTranscript` comments
+  still said "(placeholder)" while the implementations are real - honest
+  comments now.
+- `PerformanceMonitor`: logged fake metrics (fps: 60, memory: 0) every 30s
+  - now measures REAL navigation timing, resource transfer size, and
+  network info into metricsService (Prometheus-exportable).
+
+**POLISH**
+- `manifest.json`: added id, brand theme/background colors, categories,
+  lang, display_override.
+- `useIntersectionObserver`: options stabilized via ref (no re-subscribe
+  on every render).
+- `SyncProgress`: role="progressbar" + aria-valuenow for screen readers.
+- Verified already-correct: crashReportingService (real Sentry-style
+  dispatch with PII redaction + failure safety), SearchBar (aria-label on
+  clear), TopAppBar (aria labels), CommentsModal (real firestore).
+
+**Tests**: videoUtils.test.js (7 - chapters, strategy, no-fabrication) +
+useDoubleTap.test.js (4 - single-tap, pair, delay, consecutive pairs).
+34 suites / 426 tests green, lint 0 errors, build OK, coverage 16.56%.
+
 ### 16. Intro "Temporary Glitch" — ACTUAL root causes found and eliminated
 
 The previous i18n fix removed one crash source, but the glitch persisted. This
