@@ -940,15 +940,25 @@ class MonetizationService {
   async sendGift(senderId, postId, giftType, idempotencyKey = null) {
     await this._ensureInitialized();
     const key = idempotencyKey || generateIdempotencyKey();
+
+    // Validate the gift type FIRST - unknown gifts are rejected, never
+    // silently charged a default cost.
+    const giftConfig = (this.config.GIFTS || DEFAULT_CONFIG.GIFTS).find(g => g.type === giftType);
+    if (!giftConfig) {
+      throw new Error(`Unknown gift type: ${giftType}`);
+    }
+    const cost = giftConfig.value;
+
     try {
       const result = await retryOperation(() =>
         this.cfSendGift({ senderId, postId, giftType, idempotencyKey: key })
       );
+      // Social loop: notify the post author + award gift_received XP
+      // (best-effort, never breaks the gift).
+      this._afterGiftSent(senderId, postId, giftType, cost).catch(() => {});
       return result.data;
     } catch (err) {
       log.warn('Cloud Function sendGift failed, using atomic Firestore transaction fallback', err);
-      const giftConfig = (this.config.GIFTS || DEFAULT_CONFIG.GIFTS).find(g => g.type === giftType);
-      const cost = giftConfig ? giftConfig.value : 10;
       
       return await runTransaction(this.db, async (tx) => {
         const senderRef = doc(this.db, 'users', senderId);
@@ -998,6 +1008,28 @@ class MonetizationService {
         
         return { success: true, giftType, cost };
       });
+    }
+  }
+
+  /**
+   * Best-effort social loop after a gift is sent: notify the post author and
+   * award gift_received XP. Never throws into the gift path.
+   * @private
+   */
+  async _afterGiftSent(senderId, postId, giftType, cost) {
+    try {
+      const { getDoc, doc } = await import('firebase/firestore');
+      const postSnap = await getDoc(doc(this.db, 'posts', postId));
+      const authorId = postSnap.exists() ? (postSnap.data().authorId || postSnap.data().userId) : null;
+      if (!authorId || authorId === senderId) return;
+
+      const { getNotificationsService } = await import('./notificationsService.js');
+      await getNotificationsService().createGiftNotification(senderId, authorId, postId, giftType, cost);
+
+      const { levelSystemService } = await import('./levelSystemService.js');
+      await levelSystemService.awardExperience({ userId: authorId, action: 'gift_received', source: postId });
+    } catch (err) {
+      log.debug('[Gift] Post-gift notification/XP skipped:', { error: err.message });
     }
   }
 

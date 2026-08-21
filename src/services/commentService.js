@@ -251,6 +251,14 @@ class UltimateCommentService {
         }, 1000);
       }
 
+      // Social loop: notify the post author (top-level comments only - replies
+      // have their own _notifyReply) + award comment_created XP to the author.
+      // Both are best-effort and never break the comment write.
+      if (!options.parentId) {
+        this._notifyPostAuthor(postId, userId, commentId).catch(() => {});
+      }
+      this._awardCommentXp(userId, commentId).catch(() => {});
+
       this._invalidatePostCache(postId);
 
       auditLogger.log('content.comment', { userId, meta: { commentId, postId, parentId: options.parentId || null } });
@@ -1167,6 +1175,33 @@ class UltimateCommentService {
 
     } catch (error) {
       // Mention processing failed
+    }
+  }
+
+  /** Notifies the post author when a top-level comment is created. */
+  async _notifyPostAuthor(postId, userId, commentId) {
+    try {
+      await this._ensureInitialized();
+      const postSnap = await this.firestoreMethods.getDoc(
+        this.firestoreMethods.doc(this.firestore, 'posts', postId)
+      );
+      const authorId = postSnap.exists() ? (postSnap.data().authorId || postSnap.data().userId) : null;
+      if (!authorId || authorId === userId) return;
+
+      const { getNotificationsService } = await import('./notificationsService.js');
+      await getNotificationsService().createCommentNotification(postId, userId, authorId, commentId);
+    } catch (err) {
+      logger.warn('Post-author comment notification failed', { error: err.message });
+    }
+  }
+
+  /** Best-effort comment_created XP award for the commenter. */
+  async _awardCommentXp(userId, commentId) {
+    try {
+      const { levelSystemService } = await import('./levelSystemService.js');
+      await levelSystemService.awardExperience({ userId, action: 'comment_created', source: commentId });
+    } catch (err) {
+      logger.debug('Comment XP award skipped', { error: err.message });
     }
   }
 

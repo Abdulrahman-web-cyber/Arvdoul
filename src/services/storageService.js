@@ -126,8 +126,10 @@ class StorageLogger {
       ...data
     };
 
-    // Console output (development only)
-    if (import.meta.env.DEV) {
+    // Console output (development only) - optional-chained so the module
+    // never crashes in runtimes without import.meta.env (tests, SSR, exotic
+    // bundlers).
+    if (import.meta.env?.DEV) {
       const colors = {
         DEBUG: 'color: #666;',
         INFO: 'color: #4CAF50;',
@@ -2060,8 +2062,9 @@ export {
 };
 
 // ==================== AUTOMATIC INITIALIZATION ====================
-// Auto-initialize in production
-if (import.meta.env.PROD) {
+// Auto-initialize in production (optional-chained: never crash when
+// import.meta.env is absent, e.g. tests/SSR).
+if (import.meta.env?.PROD) {
   setTimeout(() => {
     getStorageService().initialize().catch(error => {
 //       logger.warn('Storage service auto-initialization failed:', error.message);

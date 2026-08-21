@@ -102,6 +102,30 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 14. Social systems completion: comments, follow, friends, gifts, likes
+
+The five named systems were already structurally solid (transactions, sharded
+counters, idempotency, rate limits) but were missing their SOCIAL LOOPS:
+
+| Gap found | Fix |
+|---|---|
+| 🔴 `likePost` never notified the post author (createLikeNotification existed but was NEVER called) | likePost now fires the author notification + awards `like_received` XP - only on NEW likes (duplicate likes stay silent), both best-effort |
+| 🔴 `sendGift` accepted ANY gift type and silently charged a default 10 coins | Unknown gift types now REJECT (`Unknown gift type: X`); valid gifts fire a `GIFT_RECEIVED` notification (new createGiftNotification helper) + award `gift_received` XP to the author |
+| 🔴 `sendFriendRequest` never notified the recipient (FRIEND_REQUEST type existed, unused) | New createFriendRequestNotification helper + wiring; ALSO short-circuits when the users are already friends (new `areFriends`) |
+| ❌ No cancel friend request | New `cancelFriendRequest(from, to)` - pending -> cancelled, sender-only, atomic |
+| ❌ No friendship check API | New `areFriends(a, b)` - mutual-follow check, exported from facade |
+| 🔴 `createComment` only notified on replies - the POST AUTHOR never learned about top-level comments | New `_notifyPostAuthor` fires createCommentNotification; commenter earns `comment_created` XP |
+| 🔴 Level system existed but nothing except daily-login awarded XP | Wired real awards: like_received (likes), follow_received (follows), gift_received (gifts), comment_created (comments), post_created (posts) - all best-effort, never break the primary op, all idempotent + daily-capped |
+| 🔴 Latent crash: `storageService` accessed `import.meta.env.DEV` / `import.meta.env.PROD` unguarded - throws in any runtime without import.meta.env (tests/SSR/exotic bundlers) | Optional-chained both; the social-systems test suite caught it |
+
+**Tests**: new `socialSystems.test.js` (10 tests, hermetic fake-Firestore):
+like notification+XP on new like only; gift type validation + notification+XP;
+areFriends mutual-edge semantics; friend-request short-circuit + notification;
+cancel (success, non-sender rejection); follow XP (new follow only).
+
+**Verification: 30 suites / 406 tests green, lint 0 errors, build OK,
+coverage 14.51% -> 16.49% statements.**
+
 ### 13. Rules, indexes & functions completion (deployment infrastructure)
 
 **FIRESTORE RULES — every client-written collection now covered (105 match blocks)**
