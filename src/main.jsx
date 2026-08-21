@@ -4,6 +4,31 @@ import { createRoot } from 'react-dom/client';
 import AppBootstrap from './app/AppBootstrap.jsx';
 import './styles/tailwind.css';
 
+// ---------------------------------------------------------------------------
+// CRITICAL POLYFILL: window.matchMedia
+// Framer Motion's useReducedMotion, ThemeProvider and useMediaQuery call
+// window.matchMedia unconditionally. Some embedded webviews / preview iframes
+// do not implement it - which previously crashed the Intro screen into its
+// error boundary ("Temporary Glitch") on every launch. The index.html inline
+// script covers first paint; this covers HMR / any import-order edge case.
+// ---------------------------------------------------------------------------
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  window.matchMedia = function (query) {
+    return {
+      matches: false,
+      media: query || '',
+      onchange: null,
+      addListener: function () {},
+      removeListener: function () {},
+      addEventListener: function () {},
+      removeEventListener: function () {},
+      dispatchEvent: function () {
+        return false;
+      },
+    };
+  };
+}
+
 // Initialize app
 const rootElement = document.getElementById('root');
 if (!rootElement) {

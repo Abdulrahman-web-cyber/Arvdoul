@@ -120,7 +120,8 @@
     "createAccount": "Criar conta",
     "signIn": "Entrar",
     "footnote": "Plano gratuito disponível • Sem cartão de crédito",
-    "srWelcome": "Bem-vindo ao Arvdoul. Conecte-se com amigos, construa comunidades e crie conteúdo incrível."
+    "srWelcome": "Bem-vindo ao Arvdoul. Conecte-se com amigos, construa comunidades e crie conteúdo incrível.",
+    "continueToApp": "Continuar para o app"
   },
   "settings": {
     "title": "Configurações e preferências",

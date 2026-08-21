@@ -246,12 +246,35 @@ const getDefaultTheme = () => ({
 // ==================== PROVIDER ====================
 
 /**
+ * Safe localStorage access - sandboxed iframes (previews, embedded webviews)
+ * can throw SecurityError on ANY storage access. A crash here would unmount
+ * the entire app (ThemeProvider has no error boundary above it), which used
+ * to present as a blank screen or the intro glitch. Never throw on storage.
+ */
+function safeStorageGet(key) {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeStorageSet(key, value) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage blocked - theme just won't persist */
+  }
+}
+
+/**
  * ThemeProvider - World-class theme provider with ARVDOUL design system
  */
 export const ThemeProvider = memo(({ children }) => {
   const [theme, setThemeState] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('theme');
+      const saved = safeStorageGet('theme');
       if (saved === 'light' || saved === 'dark' || saved === 'system') {
         return saved;
       }
@@ -267,9 +290,10 @@ export const ThemeProvider = memo(({ children }) => {
     setMounted(true);
   }, []);
 
-  // Detect system theme changes
+  // Detect system theme changes (guarded: matchMedia may be missing in
+  // embedded webviews - the global polyfill covers it, this is belt+braces)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
@@ -302,7 +326,7 @@ export const ThemeProvider = memo(({ children }) => {
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(resolvedTheme);
-    localStorage.setItem('theme', theme);
+    safeStorageSet('theme', theme);
     
     // Apply CSS custom properties for easy access
     root.style.setProperty('--arvdoul-primary', ARVDOUL_COLORS.primary.purple);

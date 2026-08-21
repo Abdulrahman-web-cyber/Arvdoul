@@ -102,6 +102,46 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 16. Intro "Temporary Glitch" — ACTUAL root causes found and eliminated
+
+The previous i18n fix removed one crash source, but the glitch persisted. This
+pass found and fixed the REAL remaining causes:
+
+**🔴 Cause 1 — `window.matchMedia` unguarded (the intro killer)**
+- IntroScreen's `resolvedTheme` memo called `window.matchMedia(...)` with no
+  guard - throws in embedded webviews / preview iframes that lack the API,
+  which crashed the intro into its boundary on EVERY launch. framer-motion's
+  `useReducedMotion` and ThemeProvider's system-theme effect had the same
+  hidden assumption.
+- Fixes:
+  - **Global polyfill** in index.html (inline, runs before the bundle) AND
+    main.jsx: `window.matchMedia` is always defined as a safe no-op.
+  - **`useSafeReducedMotion`** hook in IntroScreen: same semantics as
+    framer-motion's hook but implemented on the media query directly with
+    feature detection - no dependency on framer-motion's internal call.
+  - ThemeProvider system-theme effect guarded.
+
+**🔴 Cause 2 — ThemeProvider localStorage crash (whole-app unmount risk)**
+- `useState(() => localStorage.getItem('theme'))` ran UNGUARDED in the lazy
+  initializer. Sandboxed iframes throw SecurityError on ANY storage access;
+  with no error boundary above ThemeProvider, the ENTIRE app unmounted to a
+  blank screen (or, depending on timing, surfaced as the intro glitch).
+- Fix: `safeStorageGet` / `safeStorageSet` wrappers - storage is now fully
+  optional (theme simply won't persist when blocked).
+
+**🛡️ Intro error boundary upgraded (no more dead-ends)**
+- **Diagnostics**: the real error message + stack are persisted to
+  `arvdoul_intro_error` in localStorage so the actual cause is triageable
+  instead of guessing at "Temporary Glitch".
+- **Auto-recovery**: the FIRST crash auto-retries once after 1.2s (transient
+  issues resolve themselves); only a second consecutive crash shows the UI.
+- **Escape hatch**: "Continue to App" button navigates to /home so the user
+  is never stuck on the intro.
+
+**Tests**: `introRobust.test.jsx` (4) - renders with throwing localStorage,
+with matchMedia MISSING, with a no-op polyfill, and the escape-hatch key
+resolves. 32 suites / 416 tests green, lint 0 errors, build OK.
+
 ### 15. Messaging & engagement screens: real systems (mock-free)
 
 **ChatScreen REBUILT — was 100% simulation**

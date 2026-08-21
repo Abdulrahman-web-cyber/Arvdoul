@@ -120,7 +120,8 @@
     "createAccount": "Create Account",
     "signIn": "Sign In",
     "footnote": "Free forever plan available • No credit card required",
-    "srWelcome": "Welcome to Arvdoul. Connect with friends, build communities, and create amazing content."
+    "srWelcome": "Welcome to Arvdoul. Connect with friends, build communities, and create amazing content.",
+    "continueToApp": "Continue to App"
   },
   "settings": {
     "title": "Settings & Preferences",

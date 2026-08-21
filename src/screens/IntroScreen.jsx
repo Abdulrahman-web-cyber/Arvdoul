@@ -33,10 +33,47 @@ import { useTranslation } from "react-i18next";
 import ThemeToggle from "@components/Shared/ThemeToggle";
 import {
   motion,
-  useReducedMotion,
   AnimatePresence,
 } from "framer-motion";
 import { withLanguage } from "../i18n/index.js";
+
+/* -------------------- Safe reduced-motion hook --------------------
+ * Equivalent semantics to framer-motion's useReducedMotion (respects the
+ * OS prefers-reduced-motion setting) but implemented WITHOUT relying on
+ * framer-motion's internal window.matchMedia call - a missing matchMedia
+ * in embedded webviews used to crash the intro into its error boundary
+ * ("Temporary Glitch"). The global polyfill in index.html/main.jsx covers
+ * the API; this hook is the component-level belt-and-braces guard.
+ */
+function useSafeReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+        setReduced(false);
+        return undefined;
+      }
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      setReduced(Boolean(mq.matches));
+      const onChange = (e) => setReduced(Boolean(e.matches));
+      if (typeof mq.addEventListener === "function") {
+        mq.addEventListener("change", onChange);
+        return () => mq.removeEventListener("change", onChange);
+      }
+      if (typeof mq.addListener === "function") {
+        mq.addListener(onChange);
+        return () => mq.removeListener(onChange);
+      }
+      return undefined;
+    } catch {
+      setReduced(false);
+      return undefined;
+    }
+  }, []);
+
+  return reduced;
+}
 
 /* -------------------- Ultra Smooth Debounce -------------------- */
 const useDebounce = (callback, delay = 12) => {
@@ -61,14 +98,47 @@ const useDebounce = (callback, delay = 12) => {
 class IntroErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, autoRecovered: false };
+    this._autoRetryTimer = null;
   }
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
   }
   componentDidCatch(error, errorInfo) {
     console.error("[Arvdoul Intro Error]:", error, errorInfo);
+    // Diagnostics: persist the real cause so it can be triaged instead of
+    // guessing at "Temporary Glitch". Never stores user data - message+stack only.
+    try {
+      localStorage.setItem(
+        "arvdoul_intro_error",
+        JSON.stringify({
+          message: error?.message || "unknown",
+          stack: error?.stack ? String(error.stack).slice(0, 2000) : null,
+          at: new Date().toISOString(),
+        })
+      );
+    } catch {
+      /* storage may be blocked - ignore */
+    }
+
+    // Self-healing: the FIRST crash auto-retries once after a short delay
+    // (transient issues - e.g. fonts, matchMedia timing - resolve themselves).
+    if (!this.state.autoRecovered) {
+      this._autoRetryTimer = setTimeout(() => {
+        this.setState({ hasError: false, error: null, autoRecovered: true });
+      }, 1200);
+    }
   }
+  componentWillUnmount() {
+    if (this._autoRetryTimer) clearTimeout(this._autoRetryTimer);
+  }
+  handleContinue = () => {
+    try {
+      window.location.href = "/home";
+    } catch {
+      /* noop */
+    }
+  };
   render() {
     const { t } = this.props;
     if (this.state.hasError) {
@@ -87,12 +157,20 @@ class IntroErrorBoundary extends Component {
             <p className="text-gray-600 dark:text-gray-300 text-sm mb-6">
               {t("intro.glitchText")}
             </p>
-            <button
-              onClick={() => this.setState({ hasError: false, error: null })}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:shadow-lg transition-all duration-300 min-h-[44px]"
-            >
-              {t("intro.retry")}
-            </button>
+            <div className="flex flex-col gap-2.5 sm:flex-row justify-center">
+              <button
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:shadow-lg transition-all duration-300 min-h-[44px]"
+              >
+                {t("intro.retry")}
+              </button>
+              <button
+                onClick={this.handleContinue}
+                className="px-6 py-2.5 rounded-xl border border-white/20 text-gray-700 dark:text-gray-200 font-medium hover:bg-white/10 transition-all duration-300 min-h-[44px]"
+              >
+                {t("intro.continueToApp") || "Continue to App"}
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -107,7 +185,7 @@ const BackgroundParticles = memo(({ theme }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const particlesRef = useRef([]);
-  const prefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = useSafeReducedMotion();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -335,7 +413,7 @@ const FeatureCard = memo(({ emoji, title, description, index, theme, isActive, o
 /* -------------------- Perfect Button Component (accessible) -------------------- */
 const ActionButton = memo(({ children, onClick, variant = "primary", theme, className = "", disabled = false }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = useSafeReducedMotion();
 
   const baseStyles =
     "relative px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-semibold transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
@@ -397,9 +475,13 @@ function IntroScreen() {
   const [scrollProgress, setScrollProgress] = useState(0);
 
   const resolvedTheme = useMemo(() => {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
     if (theme === "system") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      try {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      } catch {
+        return "light";
+      }
     }
     return theme || "light";
   }, [theme]);
