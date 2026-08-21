@@ -35,7 +35,9 @@ class CounterReconciliationService {
       if (Array.isArray(saved)) {
         this.auditLogs = saved;
       }
-    } catch (_) {}
+    } catch (err) {
+      logger.warn('[CounterReconciliation] Log persistence failed:', { error: err.message });
+    }
   }
 
   /**

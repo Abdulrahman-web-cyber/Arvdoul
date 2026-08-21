@@ -43,7 +43,6 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
-import { INITIAL_VIDEOS } from '../data/videoData.js';
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -713,7 +712,8 @@ class UltimateVideoService {
     videos = this._injectFreshContent(videos, recent, limit);
     let final = videos.slice(0, limit);
     if (!final || final.length === 0) {
-      final = INITIAL_VIDEOS;
+      // Honest empty feed - no fabricated videos
+      final = [];
     }
     const nextCursor = final.length ? final[final.length - 1].id : null;
     return { success: true, feed: final, hasMore: videos.length > limit, nextCursor };

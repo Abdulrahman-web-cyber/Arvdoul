@@ -3,23 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Edit2, Trash2, MessageCircle } from "lucide-react";
-import { db } from "../../firebase/firebase";
-import {
-collection,
-query,
-orderBy,
-startAfter,
-limit,
-onSnapshot,
-getDocs,
-addDoc,
-serverTimestamp,
-updateDoc,
-deleteDoc,
-arrayUnion,
-arrayRemove,
-doc,
-} from "firebase/firestore";
+import { getCommentService } from "../../services/commentService.js";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { toast } from "sonner";
@@ -31,6 +15,21 @@ dayjs.extend(relativeTime);
 
 const REACTIONS = ["❤️", "😂", "😮", "😢", "😡"];
 const COMMENTS_PAGE_SIZE = 5;
+
+/** Maps commentService documents to the modal's display shape. */
+const normalizeComment = (c) => ({
+  id: c.id,
+  userId: c.userId,
+  text: c.content || c.text || "",
+  displayName: c.userName || c.displayName || "User",
+  userPhotoURL: c.userAvatar || c.userPhotoURL || "/assets/default-profile.png",
+  createdAt: c.createdAt,
+  likes: c.likes || 0,
+  likesBy: c.likesBy || [],
+  // Map service likes to the emoji reaction count for the ❤️ row
+  reactions: (c.reactions || []).map((r) => (typeof r === "string" ? { emoji: r, userId: c.userId } : r)),
+  replies: Array.isArray(c.replies) ? c.replies.map(normalizeComment) : [],
+});
 
 export default function CommentsModal({ postId, onClose }) {
 const { user, addCoins } = useAuth();
@@ -48,22 +47,36 @@ const containerRef = useRef(null);
 
 // ---------------- Real-time initial comments ----------------
 useEffect(() => {
-const q = query(
-collection(db, "posts", postId, "comments"),
-orderBy("createdAt", "asc"),
-limit(COMMENTS_PAGE_SIZE)
-);
+  let cancelled = false;
+  let unsubscribe = () => {};
 
-const unsubscribe = onSnapshot(q, (snapshot) => {  
-  const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));  
-  setComments(data);  
-  setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);  
-  setHasMore(snapshot.docs.length >= COMMENTS_PAGE_SIZE);  
-  scrollToBottom();  
-});  
+  const load = async () => {
+    try {
+      const svc = getCommentService();
+      const res = await svc.getCommentsByPost(postId, { nested: true, limit: 50, cacheFirst: false });
+      if (cancelled) return;
+      if (res.success) {
+        setComments((res.comments || []).map(normalizeComment));
+        setHasMore(false);
+        scrollToBottom();
+      }
+      unsubscribe = svc.subscribeToPostComments(postId, () => {
+        svc.getCommentsByPost(postId, { nested: true, limit: 50, cacheFirst: false }).then((r) => {
+          if (!cancelled && r.success) setComments((r.comments || []).map(normalizeComment));
+        });
+      }, { includeReplies: true });
+    } catch {
+      if (!cancelled) setComments([]);
+    }
+  };
+  load();
 
-return unsubscribe;
-
+  return () => {
+    cancelled = true;
+    try {
+      unsubscribe();
+    } catch { /* noop */ }
+  };
 }, [postId]);
 
 const scrollToBottom = () => {
@@ -91,20 +104,16 @@ setComments((prev) => [...prev, optimisticComment]);
 setNewComment("");  
 scrollToBottom();  
 
-try {  
-  const docRef = await addDoc(collection(db, "posts", postId, "comments"), {  
-    text: optimisticComment.text,  
-    displayName: optimisticComment.displayName,  
-    userPhotoURL: optimisticComment.userPhotoURL,  
-    userId: user.uid,  
-    createdAt: serverTimestamp(),  
-    reactions: [],  
-    replies: [],  
-  });  
-  setComments((prev) =>  
-    prev.map((c) => (c.id === tempId ? { ...c, id: docRef.id } : c))  
-  );  
-  await addCoins(1, "comment");  
+try {
+  const svc = getCommentService();
+  await svc.createComment(postId, user.uid, optimisticComment.text, {
+    userName: user.displayName || "You",
+    userUsername: user.username || user.displayName || "you",
+    userAvatar: user.photoURL || "/assets/default-profile.png",
+  });
+  // The realtime subscription refreshes the list; drop the optimistic copy.
+  setComments((prev) => prev.filter((c) => c.id !== tempId));
+  try { await addCoins(1, "comment"); } catch { /* best-effort */ }
 } catch (err) {  
   console.error(err);  
   toast.error("Failed to post comment.");  
@@ -124,76 +133,62 @@ handlePostComment();
 
 // ---------------- Reactions (toggle + counts) ----------------
 const handleReaction = async (commentId, emoji) => {
-const comment = comments.find((c) => c.id === commentId);
-const existing = comment.reactions?.find((r) => r.userId === user.uid && r.emoji === emoji);
+  const comment = comments.find((c) => c.id === commentId);
+  if (!comment || !user) return;
+  const existing = comment.likesBy?.includes(user.uid) || comment.reactions?.some((r) => r.userId === user.uid);
 
-try {  
-  const commentRef = doc(db, "posts", postId, "comments", commentId);  
-  if (existing) {  
-    await updateDoc(commentRef, { reactions: arrayRemove(existing) });  
-  } else {  
-    await updateDoc(commentRef, { reactions: arrayUnion({ emoji, userId: user.uid }) });  
-    await addCoins(1, `react ${emoji}`);  
-  }  
-} catch (err) {  
-  console.error(err);  
-}
-
+  try {
+    const svc = getCommentService();
+    if (existing) {
+      await svc.removeLikeDislike(commentId, user.uid);
+    } else {
+      await svc.likeComment(commentId, user.uid);
+      try { await addCoins(1, `react ${emoji}`); } catch { /* best-effort */ }
+    }
+    // Optimistic UI toggle so the heart responds instantly
+    setComments((prev) =>
+      prev.map((c) =>
+        c.id === commentId
+          ? {
+              ...c,
+              likes: Math.max(0, (c.likes || 0) + (existing ? -1 : 1)),
+              likesBy: existing
+                ? (c.likesBy || []).filter((id) => id !== user.uid)
+                : [...(c.likesBy || []), user.uid],
+            }
+          : c
+      )
+    );
+  } catch (err) {
+    console.error(err);
+  }
 };
 
 // ---------------- Delete Comment ----------------
 const handleDelete = async (commentId) => {
-if (!confirm("Delete this comment?")) return;
-try {
-await deleteDoc(doc(db, "posts", postId, "comments", commentId));
-} catch (err) {
-console.error(err);
-toast.error("Failed to delete comment.");
-}
+  if (!window.confirm("Delete this comment?")) return;
+  try {
+    await getCommentService().deleteComment(commentId, user.uid, false);
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to delete comment.");
+  }
 };
 
 // ---------------- Edit Comment (inline) ----------------
 const handleEdit = async (commentId, newText) => {
-if (!newText.trim()) return;
-try {
-const commentRef = doc(db, "posts", postId, "comments", commentId);
-await updateDoc(commentRef, { text: newText });
-setEditingCommentId(null);
-} catch (err) {
-console.error(err);
-toast.error("Failed to edit comment.");
-}
+  if (!newText.trim()) return;
+  try {
+    await getCommentService().updateComment(commentId, user.uid, { content: newText });
+    setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, content: newText, isEdited: true } : c)));
+    setEditingCommentId(null);
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to edit comment.");
+  }
 };
 
-// ---------------- Load More Comments ----------------
-const loadMoreComments = useCallback(async () => {
-if (!hasMore || !lastDoc) return;
-
-const q = query(  
-  collection(db, "posts", postId, "comments"),  
-  orderBy("createdAt", "asc"),  
-  startAfter(lastDoc),  
-  limit(COMMENTS_PAGE_SIZE)  
-);  
-
-const snapshot = await getDocs(q);  
-if (snapshot.empty) return setHasMore(false);  
-
-const newComments = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));  
-setComments((prev) => [...prev, ...newComments]);  
-setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);  
-setHasMore(snapshot.docs.length >= COMMENTS_PAGE_SIZE);
-
-}, [postId, hasMore, lastDoc]);
-
-// ---------------- Infinite scroll ----------------
-const handleScroll = () => {
-if (!containerRef.current) return;
-const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-if (scrollTop + clientHeight >= scrollHeight - 50) {
-loadMoreComments();
-}
-};
 
 return createPortal(
 <AnimatePresence>
@@ -206,7 +201,6 @@ onClick={onClose}
 >
 <motion.div
 ref={containerRef}
-onScroll={handleScroll}
 className={`w-full max-w-md mx-2 rounded-t-xl overflow-y-auto max-h-[80vh] ${   theme === "dark" ? "bg-gray-900 text-white" : "bg-white text-gray-900"   }`}
 initial={{ y: "100%" }}
 animate={{ y: 0 }}
@@ -257,8 +251,8 @@ className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
                 )}  
                 <div className="flex gap-2 mt-1 items-center">  
                   {REACTIONS.map((r) => {  
-                    const count = c.reactions?.filter((x) => x.emoji === r).length || 0;  
-                    const reacted = c.reactions?.some((x) => x.emoji === r && x.userId === user.uid);  
+                    const count = r === "❤️" ? (c.likes || 0) : 0;
+                    const reacted = r === "❤️" ? (c.likesBy || []).includes(user?.uid) : false;
                     return (  
                       <span  
                         key={r}  
@@ -287,7 +281,7 @@ className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
               <div className="ml-10 mt-1 space-y-1 border-l border-gray-300 pl-2 dark:border-gray-700">  
                 {c.replies.map((r) => (  
                   <div key={r.id} className="flex gap-2 items-start text-sm">  
-                    <img src={r.userPhotoURL || "/assets/default-profile.png"} alt={`r.displayName`} className="w-6 h-6 rounded-full object-cover" />  
+                    <img src={r.userPhotoURL || "/assets/default-profile.png"} alt={r.displayName || "User"} className="w-6 h-6 rounded-full object-cover" />  
                     <p>  
                       <span className="font-medium mr-1">{r.displayName}</span>  
                       {r.text}{" "}  

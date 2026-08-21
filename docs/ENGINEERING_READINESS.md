@@ -102,6 +102,69 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 18. Next-70 hardening batch (30+ verified fixes)
+
+**MOCK DATA REMOVED (final remnants)**
+- `videoService` returned fabricated `INITIAL_VIDEOS` (fake creators "Zaid
+  Al-Harbi", "Elena Rostova"... + Unsplash URLs) when the real feed was
+  empty -> honest empty feed. `src/data/videoData.js` stripped to only the
+  real `VIRTUAL_GIFTS` catalog (6 config items used by VideoGiftModal).
+- `VideoCard` Unsplash avatar/cover fallbacks -> `/assets/default-profile.png`.
+
+**🔴 CRITICAL BUG: stale-balance coin overwrite (Composer)**
+- `coins: (user.coins || 0) + 10` wrote a STALE in-memory balance over the
+  real server balance (e.g. real 500 -> set to 60) - destroying user coins.
+  Now: post creation via firestoreService.createPost (validation,
+  moderation, XP, idempotency) + coin reward via monetizationService
+  (server-side increment).
+
+**🔴 CRITICAL BUG: CommentsModal wrote to a rules-DENIED path**
+- Posted to `posts/{id}/comments` via addDoc with random ids - the security
+  rules require docId == uid (denied in production) and it bypassed
+  moderation/notifications/XP. Migrated to commentService (create, realtime
+  subscribe, like/removeLikeDislike, delete, edit) with field normalization.
+
+**BROKEN ASSET PATH (all avatar fallbacks)**
+- Code referenced `/assets/default-profile.png` but public/assets/ did NOT
+  exist - every fallback 404'd. Created public/assets/default-profile.png.
+
+**BROKEN ATTRIBUTES (AdvancedPhoneInput)**
+- Literal `REAL="..."` attributes (a broken find/replace of "placeholder")
+  meant the phone input + country search had NO placeholders and invalid
+  `REAL-gray-*` classes. Fixed (4 spots).
+
+**ALT BUGS (template literals rendered as literal strings)**
+- CommentsModal: `alt={r.displayName}` was the string "r.displayName".
+- StoryList: alt was the string `story.username || "User"`.
+- StoryViewer: alt was the string `currentStory.username || "Story"`.
+
+**SECURITY**
+- Verified all target=_blank links carry rel (noopener/noreferrer) - 5 files
+  checked, all correct.
+- VideoBottomSheet window.open -> added noopener,noreferrer features.
+
+**UX (native alert() -> toasts)**
+- AddStoryModal, AudioEditorScreen (x2), CollaborationScreen.
+
+**A11Y**
+- Composer media mute/remove buttons: type + aria-labels.
+- MediaCarousel dots: type + aria-current.
+- SyncProgress: role=progressbar (previous batch).
+- Verified-correct: MediaCarousel arrows, SwipableMedia, BottomMenu,
+  Stories mute, AdvancedPhoneInput country selector.
+
+**ERROR VISIBILITY**
+- Silent `catch (_) {}` in CounterReconciliationService + AggregationCache
+  L2 write-through -> logged warnings (visibility without noise).
+- Fixed missing toast import (ProjectDashboardScreen, CollaborationScreen) -
+  lint errors -> 0.
+
+**TESTS**
+- noFabricatedData.test.js (5): videoData has no fake users/URLs, VIRTUAL_
+  GIFTS intact, videoService has no mock fallback, Composer has no stale-
+  balance write, CommentsModal has no denied subcollection write.
+- 35 suites / 431 tests green, lint 0 errors, build OK.
+
 ### 17. 20-item hardening pass: mock removal, real bugs, honest utilities
 
 **MOCK DATA REMOVED (the last of it)**

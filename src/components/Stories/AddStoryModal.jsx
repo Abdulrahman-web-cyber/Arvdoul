@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { toast } from "sonner";
 import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, UploadCloud, Loader2 } from "lucide-react";
@@ -28,7 +29,7 @@ export default function AddStoryModal({ onClose }) {
 
     // File validation: max 50MB
     if (selected.size > 50 * 1024 * 1024) {
-      alert("File size must be less than 50MB.");
+      toast.error("File size must be less than 50MB.");
       return;
     }
 

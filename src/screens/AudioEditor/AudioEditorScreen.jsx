@@ -3,6 +3,7 @@
 // ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { toast } from "sonner";
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -520,7 +521,7 @@ export default function AudioEditorScreen() {
       });
       
       console.log('[AudioEditor] Export complete:', result);
-      alert('Audio exported successfully!');
+      toast.success('Audio exported successfully!');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -531,7 +532,7 @@ export default function AudioEditorScreen() {
   const handleSaveProject = useCallback(() => {
     try {
       audioEditorService.saveProject();
-      alert('Project saved!');
+      toast.success('Project saved!');
     } catch (err) {
       setError(err.message);
     }

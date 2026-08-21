@@ -84,7 +84,7 @@ export default function StoryList() {
               >
                 <img
                   src={story.userAvatar || DEFAULT_AVATAR}
-                  alt={`story.username || "User"`}
+                  alt={story.username || "User"}
                   className="w-full h-full object-cover rounded-full"
                   loading="lazy"
                 />

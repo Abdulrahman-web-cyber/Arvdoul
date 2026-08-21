@@ -8,6 +8,7 @@ import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
 import collaborationService from '../../services/collaborationService';
 import { Plus, Folder, Clock, Users, MoreVertical, Search, Filter, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const STATUS_COLORS = {
   draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Draft' },

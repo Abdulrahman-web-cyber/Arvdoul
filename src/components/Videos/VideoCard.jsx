@@ -348,7 +348,7 @@ const VideoCard = memo(({
             className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-400 shadow-xl shadow-purple-500/25 ring-2 ring-white/30"
           >
             <img
-              src={video?.creator?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'}
+              src={video?.creator?.avatar || '/assets/default-profile.png'}
               alt={video?.creator?.name || 'Creator'}
               className="w-full h-full rounded-full object-cover"
             />
@@ -629,7 +629,7 @@ const VideoCard = memo(({
             }}
           >
             <img
-              src={video?.audio?.coverUrl || video?.creator?.avatar || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&auto=format&fit=crop&q=80'}
+              src={video?.audio?.coverUrl || video?.creator?.avatar || '/assets/default-profile.png'}
               alt="Track"
               className="w-5 h-5 rounded-full object-cover"
             />

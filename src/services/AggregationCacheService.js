@@ -101,7 +101,9 @@ class AggregationCacheService {
         // Write-through to L2 Distributed Redis
         try {
           await redisCacheManager.setDistributed('aggregations', key, computed, ttl);
-        } catch (_) {}
+        } catch (err) {
+          logger.warn('[AggregationCache] L2 distributed write-through failed:', { error: err.message });
+        }
 
         const duration = performance.now() - start;
         metricsService.recordHistogram('aggregation_compute_duration_ms', duration);

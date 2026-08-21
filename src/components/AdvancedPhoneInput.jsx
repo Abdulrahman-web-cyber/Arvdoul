@@ -210,11 +210,11 @@ const AdvancedPhoneInput = React.memo(({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               disabled={disabled}
-              REAL="Enter your phone number"
+              placeholder="Enter your phone number"
               className={`w-full px-3 py-3 bg-transparent outline-none text-base ${
                 theme === 'dark' 
-                  ? 'text-white REAL-gray-500' 
-                  : 'text-gray-900 REAL-gray-400'
+                  ? 'text-white placeholder-gray-500' 
+                  : 'text-gray-900 placeholder-gray-400'
               } ${disabled ? 'cursor-not-allowed' : ''}`}
               inputMode="numeric"
               pattern="[0-9]*"
@@ -274,11 +274,11 @@ const AdvancedPhoneInput = React.memo(({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    REAL="Search countries..."
+                    placeholder="Search countries..."
                     className={`w-full pl-10 pr-4 py-2.5 rounded-lg text-sm ${
                       theme === 'dark' 
-                        ? 'bg-gray-800 text-white REAL-gray-400' 
-                        : 'bg-gray-100 text-gray-900 REAL-gray-500'
+                        ? 'bg-gray-800 text-white placeholder-gray-400' 
+                        : 'bg-gray-100 text-gray-900 placeholder-gray-500'
                     } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
                   />
                   <svg 
@@ -318,7 +318,7 @@ const AdvancedPhoneInput = React.memo(({
                         <div className={`w-6 h-4 rounded-sm overflow-hidden border ${
                           theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
                         }`}>
-                          {/* Country flag REAL - could implement with flag icons */}
+                          {/* Country flag emoji */}
                           <div className={`w-full h-full flex items-center justify-center text-xs font-bold ${
                             theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
                           }`}>
