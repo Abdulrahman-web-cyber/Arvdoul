@@ -3,7 +3,7 @@
  * The app is a SPA: fall back to index.html for any navigation.
  */
 const CACHE_NAME = 'arvdoul-v1';
-const PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icons/icon.png', '/logo/logo-light.png'];
+const PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icons/icon.png', '/logo/logo-light.png', '/logo/logo-dark.png', '/assets/default-profile.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

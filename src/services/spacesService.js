@@ -194,7 +194,7 @@ class SpacesService {
         id: hostUser?.uid || 'usr-creator',
         name: hostUser?.displayName || 'Arvdoul Creator',
         username: hostUser?.username ? `@${hostUser.username}` : '@creator',
-        avatar: hostUser?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        avatar: hostUser?.photoURL || '/assets/default-profile.png',
         isVerified: true
       },
       speakers: [],

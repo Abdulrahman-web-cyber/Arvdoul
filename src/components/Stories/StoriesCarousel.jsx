@@ -624,7 +624,7 @@ const StoryItem = memo(({
                         ? "text-gray-400" 
                         : "text-gray-500"
                   )}>
-                    {story.stories.reduce((sum, s) => sum + (s.reactions?.length || 0), 0).toLocaleString()}
+                    {story.stories.reduce((sum, s) => sum + (s.reactionCount || 0), 0).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -1409,107 +1409,111 @@ const StoriesCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   
-  // Load stories from real data - No mock data
+  // Load stories from the REAL storyService feed (Firestore-backed,
+  // moderated, seen-status aware). The previous version read
+  // `currentUser?.stories` / `friends[].stories` from the app store, which
+  // the store never populated - the carousel always rendered empty. The
+  // viewer also used `story.content` as the media src while real stories
+  // store media in `media.url` - mapping below fixes that.
   useEffect(() => {
+    let cancelled = false;
+
     const loadStories = async () => {
       try {
         setLoading(true);
-        
-        // Real data loading - from app store or API
-        const userStories = currentUser?.stories || [];
-        const friendStories = friends
-          .filter(friend => friend.stories && friend.stories.length > 0)
-          .map(friend => ({
-            ...friend,
-            userId: friend.id || friend.uid,
-            username: friend.username || friend.displayName?.toLowerCase() || `user_${friend.id}`,
-            displayName: friend.displayName || friend.username || 'User',
-            profilePic: friend.photoURL || friend.profilePic || '/assets/default-profile.png',
-            isVerified: friend.isVerified || false,
-            isPremium: friend.isPremium || false,
-            isFollowing: true,
-            hasUnseenStories: friend.stories?.some(s => !s.seen) || false,
-            stories: friend.stories || [],
-            lastUpdated: friend.lastActive || new Date().toISOString(),
-            storyCount: friend.stories?.length || 0,
-            isCurrentUser: false
+        const { getStoryService } = await import("../../services/storyService.js");
+        const svc = getStoryService();
+        const feed = await svc.getStoriesFeed(currentUser?.uid, { cacheFirst: false });
+
+        const groups = (feed?.groups || []).map((group) => {
+          const stories = (group.stories || []).map((st) => ({
+            ...st,
+            // Normalize: media URL lives in media.url for image/video/audio;
+            // text content lives in content for text stories.
+            content: st.media?.url || st.content || "",
+            text: st.type === StoryTypes.TEXT ? (st.content || "") : undefined,
+            mediaUrl: st.media?.url || null,
+            views: st.stats?.views || st.views || 0,
+            // stats.reactions is an object map {emoji: count}; the viewer
+            // expects an array-ish value - flatten to a count for display.
+            reactions: Array.isArray(st.reactions)
+              ? st.reactions
+              : st.stats?.reactions
+                ? Object.values(st.stats.reactions)
+                : [],
+            reactionCount: st.stats?.reactions
+              ? Object.values(st.stats.reactions).reduce((a, b) => a + (b || 0), 0)
+              : Array.isArray(st.reactions)
+                ? st.reactions.length
+                : 0,
+            musicTitle: st.music?.title || null,
+            musicArtist: st.music?.artist || null,
           }));
-        
-        // Add current user story (empty or with content)
-        const currentUserStory = {
-          userId: currentUser?.uid || 'current_user',
-          username: currentUser?.username || 'you',
-          displayName: currentUser?.displayName || 'Your Story',
-          profilePic: currentUser?.photoURL || '/assets/default-profile.png',
-          isVerified: currentUser?.isVerified || false,
-          isPremium: currentUser?.isPremium || false,
-          isFollowing: true,
-          hasUnseenStories: userStories.some(s => !s.seen) || false,
-          stories: userStories,
-          lastUpdated: currentUser?.lastActive || new Date().toISOString(),
-          storyCount: userStories.length,
-          isCurrentUser: true
-        };
-        
-        // Combine and filter stories
-        let allStories = [];
-        
-        if (currentUser) {
-          allStories.push(currentUserStory);
-          allStories = [...allStories, ...friendStories];
-        } else {
-          allStories = friendStories;
-        }
-        
-        // Filter out expired stories
-        const validStories = allStories.filter(story => {
-          if (story.isCurrentUser) return true;
-          return story.stories?.some(s => {
-            if (!s.expiresAt) return true;
-            return new Date(s.expiresAt) > new Date();
+          return {
+            userId: group.userId,
+            username: group.userId,
+            displayName: group.userId,
+            profilePic: "/assets/default-profile.png",
+            isFollowing: true,
+            hasUnseenStories: stories.some((st) => !st.seen),
+            stories,
+            lastUpdated: stories[0]?.createdAt || new Date().toISOString(),
+            storyCount: stories.length,
+            isCurrentUser: group.userId === currentUser?.uid,
+          };
+        });
+
+        // Current user's own entry is already in the feed when they have
+        // stories; if not, include an empty "Your Story" creator card.
+        const hasOwnGroup = groups.some((g) => g.isCurrentUser);
+        if (currentUser && !hasOwnGroup) {
+          groups.unshift({
+            userId: currentUser.uid,
+            username: currentUser.username || "you",
+            displayName: currentUser.displayName || "Your Story",
+            profilePic: currentUser.photoURL || "/assets/default-profile.png",
+            isVerified: currentUser.isVerified || false,
+            isFollowing: true,
+            hasUnseenStories: false,
+            stories: [],
+            lastUpdated: new Date().toISOString(),
+            storyCount: 0,
+            isCurrentUser: true,
           });
-        });
-        
-        // Sort stories
-        const sortedStories = [...validStories].sort((a, b) => {
-          // Current user always first
-          if (a.isCurrentUser) return -1;
-          if (b.isCurrentUser) return 1;
-          
-          // Unseen stories first
-          const aHasUnseen = a.stories?.some(s => !s.seen) || false;
-          const bHasUnseen = b.stories?.some(s => !s.seen) || false;
-          
-          if (aHasUnseen && !bHasUnseen) return -1;
-          if (!aHasUnseen && bHasUnseen) return 1;
-          
-          // Sort by last updated
-          return new Date(b.lastUpdated) - new Date(a.lastUpdated);
-        });
-        
-        setStories(sortedStories);
-        setHasMore(false); // In real app, implement pagination
-        
-        track("Stories_Loaded", { 
-          count: sortedStories.length,
-          currentUserStories: currentUserStory.storyCount,
-          friendStories: friendStories.length 
-        });
+        }
+
+        if (!cancelled) {
+          setStories(groups);
+          setHasMore(Boolean(feed?.hasMore));
+        }
+        if (!cancelled) {
+          track("Stories_Loaded", { count: groups.length });
+        }
       } catch (error) {
         console.error("Error loading stories:", error);
-        track("Stories_Load_Error", { error: error.message });
-        setStories([]);
+        if (!cancelled) {
+          setStories([]);
+          track("Stories_Load_Error", { error: error?.message });
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
-        setInitialLoadComplete(true);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+          setInitialLoadComplete(true);
+        }
       }
     };
-    
+
     loadStories();
-  }, [currentUser, friends, track]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, track, refreshNonce]);
+
+
   
   const openStoryViewer = (story, index) => {
     if (story.isCurrentUser && (!story.stories || story.stories.length === 0)) {
@@ -1593,11 +1597,10 @@ const StoriesCarousel = () => {
   
   const handleRefresh = () => {
     setRefreshing(true);
-    // In real app, fetch fresh data from API
-    setTimeout(() => {
-      setRefreshing(false);
-      track("Stories_Refresh");
-    }, 1000);
+    track("Stories_Refresh");
+    // Real refresh: re-run the feed loader. The effect depends on
+    // currentUser.uid/track only, so call the same path via a state bump.
+    setRefreshNonce((n) => n + 1);
   };
   
   const handleProfileClick = (userId) => {

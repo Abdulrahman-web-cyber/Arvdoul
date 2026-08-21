@@ -21,162 +21,6 @@ import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/ui/Dialog.jsx';
 
 // Fallback high-fidelity sample notifications matching the exact Arvdoul design
-const SAMPLE_NOTIFICATIONS = [
-  {
-    id: 'notif-1',
-    category: 'Friends',
-    type: 'friend_request',
-    timeGroup: 'Now',
-    user: {
-      name: 'Sara Khan',
-      username: 'sarakhan',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'sent you a friend request.',
-    timestamp: '2m ago',
-    unread: true,
-    actionType: 'friend_request',
-    highlight: {
-      title: 'Sara Khan',
-      badge: 'friend_request',
-      subtitle: 'sent you a friend request',
-      time: '2m ago',
-    }
-  },
-  {
-    id: 'notif-2',
-    category: 'Coins',
-    type: 'coin_gift',
-    timeGroup: 'Now',
-    user: {
-      name: 'Ibrahim',
-      username: 'ibrahim.vibes',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'sent you 250 as a gift.',
-    amount: 250,
-    timestamp: '15m ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=200&auto=format&fit=crop&q=80',
-    highlight: {
-      title: 'Ibrahim sent you 250',
-      badge: 'coin_gift',
-      subtitle: 'sent you 250 🪙',
-      time: '15m ago',
-    }
-  },
-  {
-    id: 'notif-3',
-    category: 'Stories',
-    type: 'story_reply',
-    timeGroup: 'Now',
-    user: {
-      name: 'Maya Johnson',
-      username: 'maya.j',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'replied to your story.',
-    timestamp: '45m ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&auto=format&fit=crop&q=80',
-    highlight: {
-      title: 'Maya replied to your story',
-      badge: 'story_reply',
-      subtitle: 'replied to your story',
-      time: '1h ago',
-    }
-  },
-  {
-    id: 'notif-4',
-    category: 'Live',
-    type: 'live_stream',
-    timeGroup: 'Now',
-    user: {
-      name: 'Alex',
-      username: 'alex.live',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'is live now',
-    timestamp: '2h ago',
-    unread: false,
-    viewers: '1.2K',
-    highlight: {
-      title: 'Alex is live now',
-      badge: 'live_stream',
-      subtitle: 'is live now',
-      time: '2h ago',
-    }
-  },
-  {
-    id: 'notif-5',
-    category: 'All',
-    type: 'post_like',
-    timeGroup: 'Today',
-    user: {
-      name: 'Ali Hassan',
-      username: 'alihassan',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'liked your post.',
-    timestamp: '2h ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'notif-6',
-    category: 'Mentions',
-    type: 'mention',
-    timeGroup: 'Today',
-    user: {
-      name: 'Noor Ahmed',
-      username: 'noor.ahmed',
-      avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'mentioned you in a comment.',
-    commentQuote: '@arvdoul loved this! 💜',
-    timestamp: '4h ago',
-    unread: true,
-  },
-  {
-    id: 'notif-7',
-    category: 'Stories',
-    type: 'story_view',
-    timeGroup: 'Today',
-    user: {
-      name: 'Omar',
-      username: 'omar.design',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'viewed your story.',
-    timestamp: '5h ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'notif-8',
-    category: 'Stories',
-    type: 'story_view',
-    timeGroup: 'Yesterday',
-    user: {
-      name: 'Omar',
-      username: 'omar.design',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'viewed your story.',
-    timestamp: 'Yesterday, 11:30 PM',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=200&auto=format&fit=crop&q=80'
-  }
-];
-
 const FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Messages', label: 'Messages', badge: 8, icon: MessageCircle },
@@ -195,7 +39,7 @@ export default function NotificationsScreen() {
   const isDark = theme !== 'light';
 
   const [activeFilter, setActiveFilter] = useState('All');
-  const [notifications, setNotifications] = useState(SAMPLE_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -225,14 +69,14 @@ export default function NotificationsScreen() {
               user: {
                 name: fn.senderName || fn.title || 'Arvdoul User',
                 username: fn.senderUsername || 'user',
-                avatar: fn.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                avatar: fn.senderAvatar || '/assets/default-profile.png',
                 verified: true,
               },
               message: fn.body || fn.message || 'interacted with your content.',
               timestamp: 'Just now',
               unread: !fn.read,
             }));
-            return [...formatted, ...SAMPLE_NOTIFICATIONS];
+            return formatted;
           });
         }
       });

@@ -267,42 +267,27 @@ export default function ProfileMyScreen() {
   }
 
   // Fallback profile if Firestore is yet to populate
+  // Honest fallback profile - only REAL data (the authenticated user's own
+  // fields and zeroed counters). No fabricated follower counts, levels,
+  // bios or locations.
   const effectiveProfile = profile || {
     id: currentUserId || 'my-arvdoul-creator',
-    username: currentUser?.username || currentUser?.email?.split('@')[0] || 'creator.arvdoul',
-    displayName: currentUser?.displayName || currentUser?.name || 'Arvdoul VIP Creator',
-    bio: '✨ Content Creator, Spatial UI & Audio Producer on ARVDOUL | Welcome to my official profile!',
-    photoURL: currentUser?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
-    coverPhotoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80',
-    followerCount: 14200,
-    followingCount: 320,
-    postCount: 38,
-    isVerified: true,
-    isCreator: true,
-    level: level || 28,
-    location: 'Creator HQ'
+    username: currentUser?.username || currentUser?.email?.split('@')[0] || '',
+    displayName: currentUser?.displayName || currentUser?.name || 'Your Profile',
+    bio: currentUser?.bio || '',
+    photoURL: currentUser?.photoURL || '/assets/default-profile.png',
+    coverPhotoURL: null,
+    followerCount: 0,
+    followingCount: 0,
+    postCount: 0,
+    isVerified: false,
+    isCreator: false,
+    level: level || 1,
+    location: ''
   };
 
-  const effectivePosts = (posts && posts.length > 0) ? posts : [
-    {
-      id: 'my-p-1',
-      mediaURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 4120,
-      comments: 290,
-      title: 'Neon futuristic spatial audio setup 🌌'
-    },
-    {
-      id: 'my-p-2',
-      mediaURL: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80',
-      type: 'video',
-      likes: 9840,
-      comments: 610,
-      title: 'Testing 4K multi-track video timeline exports'
-    }
-  ];
-
-  return (
+  const effectivePosts = (posts && posts.length > 0) ? posts : [];
+return (
     <ErrorBoundary>
       <div
         ref={scrollRef}

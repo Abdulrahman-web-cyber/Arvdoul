@@ -32,12 +32,13 @@ const CREATIVE_TOOLS = [
 
 const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'LAYOUT'];
 
+// Story background templates - real gradient presets (no fabricated photos)
 const SAMPLE_DRAFTS = [
-  { id: 'd1', thumb: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&auto=format&fit=crop&q=80', label: 'Sunset' },
-  { id: 'd2', thumb: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=200&auto=format&fit=crop&q=80', label: 'City lights' },
-  { id: 'd3', thumb: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=200&auto=format&fit=crop&q=80', label: 'Mountain' },
-  { id: 'd4', thumb: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=200&auto=format&fit=crop&q=80', label: 'Studio' },
-  { id: 'd5', thumb: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=200&auto=format&fit=crop&q=80', label: 'Night vibe' },
+  { id: 'd1', gradient: 'linear-gradient(135deg, #FF512F, #F09819)', label: 'Sunset' },
+  { id: 'd2', gradient: 'linear-gradient(135deg, #0F2027, #2C5364)', label: 'City lights' },
+  { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Mountain' },
+  { id: 'd4', gradient: 'linear-gradient(135deg, #41295a, #2F0743)', label: 'Studio' },
+  { id: 'd5', gradient: 'linear-gradient(135deg, #0B0C10, #45A29E)', label: 'Night vibe' },
 ];
 
 export default function CreateStory() {
@@ -59,6 +60,7 @@ export default function CreateStory() {
   const [activeTool, setActiveTool] = useState(null);
   const [toolsExpanded, setToolsExpanded] = useState(true);
   const [storyText, setStoryText] = useState('');
+  const [backgroundGradient, setBackgroundGradient] = useState(null);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOption1, setPollOption1] = useState('Yes 🔥');
   const [pollOption2, setPollOption2] = useState('No ❄️');
@@ -70,6 +72,8 @@ export default function CreateStory() {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const timerRef = useRef(null);
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
 
   // Initialize WebRTC Camera Stream
   const initCamera = useCallback(async () => {
@@ -131,34 +135,71 @@ export default function CreateStory() {
       setCapturedPreview(dataUrl);
       toast.success('Photo captured! ✨');
     } else {
-      // Fallback capture high quality preview
-      setCapturedPreview('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&auto=format&fit=crop&q=80');
-      toast.success('Photo captured! ✨');
+      // No camera active - never fabricate a photo. Show an honest error.
+      toast.error('Camera is not active. Enable camera access to capture a photo.');
     }
   };
 
   // Hold for Video Recording
   const handleShutterMouseDown = () => {
     if (capturedPreview) return;
-    setIsRecording(true);
-    setRecordSeconds(0);
-    timerRef.current = setInterval(() => {
-      setRecordSeconds((sec) => {
-        if (sec >= 30) {
-          handleShutterMouseUp();
-          return 30;
+    // REAL video recording via MediaRecorder on the camera stream
+    const stream = videoRef.current?.srcObject;
+    if (!stream || typeof MediaRecorder === 'undefined') {
+      toast.error('Camera is not active. Enable camera access to record.');
+      return;
+    }
+    try {
+      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : '';
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mime || 'video/webm' });
+        if (blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          setCapturedPreview(url);
+          toast.success(`Video recorded (${recordSeconds}s)! 🎥`);
+        } else {
+          toast.error('Recording produced no data. Try again.');
         }
-        return sec + 1;
-      });
-    }, 1000);
+      };
+      recorder.start();
+      setIsRecording(true);
+      setRecordSeconds(0);
+      timerRef.current = setInterval(() => {
+        setRecordSeconds((sec) => {
+          if (sec >= 30) {
+            handleShutterMouseUp();
+            return 30;
+          }
+          return sec + 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.error('Recording failed:', err);
+      toast.error('Could not start recording on this device.');
+    }
   };
 
   const handleShutterMouseUp = () => {
     if (isRecording) {
       setIsRecording(false);
       if (timerRef.current) clearInterval(timerRef.current);
-      setCapturedPreview('https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1080&auto=format&fit=crop&q=80');
-      toast.success(`Video recorded (${recordSeconds}s)! 🎥`);
+      try {
+        if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+          recorderRef.current.stop();
+        }
+      } catch (err) {
+        console.error('Stop recording failed:', err);
+      }
     }
   };
 
@@ -180,15 +221,24 @@ export default function CreateStory() {
     setPublishing(true);
     try {
       const storyService = getStoryService();
+      const isText = activeMode.toLowerCase() === 'text';
       const storyPayload = {
-        type: activeMode.toLowerCase() === 'text' ? 'text' : 'image',
-        content: storyText || 'Sharing an Arvdoul moment ✨',
-        mediaUrl: capturedPreview,
+        type: isText ? 'text' : 'image',
+        content: storyText || (isText ? '' : 'Sharing an Arvdoul moment ✨'),
+        // The service uploads the media file; text stories use the gradient
+        // (or a default) as their background color.
+        mediaFile: isText ? null : mediaFile,
+        backgroundColor: backgroundGradient || (isText ? '#1e1b4b' : '#000000'),
+        textColor: '#FFFFFF',
         poll: pollQuestion ? { question: pollQuestion, options: [pollOption1, pollOption2] } : null,
         musicTrack: selectedMusic,
         audience: 'all',
-        createdAt: new Date().toISOString(),
       };
+      if (!isText && !mediaFile) {
+        toast.error('Add a photo or video to share an image story.');
+        setPublishing(false);
+        return;
+      }
 
       const res = await storyService.createStory(storyPayload);
       if (res?.success || res?.queued) {
@@ -299,12 +349,19 @@ export default function CreateStory() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <img
-                src={capturedPreview || "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1080&auto=format&fit=crop&q=80"}
-                alt="Story Viewfinder"
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
+              capturedPreview ? (
+                <img
+                  src={capturedPreview}
+                  alt="Story capture preview"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#141730] to-[#0c0f24]">
+                  <p className="text-white/40 text-sm font-medium">
+                    Camera preview unavailable - enable camera access or pick from gallery
+                  </p>
+                </div>
+              )
             )}
 
             {/* Overlaid Atmosphere Gradient */}
@@ -423,12 +480,12 @@ export default function CreateStory() {
                 onClick={() => fileInputRef.current?.click()}
                 className="flex flex-col items-center gap-1 group"
               >
-                <div className="w-12 h-12 rounded-2xl overflow-hidden ring-2 ring-white/30 group-hover:ring-violet-400 transition-all">
-                  <img
-                    src="https://images.unsplash.com/photo-1514565131-fce0801e5785?w=100&auto=format&fit=crop&q=80"
-                    alt="Gallery preview"
-                    className="w-full h-full object-cover"
-                  />
+                <div className="w-12 h-12 rounded-2xl overflow-hidden ring-2 ring-white/30 group-hover:ring-violet-400 transition-all flex items-center justify-center bg-white/10">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
                 </div>
                 <span className="text-[10px] font-bold text-white/80">Gallery</span>
               </button>
@@ -616,13 +673,15 @@ export default function CreateStory() {
                 <div
                   key={d.id}
                   onClick={() => {
-                    setCapturedPreview(d.thumb);
+                    // Apply the gradient template as the story background
+                    setBackgroundGradient(d.gradient);
                     toast.success(`Draft "${d.label}" loaded!`);
                   }}
                   className="w-11 h-14 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-400 transition-all flex-shrink-0"
-                >
-                  <img src={d.thumb} alt={d.label} className="w-full h-full object-cover" />
-                </div>
+                  style={{ background: d.gradient }}
+                  role="button"
+                  aria-label={`Apply ${d.label} background`}
+                />
               ))}
               <button
                 onClick={() => navigate('/stories')}

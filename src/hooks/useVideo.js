@@ -57,9 +57,11 @@ export const useVideo = (videoId, options = {}) => {
     addToHistory,
   } = useVideoStore();
 
-  // Load video data
+  // Load video data (race-safe: a slow response for an older videoId must
+  // never overwrite a newer one).
   useEffect(() => {
-    if (!videoId) return;
+    if (!videoId) return undefined;
+    let cancelled = false;
 
     const loadVideo = async () => {
       setLoading(true);
@@ -67,19 +69,24 @@ export const useVideo = (videoId, options = {}) => {
 
       try {
         const videoData = await videoService.getVideo(videoId);
+        if (cancelled) return;
         setVideo(videoData);
         setIsLiked(videoData?.isLiked || false);
         setIsSaved(videoData?.isSaved || false);
       } catch (err) {
+        if (cancelled) return;
         console.error('Failed to load video:', err);
         setError(err.message || 'Failed to load video');
         toast.error('Failed to load video');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     loadVideo();
+    return () => {
+      cancelled = true;
+    };
   }, [videoId]);
 
   // Video playback controls

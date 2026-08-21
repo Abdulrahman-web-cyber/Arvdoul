@@ -102,6 +102,78 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 19. Stories + feed screens: real data end-to-end (fake data elimination #3)
+
+**STORIES SYSTEM (called out) — all simulated data replaced**
+- `StoriesCarousel` loaded from `currentUser?.stories`/`friends[].stories`
+  (appStore has NO stories field - the carousel always rendered empty), with
+  placeholder comments ("In real app..."). Now loads the REAL storyService
+  feed (Firestore, moderated, seen-aware), maps groups with correct field
+  normalization (media.url for media types, content for text stories,
+  stats.reactions flattening, music title/artist), real pull-to-refresh via
+  a refresh nonce, and a real current-user "Your Story" entry.
+- 🔴 **Media rendering bug fixed**: the viewer used `story.content` as the
+  image/video src while real stories store media in `media.url` - stories
+  would have rendered broken images. Mapping now normalizes both.
+- `StoriesScreen` (grid) - `SAMPLE_STORIES` (fake users + Unsplash) removed,
+  now loads storyService feed with items/captions/views mapping.
+- `CreateStory` - 🔴 VIDEO RECORDING WAS SIMULATED (a timer + fake Unsplash
+  "recorded video"); now REAL MediaRecorder on the camera stream with blob
+  output, honest errors when no camera. "Fallback capture" of a fake photo
+  removed. Viewfinder default is an honest dark canvas (no fabricated
+  photo). Gallery thumb is an icon (no fake image). `SAMPLE_DRAFTS` Unsplash
+  thumbs -> real gradient presets applied as story background; publish
+  payload now sends mediaFile + backgroundColor to createStory (it accepted
+  neither before - image stories would have failed to upload media).
+
+**MESSAGING LIST (MessagingScreen) - CONVERSATIONS_DATA mock removed**
+- Hardcoded conversations ("Sophia Martinez", "Project X" + Unsplash) -> real
+  getUserConversations (participant details, unread counts, last message
+  previews, timestamps). PINNED_ITEMS fake carousel -> derived from the REAL
+  top-5 conversations by unread count.
+
+**PROFILE SCREENS - fabricated identities/stats removed**
+- `ProfileMyScreen`: fallback profile had FAKE stats (14200 followers, level
+  28, "Creator HQ", fake bio) + fake posts ("Neon futuristic spatial audio
+  setup", 4120 likes) shown as the user's own - now real user fields only,
+  zeroed counters, honest empty posts.
+- `ProfileScreen`: same treatment (fake "Arvdoul Creator", 24500 followers,
+  Dubai, 3 fake posts) -> honest fallback + real highlights (removed fake
+  "Studio/VFX" highlight covers).
+- `ProfilePublicScreen`: entire fake "Alyssa Vance" creator profile (48 level,
+  Diamond Creator, Queen, 142.8K followers, mutual friends, highlights) ->
+  honest empty profile.
+
+**SAVED / NETWORK / REELS / ANALYTICS screens - mock data removed**
+- `SavedScreen`: INITIAL_SAVED_ITEMS (fake packs, Unsplash) -> real
+  getSavedPosts with snapshot mapping.
+- `NetworkScreen`: RECOMMENDED_CREATORS (Elena Rostova, Marcus Chen...) ->
+  real getFriendRecommendations; Empty component now receives recommended as
+  a prop (was referencing an out-of-scope variable).
+- `ReelsScreen`: SAMPLE_REELS (fake reels with Unsplash/mixkit media) ->
+  real videoService.getVideoFeed with creator/title/stats mapping; fake
+  "mutual friends" avatar stack -> honest indicator.
+- `VideoAnalyticsScreen`: ENTIRE dashboard was fabricated demo data (1.25M
+  views, $4520 revenue, fake videos/demographics) -> real analyticsService
+  getUserAnalytics mapped into the dashboard with loading/empty states.
+- `NotificationsScreen`: SAMPLE_NOTIFICATIONS (Sara Khan, Ibrahim...) ->
+  real notifications only.
+
+**BROKEN STUFF FIXED**
+- MessageInput shared-contact button called useAuth() INSIDE an async event
+  handler (Invalid hook call runtime error on click) -> proper top-level hook.
+- Missing imports: SearchScreen useMemo, SavedScreen useMemo/useCallback,
+  VideoAnalyticsScreen useAuth - all lint errors -> 0.
+- Unsplash fallback URLs in marketplaceService, soundService, spacesService,
+  VideosScreen, MessagingScreen -> /assets/default-profile.png.
+- sw.js precache now includes logo-dark + default-profile.
+- useVideo hook race condition (slow old fetch could overwrite newer video).
+
+**TESTS**: 35 suites / 431 tests green, lint 0 errors, build OK.
+(Remaining Unsplash references are only VideoEditor TEMPLATE presets - the
+editor's stock sample clips that users replace, an intentional product
+feature like CapCut's template media - not user data.)
+
 ### 18. Next-70 hardening batch (30+ verified fixes)
 
 **MOCK DATA REMOVED (final remnants)**

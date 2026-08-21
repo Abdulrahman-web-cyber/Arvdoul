@@ -88,7 +88,7 @@ class SoundService {
         title,
         artist: artist || 'Original Creator',
         creatorId: creatorId || 'usr-creator',
-        coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200',
+        coverUrl: '/assets/default-profile.png',
         duration: '0:30',
         durationSec: 30,
         bpm: 120,

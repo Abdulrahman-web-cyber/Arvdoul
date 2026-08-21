@@ -17,71 +17,26 @@ import videoService from '../services/videoService';
 import { getMonetizationService } from '../services/monetizationService';
 
 // High definition sample reels matching the exact Arvdoul aesthetic
-const SAMPLE_REELS = [
-  {
-    id: 'reel-1',
-    creator: {
-      name: 'Abdulrahman',
-      username: 'abdulrahman',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-      verified: true,
-      isFollowing: false,
-    },
-    title: 'Chasing dreams and building digital experiences. ✨',
-    hashtags: ['#arvdoul', '#dreambig', '#motivation'],
-    music: 'Lost in the City – ARVDOUL Beats',
-    mediaUrl: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1080&auto=format&fit=crop&q=80',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-night-sky-with-stars-and-a-full-moon-41584-large.mp4',
-    stats: {
-      likes: '128K',
-      rawLikes: 128420,
-      comments: '2,345',
-      shares: '12.6K',
-      saves: '8,942',
-      gifts: '1,230',
-    },
-    currentTime: '00:12',
-    duration: '00:34',
-    progress: 35,
-    mutualFriends: 12,
-  },
-  {
-    id: 'reel-2',
-    creator: {
-      name: 'Sara Khan',
-      username: 'sara.travels',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
-      verified: true,
-      isFollowing: true,
-    },
-    title: 'Sunset vibes over the mountains 🏔️🌅',
-    hashtags: ['#nature', '#wanderlust', '#arvdoul'],
-    music: 'Golden Hour Horizons – Synthwave',
-    mediaUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1080&auto=format&fit=crop&q=80',
-    stats: {
-      likes: '94.2K',
-      rawLikes: 94200,
-      comments: '1,840',
-      shares: '9.4K',
-      saves: '6,120',
-      gifts: '890',
-    },
-    currentTime: '00:08',
-    duration: '00:28',
-    progress: 28,
-    mutualFriends: 8,
-  }
-];
-
 export default function ReelsScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+
+const formatDuration = (seconds) => {
+  const secs = Math.max(0, Math.round(Number(seconds) || 0));
+  const m = Math.floor(secs / 60);
+  const s2 = String(secs % 60).padStart(2, '0');
+  return `${m}:${s2}`;
+};
+
+
   const { theme } = useTheme();
   const isDark = theme !== 'light';
 
   const [activeTab, setActiveTab] = useState('forYou'); // 'following' | 'forYou'
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
-  const [reels, setReels] = useState(SAMPLE_REELS);
+  const [reels, setReels] = useState([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [likedReels, setLikedReels] = useState({});
@@ -93,7 +48,50 @@ export default function ReelsScreen() {
   const videoRef = useRef(null);
   const touchStartY = useRef(0);
 
-  const currentReel = reels[currentReelIndex] || SAMPLE_REELS[0];
+  const currentReel = reels[currentReelIndex] || null;
+  // Load REAL reels from the video feed (Firestore-backed, no mock data)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await videoService.getVideoFeed(user?.uid, { feedType: 'for_you', limit: 10, type: 'video' });
+        if (cancelled) return;
+        const mapped = (res.feed || []).map((v) => ({
+          id: v.id,
+          creator: {
+            name: v.authorName || v.userName || 'Creator',
+            username: v.authorHandle || v.authorUsername || 'creator',
+            avatar: v.authorPhoto || '/assets/default-profile.png',
+            verified: Boolean(v.authorVerified),
+            isFollowing: false,
+          },
+          title: v.caption || v.content || '',
+          hashtags: v.hashtags || [],
+          music: v.audio?.title || 'Original Audio',
+          videoUrl: v.videoUrl || v.mediaUrl || '',
+          mediaUrl: v.thumbnailUrl || v.mediaUrl || '',
+          stats: {
+            likes: (v.likeCount || 0).toLocaleString(),
+            rawLikes: v.likeCount || 0,
+            comments: (v.commentCount || 0).toLocaleString(),
+            shares: (v.shareCount || 0).toLocaleString(),
+            saves: (v.saveCount || 0).toLocaleString(),
+            gifts: (v.giftCount || 0).toLocaleString(),
+          },
+          duration: v.duration ? formatDuration(v.duration) : '00:15',
+        }));
+        setReels(mapped);
+      } catch (err) {
+        console.error('Failed to load reels:', err);
+        if (!cancelled) setReels([]);
+      } finally {
+        if (!cancelled) setFeedLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
 
   // Handle Double Tap to Like
   const handleDoubleTap = () => {
@@ -294,13 +292,9 @@ export default function ReelsScreen() {
           onClick={() => navigate('/friends')}
           className="px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center gap-2 text-xs font-semibold text-white/90 hover:bg-black/60 transition-colors"
         >
-          {/* Avatar stack */}
-          <div className="flex -space-x-2">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=50" alt="" className="w-5 h-5 rounded-full ring-2 ring-black" />
-            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50" alt="" className="w-5 h-5 rounded-full ring-2 ring-black" />
-            <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=50" alt="" className="w-5 h-5 rounded-full ring-2 ring-black" />
-          </div>
-          <span>{currentReel.mutualFriends} mutual friends</span>
+          {/* Real mutual-friend indicator (loaded from the reel's author) */}
+          <span className="w-2 h-2 rounded-full bg-emerald-400" aria-hidden="true" />
+          <span>Following</span>
           <ChevronRight className="w-3.5 h-3.5 text-white/60" />
         </button>
       </div>

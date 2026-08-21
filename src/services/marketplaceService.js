@@ -148,7 +148,7 @@ class MarketplaceService {
         id: creator?.uid || 'usr-creator',
         name: creator?.displayName || 'Arvdoul Creator',
         username: creator?.username ? `@${creator.username}` : '@creator',
-        avatar: creator?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        avatar: creator?.photoURL || '/assets/default-profile.png',
         badge: 'Verified'
       },
       priceCoins: Number(productData.priceCoins) || 1000,
@@ -156,7 +156,7 @@ class MarketplaceService {
       rating: 5.0,
       reviewsCount: 1,
       salesCount: 0,
-      image: productData.image || 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=500',
+      image: productData.image || '/assets/default-profile.png',
       description: productData.description || 'Exclusive creator asset.',
       includes: productData.includes ? productData.includes.split('\n') : ['Instant digital download'],
       isDigital: productData.isDigital !== false,

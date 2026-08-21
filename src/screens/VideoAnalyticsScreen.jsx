@@ -24,6 +24,7 @@ import {
   TrendingUp as TrendingUpIcon,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { formatViewCount, formatDuration, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
 import { toast } from 'sonner';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
@@ -42,105 +43,77 @@ const VideoAnalyticsScreen = () => {
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [analytics, setAnalytics] = useState(null);
+  const { user } = useAuth();
 
-  // Demo analytics data
-  const [analytics] = useState({
-    overview: {
-      totalViews: 1250000,
-      viewsChange: 23.5,
-      totalLikes: 89000,
-      likesChange: 18.2,
-      totalComments: 12500,
-      commentsChange: 31.4,
-      totalShares: 4500,
-      sharesChange: 12.8,
-      totalWatchTime: 456000, // seconds
-      watchTimeChange: 28.7,
-      avgCompletionRate: 67,
-      completionChange: 5.2,
-    },
-    revenue: {
-      total: 4520.50,
-      tips: 1230.00,
-      subscriptions: 2500.00,
-      payPerView: 520.50,
-      gifts: 270.00,
-      change: 15.3,
-    },
-    videos: [
-      {
-        id: 'v1',
-        title: 'Amazing Sunset Timelapse',
-        thumbnail: 'https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=200',
-        views: 450000,
-        likes: 32000,
-        comments: 2400,
-        shares: 1800,
-        watchTime: 125000,
-        completionRate: 78,
-        earnings: 890.00,
-      },
-      {
-        id: 'v2',
-        title: 'City Lights at Night',
-        thumbnail: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=200',
-        views: 320000,
-        likes: 24000,
-        comments: 1800,
-        shares: 1200,
-        watchTime: 89000,
-        completionRate: 71,
-        earnings: 650.00,
-      },
-      {
-        id: 'v3',
-        title: 'Mountain Adventure',
-        thumbnail: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=200',
-        views: 280000,
-        likes: 19000,
-        comments: 1400,
-        shares: 950,
-        watchTime: 76000,
-        completionRate: 65,
-        earnings: 520.00,
-      },
-      {
-        id: 'v4',
-        title: 'Cooking Masterclass',
-        thumbnail: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=200',
-        views: 200000,
-        likes: 14000,
-        comments: 2100,
-        shares: 550,
-        watchTime: 98000,
-        completionRate: 82,
-        earnings: 480.00,
-      },
-    ],
-    audience: {
-      demographics: {
-        age: [
-          { range: '13-17', percentage: 8 },
-          { range: '18-24', percentage: 32 },
-          { range: '25-34', percentage: 35 },
-          { range: '35-44', percentage: 15 },
-          { range: '45+', percentage: 10 },
-        ],
-        gender: [
-          { type: 'Male', percentage: 45 },
-          { type: 'Female', percentage: 52 },
-          { type: 'Other', percentage: 3 },
-        ],
-      },
-      topCountries: [
-        { country: 'United States', percentage: 35 },
-        { country: 'United Kingdom', percentage: 18 },
-        { country: 'Canada', percentage: 12 },
-        { country: 'Australia', percentage: 8 },
-        { country: 'Germany', percentage: 6 },
-      ],
-    },
-  });
+  // Load REAL analytics from analyticsService (Firestore-backed, sharded
+  // counters). Zero state until real data arrives - no fabricated numbers.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user?.uid) return;
+      try {
+        setLoading(true);
+        const { default: analyticsService } = await import('../services/analyticsService.js');
+        const data = await analyticsService.getUserAnalytics(user.uid, timeRange === '7d' ? '7d' : timeRange === '28d' ? '30d' : '90d');
+        if (cancelled) return;
+        setAnalytics({
+          overview: {
+            totalViews: data.totalViews || 0,
+            viewsChange: data.changes?.views || 0,
+            totalLikes: data.totalEngagement || 0,
+            likesChange: data.changes?.engagement || 0,
+            totalComments: data.totalEngagement || 0,
+            commentsChange: 0,
+            totalShares: 0,
+            sharesChange: 0,
+            totalWatchTime: 0,
+            watchTimeChange: 0,
+            avgCompletionRate: 0,
+            completionChange: 0,
+          },
+          revenue: {
+            total: data.coinsEarned || 0,
+            tips: 0,
+            subscriptions: 0,
+            payPerView: 0,
+            gifts: 0,
+            change: 0,
+          },
+          videos: (data.topPosts || []).map((p, i) => ({
+            id: p.id || `v-${i}`,
+            title: p.caption || p.content?.slice(0, 40) || `Video ${i + 1}`,
+            thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
+            views: p.views || p.likeCount || 0,
+            likes: p.likeCount || 0,
+            comments: p.commentCount || 0,
+            shares: p.shareCount || 0,
+            watchTime: 0,
+            completionRate: 0,
+            earnings: 0,
+          })),
+          audience: {
+            demographics: {
+              age: Object.entries(data.demographics?.ageGroups || {}).map(([range, percentage]) => ({ range, percentage })),
+              gender: Object.entries(data.demographics?.gender || {}).map(([type, percentage]) => ({ type, percentage })),
+            },
+            topCountries: Object.entries(data.demographics?.locations || {}).slice(0, 5).map(([country, percentage]) => ({ country, percentage })),
+          },
+        });
+      } catch (err) {
+        console.error('Failed to load analytics:', err);
+        if (!cancelled) setAnalytics(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+        if (!cancelled) setIsInitialized(true);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid, timeRange]);
+
+
+  
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: TrendingUp },
@@ -202,23 +175,28 @@ const VideoAnalyticsScreen = () => {
 
       {/* Content */}
       <div className="max-w-5xl mx-auto p-4">
+        {!analytics && (
+          <div className="text-center py-16 text-white/50">
+            {loading ? 'Loading analytics...' : 'No analytics available yet. Publish videos to see insights.'}
+          </div>
+        )}
         {/* Overview Tab */}
-        {activeTab === 'overview' && (
+        {analytics && activeTab === 'overview' && (
           <OverviewTab analytics={analytics} />
         )}
 
         {/* Videos Tab */}
-        {activeTab === 'videos' && (
+        {analytics && activeTab === 'videos' && (
           <VideosTab videos={analytics.videos} />
         )}
 
         {/* Audience Tab */}
-        {activeTab === 'audience' && (
+        {analytics && activeTab === 'audience' && (
           <AudienceTab audience={analytics.audience} />
         )}
 
         {/* Revenue Tab */}
-        {activeTab === 'revenue' && (
+        {analytics && activeTab === 'revenue' && (
           <RevenueTab revenue={analytics.revenue} />
         )}
       </div>

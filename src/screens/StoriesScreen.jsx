@@ -17,273 +17,6 @@ import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
 
 // High definition sample stories matching Screenshot 2
-const SAMPLE_STORIES = [
-  {
-    id: 'story-1',
-    user: {
-      id: 'u-omar',
-      name: 'Omar',
-      username: 'omar.vibes',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Following',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '2m ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'video',
-    badgeType: 'video',
-    mediaUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-    caption: 'Tropical sunset at the beach club 🌅🌴',
-    viewsCount: '1.4K',
-    items: [
-      {
-        id: 'i1',
-        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Tropical sunset at the beach club 🌅🌴',
-        duration: 5,
-      },
-      {
-        id: 'i2',
-        url: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Night vibes starting up 🍹✨',
-        duration: 5,
-      },
-      {
-        id: 'i3',
-        url: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'City skyline in view 🏙️',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-2',
-    user: {
-      id: 'u-sara',
-      name: 'Sara',
-      username: 'sarakhan',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Friends',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '15m ago',
-    itemsCount: 4,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'photo',
-    mediaUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
-    caption: 'Morning in the alpine peaks 🏔️❄️',
-    viewsCount: '2.8K',
-    items: [
-      {
-        id: 'i4',
-        url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Morning in the alpine peaks 🏔️❄️',
-        duration: 5,
-      },
-      {
-        id: 'i5',
-        url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Pure reflection on the lake 🌊',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-3',
-    user: {
-      id: 'u-alex',
-      name: 'Alex',
-      username: 'alex.live',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Live',
-      isCloseFriend: false,
-      isLive: true,
-    },
-    timeAgo: '27m ago',
-    itemsCount: 1,
-    activeItemIndex: 0,
-    mediaType: 'video',
-    badgeType: 'live',
-    viewerCount: '1.2K',
-    mediaUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
-    caption: 'LIVE Concert soundcheck & crowd hype! 🎸🔥',
-    viewsCount: '12K',
-    items: [
-      {
-        id: 'i6',
-        url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'LIVE Concert soundcheck & crowd hype! 🎸🔥',
-        duration: 8,
-      }
-    ]
-  },
-  {
-    id: 'story-4',
-    user: {
-      id: 'u-lina',
-      name: 'Lina',
-      username: 'lina.cozy',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Following',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '35m ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'audio',
-    badgeType: 'music',
-    musicTitle: 'Lo-Fi Chill Hop – Cafe Beats',
-    mediaUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
-    caption: 'Warm roast latte & morning design session ☕💻',
-    viewsCount: '920',
-    items: [
-      {
-        id: 'i7',
-        url: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Warm roast latte & morning design session ☕💻',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-5',
-    user: {
-      id: 'u-ali',
-      name: 'Ali',
-      username: 'ali.cyber',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Friends',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '45m ago',
-    itemsCount: 2,
-    activeItemIndex: 0,
-    mediaType: 'location',
-    badgeType: 'location',
-    locationName: 'Neo Tokyo, District 9',
-    mediaUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
-    caption: 'Midnight neon rain reflections in the city 🌧️🏮',
-    viewsCount: '3.1K',
-    items: [
-      {
-        id: 'i8',
-        url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Midnight neon rain reflections in the city 🌧️🏮',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-6',
-    user: {
-      id: 'u-maya',
-      name: 'Maya',
-      username: 'maya.culinary',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Close Friends',
-      isCloseFriend: true,
-      isLive: false,
-    },
-    timeAgo: '1h ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'star',
-    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-    caption: 'Handmade Italian basil tomato pasta 🍝🌿',
-    viewsCount: '4.5K',
-    items: [
-      {
-        id: 'i9',
-        url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Handmade Italian basil tomato pasta 🍝🌿',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-7',
-    user: {
-      id: 'u-ibrahim',
-      name: 'Ibrahim',
-      username: 'ibrahim.vibes',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Friends',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '1h ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'video',
-    badgeType: 'video',
-    mediaUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800&auto=format&fit=crop&q=80',
-    caption: 'Sunset peaks and contemplation over the valley ⛰️🌄',
-    viewsCount: '1.9K',
-    items: [
-      {
-        id: 'i10',
-        url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Sunset peaks and contemplation over the valley ⛰️🌄',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-8',
-    user: {
-      id: 'u-noor',
-      name: 'Noor',
-      username: 'noor.nights',
-      avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Close Friends',
-      isCloseFriend: true,
-      isLive: false,
-    },
-    timeAgo: '2h ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'star',
-    mediaUrl: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&auto=format&fit=crop&q=80',
-    caption: 'Santorini golden hour lanterns & whitewashed views 🏛️✨',
-    viewsCount: '5.2K',
-    items: [
-      {
-        id: 'i11',
-        url: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Santorini golden hour lanterns & whitewashed views 🏛️✨',
-        duration: 5,
-      }
-    ]
-  }
-];
-
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
   { id: 'friends', label: 'Friends', icon: null },
@@ -314,10 +47,63 @@ export default function StoriesScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [flyingParticles, setFlyingParticles] = useState([]);
-  const [stories, setStories] = useState(SAMPLE_STORIES);
+  const [stories, setStories] = useState([]);
+  const [storiesLoading, setStoriesLoading] = useState(true);
   const [likedStories, setLikedStories] = useState({});
 
   const progressIntervalRef = useRef(null);
+
+  // Load REAL stories from storyService (Firestore-backed feed)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
+        if (cancelled) return;
+        const groups = feed?.groups || [];
+        const mapped = groups.map((g) => {
+          const storiesArr = g.stories || [];
+          const author = storiesArr[0]?.authorName || g.userId;
+          const authorPhoto = storiesArr[0]?.authorPhoto || '/assets/default-profile.png';
+          return {
+            id: g.userId || `g-${Math.random().toString(36).slice(2, 7)}`,
+            user: {
+              id: g.userId,
+              name: author,
+              username: author.toLowerCase().replace(/\s+/g, '.'),
+              avatar: authorPhoto,
+              verified: false,
+              category: 'Following',
+              isCloseFriend: false,
+              isLive: false,
+            },
+            timeAgo: 'Recently',
+            itemsCount: storiesArr.length,
+            activeItemIndex: 0,
+            mediaType: storiesArr[0]?.type || 'image',
+            badgeType: storiesArr[0]?.type || 'image',
+            mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
+            caption: storiesArr[0]?.content || '',
+            viewsCount: String(storiesArr[0]?.stats?.views || 0),
+            items: storiesArr.map((st) => ({
+              id: st.id,
+              url: st.media?.url || st.content || '',
+              type: st.type || 'image',
+              caption: st.content || '',
+            })),
+          };
+        });
+        setStories(mapped);
+      } catch (err) {
+        console.error('Failed to load stories:', err);
+        if (!cancelled) setStories([]);
+      } finally {
+        if (!cancelled) setStoriesLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   // Filter stories based on active category & search
   const filteredStories = useMemo(() => {
@@ -946,7 +732,7 @@ export default function StoriesScreen() {
               </p>
 
               <div className="grid grid-cols-3 gap-2 mb-4">
-                {SAMPLE_STORIES.slice(0, 3).map((st) => (
+                {stories.slice(0, 3).map((st) => (
                   <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
                     <img src={st.mediaUrl} alt={st.caption} className="w-full h-full object-cover" />
                     <span className="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1 py-0.5 rounded text-white font-mono">
