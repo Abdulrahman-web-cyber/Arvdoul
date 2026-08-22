@@ -70,6 +70,45 @@ class ProductionAuthService {
 
       this.firebase = firebaseApp;
       this.initialized = true;
+
+      // Handle Google redirect auth result if page was reloaded after redirect
+      try {
+        const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
+        const redirectResult = await getRedirectResult(this.auth);
+        if (redirectResult?.user) {
+          logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
+          const user = redirectResult.user;
+          const additionalInfo = getAdditionalUserInfo(redirectResult);
+          const isNewUser = additionalInfo?.isNewUser || false;
+          if (isNewUser && additionalInfo?.profile) {
+            await updateProfile(user, {
+              displayName: additionalInfo.profile.name || user.displayName,
+              photoURL: additionalInfo.profile.picture || user.photoURL
+            });
+            const { createUserProfile } = await import('./userService.js');
+            try {
+              await createUserProfile(user.uid, {
+                displayName: user.displayName,
+                email: user.email,
+                photoURL: user.photoURL,
+                authProvider: 'google',
+                emailVerified: user.emailVerified,
+              });
+            } catch (pErr) {
+              this._storePendingProfile(user.uid, {
+                displayName: user.displayName,
+                email: user.email,
+                photoURL: user.photoURL,
+                authProvider: 'google',
+                emailVerified: user.emailVerified
+              });
+            }
+          }
+        }
+      } catch (redirectError) {
+        logger.error('Google redirect sign-in error:', redirectError);
+      }
+
       logger.warn('// Auth service ready');
       return this.auth;
     } catch (error) {
@@ -672,7 +711,31 @@ class ProductionAuthService {
       provider.setCustomParameters({ prompt: 'select_account', login_hint: options.email || '' });
       await setPersistence(this.auth, browserLocalPersistence);
 
-      const result = await signInWithPopup(this.auth, provider);
+      const { signInWithRedirect } = await import('firebase/auth');
+      let result;
+      try {
+        result = await signInWithPopup(this.auth, provider);
+      } catch (popupError) {
+        logger.warn('signInWithPopup failed:', popupError.code || popupError.message);
+        // Fallback to signInWithRedirect if popup is blocked, closed, or restricted
+        if (
+          popupError.code === 'auth/popup-blocked' ||
+          popupError.code === 'auth/popup-closed-by-user' ||
+          popupError.code === 'auth/cancelled-popup-request' ||
+          popupError.code === 'auth/internal-error'
+        ) {
+          logger.warn('Popup blocked/failed; attempting signInWithRedirect fallback...');
+          try {
+            await signInWithRedirect(this.auth, provider);
+            return { success: true, redirecting: true };
+          } catch (redirectError) {
+            logger.error('signInWithRedirect failed:', redirectError);
+            throw popupError;
+          }
+        }
+        throw popupError;
+      }
+
       const user = result.user;
       const additionalInfo = getAdditionalUserInfo(result);
       const isNewUser = additionalInfo?.isNewUser || false;
@@ -746,18 +809,19 @@ class ProductionAuthService {
     try {
       await this.initialize();
       
-      // Extra safety: now that initialize() guarantees auth.settings exists,
-      // we can proceed. But in case some other issue arises, a clear error is
-      // thrown rather than a cryptic SDK crash.
       if (!this.auth.settings) {
-        throw new AuthError('auth/not-initialized',
-          'Firebase Auth settings are not available. Please refresh the page.');
+        this.auth.settings = {};
       }
       
       const { RecaptchaVerifier } = await import('firebase/auth');
       logger.warn('// Creating reCAPTCHA for:', containerId);
 
-      this.cleanupRecaptchaVerifier(containerId);
+      // Clean existing verifier instance safely
+      const existing = this.recaptchaVerifiers.get(containerId);
+      if (existing && typeof existing.clear === 'function') {
+        try { existing.clear(); } catch(e) {}
+      }
+      this.recaptchaVerifiers.delete(containerId);
 
       let container = document.getElementById(containerId);
       if (!container) {
@@ -765,8 +829,9 @@ class ProductionAuthService {
         container.id = containerId;
         container.className = 'recaptcha-container';
         document.body.appendChild(container);
+      } else {
+        container.innerHTML = '';
       }
-      container.innerHTML = '';
 
       const recaptchaVerifier = new RecaptchaVerifier(
         this.auth,
@@ -779,7 +844,6 @@ class ProductionAuthService {
             if (options.callback) options.callback(response);
           },
           'expired-callback': () => {
-//             logger.warn('❌ reCAPTCHA expired');
             if (options.expiredCallback) options.expiredCallback();
             this.cleanupRecaptchaVerifier(containerId);
           }
@@ -805,20 +869,14 @@ class ProductionAuthService {
     try {
       const verifier = this.recaptchaVerifiers.get(containerId);
       if (verifier && typeof verifier.clear === 'function') {
-        verifier.clear();
-//         logger.warn(`🧹 Called clear() on reCAPTCHA verifier for ${containerId}`);
+        try { verifier.clear(); } catch(e) {}
       }
       this.recaptchaVerifiers.delete(containerId);
     } catch (e) {
-//       logger.warn(`Error during verifier cleanup for ${containerId}:`, e);
     } finally {
       const container = document.getElementById(containerId);
-      if (container && container.parentNode) {
-        container.parentNode.removeChild(container);
-//         logger.warn(`🗑️ Removed container #${containerId} from DOM`);
-      } else if (container) {
+      if (container) {
         container.innerHTML = '';
-//         logger.warn(`🧹 Cleared innerHTML of container #${containerId}`);
       }
     }
   }

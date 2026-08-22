@@ -686,8 +686,8 @@ export const SignupProvider = ({ children }) => {
         verifier = await initRecaptcha();
       }
 
-      if (!recaptchaReady) {
-        throw new Error("Security verification not ready");
+      if (!verifier) {
+        throw new Error("Security verification failed to initialize");
       }
 
       // Send OTP
