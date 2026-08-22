@@ -49,6 +49,18 @@ jest.mock('../../utils/CacheManager', () => ({
   }
 }));
 
+jest.mock('../../services/commentService.js', () => ({
+  getCommentService: () => ({
+    getCommentsByPost: jest.fn(async () => ({ success: true, comments: [] })),
+    subscribeToPostComments: jest.fn(() => () => {}),
+    createComment: jest.fn(async () => ({ success: true })),
+    likeComment: jest.fn(async () => ({})),
+    removeLikeDislike: jest.fn(async () => ({})),
+    deleteComment: jest.fn(async () => ({})),
+    updateComment: jest.fn(async () => ({})),
+  }),
+}));
+
 import ReelsFeed from './ReelsFeed';
 
 describe('ReelsFeed', () => {

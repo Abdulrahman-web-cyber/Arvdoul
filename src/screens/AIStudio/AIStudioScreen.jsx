@@ -73,6 +73,13 @@ export default function AIStudioScreen() {
   // Localization State
   const [localizeText, setLocalizeText] = useState('Welcome to Arvdoul, the ultimate creative economy platform for modern creators.');
   const [translations, setTranslations] = useState(null);
+  const [aiError, setAiError] = useState(null);
+
+  // Honest error text: AI features require the server-side gateway
+  // (functions/ai.js, exposed as VITE_AI_GATEWAY_URL). Without it, no output
+  // is fabricated — the user sees exactly why nothing was generated.
+  const AI_UNAVAILABLE_MSG =
+    'AI Studio is not configured yet. The AI gateway (VITE_AI_GATEWAY_URL → functions/ai.js) must be set up before captions, scripts, prompts or analyses can be generated. Nothing was fabricated to hide this.';
 
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
@@ -84,14 +91,23 @@ export default function AIStudioScreen() {
   // 1. Generate Caption
   const handleGenerateCaption = async () => {
     setLoading(true);
+    setAiError(null);
     try {
       const res = await aiStudioService.generateCaptions({
         topic: captionTopic,
         tone: captionTone
       });
+      if (!res) {
+        setAiError(AI_UNAVAILABLE_MSG);
+        setGeneratedCaption(null);
+        toast.error('AI gateway unavailable — no caption was generated');
+        return;
+      }
       setGeneratedCaption(res);
-      toast.success('Generated viral caption! 🚀');
-    } catch {
+      toast.success('Generated caption! ✍️');
+    } catch (err) {
+      setAiError(err?.message || 'Failed to generate caption');
+      setGeneratedCaption(null);
       toast.error('Failed to generate caption');
     } finally {
       setLoading(false);
@@ -101,15 +117,24 @@ export default function AIStudioScreen() {
   // 2. Generate Script
   const handleGenerateScript = async () => {
     setLoading(true);
+    setAiError(null);
     try {
       const res = await aiStudioService.generateScript({
         topic: scriptTopic,
         duration: scriptDuration,
         style: scriptStyle
       });
+      if (!res) {
+        setAiError(AI_UNAVAILABLE_MSG);
+        setGeneratedScript(null);
+        toast.error('AI gateway unavailable — no script was generated');
+        return;
+      }
       setGeneratedScript(res);
       toast.success('Generated video storyboard! 🎬');
-    } catch {
+    } catch (err) {
+      setAiError(err?.message || 'Failed to generate script');
+      setGeneratedScript(null);
       toast.error('Failed to generate script');
     } finally {
       setLoading(false);
@@ -119,15 +144,24 @@ export default function AIStudioScreen() {
   // 3. Generate Image Prompt
   const handleGeneratePrompt = async () => {
     setLoading(true);
+    setAiError(null);
     try {
       const res = await aiStudioService.craftImagePrompt({
         subject: promptSubject,
         style: promptStyle,
         ratio: promptRatio
       });
+      if (!res) {
+        setAiError(AI_UNAVAILABLE_MSG);
+        setGeneratedPrompt(null);
+        toast.error('AI gateway unavailable — no prompt was crafted');
+        return;
+      }
       setGeneratedPrompt(res);
       toast.success('AI Prompt crafted! 🎨');
-    } catch {
+    } catch (err) {
+      setAiError(err?.message || 'Failed to craft prompt');
+      setGeneratedPrompt(null);
       toast.error('Failed to craft prompt');
     } finally {
       setLoading(false);
@@ -137,11 +171,20 @@ export default function AIStudioScreen() {
   // 4. Analyze Viral Score
   const handleAnalyzeViral = async () => {
     setLoading(true);
+    setAiError(null);
     try {
       const res = await aiStudioService.analyzeViralPotential({ text: sentimentText });
+      if (!res) {
+        setAiError(AI_UNAVAILABLE_MSG);
+        setViralAnalysis(null);
+        toast.error('AI gateway unavailable — no analysis was produced');
+        return;
+      }
       setViralAnalysis(res);
-      toast.success('Audience simulation complete! 📊');
-    } catch {
+      toast.success('AI analysis complete! 📊');
+    } catch (err) {
+      setAiError(err?.message || 'Analysis failed');
+      setViralAnalysis(null);
       toast.error('Analysis failed');
     } finally {
       setLoading(false);
@@ -154,7 +197,11 @@ export default function AIStudioScreen() {
     try {
       const res = await aiStudioService.localizeContent({ text: localizeText });
       setTranslations(res);
-      toast.success('Content localized into 5 languages! 🌍');
+      if (res.some((item) => item.untranslated)) {
+        toast.warning('AI translation unavailable - showing original text');
+      } else {
+        toast.success('Content localized into 5 languages! 🌍');
+      }
     } catch {
       toast.error('Localization failed');
     } finally {
@@ -179,7 +226,7 @@ export default function AIStudioScreen() {
               AI Creator Co-Pilot <Crown className="w-6 h-6 text-yellow-400" />
             </h1>
             <p className="text-gray-300 text-sm sm:text-base mt-2 max-w-xl">
-              Supercharge your creative workflow with viral hooks, multi-scene video scripts, prompt engineering, audience retention simulation, and global localization.
+              Supercharge your creative workflow with viral hooks, multi-scene video scripts, prompt engineering, AI audience analysis, and global localization.
             </p>
           </div>
 
@@ -221,6 +268,17 @@ export default function AIStudioScreen() {
       {/* Main Content Area */}
       <AnimatePresence mode="wait">
         {/* ==================== TAB 1: CAPTIONS & VIRAL HOOKS ==================== */}
+        {/* Honest AI-unavailable banner (shown on any tab after a failed call) */}
+        {aiError && (
+          <div className="mb-6 p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
+            <span className="text-xl" aria-hidden="true">⚠️</span>
+            <div>
+              <p className="text-sm font-bold text-amber-300 mb-1">AI Studio unavailable</p>
+              <p className="text-xs text-amber-200/80 leading-relaxed">{aiError}</p>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'captions' && (
           <motion.div
             key="captions"
@@ -292,21 +350,16 @@ export default function AIStudioScreen() {
                     <Sparkles className="w-5 h-5 text-purple-400" />
                     AI Output & Viral Hook
                   </div>
-                  {generatedCaption && (
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold flex items-center gap-1">
-                        <Flame className="w-3.5 h-3.5" /> Viral Score: {generatedCaption.viralScore}/100
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 {generatedCaption ? (
                   <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30">
-                      <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block mb-1">Generated Hook</span>
-                      <p className="text-base font-extrabold text-white">{generatedCaption.hook}</p>
-                    </div>
+                    {generatedCaption.hook && (
+                      <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30">
+                        <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block mb-1">Generated Hook</span>
+                        <p className="text-base font-extrabold text-white">{generatedCaption.hook}</p>
+                      </div>
+                    )}
 
                     <div className="p-4 rounded-2xl bg-gray-800/60 border border-gray-700/60">
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">Complete Post Caption</span>
@@ -394,7 +447,9 @@ export default function AIStudioScreen() {
                 <div className="flex items-center justify-between pb-4 border-b border-gray-800">
                   <div>
                     <h3 className="text-lg font-bold text-white">{generatedScript.title}</h3>
-                    <p className="text-xs text-purple-400">Pacing: {generatedScript.estimatedPacing} • Audio: {generatedScript.suggestedBgm}</p>
+                    {generatedScript.estimatedPacing && generatedScript.suggestedBgm && (
+                      <p className="text-xs text-purple-400">Pacing: {generatedScript.estimatedPacing} • Audio: {generatedScript.suggestedBgm}</p>
+                    )}
                   </div>
                   <button
                     onClick={() => navigate('/video-editor')}
@@ -404,23 +459,9 @@ export default function AIStudioScreen() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  {generatedScript.scenes.map((scene, idx) => (
-                    <div key={idx} className="p-4 rounded-2xl bg-gray-800/50 border border-gray-700/60 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-1 bg-purple-500/20 text-purple-300 font-bold rounded-lg text-xs">Scene {scene.scene} ({scene.time})</span>
-                        <span className="text-[11px] text-gray-400">🔊 {scene.audioCue}</span>
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-gray-400 block font-semibold">Visual Action:</span>
-                        <p className="text-xs text-gray-200">{scene.visual}</p>
-                      </div>
-                      <div className="pt-2 border-t border-gray-700/50">
-                        <span className="text-[11px] text-yellow-400 block font-semibold">Voiceover / Speech:</span>
-                        <p className="text-xs font-medium text-white italic">"{scene.speech}"</p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="p-4 rounded-2xl bg-gray-800/50 border border-gray-700/60 pt-2">
+                  <span className="text-[11px] text-gray-400 block font-semibold mb-2">Multi-scene script (AI output):</span>
+                  <p className="text-sm text-gray-200 whitespace-pre-line leading-relaxed">{generatedScript.rawScriptText}</p>
                 </div>
               </div>
             )}
@@ -500,11 +541,6 @@ export default function AIStudioScreen() {
                       <span className="text-xs font-bold text-blue-400 uppercase tracking-wider block mb-1">Optimized Positive Prompt</span>
                       <p className="text-xs font-mono text-gray-200 break-words leading-relaxed">{generatedPrompt.prompt}</p>
                     </div>
-
-                    <div className="p-3 rounded-xl bg-gray-800/40 border border-gray-700 text-xs text-gray-400">
-                      <span className="font-bold block text-red-400 mb-1">Negative Weights:</span>
-                      {generatedPrompt.negativePrompt}
-                    </div>
                   </div>
                 ) : (
                   <div className="h-48 flex items-center justify-center text-center text-gray-500 border border-dashed border-gray-700 rounded-2xl">
@@ -549,44 +585,22 @@ export default function AIStudioScreen() {
                 disabled={loading}
                 className="w-full py-3.5 rounded-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
               >
-                {loading ? <LoadingSpinner size="sm" /> : <><TrendingUp className="w-5 h-5" /> Simulate Viral Retention & Sentiment</>}
+                {loading ? <LoadingSpinner size="sm" /> : <><TrendingUp className="w-5 h-5" /> Analyze Viral Retention & Sentiment</>}
               </button>
             </div>
 
             {viralAnalysis && (
-              <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-6`}>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-2xl bg-green-500/10 border border-green-500/30 text-center">
-                    <span className="text-3xl font-extrabold text-green-400">{viralAnalysis.viralScore}%</span>
-                    <span className="text-[11px] text-gray-400 block mt-1 uppercase font-bold">Viral Probability</span>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-center">
-                    <span className="text-3xl font-extrabold text-blue-400">{viralAnalysis.sentiment.curiosity}%</span>
-                    <span className="text-[11px] text-gray-400 block mt-1 uppercase font-bold">Curiosity Hook</span>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-center">
-                    <span className="text-3xl font-extrabold text-purple-400">{viralAnalysis.sentiment.actionability}%</span>
-                    <span className="text-[11px] text-gray-400 block mt-1 uppercase font-bold">Actionability</span>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center">
-                    <span className="text-3xl font-extrabold text-amber-400">{viralAnalysis.sentiment.positive}%</span>
-                    <span className="text-[11px] text-gray-400 block mt-1 uppercase font-bold">Positive Sentiment</span>
-                  </div>
+              <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-yellow-400" />
+                  <h4 className="font-bold text-sm text-white">AI Analysis of Your Content</h4>
                 </div>
-
-                <div>
-                  <h4 className="font-bold text-sm text-white mb-2 flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-yellow-400" /> AI Optimization Recommendations:
-                  </h4>
-                  <ul className="space-y-2">
-                    {viralAnalysis.recommendations.map((rec, i) => (
-                      <li key={i} className="text-xs text-gray-300 flex items-start gap-2">
-                        <Check className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <p className="text-sm text-gray-200 whitespace-pre-line leading-relaxed">
+                  {viralAnalysis.rawAnalysis}
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  Quantitative scores (viral %, sentiment %) require the full model pipeline and are not estimated locally.
+                </p>
               </div>
             )}
           </motion.div>
@@ -624,13 +638,17 @@ export default function AIStudioScreen() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {translations.map((item, idx) => (
                   <div key={idx} className={`p-4 rounded-2xl border ${isDark ? 'bg-gray-900/80 border-gray-800' : 'bg-white border-gray-200'} shadow-md space-y-2`}>
-                    <p className="text-xs text-gray-200 font-sans leading-relaxed">{item.translation}</p>
-                    <button
-                      onClick={() => handleCopy(item.translation)}
-                      className="text-[11px] text-amber-400 font-semibold flex items-center gap-1 hover:underline pt-1"
-                    >
-                      <Copy className="w-3 h-3" /> Copy translation
-                    </button>
+                    <p className="text-xs text-gray-200 font-sans leading-relaxed">
+                      {item.untranslated ? item.original : item.translation}
+                    </p>
+                    {!item.untranslated && (
+                      <button
+                        onClick={() => handleCopy(item.translation)}
+                        className="text-[11px] text-amber-400 font-semibold flex items-center gap-1 hover:underline pt-1"
+                      >
+                        <Copy className="w-3 h-3" /> Copy translation
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

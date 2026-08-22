@@ -181,24 +181,30 @@ class SpacesService {
   }
 
   async createSpace({ title, category = 'General', isRecording = true, hostUser }) {
+    if (!hostUser?.uid) {
+      throw new Error('Sign in to start a space');
+    }
     log.info('Creating new live space in Firestore', { title, category });
     const firestore = await getFirestoreInstance();
     const { collection, addDoc } = await import('firebase/firestore');
 
+    // Honest host identity: real user fields only; no fabricated names,
+    // handles, avatars or "Verified" badges.
     const newSpace = {
       title,
       category,
       isLive: true,
       startedAt: Date.now(),
+      hostId: hostUser.uid,
       host: {
-        id: hostUser?.uid || 'usr-creator',
-        name: hostUser?.displayName || 'Arvdoul Creator',
-        username: hostUser?.username ? `@${hostUser.username}` : '@creator',
-        avatar: hostUser?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        isVerified: true
+        id: hostUser.uid,
+        name: hostUser.displayName || '',
+        username: hostUser.username ? `@${hostUser.username}` : null,
+        avatar: hostUser.photoURL || null,
+        isVerified: false
       },
       speakers: [],
-      audienceCount: 1,
+      audienceCount: 0,
       listeners: [],
       raisedHands: [],
       tipsTotalCoins: 0,
@@ -209,15 +215,49 @@ class SpacesService {
     return { id: docRef.id, ...newSpace };
   }
 
-  async sendTip(spaceId, amount, speakerId) {
-    log.info('Tipping in space', { spaceId, amount, speakerId });
+  /**
+   * REAL coin tip: debits the sender via the server-authoritative coin ledger
+   * (spendCoins CF with atomic fallback) and credits the speaker, then
+   * updates the space's running tip total (best-effort). Never lets a sender
+   * tip coins they do not have.
+   */
+  async sendTip(spaceId, amount, speakerId, senderId = null) {
+    log.info('Tipping in space', { spaceId, amount, speakerId, senderId });
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount <= 0) {
+      return { success: false, error: 'Invalid tip amount' };
+    }
+    if (!senderId) {
+      return { success: false, error: 'Sign in to send a tip' };
+    }
+
     try {
-      const firestore = await getFirestoreInstance();
-      const { doc, updateDoc, increment } = await import('firebase/firestore');
-      const spaceRef = doc(firestore, 'spaces', spaceId);
-      await updateDoc(spaceRef, {
-        tipsTotalCoins: increment(Number(amount))
-      });
+      // 1. REAL double-entry transfer: sender → speaker.
+      const { getMonetizationService } = await import('./monetizationService.js');
+      const monetization = getMonetizationService();
+      const transfer = await monetization.transferCoins(
+        senderId,
+        speakerId,
+        numericAmount,
+        'space_tip',
+        { spaceId }
+      );
+      if (!transfer?.success) {
+        return { success: false, error: transfer?.message || 'Tip could not be processed' };
+      }
+
+      // 2. Space tip total (best-effort — ledger above is authoritative).
+      try {
+        const firestore = await getFirestoreInstance();
+        const { doc, updateDoc, increment } = await import('firebase/firestore');
+        const spaceRef = doc(firestore, 'spaces', spaceId);
+        await updateDoc(spaceRef, {
+          tipsTotalCoins: increment(numericAmount)
+        });
+      } catch (err) {
+        log.warn('Space tip counter update failed (ledger already settled):', err.message);
+      }
+
       return { success: true };
     } catch (err) {
       log.error('Error sending tip in space', err);

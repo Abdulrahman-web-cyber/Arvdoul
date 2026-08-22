@@ -66,8 +66,13 @@ export default function RecordVoiceModal({
 
   const startRecording = () => {
     if (!mediaStream) {
-      // In case no physical webcam in sandbox, use simulated recording
-      simulateRecording();
+      // No fabricated recordings: without a granted camera/mic stream there is
+      // nothing real to record. Surface the permission state instead.
+      setPermissionError(
+        mode === 'record'
+          ? 'Camera and microphone access is required to record. Grant permission and try again.'
+          : 'Microphone access is required to record a voiceover. Grant permission and try again.'
+      );
       return;
     }
 
@@ -78,6 +83,10 @@ export default function RecordVoiceModal({
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
+        if (chunksRef.current.length === 0) {
+          setPermissionError('Recording produced no audio data. Try again.');
+          return;
+        }
         const mimeType = mode === 'record' ? 'video/webm' : 'audio/webm';
         const blob = new Blob(chunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(blob);
@@ -92,15 +101,9 @@ export default function RecordVoiceModal({
         setRecordDuration((prev) => prev + 1);
       }, 1000);
     } catch (err) {
-      simulateRecording();
+      console.warn('MediaRecorder failed to start:', err);
+      setPermissionError('Recording could not be started on this device/browser.');
     }
-  };
-
-  const simulateRecording = () => {
-    setIsRecording(true);
-    timerRef.current = setInterval(() => {
-      setRecordDuration((prev) => prev + 1);
-    }, 1000);
   };
 
   const stopRecording = () => {
@@ -109,21 +112,19 @@ export default function RecordVoiceModal({
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-    } else {
-      // simulated blob
-      setRecordedBlobUrl(
-        mode === 'record'
-          ? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-          : 'https://cdn.freesound.org/previews/518/518888_11565147-lq.mp3'
-      );
     }
+    // No recorder/no data => recordedBlobUrl stays null (nothing fabricated).
   };
 
   const handleApplyToTimeline = () => {
+    if (!recordedBlobUrl) {
+      setPermissionError('Nothing to add - record a clip first.');
+      return;
+    }
     onAddRecordedClip?.({
       type: mode === 'record' ? 'video' : 'audio',
-      url: recordedBlobUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      duration: Math.max(3, recordDuration),
+      url: recordedBlobUrl,
+      duration: Math.max(1, recordDuration),
       title: mode === 'record' ? 'Camera Recording' : 'Voiceover Track',
     });
     onClose();
@@ -200,7 +201,7 @@ export default function RecordVoiceModal({
             <div className="absolute inset-0 bg-black/80 p-4 flex flex-col items-center justify-center text-center">
               <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
               <p className="text-xs text-gray-300 max-w-xs">{permissionError}</p>
-              <p className="text-[11px] text-gray-500 mt-1">Using high-fidelity simulator mode.</p>
+              <p className="text-[11px] text-gray-500 mt-1">Allow microphone access to record — no simulated audio is ever produced.</p>
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo, memo, useEffect } from "react";
+import { toast } from "sonner";
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   ChevronUp,
@@ -139,6 +140,9 @@ import { GiGoldBar, GiTreasureMap, GiCrownCoin } from "react-icons/gi";
 import { MdAdsClick, MdOutlinePaid, MdAccountBalance, MdTrendingUp, MdShowChart } from "react-icons/md";
 import { RiCopperCoinLine } from "react-icons/ri";
 import { SiCashapp } from "react-icons/si";
+
+// Monetization (withdrawals) unlocks at level 10 — matches levelSystemService LEVEL_PERKS.
+const MONETIZATION_MIN_LEVEL = 10;
 
 // ==================== CONSTANTS & CONFIGURATION ====================
 const ANIMATION_CONFIG = {
@@ -300,11 +304,12 @@ const ProgressBar = memo(({ value, max = 100, label, showLabel = true, color = "
 });
 
 const LevelBadge = memo(({ level, size = "md", showLevel = true }) => {
+  // Level bands aligned with the real 15-level curve (levelSystemService.LEVELS).
   const getBadgeColor = () => {
-    if (level >= 40) return "from-yellow-400 via-amber-500 to-orange-500";
-    if (level >= 30) return "from-purple-400 via-pink-500 to-rose-500";
-    if (level >= 20) return "from-blue-400 via-cyan-500 to-teal-500";
-    if (level >= 10) return "from-green-400 via-emerald-500 to-teal-500";
+    if (level >= 15) return "from-yellow-400 via-amber-500 to-orange-500";
+    if (level >= 12) return "from-purple-400 via-pink-500 to-rose-500";
+    if (level >= 8) return "from-blue-400 via-cyan-500 to-teal-500";
+    if (level >= 4) return "from-green-400 via-emerald-500 to-teal-500";
     return "from-gray-400 via-gray-500 to-gray-600";
   };
 
@@ -634,7 +639,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   // ==================== QUICK ACTIONS ====================
   const quickActions = useMemo(() => {
     const isCreator = currentUser?.isCreator || false;
-    const canMonetize = currentUser?.level >= 25 || isCreator;
+    const canMonetize = (currentUser?.level || 1) >= MONETIZATION_MIN_LEVEL || isCreator;
     
     return {
       create: [
@@ -689,7 +694,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           description: "Earn & spend",
           earnings: monetization.coinsEarnedToday || 0,
           disabled: !canMonetize,
-          disabledText: "Unlock at Level 25"
+          disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         },
         { 
           label: "Earnings", 
@@ -699,7 +704,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           description: "View income",
           earnings: monetization.todayEarnings || 0,
           disabled: !canMonetize,
-          disabledText: "Unlock at Level 25"
+          disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         },
         { 
           label: "Ads", 
@@ -709,7 +714,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           description: "Ad revenue",
           earnings: monetization.adRevenueToday || 0,
           disabled: !canMonetize,
-          disabledText: "Unlock at Level 25"
+          disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         },
         { 
           label: "Sponsored", 
@@ -719,7 +724,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           description: "Brand deals",
           earnings: monetization.sponsoredToday || 0,
           disabled: !canMonetize,
-          disabledText: "Unlock at Level 25"
+          disabledText: `Unlock at Level ${MONETIZATION_MIN_LEVEL}`
         }
       ],
       navigate: [
@@ -904,19 +909,18 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     action();
   }, [playSound]);
 
-  const copyProfileLink = useCallback(() => {
+  const copyProfileLink = useCallback(async () => {
     const username = currentUser?.username;
     if (username) {
       const link = `${window.location.origin}/profile/${username}`;
-      navigator.clipboard.writeText(link).then(() => {
+      try {
+        await navigator.clipboard.writeText(link);
         track("Profile_Link_Copied");
-        // Show success toast
-        if (window.toast) {
-          window.toast.success("Profile link copied!");
-        }
-      }).catch(err => {
+        toast.success("Profile link copied!");
+      } catch (err) {
         console.error("Failed to copy:", err);
-      });
+        toast.error("Could not copy link");
+      }
     }
   }, [currentUser?.username, track]);
 
@@ -1386,7 +1390,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   );
 
   const renderMonetization = () => {
-    const canMonetize = currentUser?.level >= 25 || currentUser?.isCreator;
+    const canMonetize = (currentUser?.level || 1) >= MONETIZATION_MIN_LEVEL || currentUser?.isCreator;
     
     return (
       <motion.div
@@ -1404,7 +1408,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
               Monetization
             </h3>
             <Badge variant={canMonetize ? "monetization" : "warning"}>
-              {canMonetize ? "Active" : "Unlock at Level 25"}
+              {canMonetize ? "Active" : `Unlock at Level ${MONETIZATION_MIN_LEVEL}`}
             </Badge>
           </div>
           
@@ -1422,12 +1426,12 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     Monetization Locked
                   </h4>
                   <p className="text-sm text-amber-700/70 dark:text-amber-300/70 mt-1">
-                    Reach Level 25 to unlock monetization features. You need {25 - (currentUser?.level || 1)} more levels.
+                    Reach Level {MONETIZATION_MIN_LEVEL} to unlock monetization features. You need {Math.max(0, MONETIZATION_MIN_LEVEL - (currentUser?.level || 1))} more levels.
                   </p>
                   <ProgressBar 
                     value={currentUser?.level || 1} 
-                    max={25}
-                    label="Progress to Level 25"
+                    max={MONETIZATION_MIN_LEVEL}
+                    label={`Progress to Level ${MONETIZATION_MIN_LEVEL}`}
                     color="amber"
                     size="sm"
                     className="mt-3"

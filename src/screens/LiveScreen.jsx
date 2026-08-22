@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '@context/ThemeContext';
 import { getLiveService } from '../services/liveService';
 import { cn } from '../lib/utils';
+import { useEscapeClose } from '../hooks/useEscapeClose';
 import {
   Video, VideoOff, Mic, MicOff, Users, Gift, Heart, MessageCircle,
   X, Send, Phone, PhoneOff, Camera, Eye, Crown, Diamond, Rocket, Star,
@@ -29,10 +30,13 @@ export default function LiveScreen() {
 
   // Start-stream state
   const [showStartModal, setShowStartModal] = useState(false);
+  useEscapeClose(showStartModal, () => setShowStartModal(false));
   const [liveTitle, setLiveTitle] = useState('');
   const [visibility, setVisibility] = useState('public');
   const [starting, setStarting] = useState(false);
   const [myStream, setMyStream] = useState(null); // { id, startedAt }
+  const myStreamRef = useRef(null);
+  useEffect(() => { myStreamRef.current = myStream; }, [myStream]);
   const [duration, setDuration] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
   const durationRef = useRef(null);
@@ -116,6 +120,19 @@ export default function LiveScreen() {
     setMyStream(null); setViewerCount(0); setDuration(0);
     loadStreams();
   };
+
+  // Unmount while LIVE: stop the stream server-side and clear timers so no
+  // intervals leak and no zombie stream keeps counting viewers.
+  useEffect(() => {
+    return () => {
+      if (durationRef.current) clearInterval(durationRef.current);
+      if (viewerPollRef.current) clearInterval(viewerPollRef.current);
+      if (myStreamRef.current && user?.uid) {
+        svc().endLiveStream(myStreamRef.current.id, user.uid).catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // ---------- watch stream ----------
   const handleWatch = async (stream) => {

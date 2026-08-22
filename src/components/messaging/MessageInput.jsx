@@ -3,6 +3,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 import {
   Send,
   Paperclip,
@@ -39,6 +40,7 @@ const MessageInput = React.memo(({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const { user: currentUser } = useAuth();
   const textInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const mediaInputRef = useRef(null);
@@ -112,8 +114,10 @@ const MessageInput = React.memo(({
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
-      mediaRecorder.ondata = (event) => {
-        audioChunksRef.current.push(event.data);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
       mediaRecorder.onstart = () => {
@@ -382,7 +386,7 @@ const MessageInput = React.memo(({
               // Share your own profile card (real, privacy-safe) — device contact
               // pickers require native permissions unavailable on web.
               try {
-                const { user } = await import('../../context/AuthContext.jsx').then(m => ({ user: m.useAuth().user }));
+                const user = currentUser;
                 if (!user) { toast.error('Sign in to share your profile.'); return; }
                 await onSendMessage?.({
                   type: 'contact',

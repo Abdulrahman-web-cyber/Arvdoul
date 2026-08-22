@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSwipeable } from 'react-swipeable';
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import VideoCard from './VideoCard';
 import VideoComments from './VideoComments';
 import VideoBottomSheet from './VideoBottomSheet';
@@ -40,7 +41,8 @@ const VideoFeed = memo(({
   const [preloadedVideos, setPreloadedVideos] = useState({});
 
   const { theme, isDark } = useTheme();
-  const { setCurrentIndex: storeSetIndex, updateVideo, addToWatchLater } = useVideoStore();
+  const { user } = useAuth();
+  const { setCurrentIndex: storeSetIndex, updateVideo, addToWatchLater, removeFromWatchLater } = useVideoStore();
 
   // Keep selected video in sync
   const currentVideo = videos[currentIndex] || videos[0] || null;
@@ -163,7 +165,7 @@ const VideoFeed = memo(({
     }
   }, [updateVideo]);
 
-  const handleSave = useCallback((video) => {
+  const handleSave = useCallback(async (video) => {
     if (!video) return;
     const wasSaved = video.isSaved;
     updateVideo(video.id, {
@@ -174,9 +176,30 @@ const VideoFeed = memo(({
       addToWatchLater(video);
       toast.success('Saved to your collection! 🌟');
     } else {
+      removeFromWatchLater(video.id);
       toast.info('Removed from saved');
     }
-  }, [updateVideo, addToWatchLater]);
+
+    // Real server-side persistence (best-effort with rollback on failure).
+    if (user?.uid) {
+      try {
+        if (wasSaved) {
+          await videoService.unsaveVideo(video.id, user.uid);
+        } else {
+          await videoService.saveVideo(video.id, user.uid);
+        }
+      } catch (err) {
+        // Rollback local state.
+        updateVideo(video.id, {
+          isSaved: wasSaved,
+          saves: wasSaved ? (video.saves || 0) : Math.max(0, (video.saves || 1) - 1),
+        });
+        if (wasSaved) addToWatchLater(video);
+        else removeFromWatchLater(video.id);
+        toast.error(err?.message || 'Could not sync save. Are you signed in?');
+      }
+    }
+  }, [updateVideo, addToWatchLater, removeFromWatchLater, user?.uid]);
 
   const handleGift = useCallback((video) => {
     setSelectedVideo(video);

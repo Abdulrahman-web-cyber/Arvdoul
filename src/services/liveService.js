@@ -815,6 +815,16 @@ class UltimateLiveService {
         throw new Error('Gifts are disabled for this stream');
       }
       
+      // Debit the sender FIRST — the gift only exists if the coins were
+      // really charged (server-authoritative ledger).
+      const { getMonetizationService } = await import('./monetizationService.js');
+      const debit = await getMonetizationService().spendCoins(senderId, giftConfig.coinValue, 'live_gift', {
+        streamId, giftType, recipientId,
+      });
+      if (!debit?.success) {
+        throw new Error(debit?.message || 'Could not charge coins for this gift');
+      }
+
       const giftsRef = collection(this.firestore, 'live_gifts');
       const giftData = {
         streamId,
@@ -838,15 +848,6 @@ class UltimateLiveService {
           updatedAt: serverTimestamp(),
         });
       });
-
-      try {
-        const { getMonetizationService } = await import('./monetizationService.js');
-        await getMonetizationService().spendCoins(senderId, giftConfig.coinValue, 'live_gift', {
-          streamId, giftType, recipientId,
-        });
-      } catch (err) {
-        logger.warn('Gift coin deduction failed (server will reconcile)', { error: err.message });
-      }
 
       auditLogger.log('monetization.live_gift', {
         userId: senderId,
@@ -887,6 +888,17 @@ class UltimateLiveService {
       }
       
       const recipientId = streamSnap.data().userId;
+
+      // Debit sender + credit streamer FIRST via the real ledger — a tip
+      // only exists if the coins were really transferred.
+      const { getMonetizationService } = await import('./monetizationService.js');
+      const transfer = await getMonetizationService().transferCoins(
+        senderId, recipientId, amount, 'live_tip', { streamId }
+      );
+      if (!transfer?.success) {
+        throw new Error(transfer?.message || 'Could not process tip');
+      }
+
       const tipsRef = collection(this.firestore, 'live_tips');
       const tipData = {
         streamId,

@@ -20,6 +20,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { SPRING_ANIMATION, REPORT_REASONS } from '../../utils/videoUtils';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
@@ -33,9 +34,12 @@ const VideoBottomSheet = memo(({
   video,
 }) => {
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -84,7 +88,7 @@ const VideoBottomSheet = memo(({
     };
 
     if (shareUrls[platform]) {
-      window.open(shareUrls[platform], '_blank', 'width=600,height=400');
+      window.open(shareUrls[platform], '_blank', 'noopener,noreferrer,width=600,height=400');
     }
   };
 
@@ -109,26 +113,65 @@ const VideoBottomSheet = memo(({
     }
   };
 
-  // Handle save to watch later
-  const handleSave = () => {
-    toast.success('Added to Watch Later');
-    onClose();
+  // Handle save to watch later — REAL persistence: optimistic local store +
+  // server-side saved_videos record (best-effort with rollback on failure).
+  const handleSave = async () => {
+    if (!video?.id || saving) return;
+    setSaving(true);
+    const { useVideoStore } = await import('../../store/videoStore.js');
+    const store = useVideoStore.getState();
+    const wasSaved = store.isInWatchLater ? store.isInWatchLater(video.id) : false;
+
+    // Optimistic local update (Zustand persist → localStorage).
+    if (wasSaved) store.removeFromWatchLater(video.id);
+    else store.addToWatchLater(video);
+
+    try {
+      const { getVideoService } = await import('../../services/videoService.js');
+      const service = getVideoService();
+      if (wasSaved) {
+        await service.unsaveVideo(video.id, user?.uid || '');
+      } else {
+        await service.saveVideo(video.id, user?.uid || '');
+      }
+      toast.success(wasSaved ? 'Removed from Watch Later' : 'Added to Watch Later');
+    } catch (err) {
+      // Rollback local state on server failure.
+      if (wasSaved) store.addToWatchLater(video);
+      else store.removeFromWatchLater(video.id);
+      toast.error(err?.message || 'Could not update Watch Later. Are you signed in?');
+    } finally {
+      setSaving(false);
+      onClose();
+    }
   };
 
-  // Handle report
+  // Handle report modal open
   const handleReport = () => {
     setShowReportModal(true);
   };
 
-  const submitReport = () => {
+  // Handle report — REAL submission to the reportVideo Cloud Function.
+  const submitReport = async () => {
+    if (!video?.id) return;
     if (!reportReason) {
       toast.error('Please select a reason');
       return;
     }
-    toast.success('Report submitted. Thank you!');
-    setShowReportModal(false);
-    setReportReason('');
-    onClose();
+    if (reporting) return;
+    setReporting(true);
+    try {
+      const { getVideoService } = await import('../../services/videoService.js');
+      await getVideoService().reportVideo(video.id, reportReason);
+      toast.success('Report submitted. Our moderation team will review it.');
+      setShowReportModal(false);
+      setReportReason('');
+      onClose();
+    } catch (err) {
+      toast.error(err?.message || 'Report failed to submit. Please try again.');
+    } finally {
+      setReporting(false);
+    }
   };
 
   return (
@@ -330,10 +373,10 @@ const VideoBottomSheet = memo(({
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={submitReport}
-                  disabled={!reportReason}
+                  disabled={!reportReason || reporting}
                   className={`w-full p-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 ${isDark ? 'text-white' : 'text-gray-900'} font-semibold disabled:opacity-50`}
                 >
-                  Submit Report
+                  {reporting ? 'Submitting...' : 'Submit Report'}
                 </motion.button>
               </motion.div>
             )}

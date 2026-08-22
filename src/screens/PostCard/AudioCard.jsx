@@ -350,10 +350,11 @@ const AudioCard = React.memo(({
   const [displayTime, setDisplayTime] = useState(0); // for UI label (throttled)
   const [isDraggingSeek, setIsDraggingSeek] = useState(false);
 
-  // Waveform data (cached by audio id)
+  // Waveform data (cached by audio id). REAL data only: when the audio has no
+  // analyzed waveform, render neutral bars — never a fabricated pattern.
   const rawWaveform = useMemo(() => {
     if (audio?.waveformData && Array.isArray(audio.waveformData)) return audio.waveformData;
-    return Array.from({ length: 64 }, (_, i) => 20 + Math.sin(i * 0.4) * 15 + Math.random() * 8);
+    return Array.from({ length: 64 }, () => 30); // neutral
   }, [audio?.waveformData]);
   const waveformKey = audio?.id || audio?.url;
   if (!waveformCacheRef.current.has(waveformKey)) {

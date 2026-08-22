@@ -5,7 +5,7 @@
  * privacy controls, batch organization, and live item counts.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -15,79 +15,104 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
-
-const INITIAL_COLLECTIONS = [
-  {
-    id: 'c1',
-    title: 'Design Systems & 3D WebGL',
-    description: 'Spatial shaders, fluid UI gradients, and Three.js physics experiments',
-    itemCount: 18,
-    isPrivate: false,
-    cover: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-    lastUpdated: 'Today'
-  },
-  {
-    id: 'c2',
-    title: 'Cinematic LUTs & Soundtracks',
-    description: 'Master audio presets, atmospheric music loops, and 4K color grades',
-    itemCount: 24,
-    isPrivate: true,
-    cover: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80',
-    lastUpdated: '2 days ago'
-  },
-  {
-    id: 'c3',
-    title: 'Architecture & Cyber Minimal',
-    description: 'Interior architecture moodboards, brutalist typography, and dusk photography',
-    itemCount: 12,
-    isPrivate: false,
-    cover: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
-    lastUpdated: 'Last week'
-  }
-];
 
 export default function CollectionsScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
+  const { user } = useAuth();
 
-  const [collections, setCollections] = useState(INITIAL_COLLECTIONS);
+  const [collections, setCollections] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newIsPrivate, setNewIsPrivate] = useState(false);
 
-  // Create Collection Handler
-  const handleCreateCollection = (e) => {
+  // Load REAL collections from collectionsService (Firestore-backed)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user?.uid) return;
+      try {
+        const { default: collectionsService } = await import('../services/collectionsService.js');
+        const res = await collectionsService.getCollections(user?.uid, { cacheFirst: false });
+        if (cancelled) return;
+        const mapped = (res.collections || []).map((c) => ({
+          id: c.id,
+          title: c.name || c.title || 'Untitled',
+          description: c.description || '',
+          itemCount: c.itemCount || 0,
+          isPrivate: Boolean(c.isPrivate),
+          cover: c.coverUrl || '/assets/default-profile.png',
+          lastUpdated: c.updatedAt
+            ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
+            : 'Recently',
+        }));
+        setCollections(mapped);
+      } catch (err) {
+        console.error('Failed to load collections:', err);
+        if (!cancelled) setCollections([]);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  // Create Collection (REAL: persists via collectionsService)
+  const handleCreateCollection = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) {
       toast.error('Please enter a collection title');
       return;
     }
-
-    const newCol = {
-      id: `c-${Date.now()}`,
-      title: newTitle.trim(),
-      description: newDesc.trim() || 'Custom curated collection',
-      itemCount: 0,
-      isPrivate: newIsPrivate,
-      cover: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-      lastUpdated: 'Just now'
-    };
-
-    setCollections((prev) => [newCol, ...prev]);
-    toast.success(`Created collection "${newTitle}"! 📁`);
-    setNewTitle('');
-    setNewDesc('');
-    setNewIsPrivate(false);
-    setShowCreateModal(false);
+    try {
+      const { default: collectionsService } = await import('../services/collectionsService.js');
+      const res = await collectionsService.createCollection(user?.uid, {
+        name: newTitle.trim(),
+        description: newDesc.trim() || 'Custom curated collection',
+        isPrivate: newIsPrivate,
+      });
+      if (!res.success) throw new Error(res.error || 'Failed to create');
+      toast.success(`Created collection "${newTitle}"! 📁`);
+      setNewTitle('');
+      setNewDesc('');
+      setNewIsPrivate(false);
+      setShowCreateModal(false);
+      // Reload from the server so the list reflects the real state
+      const reload = await collectionsService.getCollections(user?.uid, { cacheFirst: false });
+      if (reload.success) {
+        setCollections((reload.collections || []).map((c) => ({
+          id: c.id,
+          title: c.name || c.title || 'Untitled',
+          description: c.description || '',
+          itemCount: c.itemCount || 0,
+          isPrivate: Boolean(c.isPrivate),
+          cover: c.coverUrl || '/assets/default-profile.png',
+          lastUpdated: c.updatedAt
+            ? new Date(c.updatedAt.toDate ? c.updatedAt.toDate() : c.updatedAt).toLocaleDateString()
+            : 'Recently',
+        })));
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to create collection');
+    }
   };
 
-  // Delete Collection
-  const handleDeleteCollection = (id, title) => {
-    setCollections((prev) => prev.filter((c) => c.id !== id));
-    toast.success(`Deleted folder "${title}"`);
+  // Delete Collection (REAL)
+  const handleDeleteCollection = async (id, title) => {
+    if (!window.confirm(`Delete folder "${title}"?`)) return;
+    try {
+      const { default: collectionsService } = await import('../services/collectionsService.js');
+      await collectionsService.deleteCollection(user?.uid, id);
+      setCollections((prev) => prev.filter((c) => c.id !== id));
+      toast.success(`Deleted folder "${title}"`);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to delete collection');
+    }
   };
 
   return (
@@ -104,6 +129,7 @@ export default function CollectionsScreen() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
+              aria-label="Go back"
               className={cn(
                 "p-2 rounded-full transition-all",
                 isDark ? "hover:bg-white/10 text-gray-300" : "hover:bg-gray-100 text-gray-700"

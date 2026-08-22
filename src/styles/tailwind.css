@@ -1,3 +1,6 @@
+/* Design tokens (CSS variables + global reduced-motion policy) - must precede all rules */
+@import url("../design-system/tokens.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -73,4 +76,25 @@ button, [role="button"] {
     rgba(255, 255, 255, 0.16) 120px,
     rgba(255, 255, 255, 0.06) 240px
   );
+}
+
+/* ---------------------------------------------------------------------------
+ * GLOBAL KEYBOARD ACCESSIBILITY (WCAG 2.2 2.4.7 Focus Visible)
+ * Every interactive element gets a clear visible focus ring when navigated
+ * with the keyboard — mouse clicks never show it (:focus-visible only).
+ * ------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

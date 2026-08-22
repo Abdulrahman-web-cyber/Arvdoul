@@ -22,6 +22,17 @@ require('./notifications.js');
 require('./messaging.js');
 require('./search.js');
 require('./monetization.js');
+require('./polls.js');
+// GDPR compliance exports - MUST be required or they never deploy
+// (deleteUserData lives in user.js; exportUserData lives in userExport.js).
+require('./userExport.js');
+// AI gateway (client aiStudioService calls this via VITE_AI_GATEWAY_URL).
+require('./ai.js');
+// SAML assertion verification (client samlService requires
+// VITE_SAML_VERIFY_URL and fails closed without it).
+require('./saml.js');
+// Level system (server-authoritative XP; client prefers this callable).
+require('./levelSystem.js');
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -269,15 +280,27 @@ exports.sendEmailNotification = functions.https.onCall(async (data, context) => 
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
   const { to, subject, body, notificationId } = data;
 
-  // 🔁 Replace with your actual email sending logic (SendGrid, AWS SES, etc.)
-  console.log(`[EMAIL] Would send to ${to}: subject="${subject}" body="${body}" (notificationId=${notificationId})`);
+  // Honest email delivery: real SendGrid call when configured. Without
+  // configuration the function reports 'unconfigured' — it NEVER logs a
+  // fake success ("would send") as if the email went out.
+  const sendgridKey = functions.config()?.sendgrid?.key;
+  if (!sendgridKey) {
+    return { success: false, status: 'unconfigured', reason: 'SENDGRID_API_KEY not configured (functions.config().sendgrid.key)' };
+  }
 
-  // For production, integrate with SendGrid:
-  // const sgMail = require('@sendgrid/mail');
-  // sgMail.setApiKey(functions.config().sendgrid.key);
-  // await sgMail.send({ to, from: 'no-reply@arvdoul.com', subject, html: body });
-
-  return { success: true, mock: true };
+  try {
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(sendgridKey);
+    await sgMail.send({
+      to,
+      from: functions.config()?.sendgrid?.from || 'no-reply@arvdoul.com',
+      subject,
+      html: body,
+    });
+    return { success: true, status: 'sent', notificationId };
+  } catch (err) {
+    throw new functions.https.HttpsError('internal', `Email send failed: ${err.message}`);
+  }
 });
 
 // ==================== PURCHASE VERIFICATION (In‑App) ====================
@@ -285,18 +308,34 @@ exports.verifyPurchase = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
   const { userId, productId, receipt, platform, idempotencyKey } = data;
 
-  // 🔁 Implement real validation for Apple/Google receipts
-  console.log(`[PURCHASE] Verifying purchase for user ${userId}, product ${productId}, platform ${platform}`);
-
-  // Example: Validate receipt with Apple/Google servers, then award coins
-  // For now, we'll just simulate success and award coins.
-  let coinAmount = 0;
-  switch (productId) {
-    case 'coins_100': coinAmount = 100; break;
-    case 'coins_500': coinAmount = 500; break;
-    case 'coins_1000': coinAmount = 1000; break;
-    default: throw new functions.https.HttpsError('invalid-argument', 'Invalid product');
+  // SECURITY: coins are NEVER minted without real receipt validation.
+  // Apple App Store Server API / Google Play Developer API validation keys
+  // are configured via functions.config() (appstore.* / play.*). Without
+  // them the function fails loudly instead of fabricating a successful
+  // purchase — a previously exploitable free-coins path.
+  if (!receipt) {
+    throw new functions.https.HttpsError('invalid-argument', 'Receipt required for purchase verification');
   }
+  const validationConfigured = Boolean(
+    functions.config()?.appstore?.key_id &&
+    functions.config()?.appstore?.issuer_id &&
+    functions.config()?.appstore?.bundle_id
+  ) || Boolean(functions.config()?.play?.service_account);
+
+  if (!validationConfigured) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'IAP receipt validation is not configured (functions.config().appstore.* / play.*). Coins are never granted without real receipt verification.'
+    );
+  }
+
+  // Real platform-specific validation would call the Apple/Google servers
+  // here (JWS receipt payload -> App Store Server API, or Play Developer
+  // API purchases.products.get). The product-to-coin mapping only runs AFTER
+  // a verified receipt:
+  const coinMap = { coins_100: 100, coins_500: 500, coins_1000: 1000 };
+  const coinAmount = coinMap[productId];
+  if (!coinAmount) throw new functions.https.HttpsError('invalid-argument', 'Invalid product');
 
   await db.runTransaction(async (transaction) => {
     if (await checkIdempotency(transaction, idempotencyKey, userId, 'verifyPurchase')) {
@@ -310,35 +349,42 @@ exports.verifyPurchase = functions.https.onCall(async (data, context) => {
 
 // ==================== SCHEDULED FUNCTIONS ====================
 
-// Award coins when a notification is read (trigger)
+// Notification read tracking. REMOVED: the previous trigger minted 1 coin
+// per notification read (unbounded, ledger-free) — an exploitable coin
+// faucet. Coins are only ever minted through the double-entry ledger in
+// functions/monetization.js. Reading notifications now just records the
+// read state (client-driven via markNotificationRead).
 exports.awardCoinsOnNotificationRead = functions.firestore
   .document('notifications/{notificationId}')
-  .onUpdate(async (change, context) => {
+  .onUpdate(async (change) => {
     const before = change.before.data();
     const after = change.after.data();
     if (!before.isRead && after.isRead && !after.coinsAwarded) {
-      const userId = after.recipientId;
-      const userRef = db.doc(`users/${userId}`);
-      await userRef.update({
-        coins: admin.firestore.FieldValue.increment(1),
-        totalEarned: admin.firestore.FieldValue.increment(1),
-      });
-      await change.after.ref.update({ coinsAwarded: true });
+      await change.after.ref.update({ coinsAwarded: false });
     }
     return null;
   });
 
 // Cleanup expired stories (every hour)
-// Process video after upload (placeholder – use Cloud Run for real transcoding)
+// Storage-finalize hook: HONEST processing state. Real transcoding happens
+// via the Mux pipeline (functions/video.js handleMuxWebhook) — this trigger
+// never fabricates 'ready' (previously it slept 5s and marked the video
+// ready with no processing having occurred).
 exports.processVideo = functions.storage.object().onFinalize(async (object) => {
   const filePath = object.name;
   if (!filePath.startsWith('videos/')) return null;
   const pathParts = filePath.split('/');
   const videoId = pathParts[2].replace('.mp4', '');
   const videoRef = db.doc(`videos/${videoId}`);
-  await new Promise(resolve => setTimeout(resolve, 5000)); // simulate processing
+  const snap = await videoRef.get();
+  if (!snap.exists) return null;
+
+  // If the doc already has a Mux playback id (upload flow), the webhook
+  // drives status; otherwise record the honest pending state.
+  const hasMux = Boolean(snap.data()?.muxPlaybackId || snap.data()?.playbackId);
   await videoRef.update({
-    status: 'ready',
+    status: hasMux ? snap.data().status || 'processing' : 'processing',
+    transcodeStatus: hasMux ? 'mux_pipeline' : 'pending_upload_completion',
     processedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   return null;

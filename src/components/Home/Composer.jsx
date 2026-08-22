@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
-import { db, storage } from "../../firebase/firebase";
-import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore";
+import { storage } from "../../firebase/firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { toast } from "sonner";
 import { Camera, Video, Send, Link as LinkIcon, X } from "lucide-react";
@@ -119,24 +118,24 @@ try {
     media,  
     linkPreview,  
     authorId: user.uid,  
-    createdAt: serverTimestamp(),  
-    likes: [],  
-    comments: [],  
     type: media.length === 1 && media[0].type === "video" ? "video" : "post",  
     hashtags,  
     mentions,  
   };  
 
-  const postRef = await addDoc(collection(db, "posts"), newPost);  
+  // REAL post creation through the service: validation, moderation,
+  // sharded counters, XP award and idempotency are all handled there.
+  const { getFirestoreService } = await import("../../services/firestoreService.js");
+  const created = await getFirestoreService().createPost(newPost);
 
-  // ---------------- Reward coins ----------------  
-  const userRef = doc(db, "users", user.uid);  
-  await updateDoc(userRef, {  
-    coins: (user.coins || 0) + 10  
-  });  
+  // ---------------- Reward coins (SAFE: server-side increment) ----------------  
+  const { getMonetizationService } = await import("../../services/monetizationService.js");
+  try {
+    await getMonetizationService().addCoins(user.uid, 10, "post_created_bonus", { postId: created.postId });
+  } catch { /* best-effort */ }
 
   toast.success("Post created! +10 coins awarded");  
-  onCreate && onCreate({ ...newPost, id: postRef.id });  
+  onCreate && onCreate({ ...newPost, id: created.postId });  
 
   // reset  
   setText("");  
@@ -205,11 +204,11 @@ maxLength={280}
           )}  
           <div className="absolute top-1 right-1 flex gap-1">  
             {m.file.type.startsWith("video") && (  
-              <button onClick={() => toggleMute(i)} className="bg-black/50 text-white rounded-full p-1">  
+              <button type="button" onClick={() => toggleMute(i)} aria-label={m.muted ? "Unmute media" : "Mute media"} className="bg-black/50 text-white rounded-full p-1">  
                 {m.muted ? "🔇" : "🔊"}  
               </button>  
             )}  
-            <button onClick={() => removeMedia(i)} className="bg-black/50 text-white rounded-full p-1">  
+            <button type="button" onClick={() => removeMedia(i)} aria-label="Remove media" className="bg-black/50 text-white rounded-full p-1">  
               <X size={12} />  
             </button>  
           </div>  

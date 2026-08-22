@@ -24,6 +24,7 @@ export default function NetworkScreen() {
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [recommended, setRecommended] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
 
@@ -45,6 +46,9 @@ export default function NetworkScreen() {
         svc.getFollowing(user.uid, { limit: 50 }),
         svc.getFriendRequests(user.uid, 'received'),
       ]);
+      // Real friend recommendations via userService
+      const recResult = await svc.getFriendRecommendations(user.uid, 5).catch(() => ({ success: false, recommendations: [] }));
+      setRecommended(recResult.recommendations || []);
       setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
       setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
@@ -144,14 +148,14 @@ export default function NetworkScreen() {
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-violet-500 animate-spin" /></div>
         ) : tab === 'followers' ? (
           followers.length === 0 ? (
-            <Empty label="No followers yet" />
+            <Empty label="No followers yet" recommended={recommended} />
           ) : followers.map((p) => <PersonRow key={p.id || p.userId} person={p} />)
         ) : tab === 'following' ? (
           following.length === 0 ? (
-            <Empty label="Not following anyone yet" />
+            <Empty label="Not following anyone yet" recommended={recommended} />
           ) : following.map((p) => <PersonRow key={p.id || p.userId} person={p} />)
         ) : requests.length === 0 ? (
-          <Empty label="No pending friend requests" />
+          <Empty label="No pending friend requests" recommended={recommended} />
         ) : (
           requests.map((req) => (
             <div key={req.id} className={cn("flex items-center gap-3 p-3 rounded-xl", colors.card, "border")}>
@@ -183,31 +187,7 @@ export default function NetworkScreen() {
   );
 }
 
-const RECOMMENDED_CREATORS = [
-  {
-    id: 'rec-1',
-    displayName: 'Elena Rostova',
-    username: 'elena.sound',
-    bio: 'Spatial audio designer & modular synth composer',
-    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120'
-  },
-  {
-    id: 'rec-2',
-    displayName: 'Marcus Chen',
-    username: 'marcus.3d',
-    bio: 'WebGL shader engineer & Cyberpunk art director',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120'
-  },
-  {
-    id: 'rec-3',
-    displayName: 'Sophia Martinez',
-    username: 'sophia.vfx',
-    bio: '4K Colorist & cinematic camera operator',
-    photoURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120'
-  }
-];
-
-function Empty({ label, onFollow }) {
+function Empty({ label, onFollow, recommended = [] }) {
   const [followedIds, setFollowedIds] = useState([]);
 
   const handleFollowToggle = (id, name) => {
@@ -224,13 +204,14 @@ function Empty({ label, onFollow }) {
         <p className="text-gray-500 dark:text-gray-400 font-medium text-sm">{label}</p>
       </div>
 
+      {recommended.length > 0 && (
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Suggested for you</span>
           <span className="text-xs text-purple-400 font-bold">Discover</span>
         </div>
 
-        {RECOMMENDED_CREATORS.map((c) => {
+        {recommended.map((c) => {
           const isFollowing = followedIds.includes(c.id);
           return (
             <div
@@ -263,6 +244,7 @@ function Empty({ label, onFollow }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

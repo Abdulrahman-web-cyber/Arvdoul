@@ -18,8 +18,46 @@ function stripConsolePlugin() {
   };
 }
 
+/**
+ * Dev-only Prometheus scrape endpoint.
+ *
+ * Serves the metricsService Prometheus text exposition at GET /metrics so a
+ * local Prometheus (see ops/prometheus/prometheus.yml) can scrape the SPA's
+ * client-side telemetry (RUM vitals, API latency histograms, error counters)
+ * during development and dogfooding.
+ *
+ * In production, client metrics should be pushed to a pushgateway/OTLP
+ * collector instead (see docs/OBSERVABILITY.md) — this plugin is dev-only.
+ */
+function metricsEndpointPlugin() {
+  return {
+    name: 'arvdoul-metrics-endpoint',
+    configureServer(server) {
+      server.middlewares.use('/metrics', async (_req, res) => {
+        res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        try {
+          const { metricsService } = await import('./src/services/metricsService.js');
+          // Liveness pulse so a scrape always yields telemetry, even before
+          // the first app event is recorded.
+          metricsService.incrementCounter('dev_scrape_total', 1);
+          metricsService.setGauge('dev_server_uptime_seconds', Math.round(process.uptime()));
+          res.end(metricsService.getPrometheusMetrics() + '\n');
+        } catch (err) {
+          res.statusCode = 500;
+          res.end(`# metrics unavailable: ${err.message}\n`);
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), process.env.NODE_ENV === 'production' ? stripConsolePlugin() : null].filter(Boolean),
+  plugins: [
+    react(),
+    process.env.NODE_ENV === 'production' ? stripConsolePlugin() : null,
+    metricsEndpointPlugin(),
+  ].filter(Boolean),
   server: {
     host: '0.0.0.0',
     port: 3000,

@@ -43,7 +43,7 @@ export class SecurityHeadersService {
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline' https://apis.google.com https://js.stripe.com ${nonceDirective}`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com https://picsum.photos https://images.unsplash.com",
+      "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://lh3.googleusercontent.com",
       "connect-src 'self' https://*.googleapis.com wss://*.firebase_database_id.firebaseio.com https://api.openai.com https://api.stripe.com wss://signaling.arvdoul.com",
       "font-src 'self' https://fonts.gstatic.com",
       "media-src 'self' blob: data: https://firebasestorage.googleapis.com",

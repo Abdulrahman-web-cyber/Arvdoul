@@ -82,7 +82,7 @@ class MarketplaceService {
     return null;
   }
 
-  async purchaseProductWithCoins(productId, userCoins, onDeductCoins, buyerUser) {
+  async purchaseProductWithCoins(productId, buyerUser) {
     log.info('Purchasing product with coins', { productId });
     const product = await this.getProductById(productId);
     if (!product) {
@@ -92,75 +92,78 @@ class MarketplaceService {
     if (product.stock <= 0) {
       throw new Error('This item is currently out of stock.');
     }
-    
-    if (userCoins < product.priceCoins) {
-      throw new Error(`Insufficient Arvdoul Coins. You need ${product.priceCoins} coins, but have ${userCoins}.`);
+
+    if (!buyerUser?.uid) {
+      throw new Error('Sign in to purchase items.');
     }
 
-    if (onDeductCoins) {
-      onDeductCoins(product.priceCoins);
-    }
-
-    const firestore = await getFirestoreInstance();
-    const { doc, updateDoc, increment, collection, addDoc } = await import('firebase/firestore');
-
-    // Deduct stock in Firestore
+    // REAL server-authoritative purchase: the purchaseMarketplaceItem Cloud
+    // Function atomically debits the coins (double-entry ledger), decrements
+    // stock and creates the order. Client-side writes to marketplace_items
+    // are denied by rules (buyer != creator), so there is no client fallback
+    // for this money path — it fails loudly until the function is deployed.
     try {
-      await updateDoc(doc(firestore, 'marketplace_items', productId), {
-        stock: increment(-1),
-        salesCount: increment(1)
-      });
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const { getApp } = await import('firebase/app');
+      const functions = getFunctions(getApp());
+      const fn = httpsCallable(functions, 'purchaseMarketplaceItem');
+      const res = await fn({ productId });
+      const result = res.data || {};
+      const order = result.order || {
+        orderId: `ARV-ORD-${Date.now()}`,
+        productId,
+        productTitle: product.title,
+        product,
+        buyerId: buyerUser.uid,
+        purchasedAt: new Date().toISOString(),
+        amountPaidCoins: product.priceCoins,
+        downloadUrl: product.downloadUrl || null,
+        status: 'Completed',
+      };
+      this.orders.unshift(order);
+      await this._saveOrders();
+      return order;
     } catch (err) {
-      log.warn('Could not update Firestore stock', err);
+      const msg = err?.message || String(err);
+      throw new Error(
+        msg.includes('purchaseMarketplaceItem') || msg.includes('INTERNAL') || msg.includes('UNAVAILABLE')
+          ? 'Purchase requires the purchaseMarketplaceItem Cloud Function to be deployed.'
+          : msg
+      );
     }
-
-    const secureHex = this._generateSecureHex(4);
-    const order = {
-      orderId: `ARV-ORD-${Date.now().toString().slice(-6)}-${secureHex}`,
-      productId,
-      productTitle: product.title,
-      product,
-      buyerId: buyerUser?.uid || 'usr-buyer',
-      purchasedAt: new Date().toISOString(),
-      amountPaidCoins: product.priceCoins,
-      downloadUrl: product.isDigital ? `https://arvdoul.cloud/downloads/pack-${secureHex}.zip` : null,
-      status: 'Completed'
-    };
-
-    try {
-      await addDoc(collection(firestore, 'orders'), order);
-    } catch (err) {
-      log.warn('Could not write order to Firestore', err);
-    }
-
-    this.orders.unshift(order);
-    await this._saveOrders();
-
-    return order;
   }
 
   async listNewProduct(productData, creator) {
-    const secureHex = this._generateSecureHex(4);
+    // Honest listing: real creator identity only (no fabricated names,
+    // handles, avatars or "Verified" badges), zero ratings until real
+    // reviews exist, stock explicitly set by the seller.
+    if (!creator?.uid) {
+      throw new Error('Sign in to list a product');
+    }
     const newProd = {
       title: productData.title,
       category: productData.category || 'Digital Assets',
+      // Top-level creatorId is REQUIRED by firestore.rules
+      // (match /marketplace_items/{itemId} create: creatorId == uid()).
+      creatorId: creator.uid,
       creator: {
-        id: creator?.uid || 'usr-creator',
-        name: creator?.displayName || 'Arvdoul Creator',
-        username: creator?.username ? `@${creator.username}` : '@creator',
-        avatar: creator?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        badge: 'Verified'
+        id: creator?.uid || null,
+        name: creator?.displayName || '',
+        username: creator?.username ? `@${creator.username}` : null,
+        avatar: creator?.photoURL || null,
+        badge: null
       },
-      priceCoins: Number(productData.priceCoins) || 1000,
-      priceUsd: Number(productData.priceUsd) || 12.99,
-      rating: 5.0,
-      reviewsCount: 1,
+      priceCoins: Math.max(0, Number(productData.priceCoins) || 0),
+      priceUsd: productData.priceUsd != null ? Number(productData.priceUsd) : null,
+      rating: 0,
+      reviewsCount: 0,
       salesCount: 0,
-      image: productData.image || 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=500',
-      description: productData.description || 'Exclusive creator asset.',
-      includes: productData.includes ? productData.includes.split('\n') : ['Instant digital download'],
+      image: productData.image || null,
+      description: productData.description || '',
+      includes: productData.includes ? productData.includes.split('\n') : [],
       isDigital: productData.isDigital !== false,
-      stock: 100,
+      // Explicit seller stock (default 1 = they are listing one item).
+      stock: Math.max(0, Number(productData.stock) || 1),
       createdAt: new Date().toISOString()
     };
 

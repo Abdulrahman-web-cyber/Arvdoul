@@ -2,7 +2,7 @@
 // 100% Pixel-perfect replica of Arvdoul Stories Grid & Interactive Viewer from user design specs
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -17,273 +17,6 @@ import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
 
 // High definition sample stories matching Screenshot 2
-const SAMPLE_STORIES = [
-  {
-    id: 'story-1',
-    user: {
-      id: 'u-omar',
-      name: 'Omar',
-      username: 'omar.vibes',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Following',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '2m ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'video',
-    badgeType: 'video',
-    mediaUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-    caption: 'Tropical sunset at the beach club 🌅🌴',
-    viewsCount: '1.4K',
-    items: [
-      {
-        id: 'i1',
-        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Tropical sunset at the beach club 🌅🌴',
-        duration: 5,
-      },
-      {
-        id: 'i2',
-        url: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Night vibes starting up 🍹✨',
-        duration: 5,
-      },
-      {
-        id: 'i3',
-        url: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'City skyline in view 🏙️',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-2',
-    user: {
-      id: 'u-sara',
-      name: 'Sara',
-      username: 'sarakhan',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Friends',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '15m ago',
-    itemsCount: 4,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'photo',
-    mediaUrl: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
-    caption: 'Morning in the alpine peaks 🏔️❄️',
-    viewsCount: '2.8K',
-    items: [
-      {
-        id: 'i4',
-        url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Morning in the alpine peaks 🏔️❄️',
-        duration: 5,
-      },
-      {
-        id: 'i5',
-        url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Pure reflection on the lake 🌊',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-3',
-    user: {
-      id: 'u-alex',
-      name: 'Alex',
-      username: 'alex.live',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Live',
-      isCloseFriend: false,
-      isLive: true,
-    },
-    timeAgo: '27m ago',
-    itemsCount: 1,
-    activeItemIndex: 0,
-    mediaType: 'video',
-    badgeType: 'live',
-    viewerCount: '1.2K',
-    mediaUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
-    caption: 'LIVE Concert soundcheck & crowd hype! 🎸🔥',
-    viewsCount: '12K',
-    items: [
-      {
-        id: 'i6',
-        url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'LIVE Concert soundcheck & crowd hype! 🎸🔥',
-        duration: 8,
-      }
-    ]
-  },
-  {
-    id: 'story-4',
-    user: {
-      id: 'u-lina',
-      name: 'Lina',
-      username: 'lina.cozy',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Following',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '35m ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'audio',
-    badgeType: 'music',
-    musicTitle: 'Lo-Fi Chill Hop – Cafe Beats',
-    mediaUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
-    caption: 'Warm roast latte & morning design session ☕💻',
-    viewsCount: '920',
-    items: [
-      {
-        id: 'i7',
-        url: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Warm roast latte & morning design session ☕💻',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-5',
-    user: {
-      id: 'u-ali',
-      name: 'Ali',
-      username: 'ali.cyber',
-      avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Friends',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '45m ago',
-    itemsCount: 2,
-    activeItemIndex: 0,
-    mediaType: 'location',
-    badgeType: 'location',
-    locationName: 'Neo Tokyo, District 9',
-    mediaUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
-    caption: 'Midnight neon rain reflections in the city 🌧️🏮',
-    viewsCount: '3.1K',
-    items: [
-      {
-        id: 'i8',
-        url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Midnight neon rain reflections in the city 🌧️🏮',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-6',
-    user: {
-      id: 'u-maya',
-      name: 'Maya',
-      username: 'maya.culinary',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Close Friends',
-      isCloseFriend: true,
-      isLive: false,
-    },
-    timeAgo: '1h ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'star',
-    mediaUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-    caption: 'Handmade Italian basil tomato pasta 🍝🌿',
-    viewsCount: '4.5K',
-    items: [
-      {
-        id: 'i9',
-        url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Handmade Italian basil tomato pasta 🍝🌿',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-7',
-    user: {
-      id: 'u-ibrahim',
-      name: 'Ibrahim',
-      username: 'ibrahim.vibes',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Friends',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: '1h ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'video',
-    badgeType: 'video',
-    mediaUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800&auto=format&fit=crop&q=80',
-    caption: 'Sunset peaks and contemplation over the valley ⛰️🌄',
-    viewsCount: '1.9K',
-    items: [
-      {
-        id: 'i10',
-        url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Sunset peaks and contemplation over the valley ⛰️🌄',
-        duration: 5,
-      }
-    ]
-  },
-  {
-    id: 'story-8',
-    user: {
-      id: 'u-noor',
-      name: 'Noor',
-      username: 'noor.nights',
-      avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Close Friends',
-      isCloseFriend: true,
-      isLive: false,
-    },
-    timeAgo: '2h ago',
-    itemsCount: 3,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'star',
-    mediaUrl: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&auto=format&fit=crop&q=80',
-    caption: 'Santorini golden hour lanterns & whitewashed views 🏛️✨',
-    viewsCount: '5.2K',
-    items: [
-      {
-        id: 'i11',
-        url: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Santorini golden hour lanterns & whitewashed views 🏛️✨',
-        duration: 5,
-      }
-    ]
-  }
-];
-
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
   { id: 'friends', label: 'Friends', icon: null },
@@ -296,6 +29,7 @@ const QUICK_EMOJIS = ['❤️', '🔥', '👏', '😮', '😂', '💎'];
 
 export default function StoriesScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -314,10 +48,75 @@ export default function StoriesScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [flyingParticles, setFlyingParticles] = useState([]);
-  const [stories, setStories] = useState(SAMPLE_STORIES);
+  const [stories, setStories] = useState([]);
+  const [storiesLoading, setStoriesLoading] = useState(true);
   const [likedStories, setLikedStories] = useState({});
 
   const progressIntervalRef = useRef(null);
+
+  // Load REAL stories from storyService (Firestore-backed feed)
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
+        if (cancelled) return;
+        const groups = feed?.groups || [];
+        const mapped = groups.map((g) => {
+          const storiesArr = g.stories || [];
+          const author = storiesArr[0]?.authorName || g.userId;
+          const authorPhoto = storiesArr[0]?.authorPhoto || '/assets/default-profile.png';
+          return {
+            id: g.userId || `g-${Math.random().toString(36).slice(2, 7)}`,
+            user: {
+              id: g.userId,
+              name: author,
+              username: author.toLowerCase().replace(/\s+/g, '.'),
+              avatar: authorPhoto,
+              verified: false,
+              category: 'Following',
+              isCloseFriend: false,
+              isLive: false,
+            },
+            timeAgo: 'Recently',
+            itemsCount: storiesArr.length,
+            activeItemIndex: 0,
+            mediaType: storiesArr[0]?.type || 'image',
+            badgeType: storiesArr[0]?.type || 'image',
+            mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
+            caption: storiesArr[0]?.content || '',
+            viewsCount: String(storiesArr[0]?.stats?.views || 0),
+            items: storiesArr.map((st) => ({
+              id: st.id,
+              url: st.media?.url || st.content || '',
+              type: st.type || 'image',
+              caption: st.content || '',
+            })),
+          };
+        });
+        setStories(mapped);
+
+        // Deep link / Home entry (spec §51/33): jump straight into a specific
+        // creator's Vibe sequence when arriving with state.
+        const targetUserId = location.state?.vibeUserId;
+        if (targetUserId && mapped.length > 0) {
+          const idx = mapped.findIndex((s) => s.user?.id === targetUserId);
+          if (idx >= 0) {
+            setActiveStoryIndex(idx);
+            setActiveItemIndex(0);
+            setStoryProgress(0);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load stories:', err);
+        if (!cancelled) setStories([]);
+      } finally {
+        if (!cancelled) setStoriesLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   // Filter stories based on active category & search
   const filteredStories = useMemo(() => {
@@ -351,6 +150,9 @@ export default function StoriesScreen() {
 
   // Close story viewer
   const handleCloseStory = () => {
+    if (location.state?.vibeUserId) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
     setActiveStoryIndex(null);
     setActiveItemIndex(0);
     setStoryProgress(0);
@@ -377,6 +179,11 @@ export default function StoriesScreen() {
     progressIntervalRef.current = setInterval(() => {
       setStoryProgress((prev) => {
         if (prev + step >= 100) {
+          // REAL completion event (spec §23/58): the item was watched to the
+          // end — buffered server-side, never a per-frame write.
+          if (currentItem?.id) {
+            getStoryService().reportStoryCompletion(currentItem.id).catch(() => {});
+          }
           // Advance to next item or next story
           if (activeItemIndex + 1 < (currentStory.items?.length || 1)) {
             setActiveItemIndex((i) => i + 1);
@@ -405,7 +212,10 @@ export default function StoriesScreen() {
     const x = e.clientX - rect.left;
     const isRight = x > rect.width / 2;
 
+    // REAL tap analytics (spec §58) — buffered, never per-tap doc writes.
+    const svc = getStoryService();
     if (isRight) {
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch(() => {});
       // Advance
       if (activeItemIndex + 1 < (currentStory?.items?.length || 1)) {
         setActiveItemIndex((i) => i + 1);
@@ -418,6 +228,7 @@ export default function StoriesScreen() {
         handleCloseStory();
       }
     } else {
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'back').catch(() => {});
       // Previous
       if (activeItemIndex > 0) {
         setActiveItemIndex((i) => i - 1);
@@ -431,29 +242,111 @@ export default function StoriesScreen() {
     }
   };
 
+  // Keyboard navigation for the immersive viewer (spec §15/67): arrow keys
+  // move between Vibes, Escape closes. No mouse required.
+  useEffect(() => {
+    if (activeStoryIndex === null) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (activeItemIndex + 1 < (currentStory?.items?.length || 1)) {
+          setActiveItemIndex((i) => i + 1);
+          setStoryProgress(0);
+        } else if (activeStoryIndex + 1 < filteredStories.length) {
+          setActiveStoryIndex((s) => s + 1);
+          setActiveItemIndex(0);
+          setStoryProgress(0);
+        } else handleCloseStory();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (activeItemIndex > 0) {
+          setActiveItemIndex((i) => i - 1);
+          setStoryProgress(0);
+        } else if (activeStoryIndex > 0) {
+          setActiveStoryIndex((s) => s - 1);
+          const prev = filteredStories[activeStoryIndex - 1];
+          setActiveItemIndex((prev?.items?.length || 1) - 1);
+          setStoryProgress(0);
+        }
+      } else if (e.key === 'Escape') {
+        handleCloseStory();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setIsPaused((p) => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStoryIndex, activeItemIndex, currentStory, filteredStories.length]);
+
   // Handle quick emoji reaction with particle explosion
-  const handleSendReaction = (emoji) => {
-    toast.success(`Sent ${emoji} to ${currentStory?.user?.name}`);
+  // REAL reaction via reactToStory (spec §22) — particle is the visual
+  // confirmation, the service call is the actual interaction.
+  const [reactingId, setReactingId] = useState(null);
+  const handleSendReaction = async (emoji) => {
+    if (!currentItem?.id || reactingId) return;
+    setReactingId(currentItem.id);
     const id = Date.now() + Math.random();
     setFlyingParticles((prev) => [...prev, { id, emoji, x: Math.random() * 60 + 20 }]);
     setTimeout(() => {
       setFlyingParticles((prev) => prev.filter((p) => p.id !== id));
     }, 1500);
+    try {
+      await getStoryService().reactToStory(currentItem.id, emoji);
+    } catch (err) {
+      toast.error(err?.message || 'Reaction could not be sent');
+    } finally {
+      setReactingId(null);
+    }
   };
 
   // Handle gift coins
-  const handleGiftCoin = () => {
-    const monetization = getMonetizationService();
-    toast.success(`Sent 250 🪙 to ${currentStory?.user?.name}!`);
-    handleSendReaction('🪙');
+  const [gifting, setGifting] = useState(false);
+
+  // REAL coin gift via the double-entry ledger (spec — no free coins).
+  const handleGiftCoin = async () => {
+    if (!user?.uid || gifting) return;
+    const storyUserId = currentStory?.user?.id || currentStory?.userId;
+    if (!storyUserId) { toast.error('Recipient unknown'); return; }
+    if (storyUserId === user.uid) { toast.error('You cannot gift yourself'); return; }
+    setGifting(true);
+    try {
+      const res = await getMonetizationService().transferCoins(
+        user.uid, storyUserId, 250, 'vibe_gift',
+        { storyId: currentItem?.id || null }
+      );
+      if (res?.success) {
+        handleSendReaction('🪙');
+        toast.success(`Sent 250 🪙 to ${currentStory?.user?.name}!`);
+      } else {
+        toast.error(res?.message || 'Gift could not be sent');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Gift could not be sent');
+    } finally {
+      setGifting(false);
+    }
   };
 
-  // Handle story reply
-  const handleSendReply = (e) => {
+  // Handle story reply — REAL: replyToStory creates a direct conversation
+  // with the creator carrying the vibe reference (spec §21/65).
+  const [replying, setReplying] = useState(false);
+  const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
-    toast.success(`Reply sent to ${currentStory?.user?.name}`);
-    setReplyText('');
+    const text = replyText.trim();
+    if (!text || replying) return;
+    if (!currentItem?.id) { toast.error('Vibe not found'); return; }
+    setReplying(true);
+    try {
+      await getStoryService().replyToStory(currentItem.id, text);
+      toast.success(`Reply sent to ${currentStory?.user?.name}`);
+      setReplyText('');
+    } catch (err) {
+      toast.error(err?.message || 'Reply could not be sent');
+    } finally {
+      setReplying(false);
+    }
   };
 
   return (
@@ -811,6 +704,7 @@ export default function StoriesScreen() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsMuted((m) => !m)}
+                  aria-label={isMuted ? 'Unmute Vibe' : 'Mute Vibe'}
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
                 >
                   {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -818,6 +712,7 @@ export default function StoriesScreen() {
 
                 <button
                   onClick={handleCloseStory}
+                  aria-label="Close Vibes viewer"
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
                 >
                   <X className="w-5 h-5" />
@@ -834,12 +729,27 @@ export default function StoriesScreen() {
               onTouchEnd={() => setIsPaused(false)}
               className="relative w-full h-full flex items-center justify-center cursor-pointer"
             >
-              <img
-                src={currentItem?.url || currentStory.mediaUrl}
-                alt="Story media"
-                referrerPolicy="no-referrer"
-                className="max-h-full max-w-full object-contain"
-              />
+              {currentItem?.url || currentStory.mediaUrl ? (
+                <img
+                  src={currentItem?.url || currentStory.mediaUrl}
+                  alt={currentItem?.caption ? `Vibe by ${currentStory.user.name}: ${currentItem.caption}` : `Vibe by ${currentStory.user.name}`}
+                  referrerPolicy="no-referrer"
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <div className="text-center px-6" role="status">
+                  <p className="text-white font-semibold mb-1">Vibe unavailable</p>
+                  <p className="text-white/60 text-sm">
+                    This Vibe has expired or is no longer available.
+                  </p>
+                  <button
+                    onClick={handleCloseStory}
+                    className="mt-4 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
 
               {/* Caption Overlay */}
               {currentItem?.caption && (
@@ -880,9 +790,10 @@ export default function StoriesScreen() {
                 ))}
                 <button
                   onClick={handleGiftCoin}
-                  className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-xs font-bold text-white flex items-center gap-1 shadow-lg active:scale-95"
+                  disabled={gifting}
+                  className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-xs font-bold text-white flex items-center gap-1 shadow-lg active:scale-95 disabled:opacity-60"
                 >
-                  <span>🪙 250</span>
+                  <span>🪙 {gifting ? 'Sending…' : '250'}</span>
                 </button>
               </div>
 
@@ -946,7 +857,7 @@ export default function StoriesScreen() {
               </p>
 
               <div className="grid grid-cols-3 gap-2 mb-4">
-                {SAMPLE_STORIES.slice(0, 3).map((st) => (
+                {stories.slice(0, 3).map((st) => (
                   <div key={st.id} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
                     <img src={st.mediaUrl} alt={st.caption} className="w-full h-full object-cover" />
                     <span className="absolute bottom-1 right-1 text-[9px] bg-black/60 px-1 py-0.5 rounded text-white font-mono">

@@ -15,6 +15,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../../context/ThemeContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
@@ -42,6 +43,7 @@ const BottomNav = () => {
   const { theme, isDark } = useTheme();
   const { playSound } = useSound();
   const { track } = useAnalytics();
+  const { t } = useTranslation();
   const { unreadCounts = {}, currentUser } = useAppStore();
 
   // Navigation states
@@ -109,17 +111,18 @@ const BottomNav = () => {
   }, [playSound]);
 
   // 7 Tabs: Home, Videos, Chat, Plus (Center), Coins, Alerts, Profile
+  // Labels are i18n keys resolved at render time (nav.* namespace).
   const tabs = useMemo(() => [
     {
       to: "/home",
-      label: "Home",
+      labelKey: "nav.home",
       icon: Home,
       navigateTo: "/home",
       badgeKey: "home",
     },
     {
       to: "/videos",
-      label: "Videos",
+      labelKey: "nav.videos",
       icon: PlayCircle,
       navigateTo: "/videos",
       badgeKey: "videos",
@@ -127,40 +130,40 @@ const BottomNav = () => {
     },
     {
       to: "/messages",
-      label: "Chat",
+      labelKey: "nav.chat",
       icon: MessageCircle,
       navigateTo: "/messages",
       badgeKey: "messages",
     },
     {
       to: "/create-post",
-      label: "Create",
+      labelKey: "nav.create",
       icon: Plus,
       navigateTo: "/create-post",
       isPlus: true,
     },
     {
       to: "/coins",
-      label: "Coins",
+      labelKey: "nav.coins",
       icon: FaCoins,
       navigateTo: "/coins",
       isCoins: true,
     },
     {
       to: "/notifications",
-      label: "Alerts",
+      labelKey: "nav.alerts",
       icon: Bell,
       navigateTo: "/notifications",
       badgeKey: "notifications",
     },
     {
       to: "/profile",
-      label: "Profile",
+      labelKey: "nav.profile",
       icon: CircleUser,
       navigateTo: currentUser?.uid ? `/profile/${currentUser.uid}` : "/profile",
       isProfile: true,
     },
-  ], [currentUser?.uid, currentUser?.coins, currentUser?.photoURL]);
+  ], [currentUser?.uid, currentUser?.coins, currentUser?.photoURL, t]);
 
   const userCoins = currentUser?.coins ?? 1250;
   const formattedCoins = userCoins >= 1000 ? `${(userCoins / 1000).toFixed(1)}k` : `${userCoins}`;
@@ -189,11 +192,12 @@ const BottomNav = () => {
                     ? "bg-[#0b1020]/90 border-purple-500/30 text-purple-300"
                     : "bg-white/95 border-purple-300 text-purple-700"
                 }`}
-                title="Open ARVDOUL Quick Menu"
+                title={t('nav.openQuickMenu')}
+                aria-label={t('nav.openQuickMenu')}
               >
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                <ChevronUp className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wider">Quick Menu</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" aria-hidden="true" />
+                <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="text-[10px] font-black uppercase tracking-wider">{t('nav.openQuickMenu')}</span>
               </motion.button>
             </div>
 
@@ -224,11 +228,11 @@ const BottomNav = () => {
                           whileTap={{ scale: 0.9 }}
                           onClick={() => handleNavigation(tab.to, tab.navigateTo)}
                           className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-cyan-400 p-0.5 shadow-xl shadow-purple-600/40 flex items-center justify-center relative ring-2 ring-white/20 transition-transform"
-                          title="Create Post or Story"
-                          aria-label="Create Post"
+                          title={t('nav.create')}
+                          aria-label={t('nav.create')}
                         >
                           <div className="w-full h-full rounded-[14px] bg-gradient-to-tr from-purple-700 via-pink-600 to-cyan-500 flex items-center justify-center text-white">
-                            <Plus className="w-6 h-6 stroke-[2.5]" />
+                            <Plus className="w-6 h-6 stroke-[2.5]" aria-hidden="true" />
                           </div>
                         </motion.button>
                       </div>
@@ -244,13 +248,14 @@ const BottomNav = () => {
                         whileTap={{ scale: 0.88 }}
                         onClick={() => handleNavigation(tab.to, tab.navigateTo)}
                         className="flex flex-col items-center justify-center py-1 relative group"
-                        aria-label="Profile"
+                        aria-label={t('nav.profile')}
+                        aria-current={isActive ? 'page' : undefined}
                       >
                         <div className="relative">
                           {avatar ? (
                             <img
                               src={avatar}
-                              alt="Profile"
+                              alt={t('nav.profile')}
                               className={`w-6 h-6 rounded-full object-cover ring-2 transition-all ${
                                 isActive ? "ring-purple-400 scale-105" : "ring-transparent group-hover:ring-white/40"
                               }`}
@@ -274,7 +279,7 @@ const BottomNav = () => {
                         <span className={`text-[10px] mt-1 font-semibold truncate ${
                           isActive ? "text-purple-400 font-bold" : isDark ? "text-white/60" : "text-gray-600"
                         }`}>
-                          {tab.label}
+                          {t(tab.labelKey)}
                         </span>
                       </motion.button>
                     );
@@ -288,7 +293,8 @@ const BottomNav = () => {
                         whileTap={{ scale: 0.88 }}
                         onClick={() => handleNavigation(tab.to, tab.navigateTo)}
                         className="flex flex-col items-center justify-center py-1 relative group"
-                        aria-label="Coins"
+                        aria-label={t('nav.coins')}
+                        aria-current={isActive ? 'page' : undefined}
                       >
                         <div className="relative flex flex-col items-center">
                           <FaCoins className={`w-5 h-5 transition-transform group-hover:scale-110 ${
@@ -318,7 +324,8 @@ const BottomNav = () => {
                       whileTap={{ scale: 0.88 }}
                       onClick={() => handleNavigation(tab.to, tab.navigateTo)}
                       className="flex flex-col items-center justify-center py-1 relative group"
-                      aria-label={tab.label}
+                      aria-label={t(tab.labelKey)}
+                      aria-current={isActive ? 'page' : undefined}
                     >
                       <div className="relative">
                         <Icon className={`w-5.5 h-5.5 transition-all ${
@@ -353,7 +360,7 @@ const BottomNav = () => {
                           ? "text-white/60"
                           : "text-gray-600"
                       }`}>
-                        {tab.label}
+                        {t(tab.labelKey)}
                       </span>
                     </motion.button>
                   );

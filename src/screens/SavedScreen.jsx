@@ -5,7 +5,7 @@
  * multi-select batch actions, search, and rich media previews.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,88 +16,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
-
-const INITIAL_SAVED_ITEMS = [
-  {
-    id: 's1',
-    title: 'Neon Cyberpunk Spatial UI Shader Pack',
-    author: {
-      name: 'Alyssa Vance',
-      username: 'alydesigns',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'
-    },
-    type: 'video',
-    thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80',
-    duration: '0:45',
-    savedAt: '2 hours ago',
-    likes: 14200,
-    collection: 'Design Systems',
-    tags: ['UI', '3D', 'WebGL']
-  },
-  {
-    id: 's2',
-    title: 'Cinematic Color Grading & 4K LUT Presets',
-    author: {
-      name: 'Omar Design',
-      username: 'omar.cinema',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100'
-    },
-    type: 'preset',
-    thumbnail: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&auto=format&fit=crop&q=80',
-    savedAt: 'Yesterday',
-    likes: 8900,
-    collection: 'LUTs & VFX',
-    tags: ['Color', 'Presets', 'Premiere']
-  },
-  {
-    id: 's3',
-    title: 'Minimalist Architecture in Tokyo at Dusk',
-    author: {
-      name: 'Maya Johnson',
-      username: 'maya.photos',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100'
-    },
-    type: 'image',
-    thumbnail: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=80',
-    savedAt: '3 days ago',
-    likes: 21400,
-    collection: 'Inspiration',
-    tags: ['Architecture', 'Photography']
-  },
-  {
-    id: 's4',
-    title: 'Ambient Deep Space Sine-Wave Synthesizer',
-    author: {
-      name: 'Alex Live',
-      username: 'alex.audio',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100'
-    },
-    type: 'audio',
-    thumbnail: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80',
-    duration: '3:20',
-    savedAt: '5 days ago',
-    likes: 31200,
-    collection: 'Audio Library',
-    tags: ['Synth', 'Soundtrack']
-  },
-  {
-    id: 's5',
-    title: 'High-Speed Particle Physics in WebGL & Three.js',
-    author: {
-      name: 'Sara Khan',
-      username: 'sarakhan',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100'
-    },
-    type: 'video',
-    thumbnail: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=500&auto=format&fit=crop&q=80',
-    duration: '1:12',
-    savedAt: '1 week ago',
-    likes: 19800,
-    collection: 'Design Systems',
-    tags: ['ThreeJS', 'Interactive']
-  }
-];
 
 const COLLECTIONS = [
   'All',
@@ -110,9 +30,47 @@ const COLLECTIONS = [
 export default function SavedScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const isDark = theme !== 'light';
 
-  const [items, setItems] = useState(INITIAL_SAVED_ITEMS);
+  const [items, setItems] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(true);
+  // Load REAL saved posts from firestoreService
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user?.uid) { setSavedLoading(false); return; }
+      try {
+        const { getFirestoreService } = await import('../services/firestoreService.js');
+        const res = await getFirestoreService().getSavedPosts(user.uid, { limit: 30 });
+        if (cancelled) return;
+        const mapped = (res.posts || []).map((p, i) => ({
+          id: p.id || `saved-${i}`,
+          title: p.caption || p.content?.slice(0, 60) || 'Saved post',
+          author: {
+            name: p.authorName || 'Creator',
+            username: p.authorHandle || p.authorUsername || 'creator',
+            avatar: p.authorPhoto || '/assets/default-profile.png',
+          },
+          type: p.type || 'post',
+          thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
+          savedAt: p.savedAt || 'Recently',
+          likes: p.likeCount || 0,
+          collection: p.collection || 'Saved',
+          tags: p.hashtags || [],
+        }));
+        setItems(mapped);
+      } catch (err) {
+        console.error('Failed to load saved posts:', err);
+        if (!cancelled) setItems([]);
+      } finally {
+        if (!cancelled) setSavedLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
   const [activeCollection, setActiveCollection] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
@@ -187,6 +145,7 @@ export default function SavedScreen() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
+              aria-label="Go back"
               className={cn(
                 "p-2 rounded-full transition-all",
                 isDark ? "hover:bg-white/10 text-gray-300" : "hover:bg-gray-100 text-gray-700"
@@ -233,6 +192,8 @@ export default function SavedScreen() {
             <div className="flex items-center rounded-xl p-0.5 border border-white/10 bg-white/5">
               <button
                 onClick={() => setViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                aria-label="Grid view"
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
                   viewMode === 'grid' ? "bg-purple-600 text-white" : "text-gray-400"
@@ -243,6 +204,8 @@ export default function SavedScreen() {
               </button>
               <button
                 onClick={() => setViewMode('list')}
+                aria-pressed={viewMode === 'list'}
+                aria-label="List view"
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
                   viewMode === 'list' ? "bg-purple-600 text-white" : "text-gray-400"

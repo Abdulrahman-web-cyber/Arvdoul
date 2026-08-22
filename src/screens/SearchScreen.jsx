@@ -1,6 +1,6 @@
 // src/screens/SearchScreen.jsx - ARVDOUL Ultimate Search System
 // Pixel-perfect design with ARVDOUL DNA gradient and glassmorphism
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 

@@ -19,15 +19,99 @@ import ExportModal from './components/ExportModal';
 import RecordVoiceModal from './components/RecordVoiceModal';
 import MediaDrawer from './components/MediaDrawer';
 
+/**
+ * REAL video frame capture: loads the media, draws one frame to a canvas and
+ * returns a JPEG data URL. Returns '' when the frame cannot be decoded —
+ * callers render a neutral placeholder tile; we never invent thumbnails.
+ */
+function captureVideoFrame(url) {
+  return new Promise((resolve) => {
+    if (!url || typeof document === 'undefined') {
+      resolve('');
+      return;
+    }
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.preload = 'metadata';
+    let settled = false;
+    const done = (val) => {
+      if (settled) return;
+      settled = true;
+      resolve(val);
+      try { video.removeAttribute('src'); video.load(); } catch { /* noop */ }
+    };
+    const onMeta = () => {
+      try {
+        const t = Math.min(0.5, Math.max(0, (video.duration || 1) - 0.05));
+        video.currentTime = t;
+      } catch { done(''); }
+    };
+    const onSeeked = () => {
+      try {
+        const w = 320;
+        const scale = w / video.videoWidth;
+        const h = Math.max(1, Math.round(video.videoHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return done('');
+        ctx.drawImage(video, 0, 0, w, h);
+        done(canvas.toDataURL('image/jpeg', 0.8));
+      } catch { done(''); }
+    };
+    video.addEventListener('loadedmetadata', onMeta, { once: true });
+    video.addEventListener('seeked', onSeeked, { once: true });
+    video.addEventListener('error', () => done(''), { once: true });
+    video.src = url;
+  });
+}
+
+/**
+ * REAL audio waveform: decodes the audio with the Web Audio API and returns
+ * 40 peak values (0-100). Returns [] when decoding fails — callers must show
+ * a neutral waveform placeholder instead of a fake random one.
+ */
+function analyzeAudioWaveform(url) {
+  return new Promise((resolve) => {
+    if (!url || typeof window === 'undefined' || !window.AudioContext || !window.OfflineAudioContext) {
+      resolve([]);
+      return;
+    }
+    fetch(url)
+      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error('fetch failed'))))
+      .then((buffer) => new OfflineAudioContext(1, 1, 44100).decodeAudioData(buffer))
+      .then((audioBuffer) => {
+        const channel = audioBuffer.getChannelData(0);
+        const buckets = 40;
+        const peaks = [];
+        const perBucket = Math.max(1, Math.floor(channel.length / buckets));
+        for (let i = 0; i < buckets; i++) {
+          let peak = 0;
+          for (let j = 0; j < perBucket; j++) {
+            const v = Math.abs(channel[i * perBucket + j] || 0);
+            if (v > peak) peak = v;
+          }
+          peaks.push(Math.max(4, Math.min(100, Math.round(peak * 100))));
+        }
+        resolve(peaks);
+      })
+      .catch(() => resolve([]));
+  });
+}
+
 export default function VideoEditorScreen() {
-  // Project State
-  const [projectName, setProjectName] = useState('My Studio Masterpiece');
+  // Project State — honest default: the editor opens empty. The user names
+  // their own project; we never present a pre-made demo project.
+  const [projectName, setProjectName] = useState('Untitled Project');
   const [selectedResolution, setSelectedResolution] = useState(RESOLUTION_PRESETS[0]); // 4K 16:9
   const [isSaved, setIsSaved] = useState(true);
 
   // Tracks & Clips State
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
-  const [selectedClipId, setSelectedClipId] = useState('v1');
+  const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedTrackId, setSelectedTrackId] = useState('track-video');
 
   // History (Undo / Redo)
@@ -342,7 +426,9 @@ export default function VideoEditorScreen() {
     setSelectedTrackId('track-stickers');
   };
 
-  const handleAddAudioClip = (audioData) => {
+  const handleAddAudioClip = async (audioData) => {
+    // Real waveform from the actual audio bytes (Web Audio decode).
+    const waveform = await analyzeAudioWaveform(audioData.url);
     const newClip = {
       id: `audio-${Date.now()}`,
       startTime: currentTime,
@@ -350,7 +436,7 @@ export default function VideoEditorScreen() {
       title: audioData.title,
       url: audioData.url,
       volume: 100,
-      waveform: Array.from({ length: 40 }).map(() => Math.floor(Math.random() * 80) + 20),
+      waveform,
     };
 
     const newTracks = tracks.map((t) => {
@@ -365,19 +451,21 @@ export default function VideoEditorScreen() {
     setSelectedTrackId('track-audio');
   };
 
-  const handleAddMediaFromDisk = (file) => {
+  const handleAddMediaFromDisk = async (file) => {
     const url = URL.createObjectURL(file);
     const isVideo = file.type.startsWith('video');
     const isAudio = file.type.startsWith('audio');
 
     if (isVideo) {
+      // Real frame from the user's own video ('' if it cannot be decoded).
+      const thumbnail = await captureVideoFrame(url);
       const newClip = {
         id: `video-${Date.now()}`,
         startTime: currentTime,
         duration: 12,
         title: file.name,
         url: url,
-        thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=300&q=80',
+        thumbnail,
         volume: 100,
       };
       const newTracks = tracks.map((t) =>
@@ -636,6 +724,7 @@ export default function VideoEditorScreen() {
         projectName={projectName}
         duration={totalDuration}
         currentResolution={selectedResolution}
+        tracks={tracks}
       />
 
       <RecordVoiceModal
@@ -644,22 +733,27 @@ export default function VideoEditorScreen() {
         mode={recordMode}
         onAddRecordedClip={(clip) => {
           if (clip.type === 'video') {
-            const newClip = {
-              id: `video-rec-${Date.now()}`,
-              startTime: currentTime,
-              duration: clip.duration,
-              title: clip.title,
-              url: clip.url,
-              thumbnail: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&q=80',
-              volume: 100,
+            const addRecordedClip = async () => {
+              // Real frame from the just-recorded clip ('' if undecodable).
+              const thumbnail = await captureVideoFrame(clip.url);
+              const newClip = {
+                id: `video-rec-${Date.now()}`,
+                startTime: currentTime,
+                duration: clip.duration,
+                title: clip.title,
+                url: clip.url,
+                thumbnail,
+                volume: 100,
+              };
+              const newTracks = tracks.map((t) =>
+                t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
+              );
+              pushHistory(newTracks);
+              setSelectedClipId(newClip.id);
             };
-            const newTracks = tracks.map((t) =>
-              t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
-            );
-            pushHistory(newTracks);
-            setSelectedClipId(newClip.id);
+            void addRecordedClip();
           } else {
-            handleAddAudioClip({
+            void handleAddAudioClip({
               title: clip.title,
               url: clip.url,
               duration: clip.duration,

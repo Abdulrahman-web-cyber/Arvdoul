@@ -3,20 +3,47 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Cpu, HardDrive, Wifi, WifiOff } from 'lucide-react';
 
 const PerformanceMonitor = () => {
-  // Basic observability: log basic metrics with correlation context (Pillar 3)
+  // Real observability: push REAL device metrics into metricsService
+  // (Prometheus-exportable). No fake FPS/memory values - only measured data.
   useEffect(() => {
-    const report = () => {
-      console.log(JSON.stringify({
-        type: 'perf_metric',
-        timestamp: new Date().toISOString(),
-        fps: 60,
-        memory: 0,
-        network: navigator.onLine ? 'online' : 'offline',
-        url: window.location.pathname
-      }));
+    let intervalId = null;
+    let mounted = true;
+    import('../services/metricsService.js')
+      .then(({ metricsService }) => {
+        if (!mounted) return;
+        const report = () => {
+          try {
+            const nav = typeof navigator !== 'undefined' ? navigator : null;
+            const perf = typeof performance !== 'undefined' ? performance : null;
+            metricsService.setGauge('perf_online', nav ? (nav.onLine ? 1 : 0) : 1);
+            metricsService.setGauge('perf_route', 1); // placeholder replaced by useScreenView
+            if (perf && typeof perf.getEntriesByType === 'function') {
+              const navEntries = perf.getEntriesByType('navigation');
+              if (navEntries.length > 0) {
+                metricsService.setGauge('perf_ttfb_ms', navEntries[0].responseStart);
+                metricsService.setGauge('perf_domcontent_ms', navEntries[0].domContentLoadedEventEnd - navEntries[0].startTime);
+              }
+              const resources = perf.getEntriesByType('resource');
+              metricsService.setGauge('perf_resource_count', resources.length);
+              const totalTransfer = resources.reduce((sum, r) => sum + (r.transferSize || 0), 0);
+              metricsService.setGauge('perf_transfer_bytes', totalTransfer);
+            }
+            if (nav && nav.connection) {
+              metricsService.setGauge('perf_network_rtt_ms', nav.connection.rtt || 0);
+              metricsService.setGauge('perf_network_downlink_mbps', nav.connection.downlink || 0);
+            }
+          } catch {
+            /* metrics are best-effort */
+          }
+        };
+        report();
+        intervalId = setInterval(report, 30000);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+      if (intervalId) clearInterval(intervalId);
     };
-    const id = setInterval(report, 30000);
-    return () => clearInterval(id);
   }, []);
 
   const [metrics, setMetrics] = useState({

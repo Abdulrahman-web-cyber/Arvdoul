@@ -1,0 +1,37 @@
+# ops/prometheus/prometheus.yml
+# Prometheus scrape configuration for Arvdoul.
+#
+# Targets:
+#   1. arvdoul-dev (Vite dev server /metrics endpoint) - client-side telemetry.
+#   2. firebase-functions (optional) - add a metrics HTTP function target when
+#      deployed (see docs/OBSERVABILITY.md).
+#
+# Start with: docker compose -f ops/docker-compose.observability.yml up -d
+# Dashboards: http://localhost:3001 (Grafana, admin/admin)
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: 'arvdoul-dev'
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+        labels:
+          env: 'dev'
+          app: 'arvdoul'
+
+  # When the Cloud Functions metrics endpoint is deployed, enable this:
+  # - job_name: 'arvdoul-functions'
+  #   metrics_path: /metrics
+  #   scheme: https
+  #   static_configs:
+  #     - targets: ['us-central1-<project-id>.cloudfunctions.net']
+  #       labels:
+  #         env: 'production'
+  #         app: 'arvdoul-functions'

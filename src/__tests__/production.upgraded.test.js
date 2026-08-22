@@ -54,7 +54,6 @@ import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
 import { incidentService } from '../services/incidentService.js';
 import { aggregationCacheService } from '../services/AggregationCacheService.js';
-import soundService from '../services/soundService.js';
 import audioEditorService from '../services/audioEditorService.js';
 import collaborationService from '../services/collaborationService.js';
 
@@ -200,13 +199,24 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(dist).toBe(1);
     });
 
-    test('flags licensed media matches within the Hamming threshold distance', () => {
-      const licensedHashMatch = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff (Licensed)
-      const res = copyrightService.checkCopyrightMatch(licensedHashMatch);
+    test('flags licensed media matches within the Hamming threshold distance', async () => {
+      // Register a REAL work first - the registry is never seeded with fakes.
+      await copyrightService.registerWork({
+        fingerprint: '1111000011110000111100001111000011110000111100001111000011110000',
+        owner: 'Test Studio Ltd.',
+        title: 'Licensed Test Asset',
+      });
+
+      const licensedHashMatch = '1111000011110000111100001111000011110000111100001111000011110001'; // 1 bit diff
+      const res = await copyrightService.checkCopyrightMatch(licensedHashMatch);
 
       expect(res.match).toBe(true);
-      expect(res.owner).toBe('WarnerMedia Ltd.');
+      expect(res.owner).toBe('Test Studio Ltd.');
       expect(res.action).toBe('FLAG_FOR_ATTRIBUTION_OR_TAKEDOWN');
+
+      // Unregistered fingerprints are NOT flagged (no false positives).
+      const miss = await copyrightService.checkCopyrightMatch('0000000000000000');
+      expect(miss.match).toBe(false);
     });
 
     test('processes and logs valid DMCA Takedown Notice claims', () => {
@@ -225,25 +235,64 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(xml).toContain('enterprise_okta');
     });
 
-    test('validates assertions and parses NameID attributes', async () => {
-      const mockAssertionBase64 = btoa('SAMLAssertion: email="test_jit@corp.com" name="JIT SSO Corporate User" role="admin"');
+    test('fails CLOSED without a server verification endpoint', async () => {
+      // No verifyUrl -> assertions are never trusted client-side.
+      await expect(
+        samlService.validateSAMLAssertion(btoa('SAMLAssertion: email="x@corp.com"'), 'tenant_okta_prod')
+      ).rejects.toThrow('SAML_ASSERTION_VALIDATION_REQUIRES_SERVER');
+    });
+
+    test('validates assertions server-side and parses NameID attributes', async () => {
+      const mockAssertionBase64 = btoa('<Assertion>email="test_jit@corp.com"</Assertion>');
 
       // Stub justInTimeProvisionUser to avoid Firebase initialization hanging
       jest.spyOn(samlService, 'justInTimeProvisionUser').mockImplementation(async (email, displayName, role) => {
         return { uid: 'sso_mock_123', email, displayName, role };
       });
 
-      const res = await samlService.validateSAMLAssertion(mockAssertionBase64, 'tenant_okta_prod');
-      expect(res.success).toBe(true);
-      expect(res.email).toBe('test_jit@corp.com');
-      expect(res.displayName).toBe('JIT SSO Corporate User');
-      expect(res.role).toBe('admin');
+      // The server verification endpoint is the source of truth.
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = jest.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          success: true,
+          email: 'test_jit@corp.com',
+          displayName: 'JIT SSO Corporate User',
+          role: 'admin',
+        }),
+      }));
+
+      try {
+        const res = await samlService.validateSAMLAssertion(mockAssertionBase64, 'tenant_okta_prod', {
+          verifyUrl: 'https://verify.example/saml',
+        });
+        expect(res.success).toBe(true);
+        expect(res.email).toBe('test_jit@corp.com');
+        expect(res.displayName).toBe('JIT SSO Corporate User');
+        expect(res.role).toBe('admin');
+        expect(res.serverVerified).toBe(true);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
 
-    test('assertion validation rejects expired assertion tokens', async () => {
-      const expiredAssertion = btoa('SAMLAssertion: ExpiredAssertionSignatureSpec');
-      await expect(samlService.validateSAMLAssertion(expiredAssertion, 'tenant_okta_prod'))
-        .rejects.toThrow('Assertion validation failed: SAML token lifetime expired');
+    test('assertion validation rejects server-side verification failures', async () => {
+      const expiredAssertion = btoa('<Assertion>ExpiredAssertionSignatureSpec</Assertion>');
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = jest.fn(async () => ({
+        ok: true,
+        json: async () => ({ success: false, error: 'SAML token lifetime expired' }),
+      }));
+
+      try {
+        await expect(
+          samlService.validateSAMLAssertion(expiredAssertion, 'tenant_okta_prod', {
+            verifyUrl: 'https://verify.example/saml',
+          })
+        ).rejects.toThrow('SAML token lifetime expired');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 
@@ -514,23 +563,7 @@ describe('Upgraded Production Services Integration Tests', () => {
     });
   });
 
-  describe('SoundService & AudioEditor & Collaboration Services', () => {
-    test('soundService fetches trending audio tracks and manages saved state', async () => {
-      const sounds = await soundService.getTrendingSounds('All');
-      expect(sounds.length).toBeGreaterThan(0);
-      expect(sounds[0].id).toBeDefined();
-
-      const saveRes = await soundService.toggleSaveSound(sounds[0].id);
-      expect(saveRes).toHaveProperty('saved');
-
-      const uploaded = await soundService.uploadCustomSound({
-        title: 'Test Audio Track',
-        genre: 'Hyperpop'
-      });
-      expect(uploaded.id).toContain('snd-custom-');
-      expect(uploaded.title).toBe('Test Audio Track');
-    });
-
+  describe('AudioEditor & Collaboration Services', () => {
     test('audioEditorService creates and manages project waveforms, effects, and markers', () => {
       const proj = audioEditorService.createProject({ name: 'Studio Test Track' });
       expect(proj).toBeDefined();
@@ -561,12 +594,14 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(waveform.length).toBeGreaterThan(0);
     });
 
-    test('collaborationService returns user stats and projects overview', async () => {
-      const stats = collaborationService.getStats();
+    test('collaborationService returns an honest stats overview (no fabricated sample projects)', async () => {
+      const stats = await collaborationService.getStats(null);
       expect(stats).toBeDefined();
       expect(Array.isArray(stats.projects)).toBe(true);
-      expect(stats.projects.length).toBeGreaterThan(0);
-      expect(stats.projects[0].id).toBe('proj-sample-1');
+      // Honest empty state: without a user there are no projects, and the
+      // service must NEVER invent sample projects (regression: v1 returned a
+      // hardcoded 'proj-sample-1' demo project).
+      expect(stats.projects).toEqual([]);
     });
   });
 });

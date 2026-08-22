@@ -121,7 +121,10 @@ export default function MediaCarousel({
             {media.map((_, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => setCurrent(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                aria-current={i === current ? "true" : undefined}
                 className={`w-2 h-2 rounded-full transition-all focus:outline-none ${
                   i === current
                     ? theme === "dark"
@@ -129,7 +132,6 @@ export default function MediaCarousel({
                       : "bg-gray-900"
                     : "bg-gray-400/50"
                 }`}
-                aria-label={`Go to slide ${i + 1}`}
               />
             ))}
           </div>

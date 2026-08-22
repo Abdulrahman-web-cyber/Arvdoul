@@ -22,93 +22,34 @@ import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 
-// Sample fallback public profile when Firestore document is newly initialized
-const DEFAULT_PUBLIC_CREATOR = {
-  id: 'creator-star-1',
-  username: 'alydesigns',
-  displayName: 'Alyssa Vance',
-  bio: '✨ Senior UI/UX Architect & ARVDOUL Creator | Crafting next-gen spatial interfaces & digital fashion 🎨 Drop by my Live Spaces!',
-  photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-  coverPhotoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80',
-  isVerified: true,
-  isCreator: true,
-  location: 'San Francisco, CA',
-  website: 'https://alyssa.design',
-  joinedDate: 'Joined March 2024',
-  level: 48,
-  rank: 'Diamond Creator',
-  position: 'Queen',
+// Honest fallback when the public profile document is not yet created:
+// real fields only, zeroed counters, no fabricated identity.
+const EMPTY_PUBLIC_PROFILE = {
+  id: '',
+  username: '',
+  displayName: 'User',
+  bio: '',
+  photoURL: '/assets/default-profile.png',
+  coverPhotoURL: null,
+  isVerified: false,
+  isCreator: false,
+  location: '',
+  website: '',
+  joinedDate: '',
+  level: 1,
+  rank: '',
+  position: '',
   stats: {
-    followers: '142.8K',
-    following: '840',
-    friends: '254',
-    posts: '168',
-    reputation: 98.4,
-    totalViews: '2.4M'
+    followers: 0,
+    following: 0,
+    friends: 0,
+    posts: 0,
+    reputation: 0,
+    totalViews: 0,
   },
-  mutualFriends: [
-    { id: 'm1', name: 'Sara Khan', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120' },
-    { id: 'm2', name: 'Omar Design', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120' },
-    { id: 'm3', name: 'Maya J.', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120' }
-  ],
-  highlights: [
-    { id: 'h1', title: 'Studio 🎙️', cover: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=200' },
-    { id: 'h2', title: 'Design 🎨', cover: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=200' },
-    { id: 'h3', title: 'Vlogs ✈️', cover: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200' },
-    { id: 'h4', title: 'LUTs Store 🛍️', cover: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=200' }
-  ],
-  posts: [
-    {
-      id: 'p1',
-      mediaURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 12450,
-      comments: 384,
-      title: 'Neon fluid generative art explorations 🌌'
-    },
-    {
-      id: 'p2',
-      mediaURL: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80',
-      type: 'video',
-      likes: 24890,
-      comments: 720,
-      views: '84.2K',
-      title: 'Behind the scenes in my 4K timeline editor'
-    },
-    {
-      id: 'p3',
-      mediaURL: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 8320,
-      comments: 215,
-      title: 'Architecture & minimalist interior moodboard'
-    },
-    {
-      id: 'p4',
-      mediaURL: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 19400,
-      comments: 630,
-      title: 'Sunset vibes in Bali while recording voice spaces'
-    },
-    {
-      id: 'p5',
-      mediaURL: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&auto=format&fit=crop&q=80',
-      type: 'video',
-      likes: 31200,
-      comments: 1104,
-      views: '128K',
-      title: 'Audio waveform mastering test'
-    },
-    {
-      id: 'p6',
-      mediaURL: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 15600,
-      comments: 490,
-      title: 'New preset pack dropped in the Creator Store!'
-    }
-  ]
+  mutualFriends: [],
+  highlights: [],
+  posts: [],
 };
 
 export default function ProfilePublicScreen() {
@@ -120,7 +61,7 @@ export default function ProfilePublicScreen() {
 
   const [activeTab, setActiveTab] = useState('posts'); // 'posts' | 'reels' | 'shop' | 'about'
   const [isFollowing, setIsFollowing] = useState(false);
-  const [profileData, setProfileData] = useState(DEFAULT_PUBLIC_CREATOR);
+  const [profileData, setProfileData] = useState(EMPTY_PUBLIC_PROFILE);
   const [loading, setLoading] = useState(true);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [giftCoins, setGiftCoins] = useState(100);

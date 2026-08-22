@@ -33,53 +33,38 @@ const VideoComments = memo(({
   const [sortBy, setSortBy] = useState('best');
   const [loading, setLoading] = useState(false);
 
-  // Load comments
+  // Load comments from the real comment service (Firestore-backed, moderated,
+  // rate-limited). No mock data - an empty result renders an empty state.
   useEffect(() => {
     if (!isOpen || !video?.id) return;
 
     const loadComments = async () => {
       setLoading(true);
       try {
-        // Mock comments for demo
-        const mockComments = [
-          {
-            id: '1',
-            user: { id: 'u1', name: 'Sarah Miller', username: 'sarah', avatar: null, isVerified: true },
-            text: 'This is amazing! 🔥',
-            likes: 124,
-            isLiked: false,
-            createdAt: new Date(Date.now() - 3600000).toISOString(),
-            replies: [
-              {
-                id: 'r1',
-                user: { id: 'u2', name: 'Alex Chen', username: 'alex', avatar: null, isVerified: false },
-                text: 'Totally agree!',
-                likes: 12,
-                isLiked: false,
-                createdAt: new Date(Date.now() - 1800000).toISOString(),
-              },
-            ],
+        const { getCommentService } = await import('../../services/commentService.js');
+        const res = await getCommentService().getCommentsByPost(video.id, {
+          nested: true,
+          limit: 50,
+          cacheFirst: false,
+        });
+        const mapComment = (c) => ({
+          id: c.id,
+          user: {
+            id: c.userId,
+            name: c.userName || 'User',
+            username: c.userUsername || 'user',
+            avatar: c.userAvatar || null,
+            isVerified: !!c.isVerified,
           },
-          {
-            id: '2',
-            user: { id: 'u3', name: 'Jordan Lee', username: 'jordan', avatar: null, isVerified: false },
-            text: 'Can you do a tutorial on this?',
-            likes: 89,
-            isLiked: true,
-            createdAt: new Date(Date.now() - 7200000).toISOString(),
-            replies: [],
-          },
-          {
-            id: '3',
-            user: { id: 'u4', name: 'Taylor Swift', username: 'taylor', avatar: null, isVerified: true },
-            text: 'The quality is incredible!',
-            likes: 256,
-            isLiked: false,
-            createdAt: new Date(Date.now() - 14400000).toISOString(),
-            replies: [],
-          },
-        ];
-        setComments(mockComments);
+          text: c.content || c.text || '',
+          likes: c.likes || 0,
+          isLiked: false,
+          createdAt: c.createdAt instanceof Date
+            ? c.createdAt.toISOString()
+            : new Date(c.createdAt).toISOString(),
+          replies: Array.isArray(c.replies) ? c.replies.map(mapComment) : [],
+        });
+        setComments((res.comments || []).map(mapComment));
       } catch (err) {
         console.error('Failed to load comments:', err);
         toast.error('Failed to load comments');
@@ -95,8 +80,8 @@ const VideoComments = memo(({
   const handleSubmit = async () => {
     if (!newComment.trim()) return;
 
-    const comment = {
-      id: `c_${Date.now()}`,
+    const optimistic = {
+      id: `local_${Date.now()}`,
       user: { id: 'current', name: 'You', username: 'you', avatar: null, isVerified: false },
       text: newComment.trim(),
       likes: 0,
@@ -106,56 +91,97 @@ const VideoComments = memo(({
       ...(replyTo && { replyTo: replyTo.id }),
     };
 
-    if (replyTo) {
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === replyTo.id
-            ? { ...c, replies: [...c.replies, comment] }
-            : c
-        )
-      );
-    } else {
-      setComments((prev) => [comment, ...prev]);
-    }
+    try {
+      const { getCommentService } = await import('../../services/commentService.js');
+      const { getAuthInstance } = await import('../../firebase/firebase.js');
+      const auth = await getAuthInstance();
+      const uid = auth?.currentUser?.uid;
+      if (!uid) throw new Error('You must be signed in to comment');
 
-    setNewComment('');
-    setReplyTo(null);
-    toast.success(replyTo ? 'Reply sent!' : 'Comment posted!');
+      const res = replyTo
+        ? await getCommentService().replyToComment(
+            replyTo.id,
+            uid,
+            newComment.trim(),
+            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
+          )
+        : await getCommentService().createComment(
+            video.id,
+            uid,
+            newComment.trim(),
+            { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
+          );
+
+      if (res?.offlineQueued) {
+        // Queued offline - keep optimistic entry, marked as pending
+        optimistic._pending = true;
+      } else if (res?.success === false) {
+        throw new Error(res.error || 'Failed to post comment');
+      }
+
+      if (replyTo) {
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === replyTo.id
+              ? { ...c, replies: [...c.replies, optimistic] }
+              : c
+          )
+        );
+      } else {
+        setComments((prev) => [optimistic, ...prev]);
+      }
+
+      setNewComment('');
+      setReplyTo(null);
+      toast.success(replyTo ? 'Reply sent!' : 'Comment posted!');
+    } catch (err) {
+      console.error('Failed to post comment:', err);
+      toast.error(err.message || 'Failed to post comment');
+    }
   };
 
-  // Handle like comment
-  const handleLike = (commentId, isReply = false, parentId = null) => {
-    if (isReply && parentId) {
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === parentId
-            ? {
-                ...c,
-                replies: c.replies.map((r) =>
-                  r.id === commentId
-                    ? {
-                        ...r,
-                        isLiked: !r.isLiked,
-                        likes: r.isLiked ? r.likes - 1 : r.likes + 1,
-                      }
-                    : r
-                ),
-              }
-            : c
-        )
-      );
-    } else {
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === commentId
-            ? {
-                ...c,
-                isLiked: !c.isLiked,
-                likes: c.isLiked ? c.likes - 1 : c.likes + 1,
-              }
-            : c
-        )
-      );
+  // Handle like comment (persisted via the comment service)
+  const handleLike = async (commentId, isReply = false, parentId = null) => {
+    // Optimistic toggle
+    const applyToggle = (prev) =>
+      prev.map((c) => {
+        if (isReply && parentId && c.id === parentId) {
+          return {
+            ...c,
+            replies: c.replies.map((r) =>
+              r.id === commentId
+                ? { ...r, isLiked: !r.isLiked, likes: r.isLiked ? r.likes - 1 : r.likes + 1 }
+                : r
+            ),
+          };
+        }
+        if (!isReply && c.id === commentId) {
+          return { ...c, isLiked: !c.isLiked, likes: c.isLiked ? c.likes - 1 : c.likes + 1 };
+        }
+        return c;
+      });
+
+    setComments(applyToggle);
+
+    try {
+      const { getCommentService } = await import('../../services/commentService.js');
+      const { getAuthInstance } = await import('../../firebase/firebase.js');
+      const auth = await getAuthInstance();
+      const uid = auth?.currentUser?.uid;
+      if (!uid) return;
+      const target = (isReply && parentId
+        ? comments.find((c) => c.id === parentId)?.replies.find((r) => r.id === commentId)
+        : comments.find((c) => c.id === commentId));
+      const wasLiked = !!target?.isLiked;
+      if (wasLiked) {
+        await getCommentService().removeLikeDislike(commentId, uid);
+      } else {
+        await getCommentService().likeComment(commentId, uid);
+      }
+    } catch (err) {
+      // Roll back the optimistic toggle on failure
+      setComments(applyToggle);
+      console.error('Failed to like comment:', err);
     }
   };
 

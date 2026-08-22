@@ -2,9 +2,10 @@
 // 🏗️ Perfect architecture with clean imports
 // ⚡ No circular dependencies, perfect chunking
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
+import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '../context/ThemeContext.jsx';
 import { AuthProvider } from '../context/AuthContext.jsx';
 import { Toaster } from 'sonner';
@@ -51,6 +52,32 @@ const SystemInitializer = ({ onReady }) => {
         
         // Don't await - let it run in background
         firebaseInit();
+
+        // Feature flags: pull Firebase Remote Config in the background. Until
+        // it resolves (or fails), the static defaults are active, so nothing
+        // blocks startup. Admin overrides (kill switches) are applied
+        // synchronously from localStorage by the service constructor.
+        const featureFlagsInit = async () => {
+          try {
+            const { featureFlagService } = await import('../services/featureFlagService.js');
+            await featureFlagService.init();
+          } catch (error) {
+            console.warn('⚠️ Feature flags init failed (defaults active):', error.message);
+          }
+        };
+        featureFlagsInit();
+
+        // Real User Monitoring: wire Core Web Vitals + route timings into the
+        // metrics pipeline (best-effort; never blocks startup).
+        const rumInit = async () => {
+          try {
+            const { rumService } = await import('../services/rumService.js');
+            rumService.attachToMetrics();
+          } catch (error) {
+            console.warn('⚠️ RUM init failed:', error.message);
+          }
+        };
+        rumInit();
 
         // Wire the global offline-queue drain: every queued operation
         // (comments, live joins/leaves, gift/upload retries, welcome
@@ -110,6 +137,10 @@ const SystemInitializer = ({ onReady }) => {
                         priority: 'normal',
                         channel: 'in_app',
                       }));
+                    break;
+                  case 'markAsRead':
+                    await import('../services/notificationsService.js').then(m =>
+                      m.getNotificationsService().markNotificationAsRead(op.payload.notificationId, op.payload.userId));
                     break;
                   case 'user.follow':
                     await import('../services/userService.js').then(m =>
@@ -174,22 +205,32 @@ export default function AppBootstrap() {
   const [isReady, setIsReady] = useState(false);
   const [initializationStage, setInitializationStage] = useState('starting');
 
+  // Stable identity: SystemInitializer's effect depends on onReady, and an
+  // inline arrow would get a fresh identity on every render — re-running the
+  // whole system initialization (Firebase, feature flags, RUM, offline drain)
+  // on every AppBootstrap re-render.
+  const handleReady = useCallback(() => setIsReady(true), []);
+
   return (
     <HelmetProvider>
       <ThemeProvider>
         <GlobalErrorBoundary>
           {/* System initializer (invisible) */}
           <SystemInitializer 
-            onReady={() => setIsReady(true)}
+            onReady={handleReady}
           />
           
           {/* Main application - Only render when ready */}
           {isReady && (
             <BrowserRouter>
               <AuthProvider>
-                <Suspense fallback={<div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950" />}>
-                  <AppRoutes />
-                </Suspense>
+                {/* Global motion policy: every Framer Motion animation respects
+                    prefers-reduced-motion (WCAG 2.2 2.3.3). */}
+                <MotionConfig reducedMotion="user">
+                  <Suspense fallback={<div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950" />}>
+                    <AppRoutes />
+                  </Suspense>
+                </MotionConfig>
                 
                 {/* Toast notifications */}
                 <Toaster 

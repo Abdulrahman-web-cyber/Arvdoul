@@ -16,7 +16,7 @@ class CSPService {
   generateCSPHeader(nonce = '') {
     const scriptSrc = nonce ? `'self' 'nonce-${nonce}' https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/` : `'self' 'unsafe-inline' https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/`;
     const styleSrc = `'self' 'unsafe-inline' https://fonts.googleapis.com`;
-    const imgSrc = `'self' data: blob: https: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://images.unsplash.com`;
+    const imgSrc = `'self' data: blob: https: https://*.googleusercontent.com https://firebasestorage.googleapis.com`;
     const connectSrc = `'self' https: wss: https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com`;
     const fontSrc = `'self' data: https://fonts.gstatic.com`;
     const frameSrc = `'self' https://*.firebaseapp.com https://www.google.com/recaptcha/`;
@@ -39,10 +39,14 @@ class CSPService {
    * Ingests and reports CSP violation payload.
    */
   handleCSPViolation(report) {
+    if (!report || typeof report !== 'object') {
+      logger.warn('[CSPService] Received malformed CSP violation report');
+      return;
+    }
     logger.warn('[CSPService] CSP Violation caught:', {
-      blockedURI: report['blocked-uri'],
-      violatedDirective: report['violated-directive'],
-      documentURI: report['document-uri'],
+      blockedURI: report['blocked-uri'] ?? 'unknown',
+      violatedDirective: report['violated-directive'] ?? 'unknown',
+      documentURI: report['document-uri'] ?? 'unknown',
     });
   }
 }

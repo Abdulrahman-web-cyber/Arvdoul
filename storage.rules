@@ -1,56 +1,102 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // User avatars — owner write, public read
+    // ==================== USER MEDIA (owner write, public read) ====================
+    // Sizes and content types are enforced HERE (Storage rules OR within a
+    // match block — every allow must carry the full constraint set).
+
+    // User avatars — owner write, public read, image only, max 10 MB
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
     }
 
-    // User banners — owner write, public read
+    // User banners — owner write, public read, image only, max 10 MB
     match /banners/{userId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
     }
 
-    // Post media — owner write, public read
+    // Post media — owner write, public read, max 200 MB
     match /posts/{userId}/{postId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 200 * 1024 * 1024;
     }
 
     // Story media — owner write, public read (stories expire server-side)
     match /stories/{userId}/{storyId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 100 * 1024 * 1024;
     }
 
-    // Message media — participant read/write only (chat privacy)
+    // Message media — participant read/write only (chat privacy), max 25 MB
     match /messages/{conversationId}/{messageId}/{fileName} {
       function isParticipant() {
         return request.auth != null &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
       }
       allow read: if isParticipant();
-      allow write: if isParticipant();
+      allow write: if isParticipant() && request.resource.size < 25 * 1024 * 1024;
     }
 
     // Live media — owner write, signed-in read
     match /live/{userId}/{streamId}/{fileName} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 500 * 1024 * 1024;
     }
 
     // Community media — owner write, signed-in read
     match /communities/{userId}/{communityId}/{fileName} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 100 * 1024 * 1024;
     }
 
-    // Temp files (auto-delete after 24h) — owner-only
+    // Custom sounds (uploadCustomSound) — owner write, public read,
+    // audio content only, max 25 MB (matches the client-side limit).
+    match /sounds/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 25 * 1024 * 1024 &&
+        request.resource.contentType.matches('audio/.*');
+    }
+
+    // Video uploads (videoService) — owner write, public read
+    match /videos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 500 * 1024 * 1024;
+    }
+
+    // Video thumbnails / exports — owner write, public read
+    match /thumbnails/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Temp files (auto-delete after 24h) — owner-only, max 50 MB
     match /temp/{userId}/{fileName} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        request.resource.size < 50 * 1024 * 1024;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 

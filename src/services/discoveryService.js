@@ -80,16 +80,52 @@ class DiscoveryService {
   }
 
   /**
-   * Provides general viral and local trending categories for new profiles (Pillar 151)
+   * Provides general viral and local trending categories for new profiles (Pillar 151).
+   * Reads REAL recent public posts from Firestore (approved + not deleted). Never
+   * fabricates content: when the read fails or the store is empty, it returns an
+   * empty feed (the UI shows the real empty state) instead of invented posts.
    */
-  _generateColdStartFeed(userInterests) {
+  async _generateColdStartFeed(userInterests) {
     logger.info('[DiscoveryEngine] Executing cold-start prefetch workflow.');
 
-    // Return mock curated default posts
-    return [
-      { id: 'cold_001', category: 'tech', title: 'Welcome to the Future of Social Connection', content: 'Explore premium creation tools and decentralized media on Arvdoul.', authorId: 'arvdoul_root' },
-      { id: 'cold_002', category: 'lifestyle', title: 'Aesthetic Focus Guidelines', content: 'A guide to staying deliberate in a noisy visual age.', authorId: 'arvdoul_root' }
-    ].filter(item => userInterests.length === 0 || userInterests.includes(item.category));
+    try {
+      const { getFirestoreInstance } = await import('../firebase/firebase.js');
+      const fstore = await import('firebase/firestore');
+      const db = await getFirestoreInstance();
+
+      const constraints = [
+        fstore.where('isDeleted', '==', false),
+        fstore.where('moderationStatus', 'in', ['approved', 'pending']),
+        fstore.orderBy('createdAt', 'desc'),
+        fstore.limit(20),
+      ];
+      if (userInterests && userInterests.length > 0) {
+        constraints.unshift(fstore.where('category', 'in', userInterests.slice(0, 10)));
+      }
+
+      const q = fstore.query(fstore.collection(db, 'posts'), ...constraints);
+      const snapshot = await fstore.getDocs(q);
+
+      const posts = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        posts.push({
+          id: docSnap.id,
+          category: data.category || 'general',
+          title: data.caption ? data.caption.slice(0, 120) : 'New post',
+          content: data.caption || '',
+          authorId: data.authorId || data.userId,
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          stats: { likes: data.likeCount || 0, comments: data.commentCount || 0 },
+          _source: 'cold_start',
+        });
+      });
+
+      return posts;
+    } catch (err) {
+      logger.warn('[DiscoveryEngine] Cold-start feed unavailable - returning empty feed:', { error: err.message });
+      return [];
+    }
   }
 }
 

@@ -232,48 +232,25 @@ export default function ProfileScreen() {
   }
   
   // Fallback profile if Firestore has not synced yet
+  // Honest fallback - real user fields only, zeroed counters, no fabricated
+  // identity, stats or posts.
   const effectiveProfile = profile || {
     id: viewingUserId || 'creator-arvdoul',
-    username: authUser?.username || 'arvdoul.official',
-    displayName: authUser?.displayName || 'Arvdoul Creator',
-    bio: '✨ Content Creator & Spatial Interface Explorer | ARVDOUL Verified Partner 🚀',
-    photoURL: authUser?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
-    coverPhotoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80',
-    followerCount: 24500,
-    followingCount: 420,
-    postCount: 86,
-    isVerified: true,
-    isCreator: true,
-    level: 32,
-    location: 'Dubai, UAE'
+    username: authUser?.username || '',
+    displayName: authUser?.displayName || 'Creator',
+    bio: authUser?.bio || '',
+    photoURL: authUser?.photoURL || '/assets/default-profile.png',
+    coverPhotoURL: null,
+    followerCount: 0,
+    followingCount: 0,
+    postCount: 0,
+    isVerified: false,
+    isCreator: false,
+    level: 1,
+    location: ''
   };
 
-  const effectivePosts = (posts && posts.length > 0) ? posts : [
-    {
-      id: 'p-default-1',
-      mediaURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 3420,
-      comments: 184,
-      title: 'Exploring spatial UI gradients and fluid shaders'
-    },
-    {
-      id: 'p-default-2',
-      mediaURL: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80',
-      type: 'video',
-      likes: 8910,
-      comments: 420,
-      title: 'Studio session with the multi-track 4K video editor'
-    },
-    {
-      id: 'p-default-3',
-      mediaURL: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&auto=format&fit=crop&q=80',
-      type: 'image',
-      likes: 1980,
-      comments: 92,
-      title: 'Cyber aesthetic moodboard drop'
-    }
-  ];
+  const effectivePosts = (posts && posts.length > 0) ? posts : [];
 
   return (
     <div className={cn(
@@ -330,10 +307,7 @@ export default function ProfileScreen() {
         {(highlights.length > 0 || isOwner) && (
           <div className="px-4 mt-4">
             <ProfileHighlights
-              highlights={highlights.length > 0 ? highlights : [
-                { id: 'hl-1', title: 'Studio 🎙️', cover: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=200' },
-                { id: 'hl-2', title: 'VFX 🎨', cover: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=200' }
-              ]}
+              highlights={highlights}
               isOwner={isOwner}
               onHighlightPress={handleHighlightPress}
               onAddHighlight={handleAddHighlight}

@@ -146,12 +146,19 @@ export default function TrimSubPanel({
             {/* Filmstrip Repeating Video Frames Thumbnail Canvas */}
             <div className="absolute inset-1 flex overflow-hidden rounded-xl opacity-80">
               {Array.from({ length: 8 }).map((_, i) => (
-                <img
-                  key={i}
-                  src={selectedClip?.thumbnail || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&q=80'}
-                  alt="frame"
-                  className="h-full flex-1 object-cover border-r border-black/40"
-                />
+                selectedClip?.thumbnail ? (
+                  <img
+                    key={i}
+                    src={selectedClip.thumbnail}
+                    alt="frame"
+                    className="h-full flex-1 object-cover border-r border-black/40"
+                  />
+                ) : (
+                  <div
+                    key={i}
+                    className="h-full flex-1 bg-gradient-to-br from-purple-900/60 to-gray-900/80 border-r border-black/40"
+                  />
+                )
               ))}
             </div>
 

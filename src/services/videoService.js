@@ -43,7 +43,6 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
-import { INITIAL_VIDEOS } from '../data/videoData.js';
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -502,12 +501,27 @@ class UltimateVideoService {
     };
     await setDoc(videoRef, videoDoc);
 
-//     this.fns.processVideoEvent({ eventType: 'video.created', videoId }).catch(console.warn);
-//     this.fns.moderateVideo({ videoId }).catch(console.warn);
+    // Server-side processing pipeline (all onCall functions — real calls,
+    // best-effort so a single failure never blocks the upload):
+    // 1. Mark the video as processing.
+    this.fns.processVideoEvent({ eventType: 'video.created', videoId }).catch((err) =>
+      logger.warn('[Video] processVideoEvent failed (status stays uploading):', err.message)
+    );
+    // 2. Moderation (Google Video Intelligence) — reject content server-side.
+    this.fns.moderateVideo({ videoId }).catch((err) =>
+      logger.warn('[Video] moderateVideo unavailable (needs deployment):', err.message)
+    );
+    // 3. Watermark (ffmpeg pipeline) when enabled.
     if (VIDEO_CONFIG.WATERMARK.ENABLED && !videoDoc.watermarkDisabled) {
-//       this.fns.watermarkVideo({ videoId }).catch(console.warn);
+      this.fns.watermarkVideo({ videoId }).catch((err) =>
+        logger.warn('[Video] watermarkVideo unavailable (needs deployment):', err.message)
+      );
     }
-//     this.fns.generateAudioFingerprint({ videoId }).catch(console.warn);
+    // 4. Audio fingerprint (honest: reports unavailable until chromaprint is
+    //    configured — never stores a fabricated hash).
+    this.fns.generateAudioFingerprint({ videoId }).catch((err) =>
+      logger.warn('[Video] generateAudioFingerprint unavailable:', err.message)
+    );
 
     this.cache.invalidateVideo(videoId);
     auditLogger.log('content.video_upload', {
@@ -713,7 +727,8 @@ class UltimateVideoService {
     videos = this._injectFreshContent(videos, recent, limit);
     let final = videos.slice(0, limit);
     if (!final || final.length === 0) {
-      final = INITIAL_VIDEOS;
+      // Honest empty feed - no fabricated videos
+      final = [];
     }
     const nextCursor = final.length ? final[final.length - 1].id : null;
     return { success: true, feed: final, hasMore: videos.length > limit, nextCursor };
@@ -879,6 +894,90 @@ class UltimateVideoService {
     return res.data;
   }
 
+  // ==================== SAVED VIDEOS (WATCH LATER) ====================
+  // Real server-side persistence: users/{uid}/saved_videos/{videoId} with a
+  // transaction that snapshots the video + increments its saves counter.
+  async saveVideo(videoId, userId) {
+    await this.ensureInitialized();
+    try {
+      const videoRef = doc(this.firestore, 'videos', videoId);
+      const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
+      const videoSaveRef = doc(this.firestore, 'videos', videoId, 'saves', userId);
+      let alreadySaved = false;
+      await runTransaction(this.firestore, async (transaction) => {
+        const videoSnap = await transaction.get(videoRef);
+        if (!videoSnap.exists()) throw new Error('Video not found');
+        const savedSnap = await transaction.get(savedRef);
+        alreadySaved = savedSnap.exists();
+        if (!alreadySaved) {
+          const data = videoSnap.data();
+          transaction.update(videoRef, { saves: increment(1) });
+          transaction.set(savedRef, {
+            videoId,
+            savedAt: serverTimestamp(),
+            snapshot: {
+              id: videoId,
+              title: data.title || '',
+              videoUrl: data.videoUrl || '',
+              thumbnail: data.thumbnail || '',
+              creator: data.creator || null,
+              authorId: data.authorId || data.userId || null,
+              duration: data.duration || 0,
+              createdAt: data.createdAt || null,
+            },
+          });
+          transaction.set(videoSaveRef, { userId, savedAt: serverTimestamp() });
+        }
+      });
+      this.cache.invalidateVideo(videoId);
+      return { success: true, alreadySaved };
+    } catch (err) {
+      throw new Error(`Failed to save video: ${err.message}`);
+    }
+  }
+
+  async unsaveVideo(videoId, userId) {
+    await this.ensureInitialized();
+    try {
+      const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
+      const videoRef = doc(this.firestore, 'videos', videoId);
+      const videoSaveRef = doc(this.firestore, 'videos', videoId, 'saves', userId);
+      await runTransaction(this.firestore, async (transaction) => {
+        const savedSnap = await transaction.get(savedRef);
+        if (!savedSnap.exists()) return;
+        transaction.update(videoRef, { saves: increment(-1) });
+        transaction.delete(savedRef);
+        transaction.delete(videoSaveRef);
+      });
+      this.cache.invalidateVideo(videoId);
+      return { success: true };
+    } catch (err) {
+      throw new Error(`Failed to unsave video: ${err.message}`);
+    }
+  }
+
+  async getSavedVideos(userId, { limit: max = 50 } = {}) {
+    await this.ensureInitialized();
+    try {
+      const colRef = collection(this.firestore, 'users', userId, 'saved_videos');
+      const q = query(colRef, orderBy('savedAt', 'desc'), limit(max));
+      const snap = await getDocs(q);
+      const items = [];
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        items.push({
+          id: d.id,
+          videoId: data.videoId || d.id,
+          savedAt: data.savedAt?.toDate?.()?.toISOString() || data.savedAt || null,
+          ...(data.snapshot || {}),
+        });
+      });
+      return items;
+    } catch (err) {
+      throw new Error(`Failed to load saved videos: ${err.message}`);
+    }
+  }
+
   async getWatchNext(videoId) {
     await this.ensureInitialized();
     const res = await this.fns.getVideoRecommendations({ videoId });
@@ -1026,6 +1125,9 @@ const videoService = {
   createDuet: (orig, file, meta) => getVideoService().createDuet(orig, file, meta),
   createStitch: (orig, file, meta) => getVideoService().createStitch(orig, file, meta),
   reportVideo: (vid, reason) => getVideoService().reportVideo(vid, reason),
+  saveVideo: (vid, uid) => getVideoService().saveVideo(vid, uid),
+  unsaveVideo: (vid, uid) => getVideoService().unsaveVideo(vid, uid),
+  getSavedVideos: (uid, opts) => getVideoService().getSavedVideos(uid, opts),
   getWatchNext: (vid) => getVideoService().getWatchNext(vid),
   getWatermarkedDownloadUrl: (vid) => getVideoService().getWatermarkedDownloadUrl(vid),
   getService: getVideoService,

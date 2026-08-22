@@ -20,6 +20,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
+const { checkRateLimit } = require('./rateLimit');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -336,6 +337,27 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   const recipientId = notificationData.recipientId;
   if (!recipientId) throw new functions.https.HttpsError('invalid-argument', 'recipientId required');
 
+  // SPAM HARDENING: per-sender rate limit + no self-notifications + no
+  // notification spam to a recipient beyond a per-recipient daily cap.
+  await checkRateLimit(senderId, 'sendNotification', 30, 60000);
+  if (recipientId === senderId && notificationData.type !== 'system') {
+    throw new functions.https.HttpsError('failed-precondition', 'Cannot send self-notifications');
+  }
+  if (notificationData.type === 'welcome' && notificationData.priority !== 'high') {
+    throw new functions.https.HttpsError('invalid-argument', 'welcome notifications are server-issued only');
+  }
+
+  // Recipient cap: at most N notifications from the same sender per hour.
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentCount = await db.collection('users').doc(recipientId).collection('notifications')
+    .where('senderId', '==', senderId)
+    .where('createdAt', '>=', hourAgo)
+    .count()
+    .get();
+  if (recentCount.data().count >= 20) {
+    throw new functions.https.HttpsError('resource-exhausted', 'Too many notifications to this recipient');
+  }
+
   // Get recipient preferences and apply DND
   const prefsSnap = await db.collection('user_settings').doc(recipientId).get();
   const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
@@ -584,8 +606,11 @@ exports.generateNotificationDigest = functions.pubsub
 // ======================================================================
 exports.retryDeadLetters = functions.https.onRequest(async (req, res) => {
   const authHeader = req.headers.authorization;
-  const expectedSecret = functions.config().admin?.withdrawal_secret || 'super-secret';
-  if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
+  // Fail-closed: the admin secret MUST be configured. The previous
+  // `|| 'super-secret'` fallback meant anyone who read the source could
+  // trigger dead-letter recovery.
+  const expectedSecret = functions.config()?.admin?.withdrawal_secret;
+  if (!expectedSecret || !authHeader || authHeader !== `Bearer ${expectedSecret}`) {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }

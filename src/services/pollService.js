@@ -72,56 +72,34 @@ class PollService {
   }
 
   async votePoll(pollId, optionId, userCoins = 0, wagerCoins = 0, user = null) {
-    log.info('Voting on poll in Firestore', { pollId, optionId, wagerCoins });
-    const firestore = await getFirestoreInstance();
-    const { doc, getDoc, updateDoc, increment, collection, addDoc } = await import('firebase/firestore');
-
-    const pollRef = doc(firestore, 'polls', pollId);
-    const snap = await getDoc(pollRef);
-    if (!snap.exists()) {
-      throw new Error('Poll not found');
+    if (!user?.uid) {
+      throw new Error('Sign in to vote');
     }
+    log.info('Voting on poll (server-authoritative)', { pollId, optionId, wagerCoins });
 
-    const pollData = snap.data();
-    const options = pollData.options || [];
-    const targetOpt = options.find(o => o.id === optionId);
-    if (!targetOpt) {
-      throw new Error('Option not found');
+    // Server-authoritative vote: functions/polls.js votePoll atomically
+    // increments counters, records the deterministic poll_votes doc
+    // (${uid}_${pollId} — enforced by rules) and debits wagers through the
+    // double-entry ledger. Direct client writes to the poll doc are denied
+    // by firestore.rules (creator/admin only), so there is no client
+    // fallback for the money path.
+    try {
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const { getApp } = await import('firebase/app');
+      const functions = getFunctions(getApp());
+      const fn = httpsCallable(functions, 'votePoll');
+      const res = await fn({ pollId, optionId, wagerCoins: Number(wagerCoins) || 0 });
+      const poll = res.data?.poll || {};
+      this.votedHistory.set(pollId, optionId);
+      await this._saveVotes();
+      return poll;
+    } catch (err) {
+      const msg = err?.message || String(err);
+      if (msg.includes('votePoll') || msg.includes('INTERNAL') || msg.includes('UNAVAILABLE') || msg.includes('NOT_FOUND')) {
+        throw new Error(`Voting requires the votePoll Cloud Function to be deployed. (${msg})`);
+      }
+      throw new Error(msg);
     }
-
-    targetOpt.votes = (targetOpt.votes || 0) + 1;
-    const newTotalVotes = (pollData.totalVotes || 0) + 1;
-    options.forEach(opt => {
-      opt.percentage = Math.round(((opt.votes || 0) / newTotalVotes) * 100);
-    });
-
-    const updatePayload = {
-      options,
-      totalVotes: newTotalVotes
-    };
-
-    if (wagerCoins > 0 && pollData.isPredictionMarket) {
-      updatePayload.poolCoins = increment(Number(wagerCoins));
-    }
-
-    await updateDoc(pollRef, updatePayload);
-
-    this.votedHistory.set(pollId, optionId);
-    await this._saveVotes();
-
-    if (user?.uid) {
-      try {
-        await addDoc(collection(firestore, 'poll_votes'), {
-          pollId,
-          optionId,
-          userId: user.uid,
-          wagerCoins: Number(wagerCoins) || 0,
-          votedAt: new Date().toISOString()
-        });
-      } catch (_) {}
-    }
-
-    return { id: pollId, ...pollData, ...updatePayload, hasVoted: optionId };
   }
 
   async createPoll({ question, category = 'General', options = [], isPredictionMarket = false, creator }) {
@@ -129,17 +107,29 @@ class PollService {
     const firestore = await getFirestoreInstance();
     const { collection, addDoc } = await import('firebase/firestore');
 
+    // Honest creator identity: real user fields only. Never fabricate an
+    // id/name/avatar — anonymous fallbacks are explicit, not invented people.
+    if (!creator?.uid) {
+      throw new Error('Sign in to create a poll');
+    }
+    const now = new Date();
+    const POLL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
     const newPoll = {
       question,
       category,
+      // Top-level creatorId is REQUIRED by firestore.rules
+      // (match /polls/{pollId} create: creatorId == uid()).
+      creatorId: creator.uid,
       creator: {
-        id: creator?.uid || 'usr-creator',
-        name: creator?.displayName || 'Arvdoul Creator',
-        username: creator?.username ? `@${creator.username}` : '@creator',
-        avatar: creator?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
+        id: creator?.uid || null,
+        name: creator?.displayName || '',
+        username: creator?.username ? `@${creator.username}` : null,
+        avatar: creator?.photoURL || null
       },
       totalVotes: 0,
-      endsIn: '7 days left',
+      // Real end timestamp (computed, not a hardcoded label). The UI derives
+      // the human label from this value.
+      endsAt: new Date(now.getTime() + POLL_DURATION_MS).toISOString(),
       options: options.map((optText, idx) => ({
         id: `opt-${idx}`,
         text: optText,
@@ -147,8 +137,10 @@ class PollService {
         percentage: 0
       })),
       isPredictionMarket,
-      poolCoins: isPredictionMarket ? 5000 : 0,
-      createdAt: new Date().toISOString()
+      // Prediction pools start at 0 — every coin is a real wager. No free
+      // starting pool.
+      poolCoins: 0,
+      createdAt: now.toISOString()
     };
 
     const docRef = await addDoc(collection(firestore, 'polls'), newPoll);

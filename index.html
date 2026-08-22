@@ -32,6 +32,31 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="format-detection" content="telephone=no">
     
+    <!--
+      CRITICAL POLYFILL: window.matchMedia (runs before the app bundle).
+      Framer Motion's useReducedMotion, ThemeProvider and useMediaQuery all
+      call window.matchMedia unconditionally. Some embedded webviews / preview
+      iframes do not implement it - which previously crashed the Intro screen
+      into its error boundary ("Temporary Glitch") on every launch. Defining a
+      no-op here guarantees the API always exists.
+    -->
+    <script>
+      if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+        window.matchMedia = function (query) {
+          return {
+            matches: false,
+            media: query || '',
+            onchange: null,
+            addListener: function () {},
+            removeListener: function () {},
+            addEventListener: function () {},
+            removeEventListener: function () {},
+            dispatchEvent: function () { return false; },
+          };
+        };
+      }
+    </script>
+    
     <title>Arvdoul</title>
     
     <!-- Critical CSS - Shows your app background immediately -->
@@ -140,22 +165,7 @@
     <!-- Main React Entry -->
     <script type="module" src="/src/main.jsx"></script>
     
-    <!-- PWA Service Worker Registration -->
     <script>
-      // Register service worker in background
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(
-            (registration) => {
-              console.log('✅ ServiceWorker registered');
-            },
-            (err) => {
-              console.log('⚠️ ServiceWorker registration failed: ', err);
-            }
-          );
-        });
-      }
-      
       // Add spin animation for loading spinner
       const style = document.createElement('style');
       style.textContent = `

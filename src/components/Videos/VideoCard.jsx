@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatDuration, ARVDOUL_GRADIENT, SPRING_ANIMATION, formatViewCount } from '../../utils/videoUtils';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
@@ -221,11 +222,45 @@ const VideoCard = memo(({
     }
   }, []);
 
-  const handleFollowClick = (e) => {
+  const { user } = useAuth();
+  const [followBusy, setFollowBusy] = useState(false);
+
+  // REAL follow/unfollow via userService (Firestore follows collection +
+  // counters). Optimistic toggle with rollback; never a local-only fake.
+  const handleFollowClick = async (e) => {
     e.stopPropagation();
-    setIsFollowing((prev) => !prev);
-    onFollow?.(video?.creator);
-    toast.success(isFollowing ? `Unfollowed @${video?.creator?.username}` : `Following @${video?.creator?.username}! 🎉`);
+    if (!user?.uid) {
+      toast.error('Sign in to follow creators');
+      return;
+    }
+    const targetId = video?.userId || video?.authorId || video?.creator?.id;
+    if (!targetId) {
+      toast.error('Cannot follow: creator unknown');
+      return;
+    }
+    if (targetId === user.uid) return;
+    if (followBusy) return;
+
+    const prev = isFollowing;
+    setFollowBusy(true);
+    setIsFollowing(!prev); // optimistic
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      const svc = getUserService();
+      if (prev) {
+        await svc.unfollowUser(user.uid, targetId);
+        toast.success(`Unfollowed @${video?.creator?.username || 'creator'}`);
+      } else {
+        await svc.followUser(user.uid, targetId);
+        toast.success(`Following @${video?.creator?.username || 'creator'}! 🎉`);
+      }
+      onFollow?.(video?.creator);
+    } catch (err) {
+      setIsFollowing(prev); // rollback
+      toast.error(err?.message || 'Could not update follow status');
+    } finally {
+      setFollowBusy(false);
+    }
   };
 
   const handleDownload = useCallback(() => {
@@ -348,7 +383,7 @@ const VideoCard = memo(({
             className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-400 shadow-xl shadow-purple-500/25 ring-2 ring-white/30"
           >
             <img
-              src={video?.creator?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'}
+              src={video?.creator?.avatar || '/assets/default-profile.png'}
               alt={video?.creator?.name || 'Creator'}
               className="w-full h-full rounded-full object-cover"
             />
@@ -629,7 +664,7 @@ const VideoCard = memo(({
             }}
           >
             <img
-              src={video?.audio?.coverUrl || video?.creator?.avatar || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&auto=format&fit=crop&q=80'}
+              src={video?.audio?.coverUrl || video?.creator?.avatar || '/assets/default-profile.png'}
               alt="Track"
               className="w-5 h-5 rounded-full object-cover"
             />
@@ -661,7 +696,7 @@ const VideoCard = memo(({
         {/* Creator Info */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-white font-black text-base tracking-tight drop-shadow-md">
-            @{video?.creator?.username || 'abdulrahman'}
+            @{video?.creator?.username || video?.creator?.name || 'creator'}
           </span>
 
           {video?.creator?.isVerified && (

@@ -282,7 +282,7 @@ const GridView = memo(({
               className="relative aspect-[9/16] rounded-3xl overflow-hidden group cursor-pointer shadow-xl border border-black/10 dark:border-white/10 bg-gray-900"
             >
               <img
-                src={video.thumbnailUrl || video.thumbnail || 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1080&auto=format&fit=crop&q=80'}
+                src={video.thumbnailUrl || video.thumbnail || '/assets/default-profile.png'}
                 alt={video.title || 'Video'}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
@@ -312,7 +312,7 @@ const GridView = memo(({
               <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col gap-1">
                 <div className="flex items-center gap-1.5">
                   <img
-                    src={video.creator?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'}
+                    src={video.creator?.avatar || '/assets/default-profile.png'}
                     alt={video.creator?.name}
                     className="w-5 h-5 rounded-full object-cover ring-1 ring-white/40"
                   />

@@ -50,6 +50,8 @@ const STORY_CONFIG = {
       engagement: 0.4,
       affinity: 0.2,
     },
+    // Diversity guard: at most N Vibes per creator in discovery (spec §38).
+    MAX_STORIES_PER_CREATOR: 4,
     EDGE_CACHE_ENABLED: true,
   },
   VIEW_TRACKING: {
@@ -280,6 +282,49 @@ class UltimateStoryService {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this._onlineHandler);
     }
+
+    // ANALYTICS BUFFER (spec §57/58): raw interaction events are aggregated
+    // in memory and flushed in BATCHES to sharded counters — never one
+    // Firestore write per tap/completion. Metadata only.
+    this._analyticsBuffer = { forwardTaps: new Map(), backTaps: new Map(), completions: new Map() };
+    this._analyticsFlushTimer = null;
+    this._startAnalyticsFlushTimer();
+  }
+
+  _startAnalyticsFlushTimer() {
+    if (typeof window === 'undefined' || this._analyticsFlushTimer) return;
+    this._analyticsFlushTimer = setInterval(() => { this.flushAnalyticsBuffer().catch(() => {}); }, 30000);
+    window.addEventListener('beforeunload', () => { this.flushAnalyticsBuffer().catch(() => {}); });
+  }
+
+  async flushAnalyticsBuffer() {
+    const buf = this._analyticsBuffer;
+    this._analyticsBuffer = { forwardTaps: new Map(), backTaps: new Map(), completions: new Map() };
+    try {
+      const jobs = [];
+      for (const [storyId, count] of buf.forwardTaps) jobs.push(this._incrementAnalyticsShard(storyId, 'forwardTaps', count));
+      for (const [storyId, count] of buf.backTaps) jobs.push(this._incrementAnalyticsShard(storyId, 'backTaps', count));
+      for (const [storyId, count] of buf.completions) jobs.push(this._incrementAnalyticsShard(storyId, 'completions', count));
+      await Promise.allSettled(jobs);
+    } catch { /* best-effort */ }
+  }
+
+  async _incrementAnalyticsShard(storyId, field, amount) {
+    try {
+      await this.ensureInitialized();
+      const shardId = Math.floor(Math.random() * STORY_CONFIG.SHARDED_COUNTERS.VIEW_SHARDS);
+      const shardRef = this.fs.doc(this.firestore, 'stories', storyId, 'analytics_shards', `shard_${shardId}`);
+      try {
+        await this.fs.updateDoc(shardRef, { [field]: increment(amount), updatedAt: serverTimestamp() });
+      } catch (err) {
+        if (err.code === 'not-found') {
+          await this.fs.setDoc(shardRef, { [field]: amount, updatedAt: serverTimestamp() });
+        } else throw err;
+      }
+    } catch (err) {
+      // Rules may deny (expired/removed stories) — drop silently, never spam.
+      console.warn('[Vibes] analytics flush skipped:', err?.message);
+    }
   }
 
   async ensureInitialized() {
@@ -370,6 +415,12 @@ class UltimateStoryService {
     const story = {
       id: storyId,
       userId: currentUser.uid,
+      // Lifecycle state machine (spec §4): draft -> published -> active ->
+      // expired/removed -> archived. The server rules treat anything without
+      // status 'published' as unavailable; expiry is enforced by rules
+      // (expiresAt > request.time), never by a client timer.
+      status: 'published',
+      processingState: 'done',
       type: storyData.type,
       content: storyData.content || '',
       hashtags,
@@ -593,53 +644,35 @@ class UltimateStoryService {
     await this.rateLimiter.checkLimit(currentUser.uid, 'REACT');
     if (!STORY_CONFIG.REACTION_TYPES.includes(reactionType)) throw new Error('Invalid reaction');
 
-    const storyRef = this.fs.doc(this.firestore, 'stories', storyId);
+    // Rules forbid non-creators from updating the story doc — reactions live
+    // ONLY in the per-user reactions/{uid} subcollection (writer = reactor)
+    // plus the creator-writable reaction_shards (aggregated server-side).
     const reactionDocRef = this.fs.doc(this.firestore, 'stories', storyId, 'reactions', currentUser.uid);
+    const existingSnap = await this.fs.getDoc(reactionDocRef);
 
-    // No async calls inside transaction – fixed
     let actionResult;
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const storySnap = await transaction.get(storyRef);
-      if (!storySnap.exists()) throw new Error('Story not found');
-      const reactionSnap = await transaction.get(reactionDocRef);
-
-      let oldReaction = null;
-      if (reactionSnap.exists()) {
-        oldReaction = reactionSnap.data().reaction;
-        if (oldReaction === reactionType) {
-          transaction.delete(reactionDocRef);
-          transaction.update(storyRef, {
-            [`stats.reactions.${oldReaction}`]: increment(-1),
-            updatedAt: serverTimestamp()
-          });
-          actionResult = { success: true, action: 'removed', reaction: oldReaction };
-        } else {
-          transaction.update(reactionDocRef, { reaction: reactionType, updatedAt: serverTimestamp() });
-          transaction.update(storyRef, {
-            [`stats.reactions.${oldReaction}`]: increment(-1),
-            [`stats.reactions.${reactionType}`]: increment(1),
-            updatedAt: serverTimestamp()
-          });
-          actionResult = { success: true, action: 'changed', from: oldReaction, to: reactionType };
-        }
+    if (existingSnap.exists()) {
+      const oldReaction = existingSnap.data().reaction;
+      if (oldReaction === reactionType) {
+        await this.fs.deleteDoc(reactionDocRef);
+        await this._recordReactionShard(storyId, oldReaction, -1);
+        actionResult = { success: true, action: 'removed', reaction: oldReaction };
       } else {
-        transaction.set(reactionDocRef, { userId: currentUser.uid, reaction: reactionType, createdAt: serverTimestamp() });
-        transaction.update(storyRef, {
-          [`stats.reactions.${reactionType}`]: increment(1),
-          updatedAt: serverTimestamp()
-        });
-        actionResult = { success: true, action: 'added', reaction: reactionType };
+        await this.fs.updateDoc(reactionDocRef, { reaction: reactionType, updatedAt: serverTimestamp() });
+        await this._recordReactionShard(storyId, oldReaction, -1);
+        await this._recordReactionShard(storyId, reactionType, 1);
+        actionResult = { success: true, action: 'changed', from: oldReaction, to: reactionType };
       }
-    });
-    // Update shards outside transaction
-    if (actionResult.action === 'removed') {
-      await this._recordReactionShard(storyId, actionResult.reaction, -1);
-    } else if (actionResult.action === 'changed') {
-      await this._recordReactionShard(storyId, actionResult.from, -1);
-      await this._recordReactionShard(storyId, actionResult.to, 1);
-    } else if (actionResult.action === 'added') {
-      await this._recordReactionShard(storyId, actionResult.reaction, 1);
+    } else {
+      await this.fs.setDoc(reactionDocRef, {
+        userId: currentUser.uid,
+        reaction: reactionType,
+        createdAt: serverTimestamp(),
+      });
+      await this._recordReactionShard(storyId, reactionType, 1);
+      actionResult = { success: true, action: 'added', reaction: reactionType };
     }
+    this.storyCache.delete(storyId);
     auditLogger.log('story.reacted', { userId: currentUser.uid, meta: { storyId, reactionType, action: actionResult.action } });
     return actionResult;
   }
@@ -656,10 +689,7 @@ class UltimateStoryService {
 
     const commentService = await import('./commentService.js');
     const result = await commentService.createComment(storyId, currentUser.uid, content, options);
-    await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-      'stats.comments': increment(1),
-      updatedAt: serverTimestamp()
-    });
+    await this._incrementAnalyticsShard(storyId, 'comments', 1);
     return result;
   }
 
@@ -688,10 +718,9 @@ class UltimateStoryService {
       ...options
     });
 
-    await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-      'stats.replies': increment(1),
-      updatedAt: serverTimestamp()
-    });
+    // Rules forbid non-creators from updating the story doc — reply stats go
+    // into the owner-writable analytics shards (aggregated server-side).
+    await this._incrementAnalyticsShard(storyId, 'replies', 1);
     await this._logStoryReply(storyId, currentUser.uid, story.userId);
     return result;
   }
@@ -733,29 +762,19 @@ class UltimateStoryService {
 
   async trackStoryAnalytics(storyId, eventType) {
     if (!STORY_CONFIG.ANALYTICS.ENABLED) return;
-    const field = eventType === 'forward' ? 'forwardTaps' : (eventType === 'back' ? 'backTaps' : null);
-    if (field) {
-      await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-        [`stats.${field}`]: increment(1),
-        updatedAt: serverTimestamp()
-      });
+    // Buffered + batched (spec §57/58) — no per-tap story-doc writes.
+    if (eventType === 'forward') {
+      this._analyticsBuffer.forwardTaps.set(storyId, (this._analyticsBuffer.forwardTaps.get(storyId) || 0) + 1);
+    } else if (eventType === 'back') {
+      this._analyticsBuffer.backTaps.set(storyId, (this._analyticsBuffer.backTaps.get(storyId) || 0) + 1);
     }
   }
 
   async reportStoryCompletion(storyId) {
     if (!STORY_CONFIG.ANALYTICS.TRACK_COMPLETION_RATE) return;
-    const storyRef = this.fs.doc(this.firestore, 'stories', storyId);
-    const snap = await this.fs.getDoc(storyRef);
-    if (snap.exists()) {
-      const views = snap.data().stats?.views || 0;
-      const completions = snap.data().stats?.completions || 0;
-      const newCompletionRate = completions / Math.max(views, 1);
-      await this.fs.updateDoc(storyRef, {
-        'stats.completionRate': newCompletionRate,
-        'stats.completions': increment(1),
-        updatedAt: serverTimestamp()
-      });
-    }
+    // Buffered completion — aggregated server-side into sharded counters;
+    // never a story-doc rewrite per completion (spec §58).
+    this._analyticsBuffer.completions.set(storyId, (this._analyticsBuffer.completions.get(storyId) || 0) + 1);
   }
 
   // ========== INTERACTIVE STICKERS ==========
@@ -1287,22 +1306,81 @@ class UltimateStoryService {
     };
   }
 
+  /**
+   * REAL feed scoring (spec §37/38/39/91):
+   *  - recency (decay by age)
+   *  - engagement QUALITY (reactions/comments/shares/replies, capped)
+   *  - affinity = viewer follows the creator (was configured but never computed)
+   *  - freshness = time remaining until expiry (gentle — never dominates)
+   *  - diversity = per-creator cap so one creator cannot flood discovery
+   * Deterministic (no randomness) so the feed is stable across devices.
+   */
   async _applyFeedScoring(stories, userId) {
     const now = Date.now();
-    const scored = stories.map(s => {
+    const followMap = new Map();
+
+    // Batch-check follow relationships once for all unique creators.
+    const creatorIds = [...new Set(stories.map((s) => s.userId).filter(Boolean))];
+    await Promise.all(creatorIds.map(async (cid) => {
+      if (cid === userId) { followMap.set(cid, true); return; }
+      if (this.followedUsersCache.has(cid)) {
+        followMap.set(cid, this.followedUsersCache.get(cid));
+        return;
+      }
+      try {
+        const followDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'follows', `${userId}_${cid}`));
+        const follows = followDoc.exists();
+        this.followedUsersCache.set(cid, follows);
+        followMap.set(cid, follows);
+      } catch { followMap.set(cid, false); }
+    }));
+
+    const EXPIRY_MS = STORY_CONFIG.EXPIRY_HOURS * 3600000;
+    const scored = stories.map((s) => {
       const createdAt = s.createdAt?.toDate?.() || 0;
-      const ageHours = (now - createdAt) / 3600000;
+      const ageHours = createdAt ? (now - createdAt) / 3600000 : 24;
       const recency = Math.exp(-ageHours / 2);
+
       const stats = s.stats || {};
-      const totalEngagement = Object.values(stats.reactions || {}).reduce((a,b)=>a+b,0) +
-                              (stats.comments||0)*2 + (stats.shares||0)*3 + (stats.replies||0)*2;
+      const totalEngagement = Object.values(stats.reactions || {}).reduce((a, b) => a + b, 0) +
+        (stats.comments || 0) * 2 + (stats.shares || 0) * 3 + (stats.replies || 0) * 2;
       const engagement = Math.min(totalEngagement, 100) / 100;
+
+      // Affinity: following the creator is the strongest relationship signal.
+      const affinity = followMap.get(s.userId) ? 1 : 0.1;
+
+      // Freshness: remaining time fraction (spec §39) — gentle 0.8–1.2 band.
+      let remainingFactor = 1;
+      if (s.expiresAt?.toDate) {
+        const remainingMs = s.expiresAt.toDate().getTime() - now;
+        if (remainingMs > 0) {
+          const fraction = Math.min(1, remainingMs / EXPIRY_MS);
+          remainingFactor = 0.8 + 0.4 * fraction;
+        } else {
+          remainingFactor = 0; // expired — will be filtered by rules anyway
+        }
+      }
+
       const w = STORY_CONFIG.FEED.SCORE_WEIGHTS;
-      const score = recency * w.recency + engagement * w.engagement;
+      const score = (recency * w.recency + engagement * w.engagement + affinity * w.affinity) * remainingFactor;
       return { ...s, _score: score };
     });
-    scored.sort((a,b) => b._score - a._score);
-    return scored;
+
+    scored.sort((a, b) => b._score - a._score);
+
+    // DIVERSITY (spec §38): cap stories per creator in discovery so one
+    // creator cannot flood the feed; their other Vibes live in their own
+    // sequence inside the dedicated viewer.
+    const perCreatorCap = STORY_CONFIG.FEED.MAX_STORIES_PER_CREATOR || 4;
+    const seen = new Map();
+    const diverse = scored.filter((s) => {
+      const c = (seen.get(s.userId) || 0) + 1;
+      if (c > perCreatorCap) return false;
+      seen.set(s.userId, c);
+      return true;
+    });
+
+    return diverse;
   }
 
   async _recordStoryViewSharded(storyId, viewerId) {
@@ -1624,13 +1702,33 @@ class UltimateStoryService {
 
   async _canViewStory(story, viewerId) {
     if (!story || story.isDeleted) return false;
+    if (story.status === 'expired' || story.status === 'removed') return false;
+    if (story.moderationStatus === 'rejected' || story.moderationStatus === 'removed') return false;
+    // Expiry is server-enforced by rules; mirror it here so the UI never
+    // presents expired content as active (spec §6).
+    if (story.expiresAt?.toDate) {
+      if (story.expiresAt.toDate().getTime() <= Date.now()) return false;
+    } else if (story.expiresAt && new Date(story.expiresAt).getTime() <= Date.now()) {
+      return false;
+    }
     if (story.userId === viewerId) return true;
+    // Blocked in either direction = no access (spec §28).
+    try {
+      const [b1, b2] = await Promise.all([
+        this.fs.getDoc(this.fs.doc(this.firestore, 'blocks', `${viewerId}_${story.userId}`)),
+        this.fs.getDoc(this.fs.doc(this.firestore, 'blocks', `${story.userId}_${viewerId}`)),
+      ]);
+      if (b1.exists() || b2.exists()) return false;
+    } catch { /* block check best-effort; rules enforce authoritatively */ }
     if (story.visibility === STORY_CONFIG.VISIBILITY.PUBLIC) return true;
     if (story.visibility === STORY_CONFIG.VISIBILITY.FOLLOWERS) {
       try {
         const followDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'follows', `${viewerId}_${story.userId}`));
         return followDoc.exists();
       } catch { return false; }
+    }
+    if (story.visibility === STORY_CONFIG.VISIBILITY.PRIVATE) {
+      return false; // only the creator (handled above)
     }
     return false;
   }

@@ -16,7 +16,7 @@ isAuthenticated: false,
 setAppState: (updates) => set(updates),
 
 // Coins System (in‑memory only – synced from Firestore)  
-  coins: 1000, // Starting coins  
+  coins: 0, // honest zero — real balance always comes from the ledger (Firestore)
   transactions: [],  
   subscription: null,  
     
@@ -173,7 +173,7 @@ setAppState: (updates) => set(updates),
   resetStore: () => set({  
     currentUser: null,  
     isAuthenticated: false,  
-    coins: 1000,  
+    coins: 0,  
     transactions: [],  
     subscription: null,  
     notifications: [],  

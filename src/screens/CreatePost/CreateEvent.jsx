@@ -59,7 +59,13 @@ const compressImage = (file) =>
       }
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Canvas 2D context unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
       canvas.toBlob((blob) => {
         if (blob) resolve(blob);
         else reject(new Error("Compression failed"));

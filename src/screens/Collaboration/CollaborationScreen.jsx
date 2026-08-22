@@ -3,6 +3,7 @@
 // ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -251,7 +252,7 @@ export default function CollaborationScreen() {
       await collaborationService.createInvite(projectId, inviteEmail, inviteRole, project.ownerId);
       setInviteEmail('');
       setShowInviteModal(false);
-      alert('Invitation sent!');
+      toast.success('Invitation sent!');
     } catch (err) {
       setError(err.message);
     }

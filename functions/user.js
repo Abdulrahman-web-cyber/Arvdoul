@@ -10,6 +10,7 @@
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const { checkRateLimit } = require('./rateLimit');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -149,6 +150,7 @@ const isAdmin = (context) => !!context.auth?.token?.admin;
 // ----------------------------------------------------------------------
 exports.deleteUserData = functions.https.onCall(async (data, context) => {
   const callerUid = getUserIdFromContext(context);
+  await checkRateLimit(callerUid, 'deleteUserData', 2, 3600000); // max 2 deletions/hour
   const { userId } = data;
   if (!userId) throw new functions.https.HttpsError('invalid-argument', 'userId is required.');
   if (callerUid !== userId && !isAdmin(context)) {
@@ -360,6 +362,7 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
 // ----------------------------------------------------------------------
 exports.getMutualFriends = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'getMutualFriends', 60, 60000);
   const { otherUserId } = data;
   if (!otherUserId) throw new functions.https.HttpsError('invalid-argument', 'otherUserId is required.');
 
@@ -406,6 +409,7 @@ exports.getMutualFriends = functions.https.onCall(async (data, context) => {
 // ----------------------------------------------------------------------
 exports.generateFriendRecommendations = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
+  await checkRateLimit(uid, 'friendRecommendations', 5, 60000);
   if (!isAdmin(context)) {
     throw new functions.https.HttpsError('permission-denied', 'Only administrators can generate recommendations.');
   }

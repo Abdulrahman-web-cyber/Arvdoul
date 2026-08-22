@@ -30,6 +30,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Cinematic'];
 
@@ -54,8 +55,10 @@ export default function SoundsScreen() {
 
   // Upload modal
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  useEscapeClose(isUploadOpen, () => setIsUploadOpen(false));
   const [newTitle, setNewTitle] = useState('');
   const [newGenre, setNewGenre] = useState('Original Audio');
+  const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     loadSounds();
@@ -119,25 +122,35 @@ export default function SoundsScreen() {
   const handleUploadAudio = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    if (!selectedFile) {
+      toast.error('Select an audio file to upload');
+      return;
+    }
+    if (!user?.uid) {
+      toast.error('Sign in to upload a sound');
+      return;
+    }
     try {
       const uploaded = await soundService.uploadCustomSound({
         title: newTitle,
         genre: newGenre,
-        creatorId: user?.uid || 'usr-creator',
-        artist: user?.displayName || 'Original Creator'
+        creatorId: user.uid,
+        artist: user.displayName || '',
+        file: selectedFile
       });
       setSounds([uploaded, ...sounds]);
       setIsUploadOpen(false);
       setNewTitle('');
+      setSelectedFile(null);
       toast.success('Original sound published to Arvdoul! 🚀');
     } catch {
       toast.error('Failed to upload audio');
     }
   };
 
-  const filteredSounds = sounds.filter(s => 
-    s.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.artist.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSounds = sounds.filter(s =>
+    String(s.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(s.artist || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -236,7 +249,13 @@ export default function SoundsScreen() {
                   <span className="text-sm font-extrabold text-gray-500 w-5">{index + 1}</span>
 
                   <div className="relative w-14 h-14 rounded-2xl overflow-hidden shrink-0 group cursor-pointer" onClick={() => handlePlaySound(snd)}>
-                    <img src={snd.coverUrl} alt="" className="w-full h-full object-cover" />
+                    {snd.coverUrl ? (
+                      <img src={snd.coverUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-700/70 to-blue-700/70 flex items-center justify-center">
+                        <Music className="w-5 h-5 text-white/70" />
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity">
                       {isThisPlaying ? (
                         <Pause className="w-6 h-6 text-white" />
@@ -255,11 +274,11 @@ export default function SoundsScreen() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 truncate">{snd.artist} • {snd.genre}</p>
+                    <p className="text-xs text-gray-400 truncate">{snd.artist || 'Unknown artist'} • {snd.genre || 'Audio'}</p>
                     <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1">
-                      <span>⏱️ {snd.duration}</span>
-                      <span>⚡️ {snd.bpm} BPM</span>
-                      <span>🎬 {snd.reelsCount} Reels</span>
+                      <span>⏱️ {snd.duration || '—'}</span>
+                      {snd.bpm != null && <span>⚡️ {snd.bpm} BPM</span>}
+                      <span>🎬 {snd.reelsCount || 0} Reels</span>
                     </div>
                   </div>
                 </div>
@@ -304,14 +323,20 @@ export default function SoundsScreen() {
         <div className="fixed bottom-16 left-0 right-0 z-40 px-3 sm:px-6">
           <div className="max-w-4xl mx-auto rounded-3xl bg-gray-900/95 border border-purple-500/40 p-4 shadow-2xl backdrop-blur-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <img src={currentSound.coverUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
+              {currentSound.coverUrl ? (
+                <img src={currentSound.coverUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-700/70 to-blue-700/70 flex items-center justify-center shrink-0">
+                  <Music className="w-5 h-5 text-white/70" />
+                </div>
+              )}
               <div className="min-w-0">
                 <h4 className="font-bold text-xs text-white truncate">{currentSound.title}</h4>
-                <p className="text-[11px] text-gray-400 truncate">{currentSound.artist}</p>
+                <p className="text-[11px] text-gray-400 truncate">{currentSound.artist || 'Unknown artist'}</p>
               </div>
             </div>
 
-            {/* Waveform Bar simulation */}
+            {/* Waveform bar (real analyzed peaks, neutral bars when unknown) */}
             <div className="flex-1 w-full flex items-center gap-3">
               <button
                 onClick={() => handlePlaySound(currentSound)}
@@ -321,11 +346,14 @@ export default function SoundsScreen() {
               </button>
 
               <div className="flex-1 flex items-center gap-1 h-6">
-                {currentSound.waveformData?.map((barHeight, idx) => (
+                {(currentSound.waveformData && currentSound.waveformData.length > 0
+                  ? currentSound.waveformData
+                  : [30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]
+                ).map((barHeight, idx, arr) => (
                   <div
                     key={idx}
                     className={`flex-1 rounded-full transition-all duration-200 ${
-                      (idx / currentSound.waveformData.length) * 100 <= progress
+                      (idx / arr.length) * 100 <= progress
                         ? 'bg-purple-400'
                         : 'bg-gray-700'
                     }`}
@@ -399,10 +427,32 @@ export default function SoundsScreen() {
                   </select>
                 </div>
 
-                <div className="p-6 border-2 border-dashed border-gray-700 rounded-2xl text-center space-y-2">
-                  <Music className="w-8 h-8 text-purple-400 mx-auto" />
-                  <p className="text-xs font-bold text-white">Select MP3, WAV or AAC Audio File</p>
-                  <span className="text-[10px] text-gray-400 block">Up to 60 seconds • Max 25MB</span>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Audio File</label>
+                  <label className="p-6 border-2 border-dashed border-gray-700 rounded-2xl text-center space-y-2 block cursor-pointer hover:border-purple-500/60 transition-colors">
+                    <Music className="w-8 h-8 text-purple-400 mx-auto" />
+                    {selectedFile ? (
+                      <p className="text-xs font-bold text-white break-all">{selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)</p>
+                    ) : (
+                      <p className="text-xs font-bold text-white">Select MP3, WAV or AAC Audio File</p>
+                    )}
+                    <span className="text-[10px] text-gray-400 block">Max 25MB — the real file is uploaded to Storage; no demo audio is used</span>
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.aac,.m4a,.ogg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        if (f && f.size > 25 * 1024 * 1024) {
+                          toast.error('File exceeds 25MB limit');
+                          setSelectedFile(null);
+                          e.target.value = '';
+                          return;
+                        }
+                        setSelectedFile(f);
+                      }}
+                    />
+                  </label>
                 </div>
 
                 <button

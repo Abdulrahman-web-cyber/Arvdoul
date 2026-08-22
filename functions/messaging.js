@@ -560,3 +560,73 @@ exports.cleanupOldCalls = functions.pubsub
 // Implement Signal Protocol / ECDH + AES-GCM
 // Client encrypts payload; server stores only encrypted blobs
 // Rules enforce encrypted content only
+
+// ======================================================================
+//  UNREAD COUNTERS — server-authoritative increments
+//  Triggered on every message create (both the flat messages subcollection
+//  and the supergroup monthly shards). Client-side writes to other users'
+//  counters are denied by rules; this trigger is the only writer.
+//  Cost: 1 read (conversation) + up to N shard writes for N participants —
+//  bounded to conversations ≤ 200 participants (same bound as the client
+//  inbox); larger groups rely on the lastRead position instead.
+// ======================================================================
+const UNREAD_INCREMENT_MAX_PARTICIPANTS = 200;
+const UNREAD_SHARD_COUNT = 10;
+const UNREAD_TOTAL_SHARD_COUNT = 8;
+
+async function incrementUnreadForMessage(conversationId, senderId, messageId, createdAt) {
+  try {
+    const convSnap = await db.collection('conversations').doc(conversationId).get();
+    if (!convSnap.exists) return;
+    const conv = convSnap.data();
+    if (conv.type === 'channel') return;
+    const participants = Array.isArray(conv.participants) ? conv.participants : [];
+    if (participants.length > UNREAD_INCREMENT_MAX_PARTICIPANTS) return;
+    if (participants.length <= 1) return;
+
+    // Read the conversation's disableReadReceipts flag once.
+    if (conv.disableReadReceipts) return;
+
+    const batch = db.batch();
+    let ops = 0;
+    for (const userId of participants) {
+      if (userId === senderId) continue;
+      const counterId = `unread_${conversationId}_${userId}`;
+      const shard = Math.floor(Math.random() * UNREAD_SHARD_COUNT);
+      const shardRef = db.collection('unread_counters').doc(counterId).collection('shards').doc(String(shard));
+      batch.set(shardRef, {
+        count: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      const totalShard = Math.floor(Math.random() * UNREAD_TOTAL_SHARD_COUNT);
+      const totalRef = db.collection('user_unread_totals').doc(userId).collection('shards').doc(String(totalShard));
+      batch.set(totalRef, {
+        count: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      ops += 2;
+      if (ops >= 400) break; // safety cap: 200 participants × 2
+    }
+    if (ops > 0) await batch.commit();
+    log('INFO', 'Unread counters incremented', { conversationId, senderId, messageId, recipients: participants.length - 1 });
+  } catch (err) {
+    log('WARN', 'Unread counter increment failed', { conversationId, error: err.message });
+  }
+}
+
+exports.onMessageCreated = functions.firestore
+  .document('conversations/{conversationId}/messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    const createdAt = data.createdAt || FieldValue.serverTimestamp();
+    await incrementUnreadForMessage(context.params.conversationId, data.senderId || 'system', context.params.messageId, createdAt);
+  });
+
+exports.onShardedMessageCreated = functions.firestore
+  .document('conversations/{conversationId}/messages_{year}_{month}/{messageId}')
+  .onCreate(async (snap, context) => {
+    const data = snap.data() || {};
+    await incrementUnreadForMessage(context.params.conversationId, data.senderId || 'system', context.params.messageId, data.createdAt || FieldValue.serverTimestamp());
+  });

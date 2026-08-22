@@ -608,7 +608,7 @@ class MonetizationService {
       const uid = auth?.currentUser?.uid;
       const coinsToAdd = this.config.AD_REWARD_COINS?.MEDIUM || 2;
       if (uid) {
-        await this.addCoins(uid, coinsToAdd, `Watched ${placement} ad`, { adId, placement });
+        await this.addCoins(uid, coinsToAdd, 'watch_ad', { adId, placement });
       }
       return { success: true, coinsAwarded: coinsToAdd, message: 'Ad reward credited' };
     }
@@ -658,40 +658,57 @@ class MonetizationService {
           await this.stripe.redirectToCheckout({ sessionId: result.data.sessionId });
           return { success: true, stripeRedirect: true };
         }
+        if (result.data?.success) {
+          return {
+            success: true,
+            receipt: {
+              id: result.data.receiptId || `cf_${Date.now()}`,
+              provider: 'stripe',
+              serverVerified: true,
+              packageId,
+              coinsAdded: result.data.coinsAdded || 0,
+              timestamp: Date.now(),
+            },
+            coinsAdded: result.data.coinsAdded || 0,
+            newBalance: result.data.newBalance,
+          };
+        }
+        throw new Error(result.data?.error || 'Purchase was not completed');
       } catch (err) {
-        log.error('Real Stripe purchase flow error, falling back to ledger update', err);
+        // Hard fail: no fabricated receipts, no free coins. Coins are minted
+        // exclusively by the server-side double-entry ledger after a verified
+        // payment (functions/monetization.js purchaseCoins + stripeWebhook).
+        log.error('Real Stripe purchase flow error', err);
+        throw new Error(`PAYMENT_FAILED: ${err.message || 'payment could not be verified'}`);
       }
     }
 
-    // High fidelity ledger update & local simulator
-    const amountCoins = packageId === 'pack_gold' ? 1000 : (packageId === 'pack_platinum' ? 2500 : 500);
-    const amountPaidCents = packageId === 'pack_gold' ? 999 : (packageId === 'pack_platinum' ? 2499 : 499);
-    const uid = auth?.currentUser?.uid;
-
-    if (uid) {
-      await this.addCoins(uid, amountCoins, `Purchased coin pack (${packageId})`, {
-        packageId,
-        amountPaidCents,
-        paymentMethod: paymentMethodId || 'card'
-      });
+    // No Stripe SDK loaded (publishable key unconfigured): still attempt the
+    // Cloud Function - it performs server-side payment verification.
+    if (!this.cfPurchaseCoins) {
+      throw new Error('PAYMENT_GATEWAY_NOT_CONFIGURED: purchaseCoins Cloud Function is not reachable. Coins are never granted without server-side payment verification.');
     }
-
-    const mockReceipt = {
-      id: `rcpt_${secureRandom().toString(36).substring(3, 11)}`,
-      receipt_url: 'https://stripe.com/receipt/verified',
-      success: true,
-      amountPaidCents,
-      packageId,
-      coinsAdded: amountCoins,
-      timestamp: Date.now()
-    };
-
-    return {
-      success: true,
-      receipt: mockReceipt,
-      coinsAdded: amountCoins,
-      newBalance: amountCoins
-    };
+    try {
+      const result = await retryOperation(() => this.cfPurchaseCoins({ packageId, paymentMethodId, deviceMetadata }));
+      if (result.data?.success) {
+        return {
+          success: true,
+          receipt: {
+            id: result.data.receiptId || `cf_${Date.now()}`,
+            provider: 'stripe',
+            serverVerified: true,
+            packageId,
+            coinsAdded: result.data.coinsAdded || 0,
+            timestamp: Date.now(),
+          },
+          coinsAdded: result.data.coinsAdded || 0,
+          newBalance: result.data.newBalance,
+        };
+      }
+      throw new Error(result.data?.error || 'Purchase was not completed');
+    } catch (err) {
+      throw new Error(`PAYMENT_FAILED: ${err.message || 'payment could not be verified'}`);
+    }
   }
 
   // -------------------- SUBSCRIPTIONS --------------------
@@ -761,7 +778,9 @@ class MonetizationService {
         const snap = await getDoc(doc(this.db, 'payout_settings', uid));
         if (snap.exists()) return snap.data();
       } catch (e) {}
-      return { enabled: true, accountStatus: 'active', currency: 'USD' };
+      // Honest unconfigured state — never claim an active payout account
+      // that does not exist.
+      return { enabled: false, accountStatus: 'unconfigured', currency: 'USD' };
     }
   }
 
@@ -923,15 +942,25 @@ class MonetizationService {
   async sendGift(senderId, postId, giftType, idempotencyKey = null) {
     await this._ensureInitialized();
     const key = idempotencyKey || generateIdempotencyKey();
+
+    // Validate the gift type FIRST - unknown gifts are rejected, never
+    // silently charged a default cost.
+    const giftConfig = (this.config.GIFTS || DEFAULT_CONFIG.GIFTS).find(g => g.type === giftType);
+    if (!giftConfig) {
+      throw new Error(`Unknown gift type: ${giftType}`);
+    }
+    const cost = giftConfig.value;
+
     try {
       const result = await retryOperation(() =>
         this.cfSendGift({ senderId, postId, giftType, idempotencyKey: key })
       );
+      // Social loop: notify the post author + award gift_received XP
+      // (best-effort, never breaks the gift).
+      this._afterGiftSent(senderId, postId, giftType, cost).catch(() => {});
       return result.data;
     } catch (err) {
       log.warn('Cloud Function sendGift failed, using atomic Firestore transaction fallback', err);
-      const giftConfig = (this.config.GIFTS || DEFAULT_CONFIG.GIFTS).find(g => g.type === giftType);
-      const cost = giftConfig ? giftConfig.value : 10;
       
       return await runTransaction(this.db, async (tx) => {
         const senderRef = doc(this.db, 'users', senderId);
@@ -981,6 +1010,28 @@ class MonetizationService {
         
         return { success: true, giftType, cost };
       });
+    }
+  }
+
+  /**
+   * Best-effort social loop after a gift is sent: notify the post author and
+   * award gift_received XP. Never throws into the gift path.
+   * @private
+   */
+  async _afterGiftSent(senderId, postId, giftType, cost) {
+    try {
+      const { getDoc, doc } = await import('firebase/firestore');
+      const postSnap = await getDoc(doc(this.db, 'posts', postId));
+      const authorId = postSnap.exists() ? (postSnap.data().authorId || postSnap.data().userId) : null;
+      if (!authorId || authorId === senderId) return;
+
+      const { getNotificationsService } = await import('./notificationsService.js');
+      await getNotificationsService().createGiftNotification(senderId, authorId, postId, giftType, cost);
+
+      const { levelSystemService } = await import('./levelSystemService.js');
+      await levelSystemService.awardExperience({ userId: authorId, action: 'gift_received', source: postId });
+    } catch (err) {
+      log.debug('[Gift] Post-gift notification/XP skipped:', { error: err.message });
     }
   }
 

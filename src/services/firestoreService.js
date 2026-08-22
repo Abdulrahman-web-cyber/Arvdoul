@@ -268,6 +268,17 @@ class EnterpriseFirestoreService {
       const postId = docRef.id;
       this.cache.set(postId, { ...postDoc, id: postId, _cachedAt: Date.now() });
       this.invalidateCachePattern(`user_posts_${postData.authorId}`);
+
+      // Level system: award post_created XP (best-effort, never breaks publish).
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId: postData.authorId, action: 'post_created', source: postId })
+          .catch(() => {});
+      } catch (e) {
+        // XP award is best-effort
+      }
+
       return {
         success: true, postId, post: { ...postDoc, id: postId }, operationId,
         duration: Date.now() - startTime
@@ -529,6 +540,30 @@ class EnterpriseFirestoreService {
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.like', { userId, meta: { postId, alreadyLiked } });
+
+      // Social loop: notify the author + award like_received XP (best-effort,
+      // never breaks the like operation).
+      if (!alreadyLiked && authorId && authorId !== userId) {
+        Promise.all([
+          (async () => {
+            try {
+              const { getNotificationsService } = await import('./notificationsService.js');
+              await getNotificationsService().createLikeNotification(postId, userId, authorId);
+            } catch (e) { /* like notification is best-effort */ }
+          })(),
+          (async () => {
+            try {
+              const { levelSystemService } = await import('./levelSystemService.js');
+              await levelSystemService.awardExperience({
+                userId: authorId,
+                action: 'like_received',
+                source: postId,
+              });
+            } catch (e) { /* XP award is best-effort */ }
+          })(),
+        ]).catch(() => {});
+      }
+
       return { success: true, alreadyLiked };
     } catch (error) { throw enhanceError(error, 'Failed to like post'); }
   }

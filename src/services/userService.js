@@ -624,6 +624,16 @@ class ProfessionalUserService {
       } catch (e) {
         // Follow notification failed
       }
+      // Level system: award follow_received XP to the followed user
+      // (best-effort, never breaks the follow).
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId: followingId, action: 'follow_received', source: followerId })
+          .catch(() => {});
+      } catch (e) {
+        // XP award is best-effort
+      }
       this._invalidateUserCache(followerId);
       this._invalidateUserCache(followingId);
     }
@@ -828,6 +838,11 @@ class ProfessionalUserService {
     await this._ensureInitialized();
     await this._assertNotBlocked(fromUserId, toUserId);
 
+    // Already friends (mutual follows)? No request needed.
+    if (await this.areFriends(fromUserId, toUserId)) {
+      return { success: true, alreadyFriends: true };
+    }
+
     // Rate-limit friend requests (spam prevention UX guard).
     const rl = rateLimiter.checkAndHit(`friend_request:${fromUserId}`, { max: 30, windowMs: 60000 });
     if (!rl.allowed) {
@@ -837,16 +852,67 @@ class ProfessionalUserService {
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const requestRef = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
     const fromUser = await this.getUserProfile(fromUserId);
-    return await runTransaction(this.firestore, async (transaction) => {
+    const result = await runTransaction(this.firestore, async (transaction) => {
       const snap = await transaction.get(requestRef);
       if (snap.exists() && snap.data().status === 'pending') return { success: true, alreadyRequested: true };
+      // Re-sending after decline/cancel is allowed (status resets to pending).
       transaction.set(requestRef, {
         fromUserId, toUserId, fromUserDisplayName: fromUser?.displayName || 'Someone',
         fromUserPhotoURL: fromUser?.photoURL || null, status: 'pending',
         createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
+      return { success: true, alreadyRequested: false };
+    });
+
+    // Notify the recipient (best-effort, never breaks the request).
+    if (!result.alreadyRequested) {
+      try {
+        const { getNotificationsService } = await import('./notificationsService.js');
+        await getNotificationsService().createFriendRequestNotification(
+          fromUserId,
+          toUserId,
+          fromUser?.displayName || 'Someone'
+        );
+      } catch (e) {
+        // Friend request notification is best-effort
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Cancels a pending friend request (sender-side).
+   * @param {string} fromUserId - the sender
+   * @param {string} toUserId - the recipient
+   */
+  async cancelFriendRequest(fromUserId, toUserId) {
+    await this._ensureInitialized();
+    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+    const ref = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
+    return await runTransaction(this.firestore, async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists()) return { success: true, notFound: true };
+      if (snap.data().fromUserId !== fromUserId) throw new Error('Not authorized');
+      if (snap.data().status !== 'pending') return { success: true, notPending: true };
+      transaction.update(ref, { status: 'cancelled', updatedAt: serverTimestamp() });
       return { success: true };
     });
+  }
+
+  /**
+   * True when the two users have mutual follow edges (i.e. are friends).
+   * @param {string} userIdA
+   * @param {string} userIdB
+   */
+  async areFriends(userIdA, userIdB) {
+    if (!userIdA || !userIdB || userIdA === userIdB) return false;
+    await this._ensureInitialized();
+    const { doc, getDoc } = await import('firebase/firestore');
+    const [a, b] = await Promise.all([
+      getDoc(doc(this.firestore, 'follows', `${userIdA}_${userIdB}`)),
+      getDoc(doc(this.firestore, 'follows', `${userIdB}_${userIdA}`)),
+    ]);
+    return a.exists() && b.exists();
   }
 
   async acceptFriendRequest(requestId, userId) {
@@ -1194,6 +1260,8 @@ export const getFriendRecommendations = (uid, limit) => getUserService().getFrie
 export const sendFriendRequest = (from, to) => getUserService().sendFriendRequest(from, to);
 export const acceptFriendRequest = (reqId, uid) => getUserService().acceptFriendRequest(reqId, uid);
 export const declineFriendRequest = (reqId, uid) => getUserService().declineFriendRequest(reqId, uid);
+export const cancelFriendRequest = (from, to) => getUserService().cancelFriendRequest(from, to);
+export const areFriends = (a, b) => getUserService().areFriends(a, b);
 export const getFriendRequests = (uid, type) => getUserService().getFriendRequests(uid, type);
 
 // Blocking

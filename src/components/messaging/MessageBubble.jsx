@@ -16,6 +16,7 @@ import {
   CheckCheck,
   Clock,
   AlertCircle,
+  Bookmark,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -34,8 +35,11 @@ const MessageBubble = React.memo(({
   onEdit,
   onDelete,
   onReport,
+  onSave,
+  isSaved = false,
   theme,
   isGroup,
+  isGroupStart = true,
 }) => {
   const [showReactions, setShowReactions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -83,9 +87,9 @@ const MessageBubble = React.memo(({
   }
 
   return (
-    <div className={cn('flex gap-2 mb-3 group', isOwn ? 'justify-end' : 'justify-start')}>
-      {/* Avatar (for group chats, only on left side) */}
-      {!isOwn && isGroup && (
+    <div className={cn('flex gap-2 group', isOwn ? 'justify-end' : 'justify-start', isGroupStart ? 'mt-3' : 'mt-0.5')}>
+      {/* Avatar (for group chats, only on left side, first message of the group) */}
+      {!isOwn && isGroup && isGroupStart && (
         <div className="flex-shrink-0 mt-1">
           {senderAvatar ? (
             <img
@@ -109,8 +113,8 @@ const MessageBubble = React.memo(({
           onLongPress?.(message);
         }}
       >
-        {/* Sender name (for group chats) */}
-        {!isOwn && isGroup && (
+        {/* Sender name (for group chats, first message of the group) */}
+        {!isOwn && isGroup && isGroupStart && (
           <div className={cn(
             'text-xs px-3 pt-1',
             theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
@@ -181,7 +185,26 @@ const MessageBubble = React.memo(({
                 src={media.url}
                 controls
                 className="w-64"
+                preload="metadata"
               />
+            )}
+
+            {/* Voice messages: real audio player with metadata */}
+            {type === 'voice' && media?.url && (
+              <div className="flex items-center gap-2">
+                <audio
+                  src={media.url}
+                  controls
+                  className="w-56 h-10"
+                  preload="metadata"
+                  aria-label="Voice message"
+                />
+                {media.durationSec ? (
+                  <span className="text-[10px] opacity-70 shrink-0">
+                    {media.durationSec}s
+                  </span>
+                ) : null}
+              </div>
             )}
 
             {type === 'file' && media && (
@@ -363,6 +386,18 @@ const MessageBubble = React.memo(({
               </button>
             </>
           )}
+          <button
+            onClick={() => {
+              onSave?.(message);
+              setShowMenu(false);
+            }}
+            className={cn(
+              'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-700/50',
+              'transition-colors'
+            )}
+          >
+            <Bookmark className="w-4 h-4" /> {isSaved ? 'Unsave' : 'Save'}
+          </button>
           {!isOwn && (
             <button
               onClick={() => {

@@ -16,164 +16,11 @@ import {
 } from 'lucide-react';
 import notificationsService from '../services/notificationsService';
 import { getMonetizationService } from '../services/monetizationService';
+import EmptyState from '../design-system/EmptyState.jsx';
+import Button from '../design-system/Button.jsx';
+import { Dialog } from '../components/ui/Dialog.jsx';
 
 // Fallback high-fidelity sample notifications matching the exact Arvdoul design
-const SAMPLE_NOTIFICATIONS = [
-  {
-    id: 'notif-1',
-    category: 'Friends',
-    type: 'friend_request',
-    timeGroup: 'Now',
-    user: {
-      name: 'Sara Khan',
-      username: 'sarakhan',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'sent you a friend request.',
-    timestamp: '2m ago',
-    unread: true,
-    actionType: 'friend_request',
-    highlight: {
-      title: 'Sara Khan',
-      badge: 'friend_request',
-      subtitle: 'sent you a friend request',
-      time: '2m ago',
-    }
-  },
-  {
-    id: 'notif-2',
-    category: 'Coins',
-    type: 'coin_gift',
-    timeGroup: 'Now',
-    user: {
-      name: 'Ibrahim',
-      username: 'ibrahim.vibes',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'sent you 250 as a gift.',
-    amount: 250,
-    timestamp: '15m ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=200&auto=format&fit=crop&q=80',
-    highlight: {
-      title: 'Ibrahim sent you 250',
-      badge: 'coin_gift',
-      subtitle: 'sent you 250 🪙',
-      time: '15m ago',
-    }
-  },
-  {
-    id: 'notif-3',
-    category: 'Stories',
-    type: 'story_reply',
-    timeGroup: 'Now',
-    user: {
-      name: 'Maya Johnson',
-      username: 'maya.j',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'replied to your story.',
-    timestamp: '45m ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&auto=format&fit=crop&q=80',
-    highlight: {
-      title: 'Maya replied to your story',
-      badge: 'story_reply',
-      subtitle: 'replied to your story',
-      time: '1h ago',
-    }
-  },
-  {
-    id: 'notif-4',
-    category: 'Live',
-    type: 'live_stream',
-    timeGroup: 'Now',
-    user: {
-      name: 'Alex',
-      username: 'alex.live',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'is live now',
-    timestamp: '2h ago',
-    unread: false,
-    viewers: '1.2K',
-    highlight: {
-      title: 'Alex is live now',
-      badge: 'live_stream',
-      subtitle: 'is live now',
-      time: '2h ago',
-    }
-  },
-  {
-    id: 'notif-5',
-    category: 'All',
-    type: 'post_like',
-    timeGroup: 'Today',
-    user: {
-      name: 'Ali Hassan',
-      username: 'alihassan',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'liked your post.',
-    timestamp: '2h ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'notif-6',
-    category: 'Mentions',
-    type: 'mention',
-    timeGroup: 'Today',
-    user: {
-      name: 'Noor Ahmed',
-      username: 'noor.ahmed',
-      avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'mentioned you in a comment.',
-    commentQuote: '@arvdoul loved this! 💜',
-    timestamp: '4h ago',
-    unread: true,
-  },
-  {
-    id: 'notif-7',
-    category: 'Stories',
-    type: 'story_view',
-    timeGroup: 'Today',
-    user: {
-      name: 'Omar',
-      username: 'omar.design',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'viewed your story.',
-    timestamp: '5h ago',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?w=200&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 'notif-8',
-    category: 'Stories',
-    type: 'story_view',
-    timeGroup: 'Yesterday',
-    user: {
-      name: 'Omar',
-      username: 'omar.design',
-      avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-    },
-    message: 'viewed your story.',
-    timestamp: 'Yesterday, 11:30 PM',
-    unread: true,
-    thumbnail: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=200&auto=format&fit=crop&q=80'
-  }
-];
-
 const FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Messages', label: 'Messages', badge: 8, icon: MessageCircle },
@@ -192,7 +39,7 @@ export default function NotificationsScreen() {
   const isDark = theme !== 'light';
 
   const [activeFilter, setActiveFilter] = useState('All');
-  const [notifications, setNotifications] = useState(SAMPLE_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -212,24 +59,30 @@ export default function NotificationsScreen() {
     try {
       unsub = notificationsService.subscribeToUserNotifications(user.uid, (firestoreNotifs) => {
         if (Array.isArray(firestoreNotifs) && firestoreNotifs.length > 0) {
-          // Merge real notifications with design system items
+          // Map real Firestore notifications — real fields only, real timestamps.
           setNotifications((prev) => {
-            const formatted = firestoreNotifs.map((fn, idx) => ({
-              id: fn.id || `fn-${idx}`,
-              category: fn.type?.includes('message') ? 'Messages' : fn.type?.includes('friend') ? 'Friends' : fn.type?.includes('coin') ? 'Coins' : 'All',
-              type: fn.type || 'system',
-              timeGroup: 'Now',
-              user: {
-                name: fn.senderName || fn.title || 'Arvdoul User',
-                username: fn.senderUsername || 'user',
-                avatar: fn.senderAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-                verified: true,
-              },
-              message: fn.body || fn.message || 'interacted with your content.',
-              timestamp: 'Just now',
-              unread: !fn.read,
-            }));
-            return [...formatted, ...SAMPLE_NOTIFICATIONS];
+            const formatted = firestoreNotifs.map((fn, idx) => {
+              const createdAt = fn.createdAt?.toDate?.() || (fn.createdAt ? new Date(fn.createdAt) : null);
+              const ts = createdAt && !Number.isNaN(createdAt.getTime())
+                ? createdAt.toLocaleString()
+                : (fn.timestamp ? String(fn.timestamp) : '');
+              return {
+                id: fn.id || `fn-${idx}`,
+                category: fn.type?.includes('message') ? 'Messages' : fn.type?.includes('friend') ? 'Friends' : fn.type?.includes('coin') ? 'Coins' : 'All',
+                type: fn.type || 'system',
+                timeGroup: createdAt ? (Date.now() - createdAt.getTime() < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
+                user: {
+                  name: fn.senderName || fn.title || '',
+                  username: fn.senderUsername || '',
+                  avatar: fn.senderAvatar || '/assets/default-profile.png',
+                  verified: !!fn.senderVerified,
+                },
+                message: fn.body || fn.message || '',
+                timestamp: ts,
+                unread: !fn.read,
+              };
+            });
+            return formatted;
           });
         }
       });
@@ -242,15 +95,22 @@ export default function NotificationsScreen() {
   }, [user?.uid]);
 
   // Handle Mark All Read
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const handleMarkAllRead = async () => {
+    if (markingAllRead) return;
+    setMarkingAllRead(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
-    toast.success('All notifications marked as read');
     if (user?.uid) {
       try {
         await notificationsService.markAllAsRead(user.uid);
       } catch (err) {
         console.warn(err);
+        toast.error('Could not sync read state');
+      } finally {
+        setMarkingAllRead(false);
       }
+    } else {
+      setMarkingAllRead(false);
     }
   };
 
@@ -307,7 +167,7 @@ export default function NotificationsScreen() {
   const groupedNotifications = useMemo(() => {
     const groups = { Now: [], Today: [], Yesterday: [], Earlier: [] };
     filteredNotifications.forEach((n) => {
-      const g = n.timeGroup || 'Today';
+      const g = n.timeGroup || 'Recent';
       if (!groups[g]) groups[g] = [];
       groups[g].push(n);
     });
@@ -377,10 +237,11 @@ export default function NotificationsScreen() {
             {/* Mark All Read */}
             <button
               onClick={handleMarkAllRead}
+              disabled={markingAllRead}
               title="Mark all as read"
               aria-label="Mark all as read"
               className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all disabled:opacity-50",
                 isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               )}
             >
@@ -745,75 +606,66 @@ export default function NotificationsScreen() {
 
         {/* Empty State when filters yield no results */}
         {filteredNotifications.length === 0 && (
-          <div className="text-center py-16 space-y-3">
-            <div className="w-14 h-14 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto">
-              <Bell className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold">No notifications found</h3>
-            <p className="text-xs text-arvdoul-text-secondary max-w-xs mx-auto">
-              There are no notifications under the {activeFilter} filter at this moment.
-            </p>
-            <button
-              onClick={() => { setActiveFilter('All'); setSearchQuery(''); }}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-violet-600 text-white"
-            >
-              Reset Filters
-            </button>
-          </div>
+          <EmptyState
+            title="No notifications found"
+            description={`There are no notifications under the ${activeFilter} filter at this moment.`}
+            icon={<Bell className="w-7 h-7" />}
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => { setActiveFilter('All'); setSearchQuery(''); }}
+              >
+                Reset Filters
+              </Button>
+            }
+          />
         )}
       </main>
 
-      {/* Gift Detail Modal */}
-      <AnimatePresence>
-        {giftModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={cn(
-                "w-full max-w-sm rounded-3xl p-6 border shadow-2xl relative overflow-hidden text-center",
-                isDark ? "bg-[#0c0f24] border-violet-500/30 text-white" : "bg-white border-slate-200 text-slate-900"
-              )}
-            >
-              <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 ring-4 ring-amber-500/30">
-                <Gift className="w-8 h-8" />
-              </div>
-              <h2 className="text-xl font-bold font-display">Creator Coin Gift!</h2>
-              <p className="text-xs text-arvdoul-text-secondary mt-1">
-                {giftModal.user.name} gifted you {giftModal.amount || 250} ARVDOUL Coins.
-              </p>
-
-              <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
-                <span className="text-3xl font-black text-amber-400 font-display">
-                  +{giftModal.amount || 250}
-                </span>
-                <span className="text-sm font-bold text-arvdoul-text-secondary uppercase tracking-wider">
-                  Coins
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setGiftModal(null)}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/10 hover:bg-white/5"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => {
-                    handleThankCreator(giftModal);
-                    setGiftModal(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg"
-                >
-                  Send Thank You 💜
-                </button>
-              </div>
-            </motion.div>
+      {/* Gift Detail Modal - accessible Dialog (focus trap, Escape, aria-modal) */}
+      <Dialog
+        isOpen={Boolean(giftModal)}
+        onClose={() => setGiftModal(null)}
+        title="Creator Coin Gift!"
+        size="sm"
+      >
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 ring-4 ring-amber-500/30">
+            <Gift className="w-8 h-8" aria-hidden="true" />
           </div>
-        )}
-      </AnimatePresence>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {giftModal?.user?.name || 'A creator'} gifted you {giftModal?.amount || 250} ARVDOUL Coins.
+          </p>
+
+          <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
+            <span className="text-3xl font-black text-amber-400 font-display">
+              +{giftModal?.amount || 250}
+            </span>
+            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Coins
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setGiftModal(null)}
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-gray-300 dark:border-white/15 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors min-h-[44px]"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                handleThankCreator(giftModal);
+                setGiftModal(null);
+              }}
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg min-h-[44px]"
+            >
+              Send Thank You 💜
+            </button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* Bottom Navigation Bar */}
       <nav className={cn(

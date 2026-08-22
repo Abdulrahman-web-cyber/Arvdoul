@@ -12,7 +12,7 @@
  * - Integrated BottomNav & real message transitions
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -27,156 +27,7 @@ import {
 } from 'lucide-react';
 
 // Pinned Conversations data matching the exact screenshot
-const PINNED_ITEMS = [
-  {
-    id: 'isabella',
-    name: 'Isabella Morgan',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    verified: true,
-    typing: true,
-    unread: null,
-    type: 'direct',
-    badge: '👑',
-  },
-  {
-    id: 'design-squad',
-    name: 'Design Squad',
-    avatar: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=150',
-    isGroup: true,
-    lastSender: 'Alex',
-    subtitle: 'Nice!',
-    unread: 12,
-    type: 'group',
-  },
-  {
-    id: 'david-lee',
-    name: 'David Lee',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    verified: true,
-    isVoice: true,
-    duration: '0:18',
-    unread: null,
-    type: 'direct',
-  },
-  {
-    id: 'family',
-    name: 'Family',
-    avatar: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=150',
-    isGroup: true,
-    lastSender: 'Mom',
-    subtitle: 'Dinner at 7?',
-    unread: 5,
-    type: 'group',
-  },
-  {
-    id: 'crypto-hunters',
-    name: 'Crypto Hunters',
-    avatar: 'https://images.unsplash.com/photo-1622979135225-d2ba269bc1df?w=150',
-    isCrypto: true,
-    lastSender: 'Alex',
-    subtitle: 'BTC update!',
-    unread: 23,
-    type: 'group',
-  },
-];
-
 // Master Conversation List matching the screenshots
-const CONVERSATIONS_DATA = [
-  {
-    id: 'sophia',
-    name: 'Sophia Martinez',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    verified: true,
-    preview: 'Hey! Are we still on for tomorrow? 😊',
-    time: '9:41 AM',
-    unread: 3,
-    muted: true,
-    category: 'personal',
-    activeDot: false,
-  },
-  {
-    id: 'project-x',
-    name: 'Project X',
-    avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150',
-    verified: true,
-    isLogo: true,
-    preview: 'John: Here is the latest update',
-    hasAttachment: 'PDF',
-    time: '9:32 AM',
-    unread: 8,
-    category: 'groups',
-    activeDot: true,
-  },
-  {
-    id: 'michael-brown',
-    name: 'Michael Brown',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    isVoiceMessage: true,
-    voiceDuration: '0:28',
-    time: '9:21 AM',
-    unread: 2,
-    category: 'personal',
-    waveform: [20, 45, 65, 30, 85, 95, 40, 75, 90, 50, 70, 35, 80, 100, 60, 45, 75, 35, 20, 40, 30, 50, 20, 60],
-  },
-  {
-    id: 'weekend-plans',
-    name: 'Weekend Plans',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
-    isGroup: true,
-    preview: "Emma: Can't wait! 🔥",
-    time: 'Yesterday',
-    unread: 12,
-    muted: true,
-    category: 'groups',
-    activeDot: true,
-  },
-  {
-    id: 'emma-wilson',
-    name: 'Emma Wilson',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    hasPhoto: true,
-    photoPreview: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=150',
-    preview: 'Photo',
-    time: 'Yesterday',
-    unread: 1,
-    category: 'personal',
-  },
-  {
-    id: 'crypto-hunters-list',
-    name: 'Crypto Hunters',
-    avatar: 'https://images.unsplash.com/photo-1622979135225-d2ba269bc1df?w=150',
-    verified: true,
-    isCrypto: true,
-    preview: 'Alex: Bitcoin just broke $70K! 🚀',
-    time: 'Tue',
-    unread: 23,
-    category: 'channels',
-    activeDot: true,
-  },
-  {
-    id: 'daniel-carter',
-    name: 'Daniel Carter',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-    preview: 'Thanks for the help! 🙌',
-    time: 'Tue',
-    unread: 0,
-    pinned: true,
-    category: 'personal',
-  },
-  {
-    id: 'travel-lovers',
-    name: 'Travel Lovers',
-    avatar: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=150',
-    verified: true,
-    isGroup: true,
-    preview: 'Sophie: Bali next month? 🌴🌊',
-    time: 'Mon',
-    unread: 6,
-    category: 'groups',
-    activeDot: true,
-  },
-];
-
 const FILTER_TABS = [
   { id: 'all', label: 'All', icon: '⊞' },
   { id: 'unread', label: 'Unread', dot: true },
@@ -193,8 +44,108 @@ export default function MessagingScreen() {
 
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [conversations, setConversations] = useState(CONVERSATIONS_DATA);
+  const [conversations, setConversations] = useState([]);
+  // Pinned/quick-access carousel derived from REAL conversations
+  const pinnedItems = useMemo(
+    () =>
+      [...conversations]
+        .sort((a, b) => (b.unread || 0) - (a.unread || 0))
+        .slice(0, 5)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          avatar: c.avatar,
+          unread: c.unread || 0,
+          isGroup: c.participantCount > 2,
+          verified: Boolean(c.verified),
+        })),
+    [conversations]
+  );
+  const [loadingConversations, setLoadingConversations] = useState(true);
+
+  // Load REAL conversations from messagesService (Firestore-backed, enriched
+  // with participant details + unread counts). No mock data.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user?.uid) {
+        setLoadingConversations(false);
+        return;
+      }
+      try {
+        const { getMessagingService } = await import('../services/messagesService.js');
+        const res = await getMessagingService().getUserConversations(user.uid, { cacheFirst: false, limit: 50 });
+        if (cancelled) return;
+        const mapped = (res.conversations || []).map((c) => {
+          const other = (c.participantDetails || []).find((p) => p.id !== user.uid);
+          const lastMsg = c.lastMessage || {};
+          return {
+            id: c.id,
+            name: c.title || other?.displayName || other?.name || 'Conversation',
+            avatar: other?.photoURL || other?.avatar || '/assets/default-profile.png',
+            verified: Boolean(other?.isVerified),
+            preview: typeof lastMsg.text === 'string' ? lastMsg.text : lastMsg.content || '',
+            time: c.lastActivity ? new Date(c.lastActivity.toDate ? c.lastActivity.toDate() : c.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            unread: c.unreadCounts?.[user.uid] || 0,
+            muted: Boolean(c.mutedBy?.includes(user.uid)),
+            category: c.category || 'personal',
+            activeDot: Boolean(c.presenceOnline),
+            participantCount: c.participantCount || (c.participants?.length || 2),
+          };
+        });
+        setConversations(mapped);
+      } catch (err) {
+        console.error('Failed to load conversations:', err);
+        if (!cancelled) setConversations([]);
+      } finally {
+        if (!cancelled) setLoadingConversations(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
   const [showSearchFilters, setShowSearchFilters] = useState(false);
+  const [messageRequests, setMessageRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+
+  // Load REAL pending message requests (spec §35) — users who were blocked by
+  // privacy settings but requested a conversation.
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    const load = async () => {
+      setRequestsLoading(true);
+      try {
+        const { getMessagingService } = await import('../services/messagesService.js');
+        const res = await getMessagingService().getMessageRequests(user.uid, { limit: 20 });
+        if (!cancelled) setMessageRequests(res?.requests || []);
+      } catch (err) {
+        console.warn('Failed to load message requests:', err);
+        if (!cancelled) setMessageRequests([]);
+      } finally {
+        if (!cancelled) setRequestsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  const handleRequestResponse = useCallback(async (requestId, accept) => {
+    if (!user?.uid) return;
+    try {
+      const { getMessagingService } = await import('../services/messagesService.js');
+      const res = await getMessagingService().respondToMessageRequest(requestId, user.uid, accept);
+      setMessageRequests((prev) => prev.filter((r) => r.id !== requestId));
+      if (res?.success && res.accepted && res.conversationId) {
+        toast.success('Request accepted — conversation started');
+        navigate(`/messages/${res.conversationId}`);
+      } else {
+        toast.info('Request declined');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not respond to request');
+    }
+  }, [user?.uid, navigate]);
 
   // Filter conversations
   const filteredConversations = useMemo(() => {
@@ -238,7 +189,7 @@ export default function MessagingScreen() {
             >
               <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]">
                 <img
-                  src={user?.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"}
+                  src={user?.photoURL || "/assets/default-profile.png"}
                   alt="My Profile"
                   className="w-full h-full rounded-full object-cover border-2 border-[#030614]"
                 />
@@ -363,7 +314,7 @@ export default function MessagingScreen() {
 
           {/* Horizontal Pinned Stories/Conversations Carousel */}
           <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-2">
-            {PINNED_ITEMS.map((item) => (
+            {pinnedItems.map((item) => (
               <div
                 key={item.id}
                 onClick={() => navigate(`/messages/${item.id}`)}
@@ -422,8 +373,68 @@ export default function MessagingScreen() {
           </div>
         </div>
 
+        {/* Message Requests (spec §35) */}
+        {messageRequests.length > 0 && (
+          <div className="mt-4 px-4">
+            <h2 className="text-xs font-bold text-arvdoul-text-secondary uppercase tracking-wider mb-2">
+              Message requests ({messageRequests.length})
+            </h2>
+            <div className="space-y-2">
+              {messageRequests.map((req) => (
+                <div key={req.id} className="p-3 rounded-2xl bg-white/5 border border-purple-500/20 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {req.senderAvatar ? (
+                      <img src={req.senderAvatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-purple-600/40 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                        {(req.senderName || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{req.senderName || 'Unknown user'}</p>
+                      <p className="text-[10px] text-gray-400">wants to message you</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleRequestResponse(req.id, true)}
+                      className="px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[11px] font-bold hover:opacity-90"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleRequestResponse(req.id, false)}
+                      className="px-3 py-1.5 rounded-full bg-white/10 text-gray-300 text-[11px] font-bold hover:bg-white/20"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Master Conversation List */}
         <div className="mt-3 space-y-2">
+          {loadingConversations && filteredConversations.length === 0 && (
+            <div className="space-y-2" role="status" aria-label="Loading conversations">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full shimmer shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 shimmer rounded-lg w-1/3" />
+                    <div className="h-2.5 shimmer rounded-lg w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!loadingConversations && filteredConversations.length === 0 && (
+            <div className="text-center py-10 text-sm text-arvdoul-text-secondary">
+              No conversations yet — start one from the + button.
+            </div>
+          )}
           {filteredConversations.map((item) => (
             <div
               key={item.id}

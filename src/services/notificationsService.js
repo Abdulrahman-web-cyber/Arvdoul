@@ -1002,6 +1002,32 @@ class UltimateNotificationsService {
     });
   }
 
+  async createGiftNotification(senderId, recipientId, postId, giftType, cost) {
+    if (senderId === recipientId) return;
+    return this.sendNotification({
+      type: NOTIFICATIONS_CONFIG.TYPES.GIFT_RECEIVED,
+      recipientId,
+      senderId,
+      title: 'Gift received! 🎁',
+      message: `You received a ${giftType} gift worth ${cost} coins`,
+      metadata: { postId, giftType, cost },
+      priority: 'normal',
+    });
+  }
+
+  async createFriendRequestNotification(fromUserId, toUserId, fromDisplayName) {
+    if (fromUserId === toUserId) return;
+    return this.sendNotification({
+      type: NOTIFICATIONS_CONFIG.TYPES.FRIEND_REQUEST,
+      recipientId: toUserId,
+      senderId: fromUserId,
+      title: 'New friend request',
+      message: `${fromDisplayName || 'Someone'} sent you a friend request`,
+      metadata: { fromUserId },
+      priority: 'normal',
+    });
+  }
+
   // --------------------------------------------------------------------
   //  PRIVATE HELPERS
   // --------------------------------------------------------------------
@@ -1084,6 +1110,8 @@ const notificationsService = {
   createMessageNotification: (sender, recipient, mid, cid, txt) => getNotificationsService().createMessageNotification(sender, recipient, mid, cid, txt),
   createCoinRewardNotification: (uid, amount, reason) => getNotificationsService().createCoinRewardNotification(uid, amount, reason),
   createRoyaltyPromotionNotification: (uid, oldPos, newPos) => getNotificationsService().createRoyaltyPromotionNotification(uid, oldPos, newPos),
+  createGiftNotification: (sender, recipient, pid, giftType, cost) => getNotificationsService().createGiftNotification(sender, recipient, pid, giftType, cost),
+  createFriendRequestNotification: (from, to, name) => getNotificationsService().createFriendRequestNotification(from, to, name),
   getService: getNotificationsService,
   getStats: () => getNotificationsService().getStats(),
   clearCache: () => getNotificationsService().clearCache(),

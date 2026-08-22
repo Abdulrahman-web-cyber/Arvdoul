@@ -158,22 +158,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rankings = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
-        // Get user details
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = {
-              id: userSnap.id,
-              ...userSnap.data(),
-            };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rankings.push({
@@ -189,9 +183,8 @@ class RankingService {
       this._setCache(cacheKey, rankings);
       return rankings;
     } catch (error) {
-      logger.error('[RankingService] Failed to get creator rankings:', error);
-      // Return mock data for demo
-      return this._getMockCreatorRankings(category, offset);
+      logger.error('[RankingService] Creator rankings unavailable (no fabricated data):', error);
+      return [];
     }
   }
 
@@ -233,18 +226,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rankings = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = { id: userSnap.id, ...userSnap.data() };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rankings.push({
@@ -261,7 +252,7 @@ class RankingService {
       return rankings;
     } catch (error) {
       logger.error('[RankingService] Failed to get wealth rankings:', error);
-      return this._getMockWealthRankings(category, offset);
+      return [];
     }
   }
 
@@ -285,18 +276,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rankings = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = { id: userSnap.id, ...userSnap.data() };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rankings.push({
@@ -314,7 +303,7 @@ class RankingService {
       return rankings;
     } catch (error) {
       logger.error('[RankingService] Failed to get reputation rankings:', error);
-      return this._getMockReputationRankings(category, offset);
+      return [];
     }
   }
 
@@ -356,7 +345,7 @@ class RankingService {
       return rankings;
     } catch (error) {
       logger.error('[RankingService] Failed to get community rankings:', error);
-      return this._getMockCommunityRankings(category, offset);
+      return [];
     }
   }
 
@@ -389,7 +378,7 @@ class RankingService {
       return trending;
     } catch (error) {
       logger.error('[RankingService] Failed to get trending content:', error);
-      return this._getMockTrendingContent(type, offset);
+      return [];
     }
   }
 
@@ -413,18 +402,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rising = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = { id: userSnap.id, ...userSnap.data() };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rising.push({
@@ -441,7 +428,7 @@ class RankingService {
       return rising;
     } catch (error) {
       logger.error('[RankingService] Failed to get rising creators:', error);
-      return this._getMockRisingCreators(offset);
+      return [];
     }
   }
 
@@ -474,30 +461,134 @@ class RankingService {
     }
   }
 
+  /**
+   * REAL badge computation from live user stats. Returns a map keyed by badge
+   * id: { earned, progress, target } — progress/target are null when the
+   * metric cannot be computed cheaply (the UI must show "—" then, never a
+   * fabricated number). No badges are ever claimed without real evidence.
+   */
   async getUserBadges(userId) {
     await this.ensureInitialized();
 
-    try {
-      const badgesRef = collection(this.firestore, 'users', userId, 'badges');
-      const snap = await getDocs(badgesRef);
-      
-      const badges = [];
-      snap.docs.forEach((doc) => {
-        const badgeData = doc.data();
-        const badgeConfig = RANKING_CONFIG.BADGES.find(b => b.id === badgeData.badgeId);
-        if (badgeConfig) {
-          badges.push({
-            ...badgeConfig,
-            earnedAt: badgeData.earnedAt,
-          });
-        }
-      });
+    const result = {};
+    const today = new Date();
 
-      return badges;
+    try {
+      const userSnap = await getDoc(doc(this.firestore, 'users', userId));
+      const userData = userSnap.exists() ? userSnap.data() : {};
+
+      const followerCount = Number(userData.followerCount || userData.stats?.followers || 0);
+      const followingCount = Number(userData.followingCount || userData.stats?.following || 0);
+      const createdAt = userData.createdAt?.toDate?.() || (userData.createdAt ? new Date(userData.createdAt) : null);
+      const accountDays = createdAt && !Number.isNaN(createdAt.getTime())
+        ? Math.max(0, Math.floor((today.getTime() - createdAt.getTime()) / 86400000))
+        : null;
+      const isPremium = !!(userData.subscription?.tier || userData.subscriptionTier || userData.isPremium);
+      const isVerified = !!(userData.isVerified || userData.verified || userData.badges?.includes?.('verified'));
+
+      // Real content stats.
+      let posts = [];
+      try {
+        const postsSnap = await getDocs(
+          query(collection(this.firestore, 'posts'), where('authorId', '==', userId), limit(500))
+        );
+        posts = postsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      } catch (err) {
+        logger.warn('[RankingService] posts stats unavailable:', err.message);
+      }
+
+      let totalLikes = 0;
+      let totalViews = 0;
+      let totalComments = 0;
+      let sparkCount = 0;
+      for (const p of posts) {
+        totalLikes += Number(p.stats?.likes || p.likes || 0);
+        totalViews += Number(p.stats?.views || p.views || 0);
+        totalComments += Number(p.stats?.comments || p.comments || 0);
+        if (p.type === 'spark') sparkCount += 1;
+      }
+
+      let storyCount = 0;
+      try {
+        const sSnap = await getDocs(
+          query(collection(this.firestore, 'stories'), where('userId', '==', userId), limit(500))
+        );
+        storyCount = sSnap.size;
+      } catch { /* stories stats unavailable — story badges stay unknown */ }
+
+      const defs = {
+        first_like: { progress: totalLikes, target: 1 },
+        like_master: { progress: totalLikes, target: 1000 },
+        first_comment: { progress: totalComments, target: 1 },
+        commentator: { progress: totalComments, target: 500 },
+        viral_post: { progress: totalViews, target: 10000 },
+        trendsetter: { progress: null, target: 5 }, // not cheaply computable
+        first_follower: { progress: followerCount, target: 1 },
+        influencer: { progress: followerCount, target: 10000 },
+        supporter: { progress: followingCount, target: 100 },
+        conversation_starter: { progress: totalComments, target: 50 },
+        first_post: { progress: posts.length, target: 1 },
+        prolific_creator: { progress: posts.length, target: 100 },
+        spark_master: { progress: sparkCount, target: 50 },
+        storyteller: { progress: storyCount, target: 100 },
+        verified: { progress: null, target: 1 },
+        founder: { progress: null, target: 1 }, // unknown threshold — never claimed
+        premium: { progress: null, target: 1 },
+        year_one: { progress: accountDays, target: 365 },
+      };
+
+      const earned = {
+        first_like: totalLikes >= 1,
+        like_master: totalLikes >= 1000,
+        first_comment: totalComments >= 1,
+        commentator: totalComments >= 500,
+        viral_post: totalViews >= 10000,
+        trendsetter: false,
+        first_follower: followerCount >= 1,
+        influencer: followerCount >= 10000,
+        supporter: followingCount >= 100,
+        conversation_starter: totalComments >= 50,
+        first_post: posts.length >= 1,
+        prolific_creator: posts.length >= 100,
+        spark_master: sparkCount >= 50,
+        storyteller: storyCount >= 100,
+        verified: isVerified,
+        founder: false,
+        premium: isPremium,
+        year_one: accountDays != null && accountDays >= 365,
+      };
+
+      for (const [id, def] of Object.entries(defs)) {
+        result[id] = { earned: earned[id], progress: def.progress, target: def.target };
+      }
+
+      return result;
     } catch (error) {
       logger.error('[RankingService] Failed to get user badges:', error);
-      return [];
+      return {};
     }
+  }
+
+
+  // ==================== BATCHED USER FETCH (kills N+1) ====================
+  // Fetches user docs for many ids with `where('__name__', 'in', chunk)` in
+  // chunks of 30 (Firestore limit) — 1-2 round trips instead of one per user.
+  async _fetchUsersByIds(userIds) {
+    const unique = [...new Set((userIds || []).filter(Boolean))];
+    const users = new Map();
+    if (unique.length === 0) return users;
+    for (let i = 0; i < unique.length; i += 30) {
+      const chunk = unique.slice(i, i + 30);
+      try {
+        const snap = await getDocs(
+          query(collection(this.firestore, 'users'), where('__name__', 'in', chunk))
+        );
+        snap.forEach((d) => users.set(d.id, { id: d.id, ...d.data() }));
+      } catch (err) {
+        logger.warn('[RankingService] batched user fetch failed (chunk skipped):', err.message);
+      }
+    }
+    return users;
   }
 
   // ==================== HELPER METHODS ====================
@@ -514,101 +605,6 @@ class RankingService {
     return badgeIds
       .map((id) => RANKING_CONFIG.BADGES.find((b) => b.id === id))
       .filter(Boolean);
-  }
-
-  // ==================== MOCK DATA FOR DEMO ====================
-  _getMockCreatorRankings(category, offset) {
-    const mockUsers = [
-      { username: 'creator_one', displayName: 'Creative Creator', avatar: null },
-      { username: 'video_master', displayName: 'Video Master', avatar: null },
-      { username: 'content_king', displayName: 'Content King', avatar: null },
-      { username: 'trending_star', displayName: 'Trending Star', avatar: null },
-      { username: 'viral_vibes', displayName: 'Viral Vibes', avatar: null },
-    ];
-
-    return mockUsers.slice(0, RANKING_CONFIG.PAGE_SIZE).map((user, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      const score = (determinValue * 100) + 1000 - offset * 100;
-      return {
-        rank: offset + i + 1,
-        userId: 'user_' + i,
-        user: { ...user, id: 'user_' + i },
-        score,
-        trend: (determinValue % 10) - 5,
-        badge: this._getTier(determinValue * 100),
-      };
-    });
-  }
-
-  _getMockWealthRankings(category, offset) {
-    return this._getMockCreatorRankings(category, offset).map((r, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        ...r,
-        score: (determinValue * 1000) + 10000 - offset * 1000,
-      };
-    });
-  }
-
-  _getMockReputationRankings(category, offset) {
-    return this._getMockCreatorRankings(category, offset).map((r, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        ...r,
-        score: (determinValue * 10) + 100 - offset * 10,
-        badges: RANKING_CONFIG.BADGES.slice(0, (determinValue % 5)),
-      };
-    });
-  }
-
-  _getMockCommunityRankings(category, offset) {
-    const communities = [
-      { name: 'Tech Enthusiasts', description: 'Technology discussion', icon: '💻' },
-      { name: 'Creative Arts', description: 'Art and design community', icon: '🎨' },
-      { name: 'Gaming Hub', description: 'Gaming community', icon: '🎮' },
-      { name: 'Music Lovers', description: 'Music discussion', icon: '🎵' },
-      { name: 'Sports Central', description: 'Sports fans', icon: '⚽' },
-    ];
-
-    return communities.slice(0, RANKING_CONFIG.PAGE_SIZE).map((community, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        rank: offset + i + 1,
-        communityId: 'community_' + i,
-        community,
-        score: (determinValue * 50) + 500 - offset * 50,
-        trend: (determinValue % 10) - 5,
-        members: (determinValue * 100) + 100,
-      };
-    });
-  }
-
-  _getMockTrendingContent(type, offset) {
-    return Array.from({ length: RANKING_CONFIG.PAGE_SIZE }, (_, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        rank: offset + i + 1,
-        id: type + '_' + i,
-        title: 'Trending ' + type + ' #' + (offset + i + 1),
-        type,
-        views: determinValue * 1000,
-        likes: determinValue * 100,
-        comments: determinValue * 10,
-        createdAt: new Date().toISOString(),
-      };
-    });
-  }
-
-  _getMockRisingCreators(offset) {
-    return this._getMockCreatorRankings('growth', offset).map((r, i) => {
-      const determinValue = (Date.now() + i) % 100;
-      return {
-        ...r,
-        growthRate: (determinValue * 5) + 50,
-        previousRank: r.rank + (determinValue % 10) - 5,
-        currentRank: r.rank,
-      };
-    });
   }
 
   // ==================== SERVICE MANAGEMENT ====================

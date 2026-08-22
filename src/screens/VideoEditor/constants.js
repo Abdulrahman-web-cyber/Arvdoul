@@ -82,124 +82,6 @@ export const STICKER_CATEGORIES = [
   }
 ];
 
-export const SAMPLE_PROJECT_MEDIA = {
-  video1: {
-    id: 'clip_vid_1',
-    title: 'Video Clip 1.mp4',
-    trackId: 'track_video_1',
-    trackName: 'Video 1',
-    type: 'video',
-    startTime: 2.4, // seconds
-    duration: 26.1, // seconds
-    trimStart: 2.4,
-    trimEnd: 28.5,
-    speed: 1.0,
-    volume: 1.0,
-    opacity: 1.0,
-    filter: 'cinematic',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
-    fxBadge: 'fx',
-  },
-  video2: {
-    id: 'clip_vid_2',
-    title: 'Video Clip 2.mp4',
-    trackId: 'track_video_2',
-    trackName: 'Video 2',
-    type: 'video',
-    startTime: 20.0,
-    duration: 35.0,
-    trimStart: 0,
-    trimEnd: 35.0,
-    speed: 1.0,
-    volume: 0.8,
-    opacity: 0.9,
-    filter: 'none',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=600&q=80',
-    fxBadge: null,
-  },
-  overlay: {
-    id: 'clip_overlay_1',
-    title: 'Gradient Overlay.png',
-    trackId: 'track_overlay',
-    trackName: 'Overlay',
-    type: 'overlay',
-    startTime: 12.0,
-    duration: 25.0,
-    opacity: 0.85,
-    gradient: 'linear-gradient(135deg, rgba(168,85,247,0.4), rgba(59,130,246,0.3))',
-    thumbnail: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80',
-    fxBadge: 'fx',
-  },
-  text1: {
-    id: 'clip_text_1',
-    title: 'Explore More',
-    text: 'Explore More',
-    trackId: 'track_text',
-    trackName: 'Text',
-    type: 'text',
-    startTime: 10.0,
-    duration: 15.0,
-    x: 50,
-    y: 78,
-    fontSize: 32,
-    fontFamily: 'Plus Jakarta Sans',
-    color: '#ffffff',
-    bgColor: 'rgba(16,185,129,0.25)',
-    borderColor: 'rgba(52,211,153,0.6)',
-    animation: 'fade',
-  },
-  text2: {
-    id: 'clip_text_2',
-    title: 'Adventure Awaits',
-    text: 'Adventure Awaits',
-    trackId: 'track_text',
-    trackName: 'Text',
-    type: 'text',
-    startTime: 28.0,
-    duration: 18.0,
-    x: 50,
-    y: 82,
-    fontSize: 28,
-    fontFamily: 'Plus Jakarta Sans',
-    color: '#ffffff',
-    bgColor: 'rgba(16,185,129,0.25)',
-    borderColor: 'rgba(52,211,153,0.6)',
-    animation: 'slide',
-  },
-  audio1: {
-    id: 'clip_audio_1',
-    title: 'Energetic Pop Beat.mp3',
-    trackId: 'track_audio_1',
-    trackName: 'Audio 1',
-    type: 'audio',
-    startTime: 0,
-    duration: 65.0,
-    volume: 0.85,
-    fadeIn: 1.0,
-    fadeOut: 1.5,
-    color: '#10b981',
-    url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=summer-tropical-beat-112199.mp3',
-    fxBadge: 'fx',
-  },
-  audio2: {
-    id: 'clip_audio_2',
-    title: 'Voice Over.wav',
-    trackId: 'track_audio_2',
-    trackName: 'Audio 2',
-    type: 'audio',
-    startTime: 5.0,
-    duration: 45.0,
-    volume: 1.0,
-    fadeIn: 0.5,
-    fadeOut: 0.5,
-    color: '#3b82f6',
-    url: 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_88447e769f.mp3?filename=voice-clip-14022.mp3',
-    fxBadge: 'fx',
-  }
-};
-
 export const INITIAL_TRACKS = [
   { id: 'track_video_1', name: 'Video 1', type: 'video', visible: true, locked: false, icon: 'Video' },
   { id: 'track_video_2', name: 'Video 2', type: 'video', visible: true, locked: false, icon: 'Video' },
@@ -209,57 +91,15 @@ export const INITIAL_TRACKS = [
   { id: 'track_audio_2', name: 'Audio 2', type: 'audio', visible: true, locked: false, icon: 'Mic' },
 ];
 
-export const INITIAL_LAYERS = [
-  { id: 'layer_1', title: 'Video Clip 1', type: 'video', durationText: '00:28', durationSec: 28, visible: true, locked: false, opacity: 100, thumbnail: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=160&q=80', clipId: 'clip_vid_1' },
-  { id: 'layer_2', title: 'Video Clip 2', type: 'video', durationText: '00:35', durationSec: 35, visible: true, locked: false, opacity: 90, thumbnail: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=160&q=80', clipId: 'clip_vid_2' },
-  { id: 'layer_3', title: 'Text Layer', type: 'text', durationText: '00:05', durationSec: 5, visible: true, locked: false, opacity: 100, icon: 'Type', clipId: 'clip_text_1' },
-  { id: 'layer_4', title: 'Overlay', type: 'overlay', durationText: '00:07', durationSec: 7, visible: true, locked: false, opacity: 85, thumbnail: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=160&q=80', clipId: 'clip_overlay_1' },
-  { id: 'layer_5', title: 'Sticker', type: 'sticker', durationText: '00:03', durationSec: 3, visible: true, locked: false, opacity: 100, icon: 'Star', clipId: null },
-  { id: 'layer_6', title: 'Adjustment', type: 'adjustment', durationText: '00:45', durationSec: 45, visible: true, locked: false, opacity: 100, icon: 'Sliders', clipId: null },
-  { id: 'layer_7', title: 'Music', type: 'audio', durationText: '01:45', durationSec: 105, visible: true, locked: false, opacity: 100, icon: 'Music', clipId: 'clip_audio_1' },
-];
+export const STOCK_VIDEOS = [];
+// The stock-video library is intentionally EMPTY until a licensed media
+// provider (e.g. Pexels/Pixabay API) is configured. Fabricated catalog
+// entries with invented titles over third-party demo files were removed —
+// never present media that does not exist.
 
-export const STOCK_VIDEOS = [
-  {
-    id: 'stock_1',
-    title: 'Sunset Mountain Peak',
-    category: 'Nature',
-    duration: 28,
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: 'stock_2',
-    title: 'Cinematic Ocean Waves',
-    category: 'Nature',
-    duration: 35,
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: 'stock_3',
-    title: 'Neon Cyber City Skyline',
-    category: 'Urban',
-    duration: 24,
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: 'stock_4',
-    title: 'High Altitude Drone Flight',
-    category: 'Aerial',
-    duration: 30,
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
-    thumbnail: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80'
-  }
-];
-
-export const STOCK_AUDIO = [
-  { id: 'audio_pop', title: 'Energetic Pop Beat', duration: '01:45', bpm: 124, genre: 'Electronic / Pop', url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=summer-tropical-beat-112199.mp3' },
-  { id: 'audio_chill', title: 'Midnight Chill Lo-Fi', duration: '02:10', bpm: 85, genre: 'Lo-Fi / Hip Hop', url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=lofi-study-112191.mp3' },
-  { id: 'audio_epic', title: 'Cinematic Epic Horizon', duration: '01:58', bpm: 110, genre: 'Orchestral / Film', url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=epic-cinematic-trailer-111158.mp3' },
-  { id: 'audio_upbeat', title: 'Vibrant Dance Groove', duration: '01:30', bpm: 128, genre: 'Dance / House', url: 'https://cdn.pixabay.com/download/audio/2021/09/06/audio_73229b47e2.mp3?filename=upbeat-dance-pop-112204.mp3' },
-];
+export const STOCK_AUDIO = [];
+// Same policy as STOCK_VIDEOS: no fake royalty-free catalog. The UI shows an
+// honest empty state until a real licensed audio source is wired up.
 
 /**
  * Format total seconds to HH:MM:SS:FF or MM:SS:FF

@@ -1,5 +1,6 @@
 // src/components/Home/PostCard.jsx
 import PropTypes from "prop-types";
+import { toast } from "sonner";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
@@ -16,15 +17,17 @@ import useDoubleTap from "../../hooks/useDoubleTap";
 import SwipableMedia from "./SwipableMedia";
 import BottomMenu from "./BottomMenu";
 import { useAuth } from "../../context/AuthContext";
-import { doc, updateDoc, arrayUnion, increment, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase/firebase.js";
+import { getFirestoreService } from "../../services/firestoreService.js";
+import { getCommentService } from "../../services/commentService.js";
 import CommentsModal from "./CommentsModal"; // <- New modal component
 
 // Advanced reaction emojis
 const REACTIONS = ["❤️", "😂", "😮", "😢", "😡"];
 
 export default function PostCard({ post }) {
-const { user, addCoins } = useAuth();
+const { user } = useAuth();
 const [liked, setLiked] = useState(post.likedBy?.includes(user?.uid) || false);
 const [likesCount, setLikesCount] = useState(post.likesCount || 0);
 const [showMenu, setShowMenu] = useState(false);
@@ -39,12 +42,22 @@ const likeCooldown = useRef(false); // prevent coin spam
 useEffect(() => {
 const postRef = doc(db, "posts", post.id);
 const unsubscribe = onSnapshot(postRef, (docSnap) => {
-if (docSnap.exists()) {
-const data = docSnap.data();
-setLikesCount(data.likesCount || 0);
-setCommentsPreview(data.comments?.slice(0, 3) || []);
-}
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    setLikesCount(data.likesCount || 0);
+  }
 });
+// REAL comment preview from the comment service (flat comments collection)
+getCommentService()
+  .getCommentsByPost(post.id, { nested: false, limit: 3, cacheFirst: true })
+  .then((res) => {
+    if (res.success) {
+      setCommentsPreview(
+        (res.comments || []).map((c) => ({ displayName: c.userName || "User", text: c.content }))
+      );
+    }
+  })
+  .catch(() => {});
 return unsubscribe;
 }, [post.id]);
 
@@ -52,26 +65,30 @@ return unsubscribe;
 const onDoubleTap = useCallback(async () => {
 if (!user || liked) return;
 
-try {  
-  setLiked(true);  
-  setLikesCount((prev) => prev + 1); // Optimistic UI  
+try {
+  setLiked(true);
+  setLikesCount((prev) => prev + 1); // Optimistic UI
 
-  const postRef = doc(db, "posts", post.id);  
-  await updateDoc(postRef, {  
-    likedBy: arrayUnion(user.uid),  
-    likesCount: increment(1),  
-  });  
+  // REAL like through the service: transaction + sharded counters +
+  // author notification + like_received XP (fire-and-forget, never blocks UI).
+  await getFirestoreService().likePost(post.id, user.uid);
 
-  if (!likeCooldown.current) {  
-    likeCooldown.current = true;  
-    await addCoins(1, "like post");  
-    setTimeout(() => { likeCooldown.current = false; }, 3000); // 3s cooldown  
-  }  
-} catch (err) {  
-  console.error("Error liking post:", err);  
+  if (!likeCooldown.current) {
+    likeCooldown.current = true;
+    try {
+      const { getMonetizationService } = await import("../../services/monetizationService.js");
+      await getMonetizationService().addCoins(user.uid, 1, "like", { postId: post.id });
+    } catch (err) { console.warn("Like reward skipped:", err.message); }
+    setTimeout(() => { likeCooldown.current = false; }, 3000); // 3s cooldown
+  }
+} catch (err) {
+  // Roll back the optimistic UI so it never lies
+  setLiked(false);
+  setLikesCount((prev) => Math.max(0, prev - 1));
+  console.error("Error liking post:", err);
 }
 
-}, [user, liked, post.id, addCoins]);
+}, [user, liked, post.id]);
 
 // ---------------- Long Press ----------------
 const onLongPress = () => setShowMenu(true);
@@ -80,34 +97,52 @@ const doubleTap = useDoubleTap(onDoubleTap);
 
 // ---------------- Emoji Reactions ----------------
 const handleReaction = async (emoji) => {
-try {
-const postRef = doc(db, "posts", post.id);
-await updateDoc(postRef, {
-reactions: arrayUnion({ emoji, userId: user.uid }),
-});
-setShowReactions(false);
-await addCoins(1, `react ${emoji}`);
-} catch (err) {
-console.error("Error reacting:", err);
-}
+  if (!user) return;
+  try {
+    // REAL reaction through the service: validates the emoji, toggles
+    // (same emoji removes it), maintains stats.reactions.<emoji> counters.
+    await getFirestoreService().addReaction(post.id, user.uid, emoji);
+    setShowReactions(false);
+    try {
+      const { getMonetizationService } = await import("../../services/monetizationService.js");
+      await getMonetizationService().addCoins(user.uid, 1, "like", { postId: post.id, emoji });
+    } catch (err) { console.warn("Reaction reward skipped:", err.message); }
+  } catch (err) {
+    console.error("Error reacting:", err);
+  }
 };
 
 // ---------------- Comments ----------------
 const handleViewAllComments = () => setShowCommentsModal(true);
 
 // ---------------- Share ----------------
-const handleShare = () => {
-const postUrl = `${window.location.origin}/post/${post.id}`;
-if (navigator.share) {
-navigator.share({
-title: post.displayName,
-text: post.caption,
-url: postUrl,
-});
-} else {
-navigator.clipboard.writeText(postUrl);
-alert("Post link copied!");
-}
+const handleShare = async () => {
+  const postUrl = `${window.location.origin}/post/${post.id}`;
+  try {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      await navigator.share({ title: post.displayName, text: post.caption, url: postUrl });
+      return;
+    }
+    // Fallback: copy to clipboard (guarded - insecure contexts throw)
+    await navigator.clipboard.writeText(postUrl);
+    toast.success("Post link copied!");
+  } catch (err) {
+    if (err?.name === "AbortError") return; // user cancelled native share
+    // Last-resort fallback: manual copy via hidden input
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = postUrl;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      toast.success("Post link copied!");
+    } catch {
+      toast.error("Could not copy link");
+    }
+  }
 };
 
 return (

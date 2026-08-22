@@ -778,35 +778,22 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
 // ======================================================================
 //  14. watermarkVideoInternal (FFmpeg, visible + invisible)
 // ======================================================================
-exports.watermarkVideo = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
-  const { videoId } = req.body;
-  if (!videoId) {
-    res.status(400).json({ error: 'videoId required' });
-    return;
-  }
-
+// onCall variant (the client wires this via httpsCallable — an onRequest
+// endpoint would never work with the callable protocol).
+exports.watermarkVideo = onCall(async (data, context) => {
+  const { videoId } = data || {};
+  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
     const videoRef = db.collection('videos').doc(videoId);
     const doc = await videoRef.get();
-    if (!doc.exists) {
-      res.status(404).json({ error: 'Video not found' });
-      return;
-    }
+    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
     const video = doc.data();
     if (video.watermarkDisabled && video.userId !== 'system') {
-      res.status(200).json({ status: 'skipped' });
-      return;
+      return { status: 'skipped' };
     }
 
     const playbackId = video.muxPlaybackId;
-    if (!playbackId) {
-      res.status(400).json({ error: 'No playbackId' });
-      return;
-    }
+    if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
 
     const sourceUrl = `https://stream.mux.com/${playbackId}/high.mp4`;
     const tempInput = path.join(os.tmpdir(), `${videoId}_input.mp4`);
@@ -831,40 +818,27 @@ exports.watermarkVideo = onRequest(async (req, res) => {
     const signedUrl = await bucket.file(`watermarked/${videoId}.mp4`).getSignedUrl({ action: 'read', expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
 
     await videoRef.update({ watermarkedUrl: signedUrl[0], watermarkedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-    res.status(200).json({ success: true, watermarkedUrl: signedUrl[0] });
+    return { success: true, watermarkedUrl: signedUrl[0] };
   } catch (error) {
     logger.error('watermarkVideo', error);
-    res.status(500).json({ error: error.message });
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
 //  15. moderateVideoInternal (Google Video Intelligence + custom rules)
 // ======================================================================
-exports.moderateVideo = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
-  const { videoId } = req.body;
-  if (!videoId) {
-    res.status(400).json({ error: 'videoId required' });
-    return;
-  }
-
+// onCall variant (client calls via httpsCallable).
+exports.moderateVideo = onCall(async (data, context) => {
+  const { videoId } = data || {};
+  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
     const videoRef = db.collection('videos').doc(videoId);
     const doc = await videoRef.get();
-    if (!doc.exists) {
-      res.status(404).json({ error: 'Video not found' });
-      return;
-    }
+    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
     const video = doc.data();
     const playbackId = video.muxPlaybackId;
-    if (!playbackId) {
-      res.status(400).json({ error: 'No playbackId' });
-      return;
-    }
+    if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
 
     const gcsUri = `gs://${process.env.WATERMARK_BUCKET}/source/${videoId}.mp4`;
     const [operation] = await videoIntelligenceClient.annotateVideo({
@@ -890,60 +864,57 @@ exports.moderateVideo = onRequest(async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
       ...(moderationStatus === 'rejected' && { isDeleted: true, status: 'failed' }),
     });
-    res.status(200).json({ success: true, moderationStatus });
+    return { success: true, moderationStatus };
   } catch (error) {
     logger.error('moderateVideo', error);
-    res.status(500).json({ error: error.message });
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
-//  16. generateAudioFingerprintInternal (Chromaprint stub – real implementation would use FFmpeg)
+//  16. generateAudioFingerprint
+//  Honest implementation: a real acoustic fingerprint requires
+//  ffmpeg + chromaprint. Until that pipeline is configured, the function
+//  records status 'unavailable' and NEVER stores a fabricated hash as an
+//  audio fingerprint (a sha256 of the id is not a fingerprint).
 // ======================================================================
-exports.generateAudioFingerprint = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
-  const { videoId } = req.body;
-  if (!videoId) {
-    res.status(400).json({ error: 'videoId required' });
-    return;
-  }
-
+exports.generateAudioFingerprint = onCall(async (data, context) => {
+  const { videoId } = data || {};
+  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
-    // In production, use ffmpeg + chromaprint to extract fingerprint.
-    // For now, generate a deterministic hash from videoId.
-    const fingerprint = crypto.createHash('sha256').update(videoId).digest('hex').substring(0, 32);
-    await db.collection('videos').doc(videoId).update({ audioFingerprint: fingerprint, updatedAt: FieldValue.serverTimestamp() });
-    res.status(200).json({ success: true, fingerprint });
+    const videoRef = db.collection('videos').doc(videoId);
+    const doc = await videoRef.get();
+    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+
+    const fingerprintPipelineConfigured = false; // flip when chromaprint is wired
+    if (!fingerprintPipelineConfigured) {
+      await videoRef.update({
+        audioFingerprint: null,
+        audioFingerprintStatus: 'unavailable',
+        audioFingerprintNote: 'Acoustic fingerprinting requires the ffmpeg/chromaprint pipeline (not configured)',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { success: false, status: 'unavailable', reason: 'chromaprint pipeline not configured' };
+    }
+
+    return { success: true, status: 'pending' };
   } catch (error) {
     logger.error('generateAudioFingerprint', error);
-    res.status(500).json({ error: error.message });
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
 // ======================================================================
 //  17. updateViralScore (compute viralScore based on velocity)
 // ======================================================================
-exports.updateViralScore = onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
-  const { videoId } = req.body;
-  if (!videoId) {
-    res.status(400).json({ error: 'videoId required' });
-    return;
-  }
-
+// onCall variant (client calls via httpsCallable).
+exports.updateViralScore = onCall(async (data, context) => {
+  const { videoId } = data || {};
+  if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
     const videoRef = db.collection('videos').doc(videoId);
     const doc = await videoRef.get();
-    if (!doc.exists) {
-      res.status(404).json({ error: 'Video not found' });
-      return;
-    }
+    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
     const video = doc.data();
     const stats = video.stats || {};
     const views = stats.views || 0;
@@ -959,10 +930,10 @@ exports.updateViralScore = onRequest(async (req, res) => {
 
     const viralScore = (viewsVelocity * 0.35) + (sharesVelocity * 0.25) + (completionRate * 0.25) + (likeRatio * 0.15);
     await videoRef.update({ viralScore: Math.min(1000, viralScore), updatedAt: FieldValue.serverTimestamp() });
-    res.status(200).json({ success: true, viralScore });
+    return { success: true, viralScore };
   } catch (error) {
     logger.error('updateViralScore', error);
-    res.status(500).json({ error: error.message });
+    throw new functions.https.HttpsError('internal', error.message);
   }
 });
 
