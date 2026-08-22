@@ -3,18 +3,18 @@
  * Arvdoul — Ultra Pro IntroScreen (enhanced)
  *
  * Hardened per the zero-mock / production mandates:
- *  - NO fabricated statistics: the previous "10M+ users / 99.99% uptime"
- *    claims were removed. The stats grid is replaced with HONEST product
+ *  - NO fabricated statistics: the stats grid displays HONEST product
  *    pillars (E2EE, privacy-by-design, creator-first, real-time) that are
  *    actually true of the platform.
  *  - Full i18n: every user-facing string comes from the `intro.*` namespace
  *    (7 locales). The error boundary is translated via the withLanguage HOC.
- *  - Reduced motion respected: particles animation and the button shine
+ *  - Reduced motion respected: particles animation, background mesh orbs, and button shine
  *    effect are disabled when prefers-reduced-motion is active (in addition
  *    to the global MotionConfig + tokens.css kill-switch).
  *  - Accessibility: keyboard focus on feature cards, aria-hidden decorative
  *    emojis, aria-live welcome region, focus-visible rings on buttons.
- *  - Dead code removed (unused isMobile state, empty cleanup).
+ *  - Glassmorphic DNA: luxurious neon glow rings, background ambient multi-mesh gradient,
+ *    and smooth animations.
  *  - NAVIGATION PATHS MATCH AppRoutes.jsx EXACTLY (/signup, /login, /).
  */
 
@@ -37,14 +37,17 @@ import {
 } from "framer-motion";
 import { withLanguage } from "../i18n/index.js";
 
-/* -------------------- Safe reduced-motion hook --------------------
- * Equivalent semantics to framer-motion's useReducedMotion (respects the
- * OS prefers-reduced-motion setting) but implemented WITHOUT relying on
- * framer-motion's internal window.matchMedia call - a missing matchMedia
- * in embedded webviews used to crash the intro into its error boundary
- * ("Temporary Glitch"). The global polyfill in index.html/main.jsx covers
- * the API; this hook is the component-level belt-and-braces guard.
- */
+/* -------------------- Cryptographically Secure PRNG for SonarCloud Compliance -------------------- */
+function secureRandom() {
+  if (typeof window !== "undefined" && window.crypto && typeof window.crypto.getRandomValues === "function") {
+    const arr = new Uint32Array(1);
+    window.crypto.getRandomValues(arr);
+    return arr[0] / 4294967296;
+  }
+  return 0.5;
+}
+
+/* -------------------- Safe reduced-motion hook -------------------- */
 function useSafeReducedMotion() {
   const [reduced, setReduced] = useState(false);
 
@@ -106,8 +109,6 @@ class IntroErrorBoundary extends Component {
   }
   componentDidCatch(error, errorInfo) {
     console.error("[Arvdoul Intro Error]:", error, errorInfo);
-    // Diagnostics: persist the real cause so it can be triaged instead of
-    // guessing at "Temporary Glitch". Never stores user data - message+stack only.
     try {
       localStorage.setItem(
         "arvdoul_intro_error",
@@ -117,12 +118,8 @@ class IntroErrorBoundary extends Component {
           at: new Date().toISOString(),
         })
       );
-    } catch {
-      /* storage may be blocked - ignore */
-    }
+    } catch {}
 
-    // Self-healing: the FIRST crash auto-retries once after a short delay
-    // (transient issues - e.g. fonts, matchMedia timing - resolve themselves).
     if (!this.state.autoRecovered) {
       this._autoRetryTimer = setTimeout(() => {
         this.setState({ hasError: false, error: null, autoRecovered: true });
@@ -135,9 +132,7 @@ class IntroErrorBoundary extends Component {
   handleContinue = () => {
     try {
       window.location.href = "/home";
-    } catch {
-      /* noop */
-    }
+    } catch {}
   };
   render() {
     const { t } = this.props;
@@ -145,7 +140,7 @@ class IntroErrorBoundary extends Component {
       return (
         <div
           role="alert"
-          className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950"
+          className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-[#03071B] dark:to-[#080F2E]"
         >
           <div className="max-w-md text-center p-8 rounded-2xl bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl shadow-2xl border border-gray-100 dark:border-gray-700">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-red-100 to-pink-100 dark:from-red-900/30 dark:to-pink-900/30 flex items-center justify-center">
@@ -166,7 +161,7 @@ class IntroErrorBoundary extends Component {
             <div className="flex flex-col gap-2.5 sm:flex-row justify-center">
               <button
                 onClick={() => this.setState({ hasError: false, error: null, autoRecovered: true })}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:shadow-lg transition-all duration-300 min-h-[44px]"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white font-medium hover:shadow-lg transition-all duration-300 min-h-[44px]"
               >
                 {t("intro.retry")}
               </button>
@@ -186,7 +181,66 @@ class IntroErrorBoundary extends Component {
 }
 const IntroErrorBoundaryTranslated = withLanguage(IntroErrorBoundary);
 
-/* -------------------- Advanced Background Particles -------------------- */
+/* -------------------- Animated Mesh Gradient Background -------------------- */
+const AnimatedMeshBackground = memo(() => {
+  const prefersReducedMotion = useSafeReducedMotion();
+
+  if (prefersReducedMotion) return null;
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">
+      {/* Top Left Neon Purple Orb */}
+      <motion.div
+        animate={{
+          x: [0, 40, -20, 0],
+          y: [0, -50, 20, 0],
+          scale: [1, 1.2, 0.95, 1],
+        }}
+        transition={{
+          duration: 18,
+          repeat: Infinity,
+          repeatType: "mirror",
+          ease: "easeInOut",
+        }}
+        className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-[120px] opacity-40 dark:opacity-35 bg-gradient-to-br from-[#8B1EF3] to-[#4431F7]"
+      />
+
+      {/* Bottom Right Neon Blue/Cyan Orb */}
+      <motion.div
+        animate={{
+          x: [0, -40, 30, 0],
+          y: [0, 40, -30, 0],
+          scale: [1, 1.25, 0.9, 1],
+        }}
+        transition={{
+          duration: 22,
+          repeat: Infinity,
+          repeatType: "mirror",
+          ease: "easeInOut",
+        }}
+        className="absolute -bottom-32 -right-32 w-[30rem] h-[30rem] rounded-full blur-[140px] opacity-35 dark:opacity-30 bg-gradient-to-tr from-[#055BFB] to-[#0088FF]"
+      />
+
+      {/* Center Glow Fuchsia Accent Orb */}
+      <motion.div
+        animate={{
+          x: [-20, 20, -20],
+          y: [20, -20, 20],
+          scale: [0.9, 1.1, 0.9],
+        }}
+        transition={{
+          duration: 15,
+          repeat: Infinity,
+          repeatType: "mirror",
+          ease: "easeInOut",
+        }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] h-[24rem] rounded-full blur-[150px] opacity-25 dark:opacity-20 bg-gradient-to-r from-[#C82BFF] to-[#8B1EF3]"
+      />
+    </div>
+  );
+});
+
+/* -------------------- Background Particles -------------------- */
 const BackgroundParticles = memo(({ theme }) => {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -198,9 +252,6 @@ const BackgroundParticles = memo(({ theme }) => {
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-    // getContext('2d') can legitimately return null (canvas fingerprinting
-    // blocked in privacy browsers / WebViews). Never crash - just skip the
-    // decorative particles layer.
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     let width = window.innerWidth;
@@ -215,21 +266,20 @@ const BackgroundParticles = memo(({ theme }) => {
     };
 
     const initParticles = () => {
-      // Reduced motion: fewer, static particles (no continuous animation).
       const particleCount = prefersReducedMotion
         ? 0
-        : Math.min(40, Math.floor(width / 40));
-      particlesRef.current = Array.from({ length: particleCount }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        size: Math.random() * 2 + 1,
-        speedX: (Math.random() - 0.5) * 0.3,
-        speedY: (Math.random() - 0.5) * 0.3,
-        opacity: Math.random() * 0.15 + 0.05,
+        : Math.min(45, Math.floor(width / 35));
+      particlesRef.current = Array.from({ length: particleCount }, () => ({
+        x: secureRandom() * width,
+        y: secureRandom() * height,
+        size: secureRandom() * 2.5 + 1,
+        speedX: (secureRandom() - 0.5) * 0.35,
+        speedY: (secureRandom() - 0.5) * 0.35,
+        opacity: secureRandom() * 0.18 + 0.05,
         color:
           theme === "dark"
-            ? `rgba(59, 130, 246, ${Math.random() * 0.1 + 0.05})`
-            : `rgba(99, 102, 241, ${Math.random() * 0.08 + 0.03})`,
+            ? `rgba(139, 30, 243, ${secureRandom() * 0.12 + 0.05})`
+            : `rgba(68, 49, 247, ${secureRandom() * 0.09 + 0.03})`,
       }));
     };
 
@@ -270,13 +320,13 @@ const BackgroundParticles = memo(({ theme }) => {
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ opacity: theme === "dark" ? 0.25 : 0.12 }}
+      className="absolute inset-0 w-full h-full pointer-events-none z-0"
+      style={{ opacity: theme === "dark" ? 0.3 : 0.15 }}
     />
   );
 });
 
-/* -------------------- PERFECT CENTERED LOGO -------------------- */
+/* -------------------- PERFECT CENTERED LOGO WITH NEON RING -------------------- */
 const HeroLogo = memo(({ theme, onClick }) => {
   const [logoError, setLogoError] = useState(false);
   const resolvedTheme = useMemo(() => {
@@ -299,14 +349,14 @@ const HeroLogo = memo(({ theme, onClick }) => {
       initial={{ scale: 0, rotate: -180 }}
       animate={{ scale: 1, rotate: 0 }}
       transition={{ type: "spring", stiffness: 200, damping: 20 }}
-      className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center shadow-2xl overflow-hidden cursor-pointer"
+      className="relative w-28 h-28 mx-auto mb-6 p-1 rounded-full bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] shadow-2xl shadow-purple-500/30 overflow-hidden cursor-pointer"
       onClick={onClick}
-      whileHover={{ scale: 1.05 }}
+      whileHover={{ scale: 1.08 }}
       whileTap={{ scale: 0.95 }}
       role="img"
       aria-label="Arvdoul"
     >
-      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/10">
+      <div className="w-full h-full rounded-full overflow-hidden bg-[#03071B]/90 dark:bg-[#03071B] flex items-center justify-center p-2 backdrop-blur-md">
         <img
           src={logoPath}
           alt="Arvdoul Logo"
@@ -317,8 +367,8 @@ const HeroLogo = memo(({ theme, onClick }) => {
           }}
         />
         {logoError && (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-purple-500">
-            <span className="text-2xl font-bold text-white" aria-hidden="true">
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] rounded-full">
+            <span className="text-3xl font-black text-white tracking-widest" aria-hidden="true">
               A
             </span>
           </div>
@@ -333,8 +383,6 @@ const FeatureCard = memo(({ emoji, title, description, index, theme, isActive, o
   const [isHovered, setIsHovered] = useState(false);
   const cardRef = useRef(null);
 
-  // Keyboard parity: focus behaves like hover so keyboard users see the
-  // same affordances as pointer users.
   const activate = useCallback(() => {
     setIsHovered(true);
     onHover?.(index);
@@ -358,55 +406,48 @@ const FeatureCard = memo(({ emoji, title, description, index, theme, isActive, o
       tabIndex={0}
       role="group"
       aria-label={title}
-      className="relative cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-950 rounded-xl"
+      className="relative cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#03071B] rounded-2xl h-full"
     >
-      {/* Main card with responsive padding */}
       <div
-        className={`relative rounded-xl p-4 sm:p-5 md:p-6 transition-all duration-300 ${
+        className={`relative rounded-2xl p-5 sm:p-6 transition-all duration-300 h-full flex flex-col justify-between ${
           theme === "dark"
-            ? "bg-gray-900/80 backdrop-blur-sm border border-gray-800/50"
-            : "bg-white/90 backdrop-blur-sm border border-gray-200/60"
-        } ${isHovered ? "shadow-xl" : "shadow-lg"} hover:shadow-2xl`}
+            ? "bg-[#080F2E]/70 backdrop-blur-xl border border-white/10"
+            : "bg-white/80 backdrop-blur-xl border border-black/5"
+        } ${isHovered ? "shadow-2xl shadow-purple-500/10 border-purple-500/30" : "shadow-lg"}`}
       >
-        {/* Emoji container */}
-        <div className="relative mb-3 sm:mb-4">
-          <div className="text-2xl sm:text-3xl mb-1 sm:mb-2" aria-hidden="true">
-            {emoji}
+        <div>
+          <div className="relative mb-3 flex items-center justify-between">
+            <div className="text-3xl sm:text-4xl" aria-hidden="true">
+              {emoji}
+            </div>
+            <div
+              aria-hidden="true"
+              className="w-2 h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 animate-pulse"
+            />
           </div>
-          <div
-            aria-hidden="true"
-            className="absolute -top-1 -right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-gradient-to-r from-green-400 to-emerald-400 animate-pulse"
-          />
-        </div>
 
-        {/* Title - h3 keeps heading order (h1 hero → h2 sections → h3 cards) */}
-        <h3 className="font-bold text-base sm:text-lg md:text-lg mb-2 sm:mb-3">
-          <span
-            className={`bg-clip-text text-transparent bg-gradient-to-r ${
-              theme === "dark" ? "from-blue-300 to-purple-300" : "from-blue-600 to-purple-600"
+          <h3 className="font-bold text-base sm:text-lg mb-2">
+            <span
+              className={`bg-clip-text text-transparent bg-gradient-to-r ${
+                theme === "dark" ? "from-white via-purple-200 to-blue-200" : "from-gray-900 via-purple-900 to-blue-900"
+              }`}
+            >
+              {title}
+            </span>
+          </h3>
+
+          <p
+            className={`text-xs sm:text-sm leading-relaxed ${
+              theme === "dark" ? "text-gray-300/90" : "text-gray-600/90"
             }`}
           >
-            {title}
-          </span>
-        </h3>
+            {description}
+          </p>
+        </div>
 
-        {/* Description */}
-        <p
-          className={`text-xs sm:text-sm md:text-sm leading-relaxed ${
-            theme === "dark" ? "text-gray-300/90" : "text-gray-700/90"
-          }`}
-        >
-          {description}
-        </p>
-
-        {/* Animated underline */}
         <motion.div
           aria-hidden="true"
-          className={`absolute bottom-3 sm:bottom-4 left-4 sm:left-6 right-4 sm:right-6 h-0.5 rounded-full ${
-            theme === "dark"
-              ? "bg-gradient-to-r from-blue-400/70 to-purple-400/70"
-              : "bg-gradient-to-r from-blue-500/70 to-purple-500/70"
-          }`}
+          className="mt-4 h-0.5 rounded-full bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: isHovered || isActive ? 1 : 0 }}
           transition={{ duration: 0.3 }}
@@ -416,23 +457,21 @@ const FeatureCard = memo(({ emoji, title, description, index, theme, isActive, o
   );
 });
 
-/* -------------------- Perfect Button Component (accessible) -------------------- */
+/* -------------------- Action Button Component (accessible) -------------------- */
 const ActionButton = memo(({ children, onClick, variant = "primary", theme, className = "", disabled = false }) => {
   const [isHovered, setIsHovered] = useState(false);
   const prefersReducedMotion = useSafeReducedMotion();
 
   const baseStyles =
-    "relative px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-semibold transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
+    "relative px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl font-bold transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 overflow-hidden shadow-lg";
 
   const variants = {
     primary:
-      theme === "dark"
-        ? "bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl hover:shadow-blue-500/25"
-        : "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl hover:shadow-purple-500/30",
+      "bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-purple-500/25 hover:shadow-2xl hover:shadow-purple-500/40",
     secondary:
       theme === "dark"
-        ? "bg-gray-800/70 text-gray-200 border border-gray-700/50 hover:bg-gray-700/70 hover:border-gray-600/50"
-        : "bg-white/90 text-gray-800 border border-gray-300/60 hover:bg-gray-50/90 hover:border-gray-400/60",
+        ? "bg-[#080F2E]/80 text-white border border-white/15 hover:bg-white/10 hover:border-white/30"
+        : "bg-white/90 text-gray-900 border border-black/10 hover:bg-gray-100 hover:border-black/20",
   };
 
   return (
@@ -446,17 +485,16 @@ const ActionButton = memo(({ children, onClick, variant = "primary", theme, clas
       aria-disabled={disabled || undefined}
       className={`${baseStyles} ${variants[variant]} ${className}`}
     >
-      {/* Shine effect (disabled under reduced motion) */}
-      {!prefersReducedMotion && (
+      {!prefersReducedMotion && variant === "primary" && (
         <motion.div
           aria-hidden="true"
-          className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/20 to-transparent"
+          className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-white/25 to-transparent"
           initial={{ x: "-100%" }}
           animate={{ x: isHovered ? "100%" : "-100%" }}
           transition={{ duration: 0.6 }}
         />
       )}
-      <span className="relative z-10 text-sm sm:text-base">{children}</span>
+      <span className="relative z-10 text-sm sm:text-base tracking-wide">{children}</span>
     </motion.button>
   );
 });
@@ -492,7 +530,6 @@ function IntroScreen() {
     return theme || "light";
   }, [theme]);
 
-  // Background style - matching exact Arvdoul DNA tokens
   const backgroundStyle = useMemo(
     () => ({
       background:
@@ -507,7 +544,6 @@ function IntroScreen() {
     setMounted(true);
   }, []);
 
-  // Enhanced scroll handler with debounce
   const updateScrollProgress = useCallback(() => {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
     const docHeight = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1);
@@ -523,7 +559,6 @@ function IntroScreen() {
     return () => window.removeEventListener("scroll", debouncedScroll);
   }, [debouncedScroll]);
 
-  // HONEST feature list - every claim below is a real platform capability.
   const features = useMemo(
     () => [
       { emoji: "✨", title: t("intro.features.smartFeed.title"), description: t("intro.features.smartFeed.desc") },
@@ -536,7 +571,6 @@ function IntroScreen() {
     [t]
   );
 
-  // Honest product pillars (replaces the fabricated user-count statistics).
   const pillars = useMemo(
     () => [
       { emoji: "🔐", title: t("intro.pillars.e2ee.title"), description: t("intro.pillars.e2ee.desc") },
@@ -549,12 +583,12 @@ function IntroScreen() {
 
   if (!mounted) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
+      <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-[#03071B] dark:to-[#080F2E]">
         <div className="text-center space-y-4">
           <div className="relative">
-            <div className="w-16 h-16 rounded-full border-4 border-gray-200 dark:border-gray-700 border-t-blue-500 dark:border-t-blue-400 animate-spin" />
+            <div className="w-16 h-16 rounded-full border-4 border-gray-200 dark:border-gray-800 border-t-[#8B1EF3] dark:border-t-[#8B1EF3] animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-400 to-purple-400 animate-pulse" />
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] animate-pulse" />
             </div>
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
@@ -567,7 +601,7 @@ function IntroScreen() {
 
   return (
     <div className="relative w-full min-h-screen overflow-hidden safe-area-bottom" style={backgroundStyle}>
-      {/* Advanced Background Particles (disabled under reduced motion) */}
+      <AnimatedMeshBackground />
       <BackgroundParticles theme={resolvedTheme} />
 
       {/* Theme Toggle - Fixed top right */}
@@ -580,15 +614,15 @@ function IntroScreen() {
         <ThemeToggle
           variant="icon"
           size="lg"
-          className="hover:scale-110 transition-transform duration-200 bg-white/10 dark:bg-gray-800/50 backdrop-blur-sm border border-white/20 dark:border-gray-700/50 shadow-xl"
+          className="hover:scale-110 transition-transform duration-200 bg-white/10 dark:bg-white/10 backdrop-blur-md border border-white/20 dark:border-white/15 shadow-2xl"
         />
       </motion.div>
 
-      {/* Main Content */}
+      {/* Main Content Container */}
       <div className="relative z-10 container mx-auto px-4 sm:px-6">
-        {/* Hero Section */}
-        <section className="pt-12 sm:pt-16 pb-12 sm:pb-20">
+        <section className="pt-12 sm:pt-16 pb-16 sm:pb-24">
           <div className="max-w-6xl mx-auto">
+            {/* Hero Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -597,15 +631,14 @@ function IntroScreen() {
             >
               <HeroLogo theme={theme} onClick={() => navigate("/")} />
 
-              {/* Brand Name */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="mb-2"
+                className="mb-3"
               >
                 <h2
-                  className={`font-extrabold text-3xl sm:text-4xl tracking-tight ${
+                  className={`font-black text-3xl sm:text-4xl md:text-5xl tracking-tight ${
                     resolvedTheme === "dark" ? "text-white" : "text-gray-900"
                   }`}
                 >
@@ -613,16 +646,12 @@ function IntroScreen() {
                 </h2>
               </motion.div>
 
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight tracking-tight mb-4 sm:mb-6">
+              <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-6">
                 <span className={`block ${resolvedTheme === "dark" ? "text-white" : "text-gray-900"}`}>
                   {t("intro.title1")}
                 </span>
                 <span
-                  className={`block bg-clip-text text-transparent bg-gradient-to-r ${
-                    resolvedTheme === "dark"
-                      ? "from-blue-300 via-purple-300 to-pink-300"
-                      : "from-blue-600 via-purple-600 to-pink-500"
-                  }`}
+                  className="block bg-clip-text text-transparent bg-gradient-to-r from-[#8B1EF3] via-[#C82BFF] to-[#055BFB]"
                 >
                   {t("intro.title2")}
                 </span>
@@ -632,7 +661,7 @@ function IntroScreen() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className={`text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-8 sm:mb-12 leading-relaxed ${
+                className={`text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed ${
                   resolvedTheme === "dark" ? "text-gray-300" : "text-gray-700"
                 }`}
               >
@@ -640,12 +669,12 @@ function IntroScreen() {
               </motion.p>
             </motion.div>
 
-            {/* Honest Pillars Grid - replaces fabricated statistics */}
+            {/* Honest Pillars Grid */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-12 md:mb-16"
+              className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12 sm:mb-16"
             >
               {pillars.map((pillar, index) => (
                 <motion.div
@@ -653,26 +682,22 @@ function IntroScreen() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.1 * index }}
-                  className={`p-3 sm:p-4 md:p-5 rounded-xl backdrop-blur-sm ${
+                  className={`p-4 sm:p-5 rounded-2xl backdrop-blur-xl ${
                     resolvedTheme === "dark"
-                      ? "bg-gray-900/50 border border-gray-800/50"
-                      : "bg-white/80 border border-gray-200/60"
+                      ? "bg-[#080F2E]/60 border border-white/10 shadow-xl"
+                      : "bg-white/80 border border-black/5 shadow-lg"
                   }`}
                 >
-                  <div aria-hidden="true" className="text-lg sm:text-xl md:text-2xl mb-1">
+                  <div aria-hidden="true" className="text-2xl sm:text-3xl mb-2">
                     {pillar.emoji}
                   </div>
                   <div
-                    className={`text-sm sm:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r ${
-                      resolvedTheme === "dark"
-                        ? "from-blue-300 to-purple-300"
-                        : "from-blue-600 to-purple-600"
-                    }`}
+                    className="text-sm sm:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#8B1EF3] to-[#055BFB]"
                   >
                     {pillar.title}
                   </div>
                   <div className={`text-xs mt-1 leading-relaxed ${
-                    resolvedTheme === "dark" ? "text-gray-400" : "text-gray-500"
+                    resolvedTheme === "dark" ? "text-gray-400" : "text-gray-600"
                   }`}>
                     {pillar.description}
                   </div>
@@ -681,19 +706,19 @@ function IntroScreen() {
             </motion.div>
 
             {/* Features Grid */}
-            <div className="mb-12 sm:mb-16 md:mb-20">
+            <div className="mb-16 sm:mb-20">
               <motion.h2
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
-                className={`text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-8 sm:mb-12 ${
+                className={`text-2xl sm:text-3xl md:text-4xl font-extrabold text-center mb-10 ${
                   resolvedTheme === "dark" ? "text-white" : "text-gray-900"
                 }`}
               >
                 {t("intro.featuresTitle")}
               </motion.h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                 {features.map((feature, index) => (
                   <div key={feature.title} className="h-full">
                     <FeatureCard
@@ -713,48 +738,46 @@ function IntroScreen() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className={`rounded-2xl p-6 sm:p-8 md:p-10 backdrop-blur-sm ${
+              className={`rounded-3xl p-8 sm:p-12 backdrop-blur-2xl relative overflow-hidden ${
                 resolvedTheme === "dark"
-                  ? "bg-gray-900/50 border border-gray-800/50"
-                  : "bg-white/80 border border-gray-200/60"
+                  ? "bg-[#080F2E]/80 border border-white/15 shadow-2xl shadow-purple-500/10"
+                  : "bg-white/90 border border-black/10 shadow-2xl"
               }`}
             >
-              <div className="max-w-2xl mx-auto text-center">
+              <div className="max-w-2xl mx-auto text-center relative z-10">
                 <h3
-                  className={`text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4 ${
+                  className={`text-2xl sm:text-3xl md:text-4xl font-extrabold mb-4 ${
                     resolvedTheme === "dark" ? "text-white" : "text-gray-900"
                   }`}
                 >
                   {t("intro.ctaTitle")}
                 </h3>
                 <p
-                  className={`text-sm sm:text-base md:text-lg mb-6 sm:mb-8 ${
+                  className={`text-base sm:text-lg mb-8 ${
                     resolvedTheme === "dark" ? "text-gray-300" : "text-gray-700"
                   }`}
                 >
                   {t("intro.ctaText")}
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4">
-                  {/* MATCHES AppRoutes: /signup */}
-                  <div className="flex-1 sm:flex-none">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-4 max-w-md mx-auto">
+                  <div className="flex-1">
                     <ActionButton
                       onClick={() => navigate("/signup")}
                       variant="primary"
                       theme={resolvedTheme}
-                      className="h-full"
+                      className="w-full"
                     >
                       {t("intro.createAccount")}
                     </ActionButton>
                   </div>
 
-                  {/* MATCHES AppRoutes: /login */}
-                  <div className="flex-1 sm:flex-none">
+                  <div className="flex-1">
                     <ActionButton
                       onClick={() => navigate("/login")}
                       variant="secondary"
                       theme={resolvedTheme}
-                      className="h-full"
+                      className="w-full"
                     >
                       {t("intro.signIn")}
                     </ActionButton>
@@ -762,7 +785,7 @@ function IntroScreen() {
                 </div>
 
                 <p
-                  className={`text-xs sm:text-sm mt-4 sm:mt-6 ${
+                  className={`text-xs sm:text-sm mt-6 ${
                     resolvedTheme === "dark" ? "text-gray-400" : "text-gray-500"
                   }`}
                 >
@@ -773,42 +796,42 @@ function IntroScreen() {
           </div>
         </section>
 
-        {/* Advanced Scroll Progress */}
+        {/* Scroll Progress Bar */}
         <AnimatePresence>
           {scrollProgress > 0 && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.3 }}
-              className="fixed bottom-4 sm:bottom-6 left-1/2 transform -translate-x-1/2 z-40"
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40"
             >
               <div
-                className={`px-3 sm:px-4 py-2 rounded-full backdrop-blur-md ${
+                className={`px-4 py-2 rounded-full backdrop-blur-xl ${
                   resolvedTheme === "dark"
-                    ? "bg-gray-900/70 border border-gray-800/50"
-                    : "bg-white/80 border border-gray-200/60"
-                } shadow-lg`}
+                    ? "bg-[#080F2E]/80 border border-white/15"
+                    : "bg-white/90 border border-black/10"
+                } shadow-2xl`}
                 role="progressbar"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(scrollProgress * 100)}
                 aria-label="Page scroll progress"
               >
-                <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-24 sm:w-32 h-1 sm:h-1.5 rounded-full overflow-hidden ${
-                      resolvedTheme === "dark" ? "bg-gray-800/50" : "bg-gray-300/50"
+                    className={`w-28 sm:w-36 h-1.5 rounded-full overflow-hidden ${
+                      resolvedTheme === "dark" ? "bg-gray-800" : "bg-gray-200"
                     }`}
                   >
                     <motion.div
-                      className="h-full bg-gradient-to-r from-blue-400 to-purple-400"
+                      className="h-full bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB]"
                       style={{ width: `${scrollProgress * 100}%` }}
                       transition={{ type: "spring", damping: 20 }}
                     />
                   </div>
                   <span
-                    className={`text-xs sm:text-sm font-medium ${
+                    className={`text-xs font-bold ${
                       resolvedTheme === "dark" ? "text-gray-300" : "text-gray-700"
                     }`}
                   >
@@ -821,31 +844,23 @@ function IntroScreen() {
         </AnimatePresence>
       </div>
 
-      {/* Accessibility */}
       <div className="sr-only" aria-live="polite">
         {t("intro.srWelcome")}
       </div>
 
-      {/* Mobile-safe CSS */}
       <style>{`
         .safe-area-bottom {
           padding-bottom: env(safe-area-inset-bottom, 20px);
         }
-
-        /* Prevent zoom on mobile */
         @media screen and (max-width: 768px) {
           input, textarea {
             font-size: 16px !important;
           }
         }
-
-        /* Better touch targets */
         .touch-target {
-          min-height: 44px;
-          min-width: 44px;
+          min-height: 48px;
+          min-width: 48px;
         }
-
-        /* Smooth transitions */
         * {
           -webkit-tap-highlight-color: transparent;
         }

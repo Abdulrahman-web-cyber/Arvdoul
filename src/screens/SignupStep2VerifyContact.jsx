@@ -531,7 +531,11 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
     setError(null);
     try {
       const result = await auth.signInWithGoogle();
-      if (result.success) {
+      if (result?.redirecting) {
+        toast.info("Redirecting to Google Sign-In...");
+        return;
+      }
+      if (result?.success) {
         toast.success("Google authentication successful!");
         onSuccess(result);
       } else {
@@ -835,21 +839,26 @@ export default function SignupStep2VerifyContact() {
       triggerShake();
       return;
     }
-    if (!recaptchaReady || !recaptchaVerifier) {
-      toast.error("Security check not ready.");
-      navigationLock.current = false;
-      setPhoneLoading(false);
-      triggerShake();
-      return;
+    let verifier = recaptchaVerifier;
+    if (!verifier) {
+      try {
+        verifier = await auth.createRecaptchaVerifier('signup-recaptcha-container');
+        setRecaptchaVerifier(verifier);
+        setRecaptchaReady(true);
+      } catch (rErr) {
+        toast.error("Security check failed. Please refresh or try again.");
+        navigationLock.current = false;
+        setPhoneLoading(false);
+        triggerShake();
+        return;
+      }
     }
     try {
-      const result = await auth.sendPhoneVerificationCode(phoneToUse, recaptchaVerifier);
+      const result = await auth.sendPhoneVerificationCode(phoneToUse, verifier);
       if (!result.success) throw new Error(result.error || "Failed to send code");
       const verificationData = { verificationId: result.verificationId, phoneNumber: result.phoneNumber, method: "phone", isSignup: true, step1Data, timestamp: Date.now() };
-      localStorage.setItem('phone_verification', JSON.stringify(verificationData));
       sessionStorage.setItem('phone_verification', JSON.stringify(verificationData));
       const signupData = { ...step1Data, phoneNumber: result.phoneNumber, contactMethod: "phone", verificationId: result.verificationId, authProvider: 'phone', requiresProfileCompletion: true, isNewUser: true };
-      localStorage.setItem('signup_data', JSON.stringify(signupData));
       sessionStorage.setItem('signup_data', JSON.stringify(signupData));
       toast.success(`✅ Code sent to ${result.phoneNumber}`);
       navigate("/otp-verification", { state: { verificationId: result.verificationId, phoneNumber: result.phoneNumber, isSignup: true, method: "phone", step1Data }, replace: true });
@@ -931,7 +940,7 @@ export default function SignupStep2VerifyContact() {
 
   const isFormValid = useMemo(() => {
     switch (method) {
-      case 'phone': return phoneNumber && isPhoneValid && !errors.phone && !phoneLoading && recaptchaReady;
+      case 'phone': return phoneNumber && isPhoneValid && !errors.phone && !phoneLoading;
       case 'email': return emailForm.email && emailForm.password && emailForm.confirmPassword && emailForm.password === emailForm.confirmPassword && !errors.email && !errors.password && !errors.confirmPassword;
       case 'google': return true;
       default: return false;

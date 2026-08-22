@@ -36,8 +36,8 @@ describe('design tokens - structure', () => {
 
   test('brand identity includes the signature gradient', () => {
     expect(tokens.color.brand.gradient).toContain('linear-gradient');
-    expect(tokens.color.brand.gradient).toContain('#8B5CF6'); // violet
-    expect(tokens.color.brand.gradient).toContain('#22D3EE'); // cyan
+    expect(tokens.color.brand.gradient).toContain('#8B1EF3'); // violet
+    expect(tokens.color.brand.gradient).toContain('#055BFB'); // blue
   });
 
   test('spacing follows a 4px base scale', () => {
@@ -69,7 +69,7 @@ describe('design tokens - CSS parity', () => {
 
   test('tokens.css mirrors the brand gradient and key colors', () => {
     expect(css).toContain('--arv-brand-gradient');
-    expect(css).toContain('#8B5CF6');
+    expect(css).toContain('#8B1EF3');
     expect(css).toContain('--arv-shadow-dialog');
     expect(css).toContain('--arv-radius-sheet');
     expect(css).toContain('--arv-z-toast');

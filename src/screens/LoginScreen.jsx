@@ -258,6 +258,10 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
     setError(null);
     try {
       const result = await signInWithGoogle();
+      if (result?.redirecting) {
+        toast.info("Redirecting to Google Sign-In...");
+        return;
+      }
       if (result?.success) {
         toast.success("Welcome back!");
         const userInfo = {
@@ -630,8 +634,12 @@ export default function LoginScreen() {
     }
 
     try {
-      if (!recaptchaVerifier) throw new Error("Security verification required. Please try again.");
-      const result = await sendPhoneVerificationCode(phoneNumber, recaptchaVerifier);
+      let verifier = recaptchaVerifier;
+      if (!verifier) {
+        verifier = await createRecaptchaVerifier("login-recaptcha-container");
+        setRecaptchaVerifier(verifier);
+      }
+      const result = await sendPhoneVerificationCode(phoneNumber, verifier);
       navigate("/otp-verification", {
         state: { verificationId: result.verificationId, phoneNumber, isLogin: true },
         replace: true
@@ -688,7 +696,7 @@ export default function LoginScreen() {
   const isFormValid = useMemo(() => {
     switch (method) {
       case 'email': return email && password && !errors.email && !errors.password;
-      case 'phone': return phoneNumber && isPhoneValid && !errors.phone && recaptchaVerifier;
+      case 'phone': return phoneNumber && isPhoneValid && !errors.phone;
       case 'google': return true;
       default: return false;
     }
@@ -844,11 +852,11 @@ export default function LoginScreen() {
                   />
                   <motion.button
                     onClick={handlePhoneLogin}
-                    disabled={loading || !isPhoneValid || !recaptchaVerifier}
-                    whileHover={!loading && isPhoneValid && recaptchaVerifier ? { scale: 1.02 } : {}}
-                    whileTap={!loading && isPhoneValid && recaptchaVerifier ? { scale: 0.98 } : {}}
+                    disabled={loading || !isPhoneValid}
+                    whileHover={!loading && isPhoneValid ? { scale: 1.02 } : {}}
+                    whileTap={!loading && isPhoneValid ? { scale: 0.98 } : {}}
                     className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
-                      !loading && isPhoneValid && recaptchaVerifier
+                      !loading && isPhoneValid
                         ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg hover:shadow-xl'
                         : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                     }`}
