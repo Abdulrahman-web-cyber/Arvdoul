@@ -326,7 +326,7 @@ const BackgroundParticles = memo(({ theme }) => {
   );
 });
 
-/* -------------------- PERFECT CENTERED LOGO WITH NEON RING -------------------- */
+/* -------------------- PERFECT CENTERED LOGO -------------------- */
 const HeroLogo = memo(({ theme, onClick }) => {
   const [logoError, setLogoError] = useState(false);
   const resolvedTheme = useMemo(() => {
@@ -349,26 +349,26 @@ const HeroLogo = memo(({ theme, onClick }) => {
       initial={{ scale: 0, rotate: -180 }}
       animate={{ scale: 1, rotate: 0 }}
       transition={{ type: "spring", stiffness: 200, damping: 20 }}
-      className="relative w-28 h-28 mx-auto mb-6 p-1 rounded-full bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] shadow-2xl shadow-purple-500/30 overflow-hidden cursor-pointer"
+      className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center shadow-md overflow-hidden cursor-pointer"
       onClick={onClick}
-      whileHover={{ scale: 1.08 }}
+      whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
       role="img"
       aria-label="Arvdoul"
     >
-      <div className="w-full h-full rounded-full overflow-hidden bg-[#03071B]/90 dark:bg-[#03071B] flex items-center justify-center p-2 backdrop-blur-md">
+      <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-200/50 dark:border-white/10 flex items-center justify-center p-1 bg-white dark:bg-[#03071B]">
         <img
           src={logoPath}
           alt="Arvdoul Logo"
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain rounded-full"
           onError={(e) => {
             e.target.style.display = "none";
             setLogoError(true);
           }}
         />
         {logoError && (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] rounded-full">
-            <span className="text-3xl font-black text-white tracking-widest" aria-hidden="true">
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-r from-blue-500 to-purple-500 rounded-full">
+            <span className="text-2xl font-bold text-white" aria-hidden="true">
               A
             </span>
           </div>
@@ -463,11 +463,11 @@ const ActionButton = memo(({ children, onClick, variant = "primary", theme, clas
   const prefersReducedMotion = useSafeReducedMotion();
 
   const baseStyles =
-    "relative px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl font-bold transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 overflow-hidden shadow-lg";
+    "relative px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl font-bold transition-all duration-300 transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 overflow-hidden shadow-md";
 
   const variants = {
     primary:
-      "bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#055BFB] text-white shadow-purple-500/25 hover:shadow-2xl hover:shadow-purple-500/40",
+      "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30",
     secondary:
       theme === "dark"
         ? "bg-[#080F2E]/80 text-white border border-white/15 hover:bg-white/10 hover:border-white/30"
