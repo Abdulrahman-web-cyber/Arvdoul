@@ -561,9 +561,27 @@ exports.aggregateStoryStats = functions.pubsub
             });
           });
 
+          // Aggregate interaction counters (completions + forward/back taps)
+          // from the analytics shards (spec §58 — client only ever writes
+          // batched shards; the aggregator owns the story-doc stats).
+          let completions = 0;
+          let forwardTaps = 0;
+          let backTaps = 0;
+          const analyticsShardsSnap = await doc.ref.collection('analytics_shards').get();
+          analyticsShardsSnap.forEach((s) => {
+            const d = s.data() || {};
+            completions += d.completions || 0;
+            forwardTaps += d.forwardTaps || 0;
+            backTaps += d.backTaps || 0;
+          });
+
           await doc.ref.update({
             'stats.views': totalViews,
             'stats.reactions': reactionCounts,
+            'stats.completions': completions,
+            'stats.forwardTaps': forwardTaps,
+            'stats.backTaps': backTaps,
+            'stats.completionRate': totalViews > 0 ? completions / totalViews : 0,
             updatedAt: FieldValue.serverTimestamp(),
           });
           totalAggregated++;

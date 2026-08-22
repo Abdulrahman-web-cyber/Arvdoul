@@ -2,7 +2,7 @@
 // 100% Pixel-perfect replica of Arvdoul Stories Grid & Interactive Viewer from user design specs
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -29,6 +29,7 @@ const QUICK_EMOJIS = ['❤️', '🔥', '👏', '😮', '😂', '💎'];
 
 export default function StoriesScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -94,6 +95,18 @@ export default function StoriesScreen() {
           };
         });
         setStories(mapped);
+
+        // Deep link / Home entry (spec §51/33): jump straight into a specific
+        // creator's Vibe sequence when arriving with state.
+        const targetUserId = location.state?.vibeUserId;
+        if (targetUserId && mapped.length > 0) {
+          const idx = mapped.findIndex((s) => s.user?.id === targetUserId);
+          if (idx >= 0) {
+            setActiveStoryIndex(idx);
+            setActiveItemIndex(0);
+            setStoryProgress(0);
+          }
+        }
       } catch (err) {
         console.error('Failed to load stories:', err);
         if (!cancelled) setStories([]);
@@ -137,6 +150,9 @@ export default function StoriesScreen() {
 
   // Close story viewer
   const handleCloseStory = () => {
+    if (location.state?.vibeUserId) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
     setActiveStoryIndex(null);
     setActiveItemIndex(0);
     setStoryProgress(0);
@@ -216,6 +232,44 @@ export default function StoriesScreen() {
       }
     }
   };
+
+  // Keyboard navigation for the immersive viewer (spec §15/67): arrow keys
+  // move between Vibes, Escape closes. No mouse required.
+  useEffect(() => {
+    if (activeStoryIndex === null) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (activeItemIndex + 1 < (currentStory?.items?.length || 1)) {
+          setActiveItemIndex((i) => i + 1);
+          setStoryProgress(0);
+        } else if (activeStoryIndex + 1 < filteredStories.length) {
+          setActiveStoryIndex((s) => s + 1);
+          setActiveItemIndex(0);
+          setStoryProgress(0);
+        } else handleCloseStory();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (activeItemIndex > 0) {
+          setActiveItemIndex((i) => i - 1);
+          setStoryProgress(0);
+        } else if (activeStoryIndex > 0) {
+          setActiveStoryIndex((s) => s - 1);
+          const prev = filteredStories[activeStoryIndex - 1];
+          setActiveItemIndex((prev?.items?.length || 1) - 1);
+          setStoryProgress(0);
+        }
+      } else if (e.key === 'Escape') {
+        handleCloseStory();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setIsPaused((p) => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStoryIndex, activeItemIndex, currentStory, filteredStories.length]);
 
   // Handle quick emoji reaction with particle explosion
   const handleSendReaction = (emoji) => {
@@ -597,6 +651,7 @@ export default function StoriesScreen() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsMuted((m) => !m)}
+                  aria-label={isMuted ? 'Unmute Vibe' : 'Mute Vibe'}
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
                 >
                   {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -604,6 +659,7 @@ export default function StoriesScreen() {
 
                 <button
                   onClick={handleCloseStory}
+                  aria-label="Close Vibes viewer"
                   className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
                 >
                   <X className="w-5 h-5" />
@@ -620,12 +676,27 @@ export default function StoriesScreen() {
               onTouchEnd={() => setIsPaused(false)}
               className="relative w-full h-full flex items-center justify-center cursor-pointer"
             >
-              <img
-                src={currentItem?.url || currentStory.mediaUrl}
-                alt="Story media"
-                referrerPolicy="no-referrer"
-                className="max-h-full max-w-full object-contain"
-              />
+              {currentItem?.url || currentStory.mediaUrl ? (
+                <img
+                  src={currentItem?.url || currentStory.mediaUrl}
+                  alt={currentItem?.caption ? `Vibe by ${currentStory.user.name}: ${currentItem.caption}` : `Vibe by ${currentStory.user.name}`}
+                  referrerPolicy="no-referrer"
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <div className="text-center px-6" role="status">
+                  <p className="text-white font-semibold mb-1">Vibe unavailable</p>
+                  <p className="text-white/60 text-sm">
+                    This Vibe has expired or is no longer available.
+                  </p>
+                  <button
+                    onClick={handleCloseStory}
+                    className="mt-4 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
 
               {/* Caption Overlay */}
               {currentItem?.caption && (

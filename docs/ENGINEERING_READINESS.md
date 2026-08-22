@@ -1000,3 +1000,93 @@ throttled typing; conversation-level receipts; grouped chat UI with search/pinne
 errors, build OK, functions syntax OK.
 
 ### 24b. Implementation (this turn)
+
+### 25. Vibes master-spec audit + implementation (ephemeral content system)
+
+**ARCHITECTURE ASSESSMENT (spec §1)**
+
+CURRENT STATE — 1732-line `storyService` (sharded view/reaction counters with per-viewer dedupe,
+feed scoring with recency/relationship weights, feed cache + cross-tab invalidation, offline upload
+queue, drafts, archive + highlights, polls/quizzes/emoji-slider, music, collaboration, AI caption,
+moderation client hook, export), 863-line `functions/stories.js` (moderateStory risk-based trigger,
+cleanupExpiredStories pubsub, aggregateStoryStats pubsub, fanout, reaction trigger), canonical
+`StoriesScreen` (760 lines, inline immersive viewer), `CreateStory` creator, `VibeStrip` Home entry.
+
+WHAT IS GOOD — sharded counters; per-viewer dedupe; risk-based moderation trigger; pubsub
+aggregation + expiry cleanup; feed scoring weights; archive/highlights separation; offline queue.
+
+WHAT IS WEAK/CRITICAL —
+1. 🔴 `firestore.rules` stories: `allow read: if true` → ANY user (signed-out) reads ANY story:
+   `visibility:'private'`, `isDeleted`, rejected moderation, EXPIRED content — all bypassable by
+   direct doc reads. Privacy/expiration/moderation NOT server-enforced (spec §26/28/60/97).
+2. 🔴 Expiration is client-only in the viewer filter; `cleanupExpiredStories` runs hourly, so
+   expired Vibes stay readable between runs (spec §6).
+3. 🔴 THREE competing viewers: `StoriesCarousel.jsx` (1791 lines), `StoryList.jsx` + `StoryViewer.jsx`
+   (used by Home `VibeStrip`) — all dead/duplicate of the canonical StoriesScreen viewer.
+   `StoryViewer.jsx` writes `seen: true` to the STORY DOC (rules-deny + semantically wrong:
+   seen is per-viewer) (spec §99).
+4. 🔴 Home `VibeStrip` is BROKEN: `feedData.stories || feedData` vs real shape `{groups:[...]}`
+   → vibes always `[]` → Home shows only "Your Vibe" (spec §33).
+5. 🟠 `_canViewStory` handles public/followers only — private visibility leaks via feed in some
+   paths; close-friend/selected audiences absent (config has PUBLIC/FOLLOWERS/PRIVATE only).
+6. 🟠 No lifecycle state in the doc (`status` field) — viewer cannot distinguish
+   active/expired/archived/removed (spec §4).
+7. 🟠 Write amplification: `trackStoryAnalytics` increments the story doc on EVERY forward/back
+   tap; `reportStoryCompletion` rewrites the doc per completion (spec §57/58).
+8. 🟡 reactions/comments rules ignore `allowReactions`/`allowComments`/visibility/expiry.
+9. 🟡 No deep-link jump into a creator's sequence (spec §51).
+
+TARGET — rules-enforced visibility+expiry+moderation+blocking; lifecycle field; ONE canonical
+viewer (StoriesScreen); working Home entry (navigates to canonical viewer); buffered analytics;
+deep-link support.
+
+### 25b. Implementation (this turn)
+
+**SECURITY — firestore.rules (spec §6/26/28/60/97)**
+- `stories` read: `isSignedIn()` + active lifecycle (`!isDeleted`, `status != expired/removed`,
+  `moderationStatus != rejected/removed`, `expiresAt > request.time`) + visibility-gated
+  (owner / public / followers-via-follows-doc / private=owner) + BLOCKED in either direction
+  denied. Replaces the previous `allow read: if true` (any signed-out user could read
+  private/expired/rejected Vibes).
+- Create: `userId == uid()` + `status == 'published'` + `moderationStatus == 'pending'`.
+- Reactions/comments: only when `allowReactions`/`allowComments` and the Vibe is active and
+  visible to the actor (via `get()` on the parent doc — subcollection `resource` is the
+  sub-doc, not the story).
+- `viewers` read owner-or-self; `view_shards`/`reaction_shards`/`analytics_shards` owner-only;
+  `archived_stories` stays PRIVATE to the creator (spec §31).
+
+**LIFECYCLE (spec §4)** — `createStory` now writes `status: 'published'` +
+`processingState: 'done'`; the rules treat any other state as unavailable. `_canViewStory`
+client mirror extended: expiry (both Timestamp and ISO forms), expired/removed/rejected
+statuses, block checks both directions, `private` = owner only (was leaking through paths).
+
+**ONE CANONICAL VIEWER (spec §14/99)** — deleted FOUR duplicate/dead viewer implementations
+(`StoriesCarousel.jsx` 1791 lines, `StoryList.jsx`, `StoryViewer.jsx` — which wrote
+`seen: true` to story docs, rules-deny + semantically wrong — and `Home/Stories.jsx` with a
+global unexpired unfiltered `onSnapshot` query that my rules change would have broken) plus
+their only consumer `AddStoryModal.jsx`. The canonical experience is `StoriesScreen`.
+
+**HOME ENTRY FIXED (spec §33/34)** — `VibeStrip` was BROKEN: it read `feedData.stories ||
+feedData` against the real `{ groups: [...] }` shape → Home always showed only "Your Vibe".
+Now: maps `feedData.groups`, resolves creator identity via `userService.getUserProfile`,
+ring → `navigate('/stories', { state: { vibeUserId } })` (gateway, not a viewer), honest
+empty/error states, keyboard-activatable rings.
+
+**DEEP LINKS (spec §51)** — `StoriesScreen` consumes `location.state.vibeUserId` to open the
+target creator's sequence directly and clears the state on close (no re-jump on back).
+
+**VIEWER UX (spec §15/61/67/78/79)** — keyboard navigation (← → Escape, Space pause),
+"Vibe unavailable" state for expired/removed content instead of a broken image, aria-labels
+on icon-only controls, descriptive alt text.
+
+**COST CONTROL (spec §57/58)** — `trackStoryAnalytics` (forward/back taps) and
+`reportStoryCompletion` previously wrote the STORY DOC per event. Now: in-memory buffer
+flushed every 30s (and on beforeunload) into `analytics_shards` (batched sharded increments);
+`aggregateStoryStats` pubsub rolls shards into `stats.completions/forwardTaps/backTaps/
+completionRate` — the aggregator owns story-doc stats, the client never rewrites them.
+
+**Verification**: 35 suites / 526 tests green (10 new Vibes guards: rules strings, lifecycle,
+access mirror, dead-code deletion, deep link, keyboard/a11y, buffering), lint 0 errors, build
+OK, functions syntax OK.
+
+### 25b. Implementation (this turn)

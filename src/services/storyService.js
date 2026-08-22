@@ -280,6 +280,49 @@ class UltimateStoryService {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this._onlineHandler);
     }
+
+    // ANALYTICS BUFFER (spec §57/58): raw interaction events are aggregated
+    // in memory and flushed in BATCHES to sharded counters — never one
+    // Firestore write per tap/completion. Metadata only.
+    this._analyticsBuffer = { forwardTaps: new Map(), backTaps: new Map(), completions: new Map() };
+    this._analyticsFlushTimer = null;
+    this._startAnalyticsFlushTimer();
+  }
+
+  _startAnalyticsFlushTimer() {
+    if (typeof window === 'undefined' || this._analyticsFlushTimer) return;
+    this._analyticsFlushTimer = setInterval(() => { this.flushAnalyticsBuffer().catch(() => {}); }, 30000);
+    window.addEventListener('beforeunload', () => { this.flushAnalyticsBuffer().catch(() => {}); });
+  }
+
+  async flushAnalyticsBuffer() {
+    const buf = this._analyticsBuffer;
+    this._analyticsBuffer = { forwardTaps: new Map(), backTaps: new Map(), completions: new Map() };
+    try {
+      const jobs = [];
+      for (const [storyId, count] of buf.forwardTaps) jobs.push(this._incrementAnalyticsShard(storyId, 'forwardTaps', count));
+      for (const [storyId, count] of buf.backTaps) jobs.push(this._incrementAnalyticsShard(storyId, 'backTaps', count));
+      for (const [storyId, count] of buf.completions) jobs.push(this._incrementAnalyticsShard(storyId, 'completions', count));
+      await Promise.allSettled(jobs);
+    } catch { /* best-effort */ }
+  }
+
+  async _incrementAnalyticsShard(storyId, field, amount) {
+    try {
+      await this.ensureInitialized();
+      const shardId = Math.floor(Math.random() * STORY_CONFIG.SHARDED_COUNTERS.VIEW_SHARDS);
+      const shardRef = this.fs.doc(this.firestore, 'stories', storyId, 'analytics_shards', `shard_${shardId}`);
+      try {
+        await this.fs.updateDoc(shardRef, { [field]: increment(amount), updatedAt: serverTimestamp() });
+      } catch (err) {
+        if (err.code === 'not-found') {
+          await this.fs.setDoc(shardRef, { [field]: amount, updatedAt: serverTimestamp() });
+        } else throw err;
+      }
+    } catch (err) {
+      // Rules may deny (expired/removed stories) — drop silently, never spam.
+      console.warn('[Vibes] analytics flush skipped:', err?.message);
+    }
   }
 
   async ensureInitialized() {
@@ -370,6 +413,12 @@ class UltimateStoryService {
     const story = {
       id: storyId,
       userId: currentUser.uid,
+      // Lifecycle state machine (spec §4): draft -> published -> active ->
+      // expired/removed -> archived. The server rules treat anything without
+      // status 'published' as unavailable; expiry is enforced by rules
+      // (expiresAt > request.time), never by a client timer.
+      status: 'published',
+      processingState: 'done',
       type: storyData.type,
       content: storyData.content || '',
       hashtags,
@@ -733,29 +782,19 @@ class UltimateStoryService {
 
   async trackStoryAnalytics(storyId, eventType) {
     if (!STORY_CONFIG.ANALYTICS.ENABLED) return;
-    const field = eventType === 'forward' ? 'forwardTaps' : (eventType === 'back' ? 'backTaps' : null);
-    if (field) {
-      await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-        [`stats.${field}`]: increment(1),
-        updatedAt: serverTimestamp()
-      });
+    // Buffered + batched (spec §57/58) — no per-tap story-doc writes.
+    if (eventType === 'forward') {
+      this._analyticsBuffer.forwardTaps.set(storyId, (this._analyticsBuffer.forwardTaps.get(storyId) || 0) + 1);
+    } else if (eventType === 'back') {
+      this._analyticsBuffer.backTaps.set(storyId, (this._analyticsBuffer.backTaps.get(storyId) || 0) + 1);
     }
   }
 
   async reportStoryCompletion(storyId) {
     if (!STORY_CONFIG.ANALYTICS.TRACK_COMPLETION_RATE) return;
-    const storyRef = this.fs.doc(this.firestore, 'stories', storyId);
-    const snap = await this.fs.getDoc(storyRef);
-    if (snap.exists()) {
-      const views = snap.data().stats?.views || 0;
-      const completions = snap.data().stats?.completions || 0;
-      const newCompletionRate = completions / Math.max(views, 1);
-      await this.fs.updateDoc(storyRef, {
-        'stats.completionRate': newCompletionRate,
-        'stats.completions': increment(1),
-        updatedAt: serverTimestamp()
-      });
-    }
+    // Buffered completion — aggregated server-side into sharded counters;
+    // never a story-doc rewrite per completion (spec §58).
+    this._analyticsBuffer.completions.set(storyId, (this._analyticsBuffer.completions.get(storyId) || 0) + 1);
   }
 
   // ========== INTERACTIVE STICKERS ==========
@@ -1624,13 +1663,33 @@ class UltimateStoryService {
 
   async _canViewStory(story, viewerId) {
     if (!story || story.isDeleted) return false;
+    if (story.status === 'expired' || story.status === 'removed') return false;
+    if (story.moderationStatus === 'rejected' || story.moderationStatus === 'removed') return false;
+    // Expiry is server-enforced by rules; mirror it here so the UI never
+    // presents expired content as active (spec §6).
+    if (story.expiresAt?.toDate) {
+      if (story.expiresAt.toDate().getTime() <= Date.now()) return false;
+    } else if (story.expiresAt && new Date(story.expiresAt).getTime() <= Date.now()) {
+      return false;
+    }
     if (story.userId === viewerId) return true;
+    // Blocked in either direction = no access (spec §28).
+    try {
+      const [b1, b2] = await Promise.all([
+        this.fs.getDoc(this.fs.doc(this.firestore, 'blocks', `${viewerId}_${story.userId}`)),
+        this.fs.getDoc(this.fs.doc(this.firestore, 'blocks', `${story.userId}_${viewerId}`)),
+      ]);
+      if (b1.exists() || b2.exists()) return false;
+    } catch { /* block check best-effort; rules enforce authoritatively */ }
     if (story.visibility === STORY_CONFIG.VISIBILITY.PUBLIC) return true;
     if (story.visibility === STORY_CONFIG.VISIBILITY.FOLLOWERS) {
       try {
         const followDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'follows', `${viewerId}_${story.userId}`));
         return followDoc.exists();
       } catch { return false; }
+    }
+    if (story.visibility === STORY_CONFIG.VISIBILITY.PRIVATE) {
+      return false; // only the creator (handled above)
     }
     return false;
   }

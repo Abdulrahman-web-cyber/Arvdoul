@@ -731,3 +731,90 @@ describe('Messaging master-spec: chat UX', () => {
     expect(src).toContain("window.addEventListener('online', goOnline)");
   });
 });
+
+describe('Vibes master-spec: server-enforced access (spec §6/26/28/60)', () => {
+  test('stories read requires active lifecycle + visibility + no-block', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const block = rules.slice(rules.indexOf('match /stories/{storyId}'), rules.indexOf('match /archived_stories'));
+    expect(block).toContain('s.expiresAt > request.time'); // expiry server-enforced
+    expect(block).toContain("s.moderationStatus != 'rejected'"); // moderation enforced
+    expect(block).toContain("s.visibility == 'followers'"); // audience enforced
+    expect(block).toContain("s.visibility == 'private' && s.userId == viewerId"); // private = owner only
+    expect(block).toContain('documents/blocks/'); // blocking enforced
+    expect(block).toContain('allow read: if isSignedIn()'); // never `allow read: if true`
+  });
+
+  test('reactions/comments respect allowReactions/allowComments + active state', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('vibeData().allowReactions == true');
+    expect(rules).toContain('vibeData().allowComments == true');
+  });
+
+  test('create requires status published + moderation pending; archive is owner-only', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain("request.resource.data.status == 'published'");
+    expect(rules).toContain("request.resource.data.moderationStatus == 'pending'");
+    expect(rules).toContain("allow read, update, delete: if isSignedIn() && resource.data.userId == uid();");
+  });
+});
+
+describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
+  test('createStory writes status published + processingState', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(src).toContain("status: 'published'");
+    expect(src).toContain("processingState: 'done'");
+  });
+
+  test('_canViewStory mirrors expiry/status/block/private rules', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(src).toContain("story.status === 'expired'");
+    expect(src).toContain("story.expiresAt.toDate().getTime() <= Date.now()");
+    expect(src).toContain("'blocks', `${viewerId}_${story.userId}`");
+    expect(src).toContain("story.visibility === STORY_CONFIG.VISIBILITY.PRIVATE");
+  });
+});
+
+describe('Vibes master-spec: one canonical viewer (spec §99)', () => {
+  test('duplicate viewers are deleted, VibeStrip navigates to /stories', () => {
+    for (const dead of ['src/components/Stories/StoryViewer.jsx', 'src/components/Stories/StoryList.jsx',
+                        'src/components/Stories/StoriesCarousel.jsx', 'src/components/Home/Stories.jsx']) {
+      expect(fs.existsSync(path.join(root, dead))).toBe(false);
+    }
+    const strip = fs.readFileSync(path.join(root, 'src/components/feed/VibeStrip.jsx'), 'utf8');
+    expect(strip).not.toContain('StoryViewer');
+    expect(strip).toContain("navigate('/stories', { state: { vibeUserId: userId } })");
+    expect(strip).toContain('feedData?.groups'); // correct feed shape
+  });
+
+  test('StoriesScreen consumes deep-link state and clears it', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
+    expect(src).toContain('location.state?.vibeUserId');
+    expect(src).toContain('navigate(location.pathname, { replace: true, state: null })');
+  });
+
+  test('viewer has keyboard nav + unavailable state + aria labels', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
+    expect(src).toContain("e.key === 'ArrowRight'");
+    expect(src).toContain("e.key === 'Escape'");
+    expect(src).toContain('Vibe unavailable');
+    expect(src).toContain('aria-label="Close Vibes viewer"');
+  });
+});
+
+describe('Vibes master-spec: cost control (spec §57/58)', () => {
+  test('analytics are buffered and flushed to shards, never per-tap doc writes', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(src).toContain('_analyticsBuffer');
+    expect(src).toContain('flushAnalyticsBuffer');
+    expect(src).toContain("'analytics_shards'");
+    expect(src).not.toContain("'stats.forwardTaps': increment(1)");
+    expect(src).not.toContain("'stats.completions': increment(1)");
+  });
+
+  test('aggregator rolls up analytics shards into stats', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/stories.js'), 'utf8');
+    expect(src).toContain("doc.ref.collection('analytics_shards')");
+    expect(src).toContain("'stats.completions': completions");
+    expect(src).toContain("'stats.completionRate'");
+  });
+});
