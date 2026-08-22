@@ -90,6 +90,7 @@ export default function VideoDetailScreen() {
   // ---------- Like ----------
   const handleLike = async () => {
     if (!user?.uid) { toast.info('Sign in to like videos.'); return; }
+    if (!video?.userId) { toast.info('External videos cannot be liked.'); return; }
     try {
       const res = await videoService.likeVideo(video.id);
       const nowLiked = res?.data?.liked ?? !liked;

@@ -418,8 +418,8 @@ class UltimateFeedService {
     if (cached && Date.now() - cached.ts < FEED_CONFIG.BLOCK_CACHE_TTL) return cached.data;
     try {
       await this._ensureInitialized();
-      const { collection, query, where, getDocs } = this.firestoreMethods;
-      const snap = await getDocs(query(collection(this.firestore, 'blocks'), where('blockerId', '==', userId)));
+      const { collection, query, where, getDocs, limit: fLimit } = this.firestoreMethods;
+      const snap = await getDocs(query(collection(this.firestore, 'blocks'), where('blockerId', '==', userId), fLimit(1000)));
       const blocked = new Set(snap.docs.map(d => d.data().blockedId));
       this.blockCache.set(key, { data: blocked, ts: Date.now() });
       return blocked;

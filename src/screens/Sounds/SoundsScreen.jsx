@@ -30,6 +30,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Cinematic'];
 
@@ -54,6 +55,7 @@ export default function SoundsScreen() {
 
   // Upload modal
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  useEscapeClose(isUploadOpen, () => setIsUploadOpen(false));
   const [newTitle, setNewTitle] = useState('');
   const [newGenre, setNewGenre] = useState('Original Audio');
   const [selectedFile, setSelectedFile] = useState(null);

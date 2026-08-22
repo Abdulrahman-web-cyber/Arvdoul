@@ -129,6 +129,7 @@ export default function CollectionsScreen() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
+              aria-label="Go back"
               className={cn(
                 "p-2 rounded-full transition-all",
                 isDark ? "hover:bg-white/10 text-gray-300" : "hover:bg-gray-100 text-gray-700"

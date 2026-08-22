@@ -334,6 +334,24 @@ export default function MessagingScreen() {
 
         {/* Master Conversation List */}
         <div className="mt-3 space-y-2">
+          {loadingConversations && filteredConversations.length === 0 && (
+            <div className="space-y-2" role="status" aria-label="Loading conversations">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full shimmer shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 shimmer rounded-lg w-1/3" />
+                    <div className="h-2.5 shimmer rounded-lg w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!loadingConversations && filteredConversations.length === 0 && (
+            <div className="text-center py-10 text-sm text-arvdoul-text-secondary">
+              No conversations yet — start one from the + button.
+            </div>
+          )}
           {filteredConversations.map((item) => (
             <div
               key={item.id}

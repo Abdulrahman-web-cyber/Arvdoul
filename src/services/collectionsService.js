@@ -172,8 +172,9 @@ class CollectionsService {
 }
 
 async function getDocsLike(firestore, collectionId) {
-  const { collection, getDocs } = await import('firebase/firestore');
-  return getDocs(collection(firestore, 'collections', collectionId, 'items'));
+  const { collection, getDocs, query, limit } = await import('firebase/firestore');
+  // Bounded read: a collection page never materializes more than 200 items.
+  return getDocs(query(collection(firestore, 'collections', collectionId, 'items'), limit(200)));
 }
 
 export function getCollectionsService() {

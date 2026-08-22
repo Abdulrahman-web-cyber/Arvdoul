@@ -7,6 +7,7 @@
 //      ledger inside the same transaction as the vote.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const { checkRateLimit } = require('./rateLimit');
 
 const db = admin.firestore();
 
@@ -20,6 +21,7 @@ function getUserIdFromContext(context) {
 exports.votePoll = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
+    await checkRateLimit(uid, 'votePoll', 30, 60000);
     const { pollId, optionId, wagerCoins = 0 } = data || {};
     if (!pollId || !optionId) {
       throw new functions.https.HttpsError('invalid-argument', 'pollId and optionId required');

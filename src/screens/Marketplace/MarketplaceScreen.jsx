@@ -26,6 +26,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import marketplaceService from '../../services/marketplaceService';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const CATEGORIES = ['All', 'Digital Assets', 'Audio & Sounds', 'Merch & Apparel', 'Mentorship & VIP'];
 
@@ -44,6 +45,7 @@ export default function MarketplaceScreen() {
 
   // List product modal
   const [isListModalOpen, setIsListModalOpen] = useState(false);
+  useEscapeClose(isListModalOpen, () => setIsListModalOpen(false));
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Digital Assets');
   const [newPriceCoins, setNewPriceCoins] = useState(1200);
@@ -65,7 +67,11 @@ export default function MarketplaceScreen() {
     }
   };
 
+  const [buyingId, setBuyingId] = useState(null);
+
   const handleBuyWithCoins = async (product) => {
+    if (buyingId) return;
+    setBuyingId(product.id);
     try {
       // Real server-side debit (spendCoins CF) — the service checks the real
       // balance and deducts coins on the ledger. No client-supplied balance,
@@ -83,6 +89,8 @@ export default function MarketplaceScreen() {
       toast.success(`Purchased "${product.title}" with ${product.priceCoins} Coins! 🎁`);
     } catch (err) {
       toast.error(err.message || 'Purchase failed');
+    } finally {
+      setBuyingId(null);
     }
   };
 
@@ -224,9 +232,10 @@ export default function MarketplaceScreen() {
 
                 <button
                   onClick={() => handleBuyWithCoins(prod)}
-                  className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-1"
+                  disabled={buyingId !== null}
+                  className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Buy with Coins
+                  {buyingId === prod.id ? 'Processing…' : 'Buy with Coins'}
                 </button>
               </div>
             </div>

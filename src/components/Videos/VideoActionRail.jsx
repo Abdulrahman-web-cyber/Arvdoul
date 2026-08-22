@@ -34,6 +34,7 @@ const VideoActionRail = memo(({
       <motion.button
         whileTap={{ scale: 0.8 }}
         onClick={onLike}
+        aria-label={isLiked ? "Unlike video" : "Like video"}
         className="flex flex-col items-center gap-1.5 p-2"
       >
         <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center">
@@ -50,6 +51,7 @@ const VideoActionRail = memo(({
       <motion.button
         whileTap={{ scale: 0.8 }}
         onClick={onComment}
+        aria-label="Comment on video"
         className="flex flex-col items-center gap-1.5 p-2"
       >
         <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center">
@@ -62,6 +64,7 @@ const VideoActionRail = memo(({
       <motion.button
         whileTap={{ scale: 0.8 }}
         onClick={onShare}
+        aria-label="Share video"
         className="flex flex-col items-center gap-1.5 p-2"
       >
         <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center">

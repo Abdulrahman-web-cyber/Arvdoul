@@ -145,6 +145,7 @@ export default function SavedScreen() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
+              aria-label="Go back"
               className={cn(
                 "p-2 rounded-full transition-all",
                 isDark ? "hover:bg-white/10 text-gray-300" : "hover:bg-gray-100 text-gray-700"
@@ -191,6 +192,8 @@ export default function SavedScreen() {
             <div className="flex items-center rounded-xl p-0.5 border border-white/10 bg-white/5">
               <button
                 onClick={() => setViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                aria-label="Grid view"
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
                   viewMode === 'grid' ? "bg-purple-600 text-white" : "text-gray-400"
@@ -201,6 +204,8 @@ export default function SavedScreen() {
               </button>
               <button
                 onClick={() => setViewMode('list')}
+                aria-pressed={viewMode === 'list'}
+                aria-label="List view"
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
                   viewMode === 'list' ? "bg-purple-600 text-white" : "text-gray-400"

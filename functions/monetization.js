@@ -147,36 +147,7 @@ const sendPushToQueue = async (userId, payload) => {
 // ----------------------------------------------------------------------
 // SHARDED RATE LIMITER – globally accurate by aggregating all shards
 // ----------------------------------------------------------------------
-const checkRateLimit = async (userId, action, maxOps, windowMs = 60000) => {
-  const now = Date.now();
-  const windowStart = now - windowMs;
-  const parentRef = admin.firestore()
-    .collection('rate_limits')
-    .doc(`${userId}_${action}`);
-
-  await admin.firestore().runTransaction(async (t) => {
-    const shards = [];
-    for (let i = 0; i < NUM_RATE_SHARDS; i++) {
-      const shardSnap = await t.get(parentRef.collection('shards').doc(String(i)));
-      shards.push(shardSnap.exists ? shardSnap.data() : { count: 0, windowStart: 0 });
-    }
-
-    const total = shards.reduce((sum, d) =>
-      d.windowStart >= windowStart ? sum + d.count : sum, 0);
-
-    if (total >= maxOps) throw new Error('RATE_LIMIT_EXCEEDED');
-
-    const shardId = Math.floor(Math.random() * NUM_RATE_SHARDS);
-    const shardRef = parentRef.collection('shards').doc(String(shardId));
-    let data = shards[shardId];
-    if (data.windowStart < windowStart) {
-      data = { count: 1, windowStart: now, expireAt: new Date(now + windowMs * 2) };
-    } else {
-      data.count += 1;
-    }
-    t.set(shardRef, data, { merge: true });
-  });
-};
+const { checkRateLimit } = require('./rateLimit');
 
 // ----------------------------------------------------------------------
 // FRAUD PROTECTION – daily velocity, new account, interaction pairs
@@ -823,7 +794,7 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
 // ----------------------------------------------------------------------
 exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
   const authHeader = req.headers.authorization;
-  const expectedSecret = functions.config().admin?.withdrawal_secret || 'super-secret-change-me';
+  const expectedSecret = functions.config()?.admin?.withdrawal_secret; // fail-closed: must be configured
   if (!authHeader || authHeader !== `Bearer ${expectedSecret}`) {
     res.status(403).json({ error: 'Forbidden' });
     return;

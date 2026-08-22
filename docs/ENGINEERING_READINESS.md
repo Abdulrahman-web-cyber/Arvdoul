@@ -102,6 +102,64 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 23. Next-70 batch: billion-user scale hardening + a11y/UX pass
+
+**Server abuse & cost hardening (functions/)**
+- Extracted the sharded rate limiter into `functions/rateLimit.js` (shared) and
+  wired it into previously UNRATELIMITED callables: `sendNotification`
+  (30/min + self-notification ban + per-recipient 20/hour cap), `votePoll`
+  (30/min), `awardExperience` (60/min), `exportUserData` (1/5min),
+  `deleteUserData` (2/hour), `getMutualFriends` (60/min),
+  `generateFriendRecommendations` (5/min).
+- `sendNotification` was a spam vector (any auth user could spam any user) —
+  now capped + welcome-type server-only.
+- `retryDeadLetters` + `processWithdrawal` admin endpoints had HARDCODED
+  fallback secrets (`'super-secret'`) — now fail-closed (must be configured).
+- `exportUserData` (GDPR) is now rate-limited to prevent cost abuse.
+
+**Firestore index coverage — 4 new composites for queries that would 500:**
+- videos: status+visibility+isDeleted+createdAt DESC (and +type variant)
+- stories: isDeleted+expiresAt+moderationStatus (and +hashtags variant)
+- messages: isDeleted+ttlExpiresAt+threadId+createdAt DESC (thread queries)
+- notifications: senderId+createdAt (recipient-cap query)
+- Total: 103 composite indexes.
+
+**Scale (N+1 / unbounded reads killed)**
+- `rankingService` — 4 leaderboards did one `getDoc` PER USER (N+1) → new
+  `_fetchUsersByIds` batched `where('__name__','in',chunk)` fetcher.
+- `soundService.getSavedSounds` — loaded the ENTIRE `sounds` collection and
+  filtered client-side → batched by-id `getDoc` (chunks of 30) + saved_sounds
+  capped at 200.
+- `collectionsService` items read → capped 200; `feedService` blocks → capped
+  1000; `collaborationService` deleteProject team/content → capped 500.
+
+**Storage rules — real gaps closed**
+- `soundService` uploads to `sounds/{uid}/...` were DENIED (no rule) → added
+  with audio-only content-type + 25 MB cap.
+- Added `videos/` and `thumbnails/` paths (video uploads were denied).
+- All user-media paths now enforce size/content-type limits in place
+  (avatars/banners 10 MB image-only, posts 200 MB, stories 100 MB, messages
+  25 MB participant-only, live 500 MB, temp 50 MB).
+
+**CDN/performance (global users)**
+- `firebase.json` hosting headers: hashed `/assets/**` immutable 1y,
+  `/sw.js` no-cache, icons/logos 1d, security headers on all responses.
+
+**UI/UX + a11y (WCAG 2.2)**
+- Global `:focus-visible` ring + `prefers-reduced-motion` kill-switch in
+  tailwind.css.
+- New `useEscapeClose` hook wired into Spaces/Marketplace/Sounds/Live modals
+  (Escape dismisses; respects focused inputs).
+- aria-labels on VideoActionRail (like/comment/share), VideoTopBar
+  (aria-pressed tabs), SavedScreen (back, grid/list), CollectionsScreen (back);
+  NotificationsScreen mark-all-read disabled+loading state; Marketplace buy
+  processing state; MessagingScreen skeleton loader + honest empty state.
+- LiveScreen: intervals cleaned + stream ended on unmount while LIVE (was a
+  timer/zombie-stream leak).
+- VideoDetailScreen: external videos (url param) can't be liked (no server id).
+
+**Verification**: 35 suites / 501 tests green, lint 0 errors, build OK.
+
 ### 22. Next-70 batch: server money-path hardening + rules compliance + honest renderers
 
 **Server-side money/security fixes (functions/)**

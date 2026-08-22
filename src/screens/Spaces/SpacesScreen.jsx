@@ -30,6 +30,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import spacesService from '../../services/spacesService';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const CATEGORIES = ['All', 'Tech & AI', 'Music & Audio', 'Crypto & Web3', 'Chill Lounge', 'Creator Talk'];
 const EMOJI_REACTIONS = ['🔥', '💎', '🚀', '❤️', '👏', '💯', '👑'];
@@ -55,6 +56,7 @@ export default function SpacesScreen() {
 
   // Create Space modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  useEscapeClose(isCreateModalOpen, () => setIsCreateModalOpen(false));
   const [newSpaceTitle, setNewSpaceTitle] = useState('');
   const [newSpaceCategory, setNewSpaceCategory] = useState('Tech & AI');
   const [isRecordingEnabled, setIsRecordingEnabled] = useState(true);

@@ -495,3 +495,133 @@ describe('Admin - no fabricated stats', () => {
     expect(rules).toContain('match /video_reports/{reportId}');
   });
 });
+
+describe('Shared rate limiter + admin secrets', () => {
+  test('rateLimit.js exists and is required by money-path modules', () => {
+    const rl = fs.readFileSync(path.join(root, 'functions/rateLimit.js'), 'utf8');
+    expect(rl).toContain('module.exports = { checkRateLimit');
+    expect(rl).toContain('RATE_LIMIT_EXCEEDED');
+    const mon = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    expect(mon).toContain("require('./rateLimit')");
+    const notif = fs.readFileSync(path.join(root, 'functions/notifications.js'), 'utf8');
+    expect(notif).toContain("require('./rateLimit')");
+  });
+
+  test('admin HTTPS endpoints fail closed (no hardcoded secrets)', () => {
+    const mon = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    const notif = fs.readFileSync(path.join(root, 'functions/notifications.js'), 'utf8');
+    expect(mon).not.toContain("'super-secret-change-me'");
+    expect(mon).toContain('fail-closed');
+    // The only 'super-secret' mention left is the explanatory comment.
+    expect(notif).toContain("// `|| 'super-secret'`");
+  });
+
+  test('sendNotification is spam-hardened', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/notifications.js'), 'utf8');
+    expect(src).toContain("checkRateLimit(senderId, 'sendNotification'");
+    expect(src).toContain('Cannot send self-notifications');
+    expect(src).toContain('Too many notifications to this recipient');
+  });
+
+  test('callables got rate limits', () => {
+    const user = fs.readFileSync(path.join(root, 'functions/user.js'), 'utf8');
+    expect(user).toContain("'deleteUserData', 2, 3600000");
+    expect(user).toContain("'getMutualFriends', 60, 60000");
+    const polls = fs.readFileSync(path.join(root, 'functions/polls.js'), 'utf8');
+    expect(polls).toContain("'votePoll', 30, 60000");
+    const exp = fs.readFileSync(path.join(root, 'functions/userExport.js'), 'utf8');
+    expect(exp).toContain("'exportUserData', 1, 300000");
+  });
+});
+
+describe('Storage rules - upload paths enforced', () => {
+  test('sounds/videos/thumbnails paths exist with size limits', () => {
+    const rules = fs.readFileSync(path.join(root, 'storage.rules'), 'utf8');
+    expect(rules).toContain('match /sounds/{userId}/{fileName}');
+    expect(rules).toContain('contentType.matches(\'audio/.*\')');
+    expect(rules).toContain('match /videos/{userId}/{fileName}');
+    expect(rules).toContain('match /thumbnails/{userId}/{fileName}');
+    expect(rules).toContain('25 * 1024 * 1024');
+  });
+});
+
+describe('firebase.json - global CDN caching', () => {
+  test('hashed assets immutable + sw.js no-cache', () => {
+    const cfg = JSON.parse(fs.readFileSync(path.join(root, 'firebase.json'), 'utf8'));
+    const headers = cfg.hosting.headers || [];
+    const assets = headers.find((h) => h.source === '/assets/**');
+    expect(assets.headers.find((x) => x.key === 'Cache-Control').value).toContain('immutable');
+    const sw = headers.find((h) => h.source === '/sw.js');
+    expect(sw.headers.find((x) => x.key === 'Cache-Control').value).toContain('no-cache');
+  });
+});
+
+describe('Ranking service - N+1 killed', () => {
+  test('rankings loops use batched userMap, not per-user getDoc', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/rankingService.js'), 'utf8');
+    expect(src).toContain('_fetchUsersByIds');
+    expect(src).toContain("where('__name__', 'in', chunk)");
+    // The four leaderboard loops must not contain the old per-user getDoc block
+    expect(src).not.toContain("const userSnap = await getDoc(userRef);");
+  });
+});
+
+describe('Unbounded queries bounded', () => {
+  test('soundService no longer scans the whole sounds collection', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/soundService.js'), 'utf8');
+    expect(src).not.toContain('const allSounds = await getDocs(soundsCol);');
+    expect(src).toContain('limit(200)');
+    expect(src).toContain("getDoc(doc(firestore, 'sounds', id))");
+  });
+
+  test('collections items + blocks reads are bounded', () => {
+    const cols = fs.readFileSync(path.join(root, 'src/services/collectionsService.js'), 'utf8');
+    expect(cols).toContain('limit(200)');
+    const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
+    expect(feed).toContain('fLimit(1000)');
+  });
+});
+
+describe('UI/UX - a11y + states', () => {
+  test('useEscapeClose hook exists and is wired into key modals', () => {
+    const hook = fs.readFileSync(path.join(root, 'src/hooks/useEscapeClose.js'), 'utf8');
+    expect(hook).toContain("e.key !== 'Escape'");
+    for (const f of ['src/screens/Spaces/SpacesScreen.jsx', 'src/screens/Marketplace/MarketplaceScreen.jsx',
+                     'src/screens/Sounds/SoundsScreen.jsx', 'src/screens/LiveScreen.jsx']) {
+      const src = fs.readFileSync(path.join(root, f), 'utf8');
+      expect(src).toContain('useEscapeClose');
+    }
+  });
+
+  test('global focus-visible + reduced-motion kill-switch in tailwind.css', () => {
+    const css = fs.readFileSync(path.join(root, 'src/styles/tailwind.css'), 'utf8');
+    expect(css).toContain(':focus-visible');
+    expect(css).toContain('prefers-reduced-motion: reduce');
+  });
+
+  test('icon-only buttons have aria-labels', () => {
+    const rail = fs.readFileSync(path.join(root, 'src/components/Videos/VideoActionRail.jsx'), 'utf8');
+    expect(rail).toContain('"Unlike video" : "Like video"');
+    expect(rail).toContain('aria-label="Comment on video"');
+    const topbar = fs.readFileSync(path.join(root, 'src/components/Videos/VideoTopBar.jsx'), 'utf8');
+    expect(topbar).toContain('aria-pressed');
+  });
+
+  test('Marketplace buy has processing state', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+    expect(src).toContain('buyingId');
+    expect(src).toContain("'Processing…'");
+  });
+
+  test('MessagingScreen shows a skeleton loader', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/MessagingScreen.jsx'), 'utf8');
+    expect(src).toContain('shimmer');
+    expect(src).toContain('Loading conversations');
+  });
+
+  test('LiveScreen cleans up intervals on unmount while live', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/LiveScreen.jsx'), 'utf8');
+    expect(src).toContain('myStreamRef.current && user?.uid');
+    expect(src).toContain('endLiveStream(myStreamRef.current.id');
+  });
+});

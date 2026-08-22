@@ -251,14 +251,14 @@ class CollaborationService {
 
     // Delete all team members
     const teamRef = collection(this.firestore, 'collaboration_projects', projectId, 'team');
-    const teamSnap = await getDocs(teamRef);
+    const teamSnap = await getDocs(query(teamRef, limit(500)));
     const batch = this.firestore.batch();
     teamSnap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
 
     // Delete all content versions
     const contentRef = collection(this.firestore, 'collaboration_projects', projectId, 'content');
-    const contentSnap = await getDocs(contentRef);
+    const contentSnap = await getDocs(query(contentRef, limit(500)));
     const contentBatch = this.firestore.batch();
     contentSnap.docs.forEach((doc) => contentBatch.delete(doc.ref));
     await contentBatch.commit();

@@ -41,16 +41,30 @@ class SoundService {
   async getSavedSounds(userId) {
     try {
       const firestore = await getFirestoreInstance();
-      const { collection, getDocs, query, where } = await import('firebase/firestore');
-      const snap = await getDocs(query(collection(firestore, 'saved_sounds'), where('userId', '==', userId)));
+      const { collection, getDocs, query, where, limit } = await import('firebase/firestore');
+      const snap = await getDocs(query(
+        collection(firestore, 'saved_sounds'),
+        where('userId', '==', userId),
+        limit(200)
+      ));
       const soundIds = snap.docs.map(d => d.data().soundId);
       if (soundIds.length === 0) return [];
 
-      const soundsCol = collection(firestore, 'sounds');
-      const allSounds = await getDocs(soundsCol);
-      return allSounds.docs
-        .filter(d => soundIds.includes(d.id))
-        .map(d => ({ id: d.id, ...d.data() }));
+      // Batched by-id fetch (chunks of 30) — NEVER a full collection scan.
+      const { doc, getDoc } = await import('firebase/firestore');
+      const sounds = [];
+      for (let i = 0; i < soundIds.length; i += 30) {
+        const chunk = soundIds.slice(i, i + 30);
+        const results = await Promise.allSettled(
+          chunk.map(id => getDoc(doc(firestore, 'sounds', id)))
+        );
+        results.forEach((r, j) => {
+          if (r.status === 'fulfilled' && r.value.exists()) {
+            sounds.push({ id: chunk[j], ...r.value.data() });
+          }
+        });
+      }
+      return sounds;
     } catch (err) {
       log.error('Error fetching saved sounds', err);
       return [];

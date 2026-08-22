@@ -95,15 +95,22 @@ export default function NotificationsScreen() {
   }, [user?.uid]);
 
   // Handle Mark All Read
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const handleMarkAllRead = async () => {
+    if (markingAllRead) return;
+    setMarkingAllRead(true);
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
-    toast.success('All notifications marked as read');
     if (user?.uid) {
       try {
         await notificationsService.markAllAsRead(user.uid);
       } catch (err) {
         console.warn(err);
+        toast.error('Could not sync read state');
+      } finally {
+        setMarkingAllRead(false);
       }
+    } else {
+      setMarkingAllRead(false);
     }
   };
 
@@ -230,10 +237,11 @@ export default function NotificationsScreen() {
             {/* Mark All Read */}
             <button
               onClick={handleMarkAllRead}
+              disabled={markingAllRead}
               title="Mark all as read"
               aria-label="Mark all as read"
               className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all disabled:opacity-50",
                 isDark ? "bg-white/5 hover:bg-white/10 text-white/80" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               )}
             >

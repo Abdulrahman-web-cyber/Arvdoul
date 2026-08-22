@@ -1,10 +1,12 @@
 // GDPR Article 20 — Data Export (machine-readable ZIP)
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const { checkRateLimit } = require('./rateLimit');
 
 exports.exportUserData = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
   const uid = context.auth.uid;
+  await checkRateLimit(uid, 'exportUserData', 1, 300000); // max 1 export / 5 min
   const db = admin.firestore();
   try {
     const userSnap = await db.collection('users').doc(uid).get();

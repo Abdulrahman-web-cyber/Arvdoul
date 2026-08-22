@@ -37,6 +37,7 @@ const VideoTopBar = memo(({
       <div className="flex items-center gap-6">
         <button
           onClick={() => onTabChange?.('following')}
+          aria-pressed={activeTab === 'following'}
           className={`relative py-1 text-sm font-bold tracking-wide transition-all ${
             activeTab === 'following'
               ? 'text-white scale-105'
@@ -55,6 +56,7 @@ const VideoTopBar = memo(({
 
         <button
           onClick={() => onTabChange?.('for_you')}
+          aria-pressed={activeTab === 'for_you'}
           className={`relative py-1 text-sm font-bold tracking-wide transition-all ${
             activeTab === 'for_you'
               ? 'text-white scale-105'

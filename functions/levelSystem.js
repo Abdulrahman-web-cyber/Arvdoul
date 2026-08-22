@@ -15,6 +15,7 @@
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const { checkRateLimit } = require('./rateLimit');
 
 const db = admin.firestore();
 
@@ -68,6 +69,7 @@ exports.awardExperience = functions
       throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
     }
     const uid = context.auth.uid;
+    await checkRateLimit(uid, 'awardExperience', 60, 60000);
 
     const action = data && data.action;
     const count = Number((data && data.count) || 1);

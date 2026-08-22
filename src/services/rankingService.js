@@ -158,22 +158,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rankings = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
-        // Get user details
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = {
-              id: userSnap.id,
-              ...userSnap.data(),
-            };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rankings.push({
@@ -232,18 +226,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rankings = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = { id: userSnap.id, ...userSnap.data() };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rankings.push({
@@ -284,18 +276,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rankings = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = { id: userSnap.id, ...userSnap.data() };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rankings.push({
@@ -412,18 +402,16 @@ class RankingService {
 
       const snapshot = await getDocs(q);
       const rising = [];
+      const userMap = await this._fetchUsersByIds(snapshot.docs.map((d) => d.data().userId));
 
       for (let i = 0; i < snapshot.docs.length; i++) {
         const doc = snapshot.docs[i];
         const data = doc.data();
         
+        // Batched user lookup (kills N+1)
         let user = null;
-        if (data.userId) {
-          const userRef = doc(this.firestore, 'users', data.userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            user = { id: userSnap.id, ...userSnap.data() };
-          }
+        if (data.userId && userMap.has(data.userId)) {
+          user = userMap.get(data.userId);
         }
 
         rising.push({
@@ -579,6 +567,28 @@ class RankingService {
       logger.error('[RankingService] Failed to get user badges:', error);
       return {};
     }
+  }
+
+
+  // ==================== BATCHED USER FETCH (kills N+1) ====================
+  // Fetches user docs for many ids with `where('__name__', 'in', chunk)` in
+  // chunks of 30 (Firestore limit) — 1-2 round trips instead of one per user.
+  async _fetchUsersByIds(userIds) {
+    const unique = [...new Set((userIds || []).filter(Boolean))];
+    const users = new Map();
+    if (unique.length === 0) return users;
+    for (let i = 0; i < unique.length; i += 30) {
+      const chunk = unique.slice(i, i + 30);
+      try {
+        const snap = await getDocs(
+          query(collection(this.firestore, 'users'), where('__name__', 'in', chunk))
+        );
+        snap.forEach((d) => users.set(d.id, { id: d.id, ...d.data() }));
+      } catch (err) {
+        logger.warn('[RankingService] batched user fetch failed (chunk skipped):', err.message);
+      }
+    }
+    return users;
   }
 
   // ==================== HELPER METHODS ====================
