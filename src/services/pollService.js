@@ -129,17 +129,23 @@ class PollService {
     const firestore = await getFirestoreInstance();
     const { collection, addDoc } = await import('firebase/firestore');
 
+    // Honest creator identity: real user fields only. Never fabricate an
+    // id/name/avatar — anonymous fallbacks are explicit, not invented people.
+    const now = new Date();
+    const POLL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
     const newPoll = {
       question,
       category,
       creator: {
-        id: creator?.uid || 'usr-creator',
-        name: creator?.displayName || 'Arvdoul Creator',
-        username: creator?.username ? `@${creator.username}` : '@creator',
-        avatar: creator?.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
+        id: creator?.uid || null,
+        name: creator?.displayName || '',
+        username: creator?.username ? `@${creator.username}` : null,
+        avatar: creator?.photoURL || null
       },
       totalVotes: 0,
-      endsIn: '7 days left',
+      // Real end timestamp (computed, not a hardcoded label). The UI derives
+      // the human label from this value.
+      endsAt: new Date(now.getTime() + POLL_DURATION_MS).toISOString(),
       options: options.map((optText, idx) => ({
         id: `opt-${idx}`,
         text: optText,
@@ -147,8 +153,10 @@ class PollService {
         percentage: 0
       })),
       isPredictionMarket,
-      poolCoins: isPredictionMarket ? 5000 : 0,
-      createdAt: new Date().toISOString()
+      // Prediction pools start at 0 — every coin is a real wager. No free
+      // starting pool.
+      poolCoins: 0,
+      createdAt: now.toISOString()
     };
 
     const docRef = await addDoc(collection(firestore, 'polls'), newPoll);

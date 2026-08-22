@@ -102,6 +102,96 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 20. Every-screen module-load failure FIX + deep fabrication sweep
+
+**ROOT CAUSE — "Failed to fetch dynamically imported module" on EVERY screen**
+- The PWA service worker (`public/sw.js` v1) intercepted **all** same-origin
+  GETs with cache-first semantics — including unversioned dev-mode module URLs
+  (`/src/**`). After source rewrites/deletions (e.g. `seedPosts.js`), the SW
+  served stale cached modules whose import chains referenced deleted files →
+  every lazy route rejected with `TypeError: Failed to fetch dynamically
+  imported module: .../CreatePost.jsx` and the intro showed "Temporary Glitch".
+- **Fix**: `sw.js` v2 (`arvdoul-v2`) only intercepts navigations (network-first
+  → cached shell) and versioned production assets (`/assets/**` hashed bundles
+  + precache list). Dev module URLs, HMR (`/@vite/*`), `/src/*`, API calls →
+  pure network pass-through. `CACHE_NAME` bumped so the poisoned v1 cache is
+  purged on activate.
+- `index.html` no longer registers the SW unconditionally; registration moved
+  to `src/main.jsx` gated by `import.meta.env.PROD`, with dev-mode
+  self-healing: unregister any stale SW + purge caches on boot (fixes browsers
+  that still hold the broken v1).
+
+**Intro screen / GlobalErrorBoundary / AppBootstrap hardening**
+- `intro.glitchTitle/glitchText` are no longer dishonest "Temporary Glitch":
+  all 7 locales now say "Something went wrong" + honest description + real
+  error detail rendered inline; added `intro.errorDetail` key (7 locales).
+- `GlobalErrorBoundary` now DETECTS module-load errors
+  (`isModuleLoadError`: dynamically imported module / chunk failed) and
+  recovers properly: purge service workers + caches → hard reload. "Clear
+  Cache & Reset" also purges SW state before reloading.
+- `AppBootstrap` — `onReady` was an inline arrow recreated every render,
+  re-running the ENTIRE system init (Firebase, feature flags, RUM, offline
+  drain wiring) on every re-render. Now `useCallback`-stabilized.
+
+**Fabricated content removed (zero-mock sweep)**
+- `pollService.createPoll` — fabricated creator identity ('usr-creator',
+  'Arvdoul Creator', '@creator', Unsplash avatar) written to real Firestore
+  docs → real user fields or explicit nulls; fake `endsIn: '7 days left'` →
+  real computed `endsAt`; prediction pools no longer start with a fabricated
+  5,000 coins (0 = all real wagers). `PollsScreen` renders the honest
+  countdown + initials-avatar fallback.
+- `collaborationService.getStats()` — hardcoded "Arvdoul Launch Reel" sample
+  project (Unsplash + pravatar) → real Firestore query
+  (`collaboration_projects` where ownerId == user, client-side sort, no
+  composite-index requirement). Dashboard handles null thumbnails/members.
+- `thumbnailService.generateThumbnailsFromVideo` — placeholder stub
+  ("Would be actual frame URL") → REAL canvas frame extraction
+  (seek → drawImage → JPEG data URL, per-frame error tolerance).
+- `videoUtils.generateThumbnail` — picsum.photos placeholder generator (dead
+  code) → honest `''` (callers render neutral tiles).
+- `VideoEditor` — demo project media (`SAMPLE_PROJECT_MEDIA`, `INITIAL_LAYERS`
+  with Google demo videos + Unsplash) deleted; `STOCK_VIDEOS`/`STOCK_AUDIO`
+  catalogs (invented titles/BPMS over hotlinked demo files) → honest EMPTY
+  catalogs with empty states in `MediaDrawer`/`ToolPanels`; added-video clips
+  now get REAL frame thumbnails (`captureVideoFrame`); audio clips get REAL
+  waveforms (`analyzeAudioWaveform` via Web Audio decode — the old
+  `Math.random()` waveform was fabricated); editor opens as honest
+  "Untitled Project" with no pre-made timeline.
+- `TrimSubPanel` filmstrip — Unsplash fallback → neutral gradient tiles.
+- `ThumbnailDesigner` — Unsplash "sample" canvas + demo "Explore More" text/
+  sticker composition → self-contained branded SVG gradient canvas, empty
+  composition; text-layer overlay now renders the ACTUAL layer data
+  (text/font/color/shadow/position) instead of hardcoded demo strings.
+- `aiStudioService` — removed ALL local template fallbacks (VIRAL_HOOK_TEMPLATES,
+  SAMPLE_SCRIPTS, fake viral scores 85–99, fake "6:30 PM - 8:45 PM" best-time,
+  fake sentiment/retention forecasts). When the AI gateway is unconfigured,
+  every generator returns `null` and `AIStudioScreen` shows an honest
+  unavailable banner + toasts. Real-path results no longer carry invented
+  metrics either (`viralScore: null`, `recommendedPostTime: null`, raw AI text
+  only).
+- `ConflictResolutionScreen` — hardcoded fake conflict ("Loving the new
+  Arvdoul update!") → REAL pending operations from `OfflineQueue`
+  (new `getPending()`/`remove(id)`), with Keep-retry / Discard actions and an
+  honest "No sync conflicts detected" empty state.
+- `NotificationsScreen` — every notification stamped `timestamp: 'Just now'` +
+  fabricated "Arvdoul User"/"interacted with your content." copy → real
+  `createdAt` timestamps, honest fallbacks, no invented message text.
+- CSP hardening: `CSPService` + `securityHeadersService` img-src no longer
+  permit `images.unsplash.com` / `picsum.photos` (nothing in the app uses
+  them anymore).
+
+**Regression guards**: `noFabricatedData.test.js` extended with suites for the
+SW (never caches `/src`, prod-only registration, no unconditional index.html
+registration), VideoEditor (no Unsplash/demo project, real capture/analyze
+helpers), pollService, collaborationService, videoUtils, CSP, ThumbnailDesigner,
+AI Studio (no template fallbacks), ConflictResolutionScreen, NotificationsScreen.
+`noMocks.test.js` now asserts every AI generator returns null without a gateway.
+`production.upgraded.test.js` asserts the honest empty stats shape.
+
+**Verification**: 35 suites / 448 tests green, lint 0 errors, build OK,
+coverage 16.64% stmts / 17.5% lines (floors intact), dev server serves all
+modified modules 200.
+
 ### 19. Stories + feed screens: real data end-to-end (fake data elimination #3)
 
 **STORIES SYSTEM (called out) — all simulated data replaced**

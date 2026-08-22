@@ -16,7 +16,7 @@ class CSPService {
   generateCSPHeader(nonce = '') {
     const scriptSrc = nonce ? `'self' 'nonce-${nonce}' https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/` : `'self' 'unsafe-inline' https://apis.google.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/`;
     const styleSrc = `'self' 'unsafe-inline' https://fonts.googleapis.com`;
-    const imgSrc = `'self' data: blob: https: https://*.googleusercontent.com https://firebasestorage.googleapis.com https://images.unsplash.com`;
+    const imgSrc = `'self' data: blob: https: https://*.googleusercontent.com https://firebasestorage.googleapis.com`;
     const connectSrc = `'self' https: wss: https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com`;
     const fontSrc = `'self' data: https://fonts.gstatic.com`;
     const frameSrc = `'self' https://*.firebaseapp.com https://www.google.com/recaptcha/`;

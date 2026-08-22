@@ -60,11 +60,51 @@ class GlobalErrorBoundaryBase extends Component {
     console.error("💥 ARVDOUL CRASH:", error, errorInfo);
   }
 
+  // A failed dynamic import() — "Failed to fetch dynamically imported module",
+  // "error loading dynamically imported module", "Importing a module script
+  // failed" — means the module request itself failed or a stale service worker
+  // served a poisoned cache entry. The only reliable recovery is to purge the
+  // SW + caches and reload; re-initializing Firebase cannot fix it.
+  isModuleLoadError(error) {
+    const msg = error?.message || String(error?.stack || '');
+    return /dynamically imported module|module script failed|Loading chunk .* failed|import\(\) of .* failed/i.test(msg);
+  }
+
+  // Best-effort: unregister every service worker and delete every cache.
+  // Never rejects — recovery must proceed even if storage is blocked.
+  async purgeServiceWorkerState() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((reg) => reg.unregister()));
+      }
+    } catch (err) {
+      console.warn('SW unregister failed (continuing):', err.message);
+    }
+    try {
+      if (window.caches && typeof window.caches.keys === 'function') {
+        const keys = await window.caches.keys();
+        await Promise.all(keys.map((k) => window.caches.delete(k)));
+      }
+    } catch (err) {
+      console.warn('Cache purge failed (continuing):', err.message);
+    }
+  }
+
   handleRecover = async () => {
     this.setState(prev => ({
       recoveryAttempts: prev.recoveryAttempts + 1,
       isRecovering: true
     }));
+
+    const { error } = this.state;
+
+    // Module-load failures: purge the service worker + caches, then hard reload.
+    if (this.isModuleLoadError(error)) {
+      await this.purgeServiceWorkerState();
+      window.location.reload();
+      return;
+    }
 
     try {
       const mod = await import('../firebase/firebase.js');
@@ -91,7 +131,9 @@ class GlobalErrorBoundaryBase extends Component {
   handleReset = () => {
     localStorage.clear();
     sessionStorage.clear();
-    window.location.reload();
+    // Also drop any service worker / cache state that could be serving stale
+    // code, so "Clear Cache & Reset" actually clears everything.
+    this.purgeServiceWorkerState().finally(() => window.location.reload());
   };
 
   handleCopy = async () => {

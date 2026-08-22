@@ -213,6 +213,30 @@ class OfflineQueue {
     return this._memory.filter((o) => o.status === 'pending').length;
   }
 
+  /** All pending operations (real unsynced local changes), newest first. */
+  async getPending() {
+    const db = await this._db();
+    let all = [];
+    if (db) {
+      all = await db.getAllFromIndex(QUEUE_STORE, 'status', 'pending');
+    } else {
+      all = this._memory.filter((o) => o.status === 'pending');
+    }
+    all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return all;
+  }
+
+  /** Remove a single queued operation by id (e.g. user chose to discard it). */
+  async remove(id) {
+    if (!id) return;
+    const db = await this._db();
+    if (db) {
+      await db.delete(QUEUE_STORE, id);
+    } else {
+      this._memory = this._memory.filter((o) => o.id !== id);
+    }
+  }
+
   async clear() {
     const db = await this._db();
     if (db) await db.clear(QUEUE_STORE);

@@ -594,12 +594,14 @@ describe('Upgraded Production Services Integration Tests', () => {
       expect(waveform.length).toBeGreaterThan(0);
     });
 
-    test('collaborationService returns user stats and projects overview', async () => {
-      const stats = collaborationService.getStats();
+    test('collaborationService returns an honest stats overview (no fabricated sample projects)', async () => {
+      const stats = await collaborationService.getStats(null);
       expect(stats).toBeDefined();
       expect(Array.isArray(stats.projects)).toBe(true);
-      expect(stats.projects.length).toBeGreaterThan(0);
-      expect(stats.projects[0].id).toBe('proj-sample-1');
+      // Honest empty state: without a user there are no projects, and the
+      // service must NEVER invent sample projects (regression: v1 returned a
+      // hardcoded 'proj-sample-1' demo project).
+      expect(stats.projects).toEqual([]);
     });
   });
 });

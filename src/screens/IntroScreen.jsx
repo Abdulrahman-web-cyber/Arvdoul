@@ -154,12 +154,18 @@ class IntroErrorBoundary extends Component {
             <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
               {t("intro.glitchTitle")}
             </h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm mb-6">
+            <p className="text-gray-600 dark:text-gray-300 text-sm mb-2">
               {t("intro.glitchText")}
             </p>
+            {this.state.error?.message && (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 break-words mb-6">
+                <span className="uppercase tracking-wide mr-1">{t("intro.errorDetail")}:</span>
+                {this.state.error.message}
+              </p>
+            )}
             <div className="flex flex-col gap-2.5 sm:flex-row justify-center">
               <button
-                onClick={() => this.setState({ hasError: false, error: null })}
+                onClick={() => this.setState({ hasError: false, error: null, autoRecovered: true })}
                 className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:shadow-lg transition-all duration-300 min-h-[44px]"
               >
                 {t("intro.retry")}

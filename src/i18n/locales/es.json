@@ -64,8 +64,8 @@
   },
   "intro": {
     "loading": "Cargando Arvdoul...",
-    "glitchTitle": "Fallo temporal",
-    "glitchText": "La pantalla de introducción encontró un problema. Esto no afectará a la aplicación principal.",
+    "glitchTitle": "Algo salió mal",
+    "glitchText": "La pantalla de introducción no pudo cargarse. Este es un error real: vuelve a intentarlo o continúa a la aplicación; tu cuenta y tus datos están a salvo.",
     "retry": "Reintentar",
     "title1": "Conecta. Crea.",
     "title2": "Comunidad.",
@@ -121,7 +121,8 @@
     "signIn": "Iniciar sesión",
     "footnote": "Plan gratuito disponible • Sin tarjeta de crédito",
     "srWelcome": "Bienvenido a Arvdoul. Conecta con amigos, construye comunidades y crea contenido increíble.",
-    "continueToApp": "Continuar a la app"
+    "continueToApp": "Continuar a la app",
+    "errorDetail": "Detalles del error"
   },
   "settings": {
     "title": "Configuración y preferencias",

@@ -2,7 +2,7 @@
 // 🏗️ Perfect architecture with clean imports
 // ⚡ No circular dependencies, perfect chunking
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { MotionConfig } from 'framer-motion';
@@ -201,13 +201,19 @@ export default function AppBootstrap() {
   const [isReady, setIsReady] = useState(false);
   const [initializationStage, setInitializationStage] = useState('starting');
 
+  // Stable identity: SystemInitializer's effect depends on onReady, and an
+  // inline arrow would get a fresh identity on every render — re-running the
+  // whole system initialization (Firebase, feature flags, RUM, offline drain)
+  // on every AppBootstrap re-render.
+  const handleReady = useCallback(() => setIsReady(true), []);
+
   return (
     <HelmetProvider>
       <ThemeProvider>
         <GlobalErrorBoundary>
           {/* System initializer (invisible) */}
           <SystemInitializer 
-            onReady={() => setIsReady(true)}
+            onReady={handleReady}
           />
           
           {/* Main application - Only render when ready */}

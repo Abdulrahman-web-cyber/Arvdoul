@@ -59,23 +59,29 @@ export default function NotificationsScreen() {
     try {
       unsub = notificationsService.subscribeToUserNotifications(user.uid, (firestoreNotifs) => {
         if (Array.isArray(firestoreNotifs) && firestoreNotifs.length > 0) {
-          // Merge real notifications with design system items
+          // Map real Firestore notifications — real fields only, real timestamps.
           setNotifications((prev) => {
-            const formatted = firestoreNotifs.map((fn, idx) => ({
-              id: fn.id || `fn-${idx}`,
-              category: fn.type?.includes('message') ? 'Messages' : fn.type?.includes('friend') ? 'Friends' : fn.type?.includes('coin') ? 'Coins' : 'All',
-              type: fn.type || 'system',
-              timeGroup: 'Now',
-              user: {
-                name: fn.senderName || fn.title || 'Arvdoul User',
-                username: fn.senderUsername || 'user',
-                avatar: fn.senderAvatar || '/assets/default-profile.png',
-                verified: true,
-              },
-              message: fn.body || fn.message || 'interacted with your content.',
-              timestamp: 'Just now',
-              unread: !fn.read,
-            }));
+            const formatted = firestoreNotifs.map((fn, idx) => {
+              const createdAt = fn.createdAt?.toDate?.() || (fn.createdAt ? new Date(fn.createdAt) : null);
+              const ts = createdAt && !Number.isNaN(createdAt.getTime())
+                ? createdAt.toLocaleString()
+                : (fn.timestamp ? String(fn.timestamp) : '');
+              return {
+                id: fn.id || `fn-${idx}`,
+                category: fn.type?.includes('message') ? 'Messages' : fn.type?.includes('friend') ? 'Friends' : fn.type?.includes('coin') ? 'Coins' : 'All',
+                type: fn.type || 'system',
+                timeGroup: createdAt ? (Date.now() - createdAt.getTime() < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
+                user: {
+                  name: fn.senderName || fn.title || '',
+                  username: fn.senderUsername || '',
+                  avatar: fn.senderAvatar || '/assets/default-profile.png',
+                  verified: !!fn.senderVerified,
+                },
+                message: fn.body || fn.message || '',
+                timestamp: ts,
+                unread: !fn.read,
+              };
+            });
             return formatted;
           });
         }
@@ -154,7 +160,7 @@ export default function NotificationsScreen() {
   const groupedNotifications = useMemo(() => {
     const groups = { Now: [], Today: [], Yesterday: [], Earlier: [] };
     filteredNotifications.forEach((n) => {
-      const g = n.timeGroup || 'Today';
+      const g = n.timeGroup || 'Recent';
       if (!groups[g]) groups[g] = [];
       groups[g].push(n);
     });

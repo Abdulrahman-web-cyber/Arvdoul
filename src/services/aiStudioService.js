@@ -3,7 +3,6 @@
 // Advanced creative assistant supporting prompt caching, request queuing, budget caps, and multi-model fallback.
 
 import { svcLogger } from './ServiceKit.js';
-import { secureRandom } from '../lib/utils.js';
 import localforage from 'localforage';
 
 const log = svcLogger('aiStudioService');
@@ -17,29 +16,11 @@ const TONES = {
   humor: { label: '😂 Meme & Sarcastic', emojis: ['💀', '😭', '🤡', '🤣', '👀'] }
 };
 
-const VIRAL_HOOK_TEMPLATES = [
-  "Stop scrolling if you want to know how {topic} actually works.",
-  "Nobody is talking about this secret to {topic}, but they should be.",
-  "I tested {topic} for 30 days so you don't have to — here's the truth:",
-  "If you struggle with {topic}, save this video right now.",
-  "3 brutal truths about {topic} that most creators won't tell you.",
-  "The exact blueprint I used to master {topic} in under 10 minutes.",
-  "Wait until the end to see the craziest part about {topic}."
-];
-
-const SAMPLE_SCRIPTS = {
-  tech: [
-    { scene: 1, time: '0:00 - 0:03', visual: 'High energy fast-paced zoom in on gadget / screen', audioCue: 'Boom SFX + energetic bass hit', speech: 'This one AI tool completely replaced 5 of my apps.' },
-    { scene: 2, time: '0:03 - 0:15', visual: 'Screen recording walkthrough with animated arrow overlays', audioCue: 'Lofi beat continues', speech: 'Look at how fast this handles automated video cuts and audio cleanup.' },
-    { scene: 3, time: '0:15 - 0:25', visual: 'Split screen comparing before and after results', audioCue: 'Whoosh transition', speech: 'Before it took 3 hours. Now it takes literally 45 seconds.' },
-    { scene: 4, time: '0:25 - 0:30', visual: 'Direct to camera call to action with text overlay', audioCue: 'Riser SFX + outro chime', speech: 'Link in my bio to try it out. Follow for more daily tech hacks!' }
-  ],
-  lifestyle: [
-    { scene: 1, time: '0:00 - 0:03', visual: 'Aesthetic morning pouring coffee or lighting candle', audioCue: 'Soft ASMR click + gentle acoustic chord', speech: 'The one habit that fixed my focus this year.' },
-    { scene: 2, time: '0:03 - 0:18', visual: 'B-roll montage of journaling, workspace, and stretching', audioCue: 'Warm lofi piano', speech: 'I stopped checking notifications for the first 60 minutes after waking up.' },
-    { scene: 3, time: '0:18 - 0:30', visual: 'Warm smile to camera with quote card overlay', audioCue: 'Gentle synth swell', speech: 'Try it tomorrow morning and let me know in the comments how you feel.' }
-  ]
-};
+// NO local template fallbacks. AI output is only ever produced by the
+// server-side AI gateway (functions/ai.js). When the gateway is not
+// configured or fails, every generator returns null and the UI shows an
+// honest error — fabricated hooks, fake viral scores, invented "best time to
+// post" advice and sample scripts are NOT acceptable substitutes for AI.
 
 class AIStudioService {
   constructor() {
@@ -160,7 +141,7 @@ class AIStudioService {
     // user rate limits and budget caps, and holds the provider credentials.
     const gatewayUrl = import.meta.env?.VITE_AI_GATEWAY_URL;
     if (!gatewayUrl) {
-      log.warn('VITE_AI_GATEWAY_URL not configured - AI requests require a server-side gateway (functions/ai.js). Using local fallback templates.');
+      log.warn('VITE_AI_GATEWAY_URL not configured - AI requests require a server-side gateway (functions/ai.js). No local fallback is produced; the caller must show an honest error.');
       return null;
     }
 
@@ -248,56 +229,26 @@ class AIStudioService {
       const modCheck = this.moderateOutput(realResponse);
       if (modCheck.flagged) {
         log.warn('OpenAI output flagged by moderation filter', modCheck.reason);
-      } else {
-        const hashtags = realResponse.match(/#[a-zA-Z0-9]+/g) || [];
-        const viralScore = Math.floor(secureRandom() * 15) + 85;
-
-        return {
-          hook: realResponse.split('\n')[0] || `Secret of ${cleanTopic}`,
-          body: realResponse,
-          hashtags,
-          viralScore,
-          tone: selectedTone.label,
-          recommendedPostTime: '6:30 PM - 8:45 PM',
-          source: 'openai-gpt-4o-mini'
-        };
+        return null;
       }
+      const hashtags = realResponse.match(/#[a-zA-Z0-9]+/g) || [];
+
+      // Only real data: the AI's own text + hashtags it actually produced.
+      // No invented viral scores or "best time to post" — those are null and
+      // the UI hides them.
+      return {
+        hook: realResponse.split('\n')[0] || null,
+        body: realResponse,
+        hashtags,
+        viralScore: null,
+        tone: selectedTone.label,
+        recommendedPostTime: null,
+        source: 'ai-gateway'
+      };
     }
 
-    // Fallback logic (Advanced Template Model)
-    await new Promise(r => setTimeout(r, 600));
-
-    const hook = VIRAL_HOOK_TEMPLATES[Math.floor(secureRandom() * VIRAL_HOOK_TEMPLATES.length)]
-      .replace('{topic}', cleanTopic);
-    
-    const bodyVariants = [
-      `Mastering ${cleanTopic} is all about consistency, deliberate practice, and knowing when to pivot.\n\nHere are 3 key takeaways you can apply today:\n1. Focus on the core fundamentals first.\n2. Don't overcomplicate your workflow.\n3. Measure real output over busywork.\n\nDrop a comment if you've been working on this too!`,
-      `The game changed completely when I started approaching ${cleanTopic} with a systems mindset.\n\nInstead of burning out, build scalable habits that compound over weeks and months.\n\nTag a friend who needs to see this!`,
-      `Most people overthink ${cleanTopic}. Here is the no-nonsense framework that works every single time.\n\nBookmark this post so you don't lose it when you need it.`
-    ];
-
-    const chosenBody = bodyVariants[Math.floor(secureRandom() * bodyVariants.length)];
-    const emojis = selectedTone.emojis.join(' ');
-    
-    const hashtags = [
-      `#${cleanTopic.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`,
-      '#ArvdoulCreators',
-      '#ViralReels',
-      '#ContentStrategy',
-      '#CreatorEconomy'
-    ];
-
-    const viralScore = Math.floor(secureRandom() * 15) + 85;
-
-    return {
-      hook,
-      body: `${hook}\n\n${chosenBody}\n\n${emojis}\n\n${hashtags.join(' ')}`,
-      hashtags,
-      viralScore,
-      tone: selectedTone.label,
-      recommendedPostTime: '6:30 PM - 8:45 PM',
-      source: 'local-fallback-template'
-    };
+    // Honest unavailable state — never fabricate a caption.
+    return null;
   }
 
   /**
@@ -312,34 +263,21 @@ class AIStudioService {
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
+      // Real AI output only. Title/derived labels come from the user's own
+      // inputs; pacing and BGM suggestions are the AI's call, not ours.
       return {
         title: `How to Master ${cleanTopic} in ${duration} Seconds`,
         targetDuration: `${duration}s`,
         style,
-        estimatedPacing: 'Fast & Punchy (140-160 WPM)',
+        estimatedPacing: null,
         rawScriptText: realResponse,
-        suggestedBgm: 'Synthwave Neon Rush (124 BPM)',
-        source: 'openai-gpt-4o-mini'
+        suggestedBgm: null,
+        source: 'ai-gateway'
       };
     }
 
-    await new Promise(r => setTimeout(r, 700));
-
-    const baseScenes = SAMPLE_SCRIPTS[style] || SAMPLE_SCRIPTS.tech;
-    const customizedScenes = baseScenes.map(sc => ({
-      ...sc,
-      speech: sc.speech.replace(/AI tool|habit/g, cleanTopic)
-    }));
-
-    return {
-      title: `How to Master ${cleanTopic} in ${duration} Seconds`,
-      targetDuration: `${duration}s`,
-      style,
-      estimatedPacing: 'Fast & Punchy (140-160 WPM)',
-      scenes: customizedScenes,
-      suggestedBgm: 'Synthwave Neon Rush (124 BPM)',
-      source: 'local-fallback-template'
-    };
+    // Honest unavailable state — no sample scripts.
+    return null;
   }
 
   /**
@@ -354,30 +292,15 @@ class AIStudioService {
     if (realResponse) {
       return {
         prompt: realResponse,
-        negativePrompt: 'blurry, low quality, distorted anatomy, text, watermark, bad hands, artifacts, oversaturated',
         ratio,
         style,
         lighting,
-        seed: Math.floor(secureRandom() * 9999999),
-        source: 'openai-gpt-4o-mini'
+        source: 'ai-gateway'
       };
     }
 
-    await new Promise(r => setTimeout(r, 500));
-
-    const finalPrompt = `Hyper-detailed 8k photograph of ${cleanSubject}, ${style.toLowerCase()} aesthetic, ${lighting.toLowerCase()} lighting, sharp focus, 35mm lens, f/1.8 aperture, octane render, vivid color grading, photorealistic reflections --ar ${ratio} --v 6.0`;
-
-    const negativePrompt = 'blurry, low quality, distorted anatomy, text, watermark, bad hands, artifacts, oversaturated';
-
-    return {
-      prompt: finalPrompt,
-      negativePrompt,
-      ratio,
-      style,
-      lighting,
-      seed: Math.floor(secureRandom() * 9999999),
-      source: 'local-fallback-template'
-    };
+    // Honest unavailable state — no locally assembled pseudo-prompts.
+    return null;
   }
 
   /**
@@ -389,64 +312,17 @@ class AIStudioService {
 
     const realResponse = await this._callOpenAI(prompt, systemPrompt);
     if (realResponse) {
+      // The AI's analysis is the only real signal. Viral scores, sentiment
+      // percentages and retention forecasts are NOT computed locally — any
+      // hardcoded numbers would be fabricated analytics, so they are omitted.
       return {
-        viralScore: Math.floor(secureRandom() * 15) + 80,
         rawAnalysis: realResponse,
-        sentiment: {
-          positive: 78,
-          curiosity: 88,
-          controversy: 12,
-          actionability: 92
-        },
-        retentionForecast: [
-          { second: '0s', retention: 100 },
-          { second: '3s', retention: 84 },
-          { second: '10s', retention: 68 },
-          { second: '20s', retention: 55 },
-          { second: '30s', retention: 48 }
-        ],
-        recommendations: [
-          'Place the strongest visual hook in the first 1.5 seconds.',
-          'Use high-contrast bold subtitles with key words highlighted in yellow.',
-          'Ask a specific question in the caption to drive comments.'
-        ],
-        source: 'openai-gpt-4o-mini'
+        source: 'ai-gateway'
       };
     }
 
-    await new Promise(r => setTimeout(r, 600));
-
-    const charCount = text?.length || 0;
-    const hasHook = text?.includes('?') || text?.includes('!') || charCount > 50;
-    const hasHashtags = text?.includes('#');
-
-    let viralScore = 70;
-    if (hasHook) viralScore += 15;
-    if (hasHashtags) viralScore += 10;
-    if (charCount > 100 && charCount < 500) viralScore += 4;
-
-    return {
-      viralScore: Math.min(viralScore, 98),
-      sentiment: {
-        positive: 78,
-        curiosity: 88,
-        controversy: 12,
-        actionability: 92
-      },
-      retentionForecast: [
-        { second: '0s', retention: 100 },
-        { second: '3s', retention: 84 },
-        { second: '10s', retention: 68 },
-        { second: '20s', retention: 55 },
-        { second: '30s', retention: 48 }
-      ],
-      recommendations: [
-        'Place the strongest visual hook in the first 1.5 seconds.',
-        'Use high-contrast bold subtitles with key words highlighted in yellow.',
-        'Ask a specific question in the caption to drive comments.'
-      ],
-      source: 'local-fallback-template'
-    };
+    // Honest unavailable state — no invented scores or forecasts.
+    return null;
   }
 
   /**

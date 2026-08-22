@@ -165,22 +165,7 @@
     <!-- Main React Entry -->
     <script type="module" src="/src/main.jsx"></script>
     
-    <!-- PWA Service Worker Registration -->
     <script>
-      // Register service worker in background
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(
-            (registration) => {
-              console.log('✅ ServiceWorker registered');
-            },
-            (err) => {
-              console.log('⚠️ ServiceWorker registration failed: ', err);
-            }
-          );
-        });
-      }
-      
       // Add spin animation for loading spinner
       const style = document.createElement('style');
       style.textContent = `

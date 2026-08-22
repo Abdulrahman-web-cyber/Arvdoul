@@ -64,8 +64,8 @@
   },
   "intro": {
     "loading": "Loading Arvdoul...",
-    "glitchTitle": "Temporary Glitch",
-    "glitchText": "The intro screen encountered an issue. This won't affect the main application.",
+    "glitchTitle": "Something went wrong",
+    "glitchText": "The intro screen failed to load. This is a real error — retry once, or continue to the app; your account and data are safe.",
     "retry": "Retry",
     "title1": "Connect. Create.",
     "title2": "Community.",
@@ -121,7 +121,8 @@
     "signIn": "Sign In",
     "footnote": "Free forever plan available • No credit card required",
     "srWelcome": "Welcome to Arvdoul. Connect with friends, build communities, and create amazing content.",
-    "continueToApp": "Continue to App"
+    "continueToApp": "Continue to App",
+    "errorDetail": "Error details"
   },
   "settings": {
     "title": "Settings & Preferences",

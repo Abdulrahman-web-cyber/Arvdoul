@@ -28,6 +28,22 @@ import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 
 const CATEGORIES = ['All', 'Tech & Trends', 'Gear & Studio', 'Creator Economy'];
 
+/** Honest countdown label derived from the poll's real endsAt timestamp.
+ *  Returns '' when the poll has no endsAt (data unavailable) — never invents
+ *  a duration. */
+function formatEndsIn(endsAt) {
+  if (!endsAt) return '';
+  const end = new Date(endsAt).getTime();
+  if (Number.isNaN(end)) return '';
+  const diffMs = end - Date.now();
+  if (diffMs <= 0) return 'Ended';
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 60) return `${diffMins}m left`;
+  const diffHrs = Math.floor(diffMins / 60);
+  if (diffHrs < 24) return `${diffHrs}h left`;
+  return `${Math.floor(diffHrs / 24)}d left`;
+}
+
 export default function PollsScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -197,10 +213,16 @@ export default function PollsScreen() {
                 {/* Poll Header */}
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="flex items-center gap-3">
-                    <img src={poll.creator.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
+                    {poll.creator?.avatar ? (
+                      <img src={poll.creator.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600/60 to-blue-600/60 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                        {(poll.creator?.name || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div>
-                      <span className="text-xs font-bold text-white block">{poll.creator.name}</span>
-                      <span className="text-[11px] text-gray-400">{poll.creator.username} • {poll.category}</span>
+                      <span className="text-xs font-bold text-white block">{poll.creator?.name || 'Anonymous'}</span>
+                      <span className="text-[11px] text-gray-400">{poll.creator?.username ? `${poll.creator.username} • ` : ''}{poll.category}</span>
                     </div>
                   </div>
 
@@ -211,7 +233,7 @@ export default function PollsScreen() {
                       </span>
                     )}
                     <span className="text-xs text-gray-400 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" /> {poll.endsIn}
+                      <Clock className="w-3.5 h-3.5" /> {formatEndsIn(poll.endsAt)}
                     </span>
                   </div>
                 </div>

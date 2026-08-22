@@ -15,9 +15,18 @@ import {
   Palette, AlignLeft, AlignCenter, AlignRight, Sun, Moon, Maximize2
 } from 'lucide-react';
 
-// Sample background image matching Screenshot 6 (Alpine mountain sunset over lake)
+// Studio base canvas: a self-contained branded gradient (inline SVG data URL).
+// No third-party stock photos — the user replaces this with their own image.
 const DEFAULT_IMAGE_URL =
-  'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&auto=format&fit=crop&q=90';
+  "data:image/svg+xml;utf8," +
+  "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='1500'>" +
+  "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
+  "<stop offset='0' stop-color='%238B5CF6'/>" +
+  "<stop offset='0.5' stop-color='%236366F1'/>" +
+  "<stop offset='1' stop-color='%2322D3EE'/>" +
+  "</linearGradient></defs>" +
+  "<rect width='1200' height='1500' fill='url(%23g)'/>" +
+  "</svg>";
 
 // Available display fonts matching Screenshot 6
 const FONT_OPTIONS = [
@@ -92,6 +101,9 @@ const FILTER_PRESETS = [
 ];
 
 // Initial layers matching Screenshot 6
+// Honest initial composition: an empty studio canvas (branded base image +
+// background). No pre-made "Explore More" demo text or sample stickers — the
+// designer opens empty and the user builds their own thumbnail.
 const INITIAL_LAYERS = [
   {
     id: 'layer-image',
@@ -101,53 +113,6 @@ const INITIAL_LAYERS = [
     visible: true,
     locked: true,
     opacity: 100,
-  },
-  {
-    id: 'layer-text-1',
-    name: 'Text Layer',
-    subtitle: 'Explore More',
-    type: 'text',
-    text: 'Explore\nMore',
-    font: 'poppins',
-    fontSize: 72,
-    color: '#FFFFFF',
-    gradient: 'from-white via-indigo-100 to-purple-300',
-    visible: true,
-    locked: false,
-    opacity: 100,
-    x: 50,
-    y: 36,
-    rotation: 0,
-    stroke: '#000000',
-    strokeWidth: 0,
-    shadow: true,
-    shadowBlur: 20,
-    shadowColor: 'rgba(0,0,0,0.8)',
-  },
-  {
-    id: 'layer-sticker-1',
-    name: 'Sticker',
-    subtitle: 'Mountains',
-    type: 'sticker',
-    stickerType: 'mountain',
-    visible: true,
-    locked: false,
-    opacity: 100,
-    x: 63,
-    y: 22,
-    scale: 1.2,
-    rotation: 0,
-  },
-  {
-    id: 'layer-gradient',
-    name: 'Gradient Overlay',
-    subtitle: 'Soft Light',
-    type: 'gradient',
-    gradientType: 'radial',
-    color: 'rgba(139, 30, 243, 0.25)',
-    visible: true,
-    locked: false,
-    opacity: 60,
   },
   {
     id: 'layer-bg',
@@ -169,7 +134,7 @@ export default function ThumbnailDesignerScreen() {
 
   // Layers & Project State
   const [layers, setLayers] = useState(INITIAL_LAYERS);
-  const [selectedLayerId, setSelectedLayerId] = useState('layer-text-1');
+  const [selectedLayerId, setSelectedLayerId] = useState('layer-image');
   const [activeRightTool, setActiveRightTool] = useState('text'); // 'crop' | 'adjust' | 'filters' | 'text' | 'draw' | 'stickers' | 'frames' | 'blur' | 'ai' | 'more'
   const [activeInspectorTab, setActiveInspectorTab] = useState('Font');
   const [activeFilterCategory, setActiveFilterCategory] = useState('VIBRANT');
@@ -723,71 +688,91 @@ export default function ThumbnailDesignerScreen() {
               </div>
             )}
 
-            {/* 5. Transformable Text Layer Overlay "Explore More" (Matching Screenshot 6) */}
-            {layers.find((l) => l.type === 'text' && l.visible) && (
-              <div
-                onClick={() => setSelectedLayerId('layer-text-1')}
-                className="absolute z-20 cursor-move"
-                style={{
-                  top: '32%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                {/* Bounding Box & Transformation Gizmo (Active only when selected) */}
-                {!isPreviewMode && selectedLayerId === 'layer-text-1' && (
-                  <div className="absolute -inset-4 border-2 border-white/80 rounded-xl pointer-events-none">
-                    {/* 4 Corner Scale Dots */}
-                    <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -top-1.5 -left-1.5" />
-                    <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -top-1.5 -right-1.5" />
-                    <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -bottom-1.5 -left-1.5" />
-                    <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -bottom-1.5 -right-1.5" />
-
-                    {/* Top center Mountain Anchor dot */}
-                    <div className="w-3.5 h-3.5 rounded-full bg-purple-500 border-2 border-white absolute -top-4 left-1/2 -translate-x-1/2" />
-
-                    {/* Bottom Left: Delete Handle (X in circle) */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteLayer('layer-text-1');
-                      }}
-                      className="w-6 h-6 rounded-full bg-black/80 border border-white/40 text-white flex items-center justify-center absolute -bottom-8 left-1/4 pointer-events-auto hover:bg-red-600 transition-colors shadow-lg"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Bottom Right: Rotate Handle (↺ in circle) */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toast.info('Rotating text layer');
-                      }}
-                      className="w-6 h-6 rounded-full bg-black/80 border border-white/40 text-white flex items-center justify-center absolute -bottom-8 right-1/4 pointer-events-auto hover:bg-purple-600 transition-colors shadow-lg"
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Rendered Text with Stylized Gradient Typography */}
+            {/* 5. Transformable Text Layer Overlay — renders the ACTUAL layer
+                content (real user text + per-layer style properties). */}
+            {layers.find((l) => l.type === 'text' && l.visible) && (() => {
+              const textLayer = layers.find((l) => l.type === 'text' && l.visible);
+              const fontSize = Math.min(72, Math.max(24, Number(textLayer?.fontSize) || 48));
+              const textColor = textLayer?.color || '#FFFFFF';
+              const textShadow = textLayer?.shadow
+                ? `0 4px 10px ${textLayer?.shadowColor || 'rgba(0,0,0,0.8)'}`
+                : 'none';
+              const lines = String(textLayer?.text || 'Text').split('\n');
+              return (
                 <div
-                  className="flex flex-col items-center justify-center text-center leading-[0.85] tracking-tight drop-shadow-[0_10px_25px_rgba(0,0,0,0.9)]"
+                  onClick={() => setSelectedLayerId(textLayer.id)}
+                  className="absolute z-20 cursor-move"
                   style={{
-                    fontFamily:
-                      FONT_OPTIONS.find((f) => f.id === (selectedLayer?.font || 'poppins'))?.family ||
-                      "'Poppins', sans-serif",
+                    top: `${textLayer?.y ?? 36}%`,
+                    left: `${textLayer?.x ?? 50}%`,
+                    transform: `translate(-50%, -50%) rotate(${textLayer?.rotation || 0}deg)`,
                   }}
                 >
-                  <span className="text-5xl md:text-7xl font-extrabold italic text-white drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
-                    Explore
-                  </span>
-                  <span className="text-4xl md:text-6xl font-extrabold italic bg-gradient-to-r from-purple-400 via-indigo-300 to-blue-400 bg-clip-text text-transparent drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
-                    More
-                  </span>
+                  {/* Bounding Box & Transformation Gizmo (Active only when selected) */}
+                  {!isPreviewMode && selectedLayerId === textLayer.id && (
+                    <div className="absolute -inset-4 border-2 border-white/80 rounded-xl pointer-events-none">
+                      {/* 4 Corner Scale Dots */}
+                      <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -top-1.5 -left-1.5" />
+                      <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -top-1.5 -right-1.5" />
+                      <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -bottom-1.5 -left-1.5" />
+                      <div className="w-3 h-3 rounded-full bg-white border-2 border-purple-500 absolute -bottom-1.5 -right-1.5" />
+
+                      {/* Top center Anchor dot */}
+                      <div className="w-3.5 h-3.5 rounded-full bg-purple-500 border-2 border-white absolute -top-4 left-1/2 -translate-x-1/2" />
+
+                      {/* Bottom Left: Delete Handle (X in circle) */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteLayer(textLayer.id);
+                        }}
+                        className="w-6 h-6 rounded-full bg-black/80 border border-white/40 text-white flex items-center justify-center absolute -bottom-8 left-1/4 pointer-events-auto hover:bg-red-600 transition-colors shadow-lg"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Bottom Right: Rotate Handle (↺ in circle) */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.info('Rotating text layer');
+                        }}
+                        className="w-6 h-6 rounded-full bg-black/80 border border-white/40 text-white flex items-center justify-center absolute -bottom-8 right-1/4 pointer-events-auto hover:bg-purple-600 transition-colors shadow-lg"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Rendered Text with Stylized Typography from the layer data */}
+                  <div
+                    className="flex flex-col items-center justify-center text-center leading-[0.85] tracking-tight drop-shadow-[0_10px_25px_rgba(0,0,0,0.9)]"
+                    style={{
+                      fontFamily:
+                        FONT_OPTIONS.find((f) => f.id === (textLayer?.font || 'poppins'))?.family ||
+                        "'Poppins', sans-serif",
+                      fontSize: `${fontSize}px`,
+                    }}
+                  >
+                    {lines.map((line, i) => (
+                      <span
+                        key={i}
+                        className="font-extrabold italic"
+                        style={{
+                          color: textColor,
+                          textShadow,
+                          WebkitTextStroke: textLayer?.stroke && Number(textLayer.strokeWidth) > 0
+                            ? `${textLayer.strokeWidth}px ${textLayer.stroke}`
+                            : '0px transparent',
+                        }}
+                      >
+                        {line}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Split Comparison Slider Overlay */}
             {isCompareActive && (

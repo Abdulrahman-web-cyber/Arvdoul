@@ -71,73 +71,99 @@ export default function MediaDrawer({
         {/* Media Grid */}
         <div className="flex-1 overflow-y-auto py-4">
           {activeTab === 'stock_videos' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {STOCK_VIDEOS.map((video) => (
-                <div
-                  key={video.id}
-                  className="group relative rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer shadow-md"
-                  onClick={() => {
-                    onAddMedia?.({
-                      type: 'video',
-                      title: video.title,
-                      url: video.url,
-                      thumbnail: video.thumbnail,
-                      duration: video.duration,
-                    });
-                    onClose();
-                  }}
-                >
-                  <div className="aspect-video relative overflow-hidden">
-                    <img
-                      src={video.thumbnail}
-                      alt={video.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-mono text-white font-bold">
-                      {video.duration}s
-                    </span>
+            STOCK_VIDEOS.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {STOCK_VIDEOS.map((video) => (
+                  <div
+                    key={video.id}
+                    className="group relative rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer shadow-md"
+                    onClick={() => {
+                      onAddMedia?.({
+                        type: 'video',
+                        title: video.title,
+                        url: video.url,
+                        thumbnail: video.thumbnail,
+                        duration: video.duration,
+                      });
+                      onClose();
+                    }}
+                  >
+                    <div className="aspect-video relative overflow-hidden">
+                      {video.thumbnail ? (
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-purple-900/70 to-blue-900/70 flex items-center justify-center">
+                          <Video className="w-8 h-8 text-white/40" />
+                        </div>
+                      )}
+                      <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-mono text-white font-bold">
+                        {video.duration}s
+                      </span>
+                    </div>
+                    <div className="p-2 flex items-center justify-between">
+                      <div className="text-xs font-semibold text-white truncate">{video.title}</div>
+                      <button className="p-1 rounded-lg bg-purple-600/30 group-hover:bg-purple-600 text-purple-300 group-hover:text-white transition-colors">
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="p-2 flex items-center justify-between">
-                    <div className="text-xs font-semibold text-white truncate">{video.title}</div>
-                    <button className="p-1 rounded-lg bg-purple-600/30 group-hover:bg-purple-600 text-purple-300 group-hover:text-white transition-colors">
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                <Video className="w-10 h-10 text-gray-500 mb-3" />
+                <p className="text-sm font-semibold text-white mb-1">No stock videos available</p>
+                <p className="text-xs text-gray-400">
+                  The stock library will appear here once a licensed media source is connected. Add your own files with the + button.
+                </p>
+              </div>
+            )
+          ) : (
+            STOCK_AUDIO.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {STOCK_AUDIO.map((audio) => (
+                  <div
+                    key={audio.id}
+                    className="flex items-center justify-between p-3 rounded-2xl bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer"
+                    onClick={() => {
+                      onAddMedia?.({
+                        type: 'audio',
+                        title: audio.title,
+                        url: audio.url,
+                        duration: 45,
+                      });
+                      onClose();
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <Music className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white">{audio.title}</div>
+                        <div className="text-[10px] text-gray-400">{audio.genre} • {audio.duration}</div>
+                      </div>
+                    </div>
+
+                    <button className="p-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white">
                       <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {STOCK_AUDIO.map((audio) => (
-                <div
-                  key={audio.id}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer"
-                  onClick={() => {
-                    onAddMedia?.({
-                      type: 'audio',
-                      title: audio.title,
-                      url: audio.url,
-                      duration: 45,
-                    });
-                    onClose();
-                  }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                      <Music className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-white">{audio.title}</div>
-                      <div className="text-[10px] text-gray-400">{audio.genre} • {audio.duration}</div>
-                    </div>
-                  </div>
-
-                  <button className="p-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white">
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                <Music className="w-10 h-10 text-gray-500 mb-3" />
+                <p className="text-sm font-semibold text-white mb-1">No soundtracks available</p>
+                <p className="text-xs text-gray-400">
+                  The music library will appear here once a licensed audio source is connected. Add your own audio with the + button.
+                </p>
+              </div>
+            )
           )}
         </div>
       </motion.div>

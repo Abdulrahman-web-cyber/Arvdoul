@@ -1,13 +1,43 @@
 /* ARVDOUL Service Worker — production PWA
- * Network-first for navigations (fresh app), cache-first for static assets.
- * The app is a SPA: fall back to index.html for any navigation.
+ *
+ * v2 (2026-08): hardened fetch strategy.
+ *
+ * CRITICAL FIX: v1 cache-first'd EVERY same-origin GET — including unversioned
+ * dev-mode module URLs (under /src/) and non-hashed scripts. When source
+ * files are rewritten or removed (e.g. seedPosts.js deletion), the SW kept
+ * serving the stale cached modules, so every lazy route failed with
+ * "Failed to fetch dynamically imported module". v2 only ever caches:
+ *   1. navigation responses (network-first, app-shell fallback), and
+ *   2. versioned production static assets (/assets/ hashed bundles) and
+ *      the small precache list (icons/logos/manifest).
+ * Everything else (dev modules, HMR, APIs) passes through untouched.
  */
-const CACHE_NAME = 'arvdoul-v1';
+
+const CACHE_NAME = 'arvdoul-v2';
 const PRECACHE_URLS = ['/', '/index.html', '/manifest.json', '/icons/icon.png', '/logo/logo-light.png', '/logo/logo-dark.png', '/assets/default-profile.png'];
+
+// File extensions safe for cache-first (versioned bundles + static media).
+const STATIC_EXT_RE = /\.(?:js|css|png|jpe?g|gif|webp|svg|avif|woff2?|ttf|otf|eot|ico|mp4|webm|mp3|m4a|ogg|wasm|json)$/i;
+
+/** True only for URLs that are safe to serve cache-first: production hashed
+ *  bundles (/assets/<name>-<hash>.js|css) or precached static media. */
+function isVersionedStatic(url) {
+  const { pathname } = url;
+  // Vite/Rollup production build output lives under /assets/ with hashed names.
+  if (pathname.startsWith('/assets/')) return STATIC_EXT_RE.test(pathname);
+  // Dev-server URLs and any unversioned source path are NEVER cached.
+  if (pathname.startsWith('/src/')) return false;
+  if (pathname.startsWith('/@vite') || pathname.startsWith('/@id') || pathname.startsWith('/@fs')) return false;
+  if (pathname.startsWith('/node_modules/')) return false;
+  // Precached static media (icons, logos, manifest, default assets).
+  return PRECACHE_URLS.includes(pathname) && STATIC_EXT_RE.test(pathname);
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -24,15 +54,17 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return; // let cross-origin (CDN/Stripe) pass through
+  if (url.origin !== self.location.origin) return; // cross-origin (CDN/Stripe/Firestore) passes through
 
-  // Navigations: network-first with index.html fallback (offline shell).
+  // Navigations: network-first with cached index.html fallback (offline shell).
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          }
           return response;
         })
         .catch(() => caches.match('/index.html'))
@@ -40,19 +72,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first, then network + cache update.
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      });
-    })
-  );
+  // Versioned static assets: cache-first, then network + background cache update.
+  if (isVersionedStatic(url)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Everything else (dev-mode modules, HMR, API calls, unversioned scripts):
+  // let the browser handle it — never intercept, never cache.
 });
 
 /* ================= FCM PUSH NOTIFICATIONS ================= */
@@ -96,4 +134,3 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
-

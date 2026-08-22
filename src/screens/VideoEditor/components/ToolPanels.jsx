@@ -325,6 +325,16 @@ export default function ToolPanels({
             </div>
           </div>
 
+          {STOCK_AUDIO.length === 0 && (
+            <div className="flex flex-col items-center justify-center text-center py-6">
+              <Music className="w-8 h-8 text-gray-500 mb-2" />
+              <p className="text-xs font-semibold text-white mb-1">No royalty-free tracks yet</p>
+              <p className="text-[11px] text-gray-400">
+                The licensed music catalog will appear here once a provider is connected. Record a voiceover or add your own audio instead.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
             {STOCK_AUDIO.map((audio) => {
               const isPlaying = previewingAudioId === audio.id;

@@ -94,19 +94,19 @@ export const getInitials = (name) => {
 };
 
 /**
- * Generate a thumbnail URL from video ID
+ * Resolve a thumbnail URL for a video.
+ * Honest by design: thumbnails are only ever real user/video data. No fake
+ * placeholder image services (picsum/unsplash). Returns '' when no real
+ * thumbnail exists — callers render a neutral placeholder tile instead.
  * @param {string} videoId - Video document ID
  * @param {string} [size='small'] - Thumbnail size: 'small' | 'medium' | 'large'
- * @returns {string} Thumbnail URL
+ * @returns {string} '' — real thumbnails must come from the actual video
+ *                   document (media.thumbnail / media.url), never synthesized.
  */
 export const generateThumbnail = (videoId, size = 'small') => {
-  if (!videoId) return '';
-  const sizeMap = {
-    small: '150x150',
-    medium: '320x180',
-    large: '640x360',
-  };
-  return `https://picsum.photos/seed/${videoId}/${sizeMap[size] || sizeMap.small}`;
+  void videoId;
+  void size;
+  return '';
 };
 
 /**

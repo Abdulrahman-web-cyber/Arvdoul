@@ -38,7 +38,7 @@ export default function ProjectDashboardScreen() {
       try {
         setLoading(true);
         // Get user's collaboration stats which includes their projects
-        const stats = await collaborationService.getStats();
+        const stats = await collaborationService.getStats(user.uid);
         setProjects(stats?.projects || []);
       } catch (err) {
         console.error('Failed to load projects:', err);
@@ -157,7 +157,7 @@ export default function ProjectDashboardScreen() {
         {!loading && !error && filteredProjects.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">
           {filteredProjects.map((project, index) => {
-            const status = STATUS_COLORS[project.status];
+            const status = STATUS_COLORS[project.status] || STATUS_COLORS.draft;
             
             return (
               <motion.div
@@ -175,11 +175,17 @@ export default function ProjectDashboardScreen() {
               >
                 {/* Thumbnail */}
                 <div className="h-32 relative">
-                  <img
-                    src={project.thumbnail}
-                    alt={project.name}
-                    className="w-full h-full object-cover"
-                  />
+                  {project.thumbnail ? (
+                    <img
+                      src={project.thumbnail}
+                      alt={project.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-800/70 via-indigo-800/70 to-blue-900/70 flex items-center justify-center">
+                      <Folder className="w-10 h-10 text-white/50" />
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   
                   {/* Status Badge */}
@@ -201,17 +207,26 @@ export default function ProjectDashboardScreen() {
                   <div className="flex items-center justify-between">
                     {/* Team Avatars */}
                     <div className="flex -space-x-2">
-                      {project.team.slice(0, 3).map((member) => (
-                        <img
-                          key={member.id}
-                          src={member.avatar}
-                          alt="Team member"
-                          className="w-7 h-7 rounded-full border-2 border-arvdoul-surface"
-                        />
+                      {(project.team || []).slice(0, 3).map((member) => (
+                        member?.avatar ? (
+                          <img
+                            key={member.id}
+                            src={member.avatar}
+                            alt="Team member"
+                            className="w-7 h-7 rounded-full border-2 border-arvdoul-surface"
+                          />
+                        ) : (
+                          <div
+                            key={member?.id || Math.random()}
+                            className="w-7 h-7 rounded-full bg-arvdoul-purple flex items-center justify-center text-xs text-white border-2 border-arvdoul-surface"
+                          >
+                            {(member?.name || '?').charAt(0).toUpperCase()}
+                          </div>
+                        )
                       ))}
-                      {project.members > 3 && (
+                      {(project.members || 0) > 3 && (
                         <div className="w-7 h-7 rounded-full bg-arvdoul-purple flex items-center justify-center text-xs text-white border-2 border-arvdoul-surface">
-                          +{project.members - 3}
+                          +{(project.members || 0) - 3}
                         </div>
                       )}
                     </div>
@@ -219,7 +234,7 @@ export default function ProjectDashboardScreen() {
                     {/* Updated */}
                     <div className="flex items-center gap-1 text-xs text-arvdoul-text-secondary">
                       <Clock className="w-3 h-3" />
-                      {project.updatedAt}
+                      {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : ''}
                     </div>
                   </div>
                 </div>

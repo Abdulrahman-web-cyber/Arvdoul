@@ -64,8 +64,8 @@
   },
   "intro": {
     "loading": "Arvdoul wird geladen...",
-    "glitchTitle": "Vorübergehende Störung",
-    "glitchText": "Der Einführungsbildschirm hat ein Problem festgestellt. Die Hauptanwendung ist davon nicht betroffen.",
+    "glitchTitle": "Etwas ist schiefgelaufen",
+    "glitchText": "Der Einführungsbildschirm konnte nicht geladen werden. Das ist ein echter Fehler – versuchen Sie es erneut oder fahren Sie mit der App fort; Ihr Konto und Ihre Daten sind sicher.",
     "retry": "Erneut versuchen",
     "title1": "Verbinden. Erstellen.",
     "title2": "Gemeinschaft.",
@@ -121,7 +121,8 @@
     "signIn": "Anmelden",
     "footnote": "Kostenloser Plan verfügbar • Keine Kreditkarte nötig",
     "srWelcome": "Willkommen bei Arvdoul. Vernetzen Sie sich mit Freunden, bauen Sie Communities auf und erstellen Sie tolle Inhalte.",
-    "continueToApp": "Weiter zur App"
+    "continueToApp": "Weiter zur App",
+    "errorDetail": "Fehlerdetails"
   },
   "settings": {
     "title": "Einstellungen & Präferenzen",

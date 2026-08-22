@@ -376,22 +376,120 @@ class ThumbnailService {
   }
 
   // ==================== AUTO-GENERATION ====================
-  generateThumbnailsFromVideo(videoUrl, frameCount = 5) {
-    // Placeholder for auto-generation from video frames
-    // In production, this would use video frame extraction
-    logger.info('[ThumbnailService] Generating thumbnails from video:', videoUrl);
-    
-    const thumbnails = [];
-    for (let i = 0; i < frameCount; i++) {
-      thumbnails.push({
-        id: uuidv4(),
-        timestamp: i * (10 / frameCount),
-        url: null, // Would be actual frame URL
-        selected: false,
-      });
+  /**
+   * REAL video-frame extraction: loads the video in a <video> element, seeks
+   * to evenly spaced timestamps and draws each frame to a canvas, returning
+   * data-URL thumbnails. No placeholders — every returned thumbnail is a real
+   * pixel of the user's video.
+   *
+   * @param {string} videoUrl - URL of the video (blob:, data: or https:).
+   * @param {number} [frameCount=5] - How many frames to extract.
+   * @param {Object} [opts] - { width } thumbnail width in px (height auto).
+   * @returns {Promise<Array<{id: string, timestamp: number, url: string|null, selected: boolean}>>}
+   *          Frames that could not be decoded are returned with url: null —
+   *          callers must render a neutral placeholder tile for those.
+   */
+  async generateThumbnailsFromVideo(videoUrl, frameCount = 5, opts = {}) {
+    if (!videoUrl || frameCount < 1) {
+      logger.warn('[ThumbnailService] generateThumbnailsFromVideo: no URL');
+      return [];
     }
-    
+    logger.info('[ThumbnailService] Extracting frames from video:', videoUrl);
+
+    if (typeof document === 'undefined') {
+      // SSR / non-browser environment — cannot decode frames.
+      return [];
+    }
+
+    const width = opts?.width || 320;
+    const thumbnails = [];
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
+    video.src = videoUrl;
+
+    try {
+      const duration = await new Promise((resolve, reject) => {
+        const onMeta = () => {
+          cleanup();
+          const dur = video.duration;
+          if (Number.isFinite(dur) && dur > 0) resolve(dur);
+          else reject(new Error('Video metadata unavailable'));
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error('Video failed to load: ' + (video.error?.message || 'unknown')));
+        };
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onMeta);
+          video.removeEventListener('error', onError);
+        };
+        video.addEventListener('loadedmetadata', onMeta);
+        video.addEventListener('error', onError);
+      });
+
+      const count = Math.max(1, Math.min(frameCount, 12)); // sanity cap
+      for (let i = 0; i < count; i++) {
+        const timestamp = (duration / (count + 1)) * (i + 1); // skip 0s/end
+        try {
+          const url = await this._captureFrame(video, timestamp, width);
+          thumbnails.push({ id: uuidv4(), timestamp, url, selected: i === 0 });
+        } catch (err) {
+          logger.warn(`[ThumbnailService] frame ${i} extraction failed:`, err.message);
+          thumbnails.push({ id: uuidv4(), timestamp, url: null, selected: false });
+        }
+      }
+    } catch (err) {
+      logger.warn('[ThumbnailService] video decode failed:', err.message);
+    } finally {
+      try { video.removeAttribute('src'); video.load(); } catch { /* noop */ }
+    }
+
     return thumbnails;
+  }
+
+  /** Seek + draw one frame to canvas; returns a PNG data URL. */
+  _captureFrame(video, timestamp, width) {
+    return new Promise((resolve, reject) => {
+      const onSeeked = () => {
+        cleanup();
+        try {
+          const scale = width / video.videoWidth;
+          const height = Math.max(1, Math.round(video.videoHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas 2D context unavailable'));
+            return;
+          }
+          ctx.drawImage(video, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error('Seek failed: ' + (video.error?.message || 'unknown')));
+      };
+      const cleanup = () => {
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+      };
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+      try {
+        video.currentTime = Math.min(timestamp, Math.max(0, (video.duration || 0) - 0.05));
+      } catch (err) {
+        cleanup();
+        reject(err);
+      }
+    });
   }
 
   // ==================== EXPORT ====================

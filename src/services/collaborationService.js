@@ -571,24 +571,59 @@ class CollaborationService {
   }
 
   // ==================== SERVICE MANAGEMENT ====================
-  getStats() {
-    return {
-      initialized: this.initialized,
-      projects: [
-        {
-          id: 'proj-sample-1',
-          name: 'Arvdoul Launch Reel',
-          description: 'Collaboration project for platform launch promo',
-          status: 'in_progress',
-          thumbnail: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=300&q=80',
-          team: [{ id: 'u1', name: 'Alex Owner', avatar: 'https://i.pravatar.cc/150?u=a' }],
-          members: 1,
-          updatedAt: 'Just now',
+  /**
+   * Real dashboard stats: loads the user's collaboration projects from
+   * Firestore. Never returns fabricated sample projects — an empty array is
+   * the honest state when there are no projects (or the query fails).
+   *
+   * @param {string|null} userId - Firestore uid of the user to scope to.
+   * @returns {Promise<{initialized: boolean, projects: Array}>}
+   */
+  async getStats(userId = null) {
+    try {
+      await this.ensureInitialized();
+    } catch (err) {
+      logger.error('[CollaborationService] getStats init failed', err);
+      return { initialized: this.initialized, projects: [] };
+    }
+
+    const projects = [];
+    if (!userId) {
+      // No authenticated user — honest empty dashboard.
+      return { initialized: this.initialized, projects };
+    }
+
+    try {
+      const projectsRef = collection(this.firestore, 'collaboration_projects');
+      // No orderBy here on purpose: combined where+orderBy on different fields
+      // would require a composite Firestore index. Sort client-side instead.
+      const q = query(projectsRef, where('ownerId', '==', userId), limit(50));
+      const snap = await getDocs(q);
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const updatedAt = data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : null) ||
+                          data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : null);
+        projects.push({
+          id: docSnap.id,
+          name: data.name || 'Untitled Project',
+          description: data.description || '',
+          status: data.status || 'draft',
+          thumbnail: data.thumbnail || null,
+          team: Array.isArray(data.team) ? data.team : [],
+          members: typeof data.members === 'number' ? data.members : 0,
+          updatedAt: updatedAt ? updatedAt.toISOString() : '',
           content: [],
-          reviews: []
-        }
-      ]
-    };
+          reviews: [],
+        });
+      });
+
+      // Newest first.
+      projects.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+    } catch (err) {
+      logger.error('[CollaborationService] getStats query failed', err);
+    }
+
+    return { initialized: this.initialized, projects };
   }
 
   destroy() {

@@ -363,12 +363,9 @@ describe('Service Layer Tests', () => {
       expect(res.flagged).toBe(false);
     });
 
-    test('generates highly structured video script with multi-scene cues', async () => {
+    test('returns null (honest unavailable) when the AI gateway is not configured — no fabricated sample scripts', async () => {
       const script = await aiService.generateScript({ topic: 'artificial intelligence', style: 'tech', duration: 30 });
-      expect(script.title).toContain('Master artificial intelligence');
-      expect(script.targetDuration).toBe('30s');
-      expect(script.scenes).toBeDefined();
-      expect(script.scenes.length).toBeGreaterThan(0);
+      expect(script).toBeNull();
     });
 
     test('correctly calculates remaining daily AI budget and enforces limits', async () => {
