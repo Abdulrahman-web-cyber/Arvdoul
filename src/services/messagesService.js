@@ -22,7 +22,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
+  collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
   query, where, orderBy, limit, startAfter, serverTimestamp, increment,
   arrayUnion, arrayRemove, writeBatch, runTransaction, onSnapshot, getCountFromServer,
   Timestamp, enableIndexedDbPersistence
@@ -347,6 +347,8 @@ async function sha256(message) {
 class OfflineMessageQueue {
   constructor(service) {
     this.service = service;
+    // v1 layout preserved (autoIncrement, no keyPath) — keys and values are
+    // zipped in getAll so existing queued messages survive upgrades.
     this.dbPromise = openDB('messaging_offline', 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('queue')) {
@@ -355,33 +357,90 @@ class OfflineMessageQueue {
       },
     });
     this.isSyncing = false;
-    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+    this.maxAttempts = 5;
+    this.statusListeners = new Set();
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'SyncManager' in window) {
       navigator.serviceWorker.ready.then(reg => reg.sync.register('message-queue').catch(() => {}));
     }
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') this.sync();
-    });
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.sync();
+      });
+      window.addEventListener('online', () => this.sync());
+    }
   }
 
-  async add(message) { const db = await this.dbPromise; await db.add('queue', message); this.sync(); }
-  async getAll() { const db = await this.dbPromise; return db.getAll('queue'); }
-  async removeFirst() { const db = await this.dbPromise; const cursor = await db.transaction('queue','readwrite').store.openCursor(); if (cursor) await cursor.delete(); }
+  /** Listen for per-message queue results: cb({ messageId, status: 'sent'|'failed', error }) */
+  onStatus(cb) { this.statusListeners.add(cb); return () => this.statusListeners.delete(cb); }
+  _emitStatus(status) { this.statusListeners.forEach((cb) => { try { cb(status); } catch { /* noop */ } }); }
+
+  async add(message) {
+    const db = await this.dbPromise;
+    const record = { ...message, attempts: 0, status: 'queued', queuedAt: Date.now() };
+    const key = await db.add('queue', record);
+    this.sync();
+    return key;
+  }
+
+  /** Values zipped with their autoIncrement keys so records are addressable. */
+  async getAll() {
+    const db = await this.dbPromise;
+    const [keys, values] = await Promise.all([db.getAllKeys('queue'), db.getAll('queue')]);
+    return values.map((v, i) => ({ ...v, _key: keys[i] }));
+  }
+
+  async getPendingCount() {
+    try {
+      const all = await this.getAll();
+      return all.filter((m) => m.status === 'queued').length;
+    } catch { return 0; }
+  }
+
+  async _update(key, patch) {
+    const db = await this.dbPromise;
+    const existing = await db.get('queue', key);
+    if (existing) await db.put('queue', { ...existing, ...patch }, key);
+  }
+
+  async remove(key) {
+    if (key == null) return;
+    const db = await this.dbPromise;
+    await db.delete('queue', key);
+  }
+
   async clear() { const db = await this.dbPromise; await db.clear('queue'); }
 
   async sync() {
     if (this.isSyncing) return;
     this.isSyncing = true;
-    const queue = await this.getAll();
-    for (const msg of queue) {
-      try {
-        await this.service.sendMessage(msg.conversationId, msg.data, { ...msg.options, offlineRetry: true });
-        await this.removeFirst();
-      } catch (err) {
-        if (err.code === 'unavailable' || err.code === 'messaging/rate-limited') break;
-        await this.removeFirst();
+    try {
+      const queue = await this.getAll();
+      for (const msg of queue) {
+        if (msg.status === 'failed' && (msg.attempts || 0) >= this.maxAttempts) continue;
+        try {
+          const result = await this.service.sendMessage(msg.conversationId, msg.data, { ...msg.options, offlineRetry: true });
+          await this.remove(msg._key);
+          this._emitStatus({ messageId: result?.messageId || msg.id, status: 'sent', conversationId: msg.conversationId });
+        } catch (err) {
+          const code = err?.code || err?.message || '';
+          const transient = /unavailable|offline|network|rate-limit|fetch|timed?out|INTERNAL|UNAVAILABLE/i.test(code);
+          if (transient) {
+            // Keep at head; retried on the next sync (online event /
+            // visibility change / manual trigger). Never dropped.
+            break;
+          }
+          const attempts = (msg.attempts || 0) + 1;
+          if (attempts >= this.maxAttempts) {
+            await this._update(msg._key, { status: 'failed', attempts, lastError: String(err?.message || err), failedAt: Date.now() });
+            this._emitStatus({ messageId: msg.id || msg._key, status: 'failed', error: err?.message || 'Message failed', conversationId: msg.conversationId });
+          } else {
+            await this._update(msg._key, { attempts, lastError: String(err?.message || err) });
+          }
+        }
       }
+    } finally {
+      this.isSyncing = false;
     }
-    this.isSyncing = false;
   }
 }
 
@@ -481,6 +540,7 @@ class UltimateMessagingService {
       MESSAGING_CONFIG.DEDUPLICATION.IN_MEMORY_CACHE_SIZE
     );
     this.typingTimers = new Map();
+    this.lastTypingWriteAt = new Map();
     this.rtdbListeners = new Map();
     this.firestoreListeners = new Map();
     this.pendingMessages = new Map();
@@ -527,7 +587,7 @@ class UltimateMessagingService {
         }
 
         this.fs = {
-          collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
+          collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
           query, where, orderBy, limit, startAfter, serverTimestamp, increment,
           arrayUnion, arrayRemove, writeBatch, runTransaction, onSnapshot, getCountFromServer,
           Timestamp,
@@ -702,6 +762,20 @@ class UltimateMessagingService {
     if (existing) { clearTimeout(existing); this.typingTimers.delete(timerKey); }
 
     if (isTyping) {
+      // THROTTLE (spec §19): at most one RTDB write per 2s per conversation —
+      // typing is ephemeral, not a keystroke log.
+      const now = Date.now();
+      const last = this.lastTypingWriteAt.get(timerKey) || 0;
+      if (now - last < 2000) {
+        // Re-arm the expiry timer so the indicator stays fresh without writing.
+        const t = setTimeout(async () => {
+          try { await this.rt.remove(typingRef); } catch (e) {}
+          this.typingTimers.delete(timerKey);
+        }, MESSAGING_CONFIG.PERFORMANCE.TYPING_INDICATOR_TIMEOUT);
+        this.typingTimers.set(timerKey, t);
+        return;
+      }
+      this.lastTypingWriteAt.set(timerKey, now);
       await this.rt.set(typingRef, { isTyping: true, timestamp: Date.now() });
       this.rt.onDisconnect(typingRef).remove();
       const timer = setTimeout(async () => {
@@ -1115,10 +1189,9 @@ class UltimateMessagingService {
       }
     });
 
-    // Unread counters
-    if (conv.conversation.participantCount <= MESSAGING_CONFIG.UNREAD_COUNTERS.CLIENT_SIDE_MAX_PARTICIPANTS && conv.conversation.type !== 'channel') {
-//       this._incrementUnreadCounters(conversationId, currentUser.uid, conv.conversation.participants).catch(console.warn);
-    }
+    // Unread counters are incremented SERVER-SIDE by the
+    // onMessageCreated trigger (functions/messaging.js) — client-side writes
+    // to other users' counters are denied by rules by design.
 
     this._invalidateConversationMessagesCache(conversationId);
     this.conversationsCache.delete(conversationId);
@@ -1126,6 +1199,15 @@ class UltimateMessagingService {
 
     this.metrics.messagesSent++;
     this.dedupeMemoryCache.set(idempotencyKey, true);
+
+    // Telemetry — metadata only, never message content (spec §69/70).
+    try {
+      const { metricsService } = await import('./metricsService.js');
+      metricsService.incrementCounter('messaging_message_sent', 1);
+      metricsService.incrementCounter(`messaging_message_sent_type_${validated.type || 'text'}`, 1);
+      const latencyMs = Date.now() - (options.sentAt || Date.now());
+      metricsService.recordHistogram('messaging_send_latency_ms', latencyMs);
+    } catch { /* telemetry is best-effort */ }
 
     // Rate limit: messages per user per minute (UX guard; server/RTDB rules enforce).
     rateLimiter.checkAndHit(`msg:send:${currentUser.uid}`, { max: MESSAGING_CONFIG.PERFORMANCE.SEND_RATE_LIMIT_MAX || 60, windowMs: 60000 });
@@ -1163,6 +1245,15 @@ class UltimateMessagingService {
       optimisticMessage: { ...message, status: 'sending', _optimistic: true, _clientId: options.clientId },
       messageId: idempotencyKey,
     };
+  }
+
+  /** Emit failure telemetry (metadata only). */
+  async _emitMessageFailedTelemetry(type = 'text') {
+    try {
+      const { metricsService } = await import('./metricsService.js');
+      metricsService.incrementCounter('messaging_message_failed', 1);
+      metricsService.incrementCounter(`messaging_message_failed_type_${type}`, 1);
+    } catch { /* best-effort */ }
   }
 
   // ========== MENTIONS & THREAD DEPTH ==========
@@ -1281,7 +1372,39 @@ class UltimateMessagingService {
     }
 
     if (options.markAsRead && messages.length > 0) {
-//       this.markConversationAsRead(conversationId, currentUser.uid).catch(console.warn);
+      // Conversation-level read position (spec §17) — one write, not N.
+      this.markConversationAsRead(conversationId, currentUser.uid).catch(() => {});
+    }
+
+    // Reactions: ONE collection-group query merges per-user reaction docs
+    // into the loaded window (no per-message round trips).
+    try {
+      const ids = messages.map((m) => m.id);
+      const reactionsMap = new Map();
+      for (let i = 0; i < ids.length; i += 30) {
+        const chunk = ids.slice(i, i + 30);
+        const rSnap = await this.fs.getDocs(
+          this.fs.query(
+            this.fs.collectionGroup(this.firestore, 'reactions'),
+            this.fs.where('conversationId', '==', conversationId),
+            this.fs.where('messageId', 'in', chunk)
+          )
+        );
+        rSnap.forEach((d) => {
+          const data = d.data() || {};
+          if (!reactionsMap.has(data.messageId)) reactionsMap.set(data.messageId, {});
+          reactionsMap.get(data.messageId)[d.id] = data.emoji;
+        });
+      }
+      if (reactionsMap.size > 0) {
+        messages.forEach((m) => {
+          const r = reactionsMap.get(m.id);
+          if (r) m.reactions = r;
+        });
+      }
+    } catch (err) {
+      // Reactions are best-effort enrichment; message list still loads.
+      console.warn('[Messaging] Reaction merge failed:', err.message);
     }
 
     const result = {
@@ -1420,21 +1543,26 @@ class UltimateMessagingService {
     if (!MESSAGING_CONFIG.REACTION_TYPES.includes(reaction)) throw new Error('Invalid reaction');
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
+    if (!conv.success) throw new Error('Conversation not found');
     const messagesSubPath = this._getMessageSubcollectionPath(conversationId, conv.conversation, new Date());
     const msgRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId);
 
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const msgSnap = await transaction.get(msgRef);
-      if (!msgSnap.exists()) throw new Error('Message not found');
-      const msg = msgSnap.data();
-      const reactions = msg.reactions || {};
-      if (reactions[userId] === reaction) {
-        delete reactions[userId];
-      } else {
-        reactions[userId] = reaction;
-      }
-      transaction.update(msgRef, { reactions, updatedAt: this.fs.serverTimestamp() });
-    });
+    // SCALABLE REACTIONS (spec §26): each user owns one reaction doc in the
+    // message's reactions subcollection — toggling never rewrites the message
+    // doc and never causes cross-user write conflicts. Rules enforce
+    // userId == uid().
+    const reactionRef = this.fs.doc(this.firestore, ...messagesSubPath.split('/'), messageId, 'reactions', userId);
+    const existingSnap = await this.fs.getDoc(reactionRef);
+    if (existingSnap.exists() && existingSnap.data().emoji === reaction) {
+      await this.fs.deleteDoc(reactionRef);
+    } else {
+      await this.fs.setDoc(reactionRef, {
+        emoji: reaction,
+        at: this.fs.serverTimestamp(),
+        conversationId,
+        messageId,
+      });
+    }
     this._invalidateConversationMessagesCache(conversationId);
     return { success: true };
   }

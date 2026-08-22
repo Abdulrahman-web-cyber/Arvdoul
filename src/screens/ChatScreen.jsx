@@ -29,7 +29,8 @@ import { Skeleton } from '../components/ui/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Lock, Users, Phone, Video, Info } from 'lucide-react';
+import { ArrowLeft, Lock, Users, Phone, Video, Info, Search, Pin, Image as ImageIcon, ArrowDown } from 'lucide-react';
+import { format, isSameDay, isSameMinute } from 'date-fns';
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -50,10 +51,22 @@ export default function ChatScreen() {
   const [typingUsers, setTypingUsers] = useState({});
   const [presence, setPresence] = useState({});
   const [sendingId, setSendingId] = useState(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [newSinceScroll, setNewSinceScroll] = useState(0);
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [sharedMedia, setSharedMedia] = useState([]);
+  const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search
+  const mainRef = useRef(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const pendingRef = useRef(new Map()); // localId -> {convId, data}
+  const messagesRef = useRef([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const reloadTimerRef = useRef(null);
 
   // ------------------------------------------------------------------
@@ -139,28 +152,65 @@ export default function ChatScreen() {
     };
   }, [conversationId, uid, loadMessages]);
 
-  // Scroll to bottom on new messages (optional-chained: some runtimes lack it)
+  // Scroll to bottom ONLY when the user is already at the bottom; otherwise
+  // count the new messages and show a jump-to-latest pill (spec §51).
   useEffect(() => {
+    if (!atBottom) return;
     try {
       messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
     } catch {
       /* noop */
     }
+    setNewSinceScroll(0);
+  }, [messages.length, atBottom]);
+
+  const bottomCountRef = useRef(0);
+  const handleScroll = useCallback(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nowAtBottom = distanceFromBottom < 120;
+    setAtBottom(nowAtBottom);
+    if (nowAtBottom) {
+      bottomCountRef.current = messagesRef.current?.length || 0;
+      setNewSinceScroll(0);
+    }
+  }, []);
+
+  // Count messages arriving while scrolled up (spec §51 jump-to-latest).
+  useEffect(() => {
+    if (!atBottom) {
+      const total = messages.length;
+      const newCount = Math.max(0, total - bottomCountRef.current);
+      if (newCount > 0) setNewSinceScroll(newCount);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
 
-  // Mark visible messages as read
+  // Reconnect: when the browser comes back online, drop stale optimistic
+  // messages (the real ones arrive via the realtime subscription) and reload.
+  useEffect(() => {
+    const goOnline = () => {
+      pendingRef.current.clear();
+      setMessages((prev) => prev.filter((m) => !m._local || m._failed));
+      getMessagingService().getMessages(conversationId, { limit: 50 }).then((res) => {
+        if (res?.success) setMessages(res.messages || []);
+      }).catch(() => {});
+    };
+    window.addEventListener('online', goOnline);
+    return () => window.removeEventListener('online', goOnline);
+  }, [conversationId]);
+
+  // Conversation-level read position (spec §17): ONE debounced write marks
+  // everything up to the latest message as read — never N per-message writes.
+  const readTimerRef = useRef(null);
   useEffect(() => {
     if (!conversationId || !uid || messages.length === 0) return;
-    const timer = setTimeout(() => {
-      const svc = getMessagingService();
-      const latest = messages
-        .filter((m) => !m._local && !m.isDeleted && m.senderId !== uid)
-        .slice(0, 10);
-      latest.forEach((m) => {
-        svc.markMessageAsRead(m.id, conversationId, uid).catch(() => {});
-      });
-    }, 800);
-    return () => clearTimeout(timer);
+    if (readTimerRef.current) clearTimeout(readTimerRef.current);
+    readTimerRef.current = setTimeout(() => {
+      getMessagingService().markConversationAsRead(conversationId, uid).catch(() => {});
+    }, 600);
+    return () => { if (readTimerRef.current) clearTimeout(readTimerRef.current); };
   }, [conversationId, uid, messages]);
 
   // ------------------------------------------------------------------
@@ -286,6 +336,104 @@ export default function ChatScreen() {
   }, [typingUsers, conversation]);
 
   // ------------------------------------------------------------------
+  // Conversation info panel: pinned messages, shared media, search
+  // ------------------------------------------------------------------
+  const openInfoPanel = useCallback(async () => {
+    setShowInfoPanel(true);
+    try {
+      const svc = getMessagingService();
+      const [pinnedRes, mediaRes] = await Promise.allSettled([
+        svc.getPinnedMessages(conversationId),
+        svc.getConversationMedia(conversationId, { limit: 30 }),
+      ]);
+      const pinnedIds = pinnedRes.status === 'fulfilled' ? pinnedRes.value?.pinnedMessageIds : [];
+      setPinnedMessages(Array.isArray(pinnedIds) ? pinnedIds : []);
+      const mediaList = mediaRes.status === 'fulfilled' ? mediaRes.value?.media : [];
+      setSharedMedia(Array.isArray(mediaList) ? mediaList : []);
+    } catch { /* panel still opens with empty states */ }
+  }, [conversationId]);
+
+  const runSearch = useCallback(async () => {
+    const q = searchQuery.trim();
+    if (!q || searching) return;
+    setSearching(true);
+    try {
+      const res = await getMessagingService().searchMessagesAlgolia(conversationId, q, { limit: 20 });
+      setSearchResults(res?.results || []);
+    } catch (err) {
+      setSearchResults(null);
+      toastError(err?.message || 'Search failed');
+    } finally {
+      setSearching(false);
+    }
+  }, [conversationId, searchQuery, searching]);
+
+  const jumpToMessage = (messageId) => {
+    setShowInfoPanel(false);
+    // If the message is in the loaded window, scroll to it; otherwise load
+    // surrounding context via the service (spec §24/32).
+    setTimeout(() => {
+      const el = document.getElementById(`msg-${messageId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-purple-400', 'rounded-xl');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-purple-400', 'rounded-xl'), 2500);
+        return;
+      }
+      // Not in the loaded window — reload the latest batch (it may contain
+      // the message) and try again; otherwise the user can search for it.
+      getMessagingService().getMessages(conversationId, { limit: 50 }).then((res) => {
+        if (res?.success) setMessages(res.messages || []);
+      }).catch(() => {});
+      toastError('Message not in the loaded window — try searching.');
+    }, 100);
+  };
+
+  // ------------------------------------------------------------------
+  // Derived render items: date separators, sender grouping (spec §49),
+  // unread divider (spec §50)
+  // ------------------------------------------------------------------
+  const renderItems = useMemo(() => {
+    const items = [];
+    let lastDateKey = null;
+    let lastSender = null;
+    let lastTime = null;
+    const lastReadAt = conversation?.lastRead?.[uid]
+      ? (conversation.lastRead[uid].toDate ? conversation.lastRead[uid].toDate() : new Date(conversation.lastRead[uid]))
+      : null;
+    let insertedUnreadDivider = false;
+
+    messages.forEach((msg) => {
+      const ts = msg.createdAt?.toDate ? msg.createdAt.toDate() : (msg.createdAt instanceof Date ? msg.createdAt : new Date(msg.createdAt));
+      const dateKey = ts instanceof Date && !Number.isNaN(ts.getTime()) ? format(ts, 'yyyy-MM-dd') : null;
+
+      // Date separator on day change.
+      if (dateKey && dateKey !== lastDateKey) {
+        items.push({ kind: 'date', date: dateKey, label: isSameDay(ts, new Date()) ? 'Today' : format(ts, 'MMM d, yyyy') });
+        lastDateKey = dateKey;
+        lastSender = null;
+        lastTime = null;
+      }
+
+      // Unread divider: first incoming message after the user's last read.
+      if (!insertedUnreadDivider && lastReadAt && !msg._local && !msg.isDeleted && msg.senderId !== uid) {
+        if (ts instanceof Date && !Number.isNaN(ts.getTime()) && ts > lastReadAt) {
+          items.push({ kind: 'unread' });
+          insertedUnreadDivider = true;
+        }
+      }
+
+      // Grouping: same sender within 5 minutes = one visual group.
+      const groupStart = !(msg.senderId === lastSender && lastTime && ts instanceof Date && !Number.isNaN(ts.getTime()) && (ts - lastTime) < 5 * 60 * 1000);
+      items.push({ kind: 'message', message: msg, groupStart });
+      lastSender = msg.senderId;
+      lastTime = ts;
+    });
+
+    return items;
+  }, [messages, conversation, uid]);
+
+  // ------------------------------------------------------------------
   // States
   // ------------------------------------------------------------------
   if (loading) {
@@ -336,7 +484,7 @@ export default function ChatScreen() {
           )}
           {conversation?.participantCount > 2 && <Users className="w-4 h-4 opacity-60" aria-hidden="true" />}
           <button
-            onClick={() => navigate(`/messages/${conversationId}/settings`)}
+            onClick={openInfoPanel}
             aria-label="Conversation info"
             className={cn('p-2 rounded-full transition-colors', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
           >
@@ -346,7 +494,7 @@ export default function ChatScreen() {
       </header>
 
       {/* Messages */}
-      <main className="flex-1 overflow-y-auto px-3 py-4 space-y-1 overscroll-contain" aria-live="polite">
+      <main ref={mainRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 py-4 overscroll-contain" aria-live="polite">
         {messages.length === 0 && (
           <div className="h-full flex items-center justify-center">
             <EmptyState
@@ -356,11 +504,36 @@ export default function ChatScreen() {
           </div>
         )}
 
-        {messages.map((msg) => {
+        {renderItems.map((item) => {
+          if (item.kind === 'date') {
+            return (
+              <div key={`date-${item.date}`} className="flex items-center justify-center my-4" role="separator">
+                <span className={cn(
+                  'text-[10px] uppercase tracking-wider px-3 py-1 rounded-full',
+                  isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-200/70 text-gray-500'
+                )}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          }
+          if (item.kind === 'unread') {
+            return (
+              <div key="unread-divider" className="flex items-center gap-3 my-4" role="separator">
+                <div className="flex-1 h-px bg-purple-500/40" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 px-2">
+                  New messages
+                </span>
+                <div className="flex-1 h-px bg-purple-500/40" />
+              </div>
+            );
+          }
+          const msg = item.message;
           const isOwn = msg.senderId === uid || msg.sender === 'me';
           return (
+            <div key={msg.id} id={`msg-${msg.id}`}>
             <MessageBubble
-              key={msg.id}
+              key={`${msg.id}-bubble`}
               message={msg}
               isOwn={isOwn}
               senderName={conversation?.participantNames?.[msg.senderId] || (isOwn ? 'You' : 'User')}
@@ -374,12 +547,191 @@ export default function ChatScreen() {
                 }
               }}
               isGroup={conversation?.participantCount > 2}
+              isGroupStart={item.groupStart}
               theme={theme}
             />
+            </div>
           );
         })}
+
+        {/* Jump-to-latest pill (spec §51) */}
+        {!atBottom && newSinceScroll > 0 && (
+          <button
+            onClick={() => {
+              try {
+                messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
+              } catch { /* noop */ }
+              bottomCountRef.current = messagesRef.current?.length || 0;
+              setNewSinceScroll(0);
+              setAtBottom(true);
+            }}
+            className="sticky bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg shadow-purple-600/40 hover:bg-purple-500 transition-colors"
+            aria-label={`Jump to ${newSinceScroll} new message${newSinceScroll > 1 ? 's' : ''}`}
+          >
+            <ArrowDown className="w-3.5 h-3.5" />
+            {newSinceScroll} new
+          </button>
+        )}
+
         <div ref={messagesEndRef} />
       </main>
+
+      {/* Conversation info panel: pinned / media / search */}
+      {showInfoPanel && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end" onClick={() => setShowInfoPanel(false)}>
+          <div
+            className={cn(
+              'w-full max-w-sm h-full overflow-y-auto p-4 border-l',
+              isDark ? 'bg-[#0B0F17] border-white/10' : 'bg-white border-gray-200'
+            )}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Conversation details"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-base">Conversation details</h2>
+              <button
+                onClick={() => setShowInfoPanel(false)}
+                aria-label="Close details"
+                className={cn('p-2 rounded-full', isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100')}
+              >
+                <Info className="w-4 h-4 opacity-60" aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 p-1 rounded-xl mb-4" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
+              {[
+                { id: 'pinned', label: 'Pinned', icon: Pin },
+                { id: 'media', label: 'Media', icon: ImageIcon },
+                { id: 'search', label: 'Search', icon: Search },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setInfoTab(tab.id)}
+                    aria-pressed={infoTab === tab.id}
+                    className={cn(
+                      'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all',
+                      infoTab === tab.id
+                        ? 'bg-purple-600 text-white shadow'
+                        : 'text-gray-400 hover:text-white'
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {infoTab === 'pinned' && (
+              <div className="space-y-2">
+                {pinnedMessages.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">No pinned messages yet</p>
+                ) : (
+                  pinnedMessages.map((pid) => (
+                    <button
+                      key={pid}
+                      onClick={() => jumpToMessage(pid)}
+                      className={cn(
+                        'w-full text-left p-3 rounded-xl text-xs border',
+                        isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200 hover:border-purple-400'
+                      )}
+                    >
+                      <span className="font-semibold">Pinned message</span>
+                      <span className="block text-gray-400 mt-0.5 truncate">{pid}</span>
+                    </button>
+                  ))
+                )}
+                <button
+                  onClick={() => navigate(`/messages/${conversationId}/settings`)}
+                  className="w-full mt-4 py-2.5 rounded-xl text-xs font-semibold border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 transition-colors"
+                >
+                  Conversation settings
+                </button>
+              </div>
+            )}
+
+            {infoTab === 'media' && (
+              <div>
+                {sharedMedia.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">No shared media yet</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {sharedMedia.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => jumpToMessage(m.id)}
+                        className="aspect-square rounded-xl overflow-hidden border border-white/10"
+                        aria-label={`Open media message ${m.id}`}
+                      >
+                        {m.media?.url || m.media?.downloadUrl ? (
+                          <img src={m.media.url || m.media.downloadUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full bg-purple-600/30 flex items-center justify-center">
+                            <ImageIcon className="w-5 h-5 text-purple-300" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {infoTab === 'search' && (
+              <div>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+                    placeholder="Search this conversation…"
+                    aria-label="Search messages"
+                    className={cn(
+                      'flex-1 px-3 py-2.5 rounded-xl text-sm outline-none border',
+                      isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    )}
+                  />
+                  <button
+                    onClick={runSearch}
+                    disabled={searching || !searchQuery.trim()}
+                    className="px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold disabled:opacity-50"
+                  >
+                    {searching ? '…' : 'Search'}
+                  </button>
+                </div>
+                {searchResults && (
+                  <div className="space-y-2">
+                    {searchResults.length === 0 ? (
+                      <p className="text-sm text-gray-400 text-center py-8">No results</p>
+                    ) : (
+                      searchResults.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => jumpToMessage(r.id)}
+                          className={cn(
+                            'w-full text-left p-3 rounded-xl text-xs border',
+                            isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200'
+                          )}
+                        >
+                          <span className="text-gray-400 block mb-0.5">
+                            {r.senderName || 'User'} · {r.createdAt?.toDate ? format(r.createdAt.toDate(), 'p') : ''}
+                          </span>
+                          <span className="line-clamp-2">{r.content || '(media message)'}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Typing indicator */}
       {typingText && !loading && (

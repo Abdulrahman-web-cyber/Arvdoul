@@ -36,6 +36,7 @@ const MessageBubble = React.memo(({
   onReport,
   theme,
   isGroup,
+  isGroupStart = true,
 }) => {
   const [showReactions, setShowReactions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -83,9 +84,9 @@ const MessageBubble = React.memo(({
   }
 
   return (
-    <div className={cn('flex gap-2 mb-3 group', isOwn ? 'justify-end' : 'justify-start')}>
-      {/* Avatar (for group chats, only on left side) */}
-      {!isOwn && isGroup && (
+    <div className={cn('flex gap-2 group', isOwn ? 'justify-end' : 'justify-start', isGroupStart ? 'mt-3' : 'mt-0.5')}>
+      {/* Avatar (for group chats, only on left side, first message of the group) */}
+      {!isOwn && isGroup && isGroupStart && (
         <div className="flex-shrink-0 mt-1">
           {senderAvatar ? (
             <img
@@ -109,8 +110,8 @@ const MessageBubble = React.memo(({
           onLongPress?.(message);
         }}
       >
-        {/* Sender name (for group chats) */}
-        {!isOwn && isGroup && (
+        {/* Sender name (for group chats, first message of the group) */}
+        {!isOwn && isGroup && isGroupStart && (
           <div className={cn(
             'text-xs px-3 pt-1',
             theme === 'dark' ? 'text-gray-400' : 'text-gray-600'

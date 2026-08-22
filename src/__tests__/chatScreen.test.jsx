@@ -47,6 +47,7 @@ jest.mock('../services/messagesService.js', () => ({
     sendMessage: mockSendMessage,
     reactToMessage: mockReactToMessage,
     markMessageAsRead: mockMarkRead,
+    markConversationAsRead: mockMarkRead,
     sendTypingIndicator: jest.fn(async () => {}),
   }),
   MESSAGING_CONFIG: {
@@ -115,11 +116,11 @@ describe('ChatScreen - real messaging wiring', () => {
     });
   });
 
-  test('marks incoming messages as read', async () => {
+  test('marks the conversation as read (conversation-level position, one write)', async () => {
     renderChat();
     await screen.findByText('Hello from the real service');
     await waitFor(() => {
-      expect(mockMarkRead).toHaveBeenCalled();
+      expect(mockMarkRead).toHaveBeenCalled(); // markConversationAsRead
     }, { timeout: 3000 });
   });
 

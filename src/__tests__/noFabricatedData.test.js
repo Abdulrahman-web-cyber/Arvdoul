@@ -625,3 +625,109 @@ describe('UI/UX - a11y + states', () => {
     expect(src).toContain('endLiveStream(myStreamRef.current.id');
   });
 });
+
+describe('Messaging master-spec: security rules', () => {
+  test('messages create requires senderId == uid(); receipts-only non-owner updates', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('request.resource.data.senderId == uid()');
+    expect(rules).toContain("affectedKeys().hasOnly(['readBy', 'deliveredTo'])");
+    expect(rules).toContain('isConvModerator() || isAdmin()');
+  });
+
+  test('supergroup monthly shards are covered by rules', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('match /messages_{year}_{month}/{messageId}');
+  });
+
+  test('last_messages writes are participant-scoped (no spoofing)', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const block = rules.slice(rules.indexOf('match /last_messages'), rules.indexOf('match /last_messages') + 500);
+    expect(block).toContain('uid() in');
+  });
+
+  test('unread counters are owner-scoped (rules exist — was default-deny dead)', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain("match /unread_counters/{counterId}");
+    expect(rules).toContain("counterId.endsWith('_' + uid())");
+    expect(rules).toContain('match /user_unread_totals/{userId}');
+  });
+
+  test('group invites are admin-managed', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const block = rules.slice(rules.indexOf('match /group_invites'), rules.indexOf('match /group_invites') + 300);
+    expect(block).toContain('isConvAdmin()');
+  });
+
+  test('conversation updates cannot mutate roles/admins unless admin', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('request.resource.data.admins == resource.data.admins');
+    expect(rules).toContain('request.resource.data.roles == resource.data.roles');
+  });
+});
+
+describe('Messaging master-spec: backend behavior', () => {
+  test('reactions moved to per-user subcollection (no message-doc rewrite)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    expect(src).toContain("'reactions', userId");
+    expect(src).toContain('collectionGroup(this.firestore, \'reactions\')');
+    expect(src).not.toContain("transaction.update(msgRef, { reactions,");
+  });
+
+  test('offline queue keeps failed messages (no silent loss) + status listeners', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    expect(src).toContain('this.maxAttempts = 5');
+    expect(src).toContain("status: 'failed'");
+    expect(src).toContain('_emitStatus');
+    expect(src).toContain('onStatus(cb)');
+    expect(src).not.toContain('await this.removeFirst();');
+  });
+
+  test('typing indicator is throttled (2s) — spec §19', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    expect(src).toContain('lastTypingWriteAt');
+    expect(src).toContain('now - last < 2000');
+  });
+
+  test('conversation-level read position used by ChatScreen (spec §17)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/ChatScreen.jsx'), 'utf8');
+    expect(src).toContain('markConversationAsRead(conversationId, uid)');
+    expect(src).not.toContain('markMessageAsRead(m.id, conversationId, uid)');
+  });
+
+  test('unread counters increment server-side via triggers', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/messaging.js'), 'utf8');
+    expect(src).toContain('exports.onMessageCreated');
+    expect(src).toContain('exports.onShardedMessageCreated');
+    expect(src).toContain('UNREAD_INCREMENT_MAX_PARTICIPANTS = 200');
+  });
+});
+
+describe('Messaging master-spec: chat UX', () => {
+  test('date separators, sender grouping, unread divider, jump-to-latest', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/ChatScreen.jsx'), 'utf8');
+    expect(src).toContain("kind: 'date'");
+    expect(src).toContain("kind: 'unread'");
+    expect(src).toContain('groupStart');
+    expect(src).toContain('New messages');
+    expect(src).toContain('jump-to-latest');
+    expect(src).toContain('newSinceScroll');
+  });
+
+  test('conversation details panel: pinned / media / search', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/ChatScreen.jsx'), 'utf8');
+    expect(src).toContain('getPinnedMessages');
+    expect(src).toContain('getConversationMedia');
+    expect(src).toContain('searchMessagesAlgolia');
+    expect(src).toContain('Conversation details');
+  });
+
+  test('MessageBubble supports grouping (isGroupStart)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/messaging/MessageBubble.jsx'), 'utf8');
+    expect(src).toContain('isGroupStart = true');
+  });
+
+  test('chat reconnects cleanly on online event', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/ChatScreen.jsx'), 'utf8');
+    expect(src).toContain("window.addEventListener('online', goOnline)");
+  });
+});

@@ -917,3 +917,86 @@ docker compose -f ops/docker-compose.observability.yml up -d  # observability
 - Every new feature flag must be registered in `DEFAULT_FLAGS` (fail-closed).
 - Every new UI string must be added to **all** locale files (CI enforces).
 - New shared components must pass the axe-core suite before merge.
+
+### 24. Messaging master-spec audit + hardening (security rules, unread system, offline queue, chat UX)
+
+**ARCHITECTURE ASSESSMENT (spec §1)**
+
+CURRENT STATE — 3090-line `messagesService` (E2EE AES-GCM + per-recipient key wrap, deterministic
+direct-conv ids, monthly sharding for 1000+ supergroups, idempotency via message_dedupe, IndexedDB
+offline queue, RTDB presence/typing, conversation-level lastRead, reactions/replies/forward/edit/
+delete/polls/pins/invites/roles/scheduled/calls), 562-line `functions/messaging.js` (search, scheduled
+dispatcher, call signaling), 6 messaging components, 5 messaging screens.
+
+WHAT IS GOOD — real E2EE; deterministic dedup; sharded counters design; participant-scoped reads;
+per-message status icons; skeletons/empty/error states; listener cleanup in ChatScreen.
+
+WHAT IS WEAK/CRITICAL —
+1. `firestore.rules` messages: `allow read, write` for ANY participant → sender forgery, editing
+   others' messages, oversized payloads (spec §44/45/73 violation).
+2. `last_messages` writable by ANY signed-in user → last-message spoofing.
+3. `unread_counters`/`user_unread_totals` have NO rules match → default-deny → unread system was
+   DEAD (increment commented out; badges always 0).
+4. Supergroup shards `messages_{yyyy}_{mm}` have NO rules match → denied for 1000+ groups.
+5. `group_invites` manageable by any participant → tighten to admins.
+6. `conversations` update: any participant can mutate admins/roles/participants (self-promotion).
+7. Offline queue silently DROPS permanently-failed messages (removeFirst in catch) — user never
+   sees a failed state (spec §9/11).
+8. Typing indicator writes on EVERY keystroke (no throttle) (spec §19).
+9. ChatScreen marks read per-message (N writes) instead of conversation-level position (spec §17).
+10. No date separators / sender grouping / unread divider / jump-to-latest (spec §49/50/51).
+
+WHAT IS MISSING — message search UI (service + CF exist), pinned/shared-media surfaces, messaging
+telemetry (spec §69).
+
+TARGET — rules-enforced domain boundaries; re-enabled unread system; resilient offline queue;
+throttled typing; conversation-level receipts; grouped chat UI with search/pinned/media.
+
+### 24b. Implementation (this turn)
+
+**SECURITY — firestore.rules (spec §44/45/73)**
+- `messages/*` — create requires `senderId == uid()` (forgery impossible);
+  update/delete only by owner, conversation admin/moderator, or global admin;
+  receipts (`readBy`/`deliveredTo`) remain writable by any participant via a
+  `diff().affectedKeys().hasOnly([...])` carve-out.
+- Supergroup monthly shards `messages_{year}_{month}` now have identical rules
+  (previously DENIED for 1000+ groups).
+- `last_messages` writes participant-scoped (was any signed-in user → spoofable
+  inbox previews).
+- `unread_counters` + `user_unread_totals` owner-scoped rules added — the unread
+  system was previously default-deny DEAD (client increments commented out).
+- `group_invites` create/update/delete admin-only.
+- `conversations` update: participants can no longer mutate `admins`/`roles`/
+  `participants`/`createdBy` unless admin (self-promotion closed).
+
+**BACKEND — messagesService / functions**
+- Reactions moved to per-user `reactions/{userId}` docs (spec §26): toggling no
+  longer rewrites the message doc; `getMessages` merges via ONE collection-group
+  query (new composite index `reactions: conversationId+messageId`).
+- Unread counters incremented server-side by `onMessageCreated` +
+  `onShardedMessageCreated` triggers (bounded to ≤200 participants; batches all
+  shard writes) — the only writer, since client writes to others' counters are
+  rules-denied.
+- OfflineMessageQueue rebuilt (spec §9/11): zipped keys, attempt tracking,
+  transient errors keep the message at the head (never dropped), permanent
+  failures marked `failed` after 5 attempts, status listeners so the UI can
+  surface sent/failed; no more silent `removeFirst` loss.
+- Typing indicator throttled to one RTDB write / 2s per conversation (spec §19).
+- ChatScreen marks read via debounced conversation-level `markConversationAsRead`
+  (spec §17) instead of N per-message writes; reconnect handler clears stale
+  optimistic messages and reloads.
+- Messaging telemetry (spec §69/70): counters + send-latency histogram — metadata
+  only, never content.
+
+**UX — ChatScreen (spec §47-51)**
+- Date separators (Today / MMM d, yyyy), 5-minute sender grouping
+  (`isGroupStart` on MessageBubble), "New messages" divider derived from the
+  real `lastRead` position, sticky "↓ N new" jump-to-latest pill with scroll
+  tracking, and a conversation-details panel (Pinned / Shared media / Search —
+  all real service calls: `getPinnedMessages`, `getConversationMedia`,
+  `searchMessagesAlgolia`→CF).
+
+**Verification**: 35 suites / 516 tests green (15 new messaging guards), lint 0
+errors, build OK, functions syntax OK.
+
+### 24b. Implementation (this turn)
