@@ -107,8 +107,11 @@ export default function BadgeScreen() {
     return userBadges[badgeId]?.earned || false;
   };
 
+  // null progress = the metric cannot be verified from available data —
+  // show "—" instead of a fabricated 0.
   const getBadgeProgress = (badgeId) => {
-    return userBadges[badgeId]?.progress || 0;
+    const p = userBadges[badgeId]?.progress;
+    return p == null ? null : p;
   };
 
   const getBadgeTarget = (badgeId) => {
@@ -266,8 +269,8 @@ export default function BadgeScreen() {
                   {badge.description}
                 </p>
 
-                {/* Progress Bar (for in-progress badges) */}
-                {progress > 0 && target > 0 && !isBadgeEarned(badge.id) && (
+                {/* Progress Bar (for in-progress badges with real metrics) */}
+                {progress != null && progress >= 0 && target > 0 && !isBadgeEarned(badge.id) && (
                   <div className="mt-3">
                     <div className={cn(
                       "h-1.5 rounded-full overflow-hidden",
@@ -284,6 +287,11 @@ export default function BadgeScreen() {
                       {progress} / {target}
                     </p>
                   </div>
+                )}
+
+                {/* Unknown metric — honest "—" instead of a fabricated 0 */}
+                {progress == null && !isBadgeEarned(badge.id) && (
+                  <p className="text-[11px] text-arvdoul-text-secondary/70 mt-3">Progress not available yet</p>
                 )}
 
                 {/* Earned Check */}

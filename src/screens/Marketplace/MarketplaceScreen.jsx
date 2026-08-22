@@ -66,24 +66,20 @@ export default function MarketplaceScreen() {
   };
 
   const handleBuyWithCoins = async (product) => {
-    const currentCoins = currentUser?.coins || 5000;
     try {
-      const order = await marketplaceService.purchaseProductWithCoins(
-        product.id,
-        currentCoins,
-        (deducted) => {
-          if (currentUser) {
-            setAppState({
-              currentUser: {
-                ...currentUser,
-                coins: currentCoins - deducted
-              }
-            });
-          }
-        },
-        user
-      );
+      // Real server-side debit (spendCoins CF) — the service checks the real
+      // balance and deducts coins on the ledger. No client-supplied balance,
+      // no fabricated defaults.
+      const order = await marketplaceService.purchaseProductWithCoins(product.id, user);
       setPurchasedOrder(order);
+      // Refresh the user's real coin balance after the ledger debit.
+      try {
+        const { getMonetizationService } = await import('../../services/monetizationService.js');
+        const bal = await getMonetizationService().getBalance(user?.uid);
+        if (currentUser && typeof bal === 'number') {
+          setAppState({ currentUser: { ...currentUser, coins: bal } });
+        }
+      } catch { /* balance refresh is best-effort */ }
       toast.success(`Purchased "${product.title}" with ${product.priceCoins} Coins! 🎁`);
     } catch (err) {
       toast.error(err.message || 'Purchase failed');
@@ -172,11 +168,17 @@ export default function MarketplaceScreen() {
             >
               <div>
                 <div className="relative h-48 overflow-hidden group cursor-pointer" onClick={() => setSelectedProduct(prod)}>
-                  <img src={prod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  {prod.image ? (
+                    <img src={prod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-900/60 to-blue-900/60 flex items-center justify-center">
+                      <ShoppingBag className="w-10 h-10 text-white/40" />
+                    </div>
+                  )}
                   <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/70 backdrop-blur-md rounded-full text-[10px] font-bold text-white uppercase">
                     {prod.category}
                   </div>
-                  {prod.creator.badge && (
+                  {prod.creator?.badge && (
                     <div className="absolute top-3 right-3 px-2.5 py-1 bg-emerald-500/90 rounded-full text-[10px] font-extrabold text-white">
                       {prod.creator.badge}
                     </div>
@@ -185,8 +187,14 @@ export default function MarketplaceScreen() {
 
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2">
-                    <img src={prod.creator.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
-                    <span className="text-xs text-gray-400 font-medium truncate">{prod.creator.name}</span>
+                    {prod.creator?.avatar ? (
+                      <img src={prod.creator.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-purple-600/50 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                        {(prod.creator?.name || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-xs text-gray-400 font-medium truncate">{prod.creator?.name || 'Seller'}</span>
                   </div>
 
                   <h3
@@ -245,10 +253,16 @@ export default function MarketplaceScreen() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <img src={selectedProduct.creator.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  {selectedProduct.creator?.avatar ? (
+                    <img src={selectedProduct.creator.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-purple-600/50 flex items-center justify-center font-bold text-white shrink-0">
+                      {(selectedProduct.creator?.name || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <h3 className="font-bold text-xs text-emerald-400 uppercase">{selectedProduct.category}</h3>
-                    <span className="text-sm font-semibold text-white">{selectedProduct.creator.name}</span>
+                    <span className="text-sm font-semibold text-white">{selectedProduct.creator?.name || 'Seller'}</span>
                   </div>
                 </div>
                 <button onClick={() => setSelectedProduct(null)} className="text-gray-400 hover:text-white p-1">
@@ -257,7 +271,13 @@ export default function MarketplaceScreen() {
               </div>
 
               <div className="relative h-64 rounded-2xl overflow-hidden">
-                <img src={selectedProduct.image} alt="" className="w-full h-full object-cover" />
+                {selectedProduct.image ? (
+                  <img src={selectedProduct.image} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-purple-900/60 to-blue-900/60 flex items-center justify-center">
+                    <ShoppingBag className="w-12 h-12 text-white/40" />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -349,7 +369,7 @@ export default function MarketplaceScreen() {
                 </a>
               ) : (
                 <div className="p-3 bg-purple-500/20 rounded-xl text-xs font-medium text-purple-300">
-                  📦 Physical order dispatched. Tracking link sent to your registered email.
+                  Purchase complete — the seller provides delivery/access for this item. No fake tracking link is shown.
                 </div>
               )}
 

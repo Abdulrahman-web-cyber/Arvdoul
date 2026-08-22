@@ -59,6 +59,16 @@ export default function CreatorPayoutScreen() {
       if (analyticsRes.status === 'fulfilled') {
         setAnalytics(analyticsRes.value);
       }
+
+      // REAL payout account status (never simulated).
+      try {
+        const settings = await monSvc.getPayoutSettings();
+        const status = settings?.accountStatus || 'unconfigured';
+        setStripeConnected(status === 'verified' || status === 'active' || status === 'enabled');
+      } catch (err) {
+        console.warn('Failed to load payout settings:', err);
+        setStripeConnected(false);
+      }
     } catch (err) {
       console.warn('Failed to load creator payout data:', err);
     } finally {
@@ -71,17 +81,31 @@ export default function CreatorPayoutScreen() {
   }, [loadData]);
 
   const handleConnectStripe = async () => {
+    if (!user?.uid) {
+      toast.error('Sign in to connect a payout account');
+      return;
+    }
     setConnectingStripe(true);
     try {
-      // Simulate/trigger Stripe Express onboarding endpoint
-      toast.info('Connecting to Stripe Express Onboarding...');
-      setTimeout(() => {
+      // REAL Stripe Express onboarding via the Cloud Function
+      // (functions/monetization.js createPayoutAccount). No timers, no
+      // simulated success — the account is only "connected" when the
+      // server actually created it.
+      const returnUrl = `${window.location.origin}/creator-payout`;
+      const result = await getMonetizationService().createPayoutAccount('US', returnUrl);
+      if (result?.onboardingUrl) {
+        // Real Stripe-hosted onboarding — send the creator there.
+        window.open(result.onboardingUrl, '_blank', 'noopener');
+        toast.info('Complete onboarding in the Stripe window that just opened.');
+      } else if (result?.success || result?.status === 'verified' || result?.accountId) {
         setStripeConnected(true);
-        setConnectingStripe(false);
-        toast.success('Stripe Express Payout Account Connected!');
-      }, 1500);
+        toast.success('Payout account connected');
+      } else {
+        toast.error(result?.message || 'Could not create the payout account. Is the Cloud Function deployed?');
+      }
     } catch (err) {
-      toast.error('Failed to connect payout account.');
+      toast.error(err?.message || 'Failed to connect payout account. The Stripe Connect Cloud Function must be deployed.');
+    } finally {
       setConnectingStripe(false);
     }
   };

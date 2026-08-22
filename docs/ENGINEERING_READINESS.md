@@ -102,6 +102,85 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 21. Next-70 production batch: money-path audit, rules compliance, real pipelines
+
+**Money-path fixes (no free coins / no fake payments)**
+- `marketplaceService.purchaseProductWithCoins` — was a LOCAL-ONLY deduction:
+  buyer's coins were never debited server-side, stock writes were denied by
+  rules (buyer ≠ creator), `buyerId` fell back to `'usr-buyer'`, and digital
+  items got a FABRICATED `arvdoul.cloud/downloads/...` URL. Now: new
+  `purchaseMarketplaceItem` Cloud Function (functions/monetization.js)
+  atomically debits via the double-entry ledger, decrements stock, creates
+  the order with real `buyerId`/`sellerId`, idempotent via the ledger;
+  client fails loudly until deployed. Receipt shows an honest "seller
+  provides delivery" note instead of fake tracking.
+- `marketplaceService.listNewProduct` — fabricated creator identity
+  (`'usr-creator'`, `'Arvdoul Creator'`, `@creator`), fake `Verified` badge,
+  fake `rating 5.0`, `reviewsCount 1`, `stock 100`, `priceUsd 12.99` →
+  real creator fields (or null), 0 ratings, explicit seller stock, and the
+  rules-required top-level `creatorId` (create would have been DENIED).
+- `spacesService.sendTip` — incremented the space counter but NEVER debited
+  the sender (unlimited free tipping) → real `transferCoins` double-entry,
+  requires `senderId`, space counter update is best-effort after settlement.
+- `liveService.sendLiveGift` — recorded the gift + stats BEFORE charging
+  coins, and a failed debit was only a warning (free gifts) → debit FIRST,
+  gift only exists after ledger success.
+- `liveService.sendLiveTip` — same bug → real `transferCoins` sender→streamer.
+- `monetizationService.getPayoutSettings` fallback claimed
+  `{ enabled: true, accountStatus: 'active' }` for an unconfigured account →
+  honest `'unconfigured'`.
+- `CreatorPayoutScreen.handleConnectStripe` — fake `setTimeout(1500)` +
+  "Connected!" → real `createPayoutAccount` CF call with onboarding-URL
+  handling; status loaded from `getPayoutSettings`.
+- `VideoGiftModal` — fake local-only deduction (`coins: Math.max(0, userCoins -
+  selectedGift.coins)` with fabricated `?? 1250` default) → real
+  `transferCoins`, real balance from ledger, self-gift blocked.
+- `VideoCard` follow button — was local state toggle + toast only (no handler
+  wired) → real `userService.followUser/unfollowUser` with optimistic rollback;
+  fabricated `@{... || 'abdulrahman'}` fallback removed.
+- `VideoFeed.handleSave` — local-only watch-later → also persists via
+  `videoService.saveVideo/unsaveVideo` (new Firestore `users/{uid}/saved_videos`
+  + rules) with rollback.
+
+**Rules compliance bugs (writes that Firestore would DENY)**
+- `pollService.createPoll` — rules require top-level `creatorId == uid()`;
+  the client wrote only a nested `creator` object → added `creatorId` + sign-in
+  requirement.
+- `marketplaceService.listNewProduct` — same (`creatorId` top-level).
+- `videoService` — new `saveVideo/unsaveVideo/getSavedVideos` + rules
+  (`users/{userId}/saved_videos/{videoId}`).
+
+**Real upload/processing pipelines (were disabled or stubbed)**
+- `soundService.uploadCustomSound` — stored a mixkit DEMO mp3 URL with
+  fabricated duration/BPM/key/waveform and `'usr-creator'` → real Storage
+  upload, real `decodeAudioData` duration + waveform, honest nulls, real
+  `creatorId`, 0 counts. `SoundsScreen` now has a real file input (was a
+  static div), requires sign-in, renders null-safe metadata.
+- `videoService.uploadVideo` — moderation/watermark/fingerprint triggers were
+  COMMENTED OUT (videos were never moderated/watermarked) → re-enabled.
+- `functions/video.js` — `watermarkVideo`, `moderateVideo`, `updateViralScore`,
+  `generateAudioFingerprint` were `onRequest` but the client wires them as
+  `httpsCallable` (guaranteed protocol failure) → converted to `onCall`;
+  `generateAudioFingerprint` was a documented stub storing a sha256 of the id
+  as a "fingerprint" → honest `audioFingerprintStatus: 'unavailable'`.
+
+**Honest data screens**
+- `DataUsageScreen` — fully fake (hardcoded 2.4GB `USAGE_DATA`, `setTimeout`
+  "clear cache", `setTimeout` "export email") → real `navigator.storage.estimate()`
+  numbers, real `settingsService.clearApplicationCache()` + Cache API purge,
+  real GDPR export via the `exportUserData` CF with a JSON download.
+- `BadgeScreen`/`rankingService.getUserBadges` — service returned an ARRAY but
+  the screen indexed it as an OBJECT (badges never displayed as earned), and
+  progress/target fields never existed → real computation from user stats
+  (posts, likes, views, followers, following, stories, account age, premium),
+  returns the map contract; unverifiable metrics show "Progress not available
+  yet" instead of fabricated zeros.
+- `AppBootstrap` offline drain — `markAsRead` queued ops were dropped by the
+  switch (default case) → real retry case wired.
+
+**Verification**: 35 suites / 471 tests green, lint 0 errors, build OK, dev
+server serves every modified module 200.
+
 ### 20. Every-screen module-load failure FIX + deep fabrication sweep
 
 **ROOT CAUSE — "Failed to fetch dynamically imported module" on EVERY screen**

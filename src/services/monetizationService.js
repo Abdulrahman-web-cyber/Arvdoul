@@ -778,7 +778,9 @@ class MonetizationService {
         const snap = await getDoc(doc(this.db, 'payout_settings', uid));
         if (snap.exists()) return snap.data();
       } catch (e) {}
-      return { enabled: true, accountStatus: 'active', currency: 'USD' };
+      // Honest unconfigured state — never claim an active payout account
+      // that does not exist.
+      return { enabled: false, accountStatus: 'unconfigured', currency: 'USD' };
     }
   }
 

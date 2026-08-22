@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatDuration, ARVDOUL_GRADIENT, SPRING_ANIMATION, formatViewCount } from '../../utils/videoUtils';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
@@ -221,11 +222,45 @@ const VideoCard = memo(({
     }
   }, []);
 
-  const handleFollowClick = (e) => {
+  const { user } = useAuth();
+  const [followBusy, setFollowBusy] = useState(false);
+
+  // REAL follow/unfollow via userService (Firestore follows collection +
+  // counters). Optimistic toggle with rollback; never a local-only fake.
+  const handleFollowClick = async (e) => {
     e.stopPropagation();
-    setIsFollowing((prev) => !prev);
-    onFollow?.(video?.creator);
-    toast.success(isFollowing ? `Unfollowed @${video?.creator?.username}` : `Following @${video?.creator?.username}! 🎉`);
+    if (!user?.uid) {
+      toast.error('Sign in to follow creators');
+      return;
+    }
+    const targetId = video?.userId || video?.authorId || video?.creator?.id;
+    if (!targetId) {
+      toast.error('Cannot follow: creator unknown');
+      return;
+    }
+    if (targetId === user.uid) return;
+    if (followBusy) return;
+
+    const prev = isFollowing;
+    setFollowBusy(true);
+    setIsFollowing(!prev); // optimistic
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      const svc = getUserService();
+      if (prev) {
+        await svc.unfollowUser(user.uid, targetId);
+        toast.success(`Unfollowed @${video?.creator?.username || 'creator'}`);
+      } else {
+        await svc.followUser(user.uid, targetId);
+        toast.success(`Following @${video?.creator?.username || 'creator'}! 🎉`);
+      }
+      onFollow?.(video?.creator);
+    } catch (err) {
+      setIsFollowing(prev); // rollback
+      toast.error(err?.message || 'Could not update follow status');
+    } finally {
+      setFollowBusy(false);
+    }
   };
 
   const handleDownload = useCallback(() => {
@@ -661,7 +696,7 @@ const VideoCard = memo(({
         {/* Creator Info */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-white font-black text-base tracking-tight drop-shadow-md">
-            @{video?.creator?.username || 'abdulrahman'}
+            @{video?.creator?.username || video?.creator?.name || 'creator'}
           </span>
 
           {video?.creator?.isVerified && (

@@ -1,10 +1,14 @@
 // src/components/Videos/VideoGiftModal.jsx - ARVDOUL VIRTUAL GIFT MODAL
-// Send coin gifts to creators in real-time with celebration animations
+// Send coin gifts to creators — REAL double-entry coin transfer via the
+// monetization ledger (transferCoins CF with atomic fallback). The local
+// store is only updated AFTER the server confirms the debit; no free gifts,
+// no fabricated balances.
 
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Zap, Award, Coins } from 'lucide-react';
+import { X, Sparkles, Zap, Award, Coins, Loader2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { VIRTUAL_GIFTS } from '../../data/videoData';
 import { toast } from 'sonner';
@@ -17,181 +21,199 @@ const VideoGiftModal = memo(({
   onSendGift,
 }) => {
   const { isDark } = useTheme();
+  const { user } = useAuth();
   const { currentUser, updateCurrentUser } = useAppStore();
   const [selectedGift, setSelectedGift] = useState(VIRTUAL_GIFTS[0]);
   const [sending, setSending] = useState(false);
   const [sentAnimation, setSentAnimation] = useState(null);
+  const [balance, setBalance] = useState(null);
 
-  const userCoins = currentUser?.coins ?? 1250;
+  // REAL balance from the ledger whenever the modal opens.
+  useEffect(() => {
+    if (!isOpen || !user?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getMonetizationService } = await import('../../services/monetizationService.js');
+        const b = await getMonetizationService().getBalance(user.uid);
+        if (!cancelled) setBalance(typeof b === 'number' ? b : null);
+      } catch {
+        if (!cancelled) setBalance(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, user?.uid]);
+
+  const recipientId = creator?.id || creator?.uid || null;
 
   const handleSend = async () => {
-    if (!selectedGift) return;
-
-    if (userCoins < selectedGift.coins) {
-      toast.error(`Not enough coins! You need ${selectedGift.coins} coins.`);
+    if (!selectedGift || sending) return;
+    if (!user?.uid) {
+      toast.error('Sign in to send gifts');
+      return;
+    }
+    if (!recipientId) {
+      toast.error('Gift recipient unknown');
+      return;
+    }
+    if (recipientId === user.uid) {
+      toast.error('You cannot gift yourself');
+      return;
+    }
+    if (balance != null && balance < selectedGift.coins) {
+      toast.error(`Not enough coins! You need ${selectedGift.coins} coins, you have ${balance}.`);
       return;
     }
 
     setSending(true);
-    setSentAnimation(selectedGift);
-
     try {
-      // Deduct coins locally and in store
-      if (updateCurrentUser && currentUser) {
-        updateCurrentUser({
-          coins: Math.max(0, userCoins - selectedGift.coins),
-        });
+      // REAL server-authoritative transfer (double-entry ledger).
+      const { getMonetizationService } = await import('../../services/monetizationService.js');
+      const res = await getMonetizationService().transferCoins(
+        user.uid,
+        recipientId,
+        selectedGift.coins,
+        'video_gift',
+        { giftType: selectedGift.id, giftName: selectedGift.name }
+      );
+      if (!res?.success) {
+        throw new Error(res?.message || 'Gift could not be sent');
       }
 
-      onSendGift?.(selectedGift);
-      toast.success(`Sent ${selectedGift.name} to @${creator?.username || 'creator'}! ✨`);
+      // Refresh the REAL balance from the ledger.
+      try {
+        const b = await getMonetizationService().getBalance(user.uid);
+        if (typeof b === 'number') {
+          setBalance(b);
+          if (updateCurrentUser && currentUser) {
+            updateCurrentUser({ coins: b });
+          }
+        }
+      } catch { /* best-effort */ }
 
+      setSentAnimation(selectedGift);
+      onSendGift?.(selectedGift);
+      toast.success(`Sent ${selectedGift.name} to @${creator?.username || creator?.name || 'creator'}! ✨`);
       setTimeout(() => {
         setSentAnimation(null);
         setSending(false);
         onClose();
       }, 1200);
     } catch (err) {
-      toast.error('Failed to send gift');
+      toast.error(err?.message || 'Failed to send gift');
       setSending(false);
       setSentAnimation(null);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4"
-        onClick={onClose}
-      >
+      {isOpen && (
         <motion.div
-          initial={{ y: 100, opacity: 0, scale: 0.95 }}
-          animate={{ y: 0, opacity: 1, scale: 1 }}
-          exit={{ y: 100, opacity: 0, scale: 0.95 }}
-          transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-          onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-md rounded-t-3xl sm:rounded-3xl border shadow-2xl p-6 relative overflow-hidden ${
-            isDark
-              ? 'bg-[#0b1020]/95 border-white/10 text-white'
-              : 'bg-white/95 border-gray-200 text-gray-900'
-          }`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={sending ? undefined : onClose}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-400 to-yellow-500 flex items-center justify-center text-white shadow-md">
-                <Sparkles className="w-4 h-4" />
+          <motion.div
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 ${
+              isDark ? 'bg-gray-900 border border-gray-800' : 'bg-white'
+            } shadow-2xl relative overflow-hidden`}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <h3 className="font-bold text-lg text-white">Send a Gift</h3>
               </div>
-              <div>
-                <h3 className="font-bold text-base leading-tight">Send a Gift</h3>
-                <p className="text-xs opacity-60">Support @{creator?.username || 'creator'}</p>
-              </div>
+              <button onClick={onClose} disabled={sending} className="text-gray-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Coin Balance */}
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold text-xs">
-                <Coins className="w-3.5 h-3.5 text-yellow-400" />
-                <span>{userCoins.toLocaleString()}</span>
-              </div>
+            {/* Recipient */}
+            <p className="text-sm text-gray-400 mb-4">
+              To{' '}
+              <span className="font-bold text-white">
+                @{creator?.username || creator?.name || 'creator'}
+              </span>
+            </p>
 
-              <motion.button
-                whileTap={{ scale: 0.9 }}
-                onClick={onClose}
-                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </motion.button>
+            {/* Balance */}
+            <div className="flex items-center justify-between bg-black/30 rounded-2xl px-4 py-3 mb-5">
+              <span className="text-xs text-gray-400">Your balance</span>
+              <span className="text-sm font-bold text-yellow-400 flex items-center gap-1">
+                <Coins className="w-4 h-4" />
+                {balance == null ? '—' : balance.toLocaleString()}
+              </span>
             </div>
-          </div>
 
-          {/* Gift Grid */}
-          <div className="grid grid-cols-3 gap-3 my-4">
-            {VIRTUAL_GIFTS.map((gift) => {
-              const isSelected = selectedGift?.id === gift.id;
-              const canAfford = userCoins >= gift.coins;
-
-              return (
+            {/* Gifts grid */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {VIRTUAL_GIFTS.map((gift) => (
                 <motion.button
                   key={gift.id}
                   whileTap={{ scale: 0.95 }}
-                  whileHover={{ scale: 1.03 }}
                   onClick={() => setSelectedGift(gift)}
-                  className={`p-3 rounded-2xl flex flex-col items-center gap-1.5 border transition-all relative ${
-                    isSelected
-                      ? 'bg-gradient-to-b from-purple-500/20 to-pink-500/20 border-purple-500 shadow-lg shadow-purple-500/20'
-                      : isDark
-                      ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  } ${!canAfford ? 'opacity-50' : ''}`}
+                  className={`p-3 rounded-2xl border text-center transition-colors ${
+                    selectedGift?.id === gift.id
+                      ? 'border-purple-500 bg-purple-500/15'
+                      : 'border-gray-700/60 bg-black/20 hover:border-purple-500/50'
+                  }`}
                 >
-                  <span className="text-3xl filter drop-shadow-md">{gift.icon}</span>
-                  <span className="text-xs font-semibold text-center leading-tight truncate w-full">
-                    {gift.name}
-                  </span>
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
-                    <Coins className="w-3 h-3 text-yellow-400" />
-                    <span>{gift.coins}</span>
+                  <div className="text-2xl mb-1">{gift.icon}</div>
+                  <div className="text-[10px] font-semibold text-white truncate">{gift.name}</div>
+                  <div className="text-[10px] font-bold text-yellow-400 flex items-center justify-center gap-0.5">
+                    <Coins className="w-3 h-3" /> {gift.coins}
                   </div>
-
-                  {isSelected && (
-                    <motion.div
-                      layoutId="selectedGiftPill"
-                      className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 ring-2 ring-white"
-                    />
-                  )}
                 </motion.button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
 
-          {/* Send Button */}
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            whileHover={{ scale: 1.02 }}
-            onClick={handleSend}
-            disabled={sending || !selectedGift || userCoins < (selectedGift?.coins || 0)}
-            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-bold text-sm shadow-xl shadow-purple-500/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {sending ? (
-              <span>Sending {selectedGift?.name}... ✨</span>
-            ) : (
-              <>
-                <span>Send {selectedGift?.name}</span>
-                <span className="opacity-80">({selectedGift?.coins} Coins)</span>
-              </>
-            )}
-          </motion.button>
+            {/* Send */}
+            <button
+              onClick={handleSend}
+              disabled={sending || balance != null && balance < selectedGift.coins}
+              className="w-full py-4 rounded-2xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-xl shadow-purple-500/25 hover:opacity-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Sending...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" /> Send {selectedGift.name}
+                </>
+              )}
+            </button>
 
-          {/* Celebration Animation Burst */}
-          <AnimatePresence>
+            {/* Sent animation */}
             {sentAnimation && (
               <motion.div
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: [0, 1.4, 1], opacity: [0, 1, 0] }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.2, ease: 'easeOut' }}
-                className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none bg-black/40 z-20"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1.2, opacity: 1 }}
+                className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm"
               >
-                <span className="text-7xl filter drop-shadow-2xl">{sentAnimation.icon}</span>
-                <p className="text-white font-black text-xl mt-2 tracking-wide drop-shadow-lg">
-                  +{sentAnimation.coins} Coins Sent!
-                </p>
+                <div className="text-center">
+                  <div className="text-6xl mb-2">{sentAnimation.icon}</div>
+                  <p className="text-white font-bold">Gift sent! ✨</p>
+                </div>
               </motion.div>
             )}
-          </AnimatePresence>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 });
 
 VideoGiftModal.displayName = 'VideoGiftModal';
+
 VideoGiftModal.propTypes = {
   isOpen: PropTypes.bool,
   onClose: PropTypes.func.isRequired,

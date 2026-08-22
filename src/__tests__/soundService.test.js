@@ -11,9 +11,18 @@ import { jest } from '@jest/globals';
 
 // ---- Mock the Firebase singleton BEFORE importing the service ----
 const mockFirestoreInstance = { type: 'mock-firestore' };
+const mockStorageInstance = { type: 'mock-storage' };
 jest.unstable_mockModule('../firebase/firebase.js', () => ({
   getFirestoreInstance: jest.fn(async () => mockFirestoreInstance),
+  getStorageInstance: jest.fn(async () => mockStorageInstance),
   getAuthInstance: jest.fn(async () => ({ currentUser: null })),
+}));
+
+// ---- Mock firebase/storage (real upload path: ref → uploadBytes → URL) ----
+jest.unstable_mockModule('firebase/storage', () => ({
+  ref: jest.fn((storage, path) => ({ storage, fullPath: path })),
+  uploadBytes: jest.fn(async () => ({ metadata: { name: 'uploaded.bin' } })),
+  getDownloadURL: jest.fn(async (storageRef) => `https://storage.mock/${storageRef.fullPath}`),
 }));
 
 // ---- In-memory fake Firestore ----
@@ -87,6 +96,7 @@ const mockFirestoreModule = {
     return makeDocRef(colRef.firestore, `sounds/${id}`);
   },
   increment: (n) => ({ __increment: n }),
+  serverTimestamp: () => ({ __serverTimestamp: true }),
 };
 
 jest.unstable_mockModule('firebase/firestore', () => mockFirestoreModule);
@@ -180,24 +190,46 @@ describe('soundService', () => {
     expect(saved[0].id).toBe('snd-sample-1');
   });
 
-  test('uploadCustomSound persists a new sound document', async () => {
+  test('uploadCustomSound uploads the REAL file and persists an honest record', async () => {
+    const fakeFile = {
+      name: 'my-beat.mp3',
+      size: 2048,
+      arrayBuffer: async () => new ArrayBuffer(8),
+    };
     const uploaded = await soundService.uploadCustomSound({
       title: 'Test Audio Track',
       genre: 'Hyperpop',
       artist: 'Tester',
       creatorId: 'usr-tester',
+      file: fakeFile,
     });
     expect(uploaded.id).toContain('snd-custom-');
     expect(uploaded.title).toBe('Test Audio Track');
     expect(uploaded.genre).toBe('Hyperpop');
+    // REAL storage URL (from the mocked storage layer) — never a mixkit demo.
+    expect(uploaded.audioUrl).toContain('https://storage.mock/sounds/usr-tester/');
+    expect(uploaded.creatorId).toBe('usr-tester');
+    expect(uploaded.bpm).toBeNull(); // honest: no invented BPM
+    expect(uploaded.key).toBeNull();
+    expect(uploaded.reelsCountNum).toBe(0);
+    expect(uploaded.durationSec).toBeNull(); // no fake 30s
     expect(soundsCollection.has(uploaded.id)).toBe(true);
+  });
+
+  test('uploadCustomSound requires a real file and a real creator', async () => {
+    await expect(
+      soundService.uploadCustomSound({ title: 'X', genre: 'Y', creatorId: 'u1' })
+    ).rejects.toThrow('No audio file provided');
+    await expect(
+      soundService.uploadCustomSound({ title: 'X', genre: 'Y', file: { name: 'a.mp3' } })
+    ).rejects.toThrow('Sign in to upload a sound');
   });
 
   test('uploadCustomSound rethrows when persistence fails', async () => {
     const { getFirestoreInstance } = await import('../firebase/firebase.js');
     getFirestoreInstance.mockRejectedValueOnce(new Error('disk full'));
     await expect(
-      soundService.uploadCustomSound({ title: 'X', genre: 'Y' })
+      soundService.uploadCustomSound({ title: 'X', genre: 'Y', creatorId: 'u1', file: { name: 'a.mp3', size: 1 } })
     ).rejects.toThrow('disk full');
   });
 });

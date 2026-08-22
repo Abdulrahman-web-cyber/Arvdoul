@@ -209,15 +209,49 @@ class SpacesService {
     return { id: docRef.id, ...newSpace };
   }
 
-  async sendTip(spaceId, amount, speakerId) {
-    log.info('Tipping in space', { spaceId, amount, speakerId });
+  /**
+   * REAL coin tip: debits the sender via the server-authoritative coin ledger
+   * (spendCoins CF with atomic fallback) and credits the speaker, then
+   * updates the space's running tip total (best-effort). Never lets a sender
+   * tip coins they do not have.
+   */
+  async sendTip(spaceId, amount, speakerId, senderId = null) {
+    log.info('Tipping in space', { spaceId, amount, speakerId, senderId });
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount <= 0) {
+      return { success: false, error: 'Invalid tip amount' };
+    }
+    if (!senderId) {
+      return { success: false, error: 'Sign in to send a tip' };
+    }
+
     try {
-      const firestore = await getFirestoreInstance();
-      const { doc, updateDoc, increment } = await import('firebase/firestore');
-      const spaceRef = doc(firestore, 'spaces', spaceId);
-      await updateDoc(spaceRef, {
-        tipsTotalCoins: increment(Number(amount))
-      });
+      // 1. REAL double-entry transfer: sender → speaker.
+      const { getMonetizationService } = await import('./monetizationService.js');
+      const monetization = getMonetizationService();
+      const transfer = await monetization.transferCoins(
+        senderId,
+        speakerId,
+        numericAmount,
+        'space_tip',
+        { spaceId }
+      );
+      if (!transfer?.success) {
+        return { success: false, error: transfer?.message || 'Tip could not be processed' };
+      }
+
+      // 2. Space tip total (best-effort — ledger above is authoritative).
+      try {
+        const firestore = await getFirestoreInstance();
+        const { doc, updateDoc, increment } = await import('firebase/firestore');
+        const spaceRef = doc(firestore, 'spaces', spaceId);
+        await updateDoc(spaceRef, {
+          tipsTotalCoins: increment(numericAmount)
+        });
+      } catch (err) {
+        log.warn('Space tip counter update failed (ledger already settled):', err.message);
+      }
+
       return { success: true };
     } catch (err) {
       log.error('Error sending tip in space', err);

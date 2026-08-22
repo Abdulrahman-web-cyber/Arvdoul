@@ -108,22 +108,26 @@ export default function SpacesScreen() {
 
   const handleSendTip = async () => {
     if (!tipModalSpeaker || !activeSpace) return;
-    const currentCoins = currentUser?.coins || 5000;
-    if (currentCoins < tipAmount) {
-      toast.error(`Insufficient coins. You have ${currentCoins} coins.`);
+    if (!user?.uid) {
+      toast.error('Sign in to send a tip');
       return;
     }
 
     try {
-      await spacesService.sendTip(activeSpace.id, tipAmount, tipModalSpeaker.id);
-      if (currentUser) {
-        setAppState({
-          currentUser: {
-            ...currentUser,
-            coins: currentCoins - tipAmount
-          }
-        });
+      // REAL server-side debit+credit; the service rejects insufficient coins.
+      const result = await spacesService.sendTip(activeSpace.id, tipAmount, tipModalSpeaker.id, user.uid);
+      if (!result?.success) {
+        toast.error(result?.error || 'Tip could not be sent');
+        return;
       }
+      // Refresh the user's REAL balance from the ledger.
+      try {
+        const { getMonetizationService } = await import('../../services/monetizationService.js');
+        const bal = await getMonetizationService().getBalance(user.uid);
+        if (currentUser && typeof bal === 'number') {
+          setAppState({ currentUser: { ...currentUser, coins: bal } });
+        }
+      } catch { /* best-effort */ }
       toast.success(`Sent ${tipAmount} Coins to ${tipModalSpeaker.name}! 🪙✨`);
       setTipModalSpeaker(null);
       handleSendReaction('💎');

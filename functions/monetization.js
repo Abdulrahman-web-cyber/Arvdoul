@@ -1558,3 +1558,108 @@ exports.processVideoEvent = functions.https.onCall(async (data, context) => {
     return { success: true, videoId, eventType };
   } catch (err) { throw handleError(err); }
 });
+
+// ----------------------------------------------------------------------
+// Marketplace purchase — server-authoritative coin debit + stock + order.
+// Client-side stock writes are denied by rules (buyer != creator), so the
+// whole purchase must happen here atomically.
+// ----------------------------------------------------------------------
+exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) => {
+  try {
+    const uid = getUserIdFromContext(context);
+    const { productId, orderId } = data || {};
+    if (!productId) throw new functions.https.HttpsError('invalid-argument', 'productId required.');
+    await checkRateLimit(uid, 'marketplacePurchase', 10, 60000);
+
+    const key = generateIdempotencyKey(orderId || `mp-${uid}-${productId}-${Date.now()}`);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== uid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
+
+      const db = admin.firestore();
+      const productRef = db.collection('marketplace_items').doc(productId);
+      const productSnap = await t.get(productRef);
+      if (!productSnap.exists) throw new functions.https.HttpsError('not-found', 'Product not found.');
+      const product = productSnap.data();
+      if ((product.stock || 0) <= 0) {
+        throw new functions.https.HttpsError('failed-precondition', 'This item is currently out of stock.');
+      }
+
+      const price = Number(product.priceCoins) || 0;
+      if (price <= 0) throw new functions.https.HttpsError('invalid-argument', 'Product has no valid coin price.');
+
+      const userRef = db.collection('users').doc(uid);
+      const userSnap = await t.get(userRef);
+      if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
+      const available = getAvailableBalance(userSnap.data());
+      if (available < price) {
+        throw new functions.https.HttpsError('failed-precondition', `Insufficient Arvdoul Coins. You need ${price} coins, but have ${available}.`);
+      }
+
+      // 1. Debit coins (same double-entry ledger as spendCoins)
+      const newBalance = (userSnap.data().coins || 0) - price;
+      t.update(userRef, { coins: newBalance });
+
+      const txRef = db.collection('coin_transactions').doc();
+      t.set(txRef, {
+        userId: uid, type: 'debit', amount: price,
+        reason: 'marketplace_purchase',
+        metadata: { productId, productTitle: product.title || '' },
+        idempotencyKey: key, balanceAfter: newBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+      createLedgerEntry(t, `users:${uid}`, 'system:coin_supply', price, { reason: 'marketplace_purchase', transactionId: txRef.id });
+      t.set(db.collection('system').doc('coin_supply'),
+        { totalCoins: admin.firestore.FieldValue.increment(-price) }, { merge: true });
+
+      // 2. Stock + sales
+      t.update(productRef, {
+        stock: admin.firestore.FieldValue.increment(-1),
+        salesCount: admin.firestore.FieldValue.increment(1),
+      });
+
+      // 3. Order (matches firestore.rules: buyerId top-level)
+      const orderRef = db.collection('orders').doc();
+      const orderData = {
+        orderId: orderRef.id,
+        productId,
+        productTitle: product.title || '',
+        product,
+        buyerId: uid,
+        sellerId: product.creatorId || null,
+        purchasedAt: admin.firestore.FieldValue.serverTimestamp(),
+        amountPaidCoins: price,
+        downloadUrl: product.downloadUrl || null,
+        status: 'Completed',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      t.set(orderRef, orderData);
+
+      const resultData = {
+        success: true,
+        order: { id: orderRef.id, ...orderData, purchasedAt: new Date().toISOString() },
+        newBalance,
+        transactionId: txRef.id,
+      };
+      t.set(ledgerRef, {
+        function: 'purchaseMarketplaceItem',
+        userId: uid,
+        result: resultData,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      return resultData;
+    });
+
+    logEvent('marketplace_purchase_success', { uid, productId, newBalance: result.newBalance });
+    return result;
+  } catch (err) { throw handleError(err); }
+});

@@ -54,6 +54,11 @@ service cloud.firestore {
     match /user_preferences/{userId} {
       allow read, write: if isOwner(userId);
     }
+    // Saved videos (Watch Later): the subcollection doc id is the video id;
+    // only the owner may read/write their own saved list.
+    match /users/{userId}/saved_videos/{videoId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
 
     // ==================== POSTS ====================
     match /posts/{postId} {

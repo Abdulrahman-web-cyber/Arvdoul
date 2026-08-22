@@ -138,6 +138,10 @@ const SystemInitializer = ({ onReady }) => {
                         channel: 'in_app',
                       }));
                     break;
+                  case 'markAsRead':
+                    await import('../services/notificationsService.js').then(m =>
+                      m.getNotificationsService().markNotificationAsRead(op.payload.notificationId, op.payload.userId));
+                    break;
                   case 'user.follow':
                     await import('../services/userService.js').then(m =>
                       m.getUserService().followUser(op.payload.followerId, op.payload.followingId));

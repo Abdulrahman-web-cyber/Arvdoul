@@ -473,29 +473,111 @@ class RankingService {
     }
   }
 
+  /**
+   * REAL badge computation from live user stats. Returns a map keyed by badge
+   * id: { earned, progress, target } — progress/target are null when the
+   * metric cannot be computed cheaply (the UI must show "—" then, never a
+   * fabricated number). No badges are ever claimed without real evidence.
+   */
   async getUserBadges(userId) {
     await this.ensureInitialized();
 
-    try {
-      const badgesRef = collection(this.firestore, 'users', userId, 'badges');
-      const snap = await getDocs(badgesRef);
-      
-      const badges = [];
-      snap.docs.forEach((doc) => {
-        const badgeData = doc.data();
-        const badgeConfig = RANKING_CONFIG.BADGES.find(b => b.id === badgeData.badgeId);
-        if (badgeConfig) {
-          badges.push({
-            ...badgeConfig,
-            earnedAt: badgeData.earnedAt,
-          });
-        }
-      });
+    const result = {};
+    const today = new Date();
 
-      return badges;
+    try {
+      const userSnap = await getDoc(doc(this.firestore, 'users', userId));
+      const userData = userSnap.exists() ? userSnap.data() : {};
+
+      const followerCount = Number(userData.followerCount || userData.stats?.followers || 0);
+      const followingCount = Number(userData.followingCount || userData.stats?.following || 0);
+      const createdAt = userData.createdAt?.toDate?.() || (userData.createdAt ? new Date(userData.createdAt) : null);
+      const accountDays = createdAt && !Number.isNaN(createdAt.getTime())
+        ? Math.max(0, Math.floor((today.getTime() - createdAt.getTime()) / 86400000))
+        : null;
+      const isPremium = !!(userData.subscription?.tier || userData.subscriptionTier || userData.isPremium);
+      const isVerified = !!(userData.isVerified || userData.verified || userData.badges?.includes?.('verified'));
+
+      // Real content stats.
+      let posts = [];
+      try {
+        const postsSnap = await getDocs(
+          query(collection(this.firestore, 'posts'), where('authorId', '==', userId), limit(500))
+        );
+        posts = postsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      } catch (err) {
+        logger.warn('[RankingService] posts stats unavailable:', err.message);
+      }
+
+      let totalLikes = 0;
+      let totalViews = 0;
+      let totalComments = 0;
+      let sparkCount = 0;
+      for (const p of posts) {
+        totalLikes += Number(p.stats?.likes || p.likes || 0);
+        totalViews += Number(p.stats?.views || p.views || 0);
+        totalComments += Number(p.stats?.comments || p.comments || 0);
+        if (p.type === 'spark') sparkCount += 1;
+      }
+
+      let storyCount = 0;
+      try {
+        const sSnap = await getDocs(
+          query(collection(this.firestore, 'stories'), where('userId', '==', userId), limit(500))
+        );
+        storyCount = sSnap.size;
+      } catch { /* stories stats unavailable — story badges stay unknown */ }
+
+      const defs = {
+        first_like: { progress: totalLikes, target: 1 },
+        like_master: { progress: totalLikes, target: 1000 },
+        first_comment: { progress: totalComments, target: 1 },
+        commentator: { progress: totalComments, target: 500 },
+        viral_post: { progress: totalViews, target: 10000 },
+        trendsetter: { progress: null, target: 5 }, // not cheaply computable
+        first_follower: { progress: followerCount, target: 1 },
+        influencer: { progress: followerCount, target: 10000 },
+        supporter: { progress: followingCount, target: 100 },
+        conversation_starter: { progress: totalComments, target: 50 },
+        first_post: { progress: posts.length, target: 1 },
+        prolific_creator: { progress: posts.length, target: 100 },
+        spark_master: { progress: sparkCount, target: 50 },
+        storyteller: { progress: storyCount, target: 100 },
+        verified: { progress: null, target: 1 },
+        founder: { progress: null, target: 1 }, // unknown threshold — never claimed
+        premium: { progress: null, target: 1 },
+        year_one: { progress: accountDays, target: 365 },
+      };
+
+      const earned = {
+        first_like: totalLikes >= 1,
+        like_master: totalLikes >= 1000,
+        first_comment: totalComments >= 1,
+        commentator: totalComments >= 500,
+        viral_post: totalViews >= 10000,
+        trendsetter: false,
+        first_follower: followerCount >= 1,
+        influencer: followerCount >= 10000,
+        supporter: followingCount >= 100,
+        conversation_starter: totalComments >= 50,
+        first_post: posts.length >= 1,
+        prolific_creator: posts.length >= 100,
+        spark_master: sparkCount >= 50,
+        storyteller: storyCount >= 100,
+        verified: isVerified,
+        founder: false,
+        premium: isPremium,
+        year_one: accountDays != null && accountDays >= 365,
+      };
+
+      for (const [id, def] of Object.entries(defs)) {
+        result[id] = { earned: earned[id], progress: def.progress, target: def.target };
+      }
+
+      return result;
     } catch (error) {
       logger.error('[RankingService] Failed to get user badges:', error);
-      return [];
+      return {};
     }
   }
 

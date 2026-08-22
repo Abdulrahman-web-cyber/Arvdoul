@@ -131,11 +131,17 @@ class PollService {
 
     // Honest creator identity: real user fields only. Never fabricate an
     // id/name/avatar — anonymous fallbacks are explicit, not invented people.
+    if (!creator?.uid) {
+      throw new Error('Sign in to create a poll');
+    }
     const now = new Date();
     const POLL_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
     const newPoll = {
       question,
       category,
+      // Top-level creatorId is REQUIRED by firestore.rules
+      // (match /polls/{pollId} create: creatorId == uid()).
+      creatorId: creator.uid,
       creator: {
         id: creator?.uid || null,
         name: creator?.displayName || '',

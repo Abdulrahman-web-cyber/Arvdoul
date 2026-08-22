@@ -193,3 +193,185 @@ describe('NotificationsScreen - real timestamps, no invented copy', () => {
     expect(src).toContain('createdAt?.toDate'); // real timestamp mapping
   });
 });
+
+describe('DataUsageScreen - real storage, cache and GDPR export', () => {
+  test('no fake USAGE_DATA, no setTimeout-only handlers', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/DataUsageScreen.jsx'), 'utf8');
+    expect(src).not.toContain('USAGE_DATA');
+    expect(src).not.toContain('await new Promise(resolve => setTimeout(resolve, 1500))');
+    expect(src).not.toContain('You\'ll receive an email when ready');
+    expect(src).toContain('navigator.storage?.estimate'); // REAL storage numbers
+    expect(src).toContain('settingsService.clearApplicationCache'); // REAL cache clearing
+    expect(src).toContain("'exportUserData'"); // REAL GDPR Cloud Function
+  });
+});
+
+describe('Marketplace - real coin ledger, honest listings', () => {
+  test('service never fabricates buyer/creator identity, ratings or download URLs', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/marketplaceService.js'), 'utf8');
+    expect(src).not.toContain('usr-buyer');
+    expect(src).not.toContain('usr-creator');
+    expect(src).not.toContain('Arvdoul Creator');
+    expect(src).not.toContain('arvdoul.cloud/downloads');
+    expect(src).not.toContain('rating: 5.0');
+    expect(src).not.toContain('stock: 100');
+    expect(src).toContain("'purchaseMarketplaceItem'"); // server-authoritative purchase
+    expect(src).toContain('creatorId: creator.uid'); // rules-compliant listing
+  });
+
+  test('screen never falls back to a fabricated 5000-coin balance', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Marketplace/MarketplaceScreen.jsx'), 'utf8');
+    expect(src).not.toContain('coins || 5000');
+    expect(src).not.toContain('Physical order dispatched');
+  });
+});
+
+describe('soundService - real uploads only', () => {
+  test('no mixkit demo URL, no fabricated metadata, real file required', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/soundService.js'), 'utf8');
+    expect(src).not.toContain('assets.mixkit.co');
+    expect(src).not.toContain("'usr-creator'");
+    expect(src).not.toContain('bpm: 120');
+    expect(src).not.toContain("key: 'C Major'");
+    expect(src).toContain('uploadBytes'); // real Storage upload
+    expect(src).toContain('decodeAudioData'); // real duration/waveform
+  });
+});
+
+describe('Spaces & Live - no free-money tips/gifts', () => {
+  test('spacesService.sendTip requires a sender and uses the real ledger', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/spacesService.js'), 'utf8');
+    expect(src).toContain('transferCoins(');
+    expect(src).toContain('Sign in to send a tip');
+  });
+
+  test('liveService debits coins BEFORE recording gifts/tips', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
+    const giftIdx = src.indexOf('async sendLiveGift');
+    const tipIdx = src.indexOf('async sendLiveTip');
+    // spendCoins/transferCoins must appear before addDoc(live_gifts/live_tips)
+    const giftBlock = src.slice(giftIdx, tipIdx);
+    const spendIdx = giftBlock.indexOf('spendCoins');
+    const addGiftIdx = giftBlock.indexOf("addDoc(giftsRef");
+    expect(spendIdx).toBeGreaterThan(-1);
+    expect(addGiftIdx).toBeGreaterThan(spendIdx);
+  });
+});
+
+describe('Badge system - real stats map', () => {
+  test('rankingService.getUserBadges returns a map keyed by badge id with earned/progress', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/rankingService.js'), 'utf8');
+    expect(src).toContain("result[id] = { earned: earned[id], progress: def.progress, target: def.target }");
+    expect(src).toContain('followerCount'); // computed from real stats
+    expect(src).toContain('first_like');
+  });
+
+  test('BadgeScreen shows honest "not available" instead of fabricated zeros', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/BadgeScreen.jsx'), 'utf8');
+    expect(src).toContain('Progress not available yet');
+  });
+});
+
+describe('Payouts - honest account state', () => {
+  test('getPayoutSettings never claims an active account when unconfigured', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(src).toContain("accountStatus: 'unconfigured'");
+    expect(src).not.toContain("return { enabled: true, accountStatus: 'active', currency: 'USD' }");
+  });
+
+  test('CreatorPayoutScreen has no simulated Stripe timer', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/CreatorPayoutScreen.jsx'), 'utf8');
+    expect(src).not.toContain("setTimeout(() => {");
+    expect(src).toContain('createPayoutAccount');
+  });
+});
+
+describe('Video save/report - real server paths', () => {
+  test('VideoBottomSheet persists saves and submits reports for real', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Videos/VideoBottomSheet.jsx'), 'utf8');
+    expect(src).not.toContain("toast.success('Added to Watch Later')");
+    expect(src).not.toContain("toast.success('Report submitted. Thank you!')");
+    expect(src).toContain('saveVideo(');
+    expect(src).toContain('reportVideo(');
+  });
+
+  test('videoService exposes save/unsave/getSavedVideos', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
+    expect(src).toContain('async saveVideo(');
+    expect(src).toContain('async unsaveVideo(');
+    expect(src).toContain('async getSavedVideos(');
+  });
+
+  test('firestore.rules allow users/{uid}/saved_videos', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('match /users/{userId}/saved_videos/{videoId}');
+  });
+});
+
+describe('Poll + marketplace rules compliance', () => {
+  test('pollService writes top-level creatorId (rules require it)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
+    expect(src).toContain('creatorId: creator.uid');
+  });
+});
+
+describe('Offline drain - markAsRead is retried', () => {
+  test('AppBootstrap drains queued notification reads', () => {
+    const src = fs.readFileSync(path.join(root, 'src/app/AppBootstrap.jsx'), 'utf8');
+    expect(src).toContain("case 'markAsRead':");
+  });
+});
+
+describe('Video gift/follow/save - no local-only fakes', () => {
+  test('VideoGiftModal transfers coins via the real ledger (no local-only deduction)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Videos/VideoGiftModal.jsx'), 'utf8');
+    expect(src).not.toContain('?? 1250');
+    expect(src).not.toContain('Math.max(0, userCoins - selectedGift.coins)');
+    expect(src).toContain('transferCoins(');
+    expect(src).toContain('getBalance('); // real balance shown
+  });
+
+  test('VideoCard has no fabricated username fallback and follows for real', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Videos/VideoCard.jsx'), 'utf8');
+    expect(src).not.toContain("'abdulrahman'");
+    expect(src).toContain('followUser(');
+    expect(src).toContain('unfollowUser(');
+  });
+
+  test('VideoFeed persists saves server-side', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Videos/VideoFeed.jsx'), 'utf8');
+    expect(src).toContain('videoService.saveVideo(');
+    expect(src).toContain('videoService.unsaveVideo(');
+  });
+});
+
+describe('Video upload pipeline - server processing re-enabled', () => {
+  test('videoService calls the moderation/watermark/fingerprint functions after upload', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
+    expect(src).not.toContain('//     this.fns.processVideoEvent');
+    expect(src).toContain("this.fns.processVideoEvent({ eventType: 'video.created', videoId })");
+    expect(src).toContain('this.fns.moderateVideo({ videoId })');
+    expect(src).toContain('this.fns.watermarkVideo({ videoId })');
+  });
+
+  test('functions/video.js processing endpoints are onCall (callable-compatible)', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/video.js'), 'utf8');
+    expect(src).toContain('exports.watermarkVideo = onCall');
+    expect(src).toContain('exports.moderateVideo = onCall');
+    expect(src).toContain('exports.updateViralScore = onCall');
+  });
+
+  test('audio fingerprint is honest (never a fabricated hash of the id)', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/video.js'), 'utf8');
+    expect(src).not.toContain('chromaprint stub');
+    expect(src).toContain("audioFingerprintStatus: 'unavailable'");
+  });
+});
+
+describe('Badge service - no phantom badge array', () => {
+  test('rankingService badge map matches the screen contract', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/rankingService.js'), 'utf8');
+    expect(src).toContain("result[id] = { earned: earned[id], progress: def.progress, target: def.target }");
+    expect(src).not.toContain('snap.docs.forEach((doc) => {'); // old array path removed
+  });
+});
