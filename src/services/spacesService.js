@@ -181,24 +181,30 @@ class SpacesService {
   }
 
   async createSpace({ title, category = 'General', isRecording = true, hostUser }) {
+    if (!hostUser?.uid) {
+      throw new Error('Sign in to start a space');
+    }
     log.info('Creating new live space in Firestore', { title, category });
     const firestore = await getFirestoreInstance();
     const { collection, addDoc } = await import('firebase/firestore');
 
+    // Honest host identity: real user fields only; no fabricated names,
+    // handles, avatars or "Verified" badges.
     const newSpace = {
       title,
       category,
       isLive: true,
       startedAt: Date.now(),
+      hostId: hostUser.uid,
       host: {
-        id: hostUser?.uid || 'usr-creator',
-        name: hostUser?.displayName || 'Arvdoul Creator',
-        username: hostUser?.username ? `@${hostUser.username}` : '@creator',
-        avatar: hostUser?.photoURL || '/assets/default-profile.png',
-        isVerified: true
+        id: hostUser.uid,
+        name: hostUser.displayName || '',
+        username: hostUser.username ? `@${hostUser.username}` : null,
+        avatar: hostUser.photoURL || null,
+        isVerified: false
       },
       speakers: [],
-      audienceCount: 1,
+      audienceCount: 0,
       listeners: [],
       raisedHands: [],
       tipsTotalCoins: 0,

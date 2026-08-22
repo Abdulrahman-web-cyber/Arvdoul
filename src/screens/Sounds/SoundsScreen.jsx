@@ -334,7 +334,7 @@ export default function SoundsScreen() {
               </div>
             </div>
 
-            {/* Waveform Bar simulation */}
+            {/* Waveform bar (real analyzed peaks, neutral bars when unknown) */}
             <div className="flex-1 w-full flex items-center gap-3">
               <button
                 onClick={() => handlePlaySound(currentSound)}

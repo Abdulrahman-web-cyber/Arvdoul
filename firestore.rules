@@ -35,7 +35,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn(); // app layer projects private profiles
       allow create: if isOwner(userId) && authoredBy('id');
-      allow update, delete: if isOwner(userId);
+      // Admins (admins/{uid} doc) may moderate: ban/suspend/verify etc.
+      allow update, delete: if isOwner(userId) || isAdmin();
     }
     // usernames registry: created/updated via owner flows
     match /usernames/{username} {
@@ -64,7 +65,8 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if true;
       allow create: if isSignedIn() && authoredBy('authorId');
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+      // Moderators may remove/restore content (admin console).
+      allow update, delete: if (isSignedIn() && request.auth.uid == resource.data.authorId) || isAdmin();
       // post subcollections (likes, saves, gifts, reactions): the doc id encodes
       // the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) — enforce it.
       match /{subcollection}/{docId} {
@@ -335,6 +337,11 @@ service cloud.firestore {
       allow read, create: if isSignedIn();
       allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow delete: if isAdmin();
+    }
+    match /video_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reportedBy == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reportedBy == uid();
+      allow update, delete: if isAdmin();
     }
     match /moderation_logs/{logId} {
       allow read: if isAdmin();

@@ -21,8 +21,8 @@ const TEXT_BACKGROUNDS = [
 
 function getRandomSolidBackground(postId) {
   if (!postId) {
-    const randomIndex = Math.floor(Math.random() * TEXT_BACKGROUNDS.length);
-    return TEXT_BACKGROUNDS[randomIndex];
+    // Deterministic default (brand violet) when no post id — never random.
+    return TEXT_BACKGROUNDS[1];
   }
   let hash = 0;
   for (let i = 0; i < postId.length; i++) {

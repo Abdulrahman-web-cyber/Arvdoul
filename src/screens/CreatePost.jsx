@@ -699,7 +699,25 @@ function CreatePostProvider({ children }) {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { coins: userCoins, setCurrentUser } = useAppStore();
+  const { setCurrentUser } = useAppStore();
+  // REAL coin balance from the ledger (Firestore users/{uid}.coins via the
+  // monetization service). Never the store's in-memory number — the store is
+  // not synced with the server.
+  const [userCoins, setUserCoins] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.uid) { setUserCoins(null); return undefined; }
+    (async () => {
+      try {
+        const { getMonetizationService } = await import('../services/monetizationService.js');
+        const bal = await getMonetizationService().getBalance(user.uid);
+        if (!cancelled) setUserCoins(typeof bal === 'number' ? bal : null);
+      } catch {
+        if (!cancelled) setUserCoins(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
   const isDark = theme === "dark";
   const prefersReducedMotion = useReducedMotion();
 
@@ -1680,7 +1698,9 @@ export function TaggingPanel({ defaultOpen = false }) {
 export function MonetizationPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
   const { userCoins } = useCreatePostServices();
-  const insufficient = state.monetization.type === "boost" && state.boost.budget > userCoins;
+  // userCoins is the REAL ledger balance (null while loading / unauthenticated).
+  const insufficient = state.monetization.type === "boost" &&
+    userCoins != null && state.boost.budget > userCoins;
   return (
     <Panel icon={Icons.DollarSign} title="Monetization" defaultOpen={defaultOpen}>
       <select value={state.monetization.type} onChange={e => dispatch({ type: "SET_MONETIZATION", payload: { ...state.monetization, type: e.target.value } })}
@@ -1697,6 +1717,9 @@ export function MonetizationPanel({ defaultOpen = false }) {
             onChange={e => dispatch({ type: "SET_BOOST", payload: { ...state.boost, budget: parseInt(e.target.value) || 0 } })}
             className={INPUT_CLASS} />
           {insufficient && <p className="text-xs text-red-500">Insufficient coins (you have {userCoins})</p>}
+          {state.monetization.type === "boost" && userCoins == null && (
+            <p className="text-xs text-gray-500">Balance loading… (server-side check still applies on publish)</p>
+          )}
         </div>
       )}
       {state.monetization.type === "subscription" && <input type="text" placeholder="Tier name" value={state.subscriptionTier || ""} onChange={e => dispatch({ type: "SET_SUBSCRIPTION_TIER", payload: e.target.value })} className={`${INPUT_CLASS} mt-2`} />}

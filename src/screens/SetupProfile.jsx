@@ -336,12 +336,24 @@ const SmartUsernameGenerator = React.memo(
           throw new Error("Generation returned empty");
         }
       } catch (error) {
-        console.warn("Username generation failed, using fallback:", error);
-        const fallback = `user_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 5)}`;
-        onChange(fallback);
-        setStatus("available");
-        setMessage("Generated username!");
-        toast.info("Auto‑generated username: " + fallback);
+        console.warn("Username generation failed, retrying with service fallback:", error);
+        // Second attempt through the real availability-checked generator.
+        try {
+          const { generateUniqueUsername } = await import("../services/userService.js");
+          const fallback = await generateUniqueUsername("user", userId);
+          if (fallback && fallback.length >= 3) {
+            onChange(fallback);
+            setStatus("available");
+            setMessage("Generated username!");
+            toast.info("Auto‑generated username: " + fallback);
+            return;
+          }
+        } catch (err) {
+          console.warn("Username fallback also failed:", err);
+        }
+        setStatus("error");
+        setMessage("Could not generate a username. Try another one.");
+        toast.error("Username generation failed — please pick a username manually.");
       }
     }, [displayName, onChange, userId, validateUsername]);
 

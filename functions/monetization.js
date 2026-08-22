@@ -279,6 +279,22 @@ const DEFAULT_GIFT_TYPES = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
 // ----------------------------------------------------------------------
 // 1. addCoins (credit) – double‑entry: credit user, debit system coin supply
 // ----------------------------------------------------------------------
+// Client-callable addCoins is RESTRICTED to allowlisted engagement reasons
+// with per-reason daily caps. Everything else (purchases, ads, gifts, levels)
+// is minted through dedicated server-side functions; a generic client coin
+// faucet would be an exploit.
+const CLIENT_ADD_REASON_CAPS = {
+  post_created_bonus: 10,
+  reel_watch: 200,
+  reel_reaction: 50,
+  comment: 50,
+  like: 100,
+  watch_ad: 50,
+  feed_view: 200,
+  quiz_correct: 20,
+  profile_complete: 1,
+};
+
 exports.addCoins = functions.https.onCall(async (data, context) => {
   try {
     const uid = getUserIdFromContext(context);
@@ -286,7 +302,38 @@ exports.addCoins = functions.https.onCall(async (data, context) => {
     if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION) {
       throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION}.`);
     }
+    const dailyCap = CLIENT_ADD_REASON_CAPS[reason];
+    if (!dailyCap) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        `Reason "${reason}" is not allowlisted for client addCoins. Use the dedicated server-side function for this credit.`
+      );
+    }
     await checkRateLimit(uid, 'addCoins', 10, 60000);
+
+    // Per-reason DAILY CAP: count today's credits for this reason.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    try {
+      const usedToday = await admin.firestore()
+        .collection('coin_transactions')
+        .where('userId', '==', uid)
+        .where('reason', '==', reason)
+        .where('createdAt', '>=', todayStart)
+        .count()
+        .get();
+      if (usedToday.data().count >= dailyCap) {
+        throw new functions.https.HttpsError(
+          'resource-exhausted',
+          `Daily cap reached for "${reason}" rewards (${dailyCap}/day).`
+        );
+      }
+    } catch (err) {
+      if (err instanceof functions.https.HttpsError) throw err;
+      // Count query failed (index missing) — fail closed, never bypass the cap.
+      throw new functions.https.HttpsError('internal', 'Reward cap check failed: ' + err.message);
+    }
+
     const key = generateIdempotencyKey(idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 

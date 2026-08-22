@@ -72,56 +72,34 @@ class PollService {
   }
 
   async votePoll(pollId, optionId, userCoins = 0, wagerCoins = 0, user = null) {
-    log.info('Voting on poll in Firestore', { pollId, optionId, wagerCoins });
-    const firestore = await getFirestoreInstance();
-    const { doc, getDoc, updateDoc, increment, collection, addDoc } = await import('firebase/firestore');
-
-    const pollRef = doc(firestore, 'polls', pollId);
-    const snap = await getDoc(pollRef);
-    if (!snap.exists()) {
-      throw new Error('Poll not found');
+    if (!user?.uid) {
+      throw new Error('Sign in to vote');
     }
+    log.info('Voting on poll (server-authoritative)', { pollId, optionId, wagerCoins });
 
-    const pollData = snap.data();
-    const options = pollData.options || [];
-    const targetOpt = options.find(o => o.id === optionId);
-    if (!targetOpt) {
-      throw new Error('Option not found');
+    // Server-authoritative vote: functions/polls.js votePoll atomically
+    // increments counters, records the deterministic poll_votes doc
+    // (${uid}_${pollId} — enforced by rules) and debits wagers through the
+    // double-entry ledger. Direct client writes to the poll doc are denied
+    // by firestore.rules (creator/admin only), so there is no client
+    // fallback for the money path.
+    try {
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const { getApp } = await import('firebase/app');
+      const functions = getFunctions(getApp());
+      const fn = httpsCallable(functions, 'votePoll');
+      const res = await fn({ pollId, optionId, wagerCoins: Number(wagerCoins) || 0 });
+      const poll = res.data?.poll || {};
+      this.votedHistory.set(pollId, optionId);
+      await this._saveVotes();
+      return poll;
+    } catch (err) {
+      const msg = err?.message || String(err);
+      if (msg.includes('votePoll') || msg.includes('INTERNAL') || msg.includes('UNAVAILABLE') || msg.includes('NOT_FOUND')) {
+        throw new Error(`Voting requires the votePoll Cloud Function to be deployed. (${msg})`);
+      }
+      throw new Error(msg);
     }
-
-    targetOpt.votes = (targetOpt.votes || 0) + 1;
-    const newTotalVotes = (pollData.totalVotes || 0) + 1;
-    options.forEach(opt => {
-      opt.percentage = Math.round(((opt.votes || 0) / newTotalVotes) * 100);
-    });
-
-    const updatePayload = {
-      options,
-      totalVotes: newTotalVotes
-    };
-
-    if (wagerCoins > 0 && pollData.isPredictionMarket) {
-      updatePayload.poolCoins = increment(Number(wagerCoins));
-    }
-
-    await updateDoc(pollRef, updatePayload);
-
-    this.votedHistory.set(pollId, optionId);
-    await this._saveVotes();
-
-    if (user?.uid) {
-      try {
-        await addDoc(collection(firestore, 'poll_votes'), {
-          pollId,
-          optionId,
-          userId: user.uid,
-          wagerCoins: Number(wagerCoins) || 0,
-          votedAt: new Date().toISOString()
-        });
-      } catch (_) {}
-    }
-
-    return { id: pollId, ...pollData, ...updatePayload, hasVoted: optionId };
   }
 
   async createPoll({ question, category = 'General', options = [], isPredictionMarket = false, creator }) {

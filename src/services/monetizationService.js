@@ -608,7 +608,7 @@ class MonetizationService {
       const uid = auth?.currentUser?.uid;
       const coinsToAdd = this.config.AD_REWARD_COINS?.MEDIUM || 2;
       if (uid) {
-        await this.addCoins(uid, coinsToAdd, `Watched ${placement} ad`, { adId, placement });
+        await this.addCoins(uid, coinsToAdd, 'watch_ad', { adId, placement });
       }
       return { success: true, coinsAwarded: coinsToAdd, message: 'Ad reward credited' };
     }

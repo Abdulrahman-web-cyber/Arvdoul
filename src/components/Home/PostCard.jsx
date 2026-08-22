@@ -27,7 +27,7 @@ import CommentsModal from "./CommentsModal"; // <- New modal component
 const REACTIONS = ["❤️", "😂", "😮", "😢", "😡"];
 
 export default function PostCard({ post }) {
-const { user, addCoins } = useAuth();
+const { user } = useAuth();
 const [liked, setLiked] = useState(post.likedBy?.includes(user?.uid) || false);
 const [likesCount, setLikesCount] = useState(post.likesCount || 0);
 const [showMenu, setShowMenu] = useState(false);
@@ -75,7 +75,10 @@ try {
 
   if (!likeCooldown.current) {
     likeCooldown.current = true;
-    try { await addCoins(1, "like post"); } catch { /* best-effort */ }
+    try {
+      const { getMonetizationService } = await import("../../services/monetizationService.js");
+      await getMonetizationService().addCoins(user.uid, 1, "like", { postId: post.id });
+    } catch (err) { console.warn("Like reward skipped:", err.message); }
     setTimeout(() => { likeCooldown.current = false; }, 3000); // 3s cooldown
   }
 } catch (err) {
@@ -85,7 +88,7 @@ try {
   console.error("Error liking post:", err);
 }
 
-}, [user, liked, post.id, addCoins]);
+}, [user, liked, post.id]);
 
 // ---------------- Long Press ----------------
 const onLongPress = () => setShowMenu(true);
@@ -100,7 +103,10 @@ const handleReaction = async (emoji) => {
     // (same emoji removes it), maintains stats.reactions.<emoji> counters.
     await getFirestoreService().addReaction(post.id, user.uid, emoji);
     setShowReactions(false);
-    try { await addCoins(1, `react ${emoji}`); } catch { /* best-effort */ }
+    try {
+      const { getMonetizationService } = await import("../../services/monetizationService.js");
+      await getMonetizationService().addCoins(user.uid, 1, "like", { postId: post.id, emoji });
+    } catch (err) { console.warn("Reaction reward skipped:", err.message); }
   } catch (err) {
     console.error("Error reacting:", err);
   }

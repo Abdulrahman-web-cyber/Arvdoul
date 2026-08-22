@@ -32,7 +32,18 @@ const REACTIONS = ["❤️", "😂", "😮", "😢", "😡"];
 const FEED_PAGE_SIZE = 5;
 
 export default function ReelsFeed({ initialQueryLimit = FEED_PAGE_SIZE }) {
-const { user, addCoins, followUser } = useAuth();
+const { user } = useAuth();
+
+// REAL coin rewards through the monetization ledger (server-side double-entry
+// with per-reason daily caps — see functions/monetization.js addCoins).
+const awardCoins = async (uid, amount, reason, metadata = {}) => {
+  try {
+    const { getMonetizationService } = await import("../../services/monetizationService.js");
+    await getMonetizationService().addCoins(uid, amount, reason, metadata);
+  } catch (err) {
+    console.warn("Coin reward skipped:", err.message);
+  }
+};
 const { theme } = useTheme();
 
 const [reels, setReels] = useState([]);
@@ -90,7 +101,9 @@ preloadNextVideos(newReels);
 
 const handleIntersection = (reelId, isVisible) => {
 setActiveReel(isVisible ? reelId : null);
-if (isVisible && user) addCoins(0.1, `watch-reel-${reelId}`);
+if (isVisible && user) {
+  void awardCoins(user.uid, 0.1, "reel_watch", { reelId });
+}
 };
 
 const handleReaction = async (reelId, emoji) => {
@@ -102,7 +115,7 @@ const reelRef = doc(db, "reels", reelId);
 if (existing) await updateDoc(reelRef, { reactions: arrayRemove(existing) });
 else {
 await updateDoc(reelRef, { reactions: arrayUnion({ emoji, userId: user.uid }) });
-await addCoins(1, `react-reel-${emoji}`);
+await awardCoins(user.uid, 1, "reel_reaction", { reelId, emoji });
 }
 } catch (err) {
 console.error(err);
@@ -113,7 +126,8 @@ toast.error("Failed to update reaction.");
 const handleFollow = async (uid) => {
 if (!user) return;
 try {
-await followUser(uid);
+const { getUserService } = await import("../../services/userService.js");
+await getUserService().followUser(user.uid, uid);
 toast.success("Followed successfully!");
 } catch {
 toast.error("Failed to follow user");

@@ -186,13 +186,11 @@ class UploadManager {
     const controller = new AbortController();
     this._abortControllers.set(item.id, controller);
 
-    // The upload itself is REAL (Firebase Storage, see storage.uploadFileWithProgress below).
-    // `fallbackProgress` is purely a UI progress-display fallback: if the storage
-    // SDK emits no progress events for a while, the indicator advances so the UI
-    // does not look frozen. It is capped at 99 and NEVER completes the upload -
-    // completion only happens from the real storage promise resolution.
+    // The upload is REAL (Firebase Storage, see storage.uploadFileWithProgress
+    // below). When the SDK emits no progress events, the UI shows an honest
+    // indeterminate state instead of fabricated percentages — progress shown
+    // to the user is always REAL upload progress.
     let fallbackInterval = null;
-    let fallbackProgress = 0;
     let lastRealProgress = 0;
     let uploadTimeout = null;
 
@@ -220,24 +218,13 @@ class UploadManager {
         controller.abort();
       }, 30000);
 
-      // Start fallback timer: after 200ms with no real progress, begin simulation
+      // Indeterminate honesty: while the storage SDK reports no progress,
+      // mark the item as uploading without inventing a percentage. Real
+      // progress events (below) replace this state with actual numbers.
       const fallbackTimeout = setTimeout(() => {
         if (controller.signal.aborted) return;
-        if (fallbackInterval) clearInterval(fallbackInterval);
-        fallbackInterval = setInterval(() => {
-          if (controller.signal.aborted) {
-            clearInterval(fallbackInterval);
-            return;
-          }
-          if (fallbackProgress < 99) {
-            fallbackProgress += 2 + Math.random() * 3;
-            fallbackProgress = Math.min(99, fallbackProgress);
-            if (fallbackProgress > lastRealProgress) {
-              this._updateState(item.id, UPLOAD_STATES.UPLOADING, fallbackProgress);
-            }
-          }
-        }, 500);
-      }, 200);
+        this._updateState(item.id, UPLOAD_STATES.UPLOADING, -1); // -1 = indeterminate
+      }, 800);
 
       const path = `posts/${Date.now()}_${Math.random().toString(36).slice(2,8)}_${item.file.name}`;
       // Race the storage promise against a timeout that rejects
@@ -615,7 +602,7 @@ const HeroPreview = React.memo(({
           {isUploading && (
             <div className="bg-yellow-500/90 text-white text-[7px] xs:text-[8px] sm:text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-lg backdrop-blur-sm border border-white/20">
               <LoadingSpinner size="xs" />
-              <span>{Math.round(progress)}%</span>
+              <span>{progress >= 0 ? `${Math.round(progress)}%` : 'Uploading…'}</span>
             </div>
           )}
           {isComplete && (

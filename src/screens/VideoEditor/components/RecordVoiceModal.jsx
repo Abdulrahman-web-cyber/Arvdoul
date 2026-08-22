@@ -201,7 +201,7 @@ export default function RecordVoiceModal({
             <div className="absolute inset-0 bg-black/80 p-4 flex flex-col items-center justify-center text-center">
               <AlertCircle className="w-8 h-8 text-amber-400 mb-2" />
               <p className="text-xs text-gray-300 max-w-xs">{permissionError}</p>
-              <p className="text-[11px] text-gray-500 mt-1">Using high-fidelity simulator mode.</p>
+              <p className="text-[11px] text-gray-500 mt-1">Allow microphone access to record — no simulated audio is ever produced.</p>
             </div>
           )}
         </div>

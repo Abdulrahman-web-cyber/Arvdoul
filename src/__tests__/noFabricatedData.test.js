@@ -375,3 +375,123 @@ describe('Badge service - no phantom badge array', () => {
     expect(src).not.toContain('snap.docs.forEach((doc) => {'); // old array path removed
   });
 });
+
+describe('Cloud functions - no fake email/IAP/video processing', () => {
+  test('sendEmailNotification never fakes success', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(src).not.toContain('Would send to');
+    expect(src).not.toContain("return { success: true, mock: true }");
+    expect(src).toContain("status: 'unconfigured'"); // honest when SendGrid missing
+  });
+
+  test('verifyPurchase never mints coins without real receipt validation', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(src).not.toContain("we'll just simulate success and award coins");
+    expect(src).toContain('Receipt required for purchase verification');
+    expect(src).toContain('appstore.*');
+  });
+
+  test('processVideo storage trigger never fabricates ready', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(src).not.toContain('simulate processing');
+    expect(src).not.toContain("setTimeout(resolve, 5000)");
+    expect(src).toContain("transcodeStatus: hasMux ? 'mux_pipeline' : 'pending_upload_completion'");
+  });
+
+  test('notification-read trigger no longer mints coins', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(src).not.toContain("coins: admin.firestore.FieldValue.increment(1)");
+  });
+
+  test('addCoins is allowlisted per reason with daily caps (no coin faucet)', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    expect(src).toContain('CLIENT_ADD_REASON_CAPS');
+    expect(src).toContain('post_created_bonus: 10');
+    expect(src).toContain("is not allowlisted for client addCoins");
+    expect(src).toContain('Daily cap reached');
+  });
+
+  test('video processing endpoints are onCall', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/video.js'), 'utf8');
+    expect(src).toContain('exports.watermarkVideo = onCall');
+    expect(src).toContain('exports.moderateVideo = onCall');
+  });
+});
+
+describe('Level gate - aligned with the real 15-level curve', () => {
+  test('no "Level 25" monetization gate (max level is 15)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
+    expect(src).not.toContain('Level 25');
+    expect(src).toContain('MONETIZATION_MIN_LEVEL = 10');
+  });
+});
+
+describe('appStore - no fabricated starting coins', () => {
+  test('initial coins are 0, not a fake 1000', () => {
+    const src = fs.readFileSync(path.join(root, 'src/store/appStore.js'), 'utf8');
+    expect(src).not.toContain('coins: 1000');
+    expect(src).toContain('coins: 0,');
+  });
+});
+
+describe('Poll wagers - real coin debit', () => {
+  test('pollService.votePoll is server-authoritative (votePoll CF) and never writes the poll doc client-side', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
+    expect(src).toContain("'votePoll'"); // Cloud Function path
+    expect(src).not.toContain('updateDoc(pollRef, updatePayload)'); // no direct poll writes
+  });
+
+  test('functions/polls.js debits wagers through the double-entry ledger', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/polls.js'), 'utf8');
+    expect(src).toContain('exports.votePoll');
+    expect(src).toContain('coin_transactions');
+    expect(src).toContain('coin_supply');
+    expect(src).toContain('You have already voted on this poll');
+  });
+
+  test('PollsScreen never falls back to fabricated 5000 coins', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Polls/PollsScreen.jsx'), 'utf8');
+    expect(src).not.toContain('coins || 5000');
+    expect(src).toContain('getBalance(');
+  });
+});
+
+describe('Engagement coin rewards - wired to the real ledger', () => {
+  test('components no longer destructure undefined addCoins/followUser from useAuth', () => {
+    const feed = fs.readFileSync(path.join(root, 'src/components/Home/ReelsFeed.jsx'), 'utf8');
+    const modal = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
+    const card = fs.readFileSync(path.join(root, 'src/components/Home/PostCard.jsx'), 'utf8');
+    expect(feed).not.toContain('addCoins, followUser } = useAuth');
+    expect(modal).not.toContain('addCoins } = useAuth');
+    expect(card).not.toContain('addCoins } = useAuth');
+    expect(feed).toContain('getUserService().followUser(user.uid, uid)');
+    expect(card).toContain('"like"');
+  });
+});
+
+describe('Spaces - honest host identity', () => {
+  test('createSpace requires a real host and never fabricates identity', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/spacesService.js'), 'utf8');
+    expect(src).not.toContain("'usr-creator'");
+    expect(src).not.toContain("'Arvdoul Creator'");
+    expect(src).not.toContain('isVerified: true');
+    expect(src).toContain('Sign in to start a space');
+  });
+});
+
+describe('Admin - no fabricated stats', () => {
+  test('dashboard has no fake trends or email-suffix admin authz', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminDashboardScreen.jsx'), 'utf8');
+    expect(src).not.toContain('@arvdoul.admin');
+    expect(src).not.toContain('+12% this week');
+    expect(src).not.toContain('+24% this month');
+    expect(src).toContain("where('status', '==', 'pending')");
+  });
+
+  test('rules allow admin moderation of users and posts', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('allow update, delete: if isOwner(userId) || isAdmin();');
+    expect(rules).toContain('|| isAdmin());');
+    expect(rules).toContain('match /video_reports/{reportId}');
+  });
+});

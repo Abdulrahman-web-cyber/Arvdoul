@@ -226,7 +226,7 @@ export default function AIStudioScreen() {
               AI Creator Co-Pilot <Crown className="w-6 h-6 text-yellow-400" />
             </h1>
             <p className="text-gray-300 text-sm sm:text-base mt-2 max-w-xl">
-              Supercharge your creative workflow with viral hooks, multi-scene video scripts, prompt engineering, audience retention simulation, and global localization.
+              Supercharge your creative workflow with viral hooks, multi-scene video scripts, prompt engineering, AI audience analysis, and global localization.
             </p>
           </div>
 

@@ -101,14 +101,20 @@ export default function PollsScreen() {
 
   const handleConfirmWager = async () => {
     if (!wagerModalPoll || !selectedOptionId) return;
-    const currentCoins = currentUser?.coins || 5000;
-    if (currentCoins < wagerCoins) {
+    // REAL balance from the ledger — never a fabricated default.
+    let currentCoins = null;
+    try {
+      const { getMonetizationService } = await import('../../services/monetizationService.js');
+      const bal = await getMonetizationService().getBalance(user?.uid);
+      currentCoins = typeof bal === 'number' ? bal : null;
+    } catch { /* balance fetch failed — service still validates server-side */ }
+    if (currentCoins != null && currentCoins < wagerCoins) {
       toast.error(`Insufficient coins. You have ${currentCoins} coins.`);
       return;
     }
 
     try {
-      const updated = await pollService.votePoll(wagerModalPoll.id, selectedOptionId, currentCoins, wagerCoins, user);
+      const updated = await pollService.votePoll(wagerModalPoll.id, selectedOptionId, currentCoins || 0, wagerCoins, user);
       if (currentUser) {
         setAppState({
           currentUser: {

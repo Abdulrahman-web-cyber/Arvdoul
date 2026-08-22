@@ -33,13 +33,15 @@ const AdminModerationQueueScreen = () => {
         const adminSnap = await getDoc(doc(firestore, 'admins', user?.uid || ''));
         if (!adminSnap.exists()) { setLoading(false); return; }
 
-        const [commentReports, userReports] = await Promise.all([
+        const [commentReports, userReports, videoReports] = await Promise.all([
           getDocs(query(collection(firestore, 'comment_reports'), orderBy('createdAt', 'desc'), limit(100))),
           getDocs(query(collection(firestore, 'user_reports'), orderBy('createdAt', 'desc'), limit(100))),
+          getDocs(query(collection(firestore, 'video_reports'), orderBy('createdAt', 'desc'), limit(100))),
         ]);
         const mapped = [
           ...commentReports.docs.map(d => ({ id: d.id, type: 'comment', status: d.data().status || 'pending', ...d.data() })),
           ...userReports.docs.map(d => ({ id: d.id, type: 'user', status: d.data().status || 'pending', ...d.data() })),
+          ...videoReports.docs.map(d => ({ id: d.id, type: 'video', status: d.data().status || 'pending', ...d.data() })),
         ];
         setReports(mapped.sort((a, b) => new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0)));
       } catch (err) {
@@ -63,7 +65,11 @@ const AdminModerationQueueScreen = () => {
       const { getFirestoreInstance } = await import('../../firebase/firebase.js');
       const firestore = await getFirestoreInstance();
       const report = reports.find(r => r.id === reportId);
-      const ref = doc(firestore, report?.type === 'user' ? 'user_reports' : 'comment_reports', reportId);
+      const collectionName =
+        report?.type === 'user' ? 'user_reports'
+        : report?.type === 'video' ? 'video_reports'
+        : 'comment_reports';
+      const ref = doc(firestore, collectionName, reportId);
       await updateDoc(ref, {
         status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'pending',
         resolvedAt: serverTimestamp(),
@@ -85,7 +91,7 @@ const AdminModerationQueueScreen = () => {
         return <MessageSquare className="w-5 h-5 text-orange-500" />;
       case 'comment':
         return <MessageSquare className="w-5 h-5 text-yellow-500" />;
-      case 'media':
+      case 'video':
         return <ImageIcon className="w-5 h-5 text-purple-500" />;
       default:
         return <Flag className="w-5 h-5 text-gray-500" />;

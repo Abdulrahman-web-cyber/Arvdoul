@@ -300,11 +300,16 @@ export default function MultiTrackTimeline({
                           </div>
                         )}
 
-                        {/* Simulated Realistic Waveform for Audio */}
+                        {/* Audio clip waveform: REAL analyzed waveform when the
+                            clip has one (from analyzeAudioWaveform); otherwise a
+                            neutral flat indicator — never a fabricated pattern. */}
                         {clip.type === 'audio' && (
                           <div className="absolute inset-0 flex items-center justify-between px-2 opacity-50 pointer-events-none">
                             {Array.from({ length: Math.min(80, Math.floor(widthVal / 4)) }).map((_, idx) => {
-                              const h = 20 + Math.sin(idx * 0.4) * 35 + (idx % 3) * 15;
+                              const real = Array.isArray(clip.waveform) && clip.waveform.length > 0
+                                ? clip.waveform[Math.floor((idx / Math.min(80, Math.floor(widthVal / 4))) * clip.waveform.length)]
+                                : null;
+                              const h = real != null ? real : 35; // neutral bar when unknown
                               return (
                                 <div
                                   key={idx}

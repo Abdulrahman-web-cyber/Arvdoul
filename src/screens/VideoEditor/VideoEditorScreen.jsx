@@ -724,6 +724,7 @@ export default function VideoEditorScreen() {
         projectName={projectName}
         duration={totalDuration}
         currentResolution={selectedResolution}
+        tracks={tracks}
       />
 
       <RecordVoiceModal

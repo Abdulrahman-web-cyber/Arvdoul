@@ -102,6 +102,65 @@
 - First components translated: GlobalErrorBoundary, BottomNav; pattern
   documented for the rest.
 
+### 22. Next-70 batch: server money-path hardening + rules compliance + honest renderers
+
+**Server-side money/security fixes (functions/)**
+- `sendEmailNotification` — logged "Would send..." and returned `{ success: true, mock: true }` →
+  real SendGrid send when configured, honest `status: 'unconfigured'` otherwise.
+- `verifyPurchase` — minted coins with NO receipt validation (client-callable free-coin
+  exploit) → fail-closed: requires a receipt AND appstore/play config; coins only after
+  real validation.
+- `addCoins` — was an unrestricted client coin faucet (any amount, any reason, rate limit
+  only) → allowlisted reasons with per-reason daily caps (post_created_bonus 10, reel_watch
+  200, reel_reaction 50, comment 50, like 100, watch_ad 50, feed_view 200, quiz_correct 20,
+  profile_complete 1); cap query fails closed; new composite index
+  (coin_transactions: userId+reason+createdAt).
+- `awardCoinsOnNotificationRead` — minted 1 coin per notification read (unbounded faucet) →
+  coin minting removed (reads are tracked only).
+- `processVideo` storage trigger — slept 5s and fabricated `status: 'ready'` → honest
+  transcodeStatus (mux_pipeline / pending_upload_completion); readiness comes from Mux webhooks.
+- New `functions/polls.js` `votePoll` — server-authoritative voting: client writes to the
+  poll doc were DENIED by rules (creator/admin only) and wagers never debited real coins.
+  Now: atomic counters + deterministic poll_votes doc (`${uid}_${pollId}`) + real
+  double-entry wager debit in one transaction.
+
+**Rules compliance**
+- `firestore.rules` — `users` and `posts` updates now allow `isAdmin()` (admin console
+  ban/verify/remove actions were being DENIED); added missing `video_reports` match.
+- `pollService.votePoll` — routed through the votePoll CF (no client poll-doc writes);
+  `poll_votes` deterministic id matches the rule contract.
+- `AdminModerationQueueScreen` — now loads/resolves video_reports too.
+
+**Honest UIs (no fabricated content)**
+- `ExportModal` — fake export (random progress → Google demo video URL) → REAL renderer:
+  seeks every clip frame-by-frame onto an offscreen canvas, records via MediaRecorder,
+  real progress, honest WebM-only format notes, honest errors, real blob download/post.
+- `PreviewCanvas` — removed Google demo video fallback.
+- `MultiTrackTimeline` — fabricated sine waveform → real analyzed waveform or neutral bars.
+- `RecordVoiceModal` — removed "simulator mode" claim.
+- `CreateImage` — upload progress "simulation" → honest indeterminate state.
+- `AudioCard` — fabricated waveform → neutral bars when no real data.
+- `TextCard` — random background without postId → deterministic brand color.
+- `SetupProfile` — fabricated random username fallback → availability-checked retry / honest error.
+- `AIStudioScreen` copy — "audience retention simulation" → "AI audience analysis".
+
+**Economy/level alignment**
+- `QuickAccessPanel` — monetization gate was "Level 25" on a 15-level curve (never
+  reachable) → Level 10 (matches WITHDRAWAL_MIN_LEVEL); badge colors aligned to real bands.
+- `appStore` — fake `coins: 1000` starting balance → 0 (real balance comes from the ledger).
+- `CreatePost` boost check + `PollsScreen` wager check — real `getBalance()` (no `|| 5000`).
+- `ReelsFeed`/`CommentsModal`/`PostCard` — destructured `addCoins`/`followUser` from
+  useAuth (undefined — rewards silently dead) → real monetization ledger + userService.
+- `spacesService.createSpace` — fabricated host identity/Verified badge → real identity,
+  `hostId`, sign-in required.
+
+**Admin honesty**
+- `AdminDashboardScreen` — removed fabricated trends ("+12% this week"), removed
+  email-suffix admin authz, honest active-users (30-day) and pending-reports counts.
+
+**Verification**: 35 suites / 486 tests green, lint 0 errors, build OK, dev server serves
+all modified modules 200.
+
 ### 21. Next-70 production batch: money-path audit, rules compliance, real pipelines
 
 **Money-path fixes (no free coins / no fake payments)**

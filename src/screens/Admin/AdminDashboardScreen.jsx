@@ -29,7 +29,9 @@ const AdminDashboardScreen = () => {
     revenue: 0
   });
 
-  const isPermitted = Boolean(user && (user.role === 'admin' || user.isAdmin === true || user.email?.endsWith('@arvdoul.admin')));
+  // Admin authz is the `admins` collection only (mirrors server-side
+  // isAdmin()). No client-side role flags or email-suffix shortcuts.
+  const isPermitted = Boolean(user?.uid);
 
   // Check admin access + load real platform stats
   useEffect(() => {
@@ -54,23 +56,38 @@ const AdminDashboardScreen = () => {
         }
 
         // Real platform stats via aggregate count queries.
-        const { collection, getCountFromServer } = await import('firebase/firestore');
-        const count = async (path) => {
-          try { const s = await getCountFromServer(collection(firestore, path)); return s.data().count; }
-          catch (e) { return 0; }
+        const { collection, getCountFromServer, query, where } = await import('firebase/firestore');
+        const count = async (path, constraints = []) => {
+          try {
+            const colRef = constraints.length
+              ? query(collection(firestore, path), ...constraints)
+              : collection(firestore, path);
+            const s = await getCountFromServer(colRef);
+            return s.data().count;
+          } catch (e) { return 0; }
         };
-        const [users, posts, reports, communities, events] = await Promise.all([
-          count('users'), count('posts'), count('comment_reports'), count('communities'), count('events'),
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const [users, activeUsers, posts, reports, pendingReports, communities, events] = await Promise.all([
+          count('users'),
+          count('users', [where('lastActive', '>=', thirtyDaysAgo)]),
+          count('posts'),
+          count('comment_reports'),
+          count('comment_reports', [where('status', '==', 'pending')]),
+          count('communities'),
+          count('events'),
         ]);
+        // pending reports across all report collections (honest sum).
+        const pendingUser = await count('user_reports', [where('status', '==', 'pending')]);
+        const pendingVideo = await count('video_reports', [where('status', '==', 'pending')]);
         setStats({
           totalUsers: users,
-          activeUsers: users,
+          activeUsers,
           totalPosts: posts,
           totalReports: reports,
-          pendingReports: reports,
+          pendingReports: pendingReports + pendingUser + pendingVideo,
           totalCommunities: communities,
           totalEvents: events,
-          revenue: 0,
+          revenue: 0, // real USD revenue requires the Stripe payout pipeline; never estimated
         });
       } catch (err) {
         setError('Could not load admin data.');
@@ -172,16 +189,12 @@ const AdminDashboardScreen = () => {
             title="Total Users"
             value={stats.totalUsers}
             icon={Users}
-            trend="+12% this week"
-            trendUp={true}
             color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
           />
           <StatCard
             title="Active Users"
             value={stats.activeUsers}
             icon={Activity}
-            trend="+8% today"
-            trendUp={true}
             color="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
           />
           <StatCard
@@ -221,8 +234,6 @@ const AdminDashboardScreen = () => {
             title="Platform Revenue"
             value={`$${stats.revenue.toLocaleString()}`}
             icon={DollarSign}
-            trend="+24% this month"
-            trendUp={true}
             color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
           />
         </div>

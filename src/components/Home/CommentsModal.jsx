@@ -32,7 +32,17 @@ const normalizeComment = (c) => ({
 });
 
 export default function CommentsModal({ postId, onClose }) {
-const { user, addCoins } = useAuth();
+const { user } = useAuth();
+
+// REAL engagement rewards through the monetization ledger (server-capped).
+const awardCoins = async (uid, amount, reason, metadata = {}) => {
+  try {
+    const { getMonetizationService } = await import("../../services/monetizationService.js");
+    await getMonetizationService().addCoins(uid, amount, reason, metadata);
+  } catch (err) {
+    console.warn("Coin reward skipped:", err.message);
+  }
+};
 const { theme } = useTheme();
 
 const [comments, setComments] = useState([]);
@@ -113,7 +123,7 @@ try {
   });
   // The realtime subscription refreshes the list; drop the optimistic copy.
   setComments((prev) => prev.filter((c) => c.id !== tempId));
-  try { await addCoins(1, "comment"); } catch { /* best-effort */ }
+  await awardCoins(user.uid, 1, "comment", { postId });
 } catch (err) {  
   console.error(err);  
   toast.error("Failed to post comment.");  
@@ -143,7 +153,7 @@ const handleReaction = async (commentId, emoji) => {
       await svc.removeLikeDislike(commentId, user.uid);
     } else {
       await svc.likeComment(commentId, user.uid);
-      try { await addCoins(1, `react ${emoji}`); } catch { /* best-effort */ }
+      await awardCoins(user.uid, 1, "like", { commentId, emoji });
     }
     // Optimistic UI toggle so the heart responds instantly
     setComments((prev) =>

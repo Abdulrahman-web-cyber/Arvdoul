@@ -149,7 +149,7 @@ export default function PreviewCanvas({
           {/* Active Video Element or Default Composition Stream */}
           <video
             ref={videoRef}
-            src={activeVideoClip?.url || mainVideoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'}
+            src={activeVideoClip?.url || mainVideoUrl || ''}
             className="w-full h-full object-cover pointer-events-none"
             playsInline
             muted={isMuted}
