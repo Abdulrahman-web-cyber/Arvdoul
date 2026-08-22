@@ -37,6 +37,16 @@ import {
 } from "framer-motion";
 import { withLanguage } from "../i18n/index.js";
 
+/* -------------------- Cryptographically Secure PRNG for SonarCloud Compliance -------------------- */
+function secureRandom() {
+  if (typeof window !== "undefined" && window.crypto && typeof window.crypto.getRandomValues === "function") {
+    const arr = new Uint32Array(1);
+    window.crypto.getRandomValues(arr);
+    return arr[0] / 4294967296;
+  }
+  return 0.5;
+}
+
 /* -------------------- Safe reduced-motion hook -------------------- */
 function useSafeReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -260,16 +270,16 @@ const BackgroundParticles = memo(({ theme }) => {
         ? 0
         : Math.min(45, Math.floor(width / 35));
       particlesRef.current = Array.from({ length: particleCount }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        size: Math.random() * 2.5 + 1,
-        speedX: (Math.random() - 0.5) * 0.35,
-        speedY: (Math.random() - 0.5) * 0.35,
-        opacity: Math.random() * 0.18 + 0.05,
+        x: secureRandom() * width,
+        y: secureRandom() * height,
+        size: secureRandom() * 2.5 + 1,
+        speedX: (secureRandom() - 0.5) * 0.35,
+        speedY: (secureRandom() - 0.5) * 0.35,
+        opacity: secureRandom() * 0.18 + 0.05,
         color:
           theme === "dark"
-            ? `rgba(139, 30, 243, ${Math.random() * 0.12 + 0.05})`
-            : `rgba(68, 49, 247, ${Math.random() * 0.09 + 0.03})`,
+            ? `rgba(139, 30, 243, ${secureRandom() * 0.12 + 0.05})`
+            : `rgba(68, 49, 247, ${secureRandom() * 0.09 + 0.03})`,
       }));
     };
 

@@ -857,10 +857,8 @@ export default function SignupStep2VerifyContact() {
       const result = await auth.sendPhoneVerificationCode(phoneToUse, verifier);
       if (!result.success) throw new Error(result.error || "Failed to send code");
       const verificationData = { verificationId: result.verificationId, phoneNumber: result.phoneNumber, method: "phone", isSignup: true, step1Data, timestamp: Date.now() };
-      localStorage.setItem('phone_verification', JSON.stringify(verificationData));
       sessionStorage.setItem('phone_verification', JSON.stringify(verificationData));
       const signupData = { ...step1Data, phoneNumber: result.phoneNumber, contactMethod: "phone", verificationId: result.verificationId, authProvider: 'phone', requiresProfileCompletion: true, isNewUser: true };
-      localStorage.setItem('signup_data', JSON.stringify(signupData));
       sessionStorage.setItem('signup_data', JSON.stringify(signupData));
       toast.success(`✅ Code sent to ${result.phoneNumber}`);
       navigate("/otp-verification", { state: { verificationId: result.verificationId, phoneNumber: result.phoneNumber, isSignup: true, method: "phone", step1Data }, replace: true });
