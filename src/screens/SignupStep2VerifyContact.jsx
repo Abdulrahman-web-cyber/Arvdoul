@@ -946,9 +946,9 @@ export default function SignupStep2VerifyContact() {
 
   if (!step1Data) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${resolvedTheme === 'dark' ? 'bg-gray-950' : 'bg-gradient-to-br from-blue-50 to-white'}`}>
+      <div className={`min-h-screen flex items-center justify-center p-4 ${resolvedTheme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-gray-900'}`}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-[#8B1EF3] border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-500 dark:text-gray-400">Loading your information...</p>
         </div>
       </div>
@@ -956,7 +956,7 @@ export default function SignupStep2VerifyContact() {
   }
 
   return (
-    <div className={`h-[100dvh] flex flex-col ${resolvedTheme === 'dark' ? 'bg-gray-950' : 'bg-gradient-to-br from-blue-50 to-white'}`}>
+    <div className={`h-[100dvh] flex flex-col ${resolvedTheme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-gray-900'}`}>
       {isOffline && <OfflineBanner />}
 
       <div className="flex-1 flex items-center justify-center p-3 overflow-hidden">
@@ -964,7 +964,7 @@ export default function SignupStep2VerifyContact() {
           animate={shakeCard ? { x: [0, -10, 10, -10, 10, 0] } : {}}
           transition={{ duration: 0.5 }}
           className={`w-full max-w-lg rounded-3xl border backdrop-blur-2xl ${navigator.deviceMemory >= 4 ? 'shadow-2xl' : 'shadow-none'} ${
-            resolvedTheme === 'dark' ? 'bg-gray-900/70 border-white/10 shadow-indigo-900/20' : 'bg-white/70 border-gray-200/60 shadow-indigo-100/20'
+            resolvedTheme === 'dark' ? 'bg-white/[0.06] border-white/[0.08]' : 'bg-white/80 border-black/[0.08]'
           } p-5`}
         >
           {/* Steps */}

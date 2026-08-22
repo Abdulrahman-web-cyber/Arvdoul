@@ -375,7 +375,7 @@ export default function EmailVerification() {
 
   // ==================== RENDER ====================
   return (
-    <div className={`h-[100dvh] flex flex-col overflow-hidden ${isDark ? "bg-gray-950" : "bg-gradient-to-br from-blue-50 to-white"}`}>
+    <div className={`h-[100dvh] flex flex-col overflow-hidden ${isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-gray-900"}`}>
       <ConfettiBurst isActive={showConfetti} />
 
       <div className="flex-1 flex items-center justify-center p-3 sm:p-4">
@@ -384,7 +384,7 @@ export default function EmailVerification() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.4, type: "spring", bounce: 0.2 }}
           className={`relative w-full max-w-lg xl:max-w-xl rounded-3xl border backdrop-blur-xl shadow-2xl ${
-            isDark ? "bg-gray-900/85 border-white/10" : "bg-white/85 border-gray-200/60"
+            isDark ? "bg-white/[0.06] border-white/[0.08]" : "bg-white/80 border-black/[0.08]"
           } overflow-hidden flex flex-col`}
           style={{ maxHeight: "calc(100dvh - 2rem)" }}
         >

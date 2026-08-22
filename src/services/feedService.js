@@ -540,14 +540,19 @@ class UltimateFeedService {
   }
 
   async _getFallbackSimpleFeed(userId, options, sourceName) {
-    if (this.offlineMode) return []; // honest empty feed - no fabricated posts
+    if (this.offlineMode) return [];
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
-      const { limit = 20, lastDoc } = options;
+      const { limit = 20 } = options;
       const { collection, query, limit: firestoreLimit, getDocs, orderBy } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit));
-      const snapshot = await getDocs(q);
+      let snapshot;
+      try {
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 2));
+        snapshot = await getDocs(q);
+      } catch {
+        snapshot = await getDocs(postsRef);
+      }
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
@@ -557,16 +562,14 @@ class UltimateFeedService {
           ...data,
           _source: sourceName || 'fallback',
           _score: 0.5,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date()
+          createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+          updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
-      if (posts.length === 0) {
-        return []; // honest empty feed
-      }
-      return posts;
+      posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
+      return posts.slice(0, limit);
     } catch (error) {
-      return []; // honest empty feed
+      return [];
     }
   }
 
@@ -1583,24 +1586,39 @@ class UltimateFeedService {
   }
 
   async _getFallbackFeed(userId, options = {}) {
-    if (this.offlineMode) return []; // honest empty feed - no fabricated posts
+    if (this.offlineMode) return [];
     try {
       await this._ensureInitialized();
       const { limit = 20 } = options;
       const { collection, query, getDocs, orderBy, limit: firestoreLimit } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit));
-      const snapshot = await getDocs(q);
-      const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fallback', createdAt: doc.data().createdAt?.toDate?.() || new Date() }));
-      if (posts.length === 0) {
-        return []; // honest empty feed
+      let snapshot;
+      try {
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit));
+        snapshot = await getDocs(q);
+      } catch {
+        snapshot = await getDocs(postsRef);
       }
-      await Promise.all(posts.map(p => countersManager.apply({
+      const posts = snapshot.docs.map(doc => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          ...d,
+          _source: 'fallback',
+          createdAt: d.createdAt?.toDate?.() || (d.createdAt ? new Date(d.createdAt) : new Date())
+        };
+      });
+      posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
+      const sliced = posts.slice(0, limit);
+      if (sliced.length === 0) {
+        return [];
+      }
+      await Promise.all(sliced.map(p => countersManager.apply({
         data: p, docPath: `posts/${p.id}`, fields: ['likes', 'comments', 'shares', 'saves'],
       }).catch(() => p)));
-      return posts;
+      return sliced;
     } catch {
-      return []; // honest empty feed
+      return [];
     }
   }
 

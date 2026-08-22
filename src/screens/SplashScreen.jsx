@@ -34,14 +34,12 @@ export default function SplashScreen() {
       logo: resolvedTheme === 'dark' ? '/logo/logo-dark.png' : '/logo/logo-light.png',
       fallbackLogo: resolvedTheme === 'dark' ? '/logo/logo-default.png' : '/logo/logo-default.png',
       background: resolvedTheme === 'dark'
-        ? 'radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 1) 0%, rgba(2, 6, 23, 1) 100%)'
-        : 'radial-gradient(circle at 50% 50%, rgba(248, 250, 252, 1) 0%, rgba(241, 245, 249, 1) 100%)',
-      textPrimary: resolvedTheme === 'dark' ? '#ffffff' : '#0f172a',
-      textSecondary: resolvedTheme === 'dark' ? '#94a3b8' : '#475569',
-      accentGradient: resolvedTheme === 'dark'
-        ? 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)'
-        : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 50%, #db2777 100%)',
-      spinnerColor: resolvedTheme === 'dark' ? '#8b5cf6' : '#4f46e5'
+        ? '#03071B'
+        : '#F6F8FC',
+      textPrimary: resolvedTheme === 'dark' ? '#FFFFFF' : '#111827',
+      textSecondary: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
+      accentGradient: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)',
+      spinnerColor: '#8B1EF3'
     };
   }, [theme]);
 
@@ -235,27 +233,9 @@ export default function SplashScreen() {
     }
   }, [progress, logoLoaded, authInitialized, isAuthenticated, navigate, isReady, isOnline]);
 
-  // Perfect circular logo component with animated gradient pulse
+  // Perfect circular logo component
   const PerfectLogo = useMemo(() => (
     <div className="relative w-28 h-28">
-      {/* Animated gradient pulse aura around logo */}
-      <motion.div
-        animate={{
-          scale: [1, 1.15, 1],
-          opacity: [0.3, 0.6, 0.3],
-        }}
-        transition={{
-          duration: 2.5,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className="absolute -inset-4 rounded-full"
-        style={{
-          background: themeConfig.accentGradient,
-          filter: "blur(14px)",
-        }}
-      />
-
       {/* Circular container - PERFECT circle */}
       <motion.div
         initial={{ scale: 0.85, opacity: 0 }}

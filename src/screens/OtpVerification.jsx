@@ -631,10 +631,10 @@ export default function OTPVerification() {
 
   if (!dataLoaded) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${isDark ? "bg-gradient-to-br from-gray-950 via-gray-900 to-black" : "bg-gradient-to-br from-blue-50 via-white to-gray-100"}`}>
+      <div className={`min-h-screen flex items-center justify-center p-4 ${isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-gray-900"}`}>
         <motion.div className="flex flex-col items-center gap-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <motion.div
-            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-500/25"
+            className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#8B1EF3] to-[#4431F7] flex items-center justify-center shadow-2xl"
             animate={!reducedMotion ? { scale: [1, 1.05, 1], rotate: [0, 5, -5, 0] } : {}}
             transition={{ duration: 3, repeat: Infinity }}
           >
@@ -647,7 +647,7 @@ export default function OTPVerification() {
   }
 
   return (
-    <div className={`min-h-[100dvh] flex flex-col ${isDark ? "bg-gradient-to-br from-gray-950 via-gray-900 to-black" : "bg-gradient-to-br from-blue-50 via-white to-gray-100"}`}>
+    <div className={`min-h-[100dvh] flex flex-col ${isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-gray-900"}`}>
       <AnimatePresence>
         {isOffline && (
           <motion.div
@@ -671,7 +671,7 @@ export default function OTPVerification() {
           <motion.div
             className={`relative rounded-3xl border backdrop-blur-2xl overflow-visible ${
               !lowPerf && (typeof navigator !== "undefined" && navigator.deviceMemory && navigator.deviceMemory >= 4) ? "shadow-2xl" : "shadow-lg"
-            } ${isDark ? "bg-gray-900/70 border-white/10 shadow-indigo-900/20" : "bg-white/70 border-gray-200/60 shadow-indigo-100/20"} p-5 sm:p-6 md:p-8`}
+            } ${isDark ? "bg-white/[0.06] border-white/[0.08]" : "bg-white/80 border-black/[0.08]"} p-5 sm:p-6 md:p-8`}
           >
             <AnimatePresence>
               {isVerifying && (

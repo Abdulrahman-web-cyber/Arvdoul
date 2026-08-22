@@ -695,9 +695,9 @@ export default function SetupProfile() {
 
   if (!user?.uid) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+      <div className={`min-h-screen flex items-center justify-center p-4 ${resolvedTheme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-gray-900'}`}>
         <div className="text-center text-gray-600 dark:text-gray-400">
-          <div className="animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <div className="animate-spin w-12 h-12 border-4 border-[#8B1EF3] border-t-transparent rounded-full mx-auto mb-4" />
           <p>Redirecting to login…</p>
         </div>
       </div>
@@ -705,7 +705,7 @@ export default function SetupProfile() {
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden">
+    <div className={`h-[100dvh] flex flex-col ${resolvedTheme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-gray-900'} overflow-hidden`}>
       {/* Offline Banner */}
       <AnimatePresence>
         {isOffline && (
@@ -727,7 +727,7 @@ export default function SetupProfile() {
             {[1, 2, 3].map((step) => (
               <div key={step} className="flex items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  step === 3 ? "bg-indigo-600 text-white ring-4 ring-indigo-500/30" : step < 3 ? "bg-emerald-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500"
+                  step === 3 ? "bg-[#8B1EF3] text-white ring-4 ring-[#8B1EF3]/30" : step < 3 ? "bg-emerald-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500"
                 }`}>{step < 3 ? "✓" : step}</div>
                 {step < 3 && <div className="w-6 h-1 bg-emerald-500" />}
               </div>
@@ -743,8 +743,8 @@ export default function SetupProfile() {
             navigator.deviceMemory && navigator.deviceMemory >= 4 ? "shadow-2xl" : "shadow-lg"
           } ${
             resolvedTheme === "dark"
-              ? "bg-gray-900/70 border-white/10 shadow-indigo-900/20"
-              : "bg-white/70 border-gray-200/60 shadow-indigo-100/20"
+              ? "bg-white/[0.06] border-white/[0.08]"
+              : "bg-white/80 border-black/[0.08]"
           } p-6 space-y-6`}
           >
             <PerfectAvatarUploader onUpload={handleAvatarUpload} currentAvatar={avatarUrl} displayName={displayName} userId={user?.uid} theme={theme} loading={loading} />

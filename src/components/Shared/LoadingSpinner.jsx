@@ -23,17 +23,18 @@ const LoadingSpinner = React.memo(
     }, [controls, inView]);
 
     const colorSchemes = {
-      primary: { light: "#6366f1", dark: "#818cf8" },
-      secondary: { light: "#8b5cf6", dark: "#a78bfa" },
-      success: { light: "#10b981", dark: "#34d399" },
-      warning: { light: "#f59e0b", dark: "#fbbf24" },
-      danger: { light: "#ef4444", dark: "#f87171" },
-      light: { light: "#e5e7eb", dark: "#f3f4f6" },
-      dark: { light: "#374151", dark: "#4b5563" },
+      primary: { light: "#8B1EF3", dark: "#8B1EF3" },
+      secondary: { light: "#4431F7", dark: "#4431F7" },
+      blue: { light: "#055BFB", dark: "#055BFB" },
+      success: { light: "#059669", dark: "#10B981" },
+      warning: { light: "#D97706", dark: "#F59E0B" },
+      danger: { light: "#DC2626", dark: "#EF4444" },
+      light: { light: "rgba(0,0,0,0.2)", dark: "rgba(255,255,255,0.7)" },
+      dark: { light: "#111827", dark: "#FFFFFF" },
     };
 
     const spinnerColor =
-      colorSchemes[color]?.[theme] || color || "#6366f1";
+      colorSchemes[color]?.[theme] || color || "#8B1EF3";
 
     const radius = size / 2;
     const dotSize = size * 0.12;

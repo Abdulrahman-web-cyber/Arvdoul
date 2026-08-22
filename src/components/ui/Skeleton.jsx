@@ -8,3 +8,5 @@ export const Skeleton = ({ className, ...props }) => (
     {...props}
   />
 );
+
+export default Skeleton;

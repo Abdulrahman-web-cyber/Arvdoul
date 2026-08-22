@@ -597,8 +597,8 @@ export default function SignupStep1Personal() {
       className="min-h-dvh w-full flex items-center justify-center p-2 sm:p-4"
       style={{
         background: theme === "dark"
-          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'
-          : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+          ? '#03071B'
+          : '#F6F8FC'
       }}
     >
       <motion.div
@@ -616,8 +616,8 @@ export default function SignupStep1Personal() {
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1 }}
-          className={`rounded-xl border shadow-lg sm:shadow-xl p-4 sm:p-6 flex flex-col flex-1 ${
-            theme === 'dark' ? 'bg-gray-900/90 border-gray-800' : 'bg-white border-gray-200'
+          className={`rounded-2xl border shadow-xl p-4 sm:p-6 flex flex-col flex-1 backdrop-blur-xl ${
+            theme === 'dark' ? 'bg-white/[0.06] border-white/[0.08]' : 'bg-white/80 border-black/[0.08]'
           }`}
           style={{ overflow: 'hidden' }}
         >

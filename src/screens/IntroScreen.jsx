@@ -492,13 +492,13 @@ function IntroScreen() {
     return theme || "light";
   }, [theme]);
 
-  // Background style - matching LoginScreen
+  // Background style - matching exact Arvdoul DNA tokens
   const backgroundStyle = useMemo(
     () => ({
       background:
         resolvedTheme === "dark"
-          ? `radial-gradient(circle at 20% 50%, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 1) 70%), linear-gradient(135deg, #0f172a 0%, #1e293b 100%)`
-          : `radial-gradient(circle at 20% 50%, rgba(241, 245, 249, 0.6) 0%, rgba(248, 250, 252, 1) 70%), linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)`,
+          ? "#03071B"
+          : "#F6F8FC",
     }),
     [resolvedTheme]
   );
