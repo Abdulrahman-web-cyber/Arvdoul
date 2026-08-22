@@ -60,6 +60,21 @@ service cloud.firestore {
     match /users/{userId}/saved_videos/{videoId} {
       allow read, create, update, delete: if isOwner(userId);
     }
+    // Saved messages (spec §33): references to original messages — owner-only.
+    match /users/{userId}/saved_messages/{messageId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+    // Message requests (spec §35): id = `${recipientId}_${senderId}`.
+    // Create only by the sender; read by either party; respond (accept/
+    // decline) only by the recipient. Nobody else can touch them.
+    match /message_requests/{requestId} {
+      allow read: if isSignedIn() &&
+        (resource.data.senderId == uid() || resource.data.recipientId == uid());
+      allow create: if isSignedIn() &&
+        request.resource.data.senderId == uid() &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if isSignedIn() && resource.data.recipientId == uid();
+    }
 
     // ==================== POSTS ====================
     match /posts/{postId} {

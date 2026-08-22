@@ -29,7 +29,7 @@ import { Skeleton } from '../components/ui/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Lock, Users, Phone, Video, Info, Search, Pin, Image as ImageIcon, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Lock, Users, Phone, Video, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark } from 'lucide-react';
 import { format, isSameDay, isSameMinute } from 'date-fns';
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -59,7 +59,11 @@ export default function ChatScreen() {
   const [searching, setSearching] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [sharedMedia, setSharedMedia] = useState([]);
-  const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search
+  const [infoTab, setInfoTab] = useState('pinned'); // pinned | media | search | saved
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [savedIds, setSavedIds] = useState({});
+  const [savedMessages, setSavedMessages] = useState([]);
   const mainRef = useRef(null);
 
   const messagesEndRef = useRef(null);
@@ -78,6 +82,7 @@ export default function ChatScreen() {
       const svc = getMessagingService();
       const res = await svc.getMessages(conversationId, { cacheFirst: false, limit: 60 });
       if (res.success) {
+        setHasMoreOlder(Boolean(res.hasMore));
         // Merge pending optimistic messages (they'll be replaced once the
         // server copy arrives via the realtime channel).
         const pending = Array.from(pendingRef.current.values()).map((p) => ({
@@ -340,6 +345,7 @@ export default function ChatScreen() {
   // ------------------------------------------------------------------
   const openInfoPanel = useCallback(async () => {
     setShowInfoPanel(true);
+    loadSavedState();
     try {
       const svc = getMessagingService();
       const [pinnedRes, mediaRes] = await Promise.allSettled([
@@ -367,6 +373,72 @@ export default function ChatScreen() {
       setSearching(false);
     }
   }, [conversationId, searchQuery, searching]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!conversationId || !uid || loadingOlder) return;
+    const oldest = messagesRef.current
+      .filter((m) => !m._local)
+      .sort((a, b) => (a.createdAt?.toDate?.() || new Date(a.createdAt)) - (b.createdAt?.toDate?.() || new Date(b.createdAt)))[0];
+    if (!oldest) return;
+    const startAfter = oldest.createdAt?.toDate ? oldest.createdAt.toDate().toISOString() : String(oldest.createdAt);
+    setLoadingOlder(true);
+    try {
+      const svc = getMessagingService();
+      const res = await svc.getMessages(conversationId, { cacheFirst: false, limit: 30, startAfter });
+      if (res?.success && res.messages.length > 0) {
+        // Preserve visual position: remember scroll height before inserting.
+        const el = mainRef.current;
+        const prevHeight = el ? el.scrollHeight : 0;
+        setMessages((prev) => [...res.messages, ...prev]);
+        setHasMoreOlder(Boolean(res.hasMore));
+        requestAnimationFrame(() => {
+          if (el) el.scrollTop = el.scrollHeight - prevHeight + el.scrollTop;
+        });
+      } else {
+        setHasMoreOlder(false);
+      }
+    } catch (err) {
+      toastError(err?.message || 'Could not load older messages');
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [conversationId, uid, loadingOlder]);
+
+  const toggleSaveMessage = useCallback(async (msg) => {
+    if (!conversationId || !uid || !msg?.id) return;
+    try {
+      const svc = getMessagingService();
+      if (savedIds[msg.id]) {
+        await svc.unsaveMessage(msg.id, uid);
+        setSavedIds((p) => { const n = { ...p }; delete n[msg.id]; return n; });
+        toastError?.('Removed from saved');
+      } else {
+        await svc.saveMessage(conversationId, msg.id, uid);
+        setSavedIds((p) => ({ ...p, [msg.id]: true }));
+      }
+      // Refresh the saved list in the panel.
+      const res = await svc.getSavedMessages(uid, { limit: 50 });
+      if (res?.success) setSavedMessages(res.messages || []);
+    } catch (err) {
+      toastError(err?.message || 'Could not update saved messages');
+    }
+  }, [conversationId, uid, savedIds]);
+
+  // Load this conversation's saved-message ids when the panel opens.
+  const loadSavedState = useCallback(async () => {
+    if (!uid) return;
+    try {
+      const svc = getMessagingService();
+      const res = await svc.getSavedMessages(uid, { limit: 200 });
+      if (res?.success) {
+        const list = res.messages || [];
+        setSavedMessages(list);
+        const ids = {};
+        list.forEach((m) => { if (m.conversationId === conversationId) ids[m.id] = true; });
+        setSavedIds(ids);
+      }
+    } catch { /* panel still opens */ }
+  }, [uid, conversationId]);
 
   const jumpToMessage = (messageId) => {
     setShowInfoPanel(false);
@@ -504,6 +576,19 @@ export default function ChatScreen() {
           </div>
         )}
 
+        {/* Load earlier messages (spec §15 pagination) */}
+        {hasMoreOlder && messages.length > 0 && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={loadOlderMessages}
+              disabled={loadingOlder}
+              className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 text-xs font-semibold text-arvdoul-text-secondary disabled:opacity-50 transition-colors"
+            >
+              {loadingOlder ? 'Loading…' : 'Load earlier messages'}
+            </button>
+          </div>
+        )}
+
         {renderItems.map((item) => {
           if (item.kind === 'date') {
             return (
@@ -546,6 +631,8 @@ export default function ChatScreen() {
                   /* best-effort */
                 }
               }}
+              onSave={toggleSaveMessage}
+              isSaved={Boolean(savedIds[msg.id])}
               isGroup={conversation?.participantCount > 2}
               isGroupStart={item.groupStart}
               theme={theme}
@@ -604,6 +691,7 @@ export default function ChatScreen() {
               {[
                 { id: 'pinned', label: 'Pinned', icon: Pin },
                 { id: 'media', label: 'Media', icon: ImageIcon },
+                { id: 'saved', label: 'Saved', icon: Bookmark },
                 { id: 'search', label: 'Search', icon: Search },
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -674,6 +762,32 @@ export default function ChatScreen() {
                             <ImageIcon className="w-5 h-5 text-purple-300" />
                           </div>
                         )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {infoTab === 'saved' && (
+              <div>
+                {savedMessages.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">No saved messages yet — long-press a message and choose Save</p>
+                ) : (
+                  <div className="space-y-2">
+                    {savedMessages.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => jumpToMessage(m.id)}
+                        className={cn(
+                          'w-full text-left p-3 rounded-xl text-xs border',
+                          isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/50' : 'bg-gray-50 border-gray-200'
+                        )}
+                      >
+                        <span className="text-gray-400 block mb-0.5">
+                          {m.senderName || 'User'} · {m.createdAt?.toDate ? format(m.createdAt.toDate(), 'p') : ''}
+                        </span>
+                        <span className="line-clamp-2">{m.content || '(media message)'}</span>
                       </button>
                     ))}
                   </div>

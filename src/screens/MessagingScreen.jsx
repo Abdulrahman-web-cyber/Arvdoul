@@ -105,6 +105,47 @@ export default function MessagingScreen() {
     return () => { cancelled = true; };
   }, [user?.uid]);
   const [showSearchFilters, setShowSearchFilters] = useState(false);
+  const [messageRequests, setMessageRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+
+  // Load REAL pending message requests (spec §35) — users who were blocked by
+  // privacy settings but requested a conversation.
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    const load = async () => {
+      setRequestsLoading(true);
+      try {
+        const { getMessagingService } = await import('../services/messagesService.js');
+        const res = await getMessagingService().getMessageRequests(user.uid, { limit: 20 });
+        if (!cancelled) setMessageRequests(res?.requests || []);
+      } catch (err) {
+        console.warn('Failed to load message requests:', err);
+        if (!cancelled) setMessageRequests([]);
+      } finally {
+        if (!cancelled) setRequestsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  const handleRequestResponse = useCallback(async (requestId, accept) => {
+    if (!user?.uid) return;
+    try {
+      const { getMessagingService } = await import('../services/messagesService.js');
+      const res = await getMessagingService().respondToMessageRequest(requestId, user.uid, accept);
+      setMessageRequests((prev) => prev.filter((r) => r.id !== requestId));
+      if (res?.success && res.accepted && res.conversationId) {
+        toast.success('Request accepted — conversation started');
+        navigate(`/messages/${res.conversationId}`);
+      } else {
+        toast.info('Request declined');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not respond to request');
+    }
+  }, [user?.uid, navigate]);
 
   // Filter conversations
   const filteredConversations = useMemo(() => {
@@ -331,6 +372,48 @@ export default function MessagingScreen() {
             ))}
           </div>
         </div>
+
+        {/* Message Requests (spec §35) */}
+        {messageRequests.length > 0 && (
+          <div className="mt-4 px-4">
+            <h2 className="text-xs font-bold text-arvdoul-text-secondary uppercase tracking-wider mb-2">
+              Message requests ({messageRequests.length})
+            </h2>
+            <div className="space-y-2">
+              {messageRequests.map((req) => (
+                <div key={req.id} className="p-3 rounded-2xl bg-white/5 border border-purple-500/20 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {req.senderAvatar ? (
+                      <img src={req.senderAvatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-purple-600/40 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                        {(req.senderName || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{req.senderName || 'Unknown user'}</p>
+                      <p className="text-[10px] text-gray-400">wants to message you</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleRequestResponse(req.id, true)}
+                      className="px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[11px] font-bold hover:opacity-90"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleRequestResponse(req.id, false)}
+                      className="px-3 py-1.5 rounded-full bg-white/10 text-gray-300 text-[11px] font-bold hover:bg-white/20"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Master Conversation List */}
         <div className="mt-3 space-y-2">

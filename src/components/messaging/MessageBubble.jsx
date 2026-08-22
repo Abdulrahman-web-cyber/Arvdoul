@@ -16,6 +16,7 @@ import {
   CheckCheck,
   Clock,
   AlertCircle,
+  Bookmark,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -34,6 +35,8 @@ const MessageBubble = React.memo(({
   onEdit,
   onDelete,
   onReport,
+  onSave,
+  isSaved = false,
   theme,
   isGroup,
   isGroupStart = true,
@@ -383,6 +386,18 @@ const MessageBubble = React.memo(({
               </button>
             </>
           )}
+          <button
+            onClick={() => {
+              onSave?.(message);
+              setShowMenu(false);
+            }}
+            className={cn(
+              'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-700/50',
+              'transition-colors'
+            )}
+          >
+            <Bookmark className="w-4 h-4" /> {isSaved ? 'Unsave' : 'Save'}
+          </button>
           {!isOwn && (
             <button
               onClick={() => {

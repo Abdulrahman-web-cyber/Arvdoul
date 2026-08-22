@@ -818,3 +818,88 @@ describe('Vibes master-spec: cost control (spec §57/58)', () => {
     expect(src).toContain("'stats.completionRate'");
   });
 });
+
+describe('Vibes scoring v2 (spec §37/38/39)', () => {
+  test('feed scoring computes affinity (follow), remaining-time freshness, and per-creator diversity cap', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(src).toContain('followMap.set(cid, true)'); // relationship signal
+    expect(src).toContain('const affinity = followMap.get(s.userId) ? 1 : 0.1;');
+    expect(src).toContain('remainingFactor = 0.8 + 0.4 * fraction'); // freshness
+    expect(src).toContain('MAX_STORIES_PER_CREATOR'); // diversity
+    expect(src).toContain('const diverse = scored.filter(');
+    expect(src).not.toContain('const score = recency * w.recency + engagement * w.engagement;'); // old no-affinity formula gone
+  });
+});
+
+describe('Vibes analytics producers (spec §23/58)', () => {
+  test('StoriesScreen reports completion and forward/back taps to the buffered service', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
+    expect(src).toContain('reportStoryCompletion(currentItem.id)');
+    expect(src).toContain("trackStoryAnalytics(currentItem.id, 'forward')");
+    expect(src).toContain("trackStoryAnalytics(currentItem.id, 'back')");
+  });
+});
+
+describe('Messaging saved messages (spec §33)', () => {
+  test('rules: users/{uid}/saved_messages owner-scoped', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('match /users/{userId}/saved_messages/{messageId}');
+  });
+
+  test('service has save/unsave/isSaved/getSavedMessages with reference snapshots', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    expect(src).toContain('async saveMessage(conversationId, messageId, userId)');
+    expect(src).toContain('async unsaveMessage(messageId, userId)');
+    expect(src).toContain('async getSavedMessages(userId');
+    expect(src).toContain("'users', userId, 'saved_messages'");
+  });
+
+  test('MessageBubble menu has Save/Unsave; ChatScreen wires it + Saved tab', () => {
+    const bubble = fs.readFileSync(path.join(root, 'src/components/messaging/MessageBubble.jsx'), 'utf8');
+    expect(bubble).toContain("{isSaved ? 'Unsave' : 'Save'}");
+    const chat = fs.readFileSync(path.join(root, 'src/screens/ChatScreen.jsx'), 'utf8');
+    expect(chat).toContain('toggleSaveMessage');
+    expect(chat).toContain("id: 'saved', label: 'Saved'");
+  });
+});
+
+describe('Message requests (spec §35)', () => {
+  test('rules: create by sender, respond by recipient only', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const block = rules.slice(rules.indexOf('match /message_requests'), rules.indexOf('match /message_requests') + 600);
+    expect(block).toContain('request.resource.data.senderId == uid()');
+    expect(block).toContain('resource.data.recipientId == uid()');
+  });
+
+  test('service: send/get/respond + idempotent deterministic id; privacy-block sends a request', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/messagesService.js'), 'utf8');
+    expect(src).toContain('async sendMessageRequest(recipientId, senderId)');
+    expect(src).toContain('async getMessageRequests(userId');
+    expect(src).toContain('async respondToMessageRequest(');
+    expect(src).toContain("'message_requests', `${recipientId}_${senderId}`");
+    expect(src).toContain("reqErr.code = 'messaging/request-sent'");
+  });
+
+  test('MessagingScreen shows an Accept/Decline requests section', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/MessagingScreen.jsx'), 'utf8');
+    expect(src).toContain('getMessageRequests(');
+    expect(src).toContain('Message requests (');
+    expect(src).toContain('handleRequestResponse(req.id, true)');
+  });
+
+  test('message_requests composite index exists', () => {
+    const idx = JSON.parse(fs.readFileSync(path.join(root, 'firestore.indexes.json'), 'utf8'));
+    const ok = idx.indexes.some((i) => i.collectionGroup === 'message_requests' &&
+      i.fields.some((f) => f.fieldPath === 'recipientId') && i.fields.some((f) => f.fieldPath === 'status'));
+    expect(ok).toBe(true);
+  });
+});
+
+describe('Chat pagination (spec §15)', () => {
+  test('ChatScreen has load-older with scroll-position preservation', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/ChatScreen.jsx'), 'utf8');
+    expect(src).toContain('loadOlderMessages');
+    expect(src).toContain('Load earlier messages');
+    expect(src).toContain('el.scrollTop = el.scrollHeight - prevHeight + el.scrollTop');
+  });
+});

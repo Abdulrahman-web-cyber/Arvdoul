@@ -50,6 +50,8 @@ const STORY_CONFIG = {
       engagement: 0.4,
       affinity: 0.2,
     },
+    // Diversity guard: at most N Vibes per creator in discovery (spec §38).
+    MAX_STORIES_PER_CREATOR: 4,
     EDGE_CACHE_ENABLED: true,
   },
   VIEW_TRACKING: {
@@ -1326,22 +1328,81 @@ class UltimateStoryService {
     };
   }
 
+  /**
+   * REAL feed scoring (spec §37/38/39/91):
+   *  - recency (decay by age)
+   *  - engagement QUALITY (reactions/comments/shares/replies, capped)
+   *  - affinity = viewer follows the creator (was configured but never computed)
+   *  - freshness = time remaining until expiry (gentle — never dominates)
+   *  - diversity = per-creator cap so one creator cannot flood discovery
+   * Deterministic (no randomness) so the feed is stable across devices.
+   */
   async _applyFeedScoring(stories, userId) {
     const now = Date.now();
-    const scored = stories.map(s => {
+    const followMap = new Map();
+
+    // Batch-check follow relationships once for all unique creators.
+    const creatorIds = [...new Set(stories.map((s) => s.userId).filter(Boolean))];
+    await Promise.all(creatorIds.map(async (cid) => {
+      if (cid === userId) { followMap.set(cid, true); return; }
+      if (this.followedUsersCache.has(cid)) {
+        followMap.set(cid, this.followedUsersCache.get(cid));
+        return;
+      }
+      try {
+        const followDoc = await this.fs.getDoc(this.fs.doc(this.firestore, 'follows', `${userId}_${cid}`));
+        const follows = followDoc.exists();
+        this.followedUsersCache.set(cid, follows);
+        followMap.set(cid, follows);
+      } catch { followMap.set(cid, false); }
+    }));
+
+    const EXPIRY_MS = STORY_CONFIG.EXPIRY_HOURS * 3600000;
+    const scored = stories.map((s) => {
       const createdAt = s.createdAt?.toDate?.() || 0;
-      const ageHours = (now - createdAt) / 3600000;
+      const ageHours = createdAt ? (now - createdAt) / 3600000 : 24;
       const recency = Math.exp(-ageHours / 2);
+
       const stats = s.stats || {};
-      const totalEngagement = Object.values(stats.reactions || {}).reduce((a,b)=>a+b,0) +
-                              (stats.comments||0)*2 + (stats.shares||0)*3 + (stats.replies||0)*2;
+      const totalEngagement = Object.values(stats.reactions || {}).reduce((a, b) => a + b, 0) +
+        (stats.comments || 0) * 2 + (stats.shares || 0) * 3 + (stats.replies || 0) * 2;
       const engagement = Math.min(totalEngagement, 100) / 100;
+
+      // Affinity: following the creator is the strongest relationship signal.
+      const affinity = followMap.get(s.userId) ? 1 : 0.1;
+
+      // Freshness: remaining time fraction (spec §39) — gentle 0.8–1.2 band.
+      let remainingFactor = 1;
+      if (s.expiresAt?.toDate) {
+        const remainingMs = s.expiresAt.toDate().getTime() - now;
+        if (remainingMs > 0) {
+          const fraction = Math.min(1, remainingMs / EXPIRY_MS);
+          remainingFactor = 0.8 + 0.4 * fraction;
+        } else {
+          remainingFactor = 0; // expired — will be filtered by rules anyway
+        }
+      }
+
       const w = STORY_CONFIG.FEED.SCORE_WEIGHTS;
-      const score = recency * w.recency + engagement * w.engagement;
+      const score = (recency * w.recency + engagement * w.engagement + affinity * w.affinity) * remainingFactor;
       return { ...s, _score: score };
     });
-    scored.sort((a,b) => b._score - a._score);
-    return scored;
+
+    scored.sort((a, b) => b._score - a._score);
+
+    // DIVERSITY (spec §38): cap stories per creator in discovery so one
+    // creator cannot flood the feed; their other Vibes live in their own
+    // sequence inside the dedicated viewer.
+    const perCreatorCap = STORY_CONFIG.FEED.MAX_STORIES_PER_CREATOR || 4;
+    const seen = new Map();
+    const diverse = scored.filter((s) => {
+      const c = (seen.get(s.userId) || 0) + 1;
+      if (c > perCreatorCap) return false;
+      seen.set(s.userId, c);
+      return true;
+    });
+
+    return diverse;
   }
 
   async _recordStoryViewSharded(storyId, viewerId) {

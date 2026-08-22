@@ -179,6 +179,11 @@ export default function StoriesScreen() {
     progressIntervalRef.current = setInterval(() => {
       setStoryProgress((prev) => {
         if (prev + step >= 100) {
+          // REAL completion event (spec §23/58): the item was watched to the
+          // end — buffered server-side, never a per-frame write.
+          if (currentItem?.id) {
+            getStoryService().reportStoryCompletion(currentItem.id).catch(() => {});
+          }
           // Advance to next item or next story
           if (activeItemIndex + 1 < (currentStory.items?.length || 1)) {
             setActiveItemIndex((i) => i + 1);
@@ -207,7 +212,10 @@ export default function StoriesScreen() {
     const x = e.clientX - rect.left;
     const isRight = x > rect.width / 2;
 
+    // REAL tap analytics (spec §58) — buffered, never per-tap doc writes.
+    const svc = getStoryService();
     if (isRight) {
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch(() => {});
       // Advance
       if (activeItemIndex + 1 < (currentStory?.items?.length || 1)) {
         setActiveItemIndex((i) => i + 1);
@@ -220,6 +228,7 @@ export default function StoriesScreen() {
         handleCloseStory();
       }
     } else {
+      if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'back').catch(() => {});
       // Previous
       if (activeItemIndex > 0) {
         setActiveItemIndex((i) => i - 1);

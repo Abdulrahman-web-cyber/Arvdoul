@@ -1102,7 +1102,23 @@ class UltimateMessagingService {
 
     if (conv.conversation.type === 'direct') {
       const other = conv.conversation.participants.find(p => p !== currentUser.uid);
-      if (other) await this.checkMessagePermission(currentUser.uid, other);
+      if (other) {
+        try {
+          await this.checkMessagePermission(currentUser.uid, other);
+        } catch (err) {
+          // Privacy gate: offer a real MESSAGE REQUEST instead of a dead end
+          // (spec §35). The request is idempotent.
+          if (err.code === 'messaging/privacy' || err.code === 'messaging/blocked') {
+            const req = await this.sendMessageRequest(other, currentUser.uid).catch(() => null);
+            if (req?.success) {
+              const reqErr = new Error('Message request sent — they will be notified.');
+              reqErr.code = 'messaging/request-sent';
+              throw reqErr;
+            }
+          }
+          throw err;
+        }
+      }
     }
 
     if (MESSAGING_CONFIG.RATE_LIMITING.ENABLED) this._recordRateLimit(currentUser.uid).catch(() => {});
@@ -2394,6 +2410,138 @@ class UltimateMessagingService {
     return { success: true, history: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
   }
 
+  // ========== MESSAGE REQUESTS (spec §35) ==========
+  // When a privacy rule blocks a direct message, the sender can request a
+  // conversation instead. The request id is deterministic
+  // (`${recipientId}_${senderId}`) so retries/offline never duplicate it.
+  async sendMessageRequest(recipientId, senderId) {
+    await this.ensureInitialized();
+    if (!recipientId || !senderId || recipientId === senderId) {
+      throw new Error('Invalid request');
+    }
+    // Idempotent: an existing pending/blocked request is not re-created.
+    const ref = this.fs.doc(this.firestore, 'message_requests', `${recipientId}_${senderId}`);
+    const existing = await this.fs.getDoc(ref);
+    if (existing.exists()) {
+      if (existing.data().status === 'accepted') return { success: true, status: 'accepted' };
+      return { success: true, status: existing.data().status || 'pending' };
+    }
+    // Resolve sender identity for the recipient's inbox.
+    let senderName = null;
+    let senderAvatar = null;
+    try {
+      const us = await this._getUserService();
+      const profile = await us.getUserProfile(senderId);
+      if (profile) {
+        senderName = profile.displayName || profile.username || null;
+        senderAvatar = profile.photoURL || null;
+      }
+    } catch { /* identity optional */ }
+    await this.fs.setDoc(ref, {
+      senderId,
+      recipientId,
+      senderName,
+      senderAvatar,
+      status: 'pending',
+      createdAt: this.fs.serverTimestamp(),
+    });
+    return { success: true, status: 'pending' };
+  }
+
+  async getMessageRequests(userId, options = {}) {
+    await this.ensureInitialized();
+    const colRef = this.fs.collection(this.firestore, 'message_requests');
+    const q = this.fs.query(
+      colRef,
+      this.fs.where('recipientId', '==', userId),
+      this.fs.where('status', '==', 'pending'),
+      this.fs.orderBy('createdAt', 'desc'),
+      this.fs.limit(options.limit || 20)
+    );
+    const snap = await this.fs.getDocs(q);
+    const items = [];
+    snap.forEach((d) => items.push({ id: d.id, ...d.data() }));
+    return { success: true, requests: items };
+  }
+
+  async respondToMessageRequest(requestId, recipientId, accept) {
+    await this.ensureInitialized();
+    const ref = this.fs.doc(this.firestore, 'message_requests', requestId);
+    const snap = await this.fs.getDoc(ref);
+    if (!snap.exists()) throw new Error('Request not found');
+    const data = snap.data();
+    if (data.recipientId !== recipientId) throw new Error('Not your request');
+    if (data.status !== 'pending') throw new Error('Request already handled');
+
+    if (accept) {
+      // Accepting creates the real direct conversation (deterministic id —
+      // dedupe handled server-side by createConversation).
+      const conv = await this.createConversation([data.senderId, data.recipientId]);
+      await this.fs.updateDoc(ref, { status: 'accepted', handledAt: this.fs.serverTimestamp() });
+      return { success: true, accepted: true, conversationId: conv.conversation.id };
+    }
+    await this.fs.updateDoc(ref, { status: 'declined', handledAt: this.fs.serverTimestamp() });
+    return { success: true, accepted: false };
+  }
+
+  // ========== SAVED MESSAGES (spec §33) ==========
+  // References to original messages — never duplicated content. If the
+  // original message is deleted, the saved reference stays but the snapshot
+  // shows 'Message no longer available' (the reference itself is inert).
+  async saveMessage(conversationId, messageId, userId) {
+    await this.ensureInitialized();
+    const msg = await this._getMessage(conversationId, messageId);
+    if (!msg) throw new Error('Message not found');
+    const ref = this.fs.doc(this.firestore, 'users', userId, 'saved_messages', messageId);
+    const snap = await this.fs.getDoc(ref);
+    if (snap.exists()) return { success: true, alreadySaved: true };
+    await this.fs.setDoc(ref, {
+      messageId,
+      conversationId,
+      savedAt: this.fs.serverTimestamp(),
+      snapshot: {
+        type: msg.type || 'text',
+        content: msg.content || null,
+        senderId: msg.senderId || null,
+        senderName: msg.senderName || null,
+        createdAt: msg.createdAt || null,
+        media: msg.media || null,
+      },
+    });
+    return { success: true, alreadySaved: false };
+  }
+
+  async unsaveMessage(messageId, userId) {
+    await this.ensureInitialized();
+    await this.fs.deleteDoc(this.fs.doc(this.firestore, 'users', userId, 'saved_messages', messageId));
+    return { success: true };
+  }
+
+  async isMessageSaved(messageId, userId) {
+    await this.ensureInitialized();
+    const snap = await this.fs.getDoc(this.fs.doc(this.firestore, 'users', userId, 'saved_messages', messageId));
+    return snap.exists();
+  }
+
+  async getSavedMessages(userId, options = {}) {
+    await this.ensureInitialized();
+    const colRef = this.fs.collection(this.firestore, 'users', userId, 'saved_messages');
+    const q = this.fs.query(colRef, this.fs.orderBy('savedAt', 'desc'), this.fs.limit(options.limit || 50));
+    const snap = await this.fs.getDocs(q);
+    const items = [];
+    snap.forEach((d) => {
+      const data = d.data() || {};
+      items.push({
+        id: d.id,
+        messageId: data.messageId || d.id,
+        conversationId: data.conversationId || null,
+        savedAt: data.savedAt?.toDate?.()?.toISOString() || null,
+        ...(data.snapshot || {}),
+      });
+    });
+    return { success: true, messages: items };
+  }
+
   // ========== PUSH TOKEN REGISTRATION ==========
   async registerPushToken(userId, token) {
     await this.ensureInitialized();
@@ -3178,6 +3326,13 @@ const messagingService = {
   setConversationReadReceipts: (cid, uid, disable) => getMessagingService().setConversationReadReceipts(cid, uid, disable),
   getGroupStats: (cid) => getMessagingService().getGroupStats(cid),
   searchMessagesAlgolia: (cid, query, opts) => getMessagingService().searchMessagesAlgolia(cid, query, opts),
+  sendMessageRequest: (rid, sid) => getMessagingService().sendMessageRequest(rid, sid),
+  getMessageRequests: (uid, opts) => getMessagingService().getMessageRequests(uid, opts),
+  respondToMessageRequest: (rid, uid, accept) => getMessagingService().respondToMessageRequest(rid, uid, accept),
+  saveMessage: (cid, mid, uid) => getMessagingService().saveMessage(cid, mid, uid),
+  unsaveMessage: (mid, uid) => getMessagingService().unsaveMessage(mid, uid),
+  isMessageSaved: (mid, uid) => getMessagingService().isMessageSaved(mid, uid),
+  getSavedMessages: (uid, opts) => getMessagingService().getSavedMessages(uid, opts),
   generateInviteQRCode: (inviteId, admin) => getMessagingService().generateInviteQRCode(inviteId, admin),
   generateUserKeys: (uid, password) => getMessagingService().generateUserKeys(uid, password),
   unlockPrivateKey: (uid, password) => getMessagingService().unlockPrivateKey(uid, password),
