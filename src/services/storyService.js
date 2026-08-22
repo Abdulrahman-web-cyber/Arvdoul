@@ -644,53 +644,35 @@ class UltimateStoryService {
     await this.rateLimiter.checkLimit(currentUser.uid, 'REACT');
     if (!STORY_CONFIG.REACTION_TYPES.includes(reactionType)) throw new Error('Invalid reaction');
 
-    const storyRef = this.fs.doc(this.firestore, 'stories', storyId);
+    // Rules forbid non-creators from updating the story doc — reactions live
+    // ONLY in the per-user reactions/{uid} subcollection (writer = reactor)
+    // plus the creator-writable reaction_shards (aggregated server-side).
     const reactionDocRef = this.fs.doc(this.firestore, 'stories', storyId, 'reactions', currentUser.uid);
+    const existingSnap = await this.fs.getDoc(reactionDocRef);
 
-    // No async calls inside transaction – fixed
     let actionResult;
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const storySnap = await transaction.get(storyRef);
-      if (!storySnap.exists()) throw new Error('Story not found');
-      const reactionSnap = await transaction.get(reactionDocRef);
-
-      let oldReaction = null;
-      if (reactionSnap.exists()) {
-        oldReaction = reactionSnap.data().reaction;
-        if (oldReaction === reactionType) {
-          transaction.delete(reactionDocRef);
-          transaction.update(storyRef, {
-            [`stats.reactions.${oldReaction}`]: increment(-1),
-            updatedAt: serverTimestamp()
-          });
-          actionResult = { success: true, action: 'removed', reaction: oldReaction };
-        } else {
-          transaction.update(reactionDocRef, { reaction: reactionType, updatedAt: serverTimestamp() });
-          transaction.update(storyRef, {
-            [`stats.reactions.${oldReaction}`]: increment(-1),
-            [`stats.reactions.${reactionType}`]: increment(1),
-            updatedAt: serverTimestamp()
-          });
-          actionResult = { success: true, action: 'changed', from: oldReaction, to: reactionType };
-        }
+    if (existingSnap.exists()) {
+      const oldReaction = existingSnap.data().reaction;
+      if (oldReaction === reactionType) {
+        await this.fs.deleteDoc(reactionDocRef);
+        await this._recordReactionShard(storyId, oldReaction, -1);
+        actionResult = { success: true, action: 'removed', reaction: oldReaction };
       } else {
-        transaction.set(reactionDocRef, { userId: currentUser.uid, reaction: reactionType, createdAt: serverTimestamp() });
-        transaction.update(storyRef, {
-          [`stats.reactions.${reactionType}`]: increment(1),
-          updatedAt: serverTimestamp()
-        });
-        actionResult = { success: true, action: 'added', reaction: reactionType };
+        await this.fs.updateDoc(reactionDocRef, { reaction: reactionType, updatedAt: serverTimestamp() });
+        await this._recordReactionShard(storyId, oldReaction, -1);
+        await this._recordReactionShard(storyId, reactionType, 1);
+        actionResult = { success: true, action: 'changed', from: oldReaction, to: reactionType };
       }
-    });
-    // Update shards outside transaction
-    if (actionResult.action === 'removed') {
-      await this._recordReactionShard(storyId, actionResult.reaction, -1);
-    } else if (actionResult.action === 'changed') {
-      await this._recordReactionShard(storyId, actionResult.from, -1);
-      await this._recordReactionShard(storyId, actionResult.to, 1);
-    } else if (actionResult.action === 'added') {
-      await this._recordReactionShard(storyId, actionResult.reaction, 1);
+    } else {
+      await this.fs.setDoc(reactionDocRef, {
+        userId: currentUser.uid,
+        reaction: reactionType,
+        createdAt: serverTimestamp(),
+      });
+      await this._recordReactionShard(storyId, reactionType, 1);
+      actionResult = { success: true, action: 'added', reaction: reactionType };
     }
+    this.storyCache.delete(storyId);
     auditLogger.log('story.reacted', { userId: currentUser.uid, meta: { storyId, reactionType, action: actionResult.action } });
     return actionResult;
   }
@@ -707,10 +689,7 @@ class UltimateStoryService {
 
     const commentService = await import('./commentService.js');
     const result = await commentService.createComment(storyId, currentUser.uid, content, options);
-    await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-      'stats.comments': increment(1),
-      updatedAt: serverTimestamp()
-    });
+    await this._incrementAnalyticsShard(storyId, 'comments', 1);
     return result;
   }
 
@@ -739,10 +718,9 @@ class UltimateStoryService {
       ...options
     });
 
-    await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-      'stats.replies': increment(1),
-      updatedAt: serverTimestamp()
-    });
+    // Rules forbid non-creators from updating the story doc — reply stats go
+    // into the owner-writable analytics shards (aggregated server-side).
+    await this._incrementAnalyticsShard(storyId, 'replies', 1);
     await this._logStoryReply(storyId, currentUser.uid, story.userId);
     return result;
   }

@@ -903,3 +903,61 @@ describe('Chat pagination (spec §15)', () => {
     expect(src).toContain('el.scrollTop = el.scrollHeight - prevHeight + el.scrollTop');
   });
 });
+
+describe('Vibes interactions are REAL (no toast-only fakes)', () => {
+  test('StoriesScreen gift calls transferCoins (was toast-only free coins)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
+    expect(src).not.toContain("const monetization = getMonetizationService();\n    toast.success(`Sent 250");
+    expect(src).toContain('transferCoins(');
+    expect(src).toContain("'vibe_gift'");
+    expect(src).toContain("You cannot gift yourself");
+  });
+
+  test('StoriesScreen reply calls replyToStory (was toast-only)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
+    expect(src).toContain('replyToStory(currentItem.id, text)');
+    expect(src).not.toContain("toast.success(`Reply sent to ${currentStory?.user?.name}`);\n    setReplyText('');");
+  });
+
+  test('StoriesScreen reaction calls reactToStory (was toast-only)', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/StoriesScreen.jsx'), 'utf8');
+    expect(src).toContain('reactToStory(currentItem.id, emoji)');
+  });
+
+  test('reactToStory no longer writes story-doc stats (rules: creator-only updates)', () => {
+    const svc = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(svc).not.toContain("'stats.reactions.${oldReaction}'");
+    expect(svc).not.toContain('transaction.update(storyRef, {');
+  });
+
+  test('replyToStory/commentOnStory increment analytics shards, not the story doc', () => {
+    const svc = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
+    expect(svc).toContain("await this._incrementAnalyticsShard(storyId, 'replies', 1);");
+    expect(svc).toContain("await this._incrementAnalyticsShard(storyId, 'comments', 1);");
+  });
+
+  test('aggregator rolls replies + comments into stats', () => {
+    const fn = fs.readFileSync(path.join(root, 'functions/stories.js'), 'utf8');
+    expect(fn).toContain("replies += d.replies || 0;");
+    expect(fn).toContain("'stats.replies': replies");
+  });
+
+  test('shards are bounded counters writable by any signed-in user (aggregator owns doc stats)', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const block = rules.slice(rules.indexOf('match /stories/{storyId}'), rules.indexOf('match /archived_stories'));
+    expect(block).toContain('match /view_shards/{shardId}');
+    expect(block).toContain('match /reaction_shards/{shardId}');
+    expect(block).toContain('allow write: if isSignedIn();');
+    // story-doc updates remain creator-only
+    expect(block).toContain('allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;');
+  });
+});
+
+describe('CreateStory honest offline state (spec §53)', () => {
+  test('queued publish shows honest offline message, not "shared to followers"', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/CreateStory.jsx'), 'utf8');
+    expect(src).toContain("'Offline — saved as draft. Will publish when you are back online.'");
+    expect(src).not.toContain("'Story shared to your followers! 🌟'");
+    expect(src).toContain("visibility: 'public'");
+  });
+});

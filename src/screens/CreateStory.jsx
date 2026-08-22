@@ -232,7 +232,8 @@ export default function CreateStory() {
         textColor: '#FFFFFF',
         poll: pollQuestion ? { question: pollQuestion, options: [pollOption1, pollOption2] } : null,
         musicTrack: selectedMusic,
-        audience: 'all',
+        // audience maps to the service visibility contract (public/followers).
+        visibility: 'public',
       };
       if (!isText && !mediaFile) {
         toast.error('Add a photo or video to share an image story.');
@@ -241,8 +242,13 @@ export default function CreateStory() {
       }
 
       const res = await storyService.createStory(storyPayload);
-      if (res?.success || res?.queued) {
-        toast.success('Story shared to your followers! 🌟');
+      if (res?.success) {
+        toast.success('Vibe published! ✨');
+        navigate('/stories');
+      } else if (res?.queued) {
+        // HONEST offline state (spec §53): the Vibe is NOT published yet —
+        // it is queued locally and will publish when the connection returns.
+        toast.info('Offline — saved as draft. Will publish when you are back online.');
         navigate('/stories');
       } else {
         toast.error(res?.error || 'Failed to publish story');

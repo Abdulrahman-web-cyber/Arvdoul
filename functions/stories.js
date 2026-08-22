@@ -567,12 +567,16 @@ exports.aggregateStoryStats = functions.pubsub
           let completions = 0;
           let forwardTaps = 0;
           let backTaps = 0;
+          let replies = 0;
+          let comments = 0;
           const analyticsShardsSnap = await doc.ref.collection('analytics_shards').get();
           analyticsShardsSnap.forEach((s) => {
             const d = s.data() || {};
             completions += d.completions || 0;
             forwardTaps += d.forwardTaps || 0;
             backTaps += d.backTaps || 0;
+            replies += d.replies || 0;
+            comments += d.comments || 0;
           });
 
           await doc.ref.update({
@@ -581,6 +585,8 @@ exports.aggregateStoryStats = functions.pubsub
             'stats.completions': completions,
             'stats.forwardTaps': forwardTaps,
             'stats.backTaps': backTaps,
+            'stats.replies': replies,
+            'stats.comments': comments,
             'stats.completionRate': totalViews > 0 ? completions / totalViews : 0,
             updatedAt: FieldValue.serverTimestamp(),
           });

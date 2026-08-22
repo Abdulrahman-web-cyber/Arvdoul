@@ -175,17 +175,20 @@ service cloud.firestore {
         allow read: if isSignedIn() && (vibeData().userId == uid() || viewerId == uid());
         allow write: if isSignedIn() && viewerId == uid();
       }
+      // Shards are BOUNDED AGGREGATION COUNTERS (spec §58): any signed-in
+      // user may increment them; the pubsub aggregator owns the story-doc
+      // stats. Clients cannot inflate the doc itself — only these counters.
       match /view_shards/{shardId} {
-        allow read: if isSignedIn() && vibeData().userId == uid();
-        allow write: if isSignedIn() && vibeData().userId == uid();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
       match /reaction_shards/{shardId} {
         allow read: if true;
-        allow write: if isSignedIn() && vibeData().userId == uid();
+        allow write: if isSignedIn();
       }
       match /analytics_shards/{shardId} {
-        allow read: if isSignedIn() && vibeData().userId == uid();
-        allow write: if isSignedIn() && vibeData().userId == uid();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
       // Reactions: only when the creator enabled them, and only while the
       // Vibe is active and visible to the reactor (spec §22).

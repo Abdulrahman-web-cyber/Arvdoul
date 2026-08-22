@@ -281,28 +281,72 @@ export default function StoriesScreen() {
   }, [activeStoryIndex, activeItemIndex, currentStory, filteredStories.length]);
 
   // Handle quick emoji reaction with particle explosion
-  const handleSendReaction = (emoji) => {
-    toast.success(`Sent ${emoji} to ${currentStory?.user?.name}`);
+  // REAL reaction via reactToStory (spec §22) — particle is the visual
+  // confirmation, the service call is the actual interaction.
+  const [reactingId, setReactingId] = useState(null);
+  const handleSendReaction = async (emoji) => {
+    if (!currentItem?.id || reactingId) return;
+    setReactingId(currentItem.id);
     const id = Date.now() + Math.random();
     setFlyingParticles((prev) => [...prev, { id, emoji, x: Math.random() * 60 + 20 }]);
     setTimeout(() => {
       setFlyingParticles((prev) => prev.filter((p) => p.id !== id));
     }, 1500);
+    try {
+      await getStoryService().reactToStory(currentItem.id, emoji);
+    } catch (err) {
+      toast.error(err?.message || 'Reaction could not be sent');
+    } finally {
+      setReactingId(null);
+    }
   };
 
   // Handle gift coins
-  const handleGiftCoin = () => {
-    const monetization = getMonetizationService();
-    toast.success(`Sent 250 🪙 to ${currentStory?.user?.name}!`);
-    handleSendReaction('🪙');
+  const [gifting, setGifting] = useState(false);
+
+  // REAL coin gift via the double-entry ledger (spec — no free coins).
+  const handleGiftCoin = async () => {
+    if (!user?.uid || gifting) return;
+    const storyUserId = currentStory?.user?.id || currentStory?.userId;
+    if (!storyUserId) { toast.error('Recipient unknown'); return; }
+    if (storyUserId === user.uid) { toast.error('You cannot gift yourself'); return; }
+    setGifting(true);
+    try {
+      const res = await getMonetizationService().transferCoins(
+        user.uid, storyUserId, 250, 'vibe_gift',
+        { storyId: currentItem?.id || null }
+      );
+      if (res?.success) {
+        handleSendReaction('🪙');
+        toast.success(`Sent 250 🪙 to ${currentStory?.user?.name}!`);
+      } else {
+        toast.error(res?.message || 'Gift could not be sent');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Gift could not be sent');
+    } finally {
+      setGifting(false);
+    }
   };
 
-  // Handle story reply
-  const handleSendReply = (e) => {
+  // Handle story reply — REAL: replyToStory creates a direct conversation
+  // with the creator carrying the vibe reference (spec §21/65).
+  const [replying, setReplying] = useState(false);
+  const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!replyText.trim()) return;
-    toast.success(`Reply sent to ${currentStory?.user?.name}`);
-    setReplyText('');
+    const text = replyText.trim();
+    if (!text || replying) return;
+    if (!currentItem?.id) { toast.error('Vibe not found'); return; }
+    setReplying(true);
+    try {
+      await getStoryService().replyToStory(currentItem.id, text);
+      toast.success(`Reply sent to ${currentStory?.user?.name}`);
+      setReplyText('');
+    } catch (err) {
+      toast.error(err?.message || 'Reply could not be sent');
+    } finally {
+      setReplying(false);
+    }
   };
 
   return (
@@ -746,9 +790,10 @@ export default function StoriesScreen() {
                 ))}
                 <button
                   onClick={handleGiftCoin}
-                  className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-xs font-bold text-white flex items-center gap-1 shadow-lg active:scale-95"
+                  disabled={gifting}
+                  className="px-3 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-xs font-bold text-white flex items-center gap-1 shadow-lg active:scale-95 disabled:opacity-60"
                 >
-                  <span>🪙 250</span>
+                  <span>🪙 {gifting ? 'Sending…' : '250'}</span>
                 </button>
               </div>
 
