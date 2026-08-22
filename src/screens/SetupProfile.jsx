@@ -781,10 +781,10 @@ export default function SetupProfile() {
               <button
                 onClick={handleSubmit}
                 disabled={loading || profileComplete || !displayName.trim() || username.length < 3}
-                className={`w-full py-3 rounded-lg font-semibold text-white transition-all duration-300 ${
+                className={`w-full py-3.5 rounded-2xl font-bold text-white transition-all duration-300 ${
                   !loading && displayName.trim() && username.length >= 3
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/25 hover:shadow-2xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
-                    : "bg-gray-400 dark:bg-gray-700 cursor-not-allowed"
+                    ? "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    : "bg-gray-400 dark:bg-gray-700 cursor-not-allowed opacity-60"
                 }`}
               >
                 {loading ? "Creating Profile..." : "Complete Setup"}

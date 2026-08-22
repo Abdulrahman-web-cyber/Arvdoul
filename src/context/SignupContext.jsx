@@ -1368,7 +1368,7 @@ export const SignupProvider = ({ children }) => {
     <SignupContext.Provider value={contextValue}>
       {children}
       {/* Invisible reCAPTCHA container */}
-      <div id="recaptcha-container" style={{ display: "none" }} />
+      <div id="recaptcha-container" className="min-h-[1px]" />
     </SignupContext.Provider>
   );
 };
