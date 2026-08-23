@@ -741,29 +741,6 @@ class ProductionAuthService {
       const isNewUser = additionalInfo?.isNewUser || false;
       logger.warn('// Google auth successful. New user:', isNewUser);
 
-      if (additionalInfo?.profile) {
-        const updateData = {};
-        if (additionalInfo.profile.name && !user.displayName) {
-          updateData.displayName = additionalInfo.profile.name;
-        }
-        if (additionalInfo.profile.picture && !user.photoURL) {
-          updateData.photoURL = additionalInfo.profile.picture;
-        }
-        if (Object.keys(updateData).length > 0) {
-          try {
-            await updateProfile(user, updateData);
-          } catch (e) {}
-        }
-      }
-
-      const { getUserProfile, createUserProfile } = await import('./userService.js');
-      let profile = null;
-      try {
-        profile = await getUserProfile(user.uid);
-      } catch (e) {}
-
-      let profileCreated = false;
-      if (!profile) {
       const { getUserProfile, createUserProfile } = await import('./userService.js');
       let profileCreated = false;
       let existingProfile = null;
@@ -782,8 +759,6 @@ class ProductionAuthService {
           });
         }
         try {
-          const initialDisplayName = user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || 'User';
-          const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
           await createUserProfile(user.uid, {
             displayName: user.displayName || user.email?.split('@')[0] || 'User',
             email: user.email,
@@ -807,6 +782,10 @@ class ProductionAuthService {
         }
       }
 
+      const { getUserProfile } = await import('./userService.js');
+      let profile = null;
+      try { profile = await getUserProfile(user.uid); } catch (e) {}
+
       if (profileCreated) {
         this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
       }
@@ -817,11 +796,11 @@ class ProductionAuthService {
           uid: user.uid,
           userId: user.uid,
           email: user.email,
-          emailVerified: user.emailVerified || true,
-          displayName: user.displayName || profile?.displayName || 'User',
-          photoURL: user.photoURL || profile?.photoURL || null,
+          emailVerified: user.emailVerified,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
           isNewUser,
-          requiresProfileCompletion: !profile?.isProfileComplete,
+          requiresProfileCompletion: isNewUser,
           authProvider: 'google',
           ...(profile && {
             coins: profile.coins || 0,
