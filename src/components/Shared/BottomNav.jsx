@@ -179,7 +179,7 @@ const BottomNav = () => {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 90, opacity: 0, scale: 0.95 }}
             transition={SPRING_TRANSITION}
-            className="fixed bottom-3 left-1/2 transform -translate-x-1/2 z-40 w-[95%] max-w-lg md:max-w-xl select-none"
+            className="fixed bottom-3 left-1/2 transform -translate-x-1/2 z-40 w-[95%] max-w-lg sm:max-w-xl md:max-w-2xl select-none"
           >
             {/* Quick Access Top Handle Pill */}
             <div className="flex justify-center -mb-2 relative z-10 pointer-events-auto">

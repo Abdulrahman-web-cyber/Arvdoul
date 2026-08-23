@@ -423,12 +423,12 @@ const TopAppBar = () => {
             transition={ANIMATION_CONFIG.spring}
             className={cn(
               "fixed top-0 left-0 right-0 z-40",
-              "px-4 pt-safe-top pb-4"
+              "px-3 sm:px-4 pt-safe-top pb-3 flex justify-center items-center"
             )}
           >
             {/* Main Container with Rounded Edges and Shadow - FLOATING */}
             <div className={cn(
-              "rounded-3xl mx-auto max-w-2xl px-5 py-3",
+              "rounded-3xl mx-auto max-w-2xl sm:max-w-3xl md:max-w-4xl w-full px-4 sm:px-6 py-2.5 sm:py-3",
               themeColors.navBg,
               "border",
               themeColors.border,
