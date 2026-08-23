@@ -202,7 +202,7 @@ const AnimatedMeshBackground = memo(() => {
           repeatType: "mirror",
           ease: "easeInOut",
         }}
-        className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-[120px] opacity-40 dark:opacity-35 bg-gradient-to-br from-[#8B1EF3] to-[#4431F7]"
+        className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-[100px] opacity-25 dark:opacity-20 bg-gradient-to-br from-[#8B1EF3] to-[#4431F7]"
       />
 
       {/* Bottom Right Neon Blue/Cyan Orb */}
@@ -218,7 +218,7 @@ const AnimatedMeshBackground = memo(() => {
           repeatType: "mirror",
           ease: "easeInOut",
         }}
-        className="absolute -bottom-32 -right-32 w-[30rem] h-[30rem] rounded-full blur-[140px] opacity-35 dark:opacity-30 bg-gradient-to-tr from-[#055BFB] to-[#0088FF]"
+        className="absolute -bottom-32 -right-32 w-[30rem] h-[30rem] rounded-full blur-[120px] opacity-20 dark:opacity-15 bg-gradient-to-tr from-[#055BFB] to-[#0088FF]"
       />
 
       {/* Center Glow Fuchsia Accent Orb */}
@@ -234,7 +234,7 @@ const AnimatedMeshBackground = memo(() => {
           repeatType: "mirror",
           ease: "easeInOut",
         }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] h-[24rem] rounded-full blur-[150px] opacity-25 dark:opacity-20 bg-gradient-to-r from-[#C82BFF] to-[#8B1EF3]"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] h-[24rem] rounded-full blur-[130px] opacity-15 dark:opacity-10 bg-gradient-to-r from-[#C82BFF] to-[#8B1EF3]"
       />
     </div>
   );
@@ -321,7 +321,7 @@ const BackgroundParticles = memo(({ theme }) => {
       ref={canvasRef}
       aria-hidden="true"
       className="absolute inset-0 w-full h-full pointer-events-none z-0"
-      style={{ opacity: theme === "dark" ? 0.3 : 0.15 }}
+      style={{ opacity: theme === "dark" ? 0.15 : 0.08 }}
     />
   );
 });
