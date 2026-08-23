@@ -782,9 +782,10 @@ class ProductionAuthService {
         }
       }
 
-      const { getUserProfile } = await import('./userService.js');
-      let profile = null;
-      try { profile = await getUserProfile(user.uid); } catch (e) {}
+      let profile = existingProfile;
+      if (!profile) {
+        try { profile = await getUserProfile(user.uid); } catch (e) {}
+      }
 
       if (profileCreated) {
         this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
