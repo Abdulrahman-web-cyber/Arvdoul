@@ -528,26 +528,30 @@ export default function SignupStep1Personal() {
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     setSubmissionAttempted(true);
+
+    if (!formData.dob.day || !formData.dob.month || !formData.dob.year) {
+      toast.error("Please enter your date of birth.");
+      return;
+    }
+
+    const birthDate = new Date(formData.dob.year, formData.dob.month - 1, formData.dob.day);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+
+    if (age < 14) {
+      toast.error("You must be at least 14 years old to register.");
+      setErrors(prev => ({ ...prev, dob: "You must be at least 14 years old to register." }));
+      return;
+    }
+
+    if (!isFormValid) {
+      toast.error("Please fix all errors before continuing.");
+      return;
+    }
+
     setLoading(true);
-
-    if (Object.keys(errors).length > 0) {
-      toast.error("Please fix the errors");
-      setLoading(false);
-      return;
-    }
-
-    const isValid = 
-      formData.firstName.trim().length >= 2 &&
-      formData.lastName.trim().length >= 2 &&
-      formData.gender &&
-      formData.dob.day && formData.dob.month && formData.dob.year;
-
-    if (!isValid) {
-      toast.error("Complete all required fields");
-      setLoading(false);
-      return;
-    }
-
     try {
       const processedData = {
         ...formData,
@@ -573,14 +577,20 @@ export default function SignupStep1Personal() {
   };
 
   const isFormValid = useMemo(() => {
-    const noErrors = Object.keys(errors).length === 0;
-    return (
-      formData.firstName.trim().length >= 2 &&
-      formData.lastName.trim().length >= 2 &&
-      formData.gender &&
-      formData.dob.day && formData.dob.month && formData.dob.year &&
-      noErrors
-    );
+    if (!formData.firstName.trim() || formData.firstName.trim().length < 2) return false;
+    if (!formData.lastName.trim() || formData.lastName.trim().length < 2) return false;
+    if (!formData.gender) return false;
+    if (!formData.dob.day || !formData.dob.month || !formData.dob.year) return false;
+
+    const birthDate = new Date(formData.dob.year, formData.dob.month - 1, formData.dob.day);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+
+    if (age < 14 || age > 120) return false;
+
+    return Object.keys(errors).length === 0;
   }, [formData, errors]);
 
   // Pulse button only if device memory >= 4 GB

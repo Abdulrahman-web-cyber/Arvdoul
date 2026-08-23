@@ -714,6 +714,10 @@ export function AuthProvider({ children }) {
         setIsSignupInProgress(true);
         setError(null);
         const result = await authService.signInWithGoogle(options);
+        if (result?.redirecting) {
+          toast.info('Redirecting to Google Sign-In...');
+          return result;
+        }
         if (!result.success) throw new Error(result.error || 'Google auth failed');
         if (result.isNewUser) {
           AuthStorageManager.set('pending_profile_creation', {
