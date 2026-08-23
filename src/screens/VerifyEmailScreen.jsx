@@ -433,10 +433,10 @@ export default function EmailVerification() {
                 <button
                   onClick={handleManualCheck}
                   disabled={loading}
-                  className={`w-full py-2.5 sm:py-3 px-4 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-lg ${
                     loading
                       ? "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-                      : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:shadow-lg hover:shadow-indigo-500/25"
+                      : "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-xl hover:shadow-purple-500/25 cursor-pointer"
                   }`}
                 >
                   {loading ? <RefreshCw className="animate-spin" size={16} /> : verificationStatus === "verified" ? <ArrowRight size={16} /> : <CheckCircle2 size={16} />}

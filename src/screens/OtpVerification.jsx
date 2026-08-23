@@ -817,7 +817,7 @@ export default function OTPVerification() {
                     whileTap={isComplete && !loading && !isVerifying && !reducedMotion ? { scale: 0.98 } : {}}
                     className={`w-full py-3.5 rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 relative overflow-hidden ${
                       isComplete && !loading && !isVerifying
-                        ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-xl shadow-indigo-500/25 hover:shadow-2xl hover:shadow-indigo-500/30"
+                        ? "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-xl shadow-purple-500/25 hover:shadow-2xl hover:shadow-purple-500/30 cursor-pointer"
                         : isDark ? "bg-gray-800 text-gray-500 cursor-not-allowed" : "bg-gray-200 text-gray-400 cursor-not-allowed"
                     }`}
                   >

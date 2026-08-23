@@ -1015,7 +1015,7 @@ export default function SignupStep2VerifyContact() {
                   onClick={handlePhoneVerification}
                   disabled={!isFormValid || phoneLoading}
                   className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
-                    isFormValid && !phoneLoading ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg hover:shadow-xl' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                    isFormValid && !phoneLoading ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl cursor-pointer' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   {phoneLoading ? (
@@ -1037,7 +1037,7 @@ export default function SignupStep2VerifyContact() {
                   onClick={handleEmailSignup}
                   disabled={!isFormValid || loading}
                   className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
-                    isFormValid && !loading ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                    isFormValid && !loading ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl cursor-pointer' : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   {loading ? (

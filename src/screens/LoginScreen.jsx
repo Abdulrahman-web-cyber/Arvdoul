@@ -827,7 +827,7 @@ export default function LoginScreen() {
                     whileTap={!loading && email && password ? { scale: 0.98 } : {}}
                     className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
                       !loading && email && password
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl'
+                        ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl cursor-pointer'
                         : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -857,7 +857,7 @@ export default function LoginScreen() {
                     whileTap={!loading && isPhoneValid ? { scale: 0.98 } : {}}
                     className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
                       !loading && isPhoneValid
-                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg hover:shadow-xl'
+                        ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl cursor-pointer'
                         : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
                     }`}
                   >

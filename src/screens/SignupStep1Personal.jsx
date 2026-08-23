@@ -361,13 +361,13 @@ const MobileDateOfBirthSelector = React.memo(({ value, onChange, error, theme })
           <motion.span
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              age >= 13
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+            className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+              age >= 14
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
                 : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
             }`}
           >
-            {age} years
+            {age} years {age < 14 ? '(Min 14)' : ''}
           </motion.span>
         )}
       </div>
@@ -518,8 +518,8 @@ export default function SignupStep1Personal() {
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
-      if (age < 13) newErrors.dob = "Must be 13+ years";
-      else if (age > 120) newErrors.dob = "Invalid year";
+      if (age < 14) newErrors.dob = "You must be at least 14 years old to register.";
+      else if (age > 120) newErrors.dob = "Invalid birth year.";
     }
 
     setErrors(newErrors);
@@ -679,11 +679,11 @@ export default function SignupStep1Personal() {
                 whileTap={(!loading && isFormValid) ? { scale: 0.98 } : {}}
                 animate={showPulse ? { scale: [1, 1.02, 1] } : {}}
                 transition={showPulse ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : {}}
-                className={`w-full py-3 px-4 rounded-lg font-medium text-sm sm:text-base transition-colors duration-200 ${
+                className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm sm:text-base transition-all duration-200 shadow-lg ${
                   isFormValid && !loading
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                    : theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-gray-200 text-gray-400'
-                } min-h-[3rem]`}
+                    ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-xl hover:shadow-purple-500/25 cursor-pointer'
+                    : theme === 'dark' ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                } min-h-[3.25rem]`}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
                 {loading ? (
