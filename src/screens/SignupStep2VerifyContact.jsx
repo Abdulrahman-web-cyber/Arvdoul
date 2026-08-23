@@ -247,6 +247,13 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
   const [status, setStatus] = useState('initializing');
   const [errorMessage, setErrorMessage] = useState('');
 
+  const onReadyRef = useRef(onReady);
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onErrorRef.current = onError;
+  }, [onReady, onError]);
+
   const resolvedTheme = theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
@@ -255,6 +262,7 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
     let mounted = true;
     const initialize = async () => {
       try {
+        await new Promise(resolve => setTimeout(resolve, 50));
         const verifier = await createRecaptchaVerifier('signup-recaptcha-container', {
           size: 'invisible',
           theme: resolvedTheme === 'dark' ? 'dark' : 'light',
@@ -264,20 +272,20 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
             if (mounted) {
               setStatus('error');
               setErrorMessage('Security check expired. Please refresh.');
-              onError('Security check expired');
+              if (onErrorRef.current) onErrorRef.current('Security check expired');
             }
           }
         });
         if (mounted) {
           setStatus('ready');
-          onReady(verifier);
+          if (onReadyRef.current) onReadyRef.current(verifier);
         }
       } catch (error) {
         const message = error?.message || error?.toString() || 'Failed to initialize security check';
         if (mounted) {
           setStatus('error');
           setErrorMessage(message);
-          onError(message);
+          if (onErrorRef.current) onErrorRef.current(message);
         }
       }
     };
@@ -286,7 +294,7 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
       mounted = false;
       cleanupRecaptchaVerifier('signup-recaptcha-container');
     };
-  }, [createRecaptchaVerifier, cleanupRecaptchaVerifier, onReady, onError, resolvedTheme]);
+  }, [createRecaptchaVerifier, cleanupRecaptchaVerifier, resolvedTheme]);
 
   return (
     <div className="space-y-1">

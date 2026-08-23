@@ -447,8 +447,33 @@ export function AuthProvider({ children }) {
               setAuthState(isComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
             }
           } else {
-            setUserProfile(null);
-            setAuthState(AuthState.PROFILE_INCOMPLETE);
+            // Profile document does not exist yet in Firestore. Provide fallback and auto-create
+            const basicName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
+            const fallbackProfile = {
+              uid: firebaseUser.uid,
+              displayName: basicName,
+              email: firebaseUser.email || '',
+              phoneNumber: firebaseUser.phoneNumber || '',
+              photoURL: firebaseUser.photoURL || null,
+              authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
+              isProfileComplete: !!(firebaseUser.displayName?.trim()),
+              coins: 50,
+              level: 1,
+              accountStatus: 'active'
+            };
+            setUserProfile(fallbackProfile);
+            syncUserWithAppStore(firebaseUser, fallbackProfile, setCurrentUserRef.current);
+            setAuthState(fallbackProfile.isProfileComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
+
+            // Auto-create in Firestore in background
+            userService.createUserProfile(uid, {
+              displayName: basicName,
+              email: firebaseUser.email || '',
+              phoneNumber: firebaseUser.phoneNumber || '',
+              photoURL: firebaseUser.photoURL || null,
+              authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
+              isProfileComplete: !!(firebaseUser.displayName?.trim())
+            }).catch(e => console.warn('Background profile bootstrap failed:', e));
           }
           
           // Resolve loading on first snapshot, but only once

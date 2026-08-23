@@ -1,113 +1,78 @@
-/**
- * src/components/ui/OfflineIndicator.jsx - ARVDOUL OFFLINE SYNC STATUS BANNER
- *
- * Implements:
- * 1. Reactive network connectivity status (Online / Offline).
- * 2. Pending background sync queue counter (posts, comments, likes queued for sync).
- * 3. Instant manual sync trigger button with visual feedback.
- */
+import { useEffect, useState } from "react";
 
-import React, { useState, useEffect } from 'react';
-import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
+export function OfflineIndicator() {
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine
+  );
 
-export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncSuccess, setSyncSuccess] = useState(false);
-
-  const updateStatus = () => {
-    setIsOnline(navigator.onLine);
-    const count = backgroundSyncService.getPendingCount();
-    setPendingCount(count);
-  };
+  const [showBackOnline, setShowBackOnline] = useState(false);
 
   useEffect(() => {
-    updateStatus();
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowBackOnline(false);
+    };
 
     const handleOnline = () => {
       setIsOnline(true);
-      updateStatus();
+      setShowBackOnline(true);
+
+      const timeout = window.setTimeout(() => {
+        setShowBackOnline(false);
+      }, 3000);
+
+      return () => window.clearTimeout(timeout);
     };
 
-    const handleOffline = () => {
-      setIsOnline(false);
-      updateStatus();
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    const interval = setInterval(updateStatus, 3000);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      clearInterval(interval);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
     };
   }, []);
 
-  const handleManualSync = async () => {
-    if (!isOnline || isSyncing) return;
-    setIsSyncing(true);
-    setSyncSuccess(false);
-
-    try {
-      const result = await backgroundSyncService.triggerSync();
-      setPendingCount(backgroundSyncService.getPendingCount());
-      if (result.syncedCount > 0) {
-        setSyncSuccess(true);
-        setTimeout(() => setSyncSuccess(false), 4000);
-      }
-    } catch {
-      // Sync error handled gracefully
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  if (isOnline && pendingCount === 0 && !syncSuccess) {
-    return null; // Clean aesthetic when fully online and synced
+  if (isOnline && !showBackOnline) {
+    return null;
   }
 
   return (
     <div
-      id={id}
-      className={`fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 rounded-full text-xs font-medium backdrop-blur-md shadow-lg border transition-all duration-300 ${
-        !isOnline
-          ? 'bg-amber-500/90 text-white border-amber-400/50'
-          : syncSuccess
-          ? 'bg-emerald-500/90 text-white border-emerald-400/50'
-          : 'bg-indigo-600/90 text-white border-indigo-400/50'
-      }`}
+      role="status"
+      aria-live="polite"
+      className={[
+        "fixed inset-x-0 top-0 z-[9999]",
+        "flex justify-center px-3 pt-[env(safe-area-inset-top)]",
+        "pointer-events-none",
+      ].join(" ")}
     >
-      {!isOnline ? (
-        <>
-          <WifiOff className="w-4 h-4 animate-pulse shrink-0" />
-          <span>You are offline. Changes saved locally ({pendingCount} pending).</span>
-        </>
-      ) : syncSuccess ? (
-        <>
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>All offline changes successfully synced!</span>
-        </>
-      ) : (
-        <>
-          <RefreshCw className={`w-4 h-4 shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>{pendingCount} action{pendingCount > 1 ? 's' : ''} waiting to sync.</span>
-          <button
-            id="btn-trigger-manual-sync"
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="ml-2 px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-full font-semibold transition"
-          >
-            {isSyncing ? 'Syncing...' : 'Sync Now'}
-          </button>
-        </>
-      )}
+      <div
+        className={[
+          "pointer-events-auto mt-2",
+          "flex items-center gap-2",
+          "rounded-full border border-white/10",
+          "bg-[#03071B]/95 backdrop-blur-xl",
+          "px-4 py-2",
+          "text-sm font-medium text-white",
+          "shadow-lg shadow-black/30",
+          "transition-all duration-300",
+        ].join(" ")}
+      >
+        <span
+          aria-hidden="true"
+          className={[
+            "h-2 w-2 rounded-full",
+            isOnline ? "bg-green-400" : "bg-red-400",
+          ].join(" ")}
+        />
+
+        <span>
+          {isOnline
+            ? "Back online"
+            : "You're offline. Changes will sync when you're back online."}
+        </span>
+      </div>
     </div>
   );
-};
-
-export default OfflineIndicator;
+}
