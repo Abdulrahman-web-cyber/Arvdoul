@@ -511,13 +511,11 @@ class UltimateFeedService {
         where('isDeleted', '==', false),
         where('status', '==', 'published'),
         where('visibility', '==', 'public'),
-        where('personalizationScore', '>=', FEED_CONFIG.ALGORITHM.MIN_SCORE_THRESHOLD),
-        orderBy('personalizationScore', 'desc'),
         orderBy('createdAt', 'desc'),
         firestoreLimit(limit)
       );
-      if (lastDoc && lastDoc.lastScore !== undefined && lastDoc.lastCreatedAt) {
-        q = query(q, startAfter(lastDoc.lastScore, new Date(lastDoc.lastCreatedAt)));
+      if (lastDoc && lastDoc.lastCreatedAt) {
+        q = query(q, startAfter(new Date(lastDoc.lastCreatedAt)));
       }
       const snapshot = await getDocs(q);
       const posts = [];

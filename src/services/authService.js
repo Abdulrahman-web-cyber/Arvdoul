@@ -741,31 +741,43 @@ class ProductionAuthService {
       const isNewUser = additionalInfo?.isNewUser || false;
       logger.warn('// Google auth successful. New user:', isNewUser);
 
+      const { getUserProfile, createUserProfile } = await import('./userService.js');
       let profileCreated = false;
-      if (isNewUser && additionalInfo?.profile) {
-        await updateProfile(user, {
-          displayName: additionalInfo.profile.name || user.displayName,
-          photoURL: additionalInfo.profile.picture || user.photoURL
-        });
-        const { createUserProfile } = await import('./userService.js');
+      let existingProfile = null;
+
+      try {
+        existingProfile = await getUserProfile(user.uid);
+      } catch (e) {
+        logger.warn('Could not check existing profile during Google auth', e);
+      }
+
+      if (!existingProfile) {
+        if (additionalInfo?.profile) {
+          await updateProfile(user, {
+            displayName: additionalInfo.profile.name || user.displayName,
+            photoURL: additionalInfo.profile.picture || user.photoURL
+          });
+        }
         try {
           await createUserProfile(user.uid, {
-            displayName: user.displayName,
+            displayName: user.displayName || user.email?.split('@')[0] || 'User',
             email: user.email,
-            photoURL: user.photoURL,
+            photoURL: user.photoURL || null,
             authProvider: 'google',
             emailVerified: user.emailVerified,
+            isProfileComplete: true
           });
           profileCreated = true;
-          logger.warn('// User profile created in Firestore');
+          logger.warn('// User profile created in Firestore for Google auth');
         } catch (profileError) {
-          logger.error('❌ Profile creation failed', profileError);
+          logger.error('❌ Profile creation failed during Google auth', profileError);
           this._storePendingProfile(user.uid, {
-            displayName: user.displayName,
+            displayName: user.displayName || user.email?.split('@')[0] || 'User',
             email: user.email,
-            photoURL: user.photoURL,
+            photoURL: user.photoURL || null,
             authProvider: 'google',
-            emailVerified: user.emailVerified
+            emailVerified: user.emailVerified,
+            isProfileComplete: true
           });
         }
       }
