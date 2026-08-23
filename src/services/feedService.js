@@ -506,13 +506,16 @@ class UltimateFeedService {
       const { limit = 20, lastDoc } = options;
       const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      
-      let snapshot;
-      try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
-      } catch (err) {
-        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
+      let q = query(
+        postsRef,
+        where('isDeleted', '==', false),
+        where('status', '==', 'published'),
+        where('visibility', '==', 'public'),
+        orderBy('createdAt', 'desc'),
+        firestoreLimit(limit)
+      );
+      if (lastDoc && lastDoc.lastCreatedAt) {
+        q = query(q, startAfter(new Date(lastDoc.lastCreatedAt)));
       }
 
       const posts = [];
