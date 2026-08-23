@@ -741,38 +741,56 @@ class ProductionAuthService {
       const isNewUser = additionalInfo?.isNewUser || false;
       logger.warn('// Google auth successful. New user:', isNewUser);
 
-      let profileCreated = false;
-      if (isNewUser && additionalInfo?.profile) {
-        await updateProfile(user, {
-          displayName: additionalInfo.profile.name || user.displayName,
-          photoURL: additionalInfo.profile.picture || user.photoURL
-        });
-        const { createUserProfile } = await import('./userService.js');
-        try {
-          await createUserProfile(user.uid, {
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-            authProvider: 'google',
-            emailVerified: user.emailVerified,
-          });
-          profileCreated = true;
-          logger.warn('// User profile created in Firestore');
-        } catch (profileError) {
-          logger.error('❌ Profile creation failed', profileError);
-          this._storePendingProfile(user.uid, {
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-            authProvider: 'google',
-            emailVerified: user.emailVerified
-          });
+      if (additionalInfo?.profile) {
+        const updateData = {};
+        if (additionalInfo.profile.name && !user.displayName) {
+          updateData.displayName = additionalInfo.profile.name;
+        }
+        if (additionalInfo.profile.picture && !user.photoURL) {
+          updateData.photoURL = additionalInfo.profile.picture;
+        }
+        if (Object.keys(updateData).length > 0) {
+          try {
+            await updateProfile(user, updateData);
+          } catch (e) {}
         }
       }
 
-      const { getUserProfile } = await import('./userService.js');
+      const { getUserProfile, createUserProfile } = await import('./userService.js');
       let profile = null;
-      try { profile = await getUserProfile(user.uid); } catch (e) {}
+      try {
+        profile = await getUserProfile(user.uid);
+      } catch (e) {}
+
+      let profileCreated = false;
+      if (!profile) {
+        try {
+          const initialDisplayName = user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || 'User';
+          const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
+          await createUserProfile(user.uid, {
+            displayName: initialDisplayName,
+            email: user.email || '',
+            photoURL: initialPhoto,
+            authProvider: 'google',
+            emailVerified: true,
+            isProfileComplete: true
+          });
+          profileCreated = true;
+          logger.warn('// User profile created in Firestore for Google login');
+          try {
+            profile = await getUserProfile(user.uid);
+          } catch (e) {}
+        } catch (profileError) {
+          logger.error('❌ Profile creation failed', profileError);
+          this._storePendingProfile(user.uid, {
+            displayName: user.displayName || 'User',
+            email: user.email,
+            photoURL: user.photoURL,
+            authProvider: 'google',
+            emailVerified: true
+          });
+        }
+      }
 
       if (profileCreated) {
         this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
@@ -784,11 +802,11 @@ class ProductionAuthService {
           uid: user.uid,
           userId: user.uid,
           email: user.email,
-          emailVerified: user.emailVerified,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
+          emailVerified: user.emailVerified || true,
+          displayName: user.displayName || profile?.displayName || 'User',
+          photoURL: user.photoURL || profile?.photoURL || null,
           isNewUser,
-          requiresProfileCompletion: isNewUser,
+          requiresProfileCompletion: !profile?.isProfileComplete,
           authProvider: 'google',
           ...(profile && {
             coins: profile.coins || 0,

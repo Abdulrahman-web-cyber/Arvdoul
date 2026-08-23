@@ -452,15 +452,15 @@ class ProfessionalUserService {
 
     await runTransaction(this.firestore, async (transaction) => {
       const existing = await transaction.get(usernameDoc);
-      if (existing.exists()) {
+      if (existing.exists() && existing.data()?.userId !== userId) {
         throw new Error(`Username "${username}" is already taken. Please choose another one.`);
       }
-      transaction.set(userDoc, profile);
+      transaction.set(userDoc, profile, { merge: true });
       transaction.set(usernameDoc, {
         userId,
         username,
         createdAt: serverTimestamp()
-      });
+      }, { merge: true });
     });
 
     // Non‑critical side documents (outside transaction)

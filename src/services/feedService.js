@@ -504,36 +504,39 @@ class UltimateFeedService {
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20, lastDoc } = options;
-      const { collection, query, where, orderBy, limit: firestoreLimit, startAfter, getDocs } = this.firestoreMethods;
+      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let q = query(
-        postsRef,
-        where('isDeleted', '==', false),
-        where('status', '==', 'published'),
-        where('visibility', '==', 'public'),
-        where('personalizationScore', '>=', FEED_CONFIG.ALGORITHM.MIN_SCORE_THRESHOLD),
-        orderBy('personalizationScore', 'desc'),
-        orderBy('createdAt', 'desc'),
-        firestoreLimit(limit)
-      );
-      if (lastDoc && lastDoc.lastScore !== undefined && lastDoc.lastCreatedAt) {
-        q = query(q, startAfter(lastDoc.lastScore, new Date(lastDoc.lastCreatedAt)));
+      
+      let snapshot;
+      try {
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        snapshot = await getDocs(q);
+      } catch (err) {
+        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
       }
-      const snapshot = await getDocs(q);
+
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
+        if (data.isDeleted === true) return;
+        if (data.status === 'draft') return;
+        if (data.visibility === 'private' && data.authorId !== userId) return;
         if (blockedUsers.has(data.authorId)) return;
+        
         posts.push({
           id: doc.id,
           ...data,
           _source: 'for_you',
           _score: data.personalizationScore || 0.5,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date()
+          createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+          updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
-      return posts;
+
+      if (posts.length === 0) {
+        return this._getFallbackSimpleFeed(userId, options, 'for_you');
+      }
+      return posts.slice(0, limit);
     } catch (error) {
       return this._getFallbackSimpleFeed(userId, options, 'for_you');
     }
@@ -548,7 +551,7 @@ class UltimateFeedService {
       const postsRef = collection(this.firestore, 'posts');
       let snapshot;
       try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 2));
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch {
         snapshot = await getDocs(postsRef);
@@ -556,7 +559,7 @@ class UltimateFeedService {
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (blockedUsers.has(data.authorId) || data.isDeleted === true) return;
+        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
@@ -577,38 +580,34 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
-      const { limit = 20, lastDoc } = options;
-      const { collection, query, where, orderBy, limit: firestoreLimit, startAfter, getDocs } = this.firestoreMethods;
+      const { limit = 20 } = options;
+      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let q = query(
-        postsRef,
-        where('isDeleted', '==', false),
-        where('status', '==', 'published'),
-        where('visibility', '==', 'public'),
-        where('trendingScore', '>', 0),
-        orderBy('trendingScore', 'desc'),
-        orderBy('createdAt', 'desc'),
-        firestoreLimit(limit)
-      );
-      if (lastDoc && lastDoc.lastScore !== undefined && lastDoc.lastCreatedAt) {
-        q = query(q, startAfter(lastDoc.lastScore, new Date(lastDoc.lastCreatedAt)));
+      
+      let snapshot;
+      try {
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        snapshot = await getDocs(q);
+      } catch {
+        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
       }
-      const snapshot = await getDocs(q);
+      
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (blockedUsers.has(data.authorId)) return;
+        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
           _source: 'trending',
-          _score: data.trendingScore || 0,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date()
+          _score: (data.likeCount || 0) + (data.commentCount || 0) + (data.viewCount || 0) + 1,
+          createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+          updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
+      posts.sort((a, b) => (b._score || 0) - (a._score || 0));
       if (posts.length === 0) return this._getFallbackSimpleFeed(userId, options, 'trending');
-      return posts;
+      return posts.slice(0, limit);
     } catch (error) {
       return this._getFallbackSimpleFeed(userId, options, 'trending');
     }
@@ -618,37 +617,33 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
-      const { limit = 20, lastDoc } = options;
-      const { collection, query, where, orderBy, limit: firestoreLimit, startAfter, getDocs } = this.firestoreMethods;
+      const { limit = 20 } = options;
+      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let q = query(
-        postsRef,
-        where('isDeleted', '==', false),
-        where('status', '==', 'published'),
-        where('visibility', '==', 'public'),
-        where('personalizationScore', '>=', 0.2),
-        orderBy('personalizationScore', 'desc'),
-        orderBy('createdAt', 'desc'),
-        firestoreLimit(limit)
-      );
-      if (lastDoc && lastDoc.lastScore !== undefined && lastDoc.lastCreatedAt) {
-        q = query(q, startAfter(lastDoc.lastScore, new Date(lastDoc.lastCreatedAt)));
+      
+      let snapshot;
+      try {
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        snapshot = await getDocs(q);
+      } catch {
+        snapshot = await getDocs(postsRef);
       }
-      const snapshot = await getDocs(q);
+      
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (blockedUsers.has(data.authorId)) return;
+        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
         posts.push({
           id: doc.id,
           ...data,
           _source: 'discover',
-          _score: data.personalizationScore || 0.3,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date()
+          _score: 0.8,
+          createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+          updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
-      return posts;
+      if (posts.length === 0) return this._getFallbackSimpleFeed(userId, options, 'discover');
+      return posts.slice(0, limit);
     } catch (error) {
       return this._getFallbackSimpleFeed(userId, options, 'discover');
     }
@@ -658,37 +653,35 @@ class UltimateFeedService {
     if (this.offlineMode) return [];
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
-      const { limit = 20, lastDoc } = options;
-      const { collection, query, where, orderBy, limit: firestoreLimit, startAfter, getDocs } = this.firestoreMethods;
+      const { limit = 20 } = options;
+      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let q = query(
-        postsRef,
-        where('isDeleted', '==', false),
-        where('status', '==', 'published'),
-        where('visibility', '==', 'public'),
-        where('type', '==', 'video'),
-        orderBy('createdAt', 'desc'),
-        firestoreLimit(limit)
-      );
-      if (lastDoc && lastDoc.lastCreatedAt) {
-        const startAfterDate = new Date(lastDoc.lastCreatedAt);
-        if (!isNaN(startAfterDate)) q = query(q, startAfter(startAfterDate));
+      
+      let snapshot;
+      try {
+        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 4));
+        snapshot = await getDocs(q);
+      } catch {
+        snapshot = await getDocs(postsRef);
       }
-      const snapshot = await getDocs(q);
+      
       const posts = [];
       snapshot.forEach(doc => {
         const data = doc.data();
-        if (blockedUsers.has(data.authorId)) return;
-        posts.push({
-          id: doc.id,
-          ...data,
-          _source: 'videos',
-          _score: 1.0,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date()
-        });
+        if (data.isDeleted === true || blockedUsers.has(data.authorId)) return;
+        const isVideo = data.type === 'video' || data.videoUrl || data.mediaType === 'video' || data.media?.some?.(m => m.type === 'video');
+        if (isVideo) {
+          posts.push({
+            id: doc.id,
+            ...data,
+            _source: 'videos',
+            _score: 1.0,
+            createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+            updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
+          });
+        }
       });
-      return posts;
+      return posts.slice(0, limit);
     } catch (error) {
       return [];
     }
