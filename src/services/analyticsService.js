@@ -278,32 +278,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  /**
-   * Get creator ranking relative to other platform creators
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} Ranking data
-   */
-  async getCreatorRanking(userId) {
-    try {
-      if (!userId) return null;
-      await this._ensureInitialized();
-      const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-      const usersRef = collection(this.firestore, 'users');
-      const q = query(usersRef, orderBy('followerCount', 'desc'), limit(ANALYTICS_CONFIG.RANKING_TOP_N || 100));
-      const snap = await getDocs(q);
-      let rank = 1;
-      for (const doc of snap.docs) {
-        if (doc.id === userId) {
-          return { rank, totalCreators: snap.docs.length, percentile: Math.max(1, Math.round((1 - (rank / Math.max(snap.docs.length, 1))) * 100)) };
-        }
-        rank++;
-      }
-      return { rank: null, totalCreators: snap.docs.length, percentile: 50 };
-    } catch (e) {
-      return { rank: null, totalCreators: 100, percentile: 50 };
-    }
-  }
-
   _extractDailyStats(dailyStatsMap, startDate, endDate = new Date()) {
     if (!dailyStatsMap) return [];
     
