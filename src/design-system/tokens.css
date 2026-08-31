@@ -1,0 +1,137 @@
+/*
+ * src/design-system/tokens.css
+ * ARVDOUL DESIGN TOKENS — CSS VARIABLES + GLOBAL MOTION POLICY
+ *
+ * Mirrors tokens.js 1:1. Consumed by Tailwind config and by any component
+ * that needs a CSS variable. Also enforces the global accessibility motion
+ * policy:
+ *
+ *   @media (prefers-reduced-motion: reduce)
+ *
+ * Neutralizes Tailwind's animate-* utilities and CSS transitions app-wide so
+ * users who request reduced motion get an instant, stable UI. (Framer Motion
+ * is handled separately via <MotionConfig reducedMotion="user">.)
+ */
+
+:root {
+  /* Brand */
+  --arv-brand-violet: #8B1EF3;
+  --arv-brand-indigo: #4431F7;
+  --arv-brand-blue: #055BFB;
+  --arv-brand-cyan: #0088FF;
+  --arv-brand-pink: #C82BFF;
+  --arv-brand-fuchsia: #8B1EF3;
+  --arv-brand-glow-pink: #C82BFF;
+  --arv-brand-glow-blue: #0088FF;
+  --arv-brand-gradient: linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%);
+
+  /* Backgrounds */
+  --arv-bg-dark: #03071B;
+  --arv-bg-dark-elevated: #080F2E;
+  --arv-bg-dark-deep: #020412;
+  --arv-bg-light: #F6F8FC;
+  --arv-bg-light-elevated: #FFFFFF;
+  --arv-bg-light-deep: #EEF2F8;
+
+  /* Surfaces & Glass */
+  --arv-surface-dark: rgba(255, 255, 255, 0.06);
+  --arv-surface-light: rgba(255, 255, 255, 0.8);
+  --arv-border-dark: rgba(255, 255, 255, 0.08);
+  --arv-border-light: rgba(0, 0, 0, 0.08);
+  --arv-text-primary-dark: #FFFFFF;
+  --arv-text-secondary-dark: rgba(255, 255, 255, 0.7);
+  --arv-text-primary-light: #111827;
+  --arv-text-secondary-light: rgba(0, 0, 0, 0.6);
+
+  /* Semantic */
+  --arv-success: #10B981;
+  --arv-success-light: #059669;
+  --arv-warning: #F59E0B;
+  --arv-warning-light: #D97706;
+  --arv-error: #EF4444;
+  --arv-error-light: #DC2626;
+  --arv-info: #055BFB;
+
+  /* Spacing (4px base) */
+  --arv-space-xs: 4px;
+  --arv-space-sm: 8px;
+  --arv-space-md: 16px;
+  --arv-space-lg: 24px;
+  --arv-space-xl: 32px;
+  --arv-space-2xl: 48px;
+  --arv-space-3xl: 64px;
+
+  /* Radius */
+  --arv-radius-sm: 8px;
+  --arv-radius-md: 12px;
+  --arv-radius-lg: 16px;
+  --arv-radius-xl: 20px;
+  --arv-radius-2xl: 24px;
+  --arv-radius-modal: 24px;
+  --arv-radius-sheet: 28px;
+  --arv-radius-full: 9999px;
+
+  /* Elevation */
+  --arv-shadow-sm: 0 1px 2px rgba(2, 4, 10, 0.1);
+  --arv-shadow-md: 0 4px 12px rgba(2, 4, 10, 0.15);
+  --arv-shadow-lg: 0 12px 32px rgba(2, 4, 10, 0.2);
+  --arv-shadow-dialog: 0 24px 64px rgba(2, 4, 10, 0.35);
+  --arv-shadow-glow: 0 0 20px rgba(139, 92, 246, 0.25);
+  --arv-shadow-glow-strong: 0 0 32px rgba(139, 92, 246, 0.45);
+
+  /* Glass */
+  --arv-glass-blur: 24px;
+  --arv-glass-blur-heavy: 40px;
+  --arv-glass-saturate: 180%;
+
+  /* Motion */
+  --arv-duration-fast: 150ms;
+  --arv-duration-base: 240ms;
+  --arv-duration-slow: 300ms;
+  --arv-duration-enter: 400ms;
+  --arv-duration-exit: 200ms;
+  --arv-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --arv-ease-emphasize: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+
+  /* Typography */
+  --arv-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Z-index */
+  --arv-z-base: 0;
+  --arv-z-sticky: 10;
+  --arv-z-nav: 40;
+  --arv-z-overlay: 50;
+  --arv-z-modal: 60;
+  --arv-z-sheet: 70;
+  --arv-z-toast: 80;
+  --arv-z-max: 100;
+}
+
+/*
+ * GLOBAL REDUCED-MOTION POLICY (WCAG 2.2 2.3.3 Animation from Interactions)
+ * Collapses Tailwind animations and CSS transitions to instant.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * MANUAL OVERRIDE (user setting, not OS preference).
+ * SettingsScreen applies/removes `.arvdoul-reduce-motion` on <html> when the
+ * user toggles "Reduce animations" - same effect as the OS media query.
+ */
+html.arvdoul-reduce-motion *,
+html.arvdoul-reduce-motion *::before,
+html.arvdoul-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

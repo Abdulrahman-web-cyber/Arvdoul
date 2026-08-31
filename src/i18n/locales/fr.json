@@ -1,0 +1,196 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "search": "Rechercher",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter",
+    "login": "Se connecter",
+    "signUp": "S'inscrire",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "offline": "Vous êtes hors ligne",
+    "online": "Vous êtes de nouveau en ligne",
+    "back": "Retour"
+  },
+  "nav": {
+    "home": "Accueil",
+    "videos": "Vidéos",
+    "chat": "Discussion",
+    "create": "Créer",
+    "coins": "Pièces",
+    "alerts": "Alertes",
+    "profile": "Profil",
+    "openQuickMenu": "Ouvrir le menu rapide",
+    "closeQuickMenu": "Fermer le menu rapide"
+  },
+  "crash": {
+    "title": "Défaillance système détectée",
+    "subtitle": "La frontière d'exécution d'Arvdoul a capturé une exception fatale",
+    "crashId": "ID de la défaillance",
+    "errorMessage": "Message d'erreur",
+    "unknownError": "Erreur inconnue",
+    "stackTrace": "Trace de pile",
+    "componentTrace": "Trace du composant",
+    "autoRecover": "Récupérer le système automatiquement",
+    "copied": "Copié ✔",
+    "copyReport": "Copier le rapport d'erreur",
+    "reload": "Recharger l'application",
+    "clearCache": "Vider le cache et réinitialiser",
+    "recoveryAttempts": "Tentatives de récupération"
+  },
+  "auth": {
+    "welcomeBack": "Bon retour",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "createAccount": "Créer un compte"
+  },
+  "feed": {
+    "newPosts": "Nouvelles publications",
+    "seeAll": "Tout voir",
+    "noPosts": "Aucune publication",
+    "like": "J'aime",
+    "comment": "Commenter",
+    "share": "Partager"
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "description": "Le lien que vous avez suivi est peut-être cassé ou la page a pu être supprimée.",
+    "goHome": "Retour à l'accueil"
+  },
+  "intro": {
+    "loading": "Chargement d’Arvdoul...",
+    "glitchTitle": "Une erreur est survenue",
+    "glitchText": "L'écran d'introduction n'a pas pu se charger. C'est une vraie erreur : réessayez ou continuez vers l'application ; votre compte et vos données sont en sécurité.",
+    "retry": "Réessayer",
+    "title1": "Connectez. Créez.",
+    "title2": "Communauté.",
+    "tagline": "Arvdoul est l’endroit où se créent des connexions significatives. Une plateforme sociale premium pour les créateurs, les communautés et les conversations qui comptent.",
+    "featuresTitle": "Tout ce dont vous avez besoin",
+    "features": {
+      "smartFeed": {
+        "title": "Fil intelligent",
+        "desc": "Fil de contenu organisé par IA qui apprend vos préférences et montre ce qui compte."
+      },
+      "privacy": {
+        "title": "Contrôle de la confidentialité",
+        "desc": "Paramètres de confidentialité granulaires avec contrôle total de votre empreinte numérique."
+      },
+      "communities": {
+        "title": "Communautés",
+        "desc": "Créez et rejoignez des communautés avec des outils de modération et d’engagement puissants."
+      },
+      "creation": {
+        "title": "Outils de création",
+        "desc": "Suite professionnelle de création de contenu avec modèles, planification et analyses."
+      },
+      "chat": {
+        "title": "Chat en temps réel",
+        "desc": "Messagerie instantanée avec groupes, messages vocaux et médias riches."
+      },
+      "platform": {
+        "title": "Multiplateforme",
+        "desc": "Expérience fluide sur le web, mobile et desktop."
+      }
+    },
+    "pillars": {
+      "e2ee": {
+        "title": "Chiffrement de bout en bout",
+        "desc": "Messagerie sécurisée par cryptographie moderne par défaut."
+      },
+      "privacy": {
+        "title": "Confidentialité dès la conception",
+        "desc": "Vous contrôlez vos données, votre empreinte et votre audience."
+      },
+      "creator": {
+        "title": "D’abord les créateurs",
+        "desc": "Monétisez avec des pièces, abonnements et paiements."
+      },
+      "realtime": {
+        "title": "Tout en temps réel",
+        "desc": "Streams en direct, espaces audio et messagerie instantanée."
+      }
+    },
+    "ctaTitle": "Prêt à commencer ?",
+    "ctaText": "Rejoignez les créateurs, communautés et conversations qui comptent.",
+    "createAccount": "Créer un compte",
+    "signIn": "Se connecter",
+    "footnote": "Plan gratuit disponible • Sans carte bancaire",
+    "srWelcome": "Bienvenue sur Arvdoul. Connectez-vous avec vos amis, créez des communautés et du contenu incroyable.",
+    "continueToApp": "Continuer vers l'application",
+    "errorDetail": "Détails de l'erreur"
+  },
+  "settings": {
+    "title": "Paramètres et préférences",
+    "saveFailed": "Impossible d’enregistrer les paramètres. Réessayez.",
+    "languageChanged": "Langue mise à jour",
+    "cacheCleared": "{{count}} éléments en cache supprimés",
+    "cacheClearFailed": "Échec de la suppression du cache",
+    "accountDeleted": "Suppression du compte planifiée. Vous êtes déconnecté.",
+    "accountDeleteFailed": "Échec de la suppression du compte. Contactez le support.",
+    "accountSection": "Compte et identité",
+    "editProfile": "Modifier les informations du profil",
+    "editProfileDesc": "Bio, nom, avatar, liens et photo de couverture",
+    "securityPassword": "Sécurité et mot de passe",
+    "securityPasswordDesc": "Authentification à deux facteurs, clés d’accès et mots de passe",
+    "wallet": "Pièces, portefeuille et paiements",
+    "walletDesc": "Solde, transactions et méthodes de retrait",
+    "dataUsage": "Données et utilisation",
+    "dataUsageDesc": "Stockage, téléchargements et réseau",
+    "appearanceSection": "Apparence",
+    "theme": "Thème",
+    "themeDark": "Mode sombre actif",
+    "themeLight": "Mode clair actif",
+    "switchLight": "Clair",
+    "switchDark": "Sombre",
+    "reduceMotion": "Réduire les animations",
+    "reduceMotionDesc": "Minimiser les mouvements dans l’application",
+    "language": "Langue",
+    "languageDesc": "Choisissez votre langue",
+    "notificationsSection": "Notifications",
+    "pushNotifs": "Notifications push",
+    "emailNotifs": "Notifications e-mail",
+    "soundFx": "Effets sonores",
+    "spatialAudio": "Audio spatial",
+    "privacySection": "Confidentialité et sécurité",
+    "privateProfile": "Profil privé",
+    "privateProfileDesc": "Seuls vos abonnés peuvent voir votre contenu",
+    "activeStatus": "Afficher le statut actif",
+    "allowDMs": "Qui peut vous écrire",
+    "dmOption": {
+      "everyone": "Tout le monde",
+      "friends": "Amis",
+      "none": "Personne"
+    },
+    "playbackSection": "Lecture",
+    "autoPlay": "Lecture automatique des vidéos",
+    "streamQuality": "Qualité de diffusion",
+    "dataSection": "Données et cache",
+    "clearCache": "Vider le cache de l’application",
+    "clearCacheDesc": "Supprime le contenu en cache et les données hors ligne",
+    "about": "À propos d’Arvdoul",
+    "dangerSection": "Compte",
+    "signOut": "Se déconnecter",
+    "signOutDesc": "Terminer cette session sur cet appareil",
+    "deleteAccount": "Supprimer le compte",
+    "deleteAccountDesc": "Supprimer définitivement votre compte et vos données",
+    "deleteWarning": "Cela supprimera définitivement votre compte, vos publications et vos données. Action irréversible.",
+    "confirmDelete": "Supprimer mon compte",
+    "deleting": "Suppression..."
+  },
+  "level": {
+    "title": "Niveau et progression",
+    "level": "Niveau",
+    "maxLevel": "Niveau maximum atteint",
+    "xpToNext": "{{xp}} XP avant le prochain niveau",
+    "xpProgress": "{{xp}} / {{next}} XP",
+    "progress": "Progression du niveau",
+    "maxLevelDesc": "Vous avez atteint le niveau le plus élevé. Légende !",
+    "rewardsEarned": "Récompenses obtenues",
+    "noPerksYet": "Montez de niveau pour débloquer des avantages"
+  }
+}

@@ -1,0 +1,40 @@
+/* ==================== CORE TAILWIND LAYERS ==================== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==================== CUSTOM UTILITIES ==================== */
+/* Your custom utilities from index.css can go here if needed */
+
+/* ==================== FIX FOR CSS NESTING ISSUES ==================== */
+/* Avoid SASS-like nesting, use separate classes */
+.card-elevated {
+  box-shadow: var(--shadow-lg);
+  border: none;
+}
+
+.card-outline {
+  background-color: transparent;
+  border: 2px solid var(--color-surface-200);
+  box-shadow: none;
+}
+
+.btn-sm {
+  padding: var(--spacing-1) var(--spacing-3);
+  font-size: var(--font-size-xs);
+}
+
+.btn-lg {
+  padding: var(--spacing-3) var(--spacing-6);
+  font-size: var(--font-size-base);
+}
+
+.input-error {
+  border-color: var(--color-error-500);
+}
+
+.input-success {
+  border-color: var(--color-success-500);
+}
+
+/* Continue with other classes as needed... */

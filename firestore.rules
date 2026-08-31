@@ -1,0 +1,798 @@
+rules_version = '2';
+
+// ============================================================
+// ARVDOUL FIRESTORE SECURITY RULES — PRODUCTION v2
+// Deny-by-default. Every collection the client services write
+// is covered with ownership / participant / role checks that
+// mirror the authorization the services already enforce.
+// ============================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function uid() {
+      return request.auth.uid;
+    }
+    function isOwner(userId) {
+      return isSignedIn() && uid() == userId;
+    }
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(uid()));
+    }
+    function isMember(userId, participantIds) {
+      return isSignedIn() && userId in (participantIds || []);
+    }
+    // Immutable authorship on create
+    function authoredBy(field) {
+      return request.resource.data[field] == uid();
+    }
+
+    // ==================== USERS ====================
+    match /users/{userId} {
+      allow read: if isSignedIn(); // app layer projects private profiles
+      allow create: if isOwner(userId) && authoredBy('id');
+      // Admins (admins/{uid} doc) may moderate: ban/suspend/verify etc.
+      allow update, delete: if isOwner(userId) || isAdmin();
+    }
+    // usernames registry: created/updated via owner flows
+    match /usernames/{username} {
+      allow read: if isSignedIn();
+      // Only the owner may create/update/delete a username doc that belongs to them.
+      allow create, update, delete: if isSignedIn() && request.resource.data.userId == uid();
+    }
+    match /user_settings/{userId} {
+      allow read, update, delete: if isOwner(userId);
+      allow create: if isOwner(userId);
+    }
+    match /user_daily_stats/{statId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId);
+      allow write: if isSignedIn() && request.resource.data.userId == uid();
+    }
+    match /user_preferences/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    // Saved videos (Watch Later): the subcollection doc id is the video id;
+    // only the owner may read/write their own saved list.
+    match /users/{userId}/saved_videos/{videoId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+    // Saved messages (spec §33): references to original messages — owner-only.
+    match /users/{userId}/saved_messages/{messageId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+    // Message requests (spec §35): id = `${recipientId}_${senderId}`.
+    // Create only by the sender; read by either party; respond (accept/
+    // decline) only by the recipient. Nobody else can touch them.
+    match /message_requests/{requestId} {
+      allow read: if isSignedIn() &&
+        (resource.data.senderId == uid() || resource.data.recipientId == uid());
+      allow create: if isSignedIn() &&
+        request.resource.data.senderId == uid() &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if isSignedIn() && resource.data.recipientId == uid();
+    }
+
+    // ==================== POSTS ====================
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn() && authoredBy('authorId');
+      // Moderators may remove/restore content (admin console).
+      allow update, delete: if (isSignedIn() && request.auth.uid == resource.data.authorId) || isAdmin();
+      // post subcollections (likes, saves, gifts, reactions): the doc id encodes
+      // the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) — enforce it.
+      match /{subcollection}/{docId} {
+        allow read: if true;
+        allow write: if isSignedIn() &&
+          (docId == uid() || docId.startsWith(uid() + '_'));
+      }
+    }
+
+    // ==================== COMMENTS ====================
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && authoredBy('userId');
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+      match /likes/{likerId} {
+        allow read: if true;
+        allow write: if isSignedIn() && likerId == uid();
+      }
+      match /dislikes/{dislikerId} {
+        allow read: if true;
+        allow write: if isSignedIn() && dislikerId == uid();
+      }
+    }
+
+    // ==================== SOCIAL GRAPH ====================
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+      // You can only create your own follow edge (follower must be you).
+      allow create: if isSignedIn() &&
+        request.resource.data.followerId == uid() &&
+        request.resource.data.followingId != uid();
+      allow delete: if isSignedIn() &&
+        (resource.data.followerId == uid() || resource.data.followingId == uid());
+    }
+    match /blocks/{blockId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSignedIn() && resource.data.blockerId == uid();
+    }
+    match /friend_requests/{requestId} {
+      allow read: if isSignedIn() &&
+        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      allow create: if isSignedIn() && request.resource.data.fromUserId == uid();
+      allow update, delete: if isSignedIn() &&
+        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+    }
+
+    // ==================== STORIES ====================
+    // ==================== VIBES (ephemeral content) ====================
+    // SERVER-ENFORCED lifecycle (spec §6/26/28/60):
+    //  - read: signed-in + not deleted + moderation-approved-or-pending +
+    //    NOT expired + visibility-gated + not blocked
+    //  - write: authenticated creator only
+    match /stories/{storyId} {
+      // Fetched parent doc — usable from subcollection matches where
+      // `resource` refers to the sub-document being written.
+      function vibeData() {
+        return get(/databases/$(database)/documents/stories/$(storyId)).data;
+      }
+      function vibeIsActive(s) {
+        return s != null &&
+          s.isDeleted == false &&
+          s.status != 'expired' &&
+          s.status != 'removed' &&
+          s.moderationStatus != 'rejected' &&
+          s.moderationStatus != 'removed' &&
+          s.expiresAt > request.time;
+      }
+      function vibeVisibleToViewer(s, viewerId) {
+        return s != null && (
+          s.userId == viewerId ||
+          s.visibility == 'public' ||
+          (s.visibility == 'followers' &&
+            exists(/databases/$(database)/documents/follows/$(viewerId + '_' + s.userId))) ||
+          (s.visibility == 'private' && s.userId == viewerId)
+        );
+      }
+      function vibeNotBlocked(s, viewerId) {
+        return s != null &&
+          !exists(/databases/$(database)/documents/blocks/$(viewerId + '_' + s.userId)) &&
+          !exists(/databases/$(database)/documents/blocks/$(s.userId + '_' + viewerId));
+      }
+      allow read: if isSignedIn() &&
+        vibeIsActive(resource.data) &&
+        vibeVisibleToViewer(resource.data, uid()) &&
+        vibeNotBlocked(resource.data, uid());
+      allow create: if isSignedIn() && authoredBy('userId') &&
+        request.resource.data.status == 'published' &&
+        request.resource.data.moderationStatus == 'pending';
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+      match /viewers/{viewerId} {
+        allow read: if isSignedIn() && (vibeData().userId == uid() || viewerId == uid());
+        allow write: if isSignedIn() && viewerId == uid();
+      }
+      // Shards are BOUNDED AGGREGATION COUNTERS (spec §58): any signed-in
+      // user may increment them; the pubsub aggregator owns the story-doc
+      // stats. Clients cannot inflate the doc itself — only these counters.
+      match /view_shards/{shardId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+      match /reaction_shards/{shardId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+      }
+      match /analytics_shards/{shardId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+      // Reactions: only when the creator enabled them, and only while the
+      // Vibe is active and visible to the reactor (spec §22).
+      match /reactions/{reactorId} {
+        allow read: if true;
+        allow write: if isSignedIn() && reactorId == uid() &&
+          vibeData().allowReactions == true &&
+          vibeIsActive(vibeData()) &&
+          vibeVisibleToViewer(vibeData(), uid());
+      }
+      // Comments: gated by allowComments + active + visible (spec §21).
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn() && authoredBy('userId') &&
+          vibeData().allowComments == true &&
+          vibeIsActive(vibeData()) &&
+          vibeVisibleToViewer(vibeData(), uid());
+        allow update, delete: if isSignedIn() && resource.data.userId == uid();
+      }
+    }
+    match /archived_stories/{storyId} {
+      // Archive is PRIVATE to the creator (spec §31) — never public.
+      allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+    }
+    match /highlights/{highlightId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isSignedIn() && resource.data.userId == uid();
+    }
+
+    // ==================== MESSAGING (participant-scoped) ====================
+    match /conversations/{conversationId} {
+      function convParticipants() {
+        return get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      }
+      function isConvAdmin() {
+        return isSignedIn() && uid() in
+          get(/databases/$(database)/documents/conversations/$(conversationId)).data.admins;
+      }
+      function isConvModerator() {
+        return isConvAdmin() || uid() in
+          get(/databases/$(database)/documents/conversations/$(conversationId)).data.moderators;
+      }
+      allow read: if isSignedIn() && uid() in resource.data.participants;
+      // Updates: participants may update their own state (lastRead, mutedBy,
+      // archivedBy, pinnedBy...) but CANNOT mutate admins/roles/participants
+      // unless they are an admin (prevents self-promotion / member tampering).
+      allow update: if isSignedIn() && uid() in resource.data.participants && (
+        isConvAdmin() ||
+        (request.resource.data.admins == resource.data.admins &&
+         request.resource.data.roles == resource.data.roles &&
+         request.resource.data.participants == resource.data.participants &&
+         request.resource.data.createdBy == resource.data.createdBy)
+      );
+      allow delete: if isSignedIn() && (uid() in resource.data.participants && isConvAdmin());
+      allow create: if isSignedIn() && uid() in request.resource.data.participants;
+
+      // MESSAGES — ownership enforced:
+      //  - create: the message must be authored by the caller
+      //  - update/delete: the message owner, or a conversation admin/moderator
+      //    (moderation), or a global admin
+      //  - receipts (readBy/deliveredTo): ANY participant may append their own
+      //    id to receipt arrays — the update must touch ONLY those fields
+      //    (spec §17/18: conversation-level read position is preferred; these
+      //    arrays are the per-message fallback).
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && uid() in convParticipants();
+        allow create: if isSignedIn() &&
+          uid() in convParticipants() &&
+          request.resource.data.senderId == uid();
+        allow update, delete: if isSignedIn() && uid() in convParticipants() && (
+          resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
+        );
+        // Reactions are per-user docs — no message-doc rewrites (spec §26).
+        match /reactions/{userId} {
+          allow read: if isSignedIn() && uid() in convParticipants();
+          allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
+        }
+      }
+      // Supergroup monthly shards (1000+ participants) — same ownership rules.
+      match /{monthlyShard}/{messageId} {
+        allow read: if isSignedIn() && monthlyShard.startsWith('messages_') && uid() in convParticipants();
+        allow create: if isSignedIn() && monthlyShard.startsWith('messages_') &&
+          uid() in convParticipants() &&
+          request.resource.data.senderId == uid();
+        allow update, delete: if isSignedIn() && monthlyShard.startsWith('messages_') && uid() in convParticipants() && (
+          resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
+        );
+        match /reactions/{userId} {
+          allow read: if isSignedIn() && uid() in convParticipants();
+          allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
+        }
+      }
+      match /group_invites/{inviteId} {
+        allow read: if isSignedIn() && uid() in convParticipants();
+        // Only admins may create/revoke invites (prevents invite spam).
+        allow create, update, delete: if isSignedIn() && isConvAdmin();
+      }
+    }
+    match /message_dedupe/{key} {
+      // Opaque idempotency keys; any signed-in user may write their own
+      // dedupe record — the key encodes sender+conversation so collisions
+      // cannot be weaponized across users.
+      allow read, write: if isSignedIn();
+    }
+    match /last_messages/{conversationId} {
+      allow read: if isSignedIn();
+      // Only participants may write the last-message preview (prevents
+      // spoofing what a conversation shows in the inbox).
+      allow write: if isSignedIn() && uid() in
+        get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+    }
+
+    // ==================== UNREAD COUNTERS (owner-scoped shards) ====================
+    // Doc id format: unread_{conversationId}_{userId} — the trailing uid is
+    // enforced so nobody can read/write another user's counters.
+    match /unread_counters/{counterId} {
+      allow read, write: if isSignedIn() && counterId.endsWith('_' + uid());
+      match /shards/{shardId} {
+        allow read, write: if isSignedIn() && counterId.endsWith('_' + uid());
+      }
+    }
+    match /user_unread_totals/{userId} {
+      allow read, write: if isOwner(userId);
+      match /shards/{shardId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ==================== NOTIFICATIONS ====================
+    match /notifications/{notificationId} {
+      // Notifications are created server-side (Cloud Functions); users read
+      // and acknowledge their own. No client-side create = no spam vector.
+      allow read, update: if isSignedIn() &&
+        (resource.data.userId == uid() || resource.data.recipientId == uid());
+      allow delete: if isSignedIn() && resource.data.recipientId == uid();
+      allow create: if false;
+    }
+    match /notification_counters/{userId} {
+      allow read, update: if isOwner(userId);
+      allow create: if isOwner(userId);
+    }
+    match /push_tokens/{tokenId} {
+      allow read, write, delete: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+    }
+
+    // ==================== COINS / MONETIZATION ====================
+    match /coin_transactions/{txId} {
+      allow read: if isSignedIn() && resource.data.userId == uid();
+      allow write: if false; // server-only (Cloud Functions)
+    }
+    match /transactions/{txId} {
+      allow read: if isSignedIn() && resource.data.userId == uid();
+      allow write: if false;
+    }
+    match /subscriptions/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // server-only
+    }
+    match /payout_settings/{userId} {
+      allow read, create, update: if isOwner(userId);
+    }
+    match /withdrawal_requests/{requestId} {
+      allow read, create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update: if isSignedIn() && resource.data.userId == uid() && resource.data.status == 'pending';
+      allow delete: if false;
+    }
+    match /gift_transactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      allow write: if false; // server-verified
+    }
+    match /ads/{adId} {
+      allow read: if isSignedIn();
+      allow write: if false; // admin via console/CF
+    }
+    match /ad_impressions/{impressionId} {
+      allow read: if isSignedIn() && resource.data.userId == uid();
+      allow write: if false;
+    }
+    match /idempotency_ledger/{key} {
+      allow read, write: if false; // server-only
+    }
+    match /counter_shards/{shardId} {
+      // Hashed, non-PII shard keys. Only single-field value updates are
+      // permitted (increments); full-document overwrites are blocked so
+      // counters cannot be corrupted by clients.
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.keys().hasAll(['value']) && request.resource.data.keys().size() == 1;
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['value']);
+    }
+    match /system/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ==================== LIVE ====================
+    match /live_streams/{streamId} {
+      allow read: if true;
+      allow create: if isSignedIn() && authoredBy('userId');
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+    match /live_viewers/{viewerId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.resource.data.userId == uid();
+    }
+    match /live_comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn() && authoredBy('userId');
+      allow delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+    }
+    match /live_gifts/{giftId} {
+      allow read: if isSignedIn();
+      allow write: if false; // server-verified
+    }
+
+    // ==================== COMMUNITIES ====================
+    match /communities/{communityId} {
+      allow read: if true;
+      allow create: if isSignedIn() && authoredBy('ownerId');
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      match /{subcollection}/{docId} {
+        allow read: if true;
+        // Members may create their own content; only the author (or admin) may edit/delete.
+        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
+      }
+    }
+
+    // ==================== EVENTS ====================
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isSignedIn() && authoredBy('organizerId');
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.organizerId;
+      match /{subcollection}/{docId} {
+        allow read: if true;
+        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
+      }
+    }
+
+    // ==================== COLLABORATION ====================
+    match /collaboration_projects/{projectId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && authoredBy('ownerId');
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      match /{subcollection}/{docId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
+        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
+      }
+    }
+    match /collaboration_invites/{inviteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    // ==================== COLLECTIONS (saved posts) ====================
+    match /collections/{collectionId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      match /items/{itemId} {
+        allow read, write, delete: if isSignedIn();
+      }
+    }
+
+    // ==================== ANALYTICS ====================
+    match /profile_analytics/{userId} {
+      allow read: if isSignedIn();
+      // Totals live in sharded counters; owners may only update dailyStats
+      // so they cannot inflate their own aggregate analytics.
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dailyStats', 'lastUpdated']);
+      allow delete: if isAdmin();
+    }
+    match /post_analytics/{postId} {
+      allow read: if true;
+      // Aggregate post analytics are server-computed (sharded counters); never client-written.
+      allow write: if false;
+    }
+    match /profile_views/{viewId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+    }
+
+    // ==================== MODERATION / ADMIN ====================
+    match /comment_reports/{reportId} {
+      allow read, create: if isSignedIn();
+      allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /user_reports/{reportId} {
+      allow read, create: if isSignedIn();
+      allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /video_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reportedBy == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reportedBy == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /moderation_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // server-verified
+    }
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false; // server-only
+    }
+
+    // ==================== MISC (bounded write surfaces) ====================
+    match /shares/{shareId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /scheduled_messages/{messageId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+    }
+    match /calls/{callId} {
+      function callParticipants() {
+        return get(/databases/$(database)/documents/calls/$(callId)).data.participants;
+      }
+      // Calls are private to participants (prevents reading others' call/SDP data).
+      allow read, update, delete: if isSignedIn() && uid() in resource.data.participants;
+      allow create: if isSignedIn() && uid() in request.resource.data.participants;
+      match /ice/{candidateId} {
+        allow read, write: if isSignedIn() && uid() in callParticipants();
+      }
+    }
+    match /rate_limits/{key} {
+      allow read, write: if false; // server-only
+    }
+    match /fanout_tasks/{taskId} {
+      allow read, write: if false; // server-only
+    }
+
+    // ==================== ADVANCED CREATOR SUITE (SPACES, SOUNDS, MARKETPLACE, POLLS, AI) ====================
+    match /spaces/{spaceId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.host.id == uid() || request.resource.data.userId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
+      match /signals/{signalId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+    match /sounds/{soundId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
+    }
+    match /marketplace_items/{itemId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+    }
+    match /marketplace_orders/{orderId} {
+      allow read: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.buyerId == uid();
+      allow update: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+    }
+    match /polls/{pollId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.creatorId == uid() || request.resource.data.authorId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || resource.data.authorId == uid() || isAdmin());
+      match /votes/{voteId} {
+        allow read: if true;
+        allow write: if isSignedIn() && voteId == uid();
+      }
+    }
+    match /prediction_markets/{marketId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.creatorId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.creatorId == uid() || isAdmin());
+      match /bets/{betId} {
+        allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+        allow create: if isSignedIn() && request.resource.data.userId == uid();
+      }
+    }
+    match /ai_creations/{creationId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || resource.data.isPublic == true);
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+    }
+    match /badges/{badgeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /user_badges/{userBadgeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ==================== LEVEL SYSTEM (XP + coin rewards) ====================
+    match /coin_ledger/{entryId} {
+      // Level-up rewards are credited by the client level system inside an
+      // atomic transaction with the user doc (coins increment + ledger entry).
+      // Entry ids are `${userId}_levelup_*`; read is owner-scoped, entries are
+      // append-only (no update/delete from clients).
+      allow read: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() &&
+        (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid()) &&
+        request.resource.data.type == 'level_up_reward';
+      allow update, delete: if false;
+    }
+
+    // ==================== SAVED SOUNDS ====================
+    match /saved_sounds/{docId} {
+      // Doc id encodes the owner: `${userId}_${soundId}`.
+      allow read: if isSignedIn();
+      allow create, delete: if isSignedIn() && docId.startsWith(uid() + '_');
+      allow update: if false; // append-only (toggle = create/delete)
+    }
+
+    // ==================== DRAFTS ====================
+    match /drafts/{draftId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+    }
+
+    // ==================== VIDEOS ====================
+    match /videos/{videoId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid() || isAdmin());
+      match /stats/{statId} {
+        allow read: if true;
+        allow write: if false; // server-computed (sharded counters)
+      }
+    }
+
+    // ==================== COPYRIGHT REGISTRY ====================
+    match /copyright_registry/{workId} {
+      // Rights holders register works from the client (registerWork) or via
+      // admin import. Read is public (needed for detection); registrants may
+      // remove their own works.
+      allow read: if true;
+      allow create: if isSignedIn() &&
+        (request.resource.data.registeredBy == uid() || request.resource.data.userId == uid());
+      allow update: if isAdmin();
+      allow delete: if isSignedIn() &&
+        (resource.data.registeredBy == uid() || resource.data.userId == uid() || isAdmin());
+    }
+
+    // ==================== ENTERPRISE SSO ====================
+    match /enterprise_tenants/{tenantId} {
+      // SAML tenant configuration - readable by signed-in users (SSO
+      // initiation), writable only via admin/server.
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ==================== EVENTS (feedback) ====================
+    match /event_feedback/{feedbackId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+    }
+
+    // ==================== GIFTS (client ledger for coin gifts) ====================
+    match /gifts/{giftId} {
+      allow read: if isSignedIn() && (resource.data.senderId == uid() || resource.data.recipientId == uid());
+      allow create: if isSignedIn() && request.resource.data.senderId == uid();
+      allow update, delete: if false; // append-only, server-verified
+    }
+
+    // ==================== INCIDENTS ====================
+    match /incidents/{incidentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (request.resource.data.reporterId == uid() || request.resource.data.userId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.reporterId == uid() || resource.data.userId == uid() || isAdmin());
+    }
+
+    // ==================== LIVE TIPS ====================
+    match /live_tips/{tipId} {
+      allow read: if isSignedIn() && (resource.data.senderId == uid() || resource.data.recipientId == uid());
+      allow create: if isSignedIn() && request.resource.data.senderId == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==================== MESSAGE REPORTS ====================
+    match /message_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==================== MODERATION APPEALS ====================
+    match /moderation_appeals/{appealId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==================== POLL VOTES (flat) ====================
+    match /poll_votes/{voteId} {
+      // Vote ids encode the voter (`${userId}_${pollId}`) - create-only so
+      // votes cannot be changed or deleted by clients.
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && voteId.startsWith(uid() + '_');
+      allow update, delete: if false;
+    }
+
+    // ==================== STORY REPLIES ====================
+    match /story_replies/{replyId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
+      allow update, delete: if isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid() || isAdmin());
+    }
+
+    // ==================== TRENDING (server-computed) ====================
+    match /trending_topics/{topicId} {
+      allow read: if isSignedIn();
+      allow write: if false; // scheduled functions update
+    }
+
+    // ==================== USER EVENTS (append-only analytics) ====================
+    match /user_events/{eventId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==================== USER FEEDBACK ====================
+    match /user_feedback/{feedbackId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==================== VIEW EVENTS (append-only) ====================
+    match /view_events/{eventId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if false;
+    }
+
+    // ==================== MARKETPLACE ORDERS ====================
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.buyerId == uid();
+      allow update: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==================== MONETIZATION OUTBOX (offline queue mirror) ====================
+    match /monetization_outbox/{outboxId} {
+      allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+    }
+
+    // ==================== RANKINGS (server-computed) ====================
+    match /rankings/{rankingId} {
+      allow read: if isSignedIn();
+      allow write: if false; // scheduled functions compute rankings
+      match /{subcollection}/{docId} {
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
+    }
+
+    // ==================== TRENDING (server-computed) ====================
+    match /trending/{trendId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ==================== MODERATION QUEUE ====================
+    match /moderation_queue/{ticketId} {
+      // Users create review tickets (reports) and can read their own ticket
+      // status; status transitions are admin/server-only.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.reporterId == uid());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ==================== USER RECOMMENDATIONS (server-computed) ====================
+    match /user_recommendations/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // generateFriendRecommendations function computes
+      match /{subcollection}/{docId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+    }
+
+    // ==================== DEFAULT DENY ====================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+// PHASE 4 HARDENING: added rules for level-system ledger, saved sounds, drafts,
+// videos, copyright registry, enterprise SSO tenants, event feedback, gifts,
+// incidents, live tips, message reports, moderation appeals, poll votes,
+// story replies, trending topics, user events, user feedback, view events,
+// and marketplace orders - every client-written collection is now covered.

@@ -1,0 +1,59 @@
+# ops/prometheus/alerts.yml
+# Arvdoul alerting rules (SLO burn-rate, error spikes, RUM degradation).
+groups:
+  - name: arvdoul-client
+    rules:
+      - alert: ArvdoulErrorRateHigh
+        expr: |
+          sum(rate(arvdoul_error_count[5m])) by (api)
+          / clamp_min(sum(rate(arvdoul_api_latency_ms[5m])) by (api), 1)
+          > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: 'Error rate above 1% for {{ $labels.api }}'
+          description: 'The 5-minute error rate for {{ $labels.api }} exceeds 1%. Investigate before users do.'
+
+      - alert: ArvdoulLatencySLOBreach
+        expr: |
+          histogram_quantile(0.95, sum(rate(arvdoul_api_latency_ms_percentiles[5m])) by (le, quantile))
+          > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: 'p95 latency above 1.5s'
+          description: 'p95 API latency exceeds the 1.5s SLO for 10 minutes.'
+
+      - alert: ArvdoulRumLcpPoor
+        expr: arvdoul_rum_lcp > 4000
+        for: 10m
+        labels:
+          severity: warning
+          team: frontend
+        annotations:
+          summary: 'LCP above 4s'
+          description: 'Largest Contentful Paint exceeds 4s (poor bucket). Check bundle size and CDN.'
+
+      - alert: ArvdoulRumClsHigh
+        expr: arvdoul_rum_cls > 0.25
+        for: 10m
+        labels:
+          severity: warning
+          team: frontend
+        annotations:
+          summary: 'CLS above 0.25'
+          description: 'Cumulative Layout Shift exceeds 0.25 (poor bucket).'
+
+      - alert: ArvdoulBillingCapApproaching
+        expr: arvdoul_gcp_daily_accumulated_cost_dollars > 120
+        for: 30m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: 'Daily GCP cost above $120'
+          description: 'Daily Firestore/CDN spend is approaching the $150 cap. Verify traffic and queries.'

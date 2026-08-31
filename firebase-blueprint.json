@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with display metadata, metrics, bio, badges, and verification status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 64 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 256 },
+        "avatar": { "type": "string", "maxLength": 500 },
+        "bio": { "type": "string", "maxLength": 500 },
+        "isVerified": { "type": "boolean" },
+        "coins": { "type": "number" },
+        "reputationScore": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "username"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "User posts including text, video reels, polls, events, and multimedia.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "author": { "type": "object" },
+        "content": { "type": "string", "maxLength": 5000 },
+        "type": { "type": "string", "enum": ["text", "image", "video", "poll", "event", "audio", "link"] },
+        "mediaUrl": { "type": "string", "maxLength": 1000 },
+        "likesCount": { "type": "number" },
+        "commentsCount": { "type": "number" },
+        "sharesCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "authorId", "type"]
+    },
+    "Space": {
+      "title": "Space",
+      "description": "Live audio space / voice room with stage participants and coin tipping.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 100 },
+        "host": { "type": "object" },
+        "isLive": { "type": "boolean" },
+        "audienceCount": { "type": "number" },
+        "tipsTotalCoins": { "type": "number" },
+        "startedAt": { "type": "number" }
+      },
+      "required": ["id", "title", "isLive"]
+    },
+    "MarketplaceItem": {
+      "title": "MarketplaceItem",
+      "description": "Creator digital goods, LUT presets, project files, and sounds.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "priceCoins": { "type": "number" },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "previewUrl": { "type": "string", "maxLength": 500 },
+        "downloadUrl": { "type": "string", "maxLength": 500 },
+        "salesCount": { "type": "number" }
+      },
+      "required": ["id", "title", "priceCoins", "creatorId"]
+    },
+    "Poll": {
+      "title": "Poll",
+      "description": "Community poll or prediction market with real-time stakes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "question": { "type": "string", "maxLength": 300 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "options": { "type": "object" },
+        "totalVotes": { "type": "number" },
+        "isPrediction": { "type": "boolean" },
+        "totalStake": { "type": "number" }
+      },
+      "required": ["id", "question", "creatorId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public and member profiles of Arvdoul users"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Multi-format social posts and video reels"
+    },
+    "/spaces/{spaceId}": {
+      "schema": "Space",
+      "description": "Live interactive audio lounges"
+    },
+    "/marketplace_items/{itemId}": {
+      "schema": "MarketplaceItem",
+      "description": "Digital assets and creator storefront items"
+    },
+    "/polls/{pollId}": {
+      "schema": "Poll",
+      "description": "Community votes and prediction markets"
+    }
+  }
+}

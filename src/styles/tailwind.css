@@ -1,0 +1,100 @@
+/* Design tokens (CSS variables + global reduced-motion policy) - must precede all rules */
+@import url("../design-system/tokens.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CRITICAL MOBILE FIXES */
+html, body, #root {
+  width: 100vw !important;
+  min-height: 100vh !important;
+  min-height: -webkit-fill-available !important;
+  overflow-x: hidden !important;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  position: relative;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  .min-h-screen {
+    min-height: -webkit-fill-available !important;
+  }
+  
+  body {
+    min-height: -webkit-fill-available !important;
+  }
+}
+
+/* Prevent zoom on mobile inputs */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Better touch targets */
+button, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Premium shimmer (loading skeletons) — works in light & dark */
+@keyframes shimmer {
+  0% { background-position: -480px 0; }
+  100% { background-position: 480px 0; }
+}
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.18) 0px,
+    rgba(148, 163, 184, 0.38) 120px,
+    rgba(148, 163, 184, 0.18) 240px
+  );
+  background-size: 960px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+.dark .shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0px,
+    rgba(255, 255, 255, 0.16) 120px,
+    rgba(255, 255, 255, 0.06) 240px
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * GLOBAL KEYBOARD ACCESSIBILITY (WCAG 2.2 2.4.7 Focus Visible)
+ * Every interactive element gets a clear visible focus ring when navigated
+ * with the keyboard — mouse clicks never show it (:focus-visible only).
+ * ------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
