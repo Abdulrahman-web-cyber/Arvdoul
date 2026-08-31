@@ -158,13 +158,30 @@ const AuthState = {
 };
 
 // ==================== SYNC HELPER ====================
+const computeProfileComplete = (u, p) => {
+  if (!u) return false;
+  if (p) {
+    if (p.isProfileComplete === true || p.profileComplete === true) return true;
+    if (p.username && p.username.trim() && !p.username.startsWith('user_')) return true;
+    if (p.displayName && p.displayName.trim() && p.displayName !== 'User' && p.displayName !== 'Arvdoul User' && (p.username || p.email || p.phoneNumber || u.email || u.phoneNumber)) return true;
+    if (p.username && (p.email || p.phoneNumber || u.email || u.phoneNumber)) return true;
+  }
+  if (u.displayName && u.displayName.trim() && u.displayName !== 'User' && u.displayName !== 'Arvdoul User' && (u.email || u.phoneNumber)) {
+    if (u.requiresProfileCompletion === false || !u.isNewUser) return true;
+  }
+  if (u.uid && (AuthStorageManager.isVerified(u.uid) || localStorage.getItem(`verified_${u.uid}`))) {
+    return true;
+  }
+  return false;
+};
+
 const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   if (!user) {
     setCurrentUser(null);
     return null;
   }
   
-  const isProfileComplete = !!(userProfile && userProfile.isProfileComplete);
+  const isProfileComplete = computeProfileComplete(user, userProfile);
   
   const userData = {
     uid: user.uid,
@@ -401,7 +418,10 @@ export function AuthProvider({ children }) {
         (snap) => {
           if (!isMounted.current) return;
           
-          if (fallbackTimer) clearTimeout(fallbackTimer);
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer);
+            fallbackTimer = null;
+          }
           
           if (snap.exists()) {
             const profile = { id: snap.id, ...snap.data() };
@@ -413,11 +433,8 @@ export function AuthProvider({ children }) {
               syncUserWithAppStore(firebaseUser, profile, setCurrentUserRef.current);
             }
 
-            // Level system: award daily-login XP once per session. The
-            // service idempotency key (daily_login:<date>) prevents any
-            // double-award across sessions/devices within the same day.
+            // Level system: award daily-login XP once per session.
             if (isFirstSnapshot) {
-              isFirstSnapshot = false;
               const today = new Date().toISOString().slice(0, 10);
               import('../services/levelSystemService.js')
                 .then(({ levelSystemService }) =>
@@ -439,11 +456,10 @@ export function AuthProvider({ children }) {
               return;
             }
             
-            // Profile completeness
-            const isComplete = profile.isProfileComplete === true ||
-              !!(profile.displayName?.trim() && (profile.username?.trim() || profile.email || profile.phoneNumber));
+            // Profile completeness check
+            const isComplete = computeProfileComplete(firebaseUser, profile);
             
-            if (status === 'active') {
+            if (status === 'active' || !status) {
               setAuthState(isComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
             }
           } else {
@@ -465,7 +481,8 @@ export function AuthProvider({ children }) {
             };
             setUserProfile(fallbackProfile);
             syncUserWithAppStore(firebaseUser, fallbackProfile, setCurrentUserRef.current);
-            setAuthState(fallbackProfile.isProfileComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
+            const isComplete = computeProfileComplete(firebaseUser, fallbackProfile);
+            setAuthState(isComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
 
             // Auto-create in Firestore in background
             userService.createUserProfile(uid, {
@@ -479,8 +496,8 @@ export function AuthProvider({ children }) {
             }).catch(e => console.warn('Background profile bootstrap failed:', e));
           }
           
-          // Resolve loading on first snapshot, but only once
-          if (isFirstSnapshot && !initialProfileLoaded.current) {
+          // Resolve loading on first snapshot
+          if (isFirstSnapshot || !initialProfileLoaded.current) {
             isFirstSnapshot = false;
             initialProfileLoaded.current = true;
             setLoading(false);
@@ -1003,10 +1020,12 @@ export function AuthProvider({ children }) {
     AuthStorageManager.clearAll();
   }, []);
 
+  const isProfileComplete = useMemo(() => computeProfileComplete(user, userProfile), [user, userProfile]);
+
   const checkAuthState = useCallback(() => ({
     isAuthenticated: !!user,
     isEmailVerified: !!(user && user.emailVerified),
-    isProfileComplete: !!(userProfile && userProfile.isProfileComplete),
+    isProfileComplete: computeProfileComplete(user, userProfile),
     hasPendingProfile: !!AuthStorageManager.get('pending_profile_creation'),
     requiresVerification: !!AuthStorageManager.get('email_not_verified_user'),
     authState,
@@ -1026,7 +1045,7 @@ export function AuthProvider({ children }) {
     authState,
     isAuthenticated: !!user,
     isEmailVerified: !!(user && user.emailVerified),
-    isProfileComplete: !!(userProfile && userProfile.isProfileComplete),
+    isProfileComplete,
     requiresEmailVerification: !!(user && !user.emailVerified),
     signInWithEmailPassword,
     signUpWithEmailPassword,

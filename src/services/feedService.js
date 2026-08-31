@@ -488,15 +488,7 @@ class UltimateFeedService {
 
   async _getForYouFeedFromServer(userId, options) {
     if (this.offlineMode) return [];
-    try {
-      const { getFunctions, httpsCallable } = await _getFunctions();
-      const functions = getFunctions();
-      const getFeed = httpsCallable(functions, 'getPersonalizedFeed');
-      const result = await getFeed({ feedType: 'for_you', pageSize: options.limit, lastPostId: options.lastDoc?.postId });
-      if (result.data && result.data.feed) {
-        return result.data.feed.map(p => ({ ...p, _source: 'for_you', createdAt: new Date(p.createdAt) }));
-      }
-    } catch (error) {}
+    // Directly use paginated client-side query for instant speed
     return this._getForYouFeedPaginated(userId, {}, options);
   }
 
@@ -1038,37 +1030,47 @@ class UltimateFeedService {
   }
 
   _scoreAndRankPostsOptimized(sources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds) {
-    const allPosts = [];
+    const rawPosts = [];
+    const unseenPosts = [];
 
     Object.entries(sources).forEach(([source, posts]) => {
       if (posts?.length) {
         const weight = dynamicWeights[source] || 0.1;
         posts.forEach(p => {
-          if (hiddenPosts.has(p.id) || seenPostIds.has(p.id)) return;
-
-          let baseScore = p._score || 1.0;
-          if (source !== 'sponsored' && p.personalizationScore === undefined) {
-            baseScore = this._calculateFallbackScore(p);
+          if (!p || !p.id || hiddenPosts.has(p.id)) return;
+          rawPosts.push({ post: p, source, weight });
+          if (!seenPostIds.has(p.id)) {
+            unseenPosts.push({ post: p, source, weight });
           }
-
-          let finalScore = baseScore * weight;
-
-          if (p.toxicityScore !== undefined) finalScore *= (1 - (p.toxicityScore || 0));
-          if (p.avgWatchTime !== undefined) {
-            const watchBoost = 1 + (p.avgWatchTime / 60) * FEED_CONFIG.ALGORITHM.WATCH_TIME_WEIGHT;
-            finalScore *= Math.min(2.0, watchBoost);
-          }
-
-          const randomBoost = (this._hashString(p.id + sessionSeed) % 100) / 100;
-          if (randomBoost < FEED_CONFIG.RANDOMNESS.EXPLORATION_BOOST) {
-            finalScore *= (1 + randomBoost);
-          }
-
-          if (isNaN(finalScore)) finalScore = 0;
-          p._finalScore = finalScore;
-          allPosts.push(p);
         });
       }
+    });
+
+    const pool = unseenPosts.length > 0 ? unseenPosts : rawPosts;
+    const allPosts = [];
+
+    pool.forEach(({ post: p, source, weight }) => {
+      let baseScore = p._score || 1.0;
+      if (source !== 'sponsored' && p.personalizationScore === undefined) {
+        baseScore = this._calculateFallbackScore(p);
+      }
+
+      let finalScore = baseScore * weight;
+
+      if (p.toxicityScore !== undefined) finalScore *= (1 - (p.toxicityScore || 0));
+      if (p.avgWatchTime !== undefined) {
+        const watchBoost = 1 + (p.avgWatchTime / 60) * FEED_CONFIG.ALGORITHM.WATCH_TIME_WEIGHT;
+        finalScore *= Math.min(2.0, watchBoost);
+      }
+
+      const randomBoost = (this._hashString(p.id + sessionSeed) % 100) / 100;
+      if (randomBoost < FEED_CONFIG.RANDOMNESS.EXPLORATION_BOOST) {
+        finalScore *= (1 + randomBoost);
+      }
+
+      if (isNaN(finalScore)) finalScore = 0;
+      p._finalScore = finalScore;
+      allPosts.push(p);
     });
 
     allPosts.sort((a, b) => b._finalScore - a._finalScore);

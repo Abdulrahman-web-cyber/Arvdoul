@@ -66,7 +66,7 @@ const MessageInput = React.memo(({
     if (isSending || disabled) return;
 
     try {
-      isSending(true);
+      setIsSending(true);
       
       if (attachedFiles.length > 0) {
         for (const file of attachedFiles) {
@@ -86,7 +86,7 @@ const MessageInput = React.memo(({
       toast.error('Failed to send message');
       console.error('Send error:', error);
     } finally {
-      isSending(false);
+      setIsSending(false);
     }
   };
 

@@ -51,6 +51,7 @@ class ProfessionalUserService {
     this.firestore = null;
     this.initialized = false;
     this.cache = new Map();               // { key: { data, timestamp } }
+    this.usernameCache = new Map();       // { username: { available, timestamp } }
     this.usernameAttempts = new Map();
     this.avatarCache = new Map();
     this.recommendationCache = new Map();
@@ -239,7 +240,7 @@ class ProfessionalUserService {
     return result;
   }
 
-  // ==================== USERNAME SYSTEM (atomic & robust) ====================
+  // ==================== USERNAME SYSTEM (instant & robust) ====================
   async checkUsernameAvailability(username, excludeUserId = null) {
     try {
       if (!username || typeof username !== 'string') return { available: false, error: 'Username required' };
@@ -248,21 +249,36 @@ class ProfessionalUserService {
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: `Too long (max ${USER_CONFIG.DEFAULT_USERNAME_LENGTH})` };
       if (!/^[a-z0-9._]+$/.test(normalized)) return { available: false, error: 'Only letters, numbers, dots, underscores allowed' };
 
+      // Instant cache check (60-second TTL)
+      const cached = this.usernameCache.get(normalized);
+      if (cached && (Date.now() - cached.timestamp < 60000)) {
+        if (cached.available || (excludeUserId && cached.userId === excludeUserId)) {
+          return { available: true, username: normalized };
+        }
+        if (!cached.available && cached.userId !== excludeUserId) {
+          return { available: false, exists: true, username: normalized };
+        }
+      }
+
       await this._ensureInitialized();
       const { doc, getDoc } = await import('firebase/firestore');
       const ref = doc(this.firestore, 'usernames', normalized);
       const snap = await getDoc(ref);
 
-      if (!snap.exists()) return { available: true, username: normalized };
+      if (!snap.exists()) {
+        this.usernameCache.set(normalized, { available: true, timestamp: Date.now() });
+        return { available: true, username: normalized };
+      }
 
       const existingUserId = snap.data().userId;
+      this.usernameCache.set(normalized, { available: false, userId: existingUserId, timestamp: Date.now() });
+
       if (excludeUserId && existingUserId === excludeUserId) {
         return { available: true, username: normalized, exists: true, existingUserId };
       }
 
       return { available: false, exists: true, username: normalized, existingUserId, checkedAt: Date.now() };
     } catch (error) {
-//       logger.warn('Username check failed, assuming available (will be verified during profile creation):', error);
       const normalized = username?.toLowerCase().trim() || '';
       if (normalized.length < 3) return { available: false, error: 'Too short' };
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: 'Too long' };
@@ -273,50 +289,51 @@ class ProfessionalUserService {
 
   async generateUniqueUsername(baseName, excludeUserId = null) {
     try {
-      let clean = (baseName || '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 15);
+      let clean = (baseName || '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 14);
       if (clean.length < 3) clean = 'user';
 
-      const maxAttempts = USER_CONFIG.MAX_USERNAME_ATTEMPTS;
-      let attempts = 0;
+      // 1. Check clean base name first
+      const baseCheck = await this.checkUsernameAvailability(clean, excludeUserId);
+      if (baseCheck.available) return clean.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
 
-      let username = clean;
-      let check = await this.checkUsernameAvailability(username, excludeUserId);
-      if (check.available) return username.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
+      // 2. Build high-entropy attractive candidates
+      const rand2 = Math.floor(10 + Math.random() * 89);
+      const rand3 = Math.floor(100 + Math.random() * 899);
+      const ts3 = Date.now().toString(36).slice(-3);
+      const randHex = Math.random().toString(36).substring(2, 5);
 
-      for (let i = 1; i <= 999 && attempts < maxAttempts; i++) {
-        const cand = `${clean}${i}`;
-        if (cand.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) break;
-        check = await this.checkUsernameAvailability(cand, excludeUserId);
-        attempts++;
-        if (check.available) return cand;
+      const candidates = [
+        `${clean}_${rand2}`,
+        `${clean}${rand2}`,
+        `${clean}_${rand3}`,
+        `${clean}${rand3}`,
+        `${clean}_${ts3}`,
+        `${clean}.${rand2}`,
+        `the_${clean}`,
+        `${clean}_${randHex}`,
+        `${clean}_pro`,
+        `${clean}_official`
+      ].filter(c => c.length >= 3 && c.length <= USER_CONFIG.DEFAULT_USERNAME_LENGTH);
+
+      // 3. Parallel availability check for all candidates
+      const results = await Promise.all(
+        candidates.map(async (candidate) => {
+          const res = await this.checkUsernameAvailability(candidate, excludeUserId);
+          return { candidate, available: res.available };
+        })
+      );
+
+      const found = results.find(r => r.available);
+      if (found) {
+        return found.candidate;
       }
 
-      const ts = Date.now().toString(36).slice(-4);
-      let tsCand = `${clean}${ts}`;
-      if (tsCand.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) {
-        tsCand = tsCand.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
-      }
-      check = await this.checkUsernameAvailability(tsCand, excludeUserId);
-      if (check.available) return tsCand;
-
-      const rand = Math.random().toString(36).substring(2, 8);
-      let randCand = `${clean}${rand}`;
-      if (randCand.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) {
-        randCand = randCand.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
-      }
-      check = await this.checkUsernameAvailability(randCand, excludeUserId);
-      if (check.available) return randCand;
-
-      const uuidPart = Date.now().toString(36) + Math.random().toString(36).substring(2);
-      let fallback = `user_${uuidPart.substring(0, 12)}`;
-      if (fallback.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) {
-        fallback = fallback.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
-      }
-      if (!/[a-z0-9]$/.test(fallback)) fallback += '0';
-      return fallback;
+      // 4. Guaranteed instant fallback
+      const guaranteed = `${clean}_${Date.now().toString(36).slice(-4)}`.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
+      return guaranteed;
     } catch (error) {
-      logger.error('Username generation failed, using emergency fallback:', error);
-      const emergency = `user_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      logger.error('Username generation failed, using instant fallback:', error);
+      const emergency = `user_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).substring(2, 5)}`;
       return emergency.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
     }
   }

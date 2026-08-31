@@ -485,16 +485,16 @@ export default function SetupProfile() {
   const location = useLocation();
   const themeCtx = useTheme?.() || { theme: "light" };
   const { theme } = themeCtx;
-  const { user, userProfile, updateUserProfile, authService, checkAuthState } = useAuth();
+  const { user, userProfile, updateUserProfile, authService, checkAuthState, isProfileComplete } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   // ✅ CRITICAL FIX: If user already has a complete profile, redirect immediately
   useEffect(() => {
-    if (user && userProfile && userProfile.isProfileComplete) {
+    if (user && isProfileComplete) {
       console.log("Profile already complete, redirecting to /home");
       navigate("/home", { replace: true });
     }
-  }, [user, userProfile, navigate]);
+  }, [user, isProfileComplete, navigate]);
 
   const signupData = useMemo(() => {
     try {

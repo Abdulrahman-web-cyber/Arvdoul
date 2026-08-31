@@ -1146,10 +1146,10 @@ export default function HomeScreen() {
 
   // Initial load
   useEffect(() => {
-    if (user?.uid && authInitialized && !isLoadingRef.current && feedRef.current.length === 0 && status === STATUS.LOADING) {
+    if (user?.uid && authInitialized && !isLoadingRef.current && feed.length === 0 && status === STATUS.LOADING) {
       loadFeedRef.current?.(true);
     }
-  }, [user?.uid, authInitialized, feedRef.current.length, status]);
+  }, [user?.uid, authInitialized, feed.length, status]);
 
   // Record first post render
   useEffect(() => {

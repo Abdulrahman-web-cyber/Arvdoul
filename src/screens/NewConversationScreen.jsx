@@ -16,7 +16,7 @@ import { X, Search, UserPlus, Loader2, ArrowLeft } from 'lucide-react';
 const NewConversationScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme } = useTheme();
+  const { isDark } = useTheme();
   const { loadConversations } = useMessagingStore();
 
   const [searchQuery, setSearchQuery] = useState('');

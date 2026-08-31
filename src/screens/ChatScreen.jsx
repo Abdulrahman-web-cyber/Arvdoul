@@ -39,8 +39,7 @@ export default function ChatScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark' || theme === 'system';
+  const { theme, isDark } = useTheme();
 
   const uid = user?.uid;
 
@@ -635,7 +634,7 @@ export default function ChatScreen() {
               isSaved={Boolean(savedIds[msg.id])}
               isGroup={conversation?.participantCount > 2}
               isGroupStart={item.groupStart}
-              theme={theme}
+              theme={isDark ? 'dark' : 'light'}
             />
             </div>
           );
@@ -862,7 +861,7 @@ export default function ChatScreen() {
           onSendMessage={handleSendMessage}
           onSendMedia={handleSendMedia}
           onTyping={handleTyping}
-          theme={theme}
+          theme={isDark ? 'dark' : 'light'}
           disabled={!conversation}
         />
       </div>
