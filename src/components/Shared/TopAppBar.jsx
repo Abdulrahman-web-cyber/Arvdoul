@@ -30,8 +30,8 @@ const getThemeColors = (theme) => ({
   border: theme === "dark" ? "border-gray-800/50" : "border-gray-300/50",
   text: theme === "dark" ? "text-white" : "text-gray-900",
   subtext: theme === "dark" ? "text-gray-300" : "text-gray-600",
-  plusGradient: theme === "dark" ? "from-purple-500 via-pink-600 to-purple-700" : "from-orange-500 via-red-500 to-orange-600",
-  handleGradient: theme === "dark" ? "from-purple-500/80 to-pink-600/80" : "from-orange-500/80 to-red-500/80",
+  plusGradient: "from-purple-600 via-pink-600 to-indigo-600",
+  handleGradient: "from-purple-500/80 to-pink-600/80",
   panelBg: theme === "dark" 
     ? "bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800" 
     : "bg-gradient-to-b from-white via-gray-50 to-gray-100",
@@ -69,13 +69,9 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
   const fallbackLogo = (
     <div className={cn(
       "w-full h-full rounded-full flex items-center justify-center",
-      "bg-gradient-to-br",
-      theme === "dark" ? "from-purple-600 to-pink-600" : "from-orange-500 to-red-500"
+      "bg-gradient-to-br from-purple-600 via-pink-600 to-indigo-600"
     )}>
-      <span className={cn(
-        "text-lg font-bold",
-        theme === "dark" ? "text-white" : "text-white"
-      )}>
+      <span className="text-lg font-bold text-white">
         A
       </span>
     </div>
@@ -98,7 +94,7 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
         isActive 
           ? theme === "dark" 
             ? "focus:ring-purple-500/50 focus:ring-offset-gray-900"
-            : "focus:ring-orange-500/50 focus:ring-offset-white"
+            : "focus:ring-purple-500/50 focus:ring-offset-white"
           : "focus:ring-transparent"
       )}
       aria-label="Arvdoul Home"
@@ -108,9 +104,7 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
       <div className={cn(
         "absolute -inset-1 rounded-full opacity-0 transition-opacity duration-300",
         isActive || isHovered ? "opacity-100" : "opacity-0",
-        theme === "dark" 
-          ? "bg-gradient-to-r from-purple-500/30 via-pink-500/30 to-purple-500/30" 
-          : "bg-gradient-to-r from-orange-500/30 via-red-500/30 to-orange-500/30"
+        "bg-gradient-to-r from-purple-500/30 via-pink-500/30 to-purple-500/30"
       )} />
       
       {/* Main container with perfect glassmorphism */}
@@ -126,7 +120,7 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
         isActive 
           ? theme === "dark" 
             ? "ring-purple-500/40 ring-offset-gray-900" 
-            : "ring-orange-500/40 ring-offset-white"
+            : "ring-purple-500/40 ring-offset-white"
           : ""
       )}>
         {/* Inner glow effect */}
@@ -456,7 +450,7 @@ const TopAppBar = () => {
                         "text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent",
                         theme === "dark"
                           ? "from-purple-400 via-pink-400 to-purple-400"
-                          : "from-orange-500 via-red-500 to-orange-500",
+                          : "from-purple-600 via-pink-600 to-indigo-600",
                         "tracking-tight leading-none"
                       )}
                     >
@@ -482,7 +476,7 @@ const TopAppBar = () => {
                       navigate('/coins');
                     }}
                     className={cn(
-                      "hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm",
+                      "hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm cursor-pointer",
                       theme === "dark"
                         ? "bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25"
                         : "bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100"
@@ -490,7 +484,7 @@ const TopAppBar = () => {
                     aria-label="Coins Wallet"
                   >
                     <span className="text-sm">🪙</span>
-                    <span>{((currentUser?.coinsBalance || currentUser?.coins || 2450)).toLocaleString()}</span>
+                    <span>{((currentUser?.coinsBalance ?? currentUser?.coins ?? 0)).toLocaleString()}</span>
                   </button>
 
                   {/* Profile avatar — premium presence in the app bar */}
@@ -498,11 +492,11 @@ const TopAppBar = () => {
                     onClick={handleProfileClick}
                     aria-label="Profile"
                     className={cn(
-                      "relative w-10 h-10 rounded-full overflow-hidden transition-all duration-200",
+                      "relative w-10 h-10 rounded-full overflow-hidden transition-all duration-200 cursor-pointer",
                       "ring-2 ring-offset-2",
                       isProfileActive
-                        ? "ring-blue-500 ring-offset-transparent"
-                        : "ring-white/20 hover:ring-blue-400",
+                        ? "ring-purple-500 ring-offset-transparent"
+                        : "ring-white/20 hover:ring-purple-400",
                       theme === "dark" ? "ring-offset-gray-900" : "ring-offset-white"
                     )}
                   >
@@ -513,7 +507,7 @@ const TopAppBar = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                      <div className="w-full h-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
                         <span className="text-sm font-bold text-white">
                           {(currentUser?.displayName || currentUser?.username || "U").charAt(0).toUpperCase()}
                         </span>
