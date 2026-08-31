@@ -528,18 +528,17 @@ export default function OTPVerification() {
         triggerHaptic("success");
         setShowSuccess(true);
 
-        // Trust server's isNewUser flag or signup intent
         const fallbackStep1 = step1Data || JSON.parse(sessionStorage.getItem('signup_step1') || sessionStorage.getItem('signup_data') || '{}');
-        const isNewUser = result.isNewUser === true || isSignup === true || !result.user?.displayName || result.user?.displayName.startsWith('Phone User');
+        // Only a confirmed new Firebase user (or an explicit signup that created one)
+        // goes to setup. Existing accounts with a placeholder displayName go Home.
+        const isNewUser = result.isNewUser === true || (isSignup === true && result.isNewUser !== false);
 
         console.log("✅ OTP verified. isNewUser =", isNewUser);
 
         if (!isNewUser) {
-          // Existing user → Home
           toast.success("Welcome back!");
           navigate("/home", { replace: true, state: { welcomeMessage: true } });
         } else {
-          // New user → SetupProfile
           toast.success("Phone verified! Let's set up your profile.");
           navigate("/setup-profile", {
             state: {
