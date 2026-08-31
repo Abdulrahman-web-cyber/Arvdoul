@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { clearOnboardingRequired } from "../utils/profileCompletion.js";
 import { updateProfile as firebaseUpdateProfile } from "firebase/auth";
 
 import {
@@ -485,16 +486,16 @@ export default function SetupProfile() {
   const location = useLocation();
   const themeCtx = useTheme?.() || { theme: "light" };
   const { theme } = themeCtx;
-  const { user, userProfile, updateUserProfile, authService, checkAuthState, isProfileComplete } = useAuth();
+  const { user, updateUserProfile, authService, needsOnboarding, profileResolved } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
-  // ✅ CRITICAL FIX: If user already has a complete profile, redirect immediately
   useEffect(() => {
-    if (user && isProfileComplete) {
+    if (!user || !profileResolved) return;
+    if (!needsOnboarding) {
       console.log("Profile already complete, redirecting to /home");
       navigate("/home", { replace: true });
     }
-  }, [user, isProfileComplete, navigate]);
+  }, [user, needsOnboarding, profileResolved, navigate]);
 
   const signupData = useMemo(() => {
     try {
@@ -641,6 +642,7 @@ export default function SetupProfile() {
 
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
+      clearOnboardingRequired();
       setProfileComplete(true);
       toast.success("🎉 Profile setup complete!");
       setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);

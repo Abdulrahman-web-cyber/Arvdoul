@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
 import LoadingSpinner from "@components/Shared/LoadingSpinner";
+import { resolveSplashDestination } from "../utils/profileCompletion.js";
 
 export default function SplashScreen() {
   const navigate = useNavigate();
@@ -210,7 +211,7 @@ export default function SplashScreen() {
 
   // Navigation when everything is perfect
   useEffect(() => {
-    if (!isReady && progress >= 100 && logoLoaded && authInitialized && isOnline) {
+    if (!isReady && progress >= 100 && logoLoaded && authReady && isOnline) {
       setShowComplete(true);
       
       completeTimerRef.current = setTimeout(() => {
@@ -218,11 +219,10 @@ export default function SplashScreen() {
         
         setIsReady(true);
         
-        // Perfect timing for navigation
         setTimeout(() => {
           if (!mountedRef.current) return;
           
-          const target = isAuthenticated ? "/home" : "/intro";
+          const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
           navigate(target, { 
             replace: true,
             state: { fromSplash: true }
@@ -231,7 +231,7 @@ export default function SplashScreen() {
         
       }, 500);
     }
-  }, [progress, logoLoaded, authInitialized, isAuthenticated, navigate, isReady, isOnline]);
+  }, [progress, logoLoaded, authReady, isAuthenticated, needsOnboarding, navigate, isReady, isOnline]);
 
   // Perfect circular logo component
   const PerfectLogo = useMemo(() => (

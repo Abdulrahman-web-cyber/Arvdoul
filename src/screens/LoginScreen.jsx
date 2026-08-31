@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { safeReturnPath } from "../utils/profileCompletion.js";
 
 // Import country codes (same as login)
 import { countryCodes, sortedCountryCodes, getCountryByIso } from "../data/countryCodes.js";
@@ -449,8 +450,9 @@ export default function LoginScreen() {
   const { theme } = themeCtx;
   const { 
     user, 
-    userProfile,
-    isAuthenticated, 
+    isAuthenticated,
+    profileResolved,
+    needsOnboarding,
     signInWithEmailPassword,
     sendPhoneVerificationCode,
     createRecaptchaVerifier,
@@ -484,17 +486,17 @@ export default function LoginScreen() {
     setTimeout(() => setShakeCard(false), 600);
   }, []);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated — wait for profile so returning users
+  // never bounce through /setup-profile because a flag is still loading.
   useEffect(() => {
-    if (isAuthenticated && user) {
-      if (userProfile && userProfile.isProfileComplete === false) {
-        navigate('/setup-profile', { replace: true });
-      } else {
-        const from = new URLSearchParams(window.location.search).get('from') || '/home';
-        navigate(from, { replace: true });
-      }
+    if (!isAuthenticated || !user || !profileResolved) return;
+    if (needsOnboarding) {
+      navigate('/setup-profile', { replace: true });
+      return;
     }
-  }, [isAuthenticated, user, userProfile, navigate]);
+    const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
+    navigate(from, { replace: true });
+  }, [isAuthenticated, user, profileResolved, needsOnboarding, navigate]);
 
   // Initialize reCAPTCHA for phone method
   useEffect(() => {
@@ -585,7 +587,7 @@ export default function LoginScreen() {
         if (rememberMe) localStorage.setItem('rememberMe', 'true');
         else localStorage.removeItem('rememberMe');
         toast.success("Welcome back!");
-        const from = new URLSearchParams(window.location.search).get('from') || '/home';
+        const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
         navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
       } else {
         throw new Error(result?.error || "Login failed");
@@ -660,7 +662,7 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSuccess = (userInfo) => {
-    if (userInfo?.isNewUser || userInfo?.requiresProfileCompletion || userInfo?.isProfileComplete === false) {
+    if (userInfo?.isNewUser === true) {
       toast.success(`Welcome to Arvdoul, ${userInfo.displayName || 'there'}! Let's set up your profile.`);
       navigate('/setup-profile', {
         replace: true,
@@ -668,13 +670,13 @@ export default function LoginScreen() {
           method: 'google',
           userData: userInfo,
           isNewUser: true,
-          fromLogin: true
+          fromLogin: false
         }
       });
       return;
     }
     toast.success(`Welcome back, ${userInfo.displayName || 'User'}!`);
-    const from = new URLSearchParams(window.location.search).get('from') || '/home';
+    const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo.displayName, isLogin: true } });
   };
 

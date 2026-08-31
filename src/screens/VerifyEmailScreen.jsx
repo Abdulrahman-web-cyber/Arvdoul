@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext";
 import { useTheme } from "@context/ThemeContext";
+import { getOnboardingSession } from "../utils/profileCompletion.js";
 import {
   RefreshCw, CheckCircle2, AlertCircle, ArrowRight,
   Shield, X, Lock, UserCheck, Send
@@ -309,19 +310,32 @@ export default function EmailVerification() {
 
   const triggerSuccess = useCallback(() => {
     if (typeof navigator !== "undefined" && navigator.deviceMemory >= 4) setShowConfetti(true);
-    toast.success("Email verified! Redirecting to setup profile…");
+    const uid = userId || user?.uid;
+    const mode = new URLSearchParams(location.search).get("mode");
+    const fromLogin = location.state?.fromLogin === true;
+    const fromSignup =
+      location.state?.fromSignup === true ||
+      location.state?.isNewUser === true ||
+      mode === "signup" ||
+      !!getOnboardingSession(uid);
+    const goToSetup = !fromLogin && fromSignup;
+    toast.success(goToSetup ? "Email verified! Let's finish your profile." : "Email verified! Welcome back.");
     const step1Data = location.state?.step1Data || JSON.parse(sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_data') || '{}');
     setTimeout(() => {
-      navigate("/setup-profile", {
-        state: { 
-          email: email || user?.email, 
-          userId: userId || user?.uid, 
-          method: "email", 
-          isNewUser: true,
-          step1Data 
-        },
-        replace: true,
-      });
+      if (goToSetup) {
+        navigate("/setup-profile", {
+          state: {
+            email: email || user?.email,
+            userId: uid,
+            method: "email",
+            isNewUser: true,
+            step1Data,
+          },
+          replace: true,
+        });
+        return;
+      }
+      navigate("/home", { replace: true, state: { welcomeMessage: true } });
     }, 1200);
   }, [email, userId, user, location.state, navigate]);
 
@@ -522,7 +536,7 @@ export default function EmailVerification() {
                     className="w-full py-2.5 sm:py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:shadow-lg"
                   >
                     <UserCheck size={16} />
-                    <span>Continue to Profile Setup</span>
+                    <span>Continue</span>
                     <ArrowRight size={16} />
                   </motion.button>
                 )}

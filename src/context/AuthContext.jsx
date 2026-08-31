@@ -8,6 +8,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAppStore } from "../store/appStore";
+import {
+  computeProfileComplete,
+  needsOnboarding as computeNeedsOnboarding,
+  markOnboardingRequired,
+  clearOnboardingRequired,
+  getOnboardingSession,
+  isReturningAuthUser,
+} from "../utils/profileCompletion.js";
 
 const AuthContext = createContext(null);
 
@@ -158,23 +166,6 @@ const AuthState = {
 };
 
 // ==================== SYNC HELPER ====================
-const computeProfileComplete = (u, p) => {
-  if (!u) return false;
-  if (p) {
-    if (p.isProfileComplete === true || p.profileComplete === true) return true;
-    if (p.username && p.username.trim() && !p.username.startsWith('user_')) return true;
-    if (p.displayName && p.displayName.trim() && p.displayName !== 'User' && p.displayName !== 'Arvdoul User' && (p.username || p.email || p.phoneNumber || u.email || u.phoneNumber)) return true;
-    if (p.username && (p.email || p.phoneNumber || u.email || u.phoneNumber)) return true;
-  }
-  if (u.displayName && u.displayName.trim() && u.displayName !== 'User' && u.displayName !== 'Arvdoul User' && (u.email || u.phoneNumber)) {
-    if (u.requiresProfileCompletion === false || !u.isNewUser) return true;
-  }
-  if (u.uid && (AuthStorageManager.isVerified(u.uid) || localStorage.getItem(`verified_${u.uid}`))) {
-    return true;
-  }
-  return false;
-};
-
 const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   if (!user) {
     setCurrentUser(null);
@@ -261,6 +252,7 @@ export function AuthProvider({ children }) {
   
   const [isSignupInProgress, setIsSignupInProgress] = useState(false);
   const [authInitialized, setAuthInitialized] = useState(false);
+  const [profileResolved, setProfileResolved] = useState(false);
   const [securityChecks, setSecurityChecks] = useState({
     firebaseReady: false,
     servicesLoaded: false,
@@ -402,13 +394,15 @@ export function AuthProvider({ children }) {
       let isFirstSnapshot = true;
       let fallbackTimer = null;
       
-      // Fallback timer: if no snapshot after 8 seconds, mark as incomplete but don't hang
+      // Fallback timer: never hang the splash/guard. Returning users enter the
+      // app; only an in-progress signup stays on onboarding.
       fallbackTimer = setTimeout(() => {
         if (isFirstSnapshot && isMounted.current && !initialProfileLoaded.current) {
-          console.warn('Profile snapshot timeout – marking as incomplete');
-          setUserProfile(null);
-          setAuthState(AuthState.PROFILE_INCOMPLETE);
+          console.warn('Profile snapshot timeout – resolving with auth-only identity');
+          const returning = isReturningAuthUser(firebaseUser) && !getOnboardingSession(firebaseUser.uid);
+          setAuthState(returning ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
           setLoading(false);
+          setProfileResolved(true);
           initialProfileLoaded.current = true;
           isFirstSnapshot = false;
         }
@@ -425,15 +419,15 @@ export function AuthProvider({ children }) {
           
           if (snap.exists()) {
             const profile = { id: snap.id, ...snap.data() };
-            
-            // Only update if changed (simple timestamp check)
-            if (prevProfileRef.current?.updatedAt !== profile.updatedAt) {
+            const incomingStamp = profile.updatedAt?.toMillis?.() ?? profile.updatedAt ?? null;
+            const prevStamp = prevProfileRef.current?.updatedAt?.toMillis?.() ?? prevProfileRef.current?.updatedAt ?? null;
+            const changed = isFirstSnapshot || !prevProfileRef.current || incomingStamp !== prevStamp;
+            if (changed) {
               prevProfileRef.current = profile;
               setUserProfile(profile);
               syncUserWithAppStore(firebaseUser, profile, setCurrentUserRef.current);
             }
 
-            // Level system: award daily-login XP once per session.
             if (isFirstSnapshot) {
               const today = new Date().toISOString().slice(0, 10);
               import('../services/levelSystemService.js')
@@ -442,28 +436,41 @@ export function AuthProvider({ children }) {
                 )
                 .catch(() => {});
             }
-            
-            // Enforce account status
+
             const status = profile.accountStatus;
-            if (status === 'banned') {
-              setAuthState(AuthState.BANNED);
-              debouncedToast('Your account has been banned. Please contact support.', 'error');
-              if (authService?.signOut) authService.signOut();
-              return;
-            } else if (status === 'suspended') {
-              setAuthState(AuthState.SUSPENDED);
-              debouncedToast('Your account is temporarily suspended.', 'error');
+            if (status === 'banned' || status === 'suspended') {
+              setAuthState(status === 'banned' ? AuthState.BANNED : AuthState.SUSPENDED);
+              debouncedToast(
+                status === 'banned'
+                  ? 'Your account has been banned. Please contact support.'
+                  : 'Your account is temporarily suspended.',
+                'error'
+              );
+              if (status === 'banned' && authService?.signOut) authService.signOut();
+              if (isFirstSnapshot || !initialProfileLoaded.current) {
+                isFirstSnapshot = false;
+                initialProfileLoaded.current = true;
+                setLoading(false);
+                setProfileResolved(true);
+              }
               return;
             }
-            
-            // Profile completeness check
-            const isComplete = computeProfileComplete(firebaseUser, profile);
-            
+
+            const isComplete = computeProfileComplete(firebaseUser, profile, { profileResolved: true });
+            const onboarding = computeNeedsOnboarding({
+              authUser: firebaseUser,
+              profile,
+              profileResolved: true,
+            });
+            if (isComplete && !onboarding && profile.isProfileComplete !== true) {
+              userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
+            }
+            if (!onboarding) clearOnboardingRequired();
             if (status === 'active' || !status) {
-              setAuthState(isComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
+              setAuthState(onboarding ? AuthState.PROFILE_INCOMPLETE : AuthState.AUTHENTICATED);
             }
           } else {
-            // Profile document does not exist yet in Firestore. Provide fallback and auto-create
+            const onboarding = !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true;
             const basicName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
             const fallbackUsername = (firebaseUser.email?.split('@')[0] || `user_${firebaseUser.uid.slice(0, 6)}`).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
             const fallbackProfile = {
@@ -474,42 +481,43 @@ export function AuthProvider({ children }) {
               phoneNumber: firebaseUser.phoneNumber || '',
               photoURL: firebaseUser.photoURL || null,
               authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
-              isProfileComplete: !!(firebaseUser.displayName?.trim() || firebaseUser.email || firebaseUser.phoneNumber),
-              coins: 50,
+              isProfileComplete: !onboarding,
+              coins: 0,
               level: 1,
               accountStatus: 'active'
             };
             setUserProfile(fallbackProfile);
             syncUserWithAppStore(firebaseUser, fallbackProfile, setCurrentUserRef.current);
-            const isComplete = computeProfileComplete(firebaseUser, fallbackProfile);
-            setAuthState(isComplete ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
+            setAuthState(onboarding ? AuthState.PROFILE_INCOMPLETE : AuthState.AUTHENTICATED);
 
-            // Auto-create in Firestore in background
-            userService.createUserProfile(uid, {
-              displayName: basicName,
-              username: fallbackUsername,
-              email: firebaseUser.email || '',
-              phoneNumber: firebaseUser.phoneNumber || '',
-              photoURL: firebaseUser.photoURL || null,
-              authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
-              isProfileComplete: true
-            }).catch(e => console.warn('Background profile bootstrap failed:', e));
+            if (!onboarding) {
+              userService.createUserProfile(uid, {
+                displayName: basicName,
+                username: fallbackUsername,
+                email: firebaseUser.email || '',
+                phoneNumber: firebaseUser.phoneNumber || '',
+                photoURL: firebaseUser.photoURL || null,
+                authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
+                isProfileComplete: true
+              }).catch(e => console.warn('Background profile bootstrap failed:', e));
+            }
           }
-          
-          // Resolve loading on first snapshot
+
           if (isFirstSnapshot || !initialProfileLoaded.current) {
             isFirstSnapshot = false;
             initialProfileLoaded.current = true;
             setLoading(false);
+            setProfileResolved(true);
           }
         },
         (err) => {
           console.warn('Profile snapshot error:', err);
           if (fallbackTimer) clearTimeout(fallbackTimer);
           if (isFirstSnapshot && isMounted.current && !initialProfileLoaded.current) {
-            setUserProfile(null);
-            setAuthState(AuthState.PROFILE_INCOMPLETE);
+            const returning = isReturningAuthUser(firebaseUser) && !getOnboardingSession(firebaseUser.uid);
+            setAuthState(returning ? AuthState.AUTHENTICATED : AuthState.PROFILE_INCOMPLETE);
             setLoading(false);
+            setProfileResolved(true);
             initialProfileLoaded.current = true;
             isFirstSnapshot = false;
           }
@@ -523,6 +531,7 @@ export function AuthProvider({ children }) {
         setUserProfile(null);
         setAuthState(AuthState.PROFILE_INCOMPLETE);
         setLoading(false);
+        setProfileResolved(true);
         initialProfileLoaded.current = true;
       }
     }
@@ -554,17 +563,16 @@ export function AuthProvider({ children }) {
           if (!isMounted.current) return;
           
           console.log('👤 Auth state changed:', firebaseUser ? `User logged in (${firebaseUser.uid})` : 'No user');
-          
-          // CRITICAL: Only set loading true if profile not loaded yet
-          if (!initialProfileLoaded.current) {
-            setLoading(true);
-          }
-          setAuthState(AuthState.PROFILE_INCOMPLETE);
           navigationLock.current = true;
           
           if (firebaseUser) {
             isLoggingOutRef.current = false;
-            
+
+            if (!initialProfileLoaded.current) {
+              setLoading(true);
+              setProfileResolved(false);
+            }
+
             const userData = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
@@ -581,12 +589,11 @@ export function AuthProvider({ children }) {
             };
             
             setUser(userData);
+            setAuthState(AuthState.BOOTING);
             
-            // Setup realtime profile (will call setLoading(false) eventually)
             await setupRealtimeProfile(firebaseUser.uid, firebaseUser);
             
           } else {
-            // Logout – reset everything
             isLoggingOutRef.current = true;
             initialProfileLoaded.current = false;
             setUser(null);
@@ -595,10 +602,13 @@ export function AuthProvider({ children }) {
             if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
             clearUserDataRef.current();
             AuthStorageManager.clearAll();
+            clearOnboardingRequired();
             setAuthState(AuthState.UNAUTHENTICATED);
             setLoading(false);
+            setProfileResolved(true);
             console.log('👤 User logged out');
           }
+          setAuthInitialized(true);
           navigationLock.current = false;
         });
         
@@ -637,7 +647,6 @@ export function AuthProvider({ children }) {
         }
         
         setSecurityChecks(prev => ({ ...prev, firebaseReady: true, authListenerActive: true }));
-        setAuthInitialized(true);
         listenerSetUp.current = true;
         console.log('✅ Auth listener setup complete');
         
@@ -678,6 +687,7 @@ export function AuthProvider({ children }) {
         setError(null);
         const result = await authService.createUserWithEmailPassword(email, password, profileData);
         if (!result.success) throw new Error(result.error || 'Email signup failed');
+        markOnboardingRequired(result.user?.uid || result.user?.userId, { method: 'email' });
         AuthStorageManager.set('email_auth_data', {
           userId: result.user.userId,
           email: result.user.email,
@@ -764,7 +774,8 @@ export function AuthProvider({ children }) {
           return result;
         }
         if (!result.success) throw new Error(result.error || 'Google auth failed');
-        if (result.isNewUser) {
+        if (result.isNewUser && result.user?.isProfileComplete === false) {
+          markOnboardingRequired(result.user?.uid, { method: 'google' });
           AuthStorageManager.set('pending_profile_creation', {
             userId: result.user.uid,
             method: 'google',
@@ -775,7 +786,8 @@ export function AuthProvider({ children }) {
           });
           toast.success('Welcome to Arvdoul! Complete your profile.');
         } else {
-          toast.success('Welcome back!');
+          clearOnboardingRequired();
+          toast.success(result.isNewUser ? 'Welcome to Arvdoul!' : 'Welcome back!');
         }
         return result;
       } catch (error) {
@@ -830,6 +842,7 @@ export function AuthProvider({ children }) {
         const result = await authService.verifyPhoneOTP(verificationId, otp);
         if (!result.success) throw new Error(result.error || 'Failed to verify OTP');
         if (result.isNewUser) {
+          markOnboardingRequired(result.user?.uid, { method: 'phone' });
           AuthStorageManager.set('pending_profile_creation', {
             userId: result.user.uid,
             method: 'phone',
@@ -839,6 +852,7 @@ export function AuthProvider({ children }) {
           });
           toast.success('Phone verified! Complete your profile.');
         } else {
+          clearOnboardingRequired();
           toast.success('Phone number verified!');
         }
         return result;
@@ -899,6 +913,7 @@ export function AuthProvider({ children }) {
         if (isMounted.current && result.profile) setUserProfile(result.profile);
         AuthStorageManager.clearAll();
         AuthStorageManager.setVerified(user.uid, 'profile_complete');
+        clearOnboardingRequired();
         toast.success('Profile created successfully! Welcome to Arvdoul.');
         return { ...result, success: true };
       } catch (error) {
@@ -1000,6 +1015,7 @@ export function AuthProvider({ children }) {
       }
       clearUserDataRef.current();
       AuthStorageManager.clearAll();
+      clearOnboardingRequired();
       broadcastRef.current?.postMessage({ type: 'signOut' });
       toast.success('Signed out successfully');
       setTimeout(() => navigate('/', { replace: true }), 300);
@@ -1020,16 +1036,36 @@ export function AuthProvider({ children }) {
     AuthStorageManager.clearAll();
   }, []);
 
-  const isProfileComplete = useMemo(() => computeProfileComplete(user, userProfile), [user, userProfile]);
+  const isProfileComplete = useMemo(
+    () => computeProfileComplete(user, userProfile, { profileResolved }),
+    [user, userProfile, profileResolved]
+  );
+
+  const needsOnboarding = useMemo(
+    () => computeNeedsOnboarding({
+      authUser: user,
+      profile: userProfile,
+      profileResolved,
+      isSignupInProgress,
+    }),
+    [user, userProfile, profileResolved, isSignupInProgress]
+  );
 
   const checkAuthState = useCallback(() => ({
     isAuthenticated: !!user,
     isEmailVerified: !!(user && user.emailVerified),
-    isProfileComplete: computeProfileComplete(user, userProfile),
+    isProfileComplete: computeProfileComplete(user, userProfile, { profileResolved }),
+    needsOnboarding: computeNeedsOnboarding({
+      authUser: user,
+      profile: userProfile,
+      profileResolved,
+      isSignupInProgress,
+    }),
+    profileResolved,
     hasPendingProfile: !!AuthStorageManager.get('pending_profile_creation'),
     requiresVerification: !!AuthStorageManager.get('email_not_verified_user'),
     authState,
-  }), [user, userProfile, authState]);
+  }), [user, userProfile, authState, profileResolved, isSignupInProgress]);
 
   const contextValue = useMemo(() => ({
     user,
@@ -1039,6 +1075,8 @@ export function AuthProvider({ children }) {
     authError,
     isSignupInProgress,
     authInitialized,
+    profileResolved,
+    needsOnboarding,
     securityChecks,
     authService,
     userService,
@@ -1046,6 +1084,8 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isEmailVerified: !!(user && user.emailVerified),
     isProfileComplete,
+    profileResolved,
+    needsOnboarding,
     requiresEmailVerification: !!(user && !user.emailVerified),
     signInWithEmailPassword,
     signUpWithEmailPassword,
