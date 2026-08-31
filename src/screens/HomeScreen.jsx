@@ -935,7 +935,6 @@ export default function HomeScreen() {
             } else if (retryCountRef.current < RETRY_MAX) {
               retryCountRef.current++;
               const delay = getRetryDelay(retryCountRef.current);
-              // ✅ capture current params for retry
               const retryReset = reset;
               const retrySkip = skipCache;
               const timer = setTimeout(() => {
@@ -952,17 +951,15 @@ export default function HomeScreen() {
           }
           return null;
         } finally {
-          if (requestId === requestIdRef.current && currentSession === sessionIdRef.current && !signal.aborted) {
-            activeRequestKeyRef.current = null;
-            pendingRequestPromisesRef.current.delete(requestKey);
-            if (!isPreload) {
-              isLoadingRef.current = false;
-              loadMoreLockRef.current = false;
-              if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
-            } else {
-              preloadLockRef.current = false;
-              setStatus(STATUS.SUCCESS);
-            }
+          activeRequestKeyRef.current = null;
+          pendingRequestPromisesRef.current.delete(requestKey);
+          if (!isPreload) {
+            isLoadingRef.current = false;
+            loadMoreLockRef.current = false;
+            if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+          } else {
+            preloadLockRef.current = false;
+            setStatus(STATUS.SUCCESS);
           }
         }
       })();

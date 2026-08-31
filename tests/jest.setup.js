@@ -114,8 +114,10 @@ if (process.env.SILENCE_CONSOLE === '1') {
 }
 
 // Restore console if a test file wants to assert on output.
-afterAll(() => {
-  globalThis.console.log = originalLog;
-  globalThis.console.warn = originalWarn;
-  globalThis.console.error = originalError;
-});
+if (typeof afterAll === 'function') {
+  afterAll(() => {
+    globalThis.console.log = originalLog;
+    globalThis.console.warn = originalWarn;
+    globalThis.console.error = originalError;
+  });
+}

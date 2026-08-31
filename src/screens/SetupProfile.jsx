@@ -249,17 +249,19 @@ const PerfectAvatarUploader = React.memo(
 );
 PerfectAvatarUploader.displayName = "PerfectAvatarUploader";
 
-// ==================== SMART USERNAME GENERATOR (IMPROVED) ====================
+// ==================== SMART USERNAME GENERATOR (WORLD CLASS) ====================
 const SmartUsernameGenerator = React.memo(
   ({ username, onChange, theme, loading = false, displayName = "", userId = null }) => {
     const [status, setStatus] = useState("idle");
     const [message, setMessage] = useState("");
     const [isChecking, setIsChecking] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
     const timeoutRef = useRef(null);
+    const generatedRef = useRef(null);
 
     const resolvedTheme =
       theme === "system"
-        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
           ? "dark"
           : "light"
         : theme;
@@ -268,7 +270,7 @@ const SmartUsernameGenerator = React.memo(
       async (value) => {
         if (!value || value.trim().length < 3) {
           setStatus("idle");
-          setMessage("Minimum 3 characters");
+          setMessage(value && value.trim().length > 0 ? "Minimum 3 characters" : "");
           return;
         }
         if (!/^[a-zA-Z0-9_.-]+$/.test(value)) {
@@ -292,7 +294,6 @@ const SmartUsernameGenerator = React.memo(
             setStatus("available");
             setMessage("Username available!");
           } else if (result.error) {
-            console.warn("Username check failed:", result.error);
             setStatus("error");
             setMessage("Unable to verify – try again");
           } else {
@@ -300,7 +301,6 @@ const SmartUsernameGenerator = React.memo(
             setMessage("Username is taken");
           }
         } catch (error) {
-          console.error("Username check exception:", error);
           setStatus("error");
           setMessage("Unable to verify");
         } finally {
@@ -315,12 +315,13 @@ const SmartUsernameGenerator = React.memo(
         toast.error("Please enter a display name first");
         return;
       }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      setIsGenerating(true);
       setStatus("checking");
       setMessage("Generating unique username...");
 
-      // Add a timeout to prevent infinite waiting
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Generation timeout")), 10000)
+        setTimeout(() => reject(new Error("Generation timeout")), 8000)
       );
 
       try {
@@ -329,38 +330,50 @@ const SmartUsernameGenerator = React.memo(
         const generated = await Promise.race([generationPromise, timeoutPromise]);
 
         if (generated && generated.length >= 3) {
+          generatedRef.current = generated;
           onChange(generated);
-          await validateUsername(generated);
+          setStatus("available");
+          setMessage("Username available!");
+          setIsGenerating(false);
           toast.success("Username generated!");
-        } else {
-          throw new Error("Generation returned empty");
+          return;
         }
+        throw new Error("Empty username generated");
       } catch (error) {
-        console.warn("Username generation failed, retrying with service fallback:", error);
-        // Second attempt through the real availability-checked generator.
+        console.warn("Username generation fallback triggered:", error);
         try {
           const { generateUniqueUsername } = await import("../services/userService.js");
           const fallback = await generateUniqueUsername("user", userId);
           if (fallback && fallback.length >= 3) {
+            generatedRef.current = fallback;
             onChange(fallback);
             setStatus("available");
-            setMessage("Generated username!");
+            setMessage("Username available!");
+            setIsGenerating(false);
             toast.info("Auto‑generated username: " + fallback);
             return;
           }
         } catch (err) {
-          console.warn("Username fallback also failed:", err);
+          console.warn("Username fallback error:", err);
         }
+        setIsGenerating(false);
         setStatus("error");
-        setMessage("Could not generate a username. Try another one.");
-        toast.error("Username generation failed — please pick a username manually.");
+        setMessage("Could not generate a username. Pick one manually.");
+        toast.error("Username generation failed — please enter a username manually.");
       }
-    }, [displayName, onChange, userId, validateUsername]);
+    }, [displayName, onChange, userId]);
 
     useEffect(() => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      // If the current username was just produced by the generator, skip redundant check
+      if (generatedRef.current && username === generatedRef.current) {
+        return;
+      }
+      // User typed something else -> invalidate generated cache
+      generatedRef.current = null;
+
       if (username.length >= 3) {
-        timeoutRef.current = setTimeout(() => validateUsername(username), 500);
+        timeoutRef.current = setTimeout(() => validateUsername(username), 400);
       } else {
         setStatus("idle");
         setMessage(username.length > 0 ? "Minimum 3 characters" : "");
@@ -398,7 +411,7 @@ const SmartUsernameGenerator = React.memo(
             type="text"
             value={username}
             onChange={(e) => onChange(e.target.value.replace(/\s+/g, "").toLowerCase())}
-            disabled={loading}
+            disabled={loading || isGenerating}
             placeholder="yourusername"
             className={`w-full pl-8 pr-10 py-3 rounded-lg border transition-all duration-200 text-sm ${
               resolvedTheme === "dark"
@@ -407,21 +420,21 @@ const SmartUsernameGenerator = React.memo(
             } ${
               status === "available" ? "!border-emerald-500" :
               status === "taken" || status === "invalid" || status === "error" ? "!border-rose-500" : ""
-            } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+            } ${loading || isGenerating ? "opacity-50 cursor-not-allowed" : ""}`}
           />
           {username.length >= 3 && status !== "idle" && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              {status === "checking" ? (
+              {isChecking || isGenerating ? (
                 <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full" />
               ) : status === "available" ? (
-                <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                  <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm">
+                  <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 </div>
               ) : status === "taken" || status === "invalid" || status === "error" ? (
-                <div className="w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center">
-                  <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <div className="w-4 h-4 rounded-full bg-rose-500 flex items-center justify-center shadow-sm">
+                  <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -437,22 +450,23 @@ const SmartUsernameGenerator = React.memo(
         )}
 
         <button
+          type="button"
           onClick={generateSmartUsername}
-          disabled={loading || isChecking || !displayName}
+          disabled={loading || isGenerating || !displayName}
           className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
             resolvedTheme === "dark"
-              ? "bg-gray-800 text-gray-300 hover:bg-gray-700"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          } ${loading || isChecking || !displayName ? "opacity-50 cursor-not-allowed" : ""}`}
+              ? "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+          } ${loading || isGenerating || !displayName ? "opacity-50 cursor-not-allowed" : ""}`}
         >
-          {isChecking ? (
+          {isGenerating ? (
             <>
-              <div className="animate-spin w-3 h-3 border-2 border-current border-t-transparent rounded-full" />
-              <span>Generating...</span>
+              <div className="animate-spin w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full" />
+              <span>Generating smart username...</span>
             </>
           ) : (
             <>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               <span>Generate Smart Username</span>
