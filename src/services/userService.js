@@ -93,6 +93,10 @@ class ProfessionalUserService {
     return this.firestore;
   }
 
+  async ensureInitialized() {
+    return this._ensureInitialized();
+  }
+
   async _getNotificationsService() {
     const mod = await import('./notificationsService.js');
     return mod.getNotificationsService();

@@ -352,6 +352,14 @@ class UltimateStoryService {
     return this.initPromise;
   }
 
+  async _ensureInitialized() {
+    return this.ensureInitialized();
+  }
+
+  async initialize() {
+    return this.ensureInitialized();
+  }
+
   // ====================================================================
   //  PUBLIC API (existing methods, all fixed)
   // ====================================================================
@@ -1781,6 +1789,8 @@ export function getStoryService() {
 }
 
 const storyService = {
+  initialize: () => getStoryService().initialize(),
+  ensureInitialized: () => getStoryService().ensureInitialized(),
   createStory: (...args) => getStoryService().createStory(...args),
   getStoriesFeed: (...args) => getStoryService().getStoriesFeed(...args),
   getStory: (...args) => getStoryService().getStory(...args),

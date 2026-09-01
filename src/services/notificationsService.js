@@ -443,6 +443,14 @@ class UltimateNotificationsService {
     return this.initPromise;
   }
 
+  async _ensureInitialized() {
+    return this.ensureInitialized();
+  }
+
+  async initialize() {
+    return this.ensureInitialized();
+  }
+
   // --------------------------------------------------------------------
   //  CORE NOTIFICATION METHODS (via Cloud Functions)
   // --------------------------------------------------------------------
@@ -1087,6 +1095,8 @@ export function getNotificationsService() {
 }
 
 const notificationsService = {
+  initialize: () => getNotificationsService().initialize(),
+  ensureInitialized: () => getNotificationsService().ensureInitialized(),
   sendNotification: (data, opts) => getNotificationsService().sendNotification(data, opts),
   getUserNotifications: (uid, opts) => getNotificationsService().getUserNotifications(uid, opts),
   getRankedNotifications: (uid, opts) => getNotificationsService().getRankedNotifications(uid, opts),

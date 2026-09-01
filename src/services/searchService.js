@@ -376,6 +376,14 @@ class UltimateSearchService {
     return this.initPromise;
   }
 
+  async _ensureInitialized() {
+    return this.ensureInitialized();
+  }
+
+  async initialize() {
+    return this.ensureInitialized();
+  }
+
   // --------------------------------------------------------------------
   //  🔍 PUBLIC SEARCH (debounced + versioned)
   // --------------------------------------------------------------------
@@ -1017,6 +1025,8 @@ export function getSearchService() {
 
 // ==================== PUBLIC API ====================
 const searchService = {
+  initialize: () => getSearchService().initialize(),
+  ensureInitialized: () => getSearchService().ensureInitialized(),
   search: (q, opts) => getSearchService().search(q, opts),
   searchUsers: async (q, opts) => {
     const result = await getSearchService().search(q, { ...opts, indices: ['users'] });

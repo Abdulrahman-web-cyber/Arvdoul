@@ -360,6 +360,14 @@ class MonetizationService {
     return this.db;
   }
 
+  async ensureInitialized() {
+    return this._ensureInitialized();
+  }
+
+  async initialize() {
+    return this._ensureInitialized();
+  }
+
   _cleanupExpiredAds() {
     const now = Date.now();
     for (const [key, value] of this.adCache.entries()) {
