@@ -189,12 +189,44 @@ const AnimatedMeshBackground = memo(() => {
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">
-      {/* Top Left Neon Purple Orb */}
+      {/* Top Left Subtle Purple Accent */}
       <motion.div
         animate={{
-          x: [0, 40, -20, 0],
-          y: [0, -50, 20, 0],
-          scale: [1, 1.2, 0.95, 1],
+          x: [0, 20, -10, 0],
+          y: [0, -25, 10, 0],
+          scale: [1, 1.08, 0.98, 1],
+        }}
+        transition={{
+          duration: 20,
+          repeat: Infinity,
+          repeatType: "mirror",
+          ease: "easeInOut",
+        }}
+        className="absolute -top-32 -left-32 w-80 h-80 rounded-full blur-3xl opacity-10 dark:opacity-8 bg-gradient-to-br from-[#8B1EF3] to-[#4431F7]"
+      />
+
+      {/* Bottom Right Subtle Blue Accent */}
+      <motion.div
+        animate={{
+          x: [0, -20, 15, 0],
+          y: [0, 20, -15, 0],
+          scale: [1, 1.1, 0.95, 1],
+        }}
+        transition={{
+          duration: 24,
+          repeat: Infinity,
+          repeatType: "mirror",
+          ease: "easeInOut",
+        }}
+        className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full blur-3xl opacity-8 dark:opacity-6 bg-gradient-to-tr from-[#055BFB] to-[#0088FF]"
+      />
+
+      {/* Center Soft Accent */}
+      <motion.div
+        animate={{
+          x: [-10, 10, -10],
+          y: [10, -10, 10],
+          scale: [0.95, 1.05, 0.95],
         }}
         transition={{
           duration: 18,
@@ -202,39 +234,7 @@ const AnimatedMeshBackground = memo(() => {
           repeatType: "mirror",
           ease: "easeInOut",
         }}
-        className="absolute -top-32 -left-32 w-96 h-96 rounded-full blur-[100px] opacity-25 dark:opacity-20 bg-gradient-to-br from-[#8B1EF3] to-[#4431F7]"
-      />
-
-      {/* Bottom Right Neon Blue/Cyan Orb */}
-      <motion.div
-        animate={{
-          x: [0, -40, 30, 0],
-          y: [0, 40, -30, 0],
-          scale: [1, 1.25, 0.9, 1],
-        }}
-        transition={{
-          duration: 22,
-          repeat: Infinity,
-          repeatType: "mirror",
-          ease: "easeInOut",
-        }}
-        className="absolute -bottom-32 -right-32 w-[30rem] h-[30rem] rounded-full blur-[120px] opacity-20 dark:opacity-15 bg-gradient-to-tr from-[#055BFB] to-[#0088FF]"
-      />
-
-      {/* Center Glow Fuchsia Accent Orb */}
-      <motion.div
-        animate={{
-          x: [-20, 20, -20],
-          y: [20, -20, 20],
-          scale: [0.9, 1.1, 0.9],
-        }}
-        transition={{
-          duration: 15,
-          repeat: Infinity,
-          repeatType: "mirror",
-          ease: "easeInOut",
-        }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[24rem] h-[24rem] rounded-full blur-[130px] opacity-15 dark:opacity-10 bg-gradient-to-r from-[#C82BFF] to-[#8B1EF3]"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full blur-3xl opacity-5 dark:opacity-4 bg-gradient-to-r from-[#C82BFF] to-[#8B1EF3]"
       />
     </div>
   );
@@ -413,7 +413,7 @@ const FeatureCard = memo(({ emoji, title, description, index, theme, isActive, o
           theme === "dark"
             ? "bg-[#080F2E]/70 backdrop-blur-xl border border-white/10"
             : "bg-white/80 backdrop-blur-xl border border-black/5"
-        } ${isHovered ? "shadow-2xl shadow-purple-500/10 border-purple-500/30" : "shadow-lg"}`}
+        } ${isHovered ? "shadow-lg border-purple-500/20" : "shadow-sm"}`}
       >
         <div>
           <div className="relative mb-3 flex items-center justify-between">
@@ -467,7 +467,7 @@ const ActionButton = memo(({ children, onClick, variant = "primary", theme, clas
 
   const variants = {
     primary:
-      "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30",
+      "bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-sm hover:shadow-md",
     secondary:
       theme === "dark"
         ? "bg-[#080F2E]/80 text-white border border-white/15 hover:bg-white/10 hover:border-white/30"
@@ -740,8 +740,8 @@ function IntroScreen() {
               transition={{ delay: 0.6 }}
               className={`rounded-3xl p-8 sm:p-12 backdrop-blur-2xl relative overflow-hidden ${
                 resolvedTheme === "dark"
-                  ? "bg-[#080F2E]/80 border border-white/15 shadow-2xl shadow-purple-500/10"
-                  : "bg-white/90 border border-black/10 shadow-2xl"
+                  ? "bg-[#080F2E]/80 border border-white/15 shadow-xl"
+                  : "bg-white/90 border border-black/10 shadow-xl"
               }`}
             >
               <div className="max-w-2xl mx-auto text-center relative z-10">

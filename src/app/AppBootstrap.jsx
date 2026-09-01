@@ -203,7 +203,7 @@ const SystemInitializer = ({ onReady }) => {
  * Main App Bootstrap Component
  */
 export default function AppBootstrap() {
-  const [isReady, setIsReady] = useState(false);
+  const [isReady, setIsReady] = useState(true);
   const [initializationStage, setInitializationStage] = useState('starting');
 
   // Stable identity: SystemInitializer's effect depends on onReady, and an

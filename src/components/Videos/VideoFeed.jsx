@@ -261,17 +261,53 @@ const VideoFeed = memo(({
         )}
       </div>
 
-      {/* Loading Full Screen State */}
+      {/* Loading Skeleton State */}
       <AnimatePresence>
         {loading && videos.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex flex-col items-center justify-center bg-black z-30"
+            className="absolute inset-0 bg-[#070913] z-30 flex flex-col justify-between p-6 animate-pulse select-none"
           >
-            <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
-            <p className="text-white/80 text-sm font-bold">Curating your feed...</p>
+            {/* Top header skeleton */}
+            <div className="flex items-center justify-between pt-2">
+              <div className="w-20 h-6 rounded-full bg-white/10" />
+              <div className="flex gap-4">
+                <div className="w-16 h-6 rounded-full bg-white/10" />
+                <div className="w-16 h-6 rounded-full bg-white/10" />
+              </div>
+              <div className="w-8 h-8 rounded-full bg-white/10" />
+            </div>
+
+            {/* Middle placeholder */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                <div className="w-6 h-6 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+              </div>
+            </div>
+
+            {/* Bottom & Right sidebar action skeletons */}
+            <div className="flex items-end justify-between pb-12">
+              <div className="space-y-3 max-w-[70%]">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-white/15" />
+                  <div className="space-y-1">
+                    <div className="w-24 h-4 rounded-lg bg-white/15" />
+                    <div className="w-16 h-3 rounded-lg bg-white/10" />
+                  </div>
+                </div>
+                <div className="w-48 h-3.5 rounded-lg bg-white/10" />
+                <div className="w-32 h-3 rounded-lg bg-white/10" />
+              </div>
+
+              <div className="flex flex-col items-center gap-5 pr-2">
+                <div className="w-11 h-11 rounded-full bg-white/10" />
+                <div className="w-11 h-11 rounded-full bg-white/10" />
+                <div className="w-11 h-11 rounded-full bg-white/10" />
+                <div className="w-11 h-11 rounded-full bg-white/10" />
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

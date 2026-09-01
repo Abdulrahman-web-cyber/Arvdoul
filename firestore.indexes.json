@@ -1436,7 +1436,7 @@
       "fields": [
         {
           "fieldPath": "participants",
-          "order": "CONTAINS"
+          "arrayConfig": "CONTAINS"
         },
         {
           "fieldPath": "lastUpdated",

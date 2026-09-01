@@ -1,8 +1,7 @@
 // src/app/AppStateGuard.jsx - Resilient route guard and navigation coordinator
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import {
   resolvePostAuthDestination,
   safeReturnPath,
@@ -22,9 +21,6 @@ export default function AppStateGuard({ children }) {
     isSignupInProgress,
   } = useAuth();
 
-  const [shouldRender, setShouldRender] = useState(false);
-  const lastDecision = useRef({ path: "", decision: null });
-
   const needsEmailVerification = useMemo(() => {
     if (!user) return false;
     const provider = (user.authProvider || "").toLowerCase();
@@ -38,8 +34,8 @@ export default function AppStateGuard({ children }) {
     );
   }, [user]);
 
-  useEffect(() => {
-    const decision = resolvePostAuthDestination({
+  const decision = useMemo(() => {
+    return resolvePostAuthDestination({
       pathname: location.pathname,
       isAuthenticated,
       authInitialized,
@@ -49,31 +45,18 @@ export default function AppStateGuard({ children }) {
       needsOnboarding,
       isSplash: location.pathname === "/",
     });
+  }, [
+    location.pathname,
+    isAuthenticated,
+    authInitialized,
+    authLoading,
+    profileResolved,
+    needsEmailVerification,
+    needsOnboarding,
+  ]);
 
-    const currentStateKey = [
-      location.pathname,
-      isAuthenticated,
-      isEmailVerified,
-      needsOnboarding,
-      profileResolved,
-      authInitialized,
-      authLoading,
-      isSignupInProgress,
-      needsEmailVerification,
-    ].join("-");
-
-    if (lastDecision.current.path === currentStateKey) {
-      setShouldRender(decision.allow && !decision.wait);
-      return;
-    }
-
-    if (decision.wait) {
-      setShouldRender(false);
-      lastDecision.current = { path: currentStateKey, decision: "wait" };
-      return;
-    }
-
-    if (decision.destination) {
+  useEffect(() => {
+    if (decision.destination && !decision.wait) {
       const target =
         decision.destination === "/home"
           ? safeReturnPath(new URLSearchParams(window.location.search).get("from"))
@@ -83,34 +66,14 @@ export default function AppStateGuard({ children }) {
           ? { email: user?.email, userId: user?.uid, fromSignup: true }
           : undefined;
       navigate(target, { replace: true, state: navState });
-      setShouldRender(false);
-      lastDecision.current = { path: currentStateKey, decision: `redirect-${target}` };
-      return;
     }
+  }, [decision, navigate, user]);
 
-    setShouldRender(true);
-    lastDecision.current = { path: currentStateKey, decision: "allow" };
-  }, [
-    location.pathname,
-    isAuthenticated,
-    isEmailVerified,
-    needsOnboarding,
-    profileResolved,
-    authInitialized,
-    authLoading,
-    isSignupInProgress,
-    needsEmailVerification,
-    user,
-    navigate,
-  ]);
-
-  if (!shouldRender) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-transparent">
-        <LoadingSpinner size={42} thickness={3} />
-      </div>
-    );
+  // If redirecting, return null seamlessly without flashing an extra blank spinner
+  if (decision.destination && !decision.wait) {
+    return null;
   }
 
+  // Allow children to render directly so their native skeletons handle background data loading
   return children;
 }
