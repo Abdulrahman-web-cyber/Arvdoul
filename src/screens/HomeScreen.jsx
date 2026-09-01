@@ -1249,7 +1249,7 @@ export default function HomeScreen() {
                 </p>
                 <div className="flex gap-3 justify-center">
                   <button
-                    onClick={() => navigate('/create')}
+                    onClick={() => navigate('/create-post')}
                     className="px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold text-sm shadow-lg shadow-purple-500/25 hover:opacity-95 transition-opacity cursor-pointer"
                   >
                     Create Post

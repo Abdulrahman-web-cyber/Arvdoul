@@ -1084,8 +1084,6 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isEmailVerified: !!(user && user.emailVerified),
     isProfileComplete,
-    profileResolved,
-    needsOnboarding,
     requiresEmailVerification: !!(user && !user.emailVerified),
     signInWithEmailPassword,
     signUpWithEmailPassword,

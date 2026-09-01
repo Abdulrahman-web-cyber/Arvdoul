@@ -5,6 +5,7 @@ import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
+import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 
 // ==================== LAZY LOAD COMPONENTS ====================
 const SplashScreen = lazy(() => import("../screens/SplashScreen.jsx"));
@@ -111,7 +112,7 @@ const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
 // ==================== LOADING COMPONENT ====================
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-transparent">
-    <div className="w-8 h-8 border-3 border-purple-500/20 border-t-purple-600 dark:border-purple-400/20 dark:border-t-purple-400 rounded-full animate-spin" />
+    <LoadingSpinner size={42} thickness={3} />
   </div>
 );
 
@@ -347,6 +348,8 @@ export default function AppRoutes() {
           </Suspense>
         </ProtectedRoute>
       } />
+      <Route path="/create" element={<Navigate to="/create-post" replace />} />
+      <Route path="/create_post" element={<Navigate to="/create-post" replace />} />
       
       <Route path="/network" element={
         <ProtectedRoute>

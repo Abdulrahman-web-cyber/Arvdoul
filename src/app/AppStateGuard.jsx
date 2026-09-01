@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import {
   resolvePostAuthDestination,
   safeReturnPath,
@@ -106,7 +107,7 @@ export default function AppStateGuard({ children }) {
   if (!shouldRender) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-transparent">
-        <div className="w-8 h-8 border-2 border-purple-500/20 border-t-purple-600 dark:border-purple-400/20 dark:border-t-purple-400 rounded-full animate-spin" />
+        <LoadingSpinner size={42} thickness={3} />
       </div>
     );
   }
