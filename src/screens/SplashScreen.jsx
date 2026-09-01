@@ -10,7 +10,7 @@ import { resolveSplashDestination } from "../utils/profileCompletion.js";
 export default function SplashScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { authInitialized, isAuthenticated } = useAuth();
+  const { authInitialized, isAuthenticated, needsOnboarding } = useAuth();
   
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -211,7 +211,7 @@ export default function SplashScreen() {
 
   // Navigation when everything is perfect
   useEffect(() => {
-    if (!isReady && progress >= 100 && logoLoaded && authReady && isOnline) {
+    if (!isReady && progress >= 100 && logoLoaded && authInitialized && isOnline) {
       setShowComplete(true);
       
       completeTimerRef.current = setTimeout(() => {
@@ -231,7 +231,7 @@ export default function SplashScreen() {
         
       }, 500);
     }
-  }, [progress, logoLoaded, authReady, isAuthenticated, needsOnboarding, navigate, isReady, isOnline]);
+  }, [progress, logoLoaded, authInitialized, isAuthenticated, needsOnboarding, navigate, isReady, isOnline]);
 
   // Perfect circular logo component
   const PerfectLogo = useMemo(() => (
