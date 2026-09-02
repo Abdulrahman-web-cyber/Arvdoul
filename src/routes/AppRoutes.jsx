@@ -109,23 +109,10 @@ const MarketplaceScreen = lazy(() => import("../screens/Marketplace/MarketplaceS
 const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
 const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
 
-// ==================== LOADING SKELETON FALLBACK ====================
-const RouteFallback = () => (
-  <div className="w-full h-full min-h-[60vh] max-w-4xl mx-auto p-4 sm:p-6 space-y-4 animate-pulse">
-    <div className="flex items-center gap-3">
-      <div className="w-12 h-12 rounded-2xl bg-black/5 dark:bg-white/5" />
-      <div className="space-y-2 flex-1">
-        <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-1/3" />
-        <div className="h-3 bg-black/5 dark:bg-white/5 rounded-lg w-1/4" />
-      </div>
-    </div>
-    <div className="h-48 sm:h-64 rounded-3xl bg-black/5 dark:bg-white/5 w-full" />
-    <div className="space-y-2.5">
-      <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-5/6" />
-      <div className="h-4 bg-black/5 dark:bg-white/5 rounded-lg w-2/3" />
-    </div>
-  </div>
-);
+import PageLoader from "../components/UI/PageLoader.jsx";
+
+// ==================== LOADING FALLBACK ====================
+const RouteFallback = () => <PageLoader label="Loading view..." fullScreen={false} />;
 
 // ==================== ROUTE WRAPPERS ====================
 const PublicRoute = ({ children }) => {

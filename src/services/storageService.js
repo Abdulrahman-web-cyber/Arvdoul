@@ -851,6 +851,25 @@ class EnterpriseStorageService {
     }
   }
 
+  async ensureInitialized() {
+    if (!this.firebaseInitialized) {
+      await this.initialize();
+    }
+    return this;
+  }
+
+  async _ensureInitialized() {
+    return this.ensureInitialized();
+  }
+
+  async ensureinitialize() {
+    return this.ensureInitialized();
+  }
+
+  async _ensureinitialize() {
+    return this.ensureInitialized();
+  }
+
   async getStorageInstance() {
     if (!this.firebaseInitialized) {
       await this.initialize();
@@ -2037,6 +2056,22 @@ const storageService = {
   initialize: async () => {
     const service = getStorageService();
     return service.initialize();
+  },
+  ensureInitialized: async () => {
+    const service = getStorageService();
+    return service.ensureInitialized();
+  },
+  _ensureInitialized: async () => {
+    const service = getStorageService();
+    return service.ensureInitialized();
+  },
+  ensureinitialize: async () => {
+    const service = getStorageService();
+    return service.ensureInitialized();
+  },
+  _ensureinitialize: async () => {
+    const service = getStorageService();
+    return service.ensureInitialized();
   },
   
   // Destruction

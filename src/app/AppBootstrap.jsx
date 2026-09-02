@@ -12,6 +12,7 @@ import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import OfflineIndicator from '../components/ui/OfflineIndicator.jsx';
+import PageLoader from '../components/UI/PageLoader.jsx';
 
 /**
  * System initialization manager
@@ -222,13 +223,13 @@ export default function AppBootstrap() {
           />
           
           {/* Main application - Only render when ready */}
-          {isReady && (
+          {isReady ? (
             <BrowserRouter>
               <AuthProvider>
                 {/* Global motion policy: every Framer Motion animation respects
                     prefers-reduced-motion (WCAG 2.2 2.3.3). */}
                 <MotionConfig reducedMotion="user">
-                  <Suspense fallback={<div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950" />}>
+                  <Suspense fallback={<PageLoader label="Loading Arvdoul..." fullScreen={false} />}>
                     <AppRoutes />
                   </Suspense>
                 </MotionConfig>
@@ -254,6 +255,8 @@ export default function AppBootstrap() {
                 />
               </AuthProvider>
             </BrowserRouter>
+          ) : (
+            <PageLoader label="Starting Arvdoul..." fullScreen={true} />
           )}
         </GlobalErrorBoundary>
       </ThemeProvider>

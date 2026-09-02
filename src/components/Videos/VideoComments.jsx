@@ -1,5 +1,5 @@
 // src/components/Videos/VideoComments.jsx - ARVDOUL VIDEO COMMENTS
-// Glass bottom sheet with real-time comments
+// World-class glass bottom sheet with real-time comments & rapid emoji reactions
 
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,22 +10,27 @@ import {
   MoreHorizontal,
   Send,
   BadgeCheck,
+  Smile,
+  Flame,
+  Crown,
+  Sparkles
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { formatTimeAgo, SPRING_ANIMATION } from '../../utils/videoUtils';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 
+const EMOJI_PRESETS = ['🔥', '❤️', '👏', '😂', '🚀', '💡', '💯', '🙌'];
+
 /**
- * VideoComments - Comments bottom sheet with real-time updates
- * Supports threaded replies, reactions, and creator badges
+ * VideoComments - World-Class Comments bottom sheet with real-time updates
  */
 const VideoComments = memo(({
   isOpen = false,
   onClose,
   video,
 }) => {
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const inputRef = useRef(null);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -33,8 +38,7 @@ const VideoComments = memo(({
   const [sortBy, setSortBy] = useState('best');
   const [loading, setLoading] = useState(false);
 
-  // Load comments from the real comment service (Firestore-backed, moderated,
-  // rate-limited). No mock data - an empty result renders an empty state.
+  // Load comments from real service
   useEffect(() => {
     if (!isOpen || !video?.id) return;
 
@@ -55,6 +59,7 @@ const VideoComments = memo(({
             username: c.userUsername || 'user',
             avatar: c.userAvatar || null,
             isVerified: !!c.isVerified,
+            isCreator: c.userId === video.userId || c.userId === video.creatorId,
           },
           text: c.content || c.text || '',
           likes: c.likes || 0,
@@ -74,16 +79,17 @@ const VideoComments = memo(({
     };
 
     loadComments();
-  }, [isOpen, video?.id]);
+  }, [isOpen, video?.id, video?.userId, video?.creatorId]);
 
   // Handle submit comment
   const handleSubmit = async () => {
     if (!newComment.trim()) return;
 
+    const textToSend = newComment.trim();
     const optimistic = {
       id: `local_${Date.now()}`,
-      user: { id: 'current', name: 'You', username: 'you', avatar: null, isVerified: false },
-      text: newComment.trim(),
+      user: { id: 'current', name: 'You', username: 'you', avatar: null, isVerified: false, isCreator: false },
+      text: textToSend,
       likes: 0,
       isLiked: false,
       createdAt: new Date().toISOString(),
@@ -102,18 +108,17 @@ const VideoComments = memo(({
         ? await getCommentService().replyToComment(
             replyTo.id,
             uid,
-            newComment.trim(),
+            textToSend,
             { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
           )
         : await getCommentService().createComment(
             video.id,
             uid,
-            newComment.trim(),
+            textToSend,
             { userName: auth.currentUser.displayName, userUsername: auth.currentUser.username || auth.currentUser.displayName, userAvatar: auth.currentUser.photoURL }
           );
 
       if (res?.offlineQueued) {
-        // Queued offline - keep optimistic entry, marked as pending
         optimistic._pending = true;
       } else if (res?.success === false) {
         throw new Error(res.error || 'Failed to post comment');
@@ -140,9 +145,14 @@ const VideoComments = memo(({
     }
   };
 
-  // Handle like comment (persisted via the comment service)
+  // Quick Emoji Click
+  const handleEmojiClick = (emoji) => {
+    setNewComment((prev) => prev + emoji);
+    inputRef.current?.focus();
+  };
+
+  // Handle like comment
   const handleLike = async (commentId, isReply = false, parentId = null) => {
-    // Optimistic toggle
     const applyToggle = (prev) =>
       prev.map((c) => {
         if (isReply && parentId && c.id === parentId) {
@@ -172,14 +182,13 @@ const VideoComments = memo(({
       const target = (isReply && parentId
         ? comments.find((c) => c.id === parentId)?.replies.find((r) => r.id === commentId)
         : comments.find((c) => c.id === commentId));
-      const wasLiked = !!target?.isLiked;
+      const wasLiked = !target?.isLiked;
       if (wasLiked) {
-        await getCommentService().removeLikeDislike(commentId, uid);
-      } else {
         await getCommentService().likeComment(commentId, uid);
+      } else {
+        await getCommentService().removeLikeDislike(commentId, uid);
       }
     } catch (err) {
-      // Roll back the optimistic toggle on failure
       setComments(applyToggle);
       console.error('Failed to like comment:', err);
     }
@@ -212,7 +221,7 @@ const VideoComments = memo(({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end flex-col"
         onClick={onClose}
       >
         <motion.div
@@ -221,43 +230,64 @@ const VideoComments = memo(({
           exit={{ y: '100%' }}
           transition={SPRING_ANIMATION.bottomSheet}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 left-0 right-0 max-h-[85vh] rounded-t-3xl backdrop-blur-2xl bg-gray-900/95 border-t border-white/10 overflow-hidden flex flex-col"
+          className="w-full max-w-2xl mx-auto max-h-[85vh] rounded-t-3xl backdrop-blur-2xl bg-[#0d0f1d]/95 border-t border-white/10 shadow-2xl overflow-hidden flex flex-col"
         >
+          {/* Top Drag Handle Indicator */}
+          <div className="w-full flex items-center justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+            <div className="w-12 h-1.5 rounded-full bg-white/20" />
+          </div>
+
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-white/10">
-            <div className="flex items-center gap-4">
-              <h2 className="text-white font-bold text-lg">
-                {comments.length} Comments
+          <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <h2 className="text-white font-extrabold text-base tracking-tight">
+                Comments
+                <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  {comments.length}
+                </span>
               </h2>
-              {/* Sort Dropdown */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-white/10 text-white/80 text-sm px-3 py-1 rounded-full border border-white/10 focus:outline-none"
-              >
-                <option value="best">Best</option>
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-              </select>
+              
+              {/* Sort Selection */}
+              <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-xl border border-white/10">
+                {['best', 'newest'].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSortBy(mode)}
+                    className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all ${
+                      sortBy === mode
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
-            <motion.button
-              whileTap={{ scale: 0.9 }}
+
+            <button
               onClick={onClose}
-              className="p-2 rounded-full bg-white/10"
+              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white flex items-center justify-center transition-colors"
+              aria-label="Close comments"
             >
-              <X className="w-5 h-5 text-white" />
-            </motion.button>
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Comments List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <div className="w-7 h-7 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-white/50 font-medium">Loading conversations...</span>
               </div>
             ) : sortedComments.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-white/60">No comments yet. Be the first!</p>
+              <div className="text-center py-12 flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <p className="text-white/80 font-bold text-sm">No comments yet</p>
+                <p className="text-white/50 text-xs max-w-xs">Be the first to share your thoughts with the creator!</p>
               </div>
             ) : (
               sortedComments.map((comment) => (
@@ -271,43 +301,69 @@ const VideoComments = memo(({
             )}
           </div>
 
-          {/* Reply Indicator */}
+          {/* Reply Indicator Bar */}
           {replyTo && (
-            <div className="px-4 py-2 bg-white/5 flex items-center justify-between">
-              <span className="text-white/60 text-sm">
-                Replying to @{replyTo.user.username}
+            <div className="px-5 py-2 bg-purple-950/40 border-t border-purple-500/20 flex items-center justify-between">
+              <span className="text-purple-200 text-xs font-medium flex items-center gap-1.5 truncate">
+                <Reply className="w-3.5 h-3.5 text-purple-400" />
+                Replying to <span className="font-bold text-white">@{replyTo.user.username}</span>
               </span>
               <button
                 onClick={() => setReplyTo(null)}
-                className="text-white/80 hover:text-white"
+                className="text-purple-300 hover:text-white p-1 rounded-md"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
-          {/* Input */}
-          <div className="p-4 border-t border-white/10">
+          {/* Quick Reaction Emojis Ribbon */}
+          <div className="px-5 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-t border-white/5 bg-white/[0.02]">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white/40 flex-shrink-0 flex items-center gap-1">
+              <Smile className="w-3.5 h-3.5" /> React:
+            </span>
+            {EMOJI_PRESETS.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => handleEmojiClick(emoji)}
+                className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-white/15 text-sm transition-transform hover:scale-110 active:scale-95 flex-shrink-0"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+
+          {/* Input Bar */}
+          <div className="p-4 border-t border-white/10 bg-[#090b14]/90">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm">
-                Y
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-600 to-fuchsia-600 flex items-center justify-center text-white font-bold text-xs shadow-md">
+                ✦
               </div>
-              <input
-                ref={inputRef}
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                placeholder="Add a comment..."
-                className="flex-1 bg-white/10 text-white placeholder-white/50 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
+              <div className="flex-1 relative flex items-center">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                  placeholder={replyTo ? `Reply to @${replyTo.user.username}...` : "Add a comment..."}
+                  className="w-full bg-white/10 text-white placeholder-white/40 text-sm rounded-full pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/10 transition-all"
+                  maxLength={500}
+                />
+                {newComment.length > 0 && (
+                  <span className="absolute right-3 text-[10px] font-mono text-white/40">
+                    {500 - newComment.length}
+                  </span>
+                )}
+              </div>
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
-                className="p-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 disabled:opacity-50"
+                className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-lg shadow-purple-500/20"
+                aria-label="Send comment"
               >
-                <Send className="w-5 h-5 text-white" />
+                <Send className="w-4 h-4 translate-x-0.5" />
               </motion.button>
             </div>
           </div>
@@ -320,102 +376,116 @@ const VideoComments = memo(({
 VideoComments.displayName = 'VideoComments';
 
 /**
- * Single comment item
+ * Single comment item component
  */
 const CommentItem = memo(({ comment, onLike, onReply }) => {
   const [showReplies, setShowReplies] = useState(false);
-  const [showReplyInput, setShowReplyInput] = useState(false);
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3 group">
       {/* Avatar */}
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-sm">
-        {comment.user.name?.[0]?.toUpperCase() || '?'}
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500/80 to-pink-500/80 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ring-1 ring-white/20 shadow-md">
+        {comment.user.avatar ? (
+          <img src={comment.user.avatar} alt={comment.user.name} className="w-full h-full rounded-full object-cover" />
+        ) : (
+          comment.user.name?.[0]?.toUpperCase() || '?'
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-white font-semibold text-sm">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-white font-bold text-xs tracking-tight">
             @{comment.user.username}
           </span>
-          {comment.user.isVerified && (
-            <BadgeCheck className="w-4 h-4 text-blue-400" />
+          {comment.user.isCreator && (
+            <span className="px-1.5 py-0.2 rounded-md bg-pink-500/20 text-pink-300 border border-pink-500/40 text-[9px] font-bold flex items-center gap-0.5">
+              <Crown className="w-2.5 h-2.5" /> Creator
+            </span>
           )}
-          <span className="text-white/50 text-xs">
+          {comment.user.isVerified && (
+            <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />
+          )}
+          <span className="text-white/40 text-[11px] font-medium ml-auto">
             {formatTimeAgo(comment.createdAt)}
           </span>
         </div>
 
-        <p className="text-white/90 text-sm mt-1">{comment.text}</p>
+        <p className="text-white/90 text-sm mt-1 leading-relaxed break-words font-normal">
+          {comment.text}
+        </p>
 
-        {/* Actions */}
+        {/* Action Buttons */}
         <div className="flex items-center gap-4 mt-2">
           <button
             onClick={() => onLike(false)}
-            className="flex items-center gap-1 text-white/60 hover:text-red-400 transition-colors"
+            className="flex items-center gap-1 text-white/50 hover:text-red-400 transition-colors"
           >
             <Heart
-              className={`w-4 h-4 ${comment.isLiked ? 'fill-red-400 text-red-400' : ''}`}
+              className={`w-3.5 h-3.5 ${comment.isLiked ? 'fill-red-400 text-red-400 scale-110' : ''}`}
             />
-            <span className="text-xs">{comment.likes}</span>
+            <span className="text-xs font-semibold">{comment.likes || 0}</span>
           </button>
 
           <button
             onClick={onReply}
-            className="flex items-center gap-1 text-white/60 hover:text-white transition-colors"
+            className="flex items-center gap-1 text-white/50 hover:text-white transition-colors text-xs font-semibold"
           >
-            <Reply className="w-4 h-4" />
-            <span className="text-xs">Reply</span>
-          </button>
-
-          <button className="text-white/60 hover:text-white transition-colors">
-            <MoreHorizontal className="w-4 h-4" />
+            <Reply className="w-3.5 h-3.5" />
+            <span>Reply</span>
           </button>
         </div>
 
-        {/* Replies Toggle */}
+        {/* Replies toggle */}
         {comment.replies?.length > 0 && (
           <button
             onClick={() => setShowReplies(!showReplies)}
-            className="text-purple-400 text-sm mt-2 hover:underline"
+            className="text-purple-400 hover:text-purple-300 text-xs font-bold mt-2.5 flex items-center gap-1.5"
           >
-            {showReplies ? 'Hide' : 'Show'} {comment.replies.length} replies
+            <span className="w-4 h-[1px] bg-purple-400/50" />
+            {showReplies ? 'Hide' : 'View'} {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
           </button>
         )}
 
-        {/* Replies */}
+        {/* Threaded Replies */}
         <AnimatePresence>
           {showReplies && comment.replies?.length > 0 && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="mt-3 pl-4 border-l-2 border-white/10 space-y-3"
+              className="mt-3 pl-3 border-l border-white/10 space-y-3"
             >
               {comment.replies.map((reply) => (
-                <div key={reply.id} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-xs">
+                <div key={reply.id} className="flex gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-white font-bold text-[10px]">
                     {reply.user.name?.[0]?.toUpperCase() || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-medium text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-white font-semibold text-xs">
                         @{reply.user.username}
                       </span>
-                      <span className="text-white/50 text-xs">
+                      {reply.user.isCreator && (
+                        <span className="px-1 py-0.2 rounded bg-pink-500/20 text-pink-300 text-[8px] font-bold">
+                          Creator
+                        </span>
+                      )}
+                      <span className="text-white/40 text-[10px] ml-auto">
                         {formatTimeAgo(reply.createdAt)}
                       </span>
                     </div>
-                    <p className="text-white/80 text-sm mt-0.5">{reply.text}</p>
+                    <p className="text-white/80 text-xs mt-0.5 leading-relaxed break-words">
+                      {reply.text}
+                    </p>
                     <button
                       onClick={() => onLike(true, comment.id)}
-                      className="flex items-center gap-1 text-white/60 hover:text-red-400 transition-colors mt-1"
+                      className="flex items-center gap-1 text-white/50 hover:text-red-400 transition-colors mt-1"
                     >
                       <Heart
                         className={`w-3 h-3 ${reply.isLiked ? 'fill-red-400 text-red-400' : ''}`}
                       />
-                      <span className="text-xs">{reply.likes}</span>
+                      <span className="text-[10px] font-semibold">{reply.likes || 0}</span>
                     </button>
                   </div>
                 </div>

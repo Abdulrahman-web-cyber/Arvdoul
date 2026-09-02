@@ -296,6 +296,18 @@ class UltimateFeedService {
     return this.firestore;
   }
 
+  async ensureInitialized() {
+    return this._ensureInitialized();
+  }
+
+  async ensureinitialize() {
+    return this._ensureInitialized();
+  }
+
+  async _ensureinitialize() {
+    return this._ensureInitialized();
+  }
+
   async _loadWeightsFromConfig(force = false) {
     if (this.offlineMode) return { ...FEED_CONFIG.ALGORITHM.BASE_WEIGHTS };
     const now = Date.now();
@@ -1971,6 +1983,9 @@ const feedService = {
   clearCache: () => getFeedService().clearCache(),
   destroy: () => getFeedService().destroy(),
   ensureInitialized: () => getFeedService()._ensureInitialized(),
+  _ensureInitialized: () => getFeedService()._ensureInitialized(),
+  ensureinitialize: () => getFeedService()._ensureInitialized(),
+  _ensureinitialize: () => getFeedService()._ensureInitialized(),
   invalidateBlockCache: (userId) => getFeedService().invalidateBlockCache(userId),
   likePost: (pid, uid) => firestoreService.likePost(pid, uid),
   unlikePost: (pid, uid) => firestoreService.unlikePost(pid, uid),

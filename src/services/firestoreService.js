@@ -145,6 +145,25 @@ class EnterpriseFirestoreService {
     }
   }
 
+  async ensureInitialized() {
+    if (!this.initialized || !this.firestore) {
+      await this.initialize();
+    }
+    return this.firestore;
+  }
+
+  async _ensureInitialized() {
+    return this.ensureInitialized();
+  }
+
+  async ensureinitialize() {
+    return this.ensureInitialized();
+  }
+
+  async _ensureinitialize() {
+    return this.ensureInitialized();
+  }
+
   // ==================== DRAFTS AND PUBLISH (GAPS COMPLIANCE) ====================
   async saveDraft(draftId, userId, draftData) {
     await this.ensureInitialized();

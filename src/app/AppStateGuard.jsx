@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import PageLoader from "../components/UI/PageLoader.jsx";
 import {
   resolvePostAuthDestination,
   safeReturnPath,
@@ -69,11 +70,15 @@ export default function AppStateGuard({ children }) {
     }
   }, [decision, navigate, user]);
 
-  // If redirecting, return null seamlessly without flashing an extra blank spinner
+  // When auth state is resolving during cold-start, present a sleek platform loader
+  if (decision.wait) {
+    return <PageLoader label="Connecting to Arvdoul..." fullScreen={true} />;
+  }
+
+  // If redirecting, return null seamlessly without flashing
   if (decision.destination && !decision.wait) {
     return null;
   }
 
-  // Allow children to render directly so their native skeletons handle background data loading
   return children;
 }
