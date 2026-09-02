@@ -103,33 +103,28 @@ class IntroErrorBoundary extends Component {
 }
 const IntroErrorBoundaryTranslated = withLanguage(IntroErrorBoundary);
 
-/* -------------------- Ambient Background with Controlled, Subtle Glow -------------------- */
+/* -------------------- Crisp Minimal Background (Zero Blurry Glow) -------------------- */
 const AmbientBackground = memo(({ theme }) => {
   const isDark = theme === "dark";
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-      {/* Soft gradient background */}
+      {/* Subtle fine geometric dot grid without any blurry glow */}
       <div
-        className="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full opacity-30 dark:opacity-20 blur-[90px]"
+        className="absolute inset-0 opacity-[0.035] dark:opacity-[0.05]"
         style={{
-          background: isDark
-            ? "radial-gradient(circle, rgba(139,30,243,0.3) 0%, rgba(5,91,251,0.15) 50%, transparent 70%)"
-            : "radial-gradient(circle, rgba(147,51,234,0.15) 0%, rgba(59,130,246,0.1) 50%, transparent 70%)",
+          backgroundImage: isDark
+            ? "radial-gradient(circle, #ffffff 1px, transparent 1px)"
+            : "radial-gradient(circle, #000000 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
         }}
       />
-      <div
-        className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[400px] rounded-full opacity-20 dark:opacity-15 blur-[80px]"
-        style={{
-          background: isDark
-            ? "radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 70%)"
-            : "radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%)",
-        }}
-      />
+      {/* Crisp subtle border accents */}
+      <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-violet-500/20 to-transparent" />
     </div>
   );
 });
 
-/* -------------------- Interactive Background Particles (Throttled & Subtle) -------------------- */
+/* -------------------- Interactive Background Particles (Minimal & Non-intrusive) -------------------- */
 const BackgroundParticles = memo(({ theme }) => {
   const canvasRef = useRef(null);
   const isReduced = useSafeReducedMotion();
@@ -153,14 +148,14 @@ const BackgroundParticles = memo(({ theme }) => {
     window.addEventListener("resize", handleResize);
 
     const isDark = theme === "dark";
-    const particleCount = Math.min(25, Math.floor(width / 50));
+    const particleCount = Math.min(14, Math.floor(width / 90));
     const particles = Array.from({ length: particleCount }).map(() => ({
       x: secureRandom() * width,
       y: secureRandom() * height,
-      radius: secureRandom() * 1.8 + 0.8,
-      vx: (secureRandom() - 0.5) * 0.35,
-      vy: (secureRandom() - 0.5) * 0.35,
-      opacity: secureRandom() * 0.25 + 0.1,
+      radius: secureRandom() * 1.2 + 0.6,
+      vx: (secureRandom() - 0.5) * 0.2,
+      vy: (secureRandom() - 0.5) * 0.2,
+      opacity: secureRandom() * 0.15 + 0.05,
     }));
 
     const render = () => {
@@ -177,7 +172,7 @@ const BackgroundParticles = memo(({ theme }) => {
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fillStyle = isDark
           ? `rgba(167, 139, 250, ${p.opacity})`
-          : `rgba(139, 92, 246, ${p.opacity * 0.8})`;
+          : `rgba(139, 92, 246, ${p.opacity * 0.6})`;
         ctx.fill();
       });
       animId = requestAnimationFrame(render);
@@ -196,7 +191,7 @@ const BackgroundParticles = memo(({ theme }) => {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 pointer-events-none z-0 opacity-80"
+      className="absolute inset-0 pointer-events-none z-0 opacity-40"
       aria-hidden="true"
     />
   );
@@ -358,7 +353,7 @@ function IntroScreen() {
               {/* Hero Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-sm mx-auto mb-14">
                 <button
-                  onClick={() => navigate("/signup")}
+                  onClick={() => navigate("/signup/step1")}
                   className="w-full sm:w-auto flex-1 px-7 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 shadow-md hover:shadow-lg transition-all transform active:scale-95"
                 >
                   {t("intro.createAccount") || "Get Started"}
@@ -427,7 +422,7 @@ function IntroScreen() {
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-sm mx-auto">
                   <button
-                    onClick={() => navigate("/signup")}
+                    onClick={() => navigate("/signup/step1")}
                     className="w-full flex-1 px-6 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-sm transition-all"
                   >
                     {t("intro.createAccount") || "Create Free Account"}

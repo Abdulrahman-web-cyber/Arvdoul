@@ -19,6 +19,8 @@ import { getMonetizationService } from '../services/monetizationService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/ui/Dialog.jsx';
+import BottomNav from '../components/Shared/BottomNav';
+import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // Fallback high-fidelity sample notifications matching the exact Arvdoul design
 const FILTERS = [
@@ -194,18 +196,21 @@ export default function NotificationsScreen() {
         isDark ? "bg-[#060814]/85 border-white/5" : "bg-white/90 border-slate-200"
       )}>
         <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black font-display tracking-tight">
-                Notifications
-              </h1>
-              {unreadCount > 0 && (
-                <span className="w-2.5 h-2.5 rounded-full bg-violet-500 shadow-arvdoul-glow" />
-              )}
+          <div className="flex items-center gap-3">
+            <ArvdoulLogo size={32} showWordmark={false} />
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black font-display tracking-tight">
+                  Notifications
+                </h1>
+                {unreadCount > 0 && (
+                  <span className="w-2.5 h-2.5 rounded-full bg-violet-500 shadow-arvdoul-glow" />
+                )}
+              </div>
+              <p className="text-xs text-arvdoul-text-secondary mt-0.5">
+                Stay updated with what matters to you
+              </p>
             </div>
-            <p className="text-xs text-arvdoul-text-secondary mt-0.5">
-              Stay updated with what matters to you
-            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -667,61 +672,8 @@ export default function NotificationsScreen() {
         </div>
       </Dialog>
 
-      {/* Bottom Navigation Bar */}
-      <nav className={cn(
-        "fixed bottom-0 inset-x-0 z-40 backdrop-blur-2xl border-t py-2 px-6 transition-colors",
-        isDark ? "bg-[#060814]/90 border-white/10" : "bg-white/95 border-slate-200 shadow-lg"
-      )}>
-        <div className="max-w-md mx-auto flex items-center justify-between">
-          <button
-            onClick={() => navigate('/')}
-            className="flex flex-col items-center gap-1 text-arvdoul-text-secondary hover:text-white transition-colors"
-          >
-            <Home className="w-5 h-5" />
-            <span className="text-[10px] font-semibold">Home</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/messages')}
-            className="relative flex flex-col items-center gap-1 text-arvdoul-text-secondary hover:text-white transition-colors"
-          >
-            <MessageSquare className="w-5 h-5" />
-            <span className="absolute -top-1 right-1 w-4 h-4 rounded-full bg-violet-600 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-[#060814]">
-              8
-            </span>
-            <span className="text-[10px] font-semibold">Chats</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/stories')}
-            className="flex flex-col items-center gap-1 text-arvdoul-text-secondary hover:text-white transition-colors"
-          >
-            <Compass className="w-5 h-5" />
-            <span className="text-[10px] font-semibold">Stories</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/notifications')}
-            className="relative flex flex-col items-center gap-1 text-violet-400 font-bold transition-colors"
-          >
-            <div className="p-1 rounded-full bg-violet-500/15">
-              <Bell className="w-5 h-5 text-violet-400 fill-violet-400/20" />
-            </div>
-            <span className="absolute -top-1 right-2 w-4 h-4 rounded-full bg-violet-600 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-[#060814] shadow-arvdoul-glow">
-              12
-            </span>
-            <span className="text-[10px] font-bold">Notifications</span>
-          </button>
-
-          <button
-            onClick={() => navigate('/profile')}
-            className="flex flex-col items-center gap-1 text-arvdoul-text-secondary hover:text-white transition-colors"
-          >
-            <User className="w-5 h-5" />
-            <span className="text-[10px] font-semibold">Profile</span>
-          </button>
-        </div>
-      </nav>
+      {/* Modern Arvdoul Dome Navigation */}
+      <BottomNav />
     </div>
   );
 }

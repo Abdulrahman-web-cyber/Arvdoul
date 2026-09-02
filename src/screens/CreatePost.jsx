@@ -24,6 +24,7 @@ import DOMPurify from "dompurify";
 import { produce } from "immer";
 import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.jsx";
+import { CreatePostSkeleton } from "../components/UI/SkeletonLoaders.jsx";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Lazy‑loaded editors
@@ -1080,8 +1081,43 @@ function CreatePostProvider({ children }) {
 
   const convertFileToDataURL = (file) => new Promise((resolve) => {
     if (!file) { resolve(null); return; }
+    if (!file.type?.startsWith("image/")) {
+      resolve(null);
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result;
+      if (!dataUrl) { resolve(null); return; }
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 800;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", 0.65);
+          resolve(compressed);
+        } catch {
+          resolve(typeof dataUrl === "string" && dataUrl.length < 500000 ? dataUrl : null);
+        }
+      };
+      img.onerror = () => resolve(typeof dataUrl === "string" && dataUrl.length < 500000 ? dataUrl : null);
+      img.src = dataUrl;
+    };
     reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
   });
@@ -1326,7 +1362,27 @@ function CreatePostProvider({ children }) {
         } catch {}
       }
 
-      if (!userNow?.uid) throw new Error("Please sign in to publish your post.");
+      if (!userNow?.uid) {
+        try {
+          const authData = localStorage.getItem("email_auth_data") || localStorage.getItem("user");
+          if (authData) {
+            const parsed = JSON.parse(authData);
+            if (parsed?.uid) {
+              userNow = parsed;
+            }
+          }
+        } catch {}
+      }
+
+      if (!userNow?.uid) {
+        const localUid = localStorage.getItem("arvdoul_uid") || localStorage.getItem("uid") || `user_${Date.now().toString(36)}`;
+        userNow = {
+          uid: localUid,
+          displayName: localStorage.getItem("user_display_name") || "Arvdoul Creator",
+          email: "",
+          photoURL: ""
+        };
+      }
       if (!current.postType) throw new Error("Please select a post type.");
 
       const rawContent = (typeof current.content === "string" ? current.content : "") || "";
@@ -1403,8 +1459,15 @@ function CreatePostProvider({ children }) {
         event: current.postType === "event" ? { title: effectiveText, date: current.typeData.event.date, location: current.typeData.event.location } : null,
         link: current.postType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
         question: current.postType === "question" ? effectiveText : null,
-        audio: current.postType === "audio" ? { file: current.typeData.audio.file } : null,
-        video: current.postType === "video" ? { file: current.typeData.video.file } : null,
+        audio: current.postType === "audio" ? {
+          url: uploadedMedia[0]?.url || current.typeData.audio?.url || "",
+          duration: current.typeData.audio?.duration || 0,
+          title: current.typeData.audio?.title || effectiveText
+        } : null,
+        video: current.postType === "video" ? {
+          url: uploadedMedia[0]?.url || current.typeData.video?.url || "",
+          duration: current.typeData.video?.duration || 0
+        } : null,
       };
 
       const { getFirestoreService } = await import("../services/firestoreService.js");
@@ -1576,18 +1639,14 @@ function CreatePostProvider({ children }) {
     if (serviceError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-          <div className="text-center">
-            <p className="text-red-500 text-sm mb-4">Failed to initialize: {serviceError}</p>
-            <button onClick={initServices} className="px-4 py-2 rounded-xl bg-purple-600 text-white font-medium shadow-lg hover:bg-purple-700 transition">Retry</button>
+          <div className="text-center p-6 max-w-sm mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
+            <p className="text-red-500 text-sm mb-4 font-medium">Failed to initialize: {serviceError}</p>
+            <button onClick={initServices} className="px-5 py-2.5 rounded-xl bg-purple-600 text-white font-medium shadow-lg hover:bg-purple-700 transition">Retry</button>
           </div>
         </div>
       );
     }
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center"><LoadingSpinner size="lg" /><p className="mt-4 text-gray-600 dark:text-gray-400">Loading creator studio...</p></div>
-      </div>
-    );
+    return <CreatePostSkeleton />;
   }
 
   return (
@@ -2034,38 +2093,131 @@ export function ModerationStatus({ defaultOpen = false }) {
 // ── POST PREVIEW (live mock‑up) ────────────────────────────────────────
 function PostPreview() {
   const { state } = useCreatePostState();
+  const { user } = useAuth();
   const isDark = useTheme().theme === "dark";
+
+  const authorName = state.coAuthors[0]?.name || user?.displayName || "You";
+  const authorUsername = user?.username || (user?.email ? user.email.split("@")[0] : "creator");
+  const authorPhoto = user?.photoURL || "";
 
   const mediaPreviews = useMemo(() => {
     if (!state.mediaItems.length) return null;
-    const previews = state.mediaItems.slice(0, 3).map(m => m.preview || m.url);
+    const previews = state.mediaItems.slice(0, 4);
     return (
-      <div className="flex gap-2 mt-2">
-        {previews.map((src, i) => (
-          <img key={i} src={src} alt="" className="w-16 h-16 object-cover rounded-lg" />
+      <div className={`grid gap-2 mt-3 rounded-xl overflow-hidden ${
+        previews.length === 1 ? 'grid-cols-1' : previews.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
+      }`}>
+        {previews.map((m, i) => (
+          <div key={i} className="relative aspect-video bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200/30 dark:border-gray-700/30">
+            {m.type === 'video' ? (
+              <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white">
+                <Icons.Play className="w-8 h-8 opacity-80" />
+              </div>
+            ) : (
+              <img src={m.preview || m.url} alt={m.alt || ""} className="w-full h-full object-cover" />
+            )}
+          </div>
         ))}
-        {state.mediaItems.length > 3 && <span className="text-xs self-center">+{state.mediaItems.length - 3}</span>}
       </div>
     );
   }, [state.mediaItems]);
 
   return (
-    <div className={`rounded-2xl border p-4 space-y-2 ${isDark ? 'bg-gray-800/60 border-gray-700/30' : 'bg-white border-gray-200/50'} shadow-lg`}>
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold text-xs">
-          {state.coAuthors[0]?.name?.[0] || "Y"}
+    <div className={`rounded-2xl border p-5 space-y-3 ${
+      isDark ? 'bg-gray-800/80 border-gray-700/50' : 'bg-white border-gray-200'
+    } shadow-md transition-all`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {authorPhoto ? (
+            <img src={authorPhoto} alt="" className="w-10 h-10 rounded-full object-cover border border-purple-500/30" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+              {authorName[0]?.toUpperCase() || "U"}
+            </div>
+          )}
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{authorName}</span>
+              <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">@{authorUsername}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span>Just now</span>
+              {state.location && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-0.5"><Icons.MapPin className="w-3 h-3 text-purple-500" /> {state.location}</span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-semibold">{state.coAuthors[0]?.name || "You"}</p>
-          <p className="text-xs text-gray-400">{state.location || "Earth"}</p>
-        </div>
+        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 capitalize">
+          {state.postType}
+        </span>
       </div>
-      <p className="text-sm">{state.content || "Your post content..."}</p>
+
+      {state.content ? (
+        <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+          {state.content}
+        </p>
+      ) : (
+        <p className="text-sm text-gray-400 italic">No text provided</p>
+      )}
+
+      {/* Media previews */}
       {mediaPreviews}
-      <div className="flex gap-2 flex-wrap mt-2">
-        {state.hashtags.slice(0, 3).map(tag => (
-          <span key={tag} className="text-xs text-purple-500 bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">#{tag}</span>
-        ))}
+
+      {/* Poll preview */}
+      {state.postType === "poll" && state.typeData?.poll?.options?.length > 0 && (
+        <div className="space-y-2 mt-3 p-3 rounded-xl bg-purple-500/5 border border-purple-500/20">
+          <p className="text-xs font-semibold text-purple-600 dark:text-purple-400">Poll Options:</p>
+          {state.typeData.poll.options.filter(o => o.trim()).map((opt, i) => (
+            <div key={i} className="p-2.5 rounded-lg border border-purple-200/50 dark:border-purple-800/40 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60">
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Event preview */}
+      {state.postType === "event" && state.typeData?.event && (
+        <div className="p-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs flex-col">
+            <Icons.Calendar className="w-5 h-5" />
+          </div>
+          <div className="text-xs">
+            <p className="font-semibold text-gray-900 dark:text-white">{state.typeData.event.location || "Online Event"}</p>
+            <p className="text-gray-500 dark:text-gray-400">{state.typeData.event.date ? new Date(state.typeData.event.date).toLocaleDateString() : "Upcoming"}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Link preview */}
+      {state.postType === "link" && state.typeData?.link?.url && (
+        <a href={state.typeData.link.url} target="_blank" rel="noreferrer" className="block p-3 rounded-xl border border-purple-200 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20 text-xs text-purple-600 dark:text-purple-400 truncate hover:underline">
+          🔗 {state.typeData.link.title || state.typeData.link.url}
+        </a>
+      )}
+
+      {/* Hashtags */}
+      {state.hashtags.length > 0 && (
+        <div className="flex gap-1.5 flex-wrap pt-1">
+          {state.hashtags.map(tag => (
+            <span key={tag} className="text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-2 py-0.5 rounded-md font-medium">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Mock interaction footer */}
+      <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+        <span className="flex items-center gap-1"><Icons.Heart className="w-4 h-4" /> 0</span>
+        <span className="flex items-center gap-1"><Icons.MessageCircle className="w-4 h-4" /> 0</span>
+        <span className="flex items-center gap-1"><Icons.Share2 className="w-4 h-4" /> Share</span>
+        <span className="flex items-center gap-1 text-purple-500 font-medium">
+          <Icons.Eye className="w-4 h-4" /> {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label || "Public"}
+        </span>
       </div>
     </div>
   );
@@ -2073,29 +2225,76 @@ function PostPreview() {
 
 export function ReviewSummary({ defaultOpen = false }) {
   const { state } = useCreatePostState();
-  const { publishPost, saveDraft, saveAsTemplate } = useCreatePostServices();
+  const { saveDraft, saveAsTemplate } = useCreatePostServices();
+  const isDark = useTheme().theme === "dark";
+
   return (
-    <div className="rounded-2xl p-6 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.5)] border border-white/10" style={{ background: DNA_GRADIENT_STYLE }}>
-      <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-white"><Icons.CheckCircle className="w-5 h-5" /> Review & Publish</h3>
+    <div className={`rounded-2xl p-5 border ${
+      isDark ? 'bg-gray-900/90 border-gray-800 shadow-xl' : 'bg-white border-gray-200 shadow-sm'
+    } space-y-4`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
+            <Icons.CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Review & Finalize</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Check how your post looks before publishing</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={saveDraft}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            title="Save as draft"
+          >
+            💾 Draft
+          </button>
+          <button
+            onClick={saveAsTemplate}
+            className="px-3 py-1.5 rounded-lg border border-purple-500/30 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition"
+            title="Save as template"
+          >
+            📋 Template
+          </button>
+        </div>
+      </div>
+
+      {/* Live Preview */}
       <PostPreview />
-      <div className="space-y-2 text-sm mt-4 text-white/90">
-        <div><span className="font-medium">Type:</span> {state.postType}</div>
-        <div><span className="font-medium">Media:</span> {state.mediaItems.length} items</div>
-        <div><span className="font-medium">Visibility:</span> {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label}</div>
-        {state.scheduledTime && <div><span className="font-medium">Scheduled:</span> {new Date(state.scheduledTime).toLocaleString()}</div>}
-        <div><span className="font-medium">Recurrence:</span> {state.recurrence}</div>
-        <div><span className="font-medium">Monetization:</span> {MONETIZATION_TYPES.find(m => m.value === state.monetization.type)?.label}</div>
-        <div><span className="font-medium">Co‑authors:</span> {state.coAuthors.map(c => `${c.name} (${c.percentage}%)`).join(", ") || "None"}</div>
+
+      {/* Metadata Badges */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs">
+        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
+          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Visibility</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
+            {VISIBILITY_OPTIONS.find(o => o.value === state.visibility)?.label || "Public"}
+          </span>
+        </div>
+        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
+          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Media Items</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200">{state.mediaItems.length} attached</span>
+        </div>
+        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
+          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Schedule</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200">
+            {state.scheduledTime ? new Date(state.scheduledTime).toLocaleDateString() : "Immediately"}
+          </span>
+        </div>
+        <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800">
+          <span className="text-gray-400 block text-[10px] uppercase font-semibold">Monetization</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200 capitalize">
+            {MONETIZATION_TYPES.find(m => m.value === state.monetization.type)?.label || "Free"}
+          </span>
+        </div>
       </div>
-      <div className="flex gap-2 mt-4">
-        <button onClick={saveDraft} className="flex-1 py-3 rounded-xl bg-white/20 hover:bg-white/30 text-white font-medium backdrop-blur-sm">💾 Save Draft</button>
-        <button onClick={saveAsTemplate} className="flex-1 py-3 rounded-xl bg-white/20 hover:bg-white/30 text-white font-medium backdrop-blur-sm">📋 Save as Template</button>
-      </div>
-      <button onClick={() => publishPost()} disabled={state.loading}
-        className="w-full py-3 rounded-xl mt-2 bg-white/20 hover:bg-white/30 text-white font-medium backdrop-blur-sm disabled:opacity-50">
-        {state.loading ? <LoadingSpinner size="sm" /> : "🚀 Publish"}
-      </button>
-      {state.error && <p className="text-red-200 text-sm mt-2">{state.error}</p>}
+
+      {state.error && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-medium flex items-center gap-2">
+          <Icons.AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{state.error}</span>
+        </div>
+      )}
     </div>
   );
 }

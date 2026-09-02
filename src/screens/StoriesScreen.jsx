@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
+import BottomNav from '../components/Shared/BottomNav';
+import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // High definition sample stories matching Screenshot 2
 const CATEGORY_TABS = [
@@ -367,15 +369,23 @@ export default function StoriesScreen() {
             : 'bg-white/90 border-gray-200/80 shadow-sm'
         )}
       >
-        {/* Title with Arvdoul glow indicator underline */}
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold tracking-tight font-display bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-              Stories
-            </h1>
+        {/* Title with Arvdoul branding and glow indicator underline */}
+        <div className="flex items-center gap-3">
+          <ArvdoulLogo size={32} showWordmark={false} />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <h1 className={cn(
+                "text-2xl font-black tracking-tight font-display bg-clip-text text-transparent",
+                isDark
+                  ? "bg-gradient-to-r from-white via-slate-100 to-slate-400"
+                  : "bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-800"
+              )}>
+                Stories
+              </h1>
+            </div>
+            {/* Subtle neon glow underline */}
+            <div className="w-10 h-1 bg-gradient-to-r from-[#8B1EF3] via-[#C82BFF] to-[#055BFB] rounded-full mt-0.5" />
           </div>
-          {/* Subtle neon glow underline */}
-          <div className="w-10 h-1 bg-gradient-to-r from-[#8B1EF3] via-[#C82BFF] to-[#055BFB] rounded-full mt-0.5" />
         </div>
 
         {/* Action icons: Search, Camera, Archive */}
@@ -880,6 +890,9 @@ export default function StoriesScreen() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modern Arvdoul Bottom Navigation */}
+      {activeStoryIndex === null && <BottomNav />}
     </div>
   );
 }

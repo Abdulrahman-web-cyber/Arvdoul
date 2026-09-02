@@ -126,10 +126,8 @@ import {
   CreatePostSkeleton,
   VideosScreenSkeleton,
   GenericScreenSkeleton,
+  RouteFallback,
 } from "../components/UI/SkeletonLoaders.jsx";
-
-// ==================== LOADING FALLBACK ====================
-const RouteFallback = () => <GenericScreenSkeleton />;
 
 // ==================== ROUTE WRAPPERS ====================
 const PublicRoute = ({ children }) => {

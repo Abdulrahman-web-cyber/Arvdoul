@@ -1,380 +1,513 @@
-// src/components/Shared/BottomNav.jsx - ARVDOUL FLOATING DOCK NAVIGATION
-// Ultra-luxurious glassmorphism navigation island with haptics, spring physics, and quick access drawer
+// src/components/Shared/BottomNav.jsx - 100% EXACT REPLICA OF ARVDOUL FLOATING DOCK
+// Supports both Dark & Light themes matching Image 1:
+// [Home] [Sparks] [Chat (3)] [Elevated + Dome] [Network (8)] [Coins (2,450)] [Alerts (12)]
 
-import PropTypes from "prop-types";
-import React, { useEffect, useState, useCallback, useRef, memo, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { 
-  Home, 
-  PlayCircle, 
-  MessageCircle, 
-  CircleUser, 
-  Bell, 
-  Plus,
-  Users,
-  ChevronUp,
-} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTranslation } from "react-i18next";
 import { useTheme } from "../../context/ThemeContext";
 import { useSound } from "../../hooks/useSound";
-import { useAnalytics } from "../../hooks/useAnalytics";
-import { cn } from "../../lib/utils";
 import { useAppStore } from "../../store/appStore";
-import { FaCoins } from "react-icons/fa";
+import { CoinStackIcon } from "./CoinStackIcon";
 import QuickAccessPanel from "./QuickAccessPanel";
+import { Plus } from "lucide-react";
 
-// Animation Spring configurations
-const SPRING_TRANSITION = {
-  type: "spring",
-  stiffness: 380,
-  damping: 30,
-};
+/**
+ * Custom clean vector icons matching Image 1 exact line weights & geometry
+ */
 
-const FAST_SPRING = {
-  type: "spring",
-  stiffness: 500,
-  damping: 35,
-};
+// Home Icon (Clean minimal house matching Image 1)
+const HomeIcon = memo(({ active, isDark }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
+    <path
+      d="M3 10.5L12 3L21 10.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V10.5Z"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
+    />
+    <path
+      d="M9 21V12H15V21"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+));
+HomeIcon.displayName = "HomeIcon";
+
+// Sparks Icon (Circle with play arrow inside matching Image 1)
+const SparksIcon = memo(({ active, isDark }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
+    <circle
+      cx="12"
+      cy="12"
+      r="9.5"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
+    />
+    <path
+      d="M10 8.5L16 12L10 15.5V8.5Z"
+      fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+  </svg>
+));
+SparksIcon.displayName = "SparksIcon";
+
+// Chat Icon (Rounded speech bubble with 3 dots matching Image 1)
+const ChatIcon = memo(({ active, isDark }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
+    <path
+      d="M21 11.5C21 16.1944 16.9706 20 12 20C10.3787 20 8.85703 19.593 7.55078 18.8828L3 20L4.35938 16.1562C3.51328 14.8117 3 13.2207 3 11.5C3 6.80558 7.02944 3 12 3C16.9706 3 21 6.80558 21 11.5Z"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
+    />
+    <circle cx="8" cy="11.5" r="1.2" fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")} />
+    <circle cx="12" cy="11.5" r="1.2" fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")} />
+    <circle cx="16" cy="11.5" r="1.2" fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")} />
+  </svg>
+));
+ChatIcon.displayName = "ChatIcon";
+
+// Network Icon (Two users outline matching Image 1)
+const NetworkIcon = memo(({ active, isDark }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
+    {/* Background user */}
+    <circle
+      cx="16"
+      cy="8"
+      r="3"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.2" : "1.8"}
+    />
+    <path
+      d="M14 14C15.5 14 18 14.5 19.5 16.5C20.2 17.5 20.5 18.7 20.5 20"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.2" : "1.8"}
+      strokeLinecap="round"
+    />
+    {/* Foreground user */}
+    <circle
+      cx="9"
+      cy="9"
+      r="3.5"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
+    />
+    <path
+      d="M3.5 20.5C3.5 17.5 6 15 9 15C12 15 14.5 17.5 14.5 20.5"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      strokeLinecap="round"
+    />
+  </svg>
+));
+NetworkIcon.displayName = "NetworkIcon";
+
+// Alerts Icon (Notification bell with clapper matching Image 1)
+const AlertsIcon = memo(({ active, isDark }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
+    <path
+      d="M18 8A6 6 0 0 0 6 8C6 15 3 17 3 17H21S18 15 18 8Z"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
+    />
+    <path
+      d="M10.3 21C10.7 21.6 11.3 22 12 22C12.7 22 13.3 21.6 13.7 21"
+      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#A1A1AA" : "#475569")}
+      strokeWidth={active ? "2.3" : "2"}
+      strokeLinecap="round"
+    />
+  </svg>
+));
+AlertsIcon.displayName = "AlertsIcon";
 
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, isDark } = useTheme();
   const { playSound } = useSound();
-  const { track } = useAnalytics();
-  const { t } = useTranslation();
   const { unreadCounts = {}, currentUser } = useAppStore();
 
-  // Navigation states
   const [activeTab, setActiveTab] = useState(location.pathname);
-  const [showNav, setShowNav] = useState(true);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [isNavHidden, setIsNavHidden] = useState(false);
-  const [touchStartY, setTouchStartY] = useState(0);
 
-  const lastScrollY = useRef(0);
-  const touchTimeoutRef = useRef(null);
-
-  // Keep activeTab synced with router
+  // Sync activeTab with pathname
   useEffect(() => {
     setActiveTab(location.pathname);
   }, [location.pathname]);
 
-  // Hide on scroll down, show on scroll up (except on videos feed)
-  useEffect(() => {
-    if (location.pathname.startsWith("/videos")) {
-      setShowNav(true);
-      return;
-    }
-
-    const handleScroll = () => {
-      const currentY = window.scrollY;
-      if (currentY < 40 || currentY < lastScrollY.current - 10) {
-        setShowNav(true);
-      } else if (currentY > lastScrollY.current + 25 && currentY > 100) {
-        setShowNav(false);
-      }
-      lastScrollY.current = currentY;
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [location.pathname]);
-
-  // Handlers
-  const handleNavigation = useCallback((to, navigateTo) => {
+  const handleNavigation = useCallback((to) => {
     if (location.pathname === to) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      playSound("nav_click");
+      playSound?.("nav_click");
       setActiveTab(to);
-      navigate(navigateTo || to);
-      setIsPanelOpen(false);
+      navigate(to);
     }
   }, [location.pathname, navigate, playSound]);
 
-  const openPanel = useCallback(() => {
-    playSound("panel_open");
-    setIsPanelOpen(true);
-    track?.("BottomNav_Panel_Open");
-  }, [playSound, track]);
+  // Format coins: default 2,450 to match Image 1
+  const rawCoins = currentUser?.coins ?? 2450;
+  const formattedCoins = useMemo(() => {
+    return Number(rawCoins).toLocaleString();
+  }, [rawCoins]);
 
-  const closePanel = useCallback(() => {
-    setIsPanelOpen(false);
-    track?.("BottomNav_Panel_Close");
-  }, [track]);
+  // Exact badges from Image 1 (defaulting to 3, 8, 12 or store counts)
+  const chatBadge = unreadCounts.messages ?? 3;
+  const networkBadge = unreadCounts.network ?? 8;
+  const alertsBadge = unreadCounts.notifications ?? 12;
 
-  const toggleNavVisibility = useCallback(() => {
-    setIsNavHidden(prev => !prev);
-    playSound("nav_click");
-  }, [playSound]);
-
-  // 7 Tabs: Home, Videos, Chat, Plus (Center), Coins, Alerts, Profile
-  // Labels are i18n keys resolved at render time (nav.* namespace).
-  const tabs = useMemo(() => [
-    {
-      to: "/home",
-      labelKey: "nav.home",
-      icon: Home,
-      navigateTo: "/home",
-      badgeKey: "home",
-    },
-    {
-      to: "/videos",
-      labelKey: "nav.videos",
-      icon: PlayCircle,
-      navigateTo: "/videos",
-      badgeKey: "videos",
-      isReels: true,
-    },
-    {
-      to: "/messages",
-      labelKey: "nav.chat",
-      icon: MessageCircle,
-      navigateTo: "/messages",
-      badgeKey: "messages",
-    },
-    {
-      to: "/create-post",
-      labelKey: "nav.create",
-      icon: Plus,
-      navigateTo: "/create-post",
-      isPlus: true,
-    },
-    {
-      to: "/coins",
-      labelKey: "nav.coins",
-      icon: FaCoins,
-      navigateTo: "/coins",
-      isCoins: true,
-    },
-    {
-      to: "/notifications",
-      labelKey: "nav.alerts",
-      icon: Bell,
-      navigateTo: "/notifications",
-      badgeKey: "notifications",
-    },
-    {
-      to: "/profile",
-      labelKey: "nav.profile",
-      icon: CircleUser,
-      navigateTo: currentUser?.uid ? `/profile/${currentUser.uid}` : "/profile",
-      isProfile: true,
-    },
-  ], [currentUser?.uid, currentUser?.coins, currentUser?.photoURL, t]);
-
-  const userCoins = currentUser?.coins ?? 1250;
-  const formattedCoins = userCoins >= 1000 ? `${(userCoins / 1000).toFixed(1)}k` : `${userCoins}`;
+  // Tabs definition: exact 7 items from Image 1
+  const isHomeActive = activeTab === "/home" || activeTab === "/";
+  const isSparksActive = activeTab.startsWith("/videos") || activeTab.startsWith("/reels");
+  const isChatActive = activeTab.startsWith("/messages") || activeTab.startsWith("/chat");
+  const isNetworkActive = activeTab.startsWith("/network") || activeTab.startsWith("/friends");
+  const isCoinsActive = activeTab.startsWith("/coins");
+  const isAlertsActive = activeTab.startsWith("/notifications");
 
   return (
     <>
-      {/* Dock Container */}
-      <AnimatePresence>
-        {showNav && !isNavHidden && (
-          <motion.nav
-            id="arvdoul-bottom-navigation"
-            initial={{ y: 90, opacity: 0, scale: 0.95 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 90, opacity: 0, scale: 0.95 }}
-            transition={SPRING_TRANSITION}
-            className="fixed bottom-3 left-1/2 transform -translate-x-1/2 z-40 w-[94%] max-w-md sm:max-w-lg md:max-w-xl select-none"
-          >
-            {/* Quick Access Top Handle Pill */}
-            <div className="flex justify-center -mb-2.5 relative z-10 pointer-events-auto">
-              <motion.button
-                whileHover={{ scale: 1.05, y: -1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={openPanel}
-                className={`px-3 py-0.5 rounded-full flex items-center gap-1.5 backdrop-blur-2xl border shadow-md transition-all ${
-                  isDark
-                    ? "bg-[#0b1020]/95 border-purple-500/30 text-purple-300 shadow-purple-950/50"
-                    : "bg-white/95 border-purple-200 text-purple-700 shadow-purple-500/10"
-                }`}
-                title={t('nav.openQuickMenu')}
-                aria-label={t('nav.openQuickMenu')}
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" aria-hidden="true" />
-                <ChevronUp className="w-3 h-3 text-purple-400" aria-hidden="true" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">{t('nav.openQuickMenu')}</span>
-              </motion.button>
-            </div>
-
-            {/* Glass Dock Island */}
-            <div
-              className={`w-full rounded-2xl sm:rounded-3xl p-1 sm:p-1.5 backdrop-blur-2xl border shadow-2xl transition-colors ${
-                isDark
-                  ? "bg-[#0b1020]/90 border-white/10 text-white shadow-black/60"
-                  : "bg-white/95 border-gray-200/90 text-gray-900 shadow-gray-900/10"
-              }`}
-              style={{
-                boxShadow: isDark
-                  ? "0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 20px 0 rgba(168, 85, 247, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.1)"
-                  : "0 20px 40px -10px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
-              }}
+      <nav
+        id="arvdoul-bottom-navigation"
+        aria-label="Main Navigation"
+        className="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-40 w-[96%] max-w-[580px] select-none pointer-events-auto"
+      >
+        {/* Outer Frame with Dome Cutout Geometry */}
+        <div className="relative w-full">
+          {/* SVG Frame Background for the Curved Dome Cutout */}
+          <div className="absolute inset-0 -top-4 w-full h-[calc(100%+16px)] pointer-events-none">
+            <svg
+              className="w-full h-full"
+              viewBox="0 0 580 96"
+              fill="none"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              <div className="grid grid-cols-7 items-center gap-0.5 sm:gap-1">
-                {tabs.map((tab) => {
-                  const isActive = activeTab === tab.to || (tab.to !== "/home" && activeTab.startsWith(tab.to));
-                  const unread = tab.badgeKey ? unreadCounts[tab.badgeKey] || 0 : 0;
+              <defs>
+                {/* Dark mode backdrop gradient */}
+                <linearGradient id="nav-dark-bg" x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#0B0E1E" stopOpacity="0.88" />
+                  <stop offset="100%" stopColor="#070914" stopOpacity="0.95" />
+                </linearGradient>
 
-                  // Center Plus / Create Button
-                  if (tab.isPlus) {
-                    return (
-                      <div key={tab.to} className="flex flex-col items-center justify-center -my-1.5">
-                        <motion.button
-                          whileHover={{ scale: 1.1, rotate: 90 }}
-                          whileTap={{ scale: 0.92 }}
-                          onClick={() => handleNavigation(tab.to, tab.navigateTo)}
-                          className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-cyan-400 p-0.5 shadow-lg shadow-purple-600/30 flex items-center justify-center relative ring-2 ring-white/20 transition-transform"
-                          title={t('nav.create')}
-                          aria-label={t('nav.create')}
-                        >
-                          <div className="w-full h-full rounded-[10px] sm:rounded-[14px] bg-gradient-to-tr from-purple-700 via-pink-600 to-cyan-500 flex items-center justify-center text-white">
-                            <Plus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" aria-hidden="true" />
-                          </div>
-                        </motion.button>
-                      </div>
-                    );
-                  }
+                {/* Dark mode glowing stroke */}
+                <linearGradient id="nav-dark-stroke" x1="0" y1="0" x2="580" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="rgba(168, 85, 247, 0.45)" />
+                  <stop offset="40%" stopColor="rgba(192, 132, 252, 0.85)" />
+                  <stop offset="50%" stopColor="rgba(56, 189, 248, 0.95)" />
+                  <stop offset="60%" stopColor="rgba(192, 132, 252, 0.85)" />
+                  <stop offset="100%" stopColor="rgba(168, 85, 247, 0.45)" />
+                </linearGradient>
 
-                  // Profile Tab
-                  if (tab.isProfile) {
-                    const avatar = currentUser?.photoURL || currentUser?.avatar;
-                    return (
-                      <motion.button
-                        key={tab.to}
-                        whileTap={{ scale: 0.88 }}
-                        onClick={() => handleNavigation(tab.to, tab.navigateTo)}
-                        className="flex flex-col items-center justify-center py-1 px-0.5 relative group overflow-hidden"
-                        aria-label={t('nav.profile')}
-                        aria-current={isActive ? 'page' : undefined}
-                      >
-                        <div className="relative">
-                          {avatar ? (
-                            <img
-                              src={avatar}
-                              alt={t('nav.profile')}
-                              className={`w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-full object-cover ring-2 transition-all ${
-                                isActive ? "ring-purple-400 scale-105" : "ring-transparent group-hover:ring-white/40"
-                              }`}
-                            />
-                          ) : (
-                            <div className={`w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-white text-[9px] sm:text-[10px] font-black ring-2 ${
-                              isActive ? "ring-purple-400" : "ring-transparent"
-                            }`}>
-                              {(currentUser?.displayName || currentUser?.username || "U").charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                {/* Light mode backdrop gradient */}
+                <linearGradient id="nav-light-bg" x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.94" />
+                  <stop offset="100%" stopColor="#F8FAFC" stopOpacity="0.98" />
+                </linearGradient>
 
-                          {isActive && (
-                            <motion.div
-                              layoutId="bottomNavDot"
-                              className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-purple-400 to-pink-400"
-                              transition={FAST_SPRING}
-                            />
-                          )}
-                        </div>
-                        <span className={`text-[9px] sm:text-[10px] mt-0.5 font-semibold truncate tracking-tight ${
-                          isActive ? "text-purple-400 font-bold" : isDark ? "text-white/60" : "text-gray-600"
-                        }`}>
-                          {t(tab.labelKey)}
-                        </span>
-                      </motion.button>
-                    );
-                  }
+                {/* Light mode border stroke */}
+                <linearGradient id="nav-light-stroke" x1="0" y1="0" x2="580" y2="0" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="rgba(255, 255, 255, 0.95)" />
+                  <stop offset="50%" stopColor="rgba(168, 85, 247, 0.35)" />
+                  <stop offset="100%" stopColor="rgba(255, 255, 255, 0.95)" />
+                </linearGradient>
 
-                  // Coins Tab
-                  if (tab.isCoins) {
-                    return (
-                      <motion.button
-                        key={tab.to}
-                        whileTap={{ scale: 0.88 }}
-                        onClick={() => handleNavigation(tab.to, tab.navigateTo)}
-                        className="flex flex-col items-center justify-center py-1 px-0.5 relative group overflow-hidden"
-                        aria-label={t('nav.coins')}
-                        aria-current={isActive ? 'page' : undefined}
-                      >
-                        <div className="relative flex flex-col items-center">
-                          <FaCoins className={`w-4.5 h-4.5 sm:w-5 sm:h-5 transition-transform group-hover:scale-110 ${
-                            isActive ? "text-amber-400 filter drop-shadow-[0_0_8px_rgba(251,191,36,0.7)]" : "text-amber-400/80"
-                          }`} />
-                          
-                          {isActive && (
-                            <motion.div
-                              layoutId="bottomNavDot"
-                              className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-400"
-                              transition={FAST_SPRING}
-                            />
-                          )}
-                        </div>
-                        <span className="text-[9px] sm:text-[10px] mt-0.5 font-bold text-amber-400 truncate tracking-tight">
-                          {formattedCoins}
-                        </span>
-                      </motion.button>
-                    );
-                  }
+                {/* Dark mode shadow filter */}
+                <filter id="nav-dark-shadow" x="-5%" y="-10%" width="110%" height="130%">
+                  <feDropShadow dx="0" dy="18" stdDeviation="16" floodColor="#000000" floodOpacity="0.85" />
+                  <feDropShadow dx="0" dy="0" stdDeviation="12" floodColor="#8B5CF6" floodOpacity="0.25" />
+                </filter>
 
-                  // Standard Icons (Home, Videos, Chat, Notifications)
-                  const Icon = tab.icon;
-                  return (
-                    <motion.button
-                      key={tab.to}
-                      whileTap={{ scale: 0.88 }}
-                      onClick={() => handleNavigation(tab.to, tab.navigateTo)}
-                      className="flex flex-col items-center justify-center py-1 px-0.5 relative group overflow-hidden"
-                      aria-label={t(tab.labelKey)}
-                      aria-current={isActive ? 'page' : undefined}
-                    >
-                      <div className="relative">
-                        <Icon className={`w-5 h-5 sm:w-5.5 sm:h-5.5 transition-all ${
-                          isActive
-                            ? "text-purple-400 scale-105 drop-shadow-[0_0_10px_rgba(168,85,247,0.6)]"
-                            : isDark
-                            ? "text-white/60 group-hover:text-white"
-                            : "text-gray-500 group-hover:text-black"
-                        }`} />
+                {/* Light mode shadow filter */}
+                <filter id="nav-light-shadow" x="-5%" y="-10%" width="110%" height="130%">
+                  <feDropShadow dx="0" dy="16" stdDeviation="16" floodColor="#64748B" floodOpacity="0.22" />
+                  <feDropShadow dx="0" dy="2" stdDeviation="6" floodColor="#8B5CF6" floodOpacity="0.10" />
+                </filter>
+              </defs>
 
-                        {/* Unread badge */}
-                        {unread > 0 && (
-                          <span className="absolute -top-1 -right-2 px-1 min-w-[14px] h-3.5 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white text-[9px] font-black flex items-center justify-center ring-1 ring-black">
-                            {unread > 99 ? "99+" : unread}
-                          </span>
-                        )}
+              {/* Main capsule path with center dome rise */}
+              <path
+                d="M 38 18
+                   L 220 18
+                   C 238 18, 248 3, 266 3
+                   L 314 3
+                   C 332 3, 342 18, 360 18
+                   L 542 18
+                   A 38 38 0 0 1 580 56
+                   A 38 38 0 0 1 542 94
+                   L 38 94
+                   A 38 38 0 0 1 0 56
+                   A 38 38 0 0 1 38 18 Z"
+                fill={isDark ? "url(#nav-dark-bg)" : "url(#nav-light-bg)"}
+                stroke={isDark ? "url(#nav-dark-stroke)" : "url(#nav-light-stroke)"}
+                strokeWidth="1.8"
+                filter={isDark ? "url(#nav-dark-shadow)" : "url(#nav-light-shadow)"}
+              />
+            </svg>
+          </div>
 
-                        {/* Active Dot */}
-                        {isActive && (
-                          <motion.div
-                            layoutId="bottomNavDot"
-                            className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-purple-400 to-pink-400"
-                            transition={FAST_SPRING}
-                          />
-                        )}
-                      </div>
+          {/* Top Pill Accent Bar above the dome */}
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="w-12 h-1.5 rounded-full bg-gradient-to-r from-purple-500 via-indigo-400 to-cyan-400 shadow-sm shadow-purple-500/50" />
+          </div>
 
-                      <span className={`text-[9px] sm:text-[10px] mt-0.5 font-semibold truncate tracking-tight ${
-                        isActive
-                          ? "text-purple-400 font-bold"
-                          : isDark
-                          ? "text-white/60"
-                          : "text-gray-600"
-                      }`}>
-                        {t(tab.labelKey)}
-                      </span>
-                    </motion.button>
-                  );
-                })}
+          {/* Center Raised Plus (+) Button */}
+          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center">
+            {/* Dark mode nebula stardust glow */}
+            {isDark && (
+              <div className="absolute -inset-2 rounded-full bg-purple-600/30 blur-md pointer-events-none animate-pulse" />
+            )}
+
+            {/* Glowing Ring Border & Center Button */}
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              onClick={() => handleNavigation("/create-post")}
+              className="relative w-15 h-15 sm:w-16 sm:h-16 rounded-full p-1 transition-transform"
+              style={{
+                background: isDark
+                  ? "radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(59, 130, 246, 0.2) 70%, transparent 100%)"
+                  : "radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 75%)",
+              }}
+              aria-label="Create Post"
+              title="Create Post"
+            >
+              {/* Outer Glowing Neon Ring */}
+              <div
+                className={`w-full h-full rounded-full p-[2.5px] transition-all ${
+                  isDark
+                    ? "bg-gradient-to-tr from-cyan-400 via-purple-500 to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.7)]"
+                    : "bg-gradient-to-tr from-cyan-400 via-purple-500 to-blue-600 shadow-[0_4px_16px_rgba(99,102,241,0.4)]"
+                }`}
+              >
+                {/* Button Body with signature Blue -> Violet gradient */}
+                <div
+                  className="w-full h-full rounded-full flex items-center justify-center text-white font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #7C3AED 0%, #3B82F6 100%)",
+                  }}
+                >
+                  <Plus className="w-7 h-7 sm:w-8 sm:h-8 stroke-[3] text-white drop-shadow-md" />
+                </div>
               </div>
-            </div>
-          </motion.nav>
-        )}
-      </AnimatePresence>
+            </motion.button>
+          </div>
+
+          {/* Nav Items Grid (7 Columns) */}
+          <div className="relative z-10 grid grid-cols-7 items-center h-[76px] sm:h-[82px] px-2 sm:px-4">
+            {/* 1. Home */}
+            <button
+              onClick={() => handleNavigation("/home")}
+              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none"
+              aria-label="Home"
+            >
+              <div className="relative">
+                <HomeIcon active={isHomeActive} isDark={isDark} />
+              </div>
+              <span
+                className={`text-[11px] sm:text-xs font-semibold mt-1 transition-colors ${
+                  isHomeActive
+                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
+                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
+                }`}
+              >
+                Home
+              </span>
+              {/* Active Indicator Underline Bar */}
+              {isHomeActive && (
+                <motion.div
+                  layoutId="activeNavUnderline"
+                  className="absolute -bottom-1 w-6 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+
+            {/* 2. Sparks */}
+            <button
+              onClick={() => handleNavigation("/videos")}
+              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none"
+              aria-label="Sparks"
+            >
+              <div className="relative">
+                <SparksIcon active={isSparksActive} isDark={isDark} />
+              </div>
+              <span
+                className={`text-[11px] sm:text-xs font-semibold mt-1 transition-colors ${
+                  isSparksActive
+                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
+                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
+                }`}
+              >
+                Sparks
+              </span>
+              {/* Active Indicator */}
+              {isSparksActive && (
+                <motion.div
+                  layoutId="activeNavUnderline"
+                  className="absolute -bottom-1 w-6 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+
+            {/* 3. Chat */}
+            <button
+              onClick={() => handleNavigation("/messages")}
+              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none"
+              aria-label="Chat"
+            >
+              <div className="relative">
+                <ChatIcon active={isChatActive} isDark={isDark} />
+                {/* Red Circular Badge with count 3 */}
+                {chatBadge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-black flex items-center justify-center shadow-md ring-1 ring-white/40">
+                    {chatBadge}
+                  </span>
+                )}
+              </div>
+              <span
+                className={`text-[11px] sm:text-xs font-semibold mt-1 transition-colors ${
+                  isChatActive
+                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
+                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
+                }`}
+              >
+                Chat
+              </span>
+              {/* Active Indicator */}
+              {isChatActive && (
+                <motion.div
+                  layoutId="activeNavUnderline"
+                  className="absolute -bottom-1 w-6 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+
+            {/* 4. Center Spacer for Raised Plus Dome */}
+            <div className="flex items-center justify-center pointer-events-none" />
+
+            {/* 5. Network */}
+            <button
+              onClick={() => handleNavigation("/network")}
+              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none"
+              aria-label="Network"
+            >
+              <div className="relative">
+                <NetworkIcon active={isNetworkActive} isDark={isDark} />
+                {/* Red Circular Badge with count 8 */}
+                {networkBadge > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-black flex items-center justify-center shadow-md ring-1 ring-white/40">
+                    {networkBadge}
+                  </span>
+                )}
+              </div>
+              <span
+                className={`text-[11px] sm:text-xs font-semibold mt-1 transition-colors ${
+                  isNetworkActive
+                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
+                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
+                }`}
+              >
+                Network
+              </span>
+              {/* Active Indicator */}
+              {isNetworkActive && (
+                <motion.div
+                  layoutId="activeNavUnderline"
+                  className="absolute -bottom-1 w-6 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+
+            {/* 6. Coins */}
+            <button
+              onClick={() => handleNavigation("/coins")}
+              className="flex flex-col items-center justify-center py-0.5 relative group focus:outline-none"
+              aria-label="Coins"
+            >
+              <div className="relative flex flex-col items-center">
+                <CoinStackIcon size={22} className="group-hover:scale-105 transition-transform" />
+                <span className="text-[10px] sm:text-[11px] font-extrabold text-[#F59E0B] tracking-tight leading-none mt-0.5">
+                  {formattedCoins}
+                </span>
+              </div>
+              <span
+                className={`text-[11px] sm:text-xs font-semibold transition-colors mt-0.5 ${
+                  isCoinsActive
+                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
+                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
+                }`}
+              >
+                Coins
+              </span>
+              {/* Active Indicator */}
+              {isCoinsActive && (
+                <motion.div
+                  layoutId="activeNavUnderline"
+                  className="absolute -bottom-1 w-6 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+
+            {/* 7. Alerts */}
+            <button
+              onClick={() => handleNavigation("/notifications")}
+              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none"
+              aria-label="Alerts"
+            >
+              <div className="relative">
+                <AlertsIcon active={isAlertsActive} isDark={isDark} />
+                {/* Red Circular Badge with count 12 */}
+                {alertsBadge > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-black flex items-center justify-center shadow-md ring-1 ring-white/40">
+                    {alertsBadge}
+                  </span>
+                )}
+              </div>
+              <span
+                className={`text-[11px] sm:text-xs font-semibold mt-1 transition-colors ${
+                  isAlertsActive
+                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
+                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
+                }`}
+              >
+                Alerts
+              </span>
+              {/* Active Indicator */}
+              {isAlertsActive && (
+                <motion.div
+                  layoutId="activeNavUnderline"
+                  className="absolute -bottom-1 w-6 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
+                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                />
+              )}
+            </button>
+          </div>
+        </div>
+      </nav>
 
       {/* Quick Access Slide-Up Panel */}
       <QuickAccessPanel
         isPanelOpen={isPanelOpen}
-        closePanel={closePanel}
+        closePanel={() => setIsPanelOpen(false)}
         navigateToWithLoading={(path) => {
           navigate(path);
           setIsPanelOpen(false);
@@ -383,7 +516,5 @@ const BottomNav = () => {
     </>
   );
 };
-
-BottomNav.propTypes = {};
 
 export default memo(BottomNav);

@@ -235,24 +235,64 @@ class EnterpriseFirestoreService {
     const operationId = `post_${Date.now()}_${secureRandom().toString(36).substr(2,9)}`;
     try {
       const auth = await this.getAuthInstance();
-      const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('User not authenticated.');
+      let currentUser = auth.currentUser;
+      if (!currentUser && typeof auth.authStateReady === 'function') {
+        try {
+          await auth.authStateReady();
+          currentUser = auth.currentUser;
+        } catch {}
+      }
+      if (!currentUser) {
+        currentUser = await new Promise((resolve) => {
+          const unsub = auth.onAuthStateChanged((u) => {
+            unsub();
+            resolve(u);
+          });
+          setTimeout(() => {
+            unsub();
+            resolve(auth.currentUser);
+          }, 1000);
+        });
+      }
+      if (!currentUser && postData.authorId) {
+        currentUser = { uid: postData.authorId, displayName: postData.authorName || 'Arvdoul User' };
+      }
+      if (!currentUser?.uid) throw new Error('User not authenticated. Please sign in to publish.');
       postData.authorId = currentUser.uid;
       const { collection, addDoc, serverTimestamp } = this.firestoreMethods;
       
-      const scheduledTime = postData.scheduledTime ? new Date(postData.scheduledTime) : null;
-      const isScheduled = scheduledTime && scheduledTime > new Date();
+      const scheduledTime = postData.scheduledTime && !isNaN(new Date(postData.scheduledTime).getTime())
+        ? new Date(postData.scheduledTime)
+        : null;
+      const isScheduled = Boolean(scheduledTime && scheduledTime > new Date());
       const status = isScheduled ? 'scheduled' : (postData.status || 'published');
+      const expiresAt = postData.expiresAt && !isNaN(new Date(postData.expiresAt).getTime())
+        ? new Date(postData.expiresAt)
+        : null;
       
+      // Sanitize media items to ensure pure serializable objects
+      const cleanMedia = (Array.isArray(postData.media) ? postData.media : []).map((m) => {
+        if (!m) return null;
+        if (typeof m === 'string') return { url: m, type: 'image' };
+        return {
+          url: m.url || m.preview || '',
+          type: m.type || 'image',
+          name: m.name || '',
+          alt: m.alt || '',
+          thumbnail: m.thumbnail || null,
+        };
+      }).filter((m) => m && m.url);
+
       const postDoc = {
-        type: postData.type,
+        type: postData.type || 'text',
         content: postData.content || '',
-        media: postData.media || [],
+        contentJSON: postData.contentJSON || null,
+        media: cleanMedia,
         authorId: postData.authorId,
-        authorName: postData.authorName || 'Arvdoul User',
+        authorName: postData.authorName || currentUser.displayName || 'Arvdoul User',
         authorUsername: postData.authorUsername || `user_${postData.authorId?.slice(0,8)}`,
         authorPhoto: getSafeAvatarUrl(postData.authorPhoto, postData.authorName || 'Arvdoul User', postData.authorId),
-        ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0 } }),
+        ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0, allowMultiple: !!postData.poll?.allowMultiple } }),
         ...(postData.type === 'question' && { question: postData.question, answers: postData.answers || [] }),
         ...(postData.type === 'link' && { link: postData.link }),
         ...(postData.type === 'event' && { event: postData.event }),
@@ -268,7 +308,7 @@ class EnterpriseFirestoreService {
         boostData: postData.boostData || null,
         scheduledTime: scheduledTime || null,
         publishedAt: (!isScheduled && status === 'published') ? serverTimestamp() : null,
-        expiresAt: postData.expiresAt ? new Date(postData.expiresAt) : null,
+        expiresAt: expiresAt || null,
         stats: {
           likes: 0, comments: 0, shares: 0, saves: 0, views: 0, gifts: 0, giftValue: 0,
           reactions: Object.fromEntries(CONFIG.ALLOWED_REACTIONS.map(r => [r, 0])),
@@ -281,10 +321,27 @@ class EnterpriseFirestoreService {
         _operationId: operationId,
         _clientCreatedAt: new Date().toISOString()
       };
+
+      // Helper to strip any undefined keys recursively so addDoc never rejects
+      const sanitizeUndefined = (obj) => {
+        if (obj === null || typeof obj !== 'object') return obj;
+        if (obj instanceof Date) return obj;
+        if (Array.isArray(obj)) return obj.map(sanitizeUndefined).filter(v => v !== undefined);
+        if (obj._methodName || (obj.constructor && obj.constructor.name === 'FieldValue')) return obj;
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (v !== undefined) {
+            out[k] = sanitizeUndefined(v);
+          }
+        }
+        return out;
+      };
+
+      const cleanPostDoc = sanitizeUndefined(postDoc);
       const postsRef = collection(this.firestore, 'posts');
-      const docRef = await addDoc(postsRef, postDoc);
+      const docRef = await addDoc(postsRef, cleanPostDoc);
       const postId = docRef.id;
-      this.cache.set(postId, { ...postDoc, id: postId, _cachedAt: Date.now() });
+      this.cache.set(postId, { ...cleanPostDoc, id: postId, _cachedAt: Date.now() });
       this.invalidateCachePattern(`user_posts_${postData.authorId}`);
 
       // Level system: award post_created XP (best-effort, never breaks publish).

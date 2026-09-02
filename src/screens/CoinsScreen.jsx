@@ -15,6 +15,8 @@ import {
   History, Banknote, AlertTriangle, Loader2, RefreshCw, Sparkles
 } from 'lucide-react';
 import PaymentModal from '../components/Shared/PaymentModal';
+import CoinStackIcon from '../components/Shared/CoinStackIcon';
+import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // Package ids MUST match the Cloud Function COIN_PACKAGES contract
 // (functions/monetization.js). Prices are the USD cents charged server-side.
@@ -267,23 +269,26 @@ export default function CoinsScreen() {
               <ArrowLeft className="w-5 h-5" />
             </button>
 
-            <div className="text-center">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-500 to-yellow-500 bg-clip-text text-transparent">
-                Arvdoul Coins
-              </h1>
-              <p className={cn("text-sm", colors.secondary)}>Premium currency for boosts, gifts & rewards</p>
+            <div className="flex items-center gap-3">
+              <ArvdoulLogo size={32} showWordmark={false} />
+              <div className="text-left">
+                <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 bg-clip-text text-transparent">
+                  Arvdoul Coins
+                </h1>
+                <p className={cn("text-xs sm:text-sm", colors.secondary)}>Monetization, gifts & creator rewards</p>
+              </div>
             </div>
 
             <button
               onClick={loadBalance}
               aria-label="Refresh balance"
-              className="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 flex items-center gap-2"
+              className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500/15 to-yellow-500/15 border border-amber-500/30 hover:border-amber-500/50 flex items-center gap-2.5 transition-all shadow-sm"
             >
-              <RefreshCw className="w-4 h-4 text-amber-500" />
+              <CoinStackIcon size={22} />
               {balanceLoading ? (
                 <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
               ) : (
-                <span className="font-bold text-amber-500">{(balance ?? 0).toLocaleString()}</span>
+                <span className="font-extrabold text-amber-400">{(balance ?? 0).toLocaleString()}</span>
               )}
             </button>
           </div>
@@ -295,22 +300,22 @@ export default function CoinsScreen() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={cn("rounded-2xl p-6 mb-8 relative overflow-hidden", colors.card, colors.border, "border")}
+          className={cn("rounded-3xl p-6 sm:p-8 mb-8 relative overflow-hidden shadow-xl", colors.card, colors.border, "border")}
         >
-          <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-gradient-to-br from-amber-500/20 to-yellow-500/10 blur-2xl" />
+          <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-gradient-to-br from-amber-500/25 to-yellow-500/10 blur-3xl" />
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative">
             <div className="text-center md:text-left">
-              <h2 className={cn("text-3xl font-bold mb-2", colors.text)}>Your Coin Balance</h2>
-              <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
+              <h2 className={cn("text-2xl sm:text-3xl font-black mb-2", colors.text)}>Your Coin Vault</h2>
+              <div className="flex items-center justify-center md:justify-start gap-4 mb-4">
                 <div className="relative">
-                  <Coins className="w-12 h-12 text-amber-500" />
-                  <div className="absolute -inset-2 rounded-full bg-amber-500/20 blur-sm" />
+                  <CoinStackIcon size={56} />
+                  <div className="absolute -inset-3 rounded-full bg-amber-500/20 blur-md pointer-events-none" />
                 </div>
                 <div>
-                  <div className="text-5xl font-bold text-amber-500">
+                  <div className="text-4xl sm:text-5xl font-black text-amber-400 tracking-tight">
                     {balanceLoading ? '…' : (balance ?? 0).toLocaleString()}
                   </div>
-                  <p className={cn("text-lg", colors.secondary)}>Arvdoul Coins</p>
+                  <p className={cn("text-sm sm:text-base font-semibold", colors.secondary)}>Arvdoul Golden Coins</p>
                 </div>
               </div>
             </div>

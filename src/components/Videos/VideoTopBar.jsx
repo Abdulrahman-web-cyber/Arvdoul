@@ -1,9 +1,10 @@
 // src/components/Videos/VideoTopBar.jsx - ARVDOUL FLOATING TOP BAR
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Camera, Plus } from 'lucide-react';
+import { Search, Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import ArvdoulLogo from '../Shared/ArvdoulLogo';
 import PropTypes from 'prop-types';
 
 const VideoTopBar = memo(({
@@ -13,43 +14,41 @@ const VideoTopBar = memo(({
   onCreateVideo,
 }) => {
   const navigate = useNavigate();
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
 
   return (
     <header 
       id="arvdoul-video-top-bar"
-      className="absolute top-0 left-0 right-0 z-30 pt-4 pb-2 px-4 flex items-center justify-between pointer-events-auto select-none"
+      className="absolute top-0 left-0 right-0 z-30 pt-3 sm:pt-4 pb-2 px-3 sm:px-5 flex items-center justify-between pointer-events-auto select-none"
     >
-      {/* Left: Brand Logo */}
-      <div 
-        onClick={() => navigate('/home')}
-        className="flex items-center gap-2 cursor-pointer group"
-      >
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-purple-500/30 ring-1 ring-white/20 transition-transform group-hover:scale-105">
-          <span className="text-white font-black text-sm tracking-tighter">A</span>
-        </div>
-        <span className="font-black text-base tracking-widest text-white drop-shadow-md hidden sm:inline-block">
-          ARVDOUL
-        </span>
+      {/* Left: Official ARVDOUL Brand Logo */}
+      <div className="flex items-center">
+        <ArvdoulLogo
+          variant="full"
+          theme="white"
+          size="sm"
+          clickable={true}
+          onClick={() => navigate('/home')}
+        />
       </div>
 
       {/* Center: Tabs (Following | For You) */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-5 sm:gap-7">
         <button
           onClick={() => onTabChange?.('following')}
           aria-pressed={activeTab === 'following'}
-          className={`relative py-1 text-sm font-bold tracking-wide transition-all ${
+          className={`relative py-1 text-sm sm:text-base font-extrabold tracking-wide transition-all ${
             activeTab === 'following'
-              ? 'text-white scale-105'
-              : 'text-white/60 hover:text-white/80'
+              ? 'text-white scale-105 drop-shadow-md'
+              : 'text-white/60 hover:text-white/85'
           }`}
         >
           Following
           {activeTab === 'following' && (
             <motion.div
               layoutId="videoTabIndicator"
-              className="absolute -bottom-1 left-2 right-2 h-0.5 rounded-full bg-gradient-to-r from-purple-400 to-pink-500 shadow-md shadow-purple-500/50"
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              className="absolute -bottom-1 left-1 right-1 h-1 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 shadow-md shadow-purple-500/60"
+              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
             />
           )}
         </button>
@@ -57,44 +56,46 @@ const VideoTopBar = memo(({
         <button
           onClick={() => onTabChange?.('for_you')}
           aria-pressed={activeTab === 'for_you'}
-          className={`relative py-1 text-sm font-bold tracking-wide transition-all ${
+          className={`relative py-1 text-sm sm:text-base font-extrabold tracking-wide transition-all ${
             activeTab === 'for_you'
-              ? 'text-white scale-105'
-              : 'text-white/60 hover:text-white/80'
+              ? 'text-white scale-105 drop-shadow-md'
+              : 'text-white/60 hover:text-white/85'
           }`}
         >
           For You
           {activeTab === 'for_you' && (
             <motion.div
               layoutId="videoTabIndicator"
-              className="absolute -bottom-1 left-2 right-2 h-0.5 rounded-full bg-gradient-to-r from-purple-400 to-pink-500 shadow-md shadow-purple-500/50"
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              className="absolute -bottom-1 left-1 right-1 h-1 rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-400 shadow-md shadow-purple-500/60"
+              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
             />
           )}
         </button>
       </div>
 
-      {/* Right: Search & Create Shortcuts */}
-      <div className="flex items-center gap-2.5">
+      {/* Right: Search & Camera Shortcuts */}
+      <div className="flex items-center gap-2 sm:gap-3">
         <motion.button
           whileTap={{ scale: 0.9 }}
+          whileHover={{ scale: 1.05 }}
           onClick={onOpenSearch || (() => navigate('/search'))}
-          className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-xl border border-white/15 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/10 transition-all shadow-md"
+          className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white/90 hover:text-white hover:bg-white/15 transition-all shadow-lg"
           title="Search Videos"
           aria-label="Search Videos"
         >
-          <Search className="w-4 h-4" />
+          <Search className="w-4.5 h-4.5" />
         </motion.button>
 
         <motion.button
           whileTap={{ scale: 0.9 }}
+          whileHover={{ scale: 1.05 }}
           onClick={onCreateVideo || (() => navigate('/create-post'))}
-          className="relative w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-pink-600 border border-white/20 flex items-center justify-center text-white shadow-lg shadow-purple-500/25 transition-transform hover:scale-105"
+          className="relative w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 border border-white/30 flex items-center justify-center text-white shadow-xl shadow-purple-500/30 transition-transform"
           title="Create Video"
           aria-label="Create Video"
         >
-          <Camera className="w-4 h-4" />
-          <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 text-black flex items-center justify-center text-[9px] font-black border border-black">
+          <Camera className="w-4.5 h-4.5" />
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-cyan-400 text-black flex items-center justify-center text-[10px] font-black border border-black shadow-sm">
             +
           </span>
         </motion.button>

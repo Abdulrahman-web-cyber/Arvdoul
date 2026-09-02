@@ -27,6 +27,12 @@ import {
   Coins,
   Sparkles,
   Users,
+  MoreHorizontal,
+  ChevronRight,
+  Gift,
+  ArrowUpCircle,
+  MoveHorizontal,
+  X,
 } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
@@ -70,6 +76,7 @@ const VideoCard = memo(({
   const [isFollowing, setIsFollowing] = useState(video?.creator?.isFollowing || false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [showGestureGuide, setShowGestureGuide] = useState(true);
 
   const { theme, isDark } = useTheme();
   const {
@@ -367,24 +374,55 @@ const VideoCard = memo(({
         )}
       </AnimatePresence>
 
-      {/* Right Floating Action Rail */}
+      {/* Floating Mutual Friends Chip (Image 2) */}
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          toast.info('Viewing 12 mutual friends on ARVDOUL');
+        }}
+        className="absolute top-16 sm:top-18 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 shadow-lg hover:bg-black/60 transition-all group"
+      >
+        <div className="flex -space-x-1.5 overflow-hidden">
+          <img
+            src={video?.mutualFriends?.[0]?.avatar || '/assets/default-profile.png'}
+            alt="friend 1"
+            className="w-5 h-5 rounded-full ring-1.5 ring-purple-500 object-cover"
+          />
+          <img
+            src={video?.mutualFriends?.[1]?.avatar || '/assets/default-profile.png'}
+            alt="friend 2"
+            className="w-5 h-5 rounded-full ring-1.5 ring-pink-500 object-cover"
+          />
+          <img
+            src={video?.mutualFriends?.[2]?.avatar || '/assets/default-profile.png'}
+            alt="friend 3"
+            className="w-5 h-5 rounded-full ring-1.5 ring-cyan-400 object-cover"
+          />
+        </div>
+        <span className="text-white text-xs font-bold tracking-tight">
+          {video?.mutualFriendsCount || 12} mutual friends
+        </span>
+        <ChevronRight className="w-3.5 h-3.5 text-white/70 group-hover:translate-x-0.5 transition-transform" />
+      </div>
+
+      {/* Right Floating Action Rail (Image 2) */}
       <aside
-        className="absolute right-3 sm:right-6 bottom-24 z-30 flex flex-col items-center gap-4.5 pointer-events-auto"
+        className="absolute right-3 sm:right-5 bottom-24 z-30 flex flex-col items-center gap-3.5 sm:gap-4 pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Creator Avatar & Follow Button */}
-        <div className="relative mb-2 flex flex-col items-center">
+        <div className="relative mb-1 flex flex-col items-center">
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={(e) => {
               e.stopPropagation();
-              toast.info(`Creator Profile: @${video?.creator?.username}`);
+              toast.info(`Creator Profile: @${video?.creator?.username || 'abdulrahman'}`);
             }}
-            className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-amber-400 shadow-xl shadow-purple-500/25 ring-2 ring-white/30"
+            className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-xl shadow-purple-500/30 ring-2 ring-purple-400/80"
           >
             <img
               src={video?.creator?.avatar || '/assets/default-profile.png'}
-              alt={video?.creator?.name || 'Creator'}
+              alt={video?.creator?.name || 'Abdulrahman'}
               className="w-full h-full rounded-full object-cover"
             />
           </motion.button>
@@ -395,9 +433,10 @@ const VideoCard = memo(({
             onClick={handleFollowClick}
             className={`absolute -bottom-2 w-6 h-6 rounded-full flex items-center justify-center shadow-lg transition-all ${
               isFollowing
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gradient-to-r from-red-500 to-pink-500 text-white'
+                ? 'bg-emerald-500 text-white ring-2 ring-black'
+                : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white ring-2 ring-black'
             }`}
+            title={isFollowing ? 'Following' : 'Follow'}
           >
             {isFollowing ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Plus className="w-3.5 h-3.5 stroke-[3]" />}
           </motion.button>
@@ -414,7 +453,7 @@ const VideoCard = memo(({
             }}
             className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all shadow-lg ${
               video?.isLiked
-                ? 'bg-red-500/25 border-red-500/50 shadow-red-500/40'
+                ? 'bg-red-500/30 border-red-500/60 shadow-red-500/40'
                 : 'bg-white/10 border-white/15 hover:bg-white/20'
             }`}
           >
@@ -427,7 +466,7 @@ const VideoCard = memo(({
             />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.likesFormatted || formatViewCount(video?.likes || 0)}
+            {video?.likesFormatted || '128K'}
           </span>
         </div>
 
@@ -445,7 +484,7 @@ const VideoCard = memo(({
             <MessageCircle className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {formatViewCount(video?.commentsCount || 0)}
+            {video?.commentsCount ? formatViewCount(video.commentsCount) : '2,345'}
           </span>
         </div>
 
@@ -463,7 +502,7 @@ const VideoCard = memo(({
             <Share2 className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {formatViewCount(video?.shares || 0)}
+            {video?.shares ? formatViewCount(video.shares) : '12.6K'}
           </span>
         </div>
 
@@ -478,7 +517,7 @@ const VideoCard = memo(({
             }}
             className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all shadow-lg ${
               video?.isSaved
-                ? 'bg-amber-500/25 border-amber-500/50 shadow-amber-500/30'
+                ? 'bg-amber-500/30 border-amber-500/60 shadow-amber-500/40'
                 : 'bg-white/10 border-white/15 hover:bg-white/20'
             }`}
           >
@@ -489,11 +528,11 @@ const VideoCard = memo(({
             />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {formatViewCount(video?.saves || 0)}
+            {video?.saves ? formatViewCount(video.saves) : '8,942'}
           </span>
         </div>
 
-        {/* Virtual Coin Gift Button */}
+        {/* Virtual Coin Gift Button (Image 2) */}
         <div className="flex flex-col items-center">
           <motion.button
             whileTap={{ scale: 0.75 }}
@@ -502,17 +541,17 @@ const VideoCard = memo(({
               e.stopPropagation();
               onGift?.();
             }}
-            className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 border border-white/30 flex items-center justify-center text-white shadow-xl shadow-amber-500/40 animate-pulse"
+            className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 via-pink-500 to-amber-400 border border-white/30 flex items-center justify-center text-white shadow-xl shadow-purple-500/30"
             title="Send Gift"
           >
-            <Coins className="w-6 h-6 text-yellow-100" />
+            <Gift className="w-6 h-6 text-white" />
           </motion.button>
-          <span className="text-amber-300 text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            Gift
+          <span className="text-purple-300 text-xs font-bold mt-1 drop-shadow-md tracking-tight">
+            {video?.gifts ? formatViewCount(video.gifts) : '1,230'}
           </span>
         </div>
 
-        {/* Settings Menu Button */}
+        {/* More Options Button (Image 2 •••) */}
         <div className="relative">
           <motion.button
             whileTap={{ scale: 0.85 }}
@@ -520,9 +559,10 @@ const VideoCard = memo(({
               e.stopPropagation();
               setShowSettings((prev) => !prev);
             }}
-            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-xl border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-all shadow-md"
+            className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-xl border border-white/15 flex items-center justify-center text-white/90 hover:text-white transition-all shadow-md"
+            title="More Options"
           >
-            <Settings className="w-5 h-5" />
+            <MoreHorizontal className="w-6 h-6 text-white" />
           </motion.button>
 
           {/* Settings Popover */}
@@ -651,199 +691,213 @@ const VideoCard = memo(({
             )}
           </AnimatePresence>
         </div>
-
-        {/* Spinning Vinyl Music Disc with Floating Notes */}
-        <div className="relative mt-2">
-          <motion.div
-            animate={{ rotate: isPlaying ? 360 : 0 }}
-            transition={{ duration: 4, repeat: isPlaying ? Infinity : 0, ease: 'linear' }}
-            className="w-11 h-11 rounded-full bg-gradient-to-tr from-gray-950 via-gray-800 to-gray-950 border-2 border-white/40 shadow-xl flex items-center justify-center p-2 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              toast.info(`Audio: ${video?.audio?.title || 'ARVDOUL Beats'}`);
-            }}
-          >
-            <img
-              src={video?.audio?.coverUrl || video?.creator?.avatar || '/assets/default-profile.png'}
-              alt="Track"
-              className="w-5 h-5 rounded-full object-cover"
-            />
-          </motion.div>
-
-          {/* Floating Music Notes Animation */}
-          {isPlaying && (
-            <motion.div
-              animate={{
-                y: [-5, -35, -55],
-                x: [0, -12, 8],
-                opacity: [0, 1, 0],
-                rotate: [0, -20, 20],
-              }}
-              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut' }}
-              className="absolute -top-3 left-0 pointer-events-none text-cyan-300 font-bold text-xs"
-            >
-              ♪
-            </motion.div>
-          )}
-        </div>
       </aside>
 
-      {/* Bottom Creator Overlay & Metadata */}
+      {/* Floating Left Creator Card (Image 2) */}
       <div
-        className="absolute bottom-4 left-4 right-20 z-20 pointer-events-auto flex flex-col gap-2 max-w-xl text-left"
+        className="absolute bottom-22 sm:bottom-24 left-3 sm:left-6 max-w-[340px] sm:max-w-md z-20 pointer-events-auto bg-black/50 backdrop-blur-2xl border border-white/20 rounded-3xl p-3.5 sm:p-4 shadow-2xl flex flex-col gap-2.5 text-left"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Creator Info */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-white font-black text-base tracking-tight drop-shadow-md">
-            @{video?.creator?.username || video?.creator?.name || 'creator'}
-          </span>
+        {/* Top row: Avatar, Name, Handle, Follow button */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative">
+              <img
+                src={video?.creator?.avatar || '/assets/default-profile.png'}
+                alt={video?.creator?.name || 'Abdulrahman'}
+                className="w-10 h-10 rounded-full ring-2 ring-purple-500/80 object-cover"
+              />
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-cyan-400 flex items-center justify-center">
+                <Check className="w-2.5 h-2.5 text-black stroke-[3]" />
+              </div>
+            </div>
 
-          {video?.creator?.isVerified && (
-            <BadgeCheck className="w-4.5 h-4.5 text-cyan-400 fill-cyan-400/20 drop-shadow-md" />
-          )}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="text-white font-extrabold text-sm sm:text-base tracking-tight truncate">
+                  {video?.creator?.name || 'Abdulrahman'}
+                </span>
+                <BadgeCheck className="w-4 h-4 text-cyan-400 fill-cyan-400/20 shrink-0" />
+              </div>
+              <span className="text-purple-300/80 text-xs font-semibold tracking-tight truncate">
+                @{video?.creator?.username || 'abdulrahman'}
+              </span>
+            </div>
+          </div>
 
-          {!isFollowing && (
-            <button
-              onClick={handleFollowClick}
-              className="px-3 py-0.5 rounded-full text-xs font-bold bg-white/20 backdrop-blur-md text-white border border-white/30 hover:bg-white hover:text-black transition-all"
-            >
-              Follow
-            </button>
-          )}
+          {/* Follow Button */}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={handleFollowClick}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold text-white shadow-md transition-all shrink-0 ${
+              isFollowing
+                ? 'bg-white/20 hover:bg-white/30 text-white'
+                : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500'
+            }`}
+          >
+            {isFollowing ? 'Following' : 'Follow'}
+          </motion.button>
         </div>
 
-        {/* Video Title & Caption */}
-        <div className="text-white/95 text-sm font-medium drop-shadow-md leading-relaxed">
-          <span>{video?.title || ''} </span>
-          <span className="text-white/80">
+        {/* Video Caption & Hashtags */}
+        <div className="text-white/95 text-xs sm:text-sm font-medium leading-relaxed">
+          <p>
             {isCaptionExpanded
-              ? video?.description
-              : video?.description?.slice(0, 80) + (video?.description?.length > 80 ? '...' : '')}
-          </span>
-          {video?.description?.length > 80 && (
-            <button
-              onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
-              className="text-white font-bold ml-1 text-xs hover:underline"
-            >
-              {isCaptionExpanded ? 'less' : 'more'}
-            </button>
-          )}
-        </div>
+              ? (video?.description || 'Chasing dreams and building digital experiences. ✨')
+              : ((video?.description || 'Chasing dreams and building digital experiences. ✨').slice(0, 75) +
+                 ((video?.description || '').length > 75 ? '...' : ''))}
+            {(video?.description || '').length > 75 && (
+              <button
+                onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
+                className="text-purple-300 font-bold ml-1 text-xs hover:underline"
+              >
+                {isCaptionExpanded ? 'less' : 'more'}
+              </button>
+            )}
+          </p>
 
-        {/* Interactive Hashtags */}
-        {video?.hashtags?.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 my-0.5">
-            {video.hashtags.map((tag) => (
+          {/* Hashtags */}
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {(video?.hashtags?.length > 0
+              ? video.hashtags
+              : ['#arvdoul', '#dreambig', '#motivation']
+            ).map((tag) => (
               <span
                 key={tag}
-                onClick={() => toast.info(`Viewing ${tag} videos`)}
-                className="text-cyan-300 font-bold text-xs hover:text-cyan-200 cursor-pointer drop-shadow-md"
+                onClick={() => toast.info(`Viewing ${tag}`)}
+                className="text-purple-400 hover:text-purple-300 font-bold text-xs cursor-pointer transition-colors"
               >
                 {tag}
               </span>
             ))}
           </div>
-        )}
+        </div>
 
-        {/* Mutual Friends Watching Pill */}
-        {video?.mutualFriendsCount > 0 && (
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-xl border border-white/15 w-fit shadow-md">
-            <div className="flex -space-x-1.5 overflow-hidden">
-              {video?.mutualFriends?.slice(0, 3).map((mf) => (
-                <img
-                  key={mf.id}
-                  src={mf.avatar}
-                  alt={mf.name}
-                  className="w-4 h-4 rounded-full ring-1 ring-black object-cover"
-                />
-              ))}
-            </div>
-            <span className="text-white/90 text-[11px] font-semibold">
-              {video.mutualFriendsCount} mutual friends watching
+        {/* Audio Track with Animated Waveform Box (Image 2) */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+          <div
+            onClick={() => toast.info(`Audio: ${video?.audio?.title || 'Lost in the City – ARVDOUL Beats'}`)}
+            className="flex items-center gap-2 cursor-pointer group min-w-0"
+          >
+            <Music className="w-3.5 h-3.5 text-purple-400 group-hover:rotate-12 transition-transform" />
+            <span className="text-white/90 text-xs font-semibold truncate max-w-[200px] sm:max-w-[240px]">
+              {video?.audio?.title || 'Lost in the City – ARVDOUL Beats'}
             </span>
           </div>
-        )}
 
-        {/* Soundtrack Info Pill with Audio Wave Visualizer */}
-        <div
-          onClick={() => toast.info(`Original Audio: ${video?.audio?.title || 'ARVDOUL Beats'}`)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-xl border border-white/15 w-fit hover:bg-black/60 transition-all cursor-pointer shadow-md"
-        >
-          <Music className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-white/90 text-xs font-semibold truncate max-w-[220px]">
-            {video?.audio?.title || 'Original Audio - ARVDOUL Beats'}
-          </span>
-          {/* Animated Audio Equalizer Bars */}
-          <div className="flex items-end gap-0.5 h-3">
+          {/* Equalizer Visualizer Box */}
+          <div className="flex items-end gap-0.5 px-2 py-1 rounded-lg bg-purple-950/50 border border-purple-500/30 h-5 shrink-0">
             <motion.div
-              animate={{ height: isPlaying ? ['30%', '100%', '40%'] : '30%' }}
-              transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut' }}
-              className="w-0.5 bg-cyan-400 rounded-full"
+              animate={{ height: isPlaying ? ['25%', '100%', '40%'] : '30%' }}
+              transition={{ duration: 0.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="w-1 bg-cyan-400 rounded-full"
             />
             <motion.div
-              animate={{ height: isPlaying ? ['80%', '20%', '90%'] : '50%' }}
-              transition={{ duration: 0.5, repeat: Infinity, ease: 'easeInOut', delay: 0.1 }}
-              className="w-0.5 bg-pink-400 rounded-full"
+              animate={{ height: isPlaying ? ['85%', '20%', '95%'] : '50%' }}
+              transition={{ duration: 0.45, repeat: Infinity, ease: 'easeInOut', delay: 0.1 }}
+              className="w-1 bg-pink-400 rounded-full"
             />
             <motion.div
-              animate={{ height: isPlaying ? ['40%', '90%', '20%'] : '20%' }}
-              transition={{ duration: 0.7, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
-              className="w-0.5 bg-purple-400 rounded-full"
+              animate={{ height: isPlaying ? ['40%', '90%', '30%'] : '25%' }}
+              transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
+              className="w-1 bg-purple-400 rounded-full"
+            />
+            <motion.div
+              animate={{ height: isPlaying ? ['70%', '30%', '80%'] : '45%' }}
+              transition={{ duration: 0.55, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }}
+              className="w-1 bg-indigo-400 rounded-full"
             />
           </div>
         </div>
       </div>
 
-      {/* Interactive Bottom Timeline / Scrubber */}
+      {/* Scrubber / Timeline Bar (Image 2) */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-30 px-3 pb-1 pt-3 pointer-events-auto"
+        className="absolute bottom-13 sm:bottom-14 left-3 right-3 sm:left-6 sm:right-6 z-20 pointer-events-auto flex items-center gap-3 select-none"
         onClick={(e) => e.stopPropagation()}
       >
+        <span className="text-white/90 text-xs font-mono font-bold shrink-0">
+          {formatDuration(currentTime) || '00:12'}
+        </span>
+
+        {/* Gradient Scrubber with Glow Knob */}
         <div
-          className="relative h-1.5 hover:h-3 transition-all bg-white/20 rounded-full cursor-pointer overflow-hidden group"
+          className="relative flex-1 h-1.5 hover:h-2.5 transition-all bg-white/20 rounded-full cursor-pointer overflow-visible group"
           onClick={handleProgressClick}
         >
           {/* Buffered track */}
           <div
-            className="absolute top-0 bottom-0 left-0 bg-white/35 rounded-full transition-all"
+            className="absolute top-0 bottom-0 left-0 bg-white/30 rounded-full transition-all"
             style={{ width: `${buffered}%` }}
           />
           {/* Active progress */}
           <div
-            className="absolute top-0 bottom-0 left-0 rounded-full transition-all"
+            className="absolute top-0 bottom-0 left-0 rounded-full"
             style={{
               width: `${progress}%`,
               background: 'linear-gradient(90deg, #a855f7 0%, #ec4899 50%, #06b6d4 100%)',
             }}
           />
+          {/* Glowing Slider Knob */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(168,85,247,0.9)] ring-2 ring-purple-500 transition-transform group-hover:scale-125"
+            style={{ left: `${progress}%` }}
+          />
         </div>
 
-        {/* Hover / Active Controls Bar */}
-        <div className={`flex items-center justify-between mt-1 px-1 transition-opacity ${isHovered ? 'opacity-100' : 'opacity-0 sm:opacity-75'}`}>
-          <span className="text-white/70 text-[10px] font-mono">
-            {formatDuration(currentTime)} / {formatDuration(duration)}
-          </span>
+        <span className="text-white/90 text-xs font-mono font-bold shrink-0">
+          {formatDuration(duration) || '00:34'}
+        </span>
 
-          <div className="flex items-center gap-3">
-            {/* Mute toggle */}
-            <button
-              onClick={toggleMute}
-              className="p-1 text-white/80 hover:text-white transition-colors"
-            >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-
-            {/* Fullscreen toggle */}
-            <button
-              onClick={handleFullscreen}
-              className="p-1 text-white/80 hover:text-white transition-colors"
-            >
-              {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-            </button>
-          </div>
-        </div>
+        {/* Volume Mute/Unmute Toggle Button */}
+        <button
+          onClick={toggleMute}
+          className="p-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all shrink-0"
+          title={isMuted ? 'Unmute' : 'Mute'}
+        >
+          {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-white" />}
+        </button>
       </div>
+
+      {/* Gesture Guidance Capsule (Image 2) */}
+      <AnimatePresence>
+        {showGestureGuide && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 15 }}
+            className="absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 pointer-events-auto w-[94%] max-w-md bg-black/70 backdrop-blur-2xl border border-white/20 rounded-full px-3.5 py-1.5 flex items-center justify-between text-white/90 text-[11px] sm:text-xs font-semibold shadow-2xl select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Gesture 1: Double Tap */}
+            <div className="flex items-center gap-1.5">
+              <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />
+              <span>Double tap <span className="text-white/60 font-normal">to like</span></span>
+            </div>
+
+            {/* Gesture 2: Swipe Up */}
+            <div className="flex items-center gap-1.5">
+              <ArrowUpCircle className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Swipe up <span className="text-white/60 font-normal">for more</span></span>
+            </div>
+
+            {/* Gesture 3: Swipe Left/Right */}
+            <div className="flex items-center gap-1.5">
+              <MoveHorizontal className="w-3.5 h-3.5 text-purple-400" />
+              <span>Swipe <span className="text-white/60 font-normal">next video</span></span>
+            </div>
+
+            {/* Dismiss × button */}
+            <button
+              onClick={() => setShowGestureGuide(false)}
+              className="p-1 text-white/50 hover:text-white transition-colors"
+              title="Dismiss guide"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 });

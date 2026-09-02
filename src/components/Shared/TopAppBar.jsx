@@ -14,6 +14,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
 import { Search, Menu, X, ChevronLeft, Sparkles, Home, Bell, MessageSquare } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
+import ArvdoulLogo from "./ArvdoulLogo";
 
 // Animation config matching BottomNav
 const ANIMATION_CONFIG = {
@@ -51,7 +52,6 @@ const NAVIGATION_PATHS = {
 // Perfect Circular Logo Component
 const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
   const { playSound } = useSound();
   const { track } = useAnalytics();
   
@@ -62,34 +62,18 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
     onClick?.();
   }, [onClick, playSound, track, theme]);
   
-  const logoUrl = theme === "dark" 
-    ? "/logo/logo-dark.png" 
-    : "/logo/logo-light.png";
-  
-  const fallbackLogo = (
-    <div className={cn(
-      "w-full h-full rounded-full flex items-center justify-center",
-      "bg-gradient-to-br from-purple-600 via-pink-600 to-indigo-600"
-    )}>
-      <span className="text-lg font-bold text-white">
-        A
-      </span>
-    </div>
-  );
-  
   return (
     <motion.button
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       whileTap={{ scale: 0.92 }}
-      whileHover={{ scale: 1.08 }}
+      whileHover={{ scale: 1.05 }}
       transition={{
-        scale: { type: "spring", stiffness: 400, damping: 15 },
-        rotate: { duration: 0.2, ease: "easeInOut" }
+        scale: { type: "spring", stiffness: 400, damping: 15 }
       }}
       className={cn(
-        "relative w-12 h-12 rounded-full",
+        "relative p-0.5 rounded-full",
         "focus:outline-none focus:ring-2 focus:ring-offset-2",
         isActive 
           ? theme === "dark" 
@@ -100,76 +84,27 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
       aria-label="Arvdoul Home"
       aria-pressed={isActive}
     >
-      {/* Outer glow ring on active/hover */}
-      <div className={cn(
-        "absolute -inset-1 rounded-full opacity-0 transition-opacity duration-300",
-        isActive || isHovered ? "opacity-100" : "opacity-0",
-        "bg-gradient-to-r from-purple-500/30 via-pink-500/30 to-purple-500/30"
-      )} />
-      
-      {/* Main container with perfect glassmorphism */}
-      <div className={cn(
-        "relative w-12 h-12 rounded-full",
-        "flex items-center justify-center",
-        "backdrop-blur-xl border-2",
-        theme === "dark" 
-          ? "bg-gray-900/80 border-gray-800/60" 
-          : "bg-white/80 border-gray-300/60",
-        "shadow-lg hover:shadow-xl transition-all duration-200",
-        isActive && "ring-2 ring-offset-2",
-        isActive 
-          ? theme === "dark" 
-            ? "ring-purple-500/40 ring-offset-gray-900" 
-            : "ring-purple-500/40 ring-offset-white"
-          : ""
-      )}>
-        {/* Inner glow effect */}
-        <div className={cn(
-          "absolute inset-1 rounded-full",
-          "bg-gradient-to-br",
-          theme === "dark" 
-            ? "from-gray-800/50 via-gray-900/50 to-gray-800/50" 
-            : "from-white/50 via-gray-50/50 to-white/50"
-        )} />
-        
-        {/* Logo image with perfect circular fill */}
-        <div className="relative w-10 h-10 rounded-full overflow-hidden">
-          <motion.img
-            src={logoUrl}
-            alt="Arvdoul"
-            className={cn(
-              "w-full h-full object-cover",
-              "transition-transform duration-200",
-              isHovered && "scale-110"
-            )}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: isLoaded ? 1 : 0 }}
-            transition={{ duration: 0.2 }}
-            onLoad={() => setIsLoaded(true)}
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.parentNode.appendChild(fallbackLogo);
-            }}
-          />
-          {!isLoaded && fallbackLogo}
-        </div>
-        
-        {/* Active indicator dot */}
-        {isActive && (
-          <motion.div
-            layoutId="topNavLogoActive"
-            className={cn(
-              "absolute -bottom-1 left-1/2 transform -translate-x-1/2",
-              "w-1.5 h-1.5 rounded-full",
-              "bg-gradient-to-r",
-              theme === "dark" 
-                ? "from-purple-500 to-pink-500" 
-                : "from-orange-500 to-red-500"
-            )}
-            transition={ANIMATION_CONFIG.fastSpring}
-          />
-        )}
+      <div className="flex items-center gap-2">
+        <ArvdoulLogo size={38} showWordmark={false} />
+        <span className={cn(
+          "font-black text-lg tracking-tight font-display hidden sm:inline-block",
+          theme === "dark" ? "text-white" : "text-slate-900"
+        )}>
+          ARVDOUL
+        </span>
       </div>
+      
+      {/* Active indicator dot */}
+      {isActive && (
+        <motion.div
+          layoutId="topNavLogoActive"
+          className={cn(
+            "absolute -bottom-1 left-1/2 transform -translate-x-1/2",
+            "w-1.5 h-1.5 rounded-full",
+            "bg-gradient-to-r from-purple-500 to-pink-500"
+          )}
+        />
+      )}
     </motion.button>
   );
 });
