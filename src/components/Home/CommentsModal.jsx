@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import PropTypes from "prop-types";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 
 dayjs.extend(relativeTime);
 
@@ -22,7 +23,7 @@ const normalizeComment = (c) => ({
   userId: c.userId,
   text: c.content || c.text || "",
   displayName: c.userName || c.displayName || "User",
-  userPhotoURL: c.userAvatar || c.userPhotoURL || "/assets/default-profile.png",
+  userPhotoURL: getSafeAvatarUrl(c.userAvatar || c.userPhotoURL, c.userName || c.displayName || "User", c.userId),
   createdAt: c.createdAt,
   likes: c.likes || 0,
   likesBy: c.likesBy || [],
@@ -103,7 +104,7 @@ const optimisticComment = {
   id: tempId,  
   text: newComment.trim(),  
   displayName: user.displayName || "Unknown",  
-  userPhotoURL: user.photoURL || "/assets/default-profile.png",  
+  userPhotoURL: getSafeAvatarUrl(user.photoURL, user.displayName || "Unknown", user.uid),  
   userId: user.uid,  
   createdAt: { seconds: Date.now() / 1000 },  
   reactions: [],  
@@ -119,7 +120,7 @@ try {
   await svc.createComment(postId, user.uid, optimisticComment.text, {
     userName: user.displayName || "You",
     userUsername: user.username || user.displayName || "you",
-    userAvatar: user.photoURL || "/assets/default-profile.png",
+    userAvatar: getSafeAvatarUrl(user.photoURL, user.displayName || "You", user.uid),
   });
   // The realtime subscription refreshes the list; drop the optimistic copy.
   setComments((prev) => prev.filter((c) => c.id !== tempId));

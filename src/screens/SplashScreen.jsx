@@ -117,121 +117,30 @@ export default function SplashScreen() {
     });
   }, [themeConfig]);
 
-  // Advanced progress system
+  // Instant & smooth navigation as soon as auth is ready
   useEffect(() => {
     mountedRef.current = true;
     
-    let currentStatusIndex = 0;
-    
-    const initialize = async () => {
-      try {
-        // Step 1: Load logo
-        await preloadLogo();
-        
-        // Step 2: Start progress system
-        progressIntervalRef.current = setInterval(() => {
-          if (!mountedRef.current) return;
-          
-          setProgress(prev => {
-            // If offline, pause progress at 85% to wait for connection
-            if (!navigator.onLine && prev >= 85) {
-              setStatus("Offline • Waiting for Connection");
-              return 85;
-            }
+    // Quick logo preload (non-blocking)
+    preloadLogo();
+    setProgress(100);
+    setStatus("Ready");
 
-            if (prev >= 100) {
-              clearInterval(progressIntervalRef.current);
-              return 100;
-            }
-            
-            // Advanced progress curve
-            const remaining = 100 - prev;
-            let increment;
-            
-            if (prev < 30) increment = 1.8;
-            else if (prev < 60) increment = 1.2;
-            else if (prev < 85) increment = 0.8;
-            else increment = 0.3;
-            
-            return Math.min(prev + increment, 100);
-          });
-        }, 40);
-        
-        // Step 3: Status updates
-        const updateStatus = () => {
-          if (!mountedRef.current || currentStatusIndex >= statusSequence.length - 1) return;
-          
-          currentStatusIndex++;
-          const { text, progress: targetProgress } = statusSequence[currentStatusIndex];
-          setStatus(text);
-          
-          // Schedule next status update
-          statusTimeoutRef.current = setTimeout(updateStatus, 400);
-        };
-        
-        // Initial status update
-        statusTimeoutRef.current = setTimeout(updateStatus, 300);
-        
-      } catch (error) {
-        console.error('Splash initialization error:', error);
-        if (mountedRef.current) {
-          setStatus("Ready");
-          setProgress(100);
-        }
-      }
-    };
-    
-    initialize();
-    
-    return () => {
-      mountedRef.current = false;
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-      if (statusTimeoutRef.current) {
-        clearTimeout(statusTimeoutRef.current);
-      }
-      if (completeTimerRef.current) {
-        clearTimeout(completeTimerRef.current);
-      }
-    };
-  }, [preloadLogo, statusSequence]);
-
-  // Real-time offline listener
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  // Navigation when everything is perfect
-  useEffect(() => {
-    if (!isReady && progress >= 100 && logoLoaded && authInitialized && isOnline) {
-      setShowComplete(true);
-      
-      completeTimerRef.current = setTimeout(() => {
+    // Once auth is initialized, navigate immediately to target
+    if (authInitialized) {
+      const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
+      const timer = setTimeout(() => {
         if (!mountedRef.current) return;
-        
-        setIsReady(true);
-        
-        setTimeout(() => {
-          if (!mountedRef.current) return;
-          
-          const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
-          navigate(target, { 
-            replace: true,
-            state: { fromSplash: true }
-          });
-        }, 400);
-        
-      }, 500);
+        navigate(target, { 
+          replace: true,
+          state: { fromSplash: true }
+        });
+      }, 50);
+      return () => {
+        clearTimeout(timer);
+      };
     }
-  }, [progress, logoLoaded, authInitialized, isAuthenticated, needsOnboarding, navigate, isReady, isOnline]);
+  }, [authInitialized, isAuthenticated, needsOnboarding, navigate, preloadLogo]);
 
   // Perfect circular logo component
   const PerfectLogo = useMemo(() => (

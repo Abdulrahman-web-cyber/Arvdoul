@@ -22,6 +22,7 @@ import { db } from "../../firebase/firebase.js";
 import { getFirestoreService } from "../../services/firestoreService.js";
 import { getCommentService } from "../../services/commentService.js";
 import CommentsModal from "./CommentsModal"; // <- New modal component
+import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 
 // Advanced reaction emojis
 const REACTIONS = ["❤️", "😂", "😮", "😢", "😡"];
@@ -158,7 +159,7 @@ className="bg-background border dark:border-gray-700 rounded-2xl overflow-hidden
 <div className="flex items-center justify-between px-4 py-3">
 <div className="flex items-center gap-3">
 <img
-src={post.userPhotoURL || "/assets/default-profile.png"}
+src={getSafeAvatarUrl(post.userPhotoURL, post.displayName || "User", post.userId)}
 alt={`${post.displayName} avatar`}
 className="w-10 h-10 rounded-full object-cover"
 />

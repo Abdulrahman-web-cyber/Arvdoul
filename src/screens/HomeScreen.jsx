@@ -36,6 +36,7 @@ import { triggerHaptic } from '../utils/haptics';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import { openDB } from 'idb';
 import VibeStrip from '../components/feed/VibeStrip';
+import { getSafeAvatarUrl } from '../utils/avatarUtils';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -384,11 +385,13 @@ class FeedSessionEngine {
 }
 
 // ==================== FEED HYDRATION ====================
-function hydratePost(post, defaultAvatar = '/assets/default-profile.png') {
+function hydratePost(post) {
+  const authorName = post.authorName || 'Arvdoul User';
+  const authorId = post.authorId || post.userId || '';
   return {
     ...post,
-    authorName: post.authorName || 'Arvdoul User',
-    authorPhoto: post.authorPhoto || defaultAvatar,
+    authorName,
+    authorPhoto: getSafeAvatarUrl(post.authorPhoto, authorName, authorId),
     content: post.content || '',
     media: post.media || [],
     stats: post.stats || { likes: 0, comments: 0, shares: 0 },

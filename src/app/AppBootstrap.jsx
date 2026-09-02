@@ -204,60 +204,47 @@ const SystemInitializer = ({ onReady }) => {
  * Main App Bootstrap Component
  */
 export default function AppBootstrap() {
-  const [isReady, setIsReady] = useState(true);
-  const [initializationStage, setInitializationStage] = useState('starting');
-
-  // Stable identity: SystemInitializer's effect depends on onReady, and an
-  // inline arrow would get a fresh identity on every render — re-running the
-  // whole system initialization (Firebase, feature flags, RUM, offline drain)
-  // on every AppBootstrap re-render.
-  const handleReady = useCallback(() => setIsReady(true), []);
+  const handleReady = useCallback(() => {}, []);
 
   return (
     <HelmetProvider>
       <ThemeProvider>
         <GlobalErrorBoundary>
-          {/* System initializer (invisible) */}
-          <SystemInitializer 
-            onReady={handleReady}
-          />
+          {/* System initializer (invisible background tasks) */}
+          <SystemInitializer onReady={handleReady} />
           
-          {/* Main application - Only render when ready */}
-          {isReady ? (
-            <BrowserRouter>
-              <AuthProvider>
-                {/* Global motion policy: every Framer Motion animation respects
-                    prefers-reduced-motion (WCAG 2.2 2.3.3). */}
-                <MotionConfig reducedMotion="user">
-                  <Suspense fallback={<PageLoader label="Loading Arvdoul..." fullScreen={false} />}>
-                    <AppRoutes />
-                  </Suspense>
-                </MotionConfig>
-                
-                {/* Global offline sync indicator */}
-                <OfflineIndicator />
-                
-                {/* Toast notifications */}
-                <Toaster 
-                  position="top-right"
-                  toastOptions={{
-                    className: 'font-sans backdrop-blur-sm',
-                    duration: 4000,
-                    style: {
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(0, 0, 0, 0.1)',
-                    }
-                  }}
-                  richColors
-                  closeButton
-                  expand
-                />
-              </AuthProvider>
-            </BrowserRouter>
-          ) : (
-            <PageLoader label="Starting Arvdoul..." fullScreen={true} />
-          )}
+          {/* Main application renders immediately without blocking screens */}
+          <BrowserRouter>
+            <AuthProvider>
+              {/* Global motion policy: every Framer Motion animation respects
+                  prefers-reduced-motion (WCAG 2.2 2.3.3). */}
+              <MotionConfig reducedMotion="user">
+                <Suspense fallback={null}>
+                  <AppRoutes />
+                </Suspense>
+              </MotionConfig>
+              
+              {/* Global offline sync indicator */}
+              <OfflineIndicator />
+              
+              {/* Toast notifications */}
+              <Toaster 
+                position="top-right"
+                toastOptions={{
+                  className: 'font-sans backdrop-blur-sm',
+                  duration: 4000,
+                  style: {
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(0, 0, 0, 0.1)',
+                  }
+                }}
+                richColors
+                closeButton
+                expand
+              />
+            </AuthProvider>
+          </BrowserRouter>
         </GlobalErrorBoundary>
       </ThemeProvider>
     </HelmetProvider>

@@ -17,48 +17,9 @@
  * @property {string} [theme='light'] - Current theme
  */
 
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useState, useMemo } from 'react';
 import { cn } from '../../lib/utils';
-
-/**
- * Generate initials from name
- * @param {string} name - Display name
- * @returns {string} Initials (max 2 characters)
- */
-const getInitials = (name) => {
-  if (!name) return 'U';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return name.substring(0, 2).toUpperCase();
-};
-
-/**
- * Get avatar background color based on name hash
- * @param {string} name - Display name
- * @returns {Object} Color palette {primary, secondary}
- */
-const getAvatarColors = (name) => {
-  const palettes = [
-    { primary: '#3B82F6', secondary: '#1D4ED8' }, // Blue
-    { primary: '#8B5CF6', secondary: '#7C3AED' }, // Purple
-    { primary: '#10B981', secondary: '#059669' }, // Green
-    { primary: '#EC4899', secondary: '#DB2777' }, // Pink
-    { primary: '#F97316', secondary: '#EA580C' }, // Orange
-    { primary: '#14B8A6', secondary: '#0D9488' }, // Teal
-    { primary: '#6366F1', secondary: '#4F46E5' }, // Indigo
-    { primary: '#EF4444', secondary: '#DC2626' }, // Red
-  ];
-  
-  if (!name) return palettes[0];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = ((hash << 5) - hash) + name.charCodeAt(i);
-    hash = hash & hash;
-  }
-  return palettes[Math.abs(hash) % palettes.length];
-};
+import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
 
 /**
  * ProfileAvatar Component
@@ -67,6 +28,7 @@ const getAvatarColors = (name) => {
 const ProfileAvatar = memo(({
   src,
   name,
+  userId = '',
   size = 120,
   level,
   onPress,
@@ -75,11 +37,15 @@ const ProfileAvatar = memo(({
 }) => {
   const [imageError, setImageError] = useState(false);
   
+  const effectiveSrc = useMemo(() => {
+    if (imageError || !src || src.includes('default-profile') || src.includes('default_profile')) {
+      return generateDefaultAvatarSvg(userId, name, size * 2);
+    }
+    return getSafeAvatarUrl(src, name, userId);
+  }, [src, imageError, userId, name, size]);
+  
   // ARVDOUL DNA Gradient ring
   const gradientRing = 'conic-gradient(from 45deg, #00D4FF, #7A2BFA, #FF44CC, #00D4FF)';
-  
-  // Avatar colors
-  const colors = getAvatarColors(name);
   
   // Handle image error
   const handleImageError = useCallback(() => {
@@ -125,28 +91,12 @@ const ProfileAvatar = memo(({
         style={{ width: size, height: size }}
         aria-label={`${name || 'User'}'s avatar${isOwner ? ' (click to view)' : ''}`}
       >
-        {src && !imageError ? (
-          <img
-            src={src}
-            alt={name || 'User avatar'}
-            className="w-full h-full object-cover"
-            onError={handleImageError}
-          />
-        ) : (
-          <div 
-            className="w-full h-full flex items-center justify-center"
-            style={{
-              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`
-            }}
-          >
-            <span 
-              className="text-white font-bold"
-              style={{ fontSize: size * 0.35 }}
-            >
-              {getInitials(name)}
-            </span>
-          </div>
-        )}
+        <img
+          src={effectiveSrc}
+          alt={name || 'User avatar'}
+          className="w-full h-full object-cover rounded-full"
+          onError={handleImageError}
+        />
         
         {/* Upload indicator for owner */}
         {isOwner && (

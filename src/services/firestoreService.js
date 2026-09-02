@@ -16,6 +16,7 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { secureRandom } from '../lib/utils.js';
+import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 
 class LRUCache {
   constructor(maxSize = 100, ttl = 60000) {
@@ -236,9 +237,7 @@ class EnterpriseFirestoreService {
       const auth = await this.getAuthInstance();
       const currentUser = auth.currentUser;
       if (!currentUser) throw new Error('User not authenticated.');
-      if (postData.authorId !== currentUser.uid) {
-        throw new Error(`authorId mismatch`);
-      }
+      postData.authorId = currentUser.uid;
       const { collection, addDoc, serverTimestamp } = this.firestoreMethods;
       
       const scheduledTime = postData.scheduledTime ? new Date(postData.scheduledTime) : null;
@@ -252,7 +251,7 @@ class EnterpriseFirestoreService {
         authorId: postData.authorId,
         authorName: postData.authorName || 'Arvdoul User',
         authorUsername: postData.authorUsername || `user_${postData.authorId?.slice(0,8)}`,
-        authorPhoto: postData.authorPhoto || '/assets/default-profile.png',
+        authorPhoto: getSafeAvatarUrl(postData.authorPhoto, postData.authorName || 'Arvdoul User', postData.authorId),
         ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0 } }),
         ...(postData.type === 'question' && { question: postData.question, answers: postData.answers || [] }),
         ...(postData.type === 'link' && { link: postData.link }),

@@ -28,6 +28,7 @@ const COMMENTS_CONFIG = {
 };
 
 import { cacheManager } from '../utils/CacheManager.js';
+import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { logger } from '../utils/Logger.js';
@@ -175,7 +176,7 @@ class UltimateCommentService {
       const commentData = {
         postId,
         userId,
-        userAvatar: options.userAvatar || '/assets/default-profile.png',
+        userAvatar: getSafeAvatarUrl(options.userAvatar, options.userName || `User_${userId.slice(0, 8)}`, userId),
         userName: options.userName || `User_${userId.slice(0, 8)}`,
         userUsername: options.userUsername || `user_${userId.slice(0, 8)}`,
         content: content.trim(),

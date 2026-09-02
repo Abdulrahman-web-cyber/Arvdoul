@@ -68,30 +68,43 @@ prev.map((m, i) => i === index ? { ...m, muted: !m.muted } : m)
 
 // ---------------- Upload Media ----------------
 const uploadMedia = async () => {
-const urls = [];
-for (const m of mediaFiles) {
-const file = m.file;
-const storageRef = ref(storage, `posts/${user.uid}/${Date.now()}-${file.name}`);
-const uploadTask = uploadBytesResumable(storageRef, file);
+  const urls = [];
+  for (const m of mediaFiles) {
+    const file = m.file;
+    if (!file) continue;
+    try {
+      const storageRef = ref(storage, `posts/${user?.uid || 'anon'}/${Date.now()}-${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
 
-await new Promise((resolve, reject) => {  
-    uploadTask.on(  
-      "state_changed",  
-      snapshot => {  
-        const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);  
-        setProgress(percent);  
-      },  
-      err => reject(err),  
-      async () => {  
-        const url = await getDownloadURL(uploadTask.snapshot.ref);  
-        urls.push({ url, type: file.type.startsWith("video") ? "video" : "image" });  
-        resolve();  
-      }  
-    );  
-  });  
-}  
-return urls;
-
+      await new Promise((resolve, reject) => {  
+        uploadTask.on(  
+          "state_changed",  
+          snapshot => {  
+            const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);  
+            setProgress(percent);  
+          },  
+          err => reject(err),  
+          async () => {  
+            const url = await getDownloadURL(uploadTask.snapshot.ref);  
+            urls.push({ url, type: file.type.startsWith("video") ? "video" : "image" });  
+            resolve();  
+          }  
+        );  
+      });
+    } catch (uploadErr) {
+      console.warn("Storage upload failed in Composer, falling back to data URL:", uploadErr);
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+      if (dataUrl) {
+        urls.push({ url: dataUrl, type: file.type.startsWith("video") ? "video" : "image" });
+      }
+    }
+  }  
+  return urls;
 };
 
 // ---------------- Extract Hashtags & Mentions ----------------

@@ -14,6 +14,7 @@ import { useProfileStore } from '../../store/profileStore';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import {
   ProfileHeader,
   ProfileHighlights,
@@ -239,7 +240,7 @@ export default function ProfileScreen() {
     username: authUser?.username || '',
     displayName: authUser?.displayName || 'Creator',
     bio: authUser?.bio || '',
-    photoURL: authUser?.photoURL || '/assets/default-profile.png',
+    photoURL: getSafeAvatarUrl(authUser?.photoURL, authUser?.displayName || 'Creator', viewingUserId),
     coverPhotoURL: null,
     followerCount: 0,
     followingCount: 0,

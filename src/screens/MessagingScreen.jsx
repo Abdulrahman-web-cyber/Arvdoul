@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
+import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import {
   Search, SlidersHorizontal, Plus, Sparkles, Pin, BellOff,
   CheckCircle2, Volume2, Mic, Image as ImageIcon, FileText,
@@ -79,10 +80,11 @@ export default function MessagingScreen() {
         const mapped = (res.conversations || []).map((c) => {
           const other = (c.participantDetails || []).find((p) => p.id !== user.uid);
           const lastMsg = c.lastMessage || {};
+          const otherName = c.title || other?.displayName || other?.name || 'Conversation';
           return {
             id: c.id,
-            name: c.title || other?.displayName || other?.name || 'Conversation',
-            avatar: other?.photoURL || other?.avatar || '/assets/default-profile.png',
+            name: otherName,
+            avatar: getSafeAvatarUrl(other?.photoURL || other?.avatar, otherName, other?.id),
             verified: Boolean(other?.isVerified),
             preview: typeof lastMsg.text === 'string' ? lastMsg.text : lastMsg.content || '',
             time: c.lastActivity ? new Date(c.lastActivity.toDate ? c.lastActivity.toDate() : c.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
@@ -191,7 +193,7 @@ export default function MessagingScreen() {
             >
               <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]">
                 <img
-                  src={user?.photoURL || "/assets/default-profile.png"}
+                  src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'User', user?.uid)}
                   alt="My Profile"
                   className={`w-full h-full rounded-full object-cover border-2 ${isDark ? 'border-[#030614]' : 'border-white'}`}
                 />

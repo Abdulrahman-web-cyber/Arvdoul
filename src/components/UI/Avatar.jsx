@@ -1,17 +1,26 @@
-// src/components/ui/Avatar.jsx
-import React, { useState, memo } from 'react';
+// src/components/UI/Avatar.jsx
+import React, { useState, memo, useMemo } from 'react';
 import { cn } from '../../lib/utils';
+import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
 
 export const Avatar = memo(({
   src,
   alt = 'User avatar',
   name = 'User',
+  userId = '',
   size = 'md',
   className = '',
   status,
   onClick,
 }) => {
   const [hasError, setHasError] = useState(false);
+
+  const effectiveSrc = useMemo(() => {
+    if (hasError || !src || src.includes('default-profile') || src.includes('default_profile')) {
+      return generateDefaultAvatarSvg(userId, name);
+    }
+    return getSafeAvatarUrl(src, name, userId);
+  }, [src, hasError, userId, name]);
 
   const sizeClasses = {
     xs: 'w-6 h-6 text-[10px]',
@@ -22,31 +31,23 @@ export const Avatar = memo(({
     '2xl': 'w-28 h-28 text-2xl',
   };
 
-  const initial = (name || 'U').charAt(0).toUpperCase();
-
   return (
     <div
       onClick={onClick}
       className={cn(
-        'relative inline-flex shrink-0 select-none rounded-full',
+        'relative inline-flex shrink-0 select-none rounded-full overflow-hidden',
         sizeClasses[size] || sizeClasses.md,
         onClick && 'cursor-pointer hover:opacity-90 transition-opacity',
         className
       )}
     >
-      {src && !hasError ? (
-        <img
-          src={src}
-          alt={alt}
-          onError={() => setHasError(true)}
-          className="w-full h-full rounded-full object-cover"
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-full h-full rounded-full bg-gradient-to-br from-arvdoul-purple to-arvdoul-blue text-white font-semibold flex items-center justify-center shadow-inner">
-          {initial}
-        </div>
-      )}
+      <img
+        src={effectiveSrc}
+        alt={alt}
+        onError={() => setHasError(true)}
+        className="w-full h-full rounded-full object-cover"
+        loading="lazy"
+      />
 
       {status && (
         <span
@@ -68,3 +69,4 @@ export const Avatar = memo(({
 Avatar.displayName = 'Avatar';
 
 export default Avatar;
+

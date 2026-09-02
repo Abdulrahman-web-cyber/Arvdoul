@@ -21,6 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
+import { generateDefaultAvatarSvg } from '../../utils/avatarUtils';
 
 // Honest fallback when the public profile document is not yet created:
 // real fields only, zeroed counters, no fabricated identity.
@@ -29,7 +30,7 @@ const EMPTY_PUBLIC_PROFILE = {
   username: '',
   displayName: 'User',
   bio: '',
-  photoURL: '/assets/default-profile.png',
+  photoURL: generateDefaultAvatarSvg('guest', 'User'),
   coverPhotoURL: null,
   isVerified: false,
   isCreator: false,

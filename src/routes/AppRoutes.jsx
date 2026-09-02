@@ -110,9 +110,23 @@ const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
 const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
 
 import PageLoader from "../components/UI/PageLoader.jsx";
+import {
+  SectionErrorBoundary,
+  FeedErrorBoundary,
+  ProfileErrorBoundary,
+  ChatErrorBoundary,
+  CreatorErrorBoundary,
+  PostErrorBoundary,
+} from "../components/ErrorBoundary/SectionErrorBoundary.jsx";
+import {
+  FeedSkeleton,
+  ProfileSkeleton,
+  ChatSkeleton,
+  PostSkeleton,
+} from "../components/UI/SkeletonLoaders.jsx";
 
 // ==================== LOADING FALLBACK ====================
-const RouteFallback = () => <PageLoader label="Loading view..." fullScreen={false} />;
+const RouteFallback = () => null;
 
 // ==================== ROUTE WRAPPERS ====================
 const PublicRoute = ({ children }) => {
@@ -251,17 +265,21 @@ export default function AppRoutes() {
       {/* Core App Routes */}
       <Route path="/home" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <HomeScreen />
-          </Suspense>
+          <FeedErrorBoundary>
+            <Suspense fallback={<FeedSkeleton />}>
+              <HomeScreen />
+            </Suspense>
+          </FeedErrorBoundary>
         </ProtectedRoute>
       } />
       
       <Route path="/videos" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <VideosScreen />
-          </Suspense>
+          <SectionErrorBoundary sectionName="Videos">
+            <Suspense fallback={<FeedSkeleton />}>
+              <VideosScreen />
+            </Suspense>
+          </SectionErrorBoundary>
         </ProtectedRoute>
       } />
       
@@ -269,42 +287,44 @@ export default function AppRoutes() {
       {/* Option 1: Nested Routes for Better UX */}
       <Route path="/messages" element={
         <MessagingLayout>
-          <Suspense fallback={<RouteFallback />}>
-            <Outlet />
-          </Suspense>
+          <ChatErrorBoundary>
+            <Suspense fallback={<ChatSkeleton />}>
+              <Outlet />
+            </Suspense>
+          </ChatErrorBoundary>
         </MessagingLayout>
       }>
         {/* Default view - conversation list */}
         <Route index element={
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<ChatSkeleton />}>
             <MessagingScreen />
           </Suspense>
         } />
         
         {/* New conversation */}
         <Route path="new" element={
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<ChatSkeleton />}>
             <NewConversationScreen />
           </Suspense>
         } />
         
         {/* Individual chat */}
         <Route path=":conversationId" element={
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<ChatSkeleton />}>
             <ChatScreen />
           </Suspense>
         } />
         
         {/* Group info */}
         <Route path=":conversationId/info" element={
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<ChatSkeleton />}>
             <GroupInfoScreen />
           </Suspense>
         } />
         
         {/* Conversation settings */}
         <Route path=":conversationId/settings" element={
-          <Suspense fallback={<RouteFallback />}>
+          <Suspense fallback={<ChatSkeleton />}>
             <ConversationSettingsScreen />
           </Suspense>
         } />
@@ -333,17 +353,21 @@ export default function AppRoutes() {
       {/* ========== SOCIAL & CONTENT ROUTES ========== */}
       <Route path="/post/:postId" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <PostDetails />
-          </Suspense>
+          <PostErrorBoundary>
+            <Suspense fallback={<PostSkeleton />}>
+              <PostDetails />
+            </Suspense>
+          </PostErrorBoundary>
         </ProtectedRoute>
       } />
 
       <Route path="/create-post" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <CreatePost />
-          </Suspense>
+          <CreatorErrorBoundary>
+            <Suspense fallback={<FeedSkeleton count={1} />}>
+              <CreatePost />
+            </Suspense>
+          </CreatorErrorBoundary>
         </ProtectedRoute>
       } />
       <Route path="/create" element={<Navigate to="/create-post" replace />} />
@@ -409,36 +433,44 @@ export default function AppRoutes() {
       {/* Main profile screen - with userId param for viewing other profiles */}
       <Route path="/profile" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ProfileMyScreen />
-          </Suspense>
+          <ProfileErrorBoundary>
+            <Suspense fallback={<ProfileSkeleton />}>
+              <ProfileMyScreen />
+            </Suspense>
+          </ProfileErrorBoundary>
         </ProtectedRoute>
       } />
       
       {/* My profile (owner view) */}
       <Route path="/profile/me" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ProfileMyScreen />
-          </Suspense>
+          <ProfileErrorBoundary>
+            <Suspense fallback={<ProfileSkeleton />}>
+              <ProfileMyScreen />
+            </Suspense>
+          </ProfileErrorBoundary>
         </ProtectedRoute>
       } />
       
       {/* Public profile view (for other users) */}
       <Route path="/profile/public/:userId" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ProfilePublicScreen />
-          </Suspense>
+          <ProfileErrorBoundary>
+            <Suspense fallback={<ProfileSkeleton />}>
+              <ProfilePublicScreen />
+            </Suspense>
+          </ProfileErrorBoundary>
         </ProtectedRoute>
       } />
       
       {/* Profile with specific user ID */}
       <Route path="/profile/:userId" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ProfileScreen />
-          </Suspense>
+          <ProfileErrorBoundary>
+            <Suspense fallback={<ProfileSkeleton />}>
+              <ProfileScreen />
+            </Suspense>
+          </ProfileErrorBoundary>
         </ProtectedRoute>
       } />
       

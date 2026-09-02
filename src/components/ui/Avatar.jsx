@@ -6,9 +6,10 @@
  * (verified / creator), keyboard-friendly click, alt text.
  */
 
-import React, { useState, memo, useCallback } from 'react';
+import React, { useState, memo, useCallback, useMemo } from 'react';
 import { BadgeCheck, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
 
 const sizeClasses = {
   xs: 'w-6 h-6 text-[10px]',
@@ -31,6 +32,7 @@ const statusClasses = {
  * @param {string} [props.src] - image URL
  * @param {string} [props.alt='User avatar'] - image alt text
  * @param {string} [props.name='User'] - display name (initials fallback)
+ * @param {string} [props.userId] - optional user ID for deterministic SVG coloring
  * @param {'xs'|'sm'|'md'|'lg'|'xl'|'2xl'} [props.size='md']
  * @param {'online'|'offline'|'away'|'busy'} [props.status] - presence dot
  * @param {'verified'|'creator'} [props.badge] - badge overlay
@@ -41,6 +43,7 @@ export const Avatar = memo(({
   src,
   alt = 'User avatar',
   name = 'User',
+  userId = '',
   size = 'md',
   className = '',
   status,
@@ -49,6 +52,13 @@ export const Avatar = memo(({
   role,
 }) => {
   const [hasError, setHasError] = useState(false);
+
+  const effectiveSrc = useMemo(() => {
+    if (hasError || !src || src.includes('default-profile') || src.includes('default_profile')) {
+      return generateDefaultAvatarSvg(userId, name);
+    }
+    return getSafeAvatarUrl(src, name, userId);
+  }, [src, hasError, userId, name]);
 
   const handleClick = useCallback(
     (e) => {
@@ -60,7 +70,6 @@ export const Avatar = memo(({
     [onClick]
   );
 
-  const initial = (name || 'U').charAt(0).toUpperCase();
   const dotSize = size === 'xs' || size === 'sm' ? 'w-2 h-2' : 'w-3 h-3';
   const badgeSize = size === 'xs' || size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
 
@@ -81,28 +90,19 @@ export const Avatar = memo(({
       }
       aria-label={onClick ? alt : undefined}
       className={cn(
-        'relative inline-flex shrink-0 select-none rounded-full',
+        'relative inline-flex shrink-0 select-none rounded-full overflow-hidden',
         sizeClasses[size] || sizeClasses.md,
         onClick && 'cursor-pointer hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         className
       )}
     >
-      {src && !hasError ? (
-        <img
-          src={src}
-          alt={alt}
-          onError={() => setHasError(true)}
-          className="w-full h-full rounded-full object-cover"
-          loading="lazy"
-        />
-      ) : (
-        <div
-          aria-hidden="true"
-          className="w-full h-full rounded-full bg-gradient-to-br from-arvdoul-purple to-arvdoul-blue text-white font-semibold flex items-center justify-center shadow-inner"
-        >
-          {initial}
-        </div>
-      )}
+      <img
+        src={effectiveSrc}
+        alt={alt}
+        onError={() => setHasError(true)}
+        className="w-full h-full rounded-full object-cover"
+        loading="lazy"
+      />
 
       {/* Presence status dot (bottom-right) */}
       {status && (

@@ -28,6 +28,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
 import { openDB } from 'idb';
+import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { loadStripe } from '@stripe/stripe-js';
 import { svcLogger } from './ServiceKit.js';
 
@@ -536,7 +537,7 @@ class MonetizationService {
       return snapshot.docs.map(doc => ({
         userId: doc.id,
         displayName: doc.data().displayName || 'User',
-        photoURL: doc.data().photoURL || '/assets/default-profile.png',
+        photoURL: getSafeAvatarUrl(doc.data().photoURL, doc.data().displayName || 'User', doc.id),
         coins: doc.data().coins || 0,
         position: this.getPositionTitle(doc.data().coins || 0),
       }));

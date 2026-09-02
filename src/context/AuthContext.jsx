@@ -16,6 +16,7 @@ import {
   getOnboardingSession,
   isReturningAuthUser,
 } from "../utils/profileCompletion.js";
+import { getSafeAvatarUrl } from "../utils/avatarUtils.js";
 
 const AuthContext = createContext(null);
 
@@ -180,7 +181,11 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     emailVerified: user.emailVerified,
     displayName: userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
     username: userProfile?.username || user.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '_') || `user_${user.uid?.slice(0, 8)}`,
-    photoURL: userProfile?.photoURL || user.photoURL || "/assets/default-profile.png",
+    photoURL: getSafeAvatarUrl(
+      userProfile?.photoURL || user.photoURL,
+      userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
+      user.uid
+    ),
     phoneNumber: userProfile?.phoneNumber || user.phoneNumber,
     authProvider: userProfile?.authProvider || user.providerData?.[0]?.providerId || 'email',
     isProfileComplete,

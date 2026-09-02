@@ -43,6 +43,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
+import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -721,7 +722,7 @@ class UltimateVideoService {
         creator: item.creator || {
           name: item.authorName || 'Arvdoul Creator',
           username: item.authorUsername || 'creator',
-          avatar: item.authorPhoto || '/assets/default-profile.png',
+          avatar: getSafeAvatarUrl(item.authorPhoto, item.authorName || 'Arvdoul Creator', item.authorId || item.userId),
           id: item.authorId || item.userId,
           isVerified: item.authorVerified || false,
         },
@@ -1006,7 +1007,7 @@ class UltimateVideoService {
             creator: data.creator || {
               name: data.authorName || 'Creator',
               username: data.authorUsername || 'creator',
-              avatar: data.authorPhoto || '/assets/default-profile.png',
+              avatar: getSafeAvatarUrl(data.authorPhoto, data.authorName || 'Creator', data.authorId || data.userId),
               id: data.authorId || data.userId,
             },
             authorId: data.authorId || data.userId || null,

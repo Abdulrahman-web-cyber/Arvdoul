@@ -70,9 +70,9 @@ export default function AppStateGuard({ children }) {
     }
   }, [decision, navigate, user]);
 
-  // When auth state is resolving during cold-start, present a sleek platform loader
+  // When auth state is resolving during cold-start, allow rendering seamlessly without blocking screens
   if (decision.wait) {
-    return <PageLoader label="Connecting to Arvdoul..." fullScreen={true} />;
+    return children;
   }
 
   // If redirecting, return null seamlessly without flashing

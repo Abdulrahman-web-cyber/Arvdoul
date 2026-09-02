@@ -16,6 +16,7 @@ import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 // Lazy load components
 const ProfileHeader = lazy(() => import('../../components/profile/ProfileHeader'));
@@ -275,7 +276,7 @@ export default function ProfileMyScreen() {
     username: currentUser?.username || currentUser?.email?.split('@')[0] || '',
     displayName: currentUser?.displayName || currentUser?.name || 'Your Profile',
     bio: currentUser?.bio || '',
-    photoURL: currentUser?.photoURL || '/assets/default-profile.png',
+    photoURL: getSafeAvatarUrl(currentUser?.photoURL, currentUser?.displayName || currentUser?.name || 'Your Profile', currentUserId),
     coverPhotoURL: null,
     followerCount: 0,
     followingCount: 0,
