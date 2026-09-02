@@ -123,10 +123,13 @@ import {
   ProfileSkeleton,
   ChatSkeleton,
   PostSkeleton,
+  CreatePostSkeleton,
+  VideosScreenSkeleton,
+  GenericScreenSkeleton,
 } from "../components/UI/SkeletonLoaders.jsx";
 
 // ==================== LOADING FALLBACK ====================
-const RouteFallback = () => null;
+const RouteFallback = () => <GenericScreenSkeleton />;
 
 // ==================== ROUTE WRAPPERS ====================
 const PublicRoute = ({ children }) => {
@@ -276,7 +279,7 @@ export default function AppRoutes() {
       <Route path="/videos" element={
         <ProtectedRoute>
           <SectionErrorBoundary sectionName="Videos">
-            <Suspense fallback={<FeedSkeleton />}>
+            <Suspense fallback={<VideosScreenSkeleton />}>
               <VideosScreen />
             </Suspense>
           </SectionErrorBoundary>
@@ -364,7 +367,7 @@ export default function AppRoutes() {
       <Route path="/create-post" element={
         <ProtectedRoute>
           <CreatorErrorBoundary>
-            <Suspense fallback={<FeedSkeleton count={1} />}>
+            <Suspense fallback={<CreatePostSkeleton />}>
               <CreatePost />
             </Suspense>
           </CreatorErrorBoundary>

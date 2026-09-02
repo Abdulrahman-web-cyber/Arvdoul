@@ -2380,18 +2380,20 @@ function CreatePostContent() {
         <CreatorShell>
           <CreatePostShell>
             {state.step === 2 ? step2Content : (
-              <div className="space-y-6 py-4">
-                <VisibilityPanel defaultOpen={true} />
-                <LocationPanel defaultOpen={false} />
-                <TaggingPanel defaultOpen={false} />
-                <MonetizationPanel defaultOpen={false} />
-                <SchedulingPanel defaultOpen={false} />
-                <CrossPlatformPanel defaultOpen={false} />
-                <CoAuthorPanel defaultOpen={false} />
-                <AIPanel defaultOpen={false} />
-                <InsightsPanel defaultOpen={false} />
-                <ModerationStatus defaultOpen={false} />
+              <div className="space-y-6 py-4 max-w-2xl mx-auto">
                 <ReviewSummary />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <VisibilityPanel defaultOpen={true} />
+                  <LocationPanel defaultOpen={false} />
+                  <TaggingPanel defaultOpen={false} />
+                  <MonetizationPanel defaultOpen={false} />
+                  <SchedulingPanel defaultOpen={false} />
+                  <CrossPlatformPanel defaultOpen={false} />
+                  <CoAuthorPanel defaultOpen={false} />
+                  <AIPanel defaultOpen={false} />
+                  <InsightsPanel defaultOpen={false} />
+                  <ModerationStatus defaultOpen={false} />
+                </div>
               </div>
             )}
           </CreatePostShell>
@@ -2403,7 +2405,7 @@ function CreatePostContent() {
 
 function CreatePostShell({ children }) {
   const { state, dispatch } = useCreatePostState();
-  const { goBackToLauncher } = useCreatePostServices();
+  const { goBackToLauncher, publishPost, saveDraft } = useCreatePostServices();
 
   const canProceed = useCallback(() => {
     if (state.isContentReady) return true;
@@ -2432,11 +2434,29 @@ function CreatePostShell({ children }) {
           </motion.div>
         </AnimatePresence>
       </div>
-      <div className="flex justify-between items-center px-4 py-3">
-        <button onClick={() => { if (state.step === 1) goBackToLauncher(); else dispatch({ type: "SET_STEP", payload: state.step - 1 }); }} className="px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 shadow-md hover:shadow-lg transition" aria-label="Back">Back</button>
-        {state.step < 3 && (
-          <button onClick={() => dispatch({ type: "SET_STEP", payload: state.step + 1 })} disabled={!canProceed()}
-            className={`px-8 py-3 rounded-full font-bold text-white transition-all duration-300 flex items-center gap-2 ${
+      <div className="sticky bottom-0 z-20 flex justify-between items-center px-4 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200/60 dark:border-gray-800/60">
+        <button
+          onClick={() => { if (state.step === 1) goBackToLauncher(); else dispatch({ type: "SET_STEP", payload: state.step - 1 }); }}
+          className="px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-semibold shadow-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition cursor-pointer"
+          aria-label="Back"
+        >
+          {state.step === 3 ? "Back to Edit" : "Back"}
+        </button>
+
+        {state.step === 3 && (
+          <button
+            onClick={saveDraft}
+            className="px-4 py-2 rounded-full border border-purple-500/30 text-purple-600 dark:text-purple-400 text-sm font-semibold hover:bg-purple-500/10 transition cursor-pointer"
+          >
+            💾 Save Draft
+          </button>
+        )}
+
+        {state.step < 3 ? (
+          <button
+            onClick={() => dispatch({ type: "SET_STEP", payload: state.step + 1 })}
+            disabled={!canProceed()}
+            className={`px-8 py-2.5 rounded-full font-bold text-white text-sm transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               canProceed()
                 ? 'shadow-[0_0_30px_rgba(147,51,234,0.4)] hover:shadow-[0_0_40px_rgba(147,51,234,0.6)] hover:scale-105 active:scale-95'
                 : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60'
@@ -2444,6 +2464,22 @@ function CreatePostShell({ children }) {
             style={canProceed() ? { background: DNA_GRADIENT_STYLE } : {}}
           >
             Next <Icons.ArrowRight className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            onClick={() => publishPost()}
+            disabled={state.loading}
+            className="px-8 py-2.5 rounded-full font-bold text-white text-sm shadow-lg shadow-purple-500/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: DNA_GRADIENT_STYLE }}
+          >
+            {state.loading ? (
+              <>
+                <LoadingSpinner size="xs" color="white" />
+                <span>Publishing...</span>
+              </>
+            ) : (
+              <span>{state.scheduledTime ? "📅 Schedule Post" : "🚀 Publish Post"}</span>
+            )}
           </button>
         )}
       </div>
