@@ -124,6 +124,7 @@ const RouteLoadingFallback = () => (
     <LoadingSpinner size="lg" color="purple" />
   </div>
 );
+const RouteFallback = RouteLoadingFallback;
 
 // ==================== ROUTE WRAPPERS ====================
 const PublicRoute = ({ children }) => {

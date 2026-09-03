@@ -1,6 +1,8 @@
 // src/screens/VideoEditor/VideoEditorScreen.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '../../context/ThemeContext';
 import {
   INITIAL_TRACKS, RESOLUTION_PRESETS, formatTimecode,
   FILTERS_LIST
@@ -103,6 +105,9 @@ function analyzeAudioWaveform(url) {
 }
 
 export default function VideoEditorScreen() {
+  const navigate = useNavigate();
+  const { theme, isDark } = useTheme();
+
   // Project State — honest default: the editor opens empty. The user names
   // their own project; we never present a pre-made demo project.
   const [projectName, setProjectName] = useState('Untitled Project');
@@ -526,23 +531,27 @@ export default function VideoEditorScreen() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-gray-950 text-white overflow-hidden select-none font-sans">
+    <div className={`flex flex-col h-screen w-screen overflow-hidden select-none font-sans ${isDark ? 'bg-gray-950 text-white' : 'bg-slate-50 text-gray-900'}`}>
       {/* 1. Studio Header */}
       <EditorHeader
         projectName={projectName}
         onProjectNameChange={setProjectName}
+        onClose={() => navigate(-1)}
+        currentResolution={selectedResolution}
         selectedResolution={selectedResolution}
+        onSelectResolution={setSelectedResolution}
         onResolutionChange={setSelectedResolution}
         isSaved={isSaved}
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
+        onExportClick={() => setIsExportModalOpen(true)}
         onOpenExport={() => setIsExportModalOpen(true)}
       />
 
       {/* 2. Main Center Work Area (Preview Canvas + Optional Layers Drawer) */}
-      <div className="relative flex-1 min-h-0 flex overflow-hidden bg-gradient-to-b from-gray-950 via-gray-900 to-black">
+      <div className={`relative flex-1 min-h-0 flex overflow-hidden ${isDark ? 'bg-gradient-to-b from-gray-950 via-gray-900 to-black' : 'bg-gradient-to-b from-gray-100 via-gray-50 to-slate-200'}`}>
         {/* Center Preview Viewport */}
         <div className="flex-1 flex flex-col p-2 sm:p-3 relative overflow-hidden min-h-0">
           <PreviewCanvas
@@ -575,7 +584,7 @@ export default function VideoEditorScreen() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 280, opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute right-0 top-0 bottom-0 z-30 w-72 sm:w-80 p-3 bg-gray-950/90 backdrop-blur-2xl border-l border-white/10 shadow-2xl"
+              className={`absolute right-0 top-0 bottom-0 z-30 w-72 sm:w-80 p-3 backdrop-blur-2xl border-l shadow-2xl ${isDark ? 'bg-gray-950/90 border-white/10' : 'bg-white/95 border-gray-200'}`}
             >
               <LayersPanel
                 tracks={tracks}
@@ -598,7 +607,7 @@ export default function VideoEditorScreen() {
       </div>
 
       {/* 3. Timeline Toolbar (Timecode, Undo, Redo, Magnet, Split, Delete, Zoom) */}
-      <div className="px-3 sm:px-4 py-1.5 bg-gray-950 border-t border-white/10">
+      <div className={`px-3 sm:px-4 py-1.5 border-t ${isDark ? 'bg-gray-950 border-white/10' : 'bg-white border-gray-200'}`}>
         <TimelineToolbar
           currentTime={currentTime}
           duration={totalDuration}
@@ -619,7 +628,7 @@ export default function VideoEditorScreen() {
       </div>
 
       {/* 4. Multi-Track Timeline (Text, Stickers, Video Clips, Audio Waveforms) */}
-      <div className="h-44 sm:h-52 bg-gray-950/95 border-t border-b border-white/10 overflow-hidden relative">
+      <div className={`h-44 sm:h-52 border-t border-b overflow-hidden relative ${isDark ? 'bg-gray-950/95 border-white/10' : 'bg-slate-100/90 border-gray-200'}`}>
         <MultiTrackTimeline
           tracks={tracks}
           currentTime={currentTime}
@@ -634,7 +643,7 @@ export default function VideoEditorScreen() {
       </div>
 
       {/* 5. Horizontal Action Ribbon (Trim, Split, Transition, Filters, Adjust, Audio, Text, Stickers, AI...) */}
-      <div className="px-3 sm:px-4 py-1.5 bg-gray-950 border-b border-white/10">
+      <div className={`px-3 sm:px-4 py-1.5 border-b ${isDark ? 'bg-gray-950 border-white/10' : 'bg-white border-gray-200'}`}>
         <ActionRibbon
           activeTool={activeTool}
           onSelectTool={setActiveTool}
@@ -642,7 +651,7 @@ export default function VideoEditorScreen() {
       </div>
 
       {/* 6. Context-Sensitive Sub Panel (Trim Subpanel vs Filter/Adjust/Text/Audio Panel) */}
-      <div className="px-3 sm:px-4 py-2 bg-gray-950/90 min-h-[100px] max-h-48 overflow-y-auto">
+      <div className={`px-3 sm:px-4 py-2 min-h-[100px] max-h-48 overflow-y-auto ${isDark ? 'bg-gray-950/90' : 'bg-slate-50/95'}`}>
         {activeTool === 'trim' || activeTool === 'split' ? (
           <TrimSubPanel
             selectedClip={selectedClip}

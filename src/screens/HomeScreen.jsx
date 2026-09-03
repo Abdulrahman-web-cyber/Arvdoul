@@ -36,6 +36,7 @@ import { triggerHaptic } from '../utils/haptics';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import { openDB } from 'idb';
 import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
+import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
@@ -1322,6 +1323,9 @@ export default function HomeScreen() {
                 itemContent={(index, post) => (
                   <div className="px-4 pb-4">
                     {index === 1 && <InFeedStoriesModule />}
+                    {index > 0 && index % 5 === 3 && (
+                      <SponsoredPostCard placement="feed" />
+                    )}
                     <PostWithTracking
                       post={post}
                       currentUser={user}
