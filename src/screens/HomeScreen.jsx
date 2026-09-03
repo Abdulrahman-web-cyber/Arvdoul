@@ -35,7 +35,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { triggerHaptic } from '../utils/haptics';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import { openDB } from 'idb';
-import VibeStrip from '../components/feed/VibeStrip';
+import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
@@ -890,6 +890,18 @@ export default function HomeScreen() {
 
           if (result.success) {
             if (reset) {
+              // Merge local posts (e.g. freshly published) at the very top of the feed
+              let localPosts = [];
+              try {
+                const raw = localStorage.getItem('arvdoul_local_posts');
+                if (raw) localPosts = JSON.parse(raw);
+              } catch {}
+              if (Array.isArray(localPosts) && localPosts.length > 0) {
+                const existingIds = new Set(newPosts.map(p => p.id));
+                const freshLocal = localPosts.filter(p => p && p.id && !existingIds.has(p.id)).map(p => hydratePost(p));
+                newPosts = [...freshLocal, ...newPosts];
+              }
+
               dispatchFeed({ type: 'SET_FEED', payload: newPosts });
               feedRuntimeRef.current.seenIds = new Set(newPosts.map(p => p.id));
               feedRuntimeRef.current.insertedIds.clear();
@@ -1089,6 +1101,24 @@ export default function HomeScreen() {
     setStatus(STATUS.LOADING);
     loadFeedRef.current?.(true, true);
   }, []);
+
+  // Listen for realtime locally published posts
+  useEffect(() => {
+    const handleNewPost = (e) => {
+      const newPost = e.detail;
+      if (newPost) {
+        const hydrated = hydratePost(newPost);
+        dispatchFeed({ type: 'PREPEND_FEED', payload: [hydrated] });
+        feedRuntimeRef.current.seenIds.add(hydrated.id);
+        feedRuntimeRef.current.insertedIds.add(hydrated.id);
+        try {
+          virtuosoRef.current?.scrollToIndex({ index: 0, align: 'start', behavior: 'smooth' });
+        } catch {}
+      }
+    };
+    window.addEventListener('arvdoul:new_post_published', handleNewPost);
+    return () => window.removeEventListener('arvdoul:new_post_published', handleNewPost);
+  }, [hydratePost]);
 
   // Online/offline with debounced refresh
   useEffect(() => {
@@ -1291,6 +1321,7 @@ export default function HomeScreen() {
                 computeItemKey={(index, item) => item.id}
                 itemContent={(index, post) => (
                   <div className="px-4 pb-4">
+                    {index === 1 && <InFeedStoriesModule />}
                     <PostWithTracking
                       post={post}
                       currentUser={user}
@@ -1302,10 +1333,9 @@ export default function HomeScreen() {
                 )}
                 components={{
                   Header: () => (
-                    <div className="pt-2 pb-2">
-                      <VibeStrip currentUser={user} />
+                    <div className="pt-2 pb-2 space-y-3">
                       {/* Feed Categories Filter */}
-                      <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto scrollbar-hide">
+                      <div className="flex items-center gap-2 px-4 py-1 overflow-x-auto scrollbar-hide">
                         {[
                           { id: 'foryou', label: '✨ For You' },
                           { id: 'following', label: '👥 Following' },
@@ -1334,6 +1364,28 @@ export default function HomeScreen() {
                             </button>
                           );
                         })}
+                      </div>
+
+                      {/* Quick Post Prompt Card */}
+                      <div className="px-4">
+                        <div
+                          onClick={() => navigate('/create-post')}
+                          className="flex items-center gap-3 p-3 rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white/80 dark:bg-[#0f1424]/80 shadow-sm backdrop-blur-md cursor-pointer hover:border-purple-500/40 transition-all group"
+                        >
+                          <img
+                            src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'User', user?.uid)}
+                            alt="Avatar"
+                            className="w-9 h-9 rounded-full object-cover border border-purple-500/30 ring-1 ring-purple-500/20"
+                          />
+                          <div className="flex-1 text-xs text-gray-500 dark:text-gray-400 font-medium group-hover:text-purple-500 transition-colors">
+                            What's on your mind, {user?.displayName ? user.displayName.split(' ')[0] : 'Creator'}?
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                              + Post
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ),

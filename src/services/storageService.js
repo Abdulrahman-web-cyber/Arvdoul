@@ -877,7 +877,17 @@ class EnterpriseStorageService {
 
     try {
       const firebase = await this.getFirebaseInfrastructure();
-      return firebase.getStorageInstance?.();
+      if (typeof firebase?.getStorageInstance === 'function') {
+        const instance = await firebase.getStorageInstance();
+        if (instance) return instance;
+      }
+      if (typeof firebase?.getStorage === 'function') {
+        const instance = await firebase.getStorage();
+        if (instance) return instance;
+      }
+      const { getStorage } = await import('firebase/storage');
+      const app = firebase?.getApp?.() || (await import('../firebase/firebase.js')).default.getApp();
+      return getStorage(app);
     } catch (error) {
       this.logger.error('Failed to get Storage instance', { error: error.message });
       throw new Error('Storage service unavailable. Please try again.');

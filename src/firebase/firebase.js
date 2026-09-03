@@ -204,6 +204,18 @@ class UltimateFirebaseManager {
     }
   }
 
+  async getStorageInstance() {
+    return this.getStorage();
+  }
+
+  async getAuthInstance() {
+    return this.getAuth();
+  }
+
+  async getFirestoreInstance() {
+    return this.getFirestore();
+  }
+
   async getMessaging() {
     if (!this._initialized) await this.initialize();
     

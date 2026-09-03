@@ -14,7 +14,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
 import { Search, Menu, X, ChevronLeft, Sparkles, Home, Bell, MessageSquare } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
-import ArvdoulLogo from "./ArvdoulLogo";
+import ArvdoulLogo, { ArvdoulEmblem } from "./ArvdoulLogo";
 
 // Animation config matching BottomNav
 const ANIMATION_CONFIG = {
@@ -52,6 +52,7 @@ const NAVIGATION_PATHS = {
 // Perfect Circular Logo Component
 const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const { playSound } = useSound();
   const { track } = useAnalytics();
   
@@ -61,39 +62,56 @@ const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
     track("top_nav_logo_click", { theme, location: "top_bar" });
     onClick?.();
   }, [onClick, playSound, track, theme]);
-  
+
+  const logoUrl = theme === "dark" 
+    ? "/logo/logo-dark.png" 
+    : "/logo/logo-light.png";
+
   return (
     <motion.button
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       whileTap={{ scale: 0.92 }}
-      whileHover={{ scale: 1.05 }}
+      whileHover={{ scale: 1.06 }}
       transition={{
         scale: { type: "spring", stiffness: 400, damping: 15 }
       }}
       className={cn(
-        "relative p-0.5 rounded-full",
+        "relative flex items-center p-0.5 rounded-full cursor-pointer",
         "focus:outline-none focus:ring-2 focus:ring-offset-2",
         isActive 
           ? theme === "dark" 
-            ? "focus:ring-purple-500/50 focus:ring-offset-gray-900"
+            ? "focus:ring-purple-500/50 focus:ring-offset-gray-900" 
             : "focus:ring-purple-500/50 focus:ring-offset-white"
           : "focus:ring-transparent"
       )}
       aria-label="Arvdoul Home"
       aria-pressed={isActive}
     >
-      <div className="flex items-center gap-2">
-        <ArvdoulLogo size={38} showWordmark={false} />
-        <span className={cn(
-          "font-black text-lg tracking-tight font-display hidden sm:inline-block",
-          theme === "dark" ? "text-white" : "text-slate-900"
-        )}>
-          ARVDOUL
-        </span>
+      <div className={cn(
+        "relative w-11 h-11 rounded-full overflow-hidden flex items-center justify-center p-1.5",
+        "border backdrop-blur-xl shadow-md transition-all duration-200",
+        theme === "dark" 
+          ? "bg-slate-900/90 border-slate-700/70 shadow-purple-950/40" 
+          : "bg-white/95 border-slate-200 shadow-slate-200/80",
+        isHovered && "ring-2 ring-purple-500/40 shadow-purple-500/20"
+      )}>
+        {!imgError ? (
+          <img
+            src={logoUrl}
+            alt="Arvdoul Logo"
+            className={cn(
+              "w-full h-full object-contain transition-all duration-200",
+              isHovered && "scale-105"
+            )}
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <ArvdoulEmblem size={26} />
+        )}
       </div>
-      
+
       {/* Active indicator dot */}
       {isActive && (
         <motion.div
