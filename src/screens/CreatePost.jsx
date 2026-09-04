@@ -1387,16 +1387,41 @@ function CreatePostProvider({ children }) {
 
       const rawContent = (typeof current.content === "string" ? current.content : "") || "";
       const sanitizedContent = DOMPurify.sanitize(rawContent, { ALLOWED_TAGS: [] });
-      const sanitizedJSON = current.contentJSON ? DOMPurify.sanitize(current.contentJSON, { ALLOWED_TAGS: ['p','br','strong','em','u','s','blockquote','ul','ol','li','a','h1','h2','h3','h4','h5','h6'] }) : null;
 
-      const effectiveText = sanitizedContent.trim() || (sanitizedJSON ? sanitizedJSON.replace(/<[^>]+>/g, '').trim() : "");
+      let sanitizedJSON = null;
+      let jsonExtractedText = "";
+      if (current.contentJSON) {
+        if (typeof current.contentJSON === "string") {
+          sanitizedJSON = DOMPurify.sanitize(current.contentJSON, { ALLOWED_TAGS: ['p','br','strong','em','u','s','blockquote','ul','ol','li','a','h1','h2','h3','h4','h5','h6'] });
+          jsonExtractedText = sanitizedJSON.replace(/<[^>]+>/g, '').trim();
+        } else if (typeof current.contentJSON === "object") {
+          sanitizedJSON = current.contentJSON;
+          const walk = (node) => {
+            if (!node) return "";
+            if (typeof node.text === "string") return node.text;
+            if (Array.isArray(node.content)) return node.content.map(walk).join(" ");
+            return "";
+          };
+          jsonExtractedText = walk(current.contentJSON).trim();
+        }
+      }
 
-      if (current.postType === "text" && !effectiveText) throw new Error("Please add some text to your post.");
-      if (current.postType === "image" && current.mediaItems.length === 0) throw new Error("Please add at least one image.");
-      if (current.postType === "video" && current.mediaItems.length === 0) throw new Error("Please add a video.");
-      if (current.postType === "poll" && current.typeData.poll.options.filter(o => o.trim()).length < 2) throw new Error("Please add at least 2 poll options.");
-      if (current.postType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
-      if (current.postType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
+      const effectiveText = sanitizedContent.trim() || jsonExtractedText || rawContent.trim();
+
+      // Auto-adapt post type if appropriate
+      let effectiveType = current.postType;
+      if ((effectiveType === "image" || effectiveType === "video") && current.mediaItems.length === 0 && effectiveText) {
+        effectiveType = "text";
+      } else if (effectiveType === "text" && !effectiveText && current.mediaItems.length > 0) {
+        effectiveType = current.mediaItems.some(m => m.type?.startsWith("video") || m.file?.type?.startsWith("video")) ? "video" : "image";
+      }
+
+      if (effectiveType === "text" && !effectiveText && current.mediaItems.length === 0) throw new Error("Please add some text or media to your post.");
+      if (effectiveType === "image" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add an image or caption.");
+      if (effectiveType === "video" && current.mediaItems.length === 0 && !effectiveText) throw new Error("Please add a video or caption.");
+      if (effectiveType === "poll" && current.typeData.poll.options.filter(o => o.trim()).length < 2) throw new Error("Please add at least 2 poll options.");
+      if (effectiveType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
+      if (effectiveType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
 
       if (isOfflineRef.current && !isOfflineReplay) { await addToOfflineQueue(current); return; }
 
@@ -1418,18 +1443,34 @@ function CreatePostProvider({ children }) {
 
       let uploadedMedia = [];
       if (current.mediaItems.length > 0) {
-        if (isOfflineReplay && current.mediaItems.every(m => m.url)) {
-          uploadedMedia = current.mediaItems.map(m => ({ url: m.url, type: m.type, name: m.name, alt: m.alt || "" }));
-        } else {
-          uploadedMedia = await uploadMedia(current.mediaItems);
+        try {
+          if (isOfflineReplay && current.mediaItems.every(m => m.url)) {
+            uploadedMedia = current.mediaItems.map(m => ({ url: m.url, type: m.type || "image", name: m.name || "media", alt: m.alt || "" }));
+          } else {
+            uploadedMedia = await uploadMedia(current.mediaItems);
+          }
+        } catch (mediaErr) {
+          console.warn("Media upload warning, using local preview items:", mediaErr);
+          uploadedMedia = current.mediaItems.map(m => ({
+            url: m.url || m.preview || "",
+            type: m.type || (m.file?.type?.startsWith("video") ? "video" : "image"),
+            name: m.name || m.file?.name || "media",
+            alt: m.alt || ""
+          }));
         }
       }
 
+      const firstMedia = uploadedMedia[0] || null;
+      const videoMedia = uploadedMedia.find(m => m.type === "video") || null;
+
       const postData = {
-        type: current.postType,
+        type: effectiveType,
         content: effectiveText || sanitizedContent,
         contentJSON: sanitizedJSON,
         media: uploadedMedia,
+        mediaUrl: firstMedia?.url || "",
+        videoUrl: videoMedia?.url || current.typeData.video?.url || "",
+        thumbnailUrl: firstMedia?.thumbnail || firstMedia?.url || "",
         authorId: userNow.uid,
         authorName: userNow.displayName || userNow.name || "Arvdoul User",
         authorUsername: userNow.username || userNow.email?.split("@")[0] || `user_${userNow.uid.slice(0, 8)}`,
@@ -1455,17 +1496,17 @@ function CreatePostProvider({ children }) {
         settings: current.settings || {},
         coAuthors: current.coAuthors || [],
         crossPlatform: current.crossPlatform || [],
-        poll: current.postType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple } : null,
-        event: current.postType === "event" ? { title: effectiveText, date: current.typeData.event.date, location: current.typeData.event.location } : null,
-        link: current.postType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
-        question: current.postType === "question" ? effectiveText : null,
-        audio: current.postType === "audio" ? {
+        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple } : null,
+        event: effectiveType === "event" ? { title: effectiveText, date: current.typeData.event.date, location: current.typeData.event.location } : null,
+        link: effectiveType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
+        question: effectiveType === "question" ? effectiveText : null,
+        audio: effectiveType === "audio" ? {
           url: uploadedMedia[0]?.url || current.typeData.audio?.url || "",
           duration: current.typeData.audio?.duration || 0,
           title: current.typeData.audio?.title || effectiveText
         } : null,
-        video: current.postType === "video" ? {
-          url: uploadedMedia[0]?.url || current.typeData.video?.url || "",
+        video: effectiveType === "video" ? {
+          url: videoMedia?.url || uploadedMedia[0]?.url || current.typeData.video?.url || "",
           duration: current.typeData.video?.duration || 0
         } : null,
       };
@@ -1494,12 +1535,24 @@ function CreatePostProvider({ children }) {
 
       // Always save to local storage cache so it appears immediately on Home screen
       try {
+        const sanitizeForLocalCache = (post) => {
+          const safeMedia = (post.media || []).map(m => {
+            if (m.url && m.url.startsWith('data:') && m.url.length > 200000) {
+              return { ...m, url: m.url.slice(0, 500) + '...[truncated]' };
+            }
+            return m;
+          });
+          return { ...post, media: safeMedia };
+        };
         const localList = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
-        const updated = [publishedPost, ...localList.filter(p => p.id !== postId)];
+        const updated = [sanitizeForLocalCache(publishedPost), ...localList.filter(p => p.id !== postId)];
         localStorage.setItem('arvdoul_local_posts', JSON.stringify(updated.slice(0, 50)));
         window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: publishedPost }));
       } catch (cacheErr) {
         console.warn("Local post caching error:", cacheErr);
+        try {
+          window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: publishedPost }));
+        } catch {}
       }
 
       if (current.boost?.type !== "none" && current.boost?.budget > 0) {
@@ -2760,18 +2813,20 @@ function CreatePostShell({ children }) {
     if (state.isContentReady) return true;
     if (state.step === 1) return !!state.postType;
     if (state.step === 2) {
+      const hasText = (typeof state.content === 'string' && state.content.trim().length > 0) ||
+                      (state.contentJSON && (typeof state.contentJSON === 'string' ? state.contentJSON.trim().length > 0 : true));
       switch (state.postType) {
-        case "text": case "question": return state.content.trim().length > 0;
-        case "image": case "video": return state.mediaItems.length > 0;
-        case "audio": return state.typeData.audio.file !== null;
-        case "poll": return state.content.trim().length > 0 && state.typeData.poll.options.filter(o => o.trim()).length >= 2;
-        case "event": return state.content.trim().length > 0 && state.typeData.event.date !== null && new Date(state.typeData.event.date) > new Date();
+        case "text": case "question": return hasText;
+        case "image": case "video": return state.mediaItems.length > 0 || hasText;
+        case "audio": return state.typeData.audio.file !== null || hasText;
+        case "poll": return hasText && state.typeData.poll.options.filter(o => o.trim()).length >= 2;
+        case "event": return hasText && state.typeData.event.date !== null;
         case "link": return state.typeData.link.url.trim().length > 0;
         default: return true;
       }
     }
     return true;
-  }, [state.isContentReady, state.step, state.postType, state.content, state.mediaItems, state.typeData]);
+  }, [state.isContentReady, state.step, state.postType, state.content, state.contentJSON, state.mediaItems, state.typeData]);
 
   return (
     <div className="flex flex-col h-full">
@@ -2801,9 +2856,42 @@ function CreatePostShell({ children }) {
           </button>
         )}
 
-        {state.step < 3 ? (
+        {state.step === 2 ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => publishPost()}
+              disabled={state.loading || !canProceed()}
+              className={`px-4 sm:px-5 py-2.5 rounded-full font-bold text-white text-xs sm:text-sm transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
+                canProceed() && !state.loading
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-500 shadow-md shadow-emerald-500/20 hover:scale-105 active:scale-95'
+                  : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60'
+              }`}
+            >
+              {state.loading ? (
+                <>
+                  <LoadingSpinner size="xs" color="white" />
+                  <span>Publishing...</span>
+                </>
+              ) : (
+                <span>🚀 Quick Publish</span>
+              )}
+            </button>
+            <button
+              onClick={() => dispatch({ type: "SET_STEP", payload: 3 })}
+              disabled={!canProceed()}
+              className={`px-4 sm:px-6 py-2.5 rounded-full font-bold text-white text-xs sm:text-sm transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
+                canProceed()
+                  ? 'shadow-[0_0_30px_rgba(147,51,234,0.4)] hover:shadow-[0_0_40px_rgba(147,51,234,0.6)] hover:scale-105 active:scale-95'
+                  : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60'
+              }`}
+              style={canProceed() ? { background: DNA_GRADIENT_STYLE } : {}}
+            >
+              Options <Icons.ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : state.step === 1 ? (
           <button
-            onClick={() => dispatch({ type: "SET_STEP", payload: state.step + 1 })}
+            onClick={() => dispatch({ type: "SET_STEP", payload: 2 })}
             disabled={!canProceed()}
             className={`px-8 py-2.5 rounded-full font-bold text-white text-sm transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               canProceed()

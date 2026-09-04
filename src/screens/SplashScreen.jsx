@@ -117,30 +117,67 @@ export default function SplashScreen() {
     });
   }, [themeConfig]);
 
-  // Instant & smooth navigation as soon as auth is ready
+  // Smooth realistic splash progress animation matching user expectations
   useEffect(() => {
     mountedRef.current = true;
-    
-    // Quick logo preload (non-blocking)
     preloadLogo();
-    setProgress(100);
-    setStatus("Ready");
 
-    // Once auth is initialized, navigate immediately to target
-    if (authInitialized) {
-      const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
-      const timer = setTimeout(() => {
+    let currentProgress = 8;
+    setProgress(currentProgress);
+
+    const interval = setInterval(() => {
+      if (!mountedRef.current) return;
+      currentProgress += Math.random() * 8 + 5;
+      if (currentProgress >= 96) {
+        currentProgress = 96;
+        clearInterval(interval);
+      }
+      setProgress(Math.min(96, Math.round(currentProgress)));
+
+      // Update status text according to statusSequence
+      for (let i = statusSequence.length - 1; i >= 0; i--) {
+        if (currentProgress >= statusSequence[i].progress) {
+          setStatus(statusSequence[i].text);
+          break;
+        }
+      }
+    }, 120);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [preloadLogo, statusSequence]);
+
+  // When auth initializes, complete to 100% and navigate cleanly
+  useEffect(() => {
+    if (!authInitialized) return;
+
+    const completeTimer = setTimeout(() => {
+      if (!mountedRef.current) return;
+      setProgress(100);
+      setStatus("Ready");
+      setShowComplete(true);
+
+      const navTimer = setTimeout(() => {
         if (!mountedRef.current) return;
+        const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
         navigate(target, { 
           replace: true,
           state: { fromSplash: true }
         });
-      }, 50);
-      return () => {
-        clearTimeout(timer);
-      };
-    }
-  }, [authInitialized, isAuthenticated, needsOnboarding, navigate, preloadLogo]);
+      }, 450);
+
+      return () => clearTimeout(navTimer);
+    }, 1200);
+
+    return () => clearTimeout(completeTimer);
+  }, [authInitialized, isAuthenticated, needsOnboarding, navigate]);
+
+  // Quick skip on tap / click
+  const handleSkip = useCallback(() => {
+    const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
+    navigate(target, { replace: true, state: { fromSplash: true } });
+  }, [isAuthenticated, needsOnboarding, navigate]);
 
   // Perfect circular logo component
   const PerfectLogo = useMemo(() => (
@@ -212,7 +249,12 @@ export default function SplashScreen() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center"
+        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center cursor-pointer select-none"
+        onClick={handleSkip}
+        role="button"
+        tabIndex={0}
+        aria-label="Skip splash screen"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSkip(); }}
         style={{ background: themeConfig.background }}
       >
         {/* Real-time Offline Detection Banner */}

@@ -15,7 +15,82 @@ import {
 } from 'lucide-react';
 import videoService from '../services/videoService';
 import { getMonetizationService } from '../services/monetizationService';
-import { RouteSkeletonShell } from '../components/Navigation/RouteProgressBar';
+import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar';
+
+const STARTER_SPARKS = [
+  {
+    id: 'spark_starter_1',
+    creator: {
+      name: 'Elena Rostova',
+      username: 'elenacreates',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      verified: true,
+      isFollowing: false,
+    },
+    title: 'Neon city vibes in Tokyo tonight 🌃✨ What do you think of this aesthetic?',
+    hashtags: ['nightcity', 'aesthetic', 'sparks', 'tokyo'],
+    music: 'Midnight City – Synthwave Dreams',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    mediaUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800',
+    stats: {
+      likes: '14.2K',
+      rawLikes: 14200,
+      comments: '342',
+      shares: '1.2K',
+      saves: '890',
+      gifts: '54',
+    },
+    duration: '00:15',
+  },
+  {
+    id: 'spark_starter_2',
+    creator: {
+      name: 'Kai Rivera',
+      username: 'kaibass',
+      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
+      verified: true,
+      isFollowing: true,
+    },
+    title: 'Live sound design session on Arvdoul Studio 🎧 Drop your feedback in the comments!',
+    hashtags: ['producer', 'beatmaker', 'studio', 'music'],
+    music: 'Original Beat – Kai Rivera',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
+    mediaUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800',
+    stats: {
+      likes: '28.5K',
+      rawLikes: 28500,
+      comments: '1.1K',
+      shares: '3.4K',
+      saves: '2.1K',
+      gifts: '120',
+    },
+    duration: '00:15',
+  },
+  {
+    id: 'spark_starter_3',
+    creator: {
+      name: 'Aria Thorne',
+      username: 'ariathorne',
+      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+      verified: false,
+      isFollowing: false,
+    },
+    title: 'Digital painting breakdown using the DNA gradient palette 🎨⚡',
+    hashtags: ['digitalart', 'conceptart', 'speedpaint', 'creative'],
+    music: 'Ambient Focus – Chill Flow',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+    mediaUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800',
+    stats: {
+      likes: '9.8K',
+      rawLikes: 9800,
+      comments: '215',
+      shares: '640',
+      saves: '1.5K',
+      gifts: '35',
+    },
+    duration: '00:15',
+  }
+];
 
 // High definition sample reels matching the exact Arvdoul aesthetic
 export default function ReelsScreen() {
@@ -81,10 +156,10 @@ const formatDuration = (seconds) => {
           },
           duration: v.duration ? formatDuration(v.duration) : '00:15',
         }));
-        setReels(mapped);
+        setReels(mapped.length > 0 ? mapped : STARTER_SPARKS);
       } catch (err) {
         console.error('Failed to load reels:', err);
-        if (!cancelled) setReels([]);
+        if (!cancelled) setReels(STARTER_SPARKS);
       } finally {
         if (!cancelled) setFeedLoading(false);
       }
@@ -160,7 +235,11 @@ const formatDuration = (seconds) => {
   };
 
   if (feedLoading && reels.length === 0) {
-    return <RouteSkeletonShell variant="video" />;
+    return (
+      <div className="h-screen w-full bg-black flex items-center justify-center">
+        <TopAppLoadingBanner isAnimating={true} label="Loading sparks..." />
+      </div>
+    );
   }
 
   if (!feedLoading && (!reels || reels.length === 0 || !currentReel)) {

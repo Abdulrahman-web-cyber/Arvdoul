@@ -254,6 +254,15 @@ class EnterpriseFirestoreService {
           }, 1000);
         });
       }
+      if (!currentUser && auth) {
+        try {
+          const { signInAnonymously } = await import('firebase/auth');
+          const cred = await signInAnonymously(auth);
+          currentUser = cred.user;
+        } catch (anonErr) {
+          console.warn('Anonymous sign-in fallback:', anonErr?.message);
+        }
+      }
       if (!currentUser && postData.authorId) {
         currentUser = { uid: postData.authorId, displayName: postData.authorName || 'Arvdoul User' };
       }
@@ -283,11 +292,17 @@ class EnterpriseFirestoreService {
         };
       }).filter((m) => m && m.url);
 
+      const firstMedia = cleanMedia[0] || null;
+      const videoItem = cleanMedia.find(m => m.type === 'video') || null;
+
       const postDoc = {
         type: postData.type || 'text',
         content: postData.content || '',
         contentJSON: postData.contentJSON || null,
         media: cleanMedia,
+        mediaUrl: postData.mediaUrl || firstMedia?.url || '',
+        videoUrl: postData.videoUrl || postData.video?.url || videoItem?.url || '',
+        thumbnailUrl: postData.thumbnailUrl || firstMedia?.thumbnail || firstMedia?.url || '',
         authorId: postData.authorId,
         authorName: postData.authorName || currentUser.displayName || 'Arvdoul User',
         authorUsername: postData.authorUsername || `user_${postData.authorId?.slice(0,8)}`,
@@ -296,6 +311,8 @@ class EnterpriseFirestoreService {
         ...(postData.type === 'question' && { question: postData.question, answers: postData.answers || [] }),
         ...(postData.type === 'link' && { link: postData.link }),
         ...(postData.type === 'event' && { event: postData.event }),
+        ...(postData.type === 'video' && { video: postData.video || { url: videoItem?.url || '' } }),
+        ...(postData.type === 'audio' && { audio: postData.audio || null }),
         visibility: postData.visibility || CONFIG.POST_VISIBILITY.PUBLIC,
         enableComments: postData.enableComments !== false,
         enableGifts: postData.enableGifts !== false,

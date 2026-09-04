@@ -11,6 +11,7 @@ import { useAppStore } from "../../store/appStore";
 import { CoinStackIcon } from "./CoinStackIcon";
 import QuickAccessPanel from "./QuickAccessPanel";
 import { Plus, Sparkles } from "lucide-react";
+import { cn } from "../../lib/utils";
 
 /**
  * Custom clean vector icons matching Arvdoul exact geometry and line weights

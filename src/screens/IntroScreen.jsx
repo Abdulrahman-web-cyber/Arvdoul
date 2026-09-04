@@ -333,21 +333,23 @@ function IntroScreen() {
             <div className="text-center">
               <HeroLogo theme={resolvedTheme} onClick={() => navigate("/")} />
 
-              <div className="mb-2">
-                <span className="inline-block px-3.5 py-1 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 border border-violet-200/60 dark:border-violet-700/40">
-                  The Modern Creator Network
+              <div className="mb-3">
+                <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 border border-violet-200/60 dark:border-violet-700/40 tracking-wider uppercase">
+                  Next-Gen Creator Network
                 </span>
               </div>
 
-              <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-5">
-                <span className="block">{t("intro.title1") || "Share Your Vision."}</span>
-                <span className="block bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-500 bg-clip-text text-transparent">
-                  {t("intro.title2") || "Empower Your Community."}
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black leading-tight tracking-tight mb-5">
+                <span className="block bg-gradient-to-r from-[#B416DB] via-[#872FE2] to-[#0EA3E6] bg-clip-text text-transparent">
+                  Arvdoul
+                </span>
+                <span className="block text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-800 dark:text-gray-100 mt-2">
+                  {t("intro.title1") || "Share Your Vision. Empower Your World."}
                 </span>
               </h1>
 
               <p className="text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed text-gray-600 dark:text-gray-400">
-                {t("intro.tagline") || "A next-generation platform for creators, thinkers, and communities to connect, share, and thrive."}
+                {t("intro.tagline") || "A next-generation platform for creators, thinkers, and communities to connect, share, and thrive with real-time sync and zero clutter."}
               </p>
 
               {/* Hero Action Buttons */}

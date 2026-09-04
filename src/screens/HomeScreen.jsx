@@ -38,6 +38,7 @@ import { openDB } from 'idb';
 import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
+import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.jsx';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -637,27 +638,9 @@ const PostWithTracking = React.memo(({
   );
 });
 
-// ==================== SKELETON LOADER ====================
-const FeedSkeleton = () => (
-  <div className="space-y-4 px-4">
-    {[1, 2, 3].map(i => (
-      <div key={i} className="rounded-3xl overflow-hidden border border-gray-200/70 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-sm">
-        <div className="p-4 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full shimmer" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 shimmer rounded-lg w-1/3" />
-            <div className="h-3 shimmer rounded-lg w-1/4" />
-          </div>
-        </div>
-        <div className="p-4 space-y-2">
-          <div className="h-4 shimmer rounded-lg w-full" />
-          <div className="h-4 shimmer rounded-lg w-5/6" />
-          <div className="h-4 shimmer rounded-lg w-4/6" />
-        </div>
-        <div className="h-64 shimmer mx-4 mb-4 rounded-2xl" />
-      </div>
-    ))}
-  </div>
+// ==================== NON-BLOCKING TOP BANNER ====================
+const FeedLoadingBanner = () => (
+  <TopAppLoadingBanner isAnimating={true} label="Refreshing feed in background..." />
 );
 
 // ==================== MAIN HOMESCREEN ====================
@@ -1259,9 +1242,8 @@ export default function HomeScreen() {
 
         {/* Feed container */}
         <div className="flex-1 min-h-0 w-full">
-          {isInitialLoading ? (
-            <FeedSkeleton />
-          ) : showErrorState ? (
+          {isInitialLoading && <FeedLoadingBanner />}
+          {showErrorState ? (
             <div className="min-h-[60vh] flex items-center justify-center px-4">
               <div className="text-center">
                 <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
