@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import videoService from '../services/videoService';
 import { getMonetizationService } from '../services/monetizationService';
+import { RouteSkeletonShell } from '../components/Navigation/RouteProgressBar';
 
 // High definition sample reels matching the exact Arvdoul aesthetic
 export default function ReelsScreen() {
@@ -158,6 +159,36 @@ const formatDuration = (seconds) => {
     }
   };
 
+  if (feedLoading && reels.length === 0) {
+    return <RouteSkeletonShell variant="video" />;
+  }
+
+  if (!feedLoading && (!reels || reels.length === 0 || !currentReel)) {
+    return (
+      <div className="h-screen w-full bg-black flex flex-col items-center justify-center text-white p-6 text-center">
+        <Sparkles className="w-16 h-16 text-yellow-400 mb-4 animate-pulse" />
+        <h2 className="text-2xl font-black mb-2">No Sparks Yet</h2>
+        <p className="text-white/60 text-sm max-w-sm mb-6">
+          Be the first creator to ignite a spark with short videos and music!
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/create-post')}
+            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-500 font-bold text-sm shadow-lg hover:scale-105 transition-transform"
+          >
+            Create Spark
+          </button>
+          <button
+            onClick={() => navigate('/videos')}
+            className="px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/20 font-bold text-sm transition-colors"
+          >
+            Explore Videos
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onKeyDown={(e) => {
@@ -176,11 +207,23 @@ const formatDuration = (seconds) => {
         onDoubleClick={handleDoubleTap}
         className="absolute inset-0 z-0 bg-black flex items-center justify-center cursor-pointer"
       >
-        <img
-          src={currentReel.mediaUrl}
-          alt={currentReel.title}
-          className="w-full h-full object-cover brightness-95"
-        />
+        {currentReel.videoUrl ? (
+          <video
+            src={currentReel.videoUrl}
+            poster={currentReel.mediaUrl}
+            autoPlay={isPlaying}
+            loop
+            muted={isMuted}
+            playsInline
+            className="w-full h-full object-cover brightness-95"
+          />
+        ) : (
+          <img
+            src={currentReel.mediaUrl || '/assets/default-profile.png'}
+            alt={currentReel.title || 'Reel'}
+            className="w-full h-full object-cover brightness-95"
+          />
+        )}
 
         {/* Ambient Dark Gradient Overlays */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90 pointer-events-none" />

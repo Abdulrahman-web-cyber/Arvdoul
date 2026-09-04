@@ -314,18 +314,17 @@ const VideoCard = memo(({
       {/* Subtle Top & Bottom Cinematic Vignette Gradients */}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/60 via-transparent to-black/80" />
 
-      {/* Loading Spinner */}
+      {/* Non-intrusive ambient buffer indicator */}
       <AnimatePresence>
         {isLoading && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none z-20"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
           >
-            <div className="p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/10 flex flex-col items-center gap-2">
-              <Loader2 className="w-10 h-10 text-purple-400 animate-spin" />
-              <span className="text-white/70 text-xs font-semibold">Streaming HD...</span>
+            <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl">
+              <div className="w-6 h-6 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
             </div>
           </motion.div>
         )}

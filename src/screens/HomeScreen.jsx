@@ -1203,8 +1203,11 @@ export default function HomeScreen() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-950">
-        <LoadingSpinner size="lg" color="purple" />
+      <div className={cn(
+        'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto py-6',
+        isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+      )}>
+        <FeedSkeleton />
       </div>
     );
   }

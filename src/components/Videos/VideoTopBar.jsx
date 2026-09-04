@@ -1,7 +1,7 @@
 // src/components/Videos/VideoTopBar.jsx - ARVDOUL FLOATING TOP BAR
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Camera } from 'lucide-react';
+import { Search, Camera, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import ArvdoulLogo from '../Shared/ArvdoulLogo';
@@ -32,12 +32,12 @@ const VideoTopBar = memo(({
         />
       </div>
 
-      {/* Center: Tabs (Following | For You) */}
-      <div className="flex items-center gap-5 sm:gap-7">
+      {/* Center: Tabs (Following | Sparks | For You) */}
+      <div className="flex items-center gap-4 sm:gap-6">
         <button
           onClick={() => onTabChange?.('following')}
           aria-pressed={activeTab === 'following'}
-          className={`relative py-1 text-sm sm:text-base font-extrabold tracking-wide transition-all ${
+          className={`relative py-1 text-xs sm:text-sm font-extrabold tracking-wide transition-all ${
             activeTab === 'following'
               ? 'text-white scale-105 drop-shadow-md'
               : 'text-white/60 hover:text-white/85'
@@ -54,9 +54,29 @@ const VideoTopBar = memo(({
         </button>
 
         <button
+          onClick={() => onTabChange?.('sparks')}
+          aria-pressed={activeTab === 'sparks'}
+          className={`relative py-1 text-xs sm:text-sm font-extrabold tracking-wide transition-all flex items-center gap-1.5 ${
+            activeTab === 'sparks'
+              ? 'text-yellow-300 scale-105 drop-shadow-[0_0_8px_rgba(253,224,71,0.6)]'
+              : 'text-white/70 hover:text-yellow-200'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 fill-current text-yellow-400" />
+          <span>Sparks</span>
+          {activeTab === 'sparks' && (
+            <motion.div
+              layoutId="videoTabIndicator"
+              className="absolute -bottom-1 left-0 right-0 h-1 rounded-full bg-gradient-to-r from-amber-400 via-rose-500 to-yellow-400 shadow-md shadow-yellow-500/80"
+              transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+            />
+          )}
+        </button>
+
+        <button
           onClick={() => onTabChange?.('for_you')}
           aria-pressed={activeTab === 'for_you'}
-          className={`relative py-1 text-sm sm:text-base font-extrabold tracking-wide transition-all ${
+          className={`relative py-1 text-xs sm:text-sm font-extrabold tracking-wide transition-all ${
             activeTab === 'for_you'
               ? 'text-white scale-105 drop-shadow-md'
               : 'text-white/60 hover:text-white/85'

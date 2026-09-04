@@ -2,7 +2,7 @@
 // Futuristic TikTok & Reels style immersive video ecosystem
 
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Video, 
@@ -26,12 +26,16 @@ import { toast } from 'sonner';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import EmptyState from '../components/UI/EmptyState';
 import ErrorState from '../components/UI/ErrorState';
+import { RouteProgressBar } from '../components/Navigation/RouteProgressBar';
 
 /**
  * VideosScreen - World-Class video feed & discovery grid
  */
 const VideosScreen = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'sparks';
+
   const { theme, isDark, spring, gradient } = useTheme();
   const {
     videos,
@@ -55,10 +59,22 @@ const VideosScreen = () => {
 
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('feed'); // 'feed' | 'grid'
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
 
-  // Load videos from service
+  // Sync initial tab from URL if provided
+  useEffect(() => {
+    if (searchParams.get('tab') && searchParams.get('tab') !== feedType) {
+      setFeedType(searchParams.get('tab'));
+    }
+  }, [searchParams, setFeedType, feedType]);
+
+  // Load videos from service (non-blocking background sync if videos already cached)
   const loadVideos = useCallback(async (type = feedType) => {
-    setLoading(true);
+    if (!videos || videos.length === 0) {
+      setLoading(true);
+    } else {
+      setBackgroundRefreshing(true);
+    }
     setError(null);
 
     try {
@@ -72,17 +88,20 @@ const VideosScreen = () => {
         setVideos(feed);
         setHasMore(result.hasMore || false);
         setNextCursor(result.nextCursor || null);
-      } else {
+      } else if (!videos || videos.length === 0) {
         setVideos([]);
         setHasMore(false);
       }
     } catch (err) {
       console.error('Failed to load videos:', err);
-      setError(err?.message || 'Could not load videos.');
+      if (!videos || videos.length === 0) {
+        setError(err?.message || 'Could not load videos.');
+      }
     } finally {
       setLoading(false);
+      setBackgroundRefreshing(false);
     }
-  }, [feedType, setVideos, setLoading, setHasMore, setNextCursor]);
+  }, [feedType, videos, setVideos, setLoading, setHasMore, setNextCursor]);
 
   // Load more pagination
   const loadMoreVideos = useCallback(async () => {
@@ -125,7 +144,7 @@ const VideosScreen = () => {
   // Initial load
   useEffect(() => {
     if (videos.length === 0) {
-      loadVideos(feedType);
+      loadVideos(initialTab || feedType);
     }
   }, []);
 
@@ -136,6 +155,13 @@ const VideosScreen = () => {
         background: isDark ? '#050510' : '#F8F9FA',
       }}
     >
+      {/* Background sync progress bar */}
+      <AnimatePresence>
+        {backgroundRefreshing && (
+          <RouteProgressBar isAnimating={true} />
+        )}
+      </AnimatePresence>
+
       {/* Floating View Switcher Button (Feed / Grid toggle) */}
       <div className="absolute top-4 left-4 z-40 flex items-center gap-2">
         <button
@@ -156,7 +182,7 @@ const VideosScreen = () => {
           ) : (
             <>
               <Smartphone className="w-3.5 h-3.5 text-pink-400" />
-              <span>Reels</span>
+              <span>Sparks Feed</span>
             </>
           )}
         </button>
@@ -240,6 +266,7 @@ const GridView = memo(({
         {/* Tab Filters */}
         <div className="flex items-center gap-2 p-1 rounded-2xl bg-black/20 dark:bg-white/5 border border-black/5 dark:border-white/10 backdrop-blur-xl">
           {[
+            { id: 'sparks', label: '⚡ Sparks' },
             { id: 'for_you', label: 'For You' },
             { id: 'trending', label: 'Trending' },
             { id: 'following', label: 'Following' },

@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from "uuid";
 import * as Icons from "lucide-react";
 import DOMPurify from "dompurify";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner.jsx";
+import { RouteProgressBar } from "../../components/Navigation/RouteProgressBar.jsx";
 import ContentEditor from "./ContentEditor";
 import PostSettings from "./PostSettings";
 
@@ -429,11 +430,11 @@ export default function CreatePost() {
   }, [publishPost, saveDraft]);
 
   // ─── Render ──────────────────────────────────────────
-  if (initializing) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
   if (serviceError) return <div className="min-h-screen flex items-center justify-center p-8 text-center"><p>Service error: {serviceError}</p></div>;
 
   return (
     <div className={`min-h-screen pb-20 transition-colors ${isDark ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      {initializing && <RouteProgressBar isAnimating={true} />}
       {isOffline && <div className="sticky top-0 z-50 bg-yellow-500 text-black p-2 text-center text-sm font-medium">⚠️ Offline – post will be queued</div>}
 
       {/* Header */}

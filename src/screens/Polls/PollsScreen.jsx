@@ -203,7 +203,29 @@ export default function PollsScreen() {
 
       {/* Poll Cards List */}
       {loading ? (
-        <div className="p-16 flex justify-center"><LoadingSpinner size="lg" /></div>
+        <div className="space-y-6">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={`p-6 sm:p-7 rounded-3xl border animate-pulse ${
+                isDark ? 'bg-gray-900/40 border-gray-800/60' : 'bg-white/60 border-gray-200/60'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-white/10" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="w-28 h-3.5 rounded-lg bg-gray-300 dark:bg-white/10" />
+                  <div className="w-16 h-2.5 rounded-lg bg-gray-300 dark:bg-white/5" />
+                </div>
+              </div>
+              <div className="w-3/4 h-5 rounded-lg bg-gray-300 dark:bg-white/10 mb-4" />
+              <div className="space-y-2.5">
+                <div className="h-11 rounded-2xl bg-gray-200 dark:bg-white/5" />
+                <div className="h-11 rounded-2xl bg-gray-200 dark:bg-white/5" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
           {polls.map((poll) => {

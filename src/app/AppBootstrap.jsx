@@ -13,6 +13,7 @@ import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import OfflineIndicator from '../components/ui/OfflineIndicator.jsx';
 import PageLoader from '../components/UI/PageLoader.jsx';
+import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
 
 /**
  * System initialization manager
@@ -185,6 +186,7 @@ const SystemInitializer = ({ onReady }) => {
         setProgress(100);
         
         console.info('✅ System initialization complete');
+        initAppBackgroundPrefetch();
         onReady();
         
       } catch (error) {

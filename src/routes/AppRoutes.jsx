@@ -118,11 +118,11 @@ import {
   CreatorErrorBoundary,
   PostErrorBoundary,
 } from "../components/ErrorBoundary/SectionErrorBoundary.jsx";
-// Lightweight clean route loading fallback (screens handle their own inner skeletons)
-const RouteLoadingFallback = () => (
-  <div className="min-h-[60vh] w-full flex items-center justify-center p-8">
-    <LoadingSpinner size="lg" color="purple" />
-  </div>
+import { RouteProgressBar, RouteSkeletonShell } from "../components/Navigation/RouteProgressBar.jsx";
+
+// World-class non-blocking route transition fallback (ambient skeleton + top glow line)
+const RouteLoadingFallback = ({ variant = "default" }) => (
+  <RouteSkeletonShell variant={variant} />
 );
 const RouteFallback = RouteLoadingFallback;
 
@@ -928,7 +928,7 @@ export default function AppRoutes() {
       <Route path="/inbox" element={<Navigate to="/messages" replace />} />
       <Route path="/dm" element={<Navigate to="/messages" replace />} />
       <Route path="/requests" element={<Navigate to="/messages" replace />} />
-      <Route path="/sparks" element={<Navigate to="/reels" replace />} />
+      <Route path="/sparks" element={<Navigate to="/videos?tab=sparks" replace />} />
       {/* Legacy / dead-link targets now resolve to real destinations */}
       <Route path="/challenges" element={<Navigate to="/rankings" replace />} />
       <Route path="/change-password" element={<Navigate to="/settings" replace />} />

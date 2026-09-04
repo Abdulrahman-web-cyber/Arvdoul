@@ -164,7 +164,24 @@ export default function MarketplaceScreen() {
 
       {/* Products Grid */}
       {loading ? (
-        <div className="p-16 flex justify-center"><LoadingSpinner size="lg" /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className={`rounded-3xl border overflow-hidden p-4 space-y-3 animate-pulse ${
+                isDark ? 'bg-gray-900/40 border-gray-800/60' : 'bg-white/60 border-gray-200/60'
+              }`}
+            >
+              <div className="h-44 rounded-2xl bg-gray-200 dark:bg-white/10" />
+              <div className="w-3/4 h-4 rounded-lg bg-gray-200 dark:bg-white/10" />
+              <div className="w-1/2 h-3 rounded-lg bg-gray-200 dark:bg-white/5" />
+              <div className="flex justify-between items-center pt-2">
+                <div className="w-16 h-5 rounded-lg bg-gray-200 dark:bg-white/10" />
+                <div className="w-20 h-8 rounded-full bg-gray-200 dark:bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {products.map((prod) => (

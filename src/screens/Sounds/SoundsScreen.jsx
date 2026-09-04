@@ -229,7 +229,25 @@ export default function SoundsScreen() {
       {/* Sound List */}
       <div className="space-y-3">
         {loading ? (
-          <div className="p-12 flex justify-center"><LoadingSpinner size="lg" /></div>
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className={`p-4 rounded-2xl border flex items-center justify-between gap-4 animate-pulse ${
+                  isDark ? 'bg-gray-900/40 border-gray-800/60' : 'bg-white/60 border-gray-200/60'
+                }`}
+              >
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-white/10" />
+                  <div className="space-y-2 flex-1">
+                    <div className="w-36 h-4 rounded-lg bg-gray-200 dark:bg-white/10" />
+                    <div className="w-20 h-3 rounded-lg bg-gray-200 dark:bg-white/5" />
+                  </div>
+                </div>
+                <div className="w-16 h-8 rounded-full bg-gray-200 dark:bg-white/10" />
+              </div>
+            ))}
+          </div>
         ) : (
           filteredSounds.map((snd, index) => {
             const isThisPlaying = currentSound?.id === snd.id && isPlaying;

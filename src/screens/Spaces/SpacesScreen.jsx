@@ -366,7 +366,19 @@ export default function SpacesScreen() {
           </h3>
 
           {loading ? (
-            <div className="p-8 flex justify-center"><LoadingSpinner size="md" /></div>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className={`p-4 rounded-2xl border space-y-2 animate-pulse ${
+                    isDark ? 'bg-gray-900/40 border-gray-800/60' : 'bg-white/60 border-gray-200/60'
+                  }`}
+                >
+                  <div className="w-40 h-4 rounded-lg bg-gray-200 dark:bg-white/10" />
+                  <div className="w-24 h-3 rounded-lg bg-gray-200 dark:bg-white/5" />
+                </div>
+              ))}
+            </div>
           ) : (
             spaces.map((sp) => {
               const isCurrent = activeSpace?.id === sp.id;
