@@ -1,487 +1,1192 @@
-// src/components/Shared/BottomNav.jsx - ARVDOUL FLOATING DOCK
-// Supports both Dark & Light themes with rock-solid responsive layout:
-// [Home] [Sparks] [Chat (3)] [Elevated Stories Dome + Quick Post] [Network (8)] [Coins (2,450)] [Alerts (12)]
-
-import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import PropTypes from "prop-types";
 import { useLocation, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { useTheme } from "../../context/ThemeContext";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Bell, Home, MessageCircle, PlayCircle, UserPlus } from "lucide-react";
+import { useTheme } from "@context/ThemeContext";
 import { useSound } from "../../hooks/useSound";
+import { useAnalytics } from "../../hooks/useAnalytics";
 import { useAppStore } from "../../store/appStore";
-import { CoinStackIcon } from "./CoinStackIcon";
 import QuickAccessPanel from "./QuickAccessPanel";
-import { Plus, Sparkles } from "lucide-react";
-import { cn } from "../../lib/utils";
 
-/**
- * Custom clean vector icons matching Arvdoul exact geometry and line weights
- */
+/* ==========================================================================
+   ARVDOUL BOTTOM NAVIGATION
+   ========================================================================== */
 
-// 1. Home Icon
-const HomeIcon = memo(({ active, isDark }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
-    <path
-      d="M3 10.5L12 3L21 10.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V10.5Z"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
-    />
-    <path
-      d="M9 21V12H15V21"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-));
-HomeIcon.displayName = "HomeIcon";
+const BRAND_GRADIENT =
+  "linear-gradient(135deg,#8B1EF3 0%,#4431F7 52%,#055BFB 100%)";
+const BRAND_LINE =
+  "linear-gradient(90deg,#C82BFF 0%,#8B1EF3 34%,#4431F7 66%,#0088FF 100%)";
+const MAX_WIDTH = 1320;
+const NAV_HEIGHT = 82;
+const HANDLE_LONG_PRESS_MS = 560;
+const HANDLE_MOVE_THRESHOLD = 9;
+const NAVIGATION_LOCK_MS = 180;
 
-// 2. Sparks Icon (Reels/Videos)
-const SparksIcon = memo(({ active, isDark }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
-    <circle
-      cx="12"
-      cy="12"
-      r="9"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
-    />
-    <path
-      d="M10 8.5L16 12L10 15.5V8.5Z"
-      fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
-  </svg>
-));
-SparksIcon.displayName = "SparksIcon";
+const SCROLL_HIDE_THRESHOLD = 30;
+const SCROLL_SHOW_THRESHOLD = 15;
+const SCROLL_TOP_REVEAL_OFFSET = 40;
 
-// 3. Chat Icon
-const ChatIcon = memo(({ active, isDark }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
-    <path
-      d="M21 11.5C21 16.1944 16.9706 20 12 20C10.3787 20 8.85703 19.593 7.55078 18.8828L3 20L4.35938 16.1562C3.51328 14.8117 3 13.2207 3 11.5C3 6.80558 7.02944 3 12 3C16.9706 3 21 6.80558 21 11.5Z"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
-    />
-    <circle cx="8" cy="11.5" r="1.1" fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")} />
-    <circle cx="12" cy="11.5" r="1.1" fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")} />
-    <circle cx="16" cy="11.5" r="1.1" fill={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")} />
-  </svg>
-));
-ChatIcon.displayName = "ChatIcon";
+const MOTION = Object.freeze({
+  membrane: { type: "spring", stiffness: 390, damping: 32, mass: 0.72 },
+  keyboard: { type: "spring", stiffness: 430, damping: 36, mass: 0.72 },
+  indicator: { type: "spring", stiffness: 560, damping: 30, mass: 0.48 },
+  press: { type: "spring", stiffness: 520, damping: 30, mass: 0.45 },
+});
 
-// 4. Center Stories Aperture Icon
-const StoriesIrisIcon = memo(({ active }) => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2.2" />
-    <circle cx="12" cy="12" r="4" fill="white" fillOpacity={active ? "1" : "0.9"} />
-    <circle cx="12" cy="12" r="1.5" fill="#7C3AED" />
-  </svg>
-));
-StoriesIrisIcon.displayName = "StoriesIrisIcon";
+const NAVIGATION_PATHS = Object.freeze({
+  home: "/home",
+  videos: "/videos",
+  messages: "/messages",
+  createPost: "/create-post",
+  requests: "/network",
+  coins: "/coins",
+  notifications: "/notifications",
+});
 
-// 5. Network Icon
-const NetworkIcon = memo(({ active, isDark }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
-    <circle
-      cx="16"
-      cy="8"
-      r="3"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.2" : "1.8"}
-    />
-    <path
-      d="M14 14C15.5 14 18 14.5 19.5 16.5C20.2 17.5 20.5 18.7 20.5 20"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.2" : "1.8"}
-      strokeLinecap="round"
-    />
-    <circle
-      cx="9"
-      cy="9"
-      r="3.5"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
-    />
-    <path
-      d="M3.5 20.5C3.5 17.5 6 15 9 15C12 15 14.5 17.5 14.5 20.5"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      strokeLinecap="round"
-    />
-  </svg>
-));
-NetworkIcon.displayName = "NetworkIcon";
+const NAV_ITEMS = Object.freeze([
+  {
+    id: "home",
+    label: "Home",
+    path: NAVIGATION_PATHS.home,
+    icon: "home",
+    matchPaths: ["/", "/home/*"],
+  },
+  {
+    id: "sparks",
+    label: "Sparks",
+    path: NAVIGATION_PATHS.videos,
+    icon: "sparks",
+    matchPaths: ["/videos/*", "/sparks/*"],
+  },
+  {
+    id: "chat",
+    label: "Chat",
+    path: NAVIGATION_PATHS.messages,
+    icon: "chat",
+    matchPaths: ["/messages/*", "/chat/*"],
+    badgeKey: "messages",
+  },
+  {
+    id: "create",
+    label: "Create",
+    path: NAVIGATION_PATHS.createPost,
+    isCreate: true,
+  },
+  {
+    id: "network",
+    label: "Network",
+    path: NAVIGATION_PATHS.requests,
+    icon: "network",
+    matchPaths: ["/network/*", "/requests/*"],
+    badgeKey: "network",
+  },
+  {
+    id: "coins",
+    label: "Coins",
+    path: NAVIGATION_PATHS.coins,
+    icon: "coins",
+    matchPaths: ["/coins/*"],
+  },
+  {
+    id: "alerts",
+    label: "Alerts",
+    path: NAVIGATION_PATHS.notifications,
+    icon: "alerts",
+    matchPaths: ["/notifications/*", "/alerts/*"],
+    badgeKey: "notifications",
+  },
+]);
 
-// 6. Alerts Icon
-const AlertsIcon = memo(({ active, isDark }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-all">
-    <path
-      d="M18 8A6 6 0 0 0 6 8C6 15 3 17 3 17H21S18 15 18 8Z"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill={active ? (isDark ? "rgba(192, 132, 252, 0.15)" : "rgba(124, 58, 237, 0.1)") : "none"}
-    />
-    <path
-      d="M10.3 21C10.7 21.6 11.3 22 12 22C12.7 22 13.3 21.6 13.7 21"
-      stroke={active ? (isDark ? "#C084FC" : "#7C3AED") : (isDark ? "#94A3B8" : "#64748B")}
-      strokeWidth={active ? "2.3" : "2"}
-      strokeLinecap="round"
-    />
-  </svg>
-));
-AlertsIcon.displayName = "AlertsIcon";
+/* ==========================================================================
+   HELPERS
+   ========================================================================== */
 
-const BottomNav = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { isDark } = useTheme();
-  const { playSound } = useSound();
-  const { unreadCounts = {}, currentUser } = useAppStore();
+const isDarkTheme = (theme) =>
+  theme === "dark" ||
+  theme?.mode === "dark" ||
+  theme?.isDark === true;
 
-  const [activeTab, setActiveTab] = useState(location.pathname);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+const normalizeCount = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return Math.floor(number);
+};
 
-  // Sync activeTab with pathname
+const formatBadge = (value) => {
+  const count = normalizeCount(value);
+  return count > 99 ? "99+" : String(count);
+};
+
+const formatCoins = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return "0";
+  if (amount < 1000) return Math.floor(amount).toLocaleString();
+  if (amount < 1_000_000)
+    return `${(amount / 1000).toFixed(amount >= 10_000 ? 0 : 1)}K`;
+  if (amount < 1_000_000_000)
+    return `${(amount / 1_000_000).toFixed(amount >= 10_000_000 ? 0 : 1)}M`;
+  return `${(amount / 1_000_000_000).toFixed(1)}B`;
+};
+
+const pathMatches = (pathname, patterns = []) =>
+  patterns.some((pattern) => {
+    if (pattern === "/") return pathname === "/";
+    const normalizedPattern = pattern.replace("/*", "");
+    return (
+      pathname === normalizedPattern ||
+      pathname.startsWith(`${normalizedPattern}/`)
+    );
+  });
+
+/* ==========================================================================
+   BADGE
+   ========================================================================== */
+
+const NavBadge = memo(function NavBadge({ count, dark, reducedMotion }) {
+  if (!count || count <= 0) return null;
+
+  return (
+    <motion.span
+      initial={reducedMotion ? false : { opacity: 0, scale: 0.72 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: "spring", stiffness: 520, damping: 28, mass: 0.45 }}
+      className="
+        absolute -right-[6px] -top-[6px] z-30 flex min-h-[20px] min-w-[20px]
+        items-center justify-center rounded-full px-[5px] text-[9px] font-bold
+        leading-none text-white border
+      "
+      style={{
+        background: "linear-gradient(135deg,#FF375F 0%,#F43F5E 55%,#E11D48 100%)",
+        borderColor: dark ? "rgba(255,255,255,.24)" : "rgba(255,255,255,.9)",
+        boxShadow: dark
+          ? "0 4px 10px rgba(0,0,0,.28),inset 0 1px 1px rgba(255,255,255,.28)"
+          : "0 3px 8px rgba(15,23,42,.14),inset 0 1px 1px rgba(255,255,255,.48)",
+      }}
+      aria-label={`${formatBadge(count)} unread`}
+    >
+      {formatBadge(count)}
+    </motion.span>
+  );
+});
+
+NavBadge.propTypes = {
+  count: PropTypes.number,
+  dark: PropTypes.bool.isRequired,
+  reducedMotion: PropTypes.bool.isRequired,
+};
+
+/* ==========================================================================
+   ICONS
+   ========================================================================== */
+
+const HomeIcon = memo(function HomeIcon({ active }) {
+  const id = useId().replace(/:/g, "");
+  const gradientId = `arvdoul-home-gradient-${id}`;
+
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="7" y1="4" x2="26" y2="29" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#C82BFF" />
+          <stop offset=".48" stopColor="#8B1EF3" />
+          <stop offset="1" stopColor="#055BFB" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M4.8 14.1 16 4.5l11.2 9.6v12.2c0 .94-.76 1.7-1.7 1.7h-7.1v-8.2h-4.8V28H6.5a1.7 1.7 0 0 1-1.7-1.7V14.1Z"
+        fill={active ? `url(#${gradientId})` : "none"}
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth="1.65"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.8 14.1 16 4.5l11.2 9.6"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth="1.65"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {!active && (
+        <path d="M12.1 28v-8.2h7.8V28" stroke="currentColor" strokeWidth="1.65" strokeLinejoin="round" />
+      )}
+    </svg>
+  );
+});
+HomeIcon.propTypes = { active: PropTypes.bool.isRequired };
+
+const SparksIcon = memo(function SparksIcon() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
+      <path
+        d="M18.2 3.5 7.5 17.8h6.2l-1.9 10.7L22.5 13.9h-6.2l1.9-10.4Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+});
+
+const ChatIcon = memo(function ChatIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth="1.5"
+      stroke="currentColor"
+      className="w-[26px] h-[26px]"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"
+      />
+    </svg>
+  );
+});
+
+const NetworkIcon = memo(function NetworkIcon() {
+  return (
+    <svg viewBox="0 0 36 32" width="27" height="26" fill="none" aria-hidden="true">
+      <circle cx="13" cy="10" r="5.3" stroke="currentColor" strokeWidth="1.65" />
+      <path d="M3.8 26.6c.7-5.3 4.15-8.15 9.2-8.15s8.5 2.85 9.2 8.15" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" />
+      <circle cx="26.1" cy="11.45" r="4.25" stroke="currentColor" strokeWidth="1.45" strokeOpacity=".86" />
+      <path d="M22.8 19.6c4.45-.15 7.65 2.15 8.9 6.3" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeOpacity=".86" />
+    </svg>
+  );
+});
+
+const AlertsIcon = memo(function AlertsIcon() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
+      <path
+        d="M7.15 22.9h17.7c-1.55-1.85-2.3-4.05-2.3-6.95v-2.3a6.55 6.55 0 0 0-13.1 0v2.3c0 2.9-.75 5.1-2.3 6.95Z"
+        stroke="currentColor" strokeWidth="1.65" strokeLinejoin="round"
+      />
+      <path d="M13.15 26.15c.65.95 1.6 1.4 2.85 1.4s2.2-.45 2.85-1.4" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" />
+      <path d="M16 5.1V3.55" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeOpacity=".68" />
+    </svg>
+  );
+});
+
+/* ==========================================================================
+   COINS ICON – Enhanced Gold Version (using provided SVG with gradients)
+   ========================================================================== */
+
+const CoinsIcon = memo(function CoinsIcon() {
+  const id = useId().replace(/:/g, "");
+  const goldGradient = `arvdoul-gold-${id}`;
+  const darkGoldGradient = `arvdoul-dark-gold-${id}`;
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className="w-[27px] h-[27px]"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={goldGradient} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FFF9C4" />
+          <stop offset="30%" stopColor="#FFD700" />
+          <stop offset="70%" stopColor="#F5A623" />
+          <stop offset="100%" stopColor="#D4AF37" />
+        </linearGradient>
+        <linearGradient id={darkGoldGradient} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#B8860B" />
+          <stop offset="50%" stopColor="#DAA520" />
+          <stop offset="100%" stopColor="#8B6914" />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${goldGradient})`}
+        d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875Z"
+      />
+      <path
+        fill={`url(#${goldGradient})`}
+        d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 0 0 1.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 0 0 1.897 1.384C6.809 12.164 9.315 12.75 12 12.75Z"
+      />
+      <path
+        fill={`url(#${darkGoldGradient})`}
+        d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 0 0 1.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 0 0 1.897 1.384C6.809 15.914 9.315 16.5 12 16.5Z"
+      />
+      <path
+        fill={`url(#${goldGradient})`}
+        d="M12 20.25c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 0 0 1.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 0 0 1.897 1.384C6.809 19.664 9.315 20.25 12 20.25Z"
+      />
+    </svg>
+  );
+});
+
+const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
+  const iconClass = active
+    ? dark ? "text-[#B978FF]" : "text-[#6D22D9]"
+    : dark ? "text-white/[0.86]" : "text-[#111827]/[0.82]";
+
+  if (type === "home") return <span className={iconClass}><HomeIcon active={active} /></span>;
+  if (type === "sparks") return <span className={iconClass}><SparksIcon /></span>;
+  if (type === "chat") return <span className={iconClass}><ChatIcon /></span>;
+  if (type === "network") return <span className={iconClass}><NetworkIcon /></span>;
+  if (type === "coins") return <CoinsIcon />; // gold always
+  if (type === "alerts") return <span className={iconClass}><AlertsIcon /></span>;
+  return null;
+});
+
+NavigationIcon.propTypes = {
+  type: PropTypes.string.isRequired,
+  active: PropTypes.bool.isRequired,
+  dark: PropTypes.bool.isRequired,
+};
+
+/* ==========================================================================
+   NAVIGATION ITEM
+   ========================================================================== */
+
+const NavigationItem = memo(function NavigationItem({
+  item,
+  active,
+  badgeCount,
+  coinBalance,
+  dark,
+  reducedMotion,
+  onNavigate,
+}) {
+  const handleClick = useCallback(() => {
+    onNavigate(item.path, item.id);
+  }, [item.id, item.path, onNavigate]);
+
+  return (
+    <motion.button
+      type="button"
+      onClick={handleClick}
+      aria-label={item.label}
+      aria-current={active ? "page" : undefined}
+      whileTap={reducedMotion ? undefined : { scale: 0.975 }}
+      transition={MOTION.press}
+      className="
+        relative flex h-[82px] min-w-0 flex-1 touch-manipulation flex-col items-center
+        justify-start overflow-visible rounded-[20px] px-0 pt-[9px] outline-none
+        focus-visible:ring-2 focus-visible:ring-[#8B1EF3]/70
+      "
+    >
+      {active && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-[13px] h-[38px] w-[62px] -translate-x-1/2 rounded-full"
+          style={{
+            background: dark
+              ? "radial-gradient(circle,rgba(139,30,243,.08),transparent 72%)"
+              : "radial-gradient(circle,rgba(139,30,243,.065),transparent 72%)",
+          }}
+        />
+      )}
+
+      <span className="relative z-10 flex h-[34px] w-[48px] shrink-0 items-center justify-center">
+        <NavigationIcon type={item.icon} active={active} dark={dark} />
+        <NavBadge count={badgeCount} dark={dark} reducedMotion={Boolean(reducedMotion)} />
+      </span>
+
+      {item.id === "coins" && (
+        <span
+          className={[
+            "relative z-10 -mt-[1px] h-[10px] whitespace-nowrap text-[9px] font-bold leading-[10px]",
+            dark ? "text-[#FFD34E]" : "text-[#D88900]",
+          ].join(" ")}
+          aria-hidden="true"
+        >
+          {formatCoins(coinBalance)}
+        </span>
+      )}
+
+      <span
+        className={[
+          "relative z-10 flex h-[17px] shrink-0 items-start justify-center whitespace-nowrap px-[2px] text-[11px] leading-[17px]",
+          item.id === "coins" ? "mt-[5px]" : "mt-[8px]",
+          active ? "font-semibold" : "font-medium",
+          active
+            ? dark ? "text-white" : "text-[#111827]"
+            : dark ? "text-white/[0.72]" : "text-[#111827]/[0.72]",
+        ].join(" ")}
+      >
+        {item.label}
+      </span>
+
+      <span className="relative z-10 mt-[2px] flex h-[3px] w-full shrink-0 items-center justify-center">
+        {active && (
+          <motion.span
+            transition={MOTION.indicator}
+            aria-hidden="true"
+            className="block h-[3px] w-[30px] rounded-full"
+            style={{ background: BRAND_GRADIENT }}
+          />
+        )}
+      </span>
+    </motion.button>
+  );
+});
+
+NavigationItem.propTypes = {
+  item: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+    path: PropTypes.string.isRequired,
+    icon: PropTypes.string,
+  }).isRequired,
+  active: PropTypes.bool.isRequired,
+  badgeCount: PropTypes.number,
+  coinBalance: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  dark: PropTypes.bool.isRequired,
+  reducedMotion: PropTypes.bool.isRequired,
+  onNavigate: PropTypes.func.isRequired,
+};
+
+/* ==========================================================================
+   CREATE CONTROL – perfectly centered, three layers, no movement
+   ========================================================================== */
+
+const CreateControl = memo(function CreateControl({ dark, reducedMotion, onCreate }) {
+  const buttonTop = 12;
+  const buttonSize = 58;
+  const ring1Size = 68;
+  const ring1Top = buttonTop - (ring1Size - buttonSize) / 2; // 7px
+  const ring2Size = 78;
+  const ring2Top = buttonTop - (ring2Size - buttonSize) / 2; // 2px
+
+  return (
+    <div className="relative flex h-[82px] w-full items-start justify-center">
+      {/* Outer ring (layer 1) */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 z-[2] -translate-x-1/2 rounded-full border"
+        style={{
+          width: `${ring2Size}px`,
+          height: `${ring2Size}px`,
+          top: `${ring2Top}px`,
+          borderColor: dark ? "rgba(255,255,255,.28)" : "rgba(255,255,255,1)",
+          boxShadow: dark
+            ? "0 0 0 1px rgba(255,255,255,.08), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(0,0,0,.2)"
+            : "0 0 0 1px rgba(255,255,255,.6), inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(0,0,0,.05)",
+        }}
+      />
+
+      {/* Inner ring (layer 2) */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 z-[3] -translate-x-1/2 rounded-full border"
+        style={{
+          width: `${ring1Size}px`,
+          height: `${ring1Size}px`,
+          top: `${ring1Top}px`,
+          borderColor: dark ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.95)",
+          boxShadow: dark
+            ? "inset 0 1px 0 rgba(255,255,255,.15)"
+            : "inset 0 1px 0 rgba(255,255,255,.9)",
+        }}
+      />
+
+      {/* Plus button (layer 3) – no movement */}
+      <button
+        type="button"
+        aria-label="Create post"
+        onClick={onCreate}
+        className="absolute left-1/2 z-30 flex -translate-x-1/2 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/90 origin-center"
+        style={{
+          width: `${buttonSize}px`,
+          height: `${buttonSize}px`,
+          top: `${buttonTop}px`,
+          background: BRAND_GRADIENT,
+          border: dark ? "1px solid rgba(255,255,255,.5)" : "1px solid rgba(255,255,255,1)",
+          boxShadow: dark
+            ? "0 12px 28px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.6), inset 0 -5px 10px rgba(0,0,0,.15)"
+            : "0 12px 28px rgba(17,24,39,.18), inset 0 1px 1px rgba(255,255,255,.9), inset 0 -5px 10px rgba(0,0,0,.08)",
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-[2px] rounded-full"
+          style={{
+            background: "linear-gradient(145deg,rgba(255,255,255,.3) 0%,transparent 40%,rgba(0,0,0,.1) 100%)",
+          }}
+        />
+        <svg viewBox="0 0 32 32" width="32" height="32" fill="none" aria-hidden="true" className="relative z-10">
+          <path d="M16 6v20M6 16h20" stroke="white" strokeWidth="2.25" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
+  );
+});
+
+CreateControl.propTypes = {
+  dark: PropTypes.bool.isRequired,
+  reducedMotion: PropTypes.bool.isRequired,
+  onCreate: PropTypes.func.isRequired,
+};
+
+/* ==========================================================================
+   PERSISTENT HANDLE – simple line, reliable click area
+   ========================================================================== */
+
+const NavigationHandle = memo(function NavigationHandle({
+  dark,
+  reducedMotion,
+  navigationVisible,
+  onToggleNavigation,
+  onOpenQuickAccess,
+}) {
+  const handleRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const pointerRef = useRef({
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    moved: false,
+    longPressed: false,
+  });
+  const suppressClickRef = useRef(false);
+
+  const clearTimer = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const resetPointer = useCallback(() => {
+    clearTimer();
+    pointerRef.current = {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      moved: false,
+      longPressed: false,
+    };
+  }, [clearTimer]);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      clearTimer();
+      const state = pointerRef.current;
+      state.active = true;
+      state.pointerId = event.pointerId;
+      state.startX = event.clientX;
+      state.startY = event.clientY;
+      state.moved = false;
+      state.longPressed = false;
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {}
+      longPressTimerRef.current = window.setTimeout(() => {
+        const current = pointerRef.current;
+        if (!current.active || current.moved) return;
+        current.longPressed = true;
+        suppressClickRef.current = true;
+        onOpenQuickAccess();
+      }, HANDLE_LONG_PRESS_MS);
+    },
+    [clearTimer, onOpenQuickAccess]
+  );
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      const state = pointerRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) return;
+      const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
+      if (Math.hypot(dx, dy) >= HANDLE_MOVE_THRESHOLD) {
+        state.moved = true;
+        clearTimer();
+      }
+    },
+    [clearTimer]
+  );
+
+  const handlePointerUp = useCallback(
+    (event) => {
+      const state = pointerRef.current;
+      if (!state.active || state.pointerId !== event.pointerId) return;
+      const wasLongPressed = state.longPressed;
+      clearTimer();
+      try {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      } catch {}
+      resetPointer();
+      if (wasLongPressed) {
+        suppressClickRef.current = true;
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+        return;
+      }
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      onToggleNavigation();
+    },
+    [clearTimer, onToggleNavigation, resetPointer]
+  );
+
+  const handlePointerCancel = useCallback(() => {
+    resetPointer();
+  }, [resetPointer]);
+
+  const handleClick = useCallback(
+    (event) => {
+      if (suppressClickRef.current) {
+        suppressClickRef.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      onToggleNavigation();
+    },
+    [onToggleNavigation]
+  );
+
   useEffect(() => {
-    setActiveTab(location.pathname);
+    return () => {
+      clearTimer();
+    };
+  }, [clearTimer]);
+
+  return (
+    <button
+      ref={handleRef}
+      type="button"
+      aria-label={
+        navigationVisible
+          ? "Hide bottom navigation. Long press for quick access."
+          : "Show bottom navigation. Long press for quick access."
+      }
+      aria-expanded={navigationVisible}
+      aria-controls="arvdoul-bottom-navigation"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onClick={handleClick}
+      className="
+        absolute left-1/2 top-[-25px] z-[100] flex h-[30px] w-[72px] -translate-x-1/2
+        touch-none items-center justify-center rounded-full outline-none
+        focus-visible:ring-2 focus-visible:ring-[#8B1EF3]/80 pointer-events-auto
+        bg-transparent border-0 p-0
+      "
+    >
+      <span
+        aria-hidden="true"
+        className="h-[4px] w-[39px] rounded-full"
+        style={{ background: BRAND_LINE }}
+      />
+    </button>
+  );
+});
+
+NavigationHandle.propTypes = {
+  dark: PropTypes.bool.isRequired,
+  reducedMotion: PropTypes.bool.isRequired,
+  navigationVisible: PropTypes.bool.isRequired,
+  onToggleNavigation: PropTypes.func.isRequired,
+  onOpenQuickAccess: PropTypes.func.isRequired,
+};
+
+/* ==========================================================================
+   BOTTOM NAV
+   ========================================================================== */
+
+function BottomNav() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { theme: themeMode } = useTheme();
+  const { playSound } = useSound();
+  const { trackEvent } = useAnalytics();
+
+  const currentUser = useAppStore((state) => state.currentUser);
+  const unreadCounts = useAppStore((state) => state.unreadCounts);
+
+  const reducedMotion = useReducedMotion();
+  const dark = isDarkTheme(themeMode);
+
+  const [visible, setVisible] = useState(true);
+  const [quickAccessOpen, setQuickAccessOpen] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  const ignoreScrollRef = useRef(false);
+  const navigationLockRef = useRef(false);
+  const lastScrollYRef = useRef(0);
+  const accumulatedScrollRef = useRef(0);
+  const directionRef = useRef(null);
+  const scrollFrameRef = useRef(null);
+
+  /* ------------------------------------------------------------------------
+     Scroll-aware visibility (state machine)
+     ------------------------------------------------------------------------ */
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY || 0;
+    accumulatedScrollRef.current = 0;
+    directionRef.current = null;
+
+    const handleScroll = () => {
+      if (scrollFrameRef.current !== null) return;
+      if (ignoreScrollRef.current) return;
+
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
+        const currentY = Math.max(window.scrollY || 0, 0);
+        const delta = currentY - lastScrollYRef.current;
+        lastScrollYRef.current = currentY;
+
+        if (quickAccessOpen) {
+          accumulatedScrollRef.current = 0;
+          directionRef.current = null;
+          setVisible(false);
+          return;
+        }
+
+        if (currentY <= SCROLL_TOP_REVEAL_OFFSET) {
+          accumulatedScrollRef.current = 0;
+          directionRef.current = null;
+          setVisible(true);
+          return;
+        }
+
+        if (Math.abs(delta) < 1) return;
+        const newDirection = delta > 0 ? "down" : "up";
+
+        if (directionRef.current !== newDirection) {
+          directionRef.current = newDirection;
+          accumulatedScrollRef.current = 0;
+        }
+
+        accumulatedScrollRef.current += Math.abs(delta);
+
+        if (newDirection === "down" && accumulatedScrollRef.current >= SCROLL_HIDE_THRESHOLD) {
+          accumulatedScrollRef.current = 0;
+          setVisible(false);
+        } else if (newDirection === "up" && accumulatedScrollRef.current >= SCROLL_SHOW_THRESHOLD) {
+          accumulatedScrollRef.current = 0;
+          setVisible(true);
+        }
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [quickAccessOpen]);
+
+  /* ------------------------------------------------------------------------
+     Toggle navigation (manual, ignores scroll for 300ms)
+     ------------------------------------------------------------------------ */
+
+  const toggleNavigation = useCallback(() => {
+    setVisible((prev) => !prev);
+    ignoreScrollRef.current = true;
+    window.setTimeout(() => {
+      ignoreScrollRef.current = false;
+    }, 300);
+  }, []);
+
+  /* ------------------------------------------------------------------------
+     Quick Access handlers
+     ------------------------------------------------------------------------ */
+
+  const closeQuickAccess = useCallback(() => {
+    setQuickAccessOpen(false);
+    // After closing, show nav if near top, otherwise let scroll decide
+    window.setTimeout(() => {
+      if ((window.scrollY || 0) <= SCROLL_TOP_REVEAL_OFFSET) {
+        setVisible(true);
+      }
+    }, 0);
+  }, []);
+
+  const openQuickAccess = useCallback(() => {
+    setQuickAccessOpen(true);
+    // Nav will hide automatically due to effect
+    try { playSound?.("navigation"); } catch {}
+    try { trackEvent?.("quick_access_open", { source: "bottom_navigation_handle", interaction: "long_press" }); } catch {}
+  }, [playSound, trackEvent]);
+
+  /* ------------------------------------------------------------------------
+     Navigation handlers
+     ------------------------------------------------------------------------ */
+
+  const openCreate = useCallback(() => {
+    if (navigationLockRef.current) return;
+    navigationLockRef.current = true;
+    window.setTimeout(() => {
+      navigationLockRef.current = false;
+    }, NAVIGATION_LOCK_MS);
+
+    try { playSound?.("create"); } catch {}
+    try { trackEvent?.("bottom_nav_create_open", { destination: NAVIGATION_PATHS.createPost, source: "bottom_navigation" }); } catch {}
+
+    closeQuickAccess();
+    navigate(NAVIGATION_PATHS.createPost);
+  }, [closeQuickAccess, navigate, playSound, trackEvent]);
+
+  const navigateTo = useCallback(
+    (path, destination) => {
+      if (navigationLockRef.current) return;
+      navigationLockRef.current = true;
+      window.setTimeout(() => {
+        navigationLockRef.current = false;
+      }, NAVIGATION_LOCK_MS);
+
+      try { playSound?.("navigation"); } catch {}
+      try { trackEvent?.("bottom_nav_navigation", { destination, path, source: "bottom_navigation" }); } catch {}
+
+      closeQuickAccess();
+
+      if (destination === "home" && location.pathname === path) {
+        window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+        return;
+      }
+      navigate(path);
+    },
+    [closeQuickAccess, location.pathname, navigate, playSound, reducedMotion, trackEvent]
+  );
+
+  const navigateToWithLoading = useCallback(
+    (path) => {
+      try { playSound?.("navigation"); } catch {}
+      try { trackEvent?.("Navigation_With_Loading", { path, source: "bottom_navigation_quick_access" }); } catch {}
+
+      closeQuickAccess();
+      navigate(path);
+    },
+    [closeQuickAccess, navigate, playSound, trackEvent]
+  );
+
+  /* ------------------------------------------------------------------------
+     Keyboard / visual viewport
+     ------------------------------------------------------------------------ */
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return undefined;
+
+    const updateKeyboardOffset = () => {
+      const difference = window.innerHeight - viewport.height;
+      const nextOffset = difference > 120 ? Math.min(difference, 420) : 0;
+      setKeyboardOffset(nextOffset);
+    };
+
+    updateKeyboardOffset();
+    viewport.addEventListener("resize", updateKeyboardOffset);
+    viewport.addEventListener("scroll", updateKeyboardOffset);
+
+    return () => {
+      viewport.removeEventListener("resize", updateKeyboardOffset);
+      viewport.removeEventListener("scroll", updateKeyboardOffset);
+    };
+  }, []);
+
+  /* ------------------------------------------------------------------------
+     Escape closes Quick Access
+     ------------------------------------------------------------------------ */
+
+  useEffect(() => {
+    if (!quickAccessOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeQuickAccess();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeQuickAccess, quickAccessOpen]);
+
+  /* ------------------------------------------------------------------------
+     Dynamic badges and balance
+     ------------------------------------------------------------------------ */
+
+  const badges = useMemo(() => {
+    const counts = unreadCounts || {};
+    return {
+      messages: normalizeCount(
+        counts.messages ?? counts.message ?? counts.chat ?? counts.messagesUnread
+      ),
+      network: normalizeCount(
+        counts.network ?? counts.requests ?? counts.friendRequests ?? counts.networkRequests
+      ),
+      notifications: normalizeCount(
+        counts.notifications ?? counts.notification ?? counts.alerts ?? counts.notificationsUnread
+      ),
+    };
+  }, [unreadCounts]);
+
+  const coinBalance = currentUser?.coins ?? 0;
+
+  const activeId = useMemo(() => {
+    const pathname = location.pathname;
+    const activeItem = NAV_ITEMS.find(
+      (item) => !item.isCreate && pathMatches(pathname, item.matchPaths)
+    );
+    return activeItem?.id ?? null;
   }, [location.pathname]);
 
-  const handleNavigation = useCallback((to) => {
-    if (location.pathname === to) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      playSound?.("nav_click");
-      setActiveTab(to);
-      navigate(to);
-    }
-  }, [location.pathname, navigate, playSound]);
-
-  // Format coins: default 2,450
-  const rawCoins = currentUser?.coins ?? 2450;
-  const formattedCoins = useMemo(() => {
-    return Number(rawCoins).toLocaleString();
-  }, [rawCoins]);
-
-  // Badges: default or store values
-  const chatBadge = unreadCounts.messages ?? 3;
-  const networkBadge = unreadCounts.network ?? 8;
-  const alertsBadge = unreadCounts.notifications ?? 12;
-
-  // Active checks
-  const isHomeActive = activeTab === "/home" || activeTab === "/";
-  const isSparksActive = activeTab.startsWith("/videos") || activeTab.startsWith("/reels");
-  const isChatActive = activeTab.startsWith("/messages") || activeTab.startsWith("/chat");
-  const isStoriesActive = activeTab.startsWith("/stories") || activeTab.startsWith("/vibes");
-  const isNetworkActive = activeTab.startsWith("/network") || activeTab.startsWith("/friends");
-  const isCoinsActive = activeTab.startsWith("/coins");
-  const isAlertsActive = activeTab.startsWith("/notifications");
+  /* ------------------------------------------------------------------------
+     Render
+     ------------------------------------------------------------------------ */
 
   return (
     <>
-      <nav
-        id="arvdoul-bottom-navigation"
-        aria-label="Main Navigation"
-        className="fixed bottom-2.5 sm:bottom-4 left-1/2 -translate-x-1/2 z-40 w-[96%] max-w-[560px] select-none pointer-events-auto"
+      <motion.nav
+        aria-label="Primary navigation"
+        initial={false}
+        animate={{ y: -keyboardOffset }}
+        transition={reducedMotion ? { duration: 0 } : MOTION.keyboard}
+        className="
+          pointer-events-none fixed inset-x-0 bottom-0 z-[100] px-2 sm:px-3
+        "
+        style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
       >
-        {/* Dock Container */}
-        <div
-          className={`relative w-full rounded-full backdrop-blur-2xl transition-all duration-300 ${
-            isDark
-              ? "bg-[#0b0f1e]/90 border border-purple-500/30 shadow-[0_12px_36px_rgba(0,0,0,0.8),0_0_20px_rgba(168,85,247,0.25)]"
-              : "bg-white/95 border border-slate-200/90 shadow-[0_12px_36px_rgba(100,116,139,0.25),0_2px_8px_rgba(168,85,247,0.12)]"
-          }`}
-        >
-          {/* Quick Post Button floating above Stories Dome */}
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleNavigation("/create-post");
-              }}
-              className="px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase text-white bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 shadow-md shadow-purple-600/40 hover:scale-105 active:scale-95 transition-all flex items-center gap-1 cursor-pointer ring-2 ring-white dark:ring-[#0b0f1e]"
-              aria-label="Create Post"
-              title="Create Post"
-            >
-              <Plus className="w-2.5 h-2.5 stroke-[3]" />
-              <span>Post</span>
-            </button>
-          </div>
+        <div className="relative mx-auto h-[82px] w-full" style={{ maxWidth: MAX_WIDTH }}>
+          <NavigationHandle
+            dark={dark}
+            reducedMotion={Boolean(reducedMotion)}
+            navigationVisible={visible}
+            onToggleNavigation={toggleNavigation}
+            onOpenQuickAccess={openQuickAccess}
+          />
 
-          {/* Center Elevated Stories Dome Button */}
-          <div className="absolute -top-4 sm:-top-5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
-            {/* Ambient stardust glow when active or in dark mode */}
-            {isDark && (
-              <div className={`absolute -inset-2 rounded-full blur-md pointer-events-none transition-opacity ${
-                isStoriesActive ? "bg-pink-500/40 opacity-100 animate-pulse" : "bg-purple-600/25 opacity-70"
-              }`} />
-            )}
-
-            <motion.button
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.94 }}
-              onClick={() => handleNavigation("/stories")}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setIsPanelOpen(true);
-              }}
-              className="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition-transform cursor-pointer"
-              aria-label="Stories & Vibes"
-              title="Stories & Vibes (Tap to view stories, right-click for quick actions)"
-            >
-              {/* Outer Vibrant Story Gradient Ring */}
-              <div
-                className={`w-full h-full rounded-full p-[2px] transition-all ${
-                  isStoriesActive
-                    ? "bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 shadow-[0_0_18px_rgba(236,72,153,0.8)] animate-pulse"
-                    : "bg-gradient-to-tr from-cyan-400 via-purple-500 to-pink-500 shadow-[0_4px_16px_rgba(168,85,247,0.4)]"
-                }`}
+          <AnimatePresence initial={false}>
+            {visible && (
+              <motion.div
+                key="arvdoul-bottom-navigation"
+                id="arvdoul-bottom-navigation"
+                initial={reducedMotion ? false : { y: 96, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={reducedMotion ? { opacity: 0 } : { y: 96, opacity: 0 }}
+                transition={reducedMotion ? { duration: 0 } : MOTION.membrane}
+                className="
+                  pointer-events-auto absolute inset-x-0 bottom-0 h-[82px] overflow-hidden
+                  rounded-[30px]
+                "
+                style={{
+                  isolation: "isolate",
+                  background: dark
+                    ? [
+                        "linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.02) 34%,rgba(255,255,255,.01) 100%)",
+                        "linear-gradient(108deg,rgba(200,43,255,.02) 0%,transparent 27%,rgba(68,49,247,.02) 55%,rgba(5,91,251,.018) 100%)",
+                        "rgba(3,7,27,.65)",
+                      ].join(",")
+                    : [
+                        "linear-gradient(180deg,rgba(255,255,255,.65) 0%,rgba(255,255,255,.45) 38%,rgba(255,255,255,.35) 100%)",
+                        "linear-gradient(108deg,rgba(200,43,255,.02) 0%,transparent 27%,rgba(68,49,247,.02) 55%,rgba(5,91,251,.015) 100%)",
+                      ].join(","),
+                  border: dark
+                    ? "1px solid rgba(255,255,255,.1)"
+                    : "1px solid rgba(255,255,255,.8)",
+                  boxShadow: dark
+                    ? "0 24px 58px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 rgba(0,0,0,.15)"
+                    : "0 22px 52px rgba(17,24,39,.1),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(0,0,0,.03)",
+                  backdropFilter: "blur(35px) saturate(180%)",
+                  WebkitBackdropFilter: "blur(35px) saturate(180%)",
+                }}
               >
-                {/* Inner Button Canvas */}
-                <div
-                  className="w-full h-full rounded-full flex items-center justify-center text-white ring-2 ring-white dark:ring-[#0b0f1e]"
+                {/* Layer 1: Inner rim */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-[2px] rounded-[28px] border"
                   style={{
-                    background: "linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)",
+                    borderColor: dark ? "rgba(255,255,255,.06)" : "rgba(17,24,39,.05)",
                   }}
-                >
-                  <StoriesIrisIcon active={isStoriesActive} />
+                />
+
+                {/* Layer 2: Top bevel */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-[34px] top-[1px] h-px rounded-full"
+                  style={{
+                    background: dark
+                      ? "linear-gradient(90deg,transparent,rgba(255,255,255,.25) 27%,rgba(255,255,255,.3) 50%,rgba(255,255,255,.2) 73%,transparent)"
+                      : "linear-gradient(90deg,transparent,rgba(255,255,255,.8) 27%,rgba(255,255,255,1) 50%,rgba(255,255,255,.8) 73%,transparent)",
+                  }}
+                />
+
+                {/* Layer 3: Diagonal refraction */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 rounded-[30px]"
+                  style={{
+                    background:
+                      "linear-gradient(106deg,transparent 9%,rgba(255,255,255,.015) 33%,rgba(255,255,255,.05) 49%,rgba(255,255,255,.015) 64%,transparent 91%)",
+                  }}
+                />
+
+                {/* Layer 4: Outer glass reflection */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 rounded-[30px]"
+                  style={{
+                    background: dark
+                      ? "linear-gradient(145deg,rgba(255,255,255,.04) 0%,transparent 40%,rgba(255,255,255,.03) 100%)"
+                      : "linear-gradient(145deg,rgba(255,255,255,.1) 0%,transparent 40%,rgba(255,255,255,.08) 100%)",
+                  }}
+                />
+
+                {/* Layer 5: Left wall */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-[10px] left-[2px] top-[12px] w-px"
+                  style={{
+                    background: dark
+                      ? "linear-gradient(180deg,transparent,rgba(200,43,255,.15) 46%,rgba(255,255,255,.1),transparent)"
+                      : "linear-gradient(180deg,transparent,rgba(139,30,243,.08) 46%,rgba(255,255,255,.7),transparent)",
+                  }}
+                />
+
+                {/* Layer 6: Right wall */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-[10px] right-[2px] top-[12px] w-px"
+                  style={{
+                    background: dark
+                      ? "linear-gradient(180deg,transparent,rgba(5,91,251,.15) 46%,rgba(255,255,255,.09),transparent)"
+                      : "linear-gradient(180deg,transparent,rgba(5,91,251,.07) 46%,rgba(255,255,255,.65),transparent)",
+                  }}
+                />
+
+                {/* Layer 7: Center dome bridge */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-1/2 top-[-13px] z-[4] h-[42px] w-[126px] -translate-x-1/2 rounded-t-[70px] border-t"
+                  style={{
+                    background: dark
+                      ? "radial-gradient(ellipse at 50% 100%,rgba(255,255,255,.05),transparent 69%)"
+                      : "radial-gradient(ellipse at 50% 100%,rgba(255,255,255,.6),transparent 69%)",
+                    borderTopColor: dark
+                      ? "rgba(255,255,255,.1)"
+                      : "rgba(255,255,255,.9)",
+                  }}
+                />
+
+                {/* Layer 8: Lower optical edge */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-[34px] bottom-[3px] h-px rounded-full"
+                  style={{
+                    background: dark
+                      ? "linear-gradient(90deg,transparent,rgba(255,255,255,.06) 25%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.06) 75%,transparent)"
+                      : "linear-gradient(90deg,transparent,rgba(255,255,255,.5) 25%,rgba(255,255,255,.8) 50%,rgba(255,255,255,.5) 75%,transparent)",
+                  }}
+                />
+
+                {/* Layer 9: Bottom reflection */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-[100px] bottom-0 h-[10px] rounded-full"
+                  style={{
+                    background: dark
+                      ? "linear-gradient(180deg,transparent,rgba(255,255,255,.02))"
+                      : "linear-gradient(180deg,transparent,rgba(255,255,255,.2))",
+                  }}
+                />
+
+                {/* Content grid */}
+                <div className="relative z-20 grid h-[82px] w-full grid-cols-[repeat(3,minmax(0,1fr))_72px_repeat(3,minmax(0,1fr))] items-start gap-0 px-[2px]">
+                  <NavigationItem
+                    item={NAV_ITEMS[0]}
+                    active={activeId === "home"}
+                    badgeCount={0}
+                    coinBalance={coinBalance}
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onNavigate={navigateTo}
+                  />
+                  <NavigationItem
+                    item={NAV_ITEMS[1]}
+                    active={activeId === "sparks"}
+                    badgeCount={0}
+                    coinBalance={coinBalance}
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onNavigate={navigateTo}
+                  />
+                  <NavigationItem
+                    item={NAV_ITEMS[2]}
+                    active={activeId === "chat"}
+                    badgeCount={badges.messages}
+                    coinBalance={coinBalance}
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onNavigate={navigateTo}
+                  />
+                  <CreateControl
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onCreate={openCreate}
+                  />
+                  <NavigationItem
+                    item={NAV_ITEMS[4]}
+                    active={activeId === "network"}
+                    badgeCount={badges.network}
+                    coinBalance={coinBalance}
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onNavigate={navigateTo}
+                  />
+                  <NavigationItem
+                    item={NAV_ITEMS[5]}
+                    active={activeId === "coins"}
+                    badgeCount={0}
+                    coinBalance={coinBalance}
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onNavigate={navigateTo}
+                  />
+                  <NavigationItem
+                    item={NAV_ITEMS[6]}
+                    active={activeId === "alerts"}
+                    badgeCount={badges.notifications}
+                    coinBalance={coinBalance}
+                    dark={dark}
+                    reducedMotion={Boolean(reducedMotion)}
+                    onNavigate={navigateTo}
+                  />
                 </div>
-              </div>
-            </motion.button>
-          </div>
-
-          {/* Nav Items Grid (7 Columns) */}
-          <div className="relative z-10 grid grid-cols-7 items-center h-[66px] sm:h-[72px] px-1 sm:px-3">
-            {/* 1. Home */}
-            <button
-              onClick={() => handleNavigation("/home")}
-              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none cursor-pointer"
-              aria-label="Home"
-            >
-              <div className="relative">
-                <HomeIcon active={isHomeActive} isDark={isDark} />
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 transition-colors ${
-                  isHomeActive
-                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
-                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
-                }`}
-              >
-                Home
-              </span>
-              {isHomeActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-
-            {/* 2. Sparks */}
-            <button
-              onClick={() => handleNavigation("/videos")}
-              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none cursor-pointer"
-              aria-label="Sparks"
-            >
-              <div className="relative">
-                <SparksIcon active={isSparksActive} isDark={isDark} />
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 transition-colors ${
-                  isSparksActive
-                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
-                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
-                }`}
-              >
-                Sparks
-              </span>
-              {isSparksActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-
-            {/* 3. Chat */}
-            <button
-              onClick={() => handleNavigation("/messages")}
-              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none cursor-pointer"
-              aria-label="Chat"
-            >
-              <div className="relative">
-                <ChatIcon active={isChatActive} isDark={isDark} />
-                {chatBadge > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-black flex items-center justify-center shadow-md ring-1 ring-white/50">
-                    {chatBadge}
-                  </span>
-                )}
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 transition-colors ${
-                  isChatActive
-                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
-                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
-                }`}
-              >
-                Chat
-              </span>
-              {isChatActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-
-            {/* 4. Center Column: Stories Label Under Dome */}
-            <button
-              onClick={() => handleNavigation("/stories")}
-              className="flex flex-col items-center justify-end h-full pb-1 relative group focus:outline-none cursor-pointer pt-6"
-              aria-label="Stories"
-            >
-              <span
-                className={`text-[10px] sm:text-[11px] font-bold transition-colors ${
-                  isStoriesActive
-                    ? isDark ? "text-pink-400" : "text-pink-600"
-                    : isDark ? "text-purple-300/80 group-hover:text-white" : "text-purple-700/80 group-hover:text-black"
-                }`}
-              >
-                Stories
-              </span>
-              {isStoriesActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 shadow-sm shadow-pink-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-
-            {/* 5. Network */}
-            <button
-              onClick={() => handleNavigation("/network")}
-              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none cursor-pointer"
-              aria-label="Network"
-            >
-              <div className="relative">
-                <NetworkIcon active={isNetworkActive} isDark={isDark} />
-                {networkBadge > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-black flex items-center justify-center shadow-md ring-1 ring-white/50">
-                    {networkBadge}
-                  </span>
-                )}
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 transition-colors ${
-                  isNetworkActive
-                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
-                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
-                }`}
-              >
-                Network
-              </span>
-              {isNetworkActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-
-            {/* 6. Coins */}
-            <button
-              onClick={() => handleNavigation("/coins")}
-              className="flex flex-col items-center justify-center py-0.5 relative group focus:outline-none cursor-pointer"
-              aria-label="Coins"
-            >
-              <div className="relative flex flex-col items-center">
-                <CoinStackIcon size={20} className="group-hover:scale-105 transition-transform" />
-                <span className="text-[9px] sm:text-[10px] font-extrabold text-[#F59E0B] tracking-tight leading-none mt-0.5">
-                  {formattedCoins}
-                </span>
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold transition-colors ${
-                  isCoinsActive
-                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
-                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
-                }`}
-              >
-                Coins
-              </span>
-              {isCoinsActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-
-            {/* 7. Alerts */}
-            <button
-              onClick={() => handleNavigation("/notifications")}
-              className="flex flex-col items-center justify-center py-1 relative group focus:outline-none cursor-pointer"
-              aria-label="Alerts"
-            >
-              <div className="relative">
-                <AlertsIcon active={isAlertsActive} isDark={isDark} />
-                {alertsBadge > 0 && (
-                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-black flex items-center justify-center shadow-md ring-1 ring-white/50">
-                    {alertsBadge}
-                  </span>
-                )}
-              </div>
-              <span
-                className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 transition-colors ${
-                  isAlertsActive
-                    ? isDark ? "text-purple-300 font-bold" : "text-purple-700 font-bold"
-                    : isDark ? "text-gray-400 group-hover:text-white" : "text-gray-600 group-hover:text-black"
-                }`}
-              >
-                Alerts
-              </span>
-              {isAlertsActive && (
-                <motion.div
-                  layoutId="activeNavUnderline"
-                  className="absolute -bottom-1 w-5 h-1 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"
-                  transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                />
-              )}
-            </button>
-          </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </nav>
+      </motion.nav>
 
-      {/* Quick Access Slide-Up Panel */}
       <QuickAccessPanel
-        isPanelOpen={isPanelOpen}
-        closePanel={() => setIsPanelOpen(false)}
-        navigateToWithLoading={(path) => {
-          navigate(path);
-          setIsPanelOpen(false);
-        }}
+        isPanelOpen={quickAccessOpen}
+        closePanel={closeQuickAccess}
+        navigateToWithLoading={navigateToWithLoading}
       />
     </>
   );
-};
+}
+
+BottomNav.propTypes = {};
 
 export default memo(BottomNav);
