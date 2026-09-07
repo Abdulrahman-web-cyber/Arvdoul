@@ -24,6 +24,9 @@ const GroupInfoScreen = () => {
   const [description, setDescription] = useState(conversation?.description || '');
   const [participants, setParticipants] = useState(conversation?.participants || []);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+  const [creatingInvite, setCreatingInvite] = useState(false);
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [memberQuery, setMemberQuery] = useState('');
   const [memberResults, setMemberResults] = useState([]);
@@ -40,24 +43,50 @@ const GroupInfoScreen = () => {
     }
   }, [conversation, user]);
 
-  const handleUpdateGroupName = async () => {
+  const handleUpdateGroupInfo = async () => {
     if (!isAdmin) {
-      toast.error('Only admins can change group name');
+      toast.error('Only admins can change group information');
       return;
     }
     try {
       setLoading(true);
       await messagingService.updateGroupInfo(
         conversationId,
-        { name: groupName },
+        { name: groupName, description },
         user.uid
       );
-      toast.success('Group name updated');
+      toast.success('Group information updated');
+      setIsEditingInfo(false);
     } catch (error) {
-      toast.error('Failed to update group name');
+      toast.error('Failed to update group information');
       console.error('Error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateInviteLink = async () => {
+    if (!isAdmin) {
+      toast.error('Only admins can create invite links');
+      return;
+    }
+    setCreatingInvite(true);
+    try {
+      const res = await messagingService.createInviteLink(conversationId, user.uid);
+      if (res?.link) {
+        setInviteLink(res.link);
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(res.link);
+          toast.success('Invite link created & copied to clipboard!');
+        } else {
+          toast.success(`Invite link created: ${res.link}`);
+        }
+      }
+    } catch (error) {
+      toast.error(error?.message || 'Failed to create invite link');
+      console.error('Error creating invite link:', error);
+    } finally {
+      setCreatingInvite(false);
     }
   };
 
@@ -147,38 +176,78 @@ const GroupInfoScreen = () => {
               {groupName?.[0]?.toUpperCase()}
             </div>
           )}
-          {isAdmin ? (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                className={cn(
-                  'w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-center font-bold',
-                  theme === 'dark'
-                    ? 'bg-gray-800 text-white border border-gray-700'
-                    : 'bg-gray-100 text-gray-900 border border-gray-200'
-                )}
-              />
-              <button
-                onClick={handleUpdateGroupName}
-                disabled={loading}
-                className={cn(
-                  'w-full px-4 py-2 rounded-lg font-medium transition-colors',
-                  'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'
-                )}
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
-                Save Name
-              </button>
+          {isAdmin && isEditingInfo ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Group Name</label>
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Group Name"
+                  className={cn(
+                    'w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-bold',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-white border border-gray-700'
+                      : 'bg-gray-100 text-gray-900 border border-gray-200'
+                  )}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Group Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Add a group description..."
+                  rows={2}
+                  className={cn(
+                    'w-full px-4 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500',
+                    theme === 'dark'
+                      ? 'bg-gray-800 text-white border border-gray-700'
+                      : 'bg-gray-100 text-gray-900 border border-gray-200'
+                  )}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsEditingInfo(false)}
+                  className={cn(
+                    'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    theme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  )}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateGroupInfo}
+                  disabled={loading}
+                  className={cn(
+                    'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'
+                  )}
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> : null}
+                  Save
+                </button>
+              </div>
             </div>
           ) : (
-            <h2 className={cn(
-              'text-2xl font-bold',
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            )}>
-              {groupName}
-            </h2>
+            <div className="space-y-1">
+              <h2 className={cn(
+                'text-2xl font-bold',
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              )}>
+                {groupName}
+              </h2>
+              {description && (
+                <p className={cn(
+                  'text-sm max-w-sm mx-auto',
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                )}>
+                  {description}
+                </p>
+              )}
+            </div>
           )}
         </div>
 
@@ -197,6 +266,7 @@ const GroupInfoScreen = () => {
             {isAdmin && (
               <button
                 onClick={() => setShowAddMembers((v) => !v)}
+                aria-label="Add members"
                 className={cn(
                   'p-2 rounded-full hover:bg-gray-200/50 dark:hover:bg-gray-800/50 transition-colors'
                 )}
@@ -266,7 +336,7 @@ const GroupInfoScreen = () => {
           {isAdmin && (
             <>
               <button
-                onClick={() => toast.info('Coming soon')}
+                onClick={() => setIsEditingInfo(true)}
                 className={cn(
                   'w-full p-3 rounded-lg text-left flex items-center gap-3 transition-colors',
                   theme === 'dark'
@@ -274,11 +344,12 @@ const GroupInfoScreen = () => {
                     : 'hover:bg-gray-100 text-gray-700'
                 )}
               >
-                <Edit2 className="w-5 h-5" />
+                <Edit2 className="w-5 h-5 text-purple-500" />
                 Edit Group Info
               </button>
               <button
-                onClick={() => toast.info('Coming soon')}
+                onClick={handleCreateInviteLink}
+                disabled={creatingInvite}
                 className={cn(
                   'w-full p-3 rounded-lg text-left flex items-center gap-3 transition-colors',
                   theme === 'dark'
@@ -286,9 +357,28 @@ const GroupInfoScreen = () => {
                     : 'hover:bg-gray-100 text-gray-700'
                 )}
               >
-                <LinkIcon className="w-5 h-5" />
-                Create Invite Link
+                {creatingInvite ? <Loader2 className="w-5 h-5 animate-spin text-purple-500" /> : <LinkIcon className="w-5 h-5 text-purple-500" />}
+                <span>{creatingInvite ? 'Generating invite link...' : 'Create Invite Link'}</span>
               </button>
+              {inviteLink && (
+                <div className={cn(
+                  'p-3 rounded-lg flex items-center justify-between gap-2 text-xs',
+                  theme === 'dark' ? 'bg-purple-950/40 border border-purple-800/60 text-purple-300' : 'bg-purple-50 border border-purple-200 text-purple-800'
+                )}>
+                  <span className="truncate flex-1 font-mono">{inviteLink}</span>
+                  <button
+                    onClick={async () => {
+                      if (navigator?.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(inviteLink);
+                        toast.success('Copied to clipboard!');
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded bg-purple-600 text-white font-semibold hover:bg-purple-700 whitespace-nowrap"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
             </>
           )}
           <button

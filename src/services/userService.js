@@ -1310,4 +1310,46 @@ export const getUserPublicKey = (uid) => getUserService().getUserPublicKey(uid);
 // Cache
 export const clearUserCache = (uid) => getUserService().clearCache(uid);
 
-export default getUserService;
+const userServiceExport = Object.assign(getUserService, {
+  getUserService,
+  getUserProfile,
+  createUserProfile,
+  updateUserProfile,
+  isProfileComplete,
+  uploadAvatar,
+  generateDefaultAvatar,
+  getAvatarUrl,
+  updateUserAvatar,
+  resetToDefaultAvatar,
+  checkUsernameAvailability,
+  generateUniqueUsername,
+  getCoinBalance,
+  addCoins,
+  followUser,
+  unfollowUser,
+  getFollowStatus,
+  getFriends,
+  getFollowers,
+  getFollowing,
+  getMutualFriends,
+  getFriendRecommendations,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  cancelFriendRequest,
+  areFriends,
+  getFriendRequests,
+  blockUser,
+  unblockUser,
+  isBlocked,
+  getBlockedUsers,
+  reportUser,
+  deleteAccount,
+  searchUsers,
+  updateLastActive,
+  markProfileComplete,
+  getUserPublicKey,
+  clearUserCache,
+});
+
+export default userServiceExport;

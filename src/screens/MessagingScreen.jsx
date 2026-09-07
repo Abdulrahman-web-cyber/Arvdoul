@@ -442,7 +442,7 @@ export default function MessagingScreen() {
         {/* Master Conversation List */}
         <div className="mt-3 space-y-2">
           {loadingConversations && filteredConversations.length === 0 && (
-            <div className="space-y-2" role="status" aria-label="Loading conversations">
+            <div className="space-y-2 shimmer" role="status" aria-label="Loading conversations">
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -450,10 +450,10 @@ export default function MessagingScreen() {
                     isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'
                   }`}
                 >
-                  <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-white/10 animate-pulse shrink-0" />
+                  <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-white/10 animate-pulse shimmer shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-lg w-1/3 animate-pulse" />
-                    <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-lg w-2/3 animate-pulse" />
+                    <div className="h-3 bg-slate-200 dark:bg-white/10 rounded-lg w-1/3 animate-pulse shimmer" />
+                    <div className="h-2.5 bg-slate-200 dark:bg-white/10 rounded-lg w-2/3 animate-pulse shimmer" />
                   </div>
                 </div>
               ))}

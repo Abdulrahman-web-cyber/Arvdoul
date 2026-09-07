@@ -71,11 +71,29 @@ for (const name of ['IDBRequest', 'IDBDatabase', 'IDBTransaction', 'IDBIndex', '
 // ---------------------------------------------------------------------------
 // jsdom gaps commonly hit by UI components
 // ---------------------------------------------------------------------------
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = () => null;
+}
+
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
     unobserve() {}
     disconnect() {}
+  };
+}
+
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    constructor(callback) {
+      this.callback = callback;
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
   };
 }
 

@@ -1537,8 +1537,8 @@ function CreatePostProvider({ children }) {
       try {
         const sanitizeForLocalCache = (post) => {
           const safeMedia = (post.media || []).map(m => {
-            if (m.url && m.url.startsWith('data:') && m.url.length > 200000) {
-              return { ...m, url: m.url.slice(0, 500) + '...[truncated]' };
+            if (m.url && m.url.startsWith('data:') && m.url.length > 500000) {
+              return { ...m, url: '' };
             }
             return m;
           });

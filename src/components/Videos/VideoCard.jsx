@@ -415,13 +415,13 @@ const VideoCard = memo(({
             whileTap={{ scale: 0.92 }}
             onClick={(e) => {
               e.stopPropagation();
-              toast.info(`Creator Profile: @${video?.creator?.username || 'abdulrahman'}`);
+              toast.info(`Creator Profile: @${video?.creator?.username || video?.creator?.id || 'creator'}`);
             }}
             className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-xl shadow-purple-500/30 ring-2 ring-purple-400/80"
           >
             <img
               src={video?.creator?.avatar || '/assets/default-profile.png'}
-              alt={video?.creator?.name || 'Abdulrahman'}
+              alt={video?.creator?.name || 'Creator'}
               className="w-full h-full rounded-full object-cover"
             />
           </motion.button>
@@ -714,12 +714,12 @@ const VideoCard = memo(({
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1">
                 <span className="text-white font-extrabold text-sm sm:text-base tracking-tight truncate">
-                  {video?.creator?.name || 'Abdulrahman'}
+                  {video?.creator?.name || 'Creator'}
                 </span>
                 <BadgeCheck className="w-4 h-4 text-cyan-400 fill-cyan-400/20 shrink-0" />
               </div>
               <span className="text-purple-300/80 text-xs font-semibold tracking-tight truncate">
-                @{video?.creator?.username || 'abdulrahman'}
+                @{video?.creator?.username || video?.creator?.id || 'creator'}
               </span>
             </div>
           </div>

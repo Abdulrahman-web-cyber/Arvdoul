@@ -133,7 +133,12 @@ const BackgroundParticles = memo(({ theme }) => {
     if (isReduced) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    let ctx = null;
+    try {
+      ctx = canvas.getContext ? canvas.getContext("2d") : null;
+    } catch {
+      return;
+    }
     if (!ctx) return;
 
     let animId;
@@ -358,7 +363,7 @@ function IntroScreen() {
                   onClick={() => navigate("/signup/step1")}
                   className="w-full sm:w-auto flex-1 px-7 py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 shadow-md hover:shadow-lg transition-all transform active:scale-95"
                 >
-                  {t("intro.createAccount") || "Get Started"}
+                  {t("intro.getStarted") || "Get Started"}
                 </button>
                 <button
                   onClick={() => navigate("/login")}

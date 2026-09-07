@@ -1,6 +1,6 @@
 // src/screens/CreatePost/CreateAudio.jsx
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useCreatePostState, useCreatePostServices } from "../CreatePost";
 import * as Icons from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ const AUDIO_GENRES = [
 
 export default function CreateAudio() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme } = useTheme();
   const isDark = theme !== "light";
   const { state, dispatch } = useCreatePostState();
@@ -64,6 +65,24 @@ export default function CreateAudio() {
     }
     toast.success("Audio loaded successfully");
   }, [trackTitle]);
+
+  // Load incoming audio from AudioEditor or other screens
+  const initialLoadedRef = useRef(false);
+  useEffect(() => {
+    if (initialLoadedRef.current) return;
+    if (location.state?.audioFile) {
+      initialLoadedRef.current = true;
+      handleFile(location.state.audioFile);
+    } else if (location.state?.audioBlob) {
+      initialLoadedRef.current = true;
+      const file = new File(
+        [location.state.audioBlob],
+        location.state.fileName || `audio-${Date.now()}.wav`,
+        { type: location.state.audioBlob.type || 'audio/wav' }
+      );
+      handleFile(file);
+    }
+  }, [location.state, handleFile]);
 
   const handleCover = useCallback((file) => {
     if (!file.type.startsWith("image/")) return;

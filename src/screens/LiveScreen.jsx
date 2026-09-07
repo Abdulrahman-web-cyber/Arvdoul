@@ -86,7 +86,7 @@ export default function LiveScreen() {
         title: liveTitle.trim().slice(0, 120),
         visibility,
       });
-      const streamId = result?.streamId || result?.id;
+      const streamId = result?.stream?.id || result?.streamId || result?.id;
       if (!streamId) throw new Error('Stream could not be created.');
 
       setMyStream({ id: streamId, startedAt: Date.now() });

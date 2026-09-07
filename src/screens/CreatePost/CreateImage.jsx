@@ -20,6 +20,7 @@ import { openDB } from "idb";
 import { getAuth } from "firebase/auth";
 
 const ImageEditor = lazy(() => import("./ImageEditor"));
+const Collage = lazy(() => import("../../components/Shared/Collage"));
 
 // ─── DESIGN TOKENS ──────────────────────────────────────────────────
 const DNA_GRADIENT = "linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)";
@@ -1261,6 +1262,7 @@ export default function CreateImage() {
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [expandedPreview, setExpandedPreview] = useState(false);
+  const [showCollage, setShowCollage] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
@@ -1554,6 +1556,13 @@ export default function CreateImage() {
     dispatch({ type: "REORDER_MEDIA", payload: { from, to } });
   }, [dispatch]);
 
+  const handleCollageSave = useCallback((collageResult) => {
+    if (collageResult?.file) {
+      handleFiles([collageResult.file]);
+    }
+    setShowCollage(false);
+  }, [handleFiles]);
+
   // ─── Autosave ──────────────────────────────────────────────────
   const performSave = useCallback(async (snapshot) => {
     saveVersionRef.current++;
@@ -1682,14 +1691,25 @@ export default function CreateImage() {
               </div>
             </div>
           </div>
-          <button
-            onClick={manualSave}
-            disabled={saving || !allUploadsComplete}
-            className="px-3 py-1.5 text-xs bg-white/20 hover:bg-white/30 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-purple-500"
-            title={!allUploadsComplete ? "Waiting for uploads to complete" : ""}
-          >
-            {saving ? <LoadingSpinner size="xs" /> : "Save Draft"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowCollage(true)}
+              className="px-3 py-1.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-400/30 rounded-full transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              title="Open Photo Collage Studio"
+            >
+              <Icons.LayoutGrid className="w-3.5 h-3.5" />
+              <span>Collage Studio</span>
+            </button>
+            <button
+              onClick={manualSave}
+              disabled={saving || !allUploadsComplete}
+              className="px-3 py-1.5 text-xs bg-white/20 hover:bg-white/30 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-purple-500"
+              title={!allUploadsComplete ? "Waiting for uploads to complete" : ""}
+            >
+              {saving ? <LoadingSpinner size="xs" /> : "Save Draft"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1799,6 +1819,19 @@ export default function CreateImage() {
             onClose={() => setEditingId(null)}
             onSave={handleEditSave}
             offline={offline}
+            isDark={isDark}
+          />
+        </Suspense>
+      )}
+
+      {showCollage && (
+        <Suspense
+          fallback={<div className="fixed inset-0 z-[999] bg-black/70 flex items-center justify-center"><LoadingSpinner size="lg" /></div>}
+        >
+          <Collage
+            images={mediaItems}
+            onSave={handleCollageSave}
+            onClose={() => setShowCollage(false)}
             isDark={isDark}
           />
         </Suspense>

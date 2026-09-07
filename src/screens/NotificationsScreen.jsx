@@ -53,6 +53,37 @@ export default function NotificationsScreen() {
     Earlier: false
   });
   const [giftModal, setGiftModal] = useState(null);
+  const [pushStatus, setPushStatus] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
+  const [requestingPush, setRequestingPush] = useState(false);
+  const [dismissPushBanner, setDismissPushBanner] = useState(false);
+
+  const handleEnablePush = async () => {
+    if (!user?.uid) {
+      toast.error("Please sign in to enable push notifications");
+      return;
+    }
+    setRequestingPush(true);
+    try {
+      const res = await notificationsService.requestPushPermission(user.uid);
+      if (res?.success || Notification.permission === 'granted') {
+        setPushStatus('granted');
+        toast.success("Push notifications enabled! 🔔");
+      } else {
+        setPushStatus(Notification.permission);
+        toast.info("Push notification permission was not granted.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not enable push notifications: " + (err.message || "Unknown error"));
+    } finally {
+      setRequestingPush(false);
+    }
+  };
 
   // Load real Firestore notifications if user is authenticated
   useEffect(() => {
@@ -331,6 +362,49 @@ export default function NotificationsScreen() {
 
       {/* Main Content Area */}
       <main className="max-w-xl mx-auto px-4 pt-4 space-y-6">
+        {/* Push Notification Opt-In Banner */}
+        {pushStatus === 'default' && !dismissPushBanner && (
+          <div className={cn(
+            "p-3.5 rounded-2xl border flex items-center justify-between gap-3 relative overflow-hidden",
+            isDark
+              ? "bg-gradient-to-r from-purple-950/40 via-indigo-950/40 to-blue-950/30 border-purple-500/30"
+              : "bg-purple-50/80 border-purple-200"
+          )}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                <Bell className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white">
+                  Enable Real-Time Push Alerts
+                </h3>
+                <p className="text-[11px] text-gray-600 dark:text-gray-400 line-clamp-1">
+                  Get instant alerts for messages, coin gifts, and live broadcasts.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleEnablePush}
+                disabled={requestingPush}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-md hover:scale-105 active:scale-95 transition cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)' }}
+              >
+                {requestingPush ? 'Enabling…' : 'Enable'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDismissPushBanner(true)}
+                className="p-1 text-gray-400 hover:text-gray-200"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Highlights Section */}
         {highlights.length > 0 && activeFilter === 'All' && !searchQuery && (
           <section className="space-y-3">

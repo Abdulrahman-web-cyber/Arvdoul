@@ -186,6 +186,15 @@ const VideosScreen = () => {
             </>
           )}
         </button>
+
+        <button
+          onClick={() => navigate('/reels')}
+          className="px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-2xl border shadow-xl flex items-center gap-1.5 transition-all hover:scale-105 bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400 border-pink-500/30"
+          title="Open Fullscreen Reels"
+        >
+          <Flame className="w-3.5 h-3.5 text-pink-500" />
+          <span>Reels</span>
+        </button>
       </div>
 
       {/* Main View Display */}

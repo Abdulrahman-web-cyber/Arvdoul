@@ -1,6 +1,6 @@
 // src/screens/VideoEditor/VideoEditorScreen.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -106,6 +106,8 @@ function analyzeAudioWaveform(url) {
 
 export default function VideoEditorScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialMediaLoaded = useRef(false);
   const { theme, isDark } = useTheme();
 
   // Project State — honest default: the editor opens empty. The user names
@@ -482,6 +484,37 @@ export default function VideoEditorScreen() {
       handleAddAudioClip({ title: file.name, url: url, duration: 25 });
     }
   };
+
+  // Load media passed from CreatePost or other screens via router state
+  useEffect(() => {
+    if (initialMediaLoaded.current) return;
+    if (location.state?.videoFile) {
+      initialMediaLoaded.current = true;
+      handleAddMediaFromDisk(location.state.videoFile);
+    } else if (location.state?.videoUrl) {
+      initialMediaLoaded.current = true;
+      const url = location.state.videoUrl;
+      const title = location.state.title || 'Imported Video';
+      (async () => {
+        const thumbnail = await captureVideoFrame(url);
+        const newClip = {
+          id: `video-${Date.now()}`,
+          startTime: 0,
+          duration: 15,
+          title,
+          url,
+          thumbnail,
+          volume: 100,
+        };
+        const newTracks = tracks.map((t) =>
+          t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
+        );
+        pushHistory(newTracks);
+        setSelectedClipId(newClip.id);
+        if (location.state.title) setProjectName(location.state.title);
+      })();
+    }
+  }, [location.state]);
 
   // AI Copilot Actions
   const handleApplyAITool = (toolId) => {

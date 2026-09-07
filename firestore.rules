@@ -271,12 +271,12 @@ service cloud.firestore {
         }
       }
       // Supergroup monthly shards (1000+ participants) — same ownership rules.
-      match /{monthlyShard}/{messageId} {
-        allow read: if isSignedIn() && monthlyShard.startsWith('messages_') && uid() in convParticipants();
-        allow create: if isSignedIn() && monthlyShard.startsWith('messages_') &&
+      match /messages_{year}_{month}/{messageId} {
+        allow read: if isSignedIn() && uid() in convParticipants();
+        allow create: if isSignedIn() &&
           uid() in convParticipants() &&
           request.resource.data.senderId == uid();
-        allow update, delete: if isSignedIn() && monthlyShard.startsWith('messages_') && uid() in convParticipants() && (
+        allow update, delete: if isSignedIn() && uid() in convParticipants() && (
           resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
         );
