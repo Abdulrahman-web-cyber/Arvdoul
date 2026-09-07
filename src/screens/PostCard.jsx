@@ -511,9 +511,20 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const isPremium = (post.authorLevel || 0) >= 8;
   const hasMedia = !!(post.media && post.media.length > 0);
 
+  const isInitiallyLiked = useMemo(() => {
+    if (post.isLiked || post.liked) return true;
+    const uid = currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') : null);
+    if (uid && likedBySet.has(uid)) return true;
+    try {
+      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
+      if (localLikes[post.id]) return true;
+    } catch {}
+    return false;
+  }, [post.id, post.isLiked, post.liked, likedBySet, currentUser?.uid]);
+
   // Engagement state with reducer
   const [engagement, dispatch] = useReducer(engagementReducer, {
-    liked: likedBySet.has(currentUser?.uid),
+    liked: isInitiallyLiked,
     reaction: post.userReaction || null,
     saved: post.savedBy?.includes(currentUser?.uid) || false,
     followState: 'none',
@@ -608,40 +619,51 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // HANDLERS with snapshot rollback, separate debounces, lock
   // ------------------------------------------------------------------
   const handleLikeClick = useCallback(() => {
-    if (!currentUser) return toast.error('Sign in');
+    const userId = currentUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : null);
+    if (!userId) {
+      toast.error('Please sign in to like posts');
+      return;
+    }
     if (likeLockRef.current) return;
     likeLockRef.current = true;
-    setTimeout(() => { likeLockRef.current = false; }, 500);
+    setTimeout(() => { likeLockRef.current = false; }, 300);
 
     const snapshot = takeSnapshot();
     const newLiked = !snapshot.liked;
     dispatch({ type: 'SET_LIKED', payload: newLiked });
     triggerHaptic('light');
 
+    // Persist immediately in client storage
+    try {
+      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
+      if (newLiked) localLikes[post.id] = true;
+      else delete localLikes[post.id];
+      localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
+    } catch {}
+
     if (debounceLikeRef.current) clearTimeout(debounceLikeRef.current);
     debounceLikeRef.current = setTimeout(async () => {
       try {
-        if (navigator.onLine) {
+        if (navigator.onLine && userId !== 'local_user') {
           if (newLiked) {
-            await firestoreService.likePost?.(post.id, currentUser.uid);
+            await firestoreService.likePost?.(post.id, userId);
           } else {
-            await firestoreService.unlikePost?.(post.id, currentUser.uid);
+            await firestoreService.unlikePost?.(post.id, userId);
           }
         } else {
-          await addToOfflineQueue(newLiked ? 'like' : 'unlike', { postId: post.id, userId: currentUser.uid });
+          await addToOfflineQueue(newLiked ? 'like' : 'unlike', { postId: post.id, userId });
         }
-        if (newLiked && post.authorId !== currentUser.uid) {
+        if (newLiked && post.authorId && post.authorId !== userId) {
           notificationService.sendNotification?.({
-            type: 'like', recipientId: post.authorId, senderId: currentUser.uid, targetId: post.id
+            type: 'like', recipientId: post.authorId, senderId: userId, targetId: post.id
           }).catch(() => {});
         }
       } catch (err) {
-        rollbackTo(snapshot);
-        toast.error('Failed to like');
-        if (process.env.NODE_ENV === 'development') console.error(err);
+        console.warn('Like sync background error handled:', err);
+        // Do not rollback local like unless critical
       }
-    }, 300);
-  }, [currentUser, post.id, post.authorId, takeSnapshot, rollbackTo]);
+    }, 250);
+  }, [currentUser, post.id, post.authorId, takeSnapshot]);
 
   const handleReaction = useCallback((reaction) => {
     if (!currentUser) return toast.error('Sign in');

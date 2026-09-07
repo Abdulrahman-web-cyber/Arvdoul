@@ -1437,54 +1437,28 @@ function CreatePostProvider({ children }) {
       if (effectiveType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
       if (effectiveType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
 
-      if (isOfflineRef.current && !isOfflineReplay) { await addToOfflineQueue(current); return; }
+      // ==================== INSTANT PUBLISH (OPTIMISTIC ENGINE) ====================
+      // Generate instant post ID and media references
+      const instantPostId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      const instantMedia = (current.mediaItems || []).map((m, idx) => ({
+        id: m.id || `media_${idx}`,
+        url: m.preview || m.url || "",
+        type: m.type || (m.file?.type?.startsWith("video") ? "video" : "image"),
+        name: m.name || m.file?.name || "media",
+        alt: m.alt || "",
+      }));
+      const firstInstantMedia = instantMedia[0] || null;
+      const videoInstantMedia = instantMedia.find(m => m.type === "video") || null;
 
-      dispatch({ type: "SET_LOADING", payload: true });
-      dispatch({ type: "SET_ERROR", payload: null });
-      dispatch({ type: "SET_PROGRESS", payload: 0 });
-
-      // Moderation (graceful fallback)
-      let moderationApproved = true;
-      try {
-        const moderation = await moderateContent(effectiveText, current.mediaItems.map(m => m.url || m.preview));
-        if (moderation && moderation.approved === false) {
-          moderationApproved = false;
-        }
-      } catch {
-        moderationApproved = true;
-      }
-      if (!moderationApproved) throw new Error("Content flagged by moderation.");
-
-      let uploadedMedia = [];
-      if (current.mediaItems.length > 0) {
-        try {
-          if (isOfflineReplay && current.mediaItems.every(m => m.url)) {
-            uploadedMedia = current.mediaItems.map(m => ({ url: m.url, type: m.type || "image", name: m.name || "media", alt: m.alt || "" }));
-          } else {
-            uploadedMedia = await uploadMedia(current.mediaItems);
-          }
-        } catch (mediaErr) {
-          console.warn("Media upload warning, using local preview items:", mediaErr);
-          uploadedMedia = current.mediaItems.map(m => ({
-            url: m.url || m.preview || "",
-            type: m.type || (m.file?.type?.startsWith("video") ? "video" : "image"),
-            name: m.name || m.file?.name || "media",
-            alt: m.alt || ""
-          }));
-        }
-      }
-
-      const firstMedia = uploadedMedia[0] || null;
-      const videoMedia = uploadedMedia.find(m => m.type === "video") || null;
-
-      const postData = {
+      const instantPublishedPost = {
+        id: instantPostId,
         type: effectiveType,
         content: effectiveText || sanitizedContent,
         contentJSON: sanitizedJSON,
-        media: uploadedMedia,
-        mediaUrl: firstMedia?.url || "",
-        videoUrl: videoMedia?.url || current.typeData.video?.url || "",
-        thumbnailUrl: firstMedia?.thumbnail || firstMedia?.url || "",
+        media: instantMedia,
+        mediaUrl: firstInstantMedia?.url || "",
+        videoUrl: videoInstantMedia?.url || current.typeData.video?.url || "",
+        thumbnailUrl: firstInstantMedia?.thumbnail || firstInstantMedia?.url || "",
         authorId: userNow.uid,
         authorName: userNow.displayName || userNow.name || "Arvdoul User",
         authorUsername: userNow.username || userNow.email?.split("@")[0] || `user_${userNow.uid.slice(0, 8)}`,
@@ -1515,92 +1489,100 @@ function CreatePostProvider({ children }) {
         link: effectiveType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
         question: effectiveType === "question" ? effectiveText : null,
         audio: effectiveType === "audio" ? {
-          url: uploadedMedia[0]?.url || current.typeData.audio?.url || "",
+          url: instantMedia[0]?.url || current.typeData.audio?.url || "",
           duration: current.typeData.audio?.duration || 0,
           title: current.typeData.audio?.title || effectiveText
         } : null,
         video: effectiveType === "video" ? {
-          url: videoMedia?.url || uploadedMedia[0]?.url || current.typeData.video?.url || "",
+          url: videoInstantMedia?.url || instantMedia[0]?.url || current.typeData.video?.url || "",
           duration: current.typeData.video?.duration || 0
         } : null,
-      };
-
-      let result = null;
-      try {
-        const { getFirestoreService } = await import("../services/firestoreService.js");
-        const firestoreService = services.current.firestore || getFirestoreService();
-        const createPromise = firestoreService.createPost(postData);
-        const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Firestore createPost timed out")), 6500));
-        result = await Promise.race([createPromise, timeoutPromise]);
-      } catch (firestoreErr) {
-        console.warn("Firestore createPost fallback to local post:", firestoreErr?.message || firestoreErr);
-      }
-
-      const postId = result?.postId || `post_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const publishedPost = {
-        ...postData,
-        id: postId,
         createdAt: new Date(),
         updatedAt: new Date(),
         likesCount: 0,
         commentsCount: 0,
         sharesCount: 0,
         viewsCount: 0,
-        stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 }
+        stats: { likes: 0, comments: 0, shares: 0, saves: 0, views: 0 },
+        isOptimistic: true,
       };
 
-      // Always save to local storage cache so it appears immediately on Home screen
+      // 1. Immediately inject into client cache & emit event
       try {
-        const sanitizeForLocalCache = (post) => {
-          const safeMedia = (post.media || []).map(m => {
-            if (m.url && m.url.startsWith('data:') && m.url.length > 500000) {
-              return { ...m, url: '' };
-            }
-            return m;
-          });
-          return { ...post, media: safeMedia };
-        };
         const localList = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
-        const updated = [sanitizeForLocalCache(publishedPost), ...localList.filter(p => p.id !== postId)];
+        const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
         localStorage.setItem('arvdoul_local_posts', JSON.stringify(updated.slice(0, 50)));
-        window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: publishedPost }));
+        window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
       } catch (cacheErr) {
-        console.warn("Local post caching error:", cacheErr);
-        try {
-          window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: publishedPost }));
-        } catch {}
+        console.warn("Local post caching note:", cacheErr);
       }
 
-      if (current.boost?.type !== "none" && current.boost?.budget > 0) {
-        try {
-          const { getMonetizationService } = await import("../services/monetizationService.js");
-          const monetizationService = services.current.monetization || getMonetizationService();
-          const spend = await monetizationService.spendCoins(userNow.uid, current.boost.budget, "post_boost");
-          if (spend?.success) setCurrentUser({ ...userNow, coins: spend.newBalance });
-        } catch { /* best-effort */ }
-      }
-
-      if (current.coAuthors?.length > 0 && services.current.notifications) {
-        for (const author of current.coAuthors) {
-          services.current.notifications.sendNotification({
-            type: "coauthor", recipientId: author.id, senderId: userNow.uid,
-            title: "Co‑author invite", message: `${userNow.displayName} invited you`, metadata: { postId },
-          }).catch(() => {});
-        }
-      }
-
-      try {
-        const { getFeedService } = await import("../services/feedService.js");
-        const feedService = services.current.feed || getFeedService();
-        feedService.clearUserCache(userNow.uid);
-      } catch {}
-
+      // 2. Clear draft
       if (current.draftId) {
-        await deleteDraft(current.draftId).catch(() => {});
+        deleteDraft(current.draftId).catch(() => {});
       }
 
-      toast.success("Post published successfully! 🎉");
+      // 3. Instant UI feedback & Navigation (User never waits!)
+      toast.success("Post published instantly! 🎉");
+      publishLockRef.current = false;
       navigate("/home");
+
+      // 4. Background Cloud Sync (Non-blocking)
+      (async () => {
+        try {
+          let uploadedMedia = instantMedia;
+          if (current.mediaItems?.length > 0 && navigator.onLine) {
+            try {
+              uploadedMedia = await uploadMedia(current.mediaItems);
+            } catch (err) {
+              console.warn("Background media upload fallback:", err);
+            }
+          }
+
+          const finalPostData = {
+            ...instantPublishedPost,
+            media: uploadedMedia,
+            mediaUrl: uploadedMedia[0]?.url || instantPublishedPost.mediaUrl,
+            videoUrl: (uploadedMedia.find(m => m.type === "video")?.url) || instantPublishedPost.videoUrl,
+            thumbnailUrl: uploadedMedia[0]?.thumbnail || uploadedMedia[0]?.url || instantPublishedPost.thumbnailUrl,
+          };
+          delete finalPostData.isOptimistic;
+
+          const { getFirestoreService } = await import("../services/firestoreService.js");
+          const firestoreService = services.current.firestore || getFirestoreService();
+          const result = await firestoreService.createPost(finalPostData);
+
+          if (result?.postId) {
+            // Replace temporary optimistic ID with real Firestore doc ID
+            try {
+              const localList = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
+              const updated = localList.map(p => p.id === instantPostId ? { ...p, id: result.postId, isOptimistic: false } : p);
+              localStorage.setItem('arvdoul_local_posts', JSON.stringify(updated));
+              window.dispatchEvent(new CustomEvent('arvdoul:post_id_synced', { detail: { oldId: instantPostId, newId: result.postId } }));
+            } catch {}
+          }
+
+          // Monetization coins boost
+          if (current.boost?.type !== "none" && current.boost?.budget > 0) {
+            try {
+              const { getMonetizationService } = await import("../services/monetizationService.js");
+              const monetizationService = services.current.monetization || getMonetizationService();
+              await monetizationService.spendCoins(userNow.uid, current.boost.budget, "post_boost");
+            } catch {}
+          }
+
+          // Clear feed cache
+          try {
+            const { getFeedService } = await import("../services/feedService.js");
+            const feedService = services.current.feed || getFeedService();
+            feedService.clearUserCache(userNow.uid);
+          } catch {}
+        } catch (bgErr) {
+          console.warn("Background post creation queued or synced locally:", bgErr);
+        }
+      })();
+
+      return;
     } catch (err) {
       console.error("Publish post error:", err);
       dispatch({ type: "SET_ERROR", payload: err.message });

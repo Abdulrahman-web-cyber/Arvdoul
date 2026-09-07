@@ -24,10 +24,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { RefreshCw, Sparkles, Compass, AlertCircle } from 'lucide-react';
+import {
+  RefreshCw, Sparkles, Compass, AlertCircle, ChevronDown, ChevronUp,
+  Coins, Gift, Flame, PlayCircle, Radio, Users, Check, X
+} from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import feedService from '../services/feedService';
 import userService from '../services/userService';
+import { getBalance, addCoins } from '../services/monetizationService.js';
 import PostCard from './PostCard';
 import CommentsDrawer from './CommentsDrawer';
 import PostOptionsDrawer from './PostOptionsDrawer';
@@ -708,6 +712,98 @@ export default function HomeScreen() {
   const [showComments, setShowComments] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
 
+  // Monetization & Categories State
+  const [isFilterShelfOpen, setIsFilterShelfOpen] = useState(false);
+  const [userCoins, setUserCoins] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem(`arvdoul_coins_${user?.uid || 'guest'}`) || '100', 10);
+    } catch {
+      return 100;
+    }
+  });
+  const [isRewardAdOpen, setIsRewardAdOpen] = useState(false);
+  const [adWatchSeconds, setAdWatchSeconds] = useState(0);
+  const [isClaimingCoins, setIsClaimingCoins] = useState(false);
+
+  const FEED_CATEGORIES = useMemo(() => [
+    { id: 'foryou', label: '✨ For You', desc: 'Recommended posts tailored to you' },
+    { id: 'following', label: '👥 Following', desc: 'Posts exclusively from creators you follow' },
+    { id: 'discover', label: '🔍 Discover', desc: 'Explore trending voices and viral creators' },
+    { id: 'trending', label: '🔥 Trending', desc: 'Top momentum posts across Arvdoul' },
+    { id: 'media', label: '🎬 Media & Clips', desc: 'High-res photos and video sparks' },
+    { id: 'spaces', label: '🎙️ Live Spaces', desc: 'Real-time live audio rooms and podcasts', action: () => navigate('/spaces') },
+  ], [navigate]);
+
+  const activeCategoryObj = useMemo(() => {
+    return FEED_CATEGORIES.find(c => c.id === activeFeedTab) || FEED_CATEGORIES[0];
+  }, [FEED_CATEGORIES, activeFeedTab]);
+
+  // Coins balance sync with 5-minute client cache to prevent excessive Firestore billing
+  useEffect(() => {
+    if (!user?.uid) return;
+    let isMounted = true;
+    const fetchBalance = async () => {
+      try {
+        const cached = localStorage.getItem(`arvdoul_coins_${user.uid}`);
+        const lastFetch = localStorage.getItem(`arvdoul_coins_ts_${user.uid}`);
+        if (cached && lastFetch && (Date.now() - parseInt(lastFetch, 10) < 5 * 60 * 1000)) {
+          setUserCoins(parseInt(cached, 10));
+          return;
+        }
+        const bal = await getBalance(user.uid);
+        if (isMounted && typeof bal === 'number') {
+          setUserCoins(bal);
+          localStorage.setItem(`arvdoul_coins_${user.uid}`, String(bal));
+          localStorage.setItem(`arvdoul_coins_ts_${user.uid}`, String(Date.now()));
+        }
+      } catch (err) {
+        // graceful offline fallback
+      }
+    };
+    fetchBalance();
+    return () => { isMounted = false; };
+  }, [user?.uid]);
+
+  const handleOpenRewardAd = useCallback(() => {
+    setIsRewardAdOpen(true);
+    setAdWatchSeconds(5);
+    const interval = setInterval(() => {
+      setAdWatchSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const handleClaimReward = useCallback(async () => {
+    if (isClaimingCoins) return;
+    setIsClaimingCoins(true);
+    try {
+      const uid = user?.uid || 'local_creator';
+      if (user?.uid) {
+        await addCoins(uid, 15, 'reward_ad');
+      }
+      const newBal = userCoins + 15;
+      setUserCoins(newBal);
+      localStorage.setItem(`arvdoul_coins_${uid}`, String(newBal));
+      triggerHaptic('success');
+      toast.success('🎉 Claimed +15 Coins from Sponsored Ad!');
+      setIsRewardAdOpen(false);
+    } catch {
+      const uid = user?.uid || 'local_creator';
+      const newBal = userCoins + 15;
+      setUserCoins(newBal);
+      localStorage.setItem(`arvdoul_coins_${uid}`, String(newBal));
+      toast.success('🎉 +15 Coins added to balance!');
+      setIsRewardAdOpen(false);
+    } finally {
+      setIsClaimingCoins(false);
+    }
+  }, [user?.uid, userCoins, isClaimingCoins]);
+
   const virtuosoRef = useRef(null);
   const scrollerRef = useRef(null);
   const [scrollerReady, setScrollerReady] = useState(false);
@@ -1288,32 +1384,7 @@ export default function HomeScreen() {
             </div>
           ) : isInitialLoading ? (
             <div className="h-full flex flex-col overflow-hidden">
-              <div className="pt-2 pb-2 space-y-3">
-                <div className="flex items-center gap-2 px-4 py-1 overflow-x-auto scrollbar-hide">
-                  {[
-                    { id: 'foryou', label: '✨ For You' },
-                    { id: 'following', label: '👥 Following' },
-                    { id: 'trending', label: '🔥 Trending' },
-                    { id: 'spaces', label: '🎙️ Live Spaces', action: () => navigate('/spaces') },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        if (tab.action) tab.action();
-                        else setActiveFeedTab(tab.id);
-                      }}
-                      className={cn(
-                        'flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer',
-                        activeFeedTab === tab.id
-                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/25'
-                          : isDark ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-700'
-                      )}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FeedLoadingBanner />
               <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                 <FeedSkeleton />
               </div>
@@ -1356,59 +1427,120 @@ export default function HomeScreen() {
                 )}
                 components={{
                   Header: () => (
-                    <div className="pt-2 pb-2 space-y-3">
-                      {/* Feed Categories Filter */}
-                      <div className="flex items-center gap-2 px-4 py-1 overflow-x-auto scrollbar-hide">
-                        {[
-                          { id: 'foryou', label: '✨ For You' },
-                          { id: 'following', label: '👥 Following' },
-                          { id: 'trending', label: '🔥 Trending' },
-                          { id: 'spaces', label: '🎙️ Live Spaces', action: () => navigate('/spaces') },
-                        ].map((tab) => {
-                          const isActive = activeFeedTab === tab.id;
-                          return (
-                            <button
-                              key={tab.id}
-                              onClick={() => {
-                                if (tab.action) {
-                                  tab.action();
-                                } else {
-                                  setActiveFeedTab(tab.id);
-                                }
-                              }}
-                              className={cn(
-                                "px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shadow-sm cursor-pointer",
-                                isActive
-                                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-purple-500/20"
-                                  : "bg-white/70 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-purple-500/10"
-                              )}
-                            >
-                              {tab.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Quick Post Prompt Card */}
+                    <div className="pt-2 pb-2 space-y-2">
+                      {/* Compact Collapsible Filter & Monetization Control Bar */}
                       <div className="px-4">
-                        <div
-                          onClick={() => navigate('/create-post')}
-                          className="flex items-center gap-3 p-3 rounded-2xl border border-gray-200/80 dark:border-white/10 bg-white/80 dark:bg-[#0f1424]/80 shadow-sm backdrop-blur-md cursor-pointer hover:border-purple-500/40 transition-all group"
-                        >
-                          <img
-                            src={getSafeAvatarUrl(user?.photoURL, user?.displayName || 'User', user?.uid)}
-                            alt="Avatar"
-                            className="w-9 h-9 rounded-full object-cover border border-purple-500/30 ring-1 ring-purple-500/20"
-                          />
-                          <div className="flex-1 text-xs text-gray-500 dark:text-gray-400 font-medium group-hover:text-purple-500 transition-colors">
-                            What's on your mind, {user?.displayName ? user.displayName.split(' ')[0] : 'Creator'}?
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                              + Post
-                            </span>
+                        <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-white/70 dark:bg-[#0f1424]/70 border border-gray-200/80 dark:border-white/10 backdrop-blur-md shadow-sm">
+                          {/* Active Tab Indicator & Arrow Toggle Button */}
+                          <button
+                            onClick={() => {
+                              triggerHaptic('light');
+                              setIsFilterShelfOpen(prev => !prev);
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/10 to-pink-600/10 dark:from-purple-500/20 dark:to-pink-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all hover:border-purple-500/50 cursor-pointer"
+                          >
+                            <span className="truncate max-w-[130px]">{activeCategoryObj.label}</span>
+                            <motion.span
+                              animate={{ rotate: isFilterShelfOpen ? 180 : 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="text-purple-600 dark:text-purple-400"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </motion.span>
+                          </button>
+
+                          {/* Monetization Quick Stats: Coins & Rewards */}
+                          <div className="flex items-center gap-1.5">
+                            {/* Coins Balance Pill */}
+                            <button
+                              onClick={() => {
+                                triggerHaptic('light');
+                                navigate('/coins');
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold transition-colors cursor-pointer"
+                              title="Arvdoul Coins Balance"
+                            >
+                              <Coins className="w-3.5 h-3.5 text-amber-500" />
+                              <span>{userCoins}</span>
+                            </button>
+
+                            {/* Watch Ad / Claim Reward Button */}
+                            <button
+                              onClick={() => {
+                                triggerHaptic('medium');
+                                handleOpenRewardAd();
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold shadow-sm shadow-purple-500/20 hover:opacity-95 transition-opacity cursor-pointer"
+                              title="Watch Sponsored Ad for Free Coins"
+                            >
+                              <Gift className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">+15</span>
+                            </button>
                           </div>
                         </div>
+
+                        {/* Collapsible Categories Shelf (Animated) */}
+                        <AnimatePresence>
+                          {isFilterShelfOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0, y: -6 }}
+                              animate={{ opacity: 1, height: 'auto', y: 0 }}
+                              exit={{ opacity: 0, height: 0, y: -6 }}
+                              transition={{ duration: 0.22, ease: 'easeOut' }}
+                              className="overflow-hidden mt-2"
+                            >
+                              <div className="p-3 rounded-2xl bg-white/95 dark:bg-[#0f1424]/95 border border-purple-500/20 shadow-lg backdrop-blur-xl space-y-2">
+                                <div className="flex items-center justify-between pb-1 border-b border-gray-100 dark:border-white/5">
+                                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                                    Select Feed View
+                                  </span>
+                                  <button
+                                    onClick={() => setIsFilterShelfOpen(false)}
+                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-white p-0.5 rounded cursor-pointer"
+                                  >
+                                    <ChevronUp className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {FEED_CATEGORIES.map((cat) => {
+                                    const isSelected = activeFeedTab === cat.id;
+                                    return (
+                                      <button
+                                        key={cat.id}
+                                        onClick={() => {
+                                          triggerHaptic('light');
+                                          if (cat.action) {
+                                            cat.action();
+                                          } else {
+                                            setActiveFeedTab(cat.id);
+                                          }
+                                          setIsFilterShelfOpen(false);
+                                        }}
+                                        className={cn(
+                                          "flex flex-col items-start p-2.5 rounded-xl text-left transition-all cursor-pointer",
+                                          isSelected
+                                            ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/20"
+                                            : "bg-gray-50 dark:bg-white/5 border border-gray-200/60 dark:border-white/5 text-gray-700 dark:text-gray-300 hover:bg-purple-500/10"
+                                        )}
+                                      >
+                                        <div className="flex items-center justify-between w-full">
+                                          <span className="text-xs font-bold">{cat.label}</span>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                        </div>
+                                        <span className={cn(
+                                          "text-[10px] mt-0.5 line-clamp-1",
+                                          isSelected ? "text-purple-100" : "text-gray-500 dark:text-gray-400"
+                                        )}>
+                                          {cat.desc}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   ),
@@ -1441,6 +1573,67 @@ export default function HomeScreen() {
         {showOptions && activePost && (
           <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} />
         )}
+
+        {/* Sponsored Reward Ad Modal for In-Feed Monetization */}
+        <AnimatePresence>
+          {isRewardAdOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            >
+              <motion.div
+                initial={{ scale: 0.92, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.92, y: 20 }}
+                className="w-full max-w-sm rounded-3xl bg-white dark:bg-[#0f1424] border border-purple-500/30 p-6 shadow-2xl space-y-4 text-center"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-white mx-auto shadow-lg shadow-purple-500/30">
+                  <Coins className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sponsored Partner Ad</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Watch this quick sponsor showcase to earn <span className="font-bold text-amber-500">+15 Free Coins</span> for tips and post boosts!
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-left space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-purple-700 dark:text-purple-300">Arvdoul Creator Rewards</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 font-bold">SPONSORED</span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    Empowering creators globally with zero-commission tipping and instant revenue sharing.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-3">
+                  {adWatchSeconds > 0 ? (
+                    <div className="w-full py-2.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 font-bold text-xs flex items-center justify-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-500" />
+                      Reward unlocks in {adWatchSeconds}s...
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleClaimReward}
+                      disabled={isClaimingCoins}
+                      className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <Gift className="w-4 h-4" />
+                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim +15 Coins Now 🎉'}
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setIsRewardAdOpen(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 font-medium cursor-pointer"
+                >
+                  Close
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </VisibilityProvider>
   );

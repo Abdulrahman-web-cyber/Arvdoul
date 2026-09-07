@@ -64,6 +64,19 @@ service cloud.firestore {
     match /users/{userId}/saved_messages/{messageId} {
       allow read, create, update, delete: if isOwner(userId);
     }
+    // Liked posts, saved posts, and user personal subcollections
+    match /users/{userId}/liked_posts/{postId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+    match /users/{userId}/saved_posts/{postId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+    match /users/{userId}/shared_posts/{postId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+    match /users/{userId}/{subcollection}/{docId} {
+      allow read, write: if isOwner(userId);
+    }
     // Message requests (spec §35): id = `${recipientId}_${senderId}`.
     // Create only by the sender; read by either party; respond (accept/
     // decline) only by the recipient. Nobody else can touch them.
