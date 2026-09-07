@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
@@ -34,9 +35,11 @@ export default function ProfileScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   
-  // Get current user from app store
-  const authUser = useAppStore(state => state.currentUser);
-  const currentUserId = authUser?.uid;
+  // Get current user from auth context and app store
+  const { user: authContextUser } = useAuth();
+  const authStoreUser = useAppStore(state => state.currentUser);
+  const authUser = authStoreUser || authContextUser;
+  const currentUserId = authUser?.uid || authContextUser?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}')?.uid : null);
   
   // Profile store
   const {
@@ -87,11 +90,11 @@ export default function ProfileScreen() {
   
   // Load profile data
   useEffect(() => {
-    if (viewingUserId && currentUserId) {
+    if (viewingUserId) {
       loadProfile(viewingUserId, currentUserId);
       loadHighlights(viewingUserId);
       
-      if (viewingUserId === currentUserId) {
+      if (!userId || viewingUserId === currentUserId) {
         loadAnalytics(viewingUserId, timeframe);
       }
     }
@@ -206,8 +209,8 @@ export default function ProfileScreen() {
     );
   }
   
-  // Error state
-  if (error) {
+  // Error state for external user profiles
+  if (error && !profile && userId && userId !== currentUserId) {
     return (
       <div className={cn(
         'min-h-screen flex items-center justify-center pb-20',

@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
-import BottomNav from '../components/Shared/BottomNav';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // High definition sample stories matching Screenshot 2
@@ -890,9 +889,6 @@ export default function StoriesScreen() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Modern Arvdoul Bottom Navigation */}
-      {activeStoryIndex === null && <BottomNav />}
     </div>
   );
 }

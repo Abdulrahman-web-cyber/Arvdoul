@@ -19,7 +19,6 @@ import { getMonetizationService } from '../services/monetizationService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/ui/Dialog.jsx';
-import BottomNav from '../components/Shared/BottomNav';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // Fallback high-fidelity sample notifications matching the exact Arvdoul design
@@ -745,9 +744,6 @@ export default function NotificationsScreen() {
           </div>
         </div>
       </Dialog>
-
-      {/* Modern Arvdoul Dome Navigation */}
-      <BottomNav />
     </div>
   );
 }

@@ -27,27 +27,37 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const effectiveUid = user?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}')?.uid : null) || 'creator';
+
   useEffect(() => {
     const loadAnalytics = async () => {
-      if (!user?.uid) {
-        setLoading(false);
-        return;
-      }
-
       try {
         setLoading(true);
-        const data = await analyticsService.getUserAnalytics(user.uid, timeframe);
+        const data = await analyticsService.getUserAnalytics(effectiveUid, timeframe);
         setAnalytics(data);
+        setError(null);
       } catch (err) {
-        console.error('Failed to load analytics:', err);
-        setError(err.message);
+        console.warn('Failed to load analytics, using graceful defaults:', err);
+        setAnalytics({
+          totalViews: 0,
+          totalReach: 0,
+          totalEngagement: 0,
+          coinsEarned: 0,
+          dailyStats: [],
+          topPosts: [],
+          ranking: null,
+          demographics: null,
+          growthRate: 0,
+          activeDays: 0,
+          changes: { views: 0, reach: 0, engagement: 0, coins: 0 }
+        });
       } finally {
         setLoading(false);
       }
     };
 
     loadAnalytics();
-  }, [user?.uid, timeframe]);
+  }, [effectiveUid, timeframe]);
 
   const backgroundStyle = useMemo(() => ({
     background: isDark
@@ -56,7 +66,7 @@ export default function AnalyticsScreen() {
   }), [isDark]);
 
   // Loading state
-  if (loading) {
+  if (loading && !analytics) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={backgroundStyle}>
         <Loader2 className="w-8 h-8 animate-spin text-arvdoul-purple" />
@@ -64,33 +74,18 @@ export default function AnalyticsScreen() {
     );
   }
 
-  // Error state
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={backgroundStyle}>
-        <p className="text-red-400 mb-4">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 rounded-lg bg-arvdoul-purple text-white"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  // Default metrics when no data
-  const metrics = analytics?.metrics || {
-    profileViews: 0,
-    followers: 0,
-    engagement: 0,
-    posts: 0,
+  // Default metrics
+  const metrics = {
+    profileViews: analytics?.totalViews ?? analytics?.metrics?.profileViews ?? 0,
+    followers: analytics?.totalReach ?? analytics?.metrics?.followers ?? 0,
+    engagement: analytics?.totalEngagement ?? analytics?.metrics?.engagement ?? 0,
+    posts: analytics?.topPosts?.length ?? analytics?.metrics?.posts ?? 0,
   };
 
   const stats = [
-    { label: 'Profile Views', value: metrics.profileViews || 0, icon: Eye, change: analytics?.viewsChange || 0 },
-    { label: 'Total Followers', value: metrics.followers || 0, icon: Users, change: analytics?.followersChange || 0 },
-    { label: 'Engagement Rate', value: `${metrics.engagement || 0}%`, icon: Heart, change: analytics?.engagementChange || 0 },
+    { label: 'Profile Views', value: metrics.profileViews || 0, icon: Eye, change: analytics?.changes?.views || analytics?.viewsChange || 0 },
+    { label: 'Total Followers', value: metrics.followers || 0, icon: Users, change: analytics?.changes?.reach || analytics?.followersChange || 0 },
+    { label: 'Engagement Rate', value: `${metrics.engagement || 0}%`, icon: Heart, change: analytics?.changes?.engagement || analytics?.engagementChange || 0 },
     { label: 'Total Posts', value: metrics.posts || 0, icon: MessageCircle, change: 0 },
   ];
 

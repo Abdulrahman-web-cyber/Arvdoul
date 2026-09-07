@@ -580,6 +580,26 @@ class UltimateFeedService {
           updatedAt: data.updatedAt?.toDate?.() || (data.updatedAt ? new Date(data.updatedAt) : new Date())
         });
       });
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const localPosts = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
+          if (Array.isArray(localPosts) && localPosts.length > 0) {
+            const existingIds = new Set(posts.map(p => p.id));
+            for (const lp of localPosts) {
+              if (lp && lp.id && !existingIds.has(lp.id) && !blockedUsers.has(lp.authorId)) {
+                posts.unshift({
+                  ...lp,
+                  _source: 'local_storage',
+                  _score: 1.0,
+                  createdAt: lp.createdAt ? new Date(lp.createdAt) : new Date(),
+                  updatedAt: lp.updatedAt ? new Date(lp.updatedAt) : new Date()
+                });
+                existingIds.add(lp.id);
+              }
+            }
+          }
+        }
+      } catch {}
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
       return posts.slice(0, limit);
     } catch (error) {

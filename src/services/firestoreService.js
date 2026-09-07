@@ -235,10 +235,13 @@ class EnterpriseFirestoreService {
     const operationId = `post_${Date.now()}_${secureRandom().toString(36).substr(2,9)}`;
     try {
       const auth = await this.getAuthInstance();
-      let currentUser = auth.currentUser;
-      if (!currentUser && typeof auth.authStateReady === 'function') {
+      let currentUser = auth?.currentUser;
+      if (!currentUser && typeof auth?.authStateReady === 'function') {
         try {
-          await auth.authStateReady();
+          await Promise.race([
+            auth.authStateReady(),
+            new Promise((res) => setTimeout(res, 1000))
+          ]);
           currentUser = auth.currentUser;
         } catch {}
       }
@@ -356,7 +359,11 @@ class EnterpriseFirestoreService {
 
       const cleanPostDoc = sanitizeUndefined(postDoc);
       const postsRef = collection(this.firestore, 'posts');
-      const docRef = await addDoc(postsRef, cleanPostDoc);
+      const addDocPromise = addDoc(postsRef, cleanPostDoc);
+      const addDocTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore addDoc timeout')), 5000)
+      );
+      const docRef = await Promise.race([addDocPromise, addDocTimeout]);
       const postId = docRef.id;
       this.cache.set(postId, { ...cleanPostDoc, id: postId, _cachedAt: Date.now() });
       this.invalidateCachePattern(`user_posts_${postData.authorId}`);

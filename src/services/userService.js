@@ -352,8 +352,41 @@ class ProfessionalUserService {
     }
 
     const { doc, getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(this.firestore, 'users', userId));
-    if (!snap.exists()) return null;
+    let snap = null;
+    try {
+      snap = await Promise.race([
+        getDoc(doc(this.firestore, 'users', userId)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('User fetch timeout')), 4500))
+      ]);
+    } catch (fetchErr) {
+      logger.warn('getDoc for user profile timed out or failed, using local/synthesized profile', { userId, error: fetchErr.message });
+    }
+
+    if (!snap || !snap.exists()) {
+      try {
+        const localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
+        if (localAuth && (localAuth.uid === userId || requesterId === userId || !requesterId)) {
+          const synth = {
+            id: userId,
+            uid: userId,
+            username: localAuth.username || localAuth.email?.split('@')[0] || 'creator',
+            displayName: localAuth.displayName || localAuth.name || 'Creator',
+            email: localAuth.email || '',
+            bio: localAuth.bio || 'Welcome to my Arvdoul profile! 🚀',
+            photoURL: localAuth.photoURL || this.getAvatarUrl(userId, localAuth.displayName || 'Creator', null),
+            followerCount: 0,
+            followingCount: 0,
+            postCount: 0,
+            isVerified: false,
+            isCreator: true,
+            createdAt: new Date(),
+          };
+          this.cache.set(cacheKey, { data: synth, timestamp: Date.now() });
+          return synth;
+        }
+      } catch {}
+      return null;
+    }
 
     const full = { id: snap.id, ...snap.data() };
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);

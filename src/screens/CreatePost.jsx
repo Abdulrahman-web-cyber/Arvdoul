@@ -1150,7 +1150,7 @@ function CreatePostProvider({ children }) {
         if (storageService && typeof storageService.uploadFileWithProgress === 'function' && item.file) {
           try {
             const uid = userRef.current?.uid || 'anonymous';
-            const uploadRes = await storageService.uploadFileWithProgress(
+            const uploadPromise = storageService.uploadFileWithProgress(
               item.file,
               `posts/${uid}/${Date.now()}_${item.file.name}`,
               {
@@ -1158,11 +1158,13 @@ function CreatePostProvider({ children }) {
                 onProgress: (p) => dispatch({ type: "UPDATE_MEDIA_ITEM", payload: { id: item.id, updates: { progress: p.progress || 0 } } })
               }
             );
+            const uploadTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Storage upload timed out")), 7000));
+            const uploadRes = await Promise.race([uploadPromise, uploadTimeout]);
             if (uploadRes?.downloadURL) {
               downloadURL = uploadRes.downloadURL;
             }
           } catch (storageErr) {
-            console.warn("Storage upload failed, falling back to data URL:", storageErr?.message);
+            console.warn("Storage upload fallback to data URL:", storageErr?.message);
           }
         }
 
@@ -1197,9 +1199,14 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const generateImageThumbnail = (file) => new Promise((resolve) => {
+    let resolved = false;
+    const finish = (res) => { if (!resolved) { resolved = true; resolve(res); } };
+    const timer = setTimeout(() => finish(null), 2500);
+
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
+      clearTimeout(timer);
       const canvas = document.createElement("canvas");
       const maxDim = 512; let w = img.width, h = img.height;
       if (w > h) { h = (h * maxDim) / w; w = maxDim; } else { w = (w * maxDim) / h; h = maxDim; }
@@ -1207,7 +1214,7 @@ function CreatePostProvider({ children }) {
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         URL.revokeObjectURL(objectUrl);
-        resolve(null);
+        finish(null);
         return;
       }
       ctx.drawImage(img, 0, 0, w, h);
@@ -1216,32 +1223,38 @@ function CreatePostProvider({ children }) {
         if (blob) {
           const thumbUrl = URL.createObjectURL(blob);
           mediaPreviewUrlsRef.current.push(thumbUrl);
-          resolve(thumbUrl);
+          finish(thumbUrl);
         } else {
-          resolve(null);
+          finish(null);
         }
       }, "image/jpeg", 0.8);
       img.onload = null; img.onerror = null;
     };
     img.onerror = () => {
+      clearTimeout(timer);
       URL.revokeObjectURL(objectUrl);
-      resolve(null);
+      finish(null);
     };
     img.src = objectUrl;
   });
 
   const generateVideoThumbnail = (file) => new Promise((resolve) => {
+    let resolved = false;
+    const finish = (res) => { if (!resolved) { resolved = true; resolve(res); } };
+    const timer = setTimeout(() => finish(null), 2500);
+
     const video = document.createElement("video");
     const objectUrl = URL.createObjectURL(file);
     video.preload = "metadata";
     video.onloadedmetadata = () => { video.currentTime = Math.min(1, video.duration / 2); };
     video.onseeked = () => {
+      clearTimeout(timer);
       const canvas = document.createElement("canvas");
       canvas.width = 512; canvas.height = (512 / video.videoWidth) * video.videoHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         URL.revokeObjectURL(objectUrl);
-        resolve(null);
+        finish(null);
         return;
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -1250,16 +1263,17 @@ function CreatePostProvider({ children }) {
         if (blob) {
           const thumbUrl = URL.createObjectURL(blob);
           mediaPreviewUrlsRef.current.push(thumbUrl);
-          resolve(thumbUrl);
+          finish(thumbUrl);
         } else {
-          resolve(null);
+          finish(null);
         }
       }, "image/jpeg", 0.8);
       video.onloadedmetadata = null; video.onseeked = null; video.onerror = null;
     };
     video.onerror = () => {
+      clearTimeout(timer);
       URL.revokeObjectURL(objectUrl);
-      resolve(null);
+      finish(null);
     };
     video.src = objectUrl;
   });
@@ -1515,9 +1529,11 @@ function CreatePostProvider({ children }) {
       try {
         const { getFirestoreService } = await import("../services/firestoreService.js");
         const firestoreService = services.current.firestore || getFirestoreService();
-        result = await firestoreService.createPost(postData);
+        const createPromise = firestoreService.createPost(postData);
+        const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("Firestore createPost timed out")), 6500));
+        result = await Promise.race([createPromise, timeoutPromise]);
       } catch (firestoreErr) {
-        console.warn("Firestore createPost failed, falling back to local post:", firestoreErr);
+        console.warn("Firestore createPost fallback to local post:", firestoreErr?.message || firestoreErr);
       }
 
       const postId = result?.postId || `post_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;

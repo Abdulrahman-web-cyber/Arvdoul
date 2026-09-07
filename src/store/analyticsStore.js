@@ -81,12 +81,34 @@ export const useAnalyticsStore = create(
           state.activeDays = analytics.activeDays || 0;
         });
       } catch (error) {
-        console.error('❌ Load analytics failed:', error);
+        console.warn('❌ Load analytics fallback used:', error);
+        const fallbackAnalytics = {
+          userId,
+          timeframe: selectedTimeframe,
+          totalViews: 0,
+          totalReach: 0,
+          totalEngagement: 0,
+          coinsEarned: 0,
+          dailyStats: [],
+          topPosts: [],
+          ranking: null,
+          demographics: null,
+          growthRate: 0,
+          activeDays: 0,
+          changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
+          lastUpdated: new Date().toISOString(),
+        };
         set((state) => {
+          state.analytics = fallbackAnalytics;
           state.loading = false;
-          state.error = error.message || 'Failed to load analytics';
+          state.error = null;
+          state.dailyStats = [];
+          state.topPosts = [];
+          state.ranking = null;
+          state.demographics = null;
+          state.growthRate = 0;
+          state.activeDays = 0;
         });
-        toast.error('Failed to load analytics');
       }
     },
     

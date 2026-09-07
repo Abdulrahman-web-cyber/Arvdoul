@@ -39,6 +39,7 @@ import InFeedStoriesModule from '../components/feed/InFeedStoriesModule';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.jsx';
+import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -792,7 +793,7 @@ export default function HomeScreen() {
   // Core loader with all fixes
   const loadFeed = useCallback(
     async (reset = false, skipCache = false, isPreload = false) => {
-      if (!user?.uid || !authInitialized) return;
+      const effectiveUserId = user?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'guest_user';
       if (isLoadingRef.current && !isPreload) return;
       if (isPreload && preloadLockRef.current) return;
 
@@ -845,7 +846,7 @@ export default function HomeScreen() {
       const promise = (async () => {
         try {
           const [result, blockedIds] = await Promise.all([
-            feedService.getSmartFeed(user.uid, {
+            feedService.getSmartFeed(effectiveUserId, {
               limit: FEED_PAGE_SIZE,
               lastDoc: reset ? null : nextCursorRef.current,
               forceRefresh: skipCache,
@@ -1093,6 +1094,7 @@ export default function HomeScreen() {
       if (newPost) {
         const hydrated = hydratePost(newPost);
         dispatchFeed({ type: 'PREPEND_FEED', payload: [hydrated] });
+        setStatus(STATUS.SUCCESS);
         feedRuntimeRef.current.seenIds.add(hydrated.id);
         feedRuntimeRef.current.insertedIds.add(hydrated.id);
         try {
@@ -1163,7 +1165,7 @@ export default function HomeScreen() {
 
   // Initial load
   useEffect(() => {
-    if (user?.uid && authInitialized && !isLoadingRef.current && feed.length === 0 && status === STATUS.LOADING) {
+    if (!isLoadingRef.current && feed.length === 0 && (status === STATUS.LOADING || status === STATUS.IDLE)) {
       loadFeedRef.current?.(true);
     }
   }, [user?.uid, authInitialized, feed.length, status]);
@@ -1282,6 +1284,38 @@ export default function HomeScreen() {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          ) : isInitialLoading ? (
+            <div className="h-full flex flex-col overflow-hidden">
+              <div className="pt-2 pb-2 space-y-3">
+                <div className="flex items-center gap-2 px-4 py-1 overflow-x-auto scrollbar-hide">
+                  {[
+                    { id: 'foryou', label: '✨ For You' },
+                    { id: 'following', label: '👥 Following' },
+                    { id: 'trending', label: '🔥 Trending' },
+                    { id: 'spaces', label: '🎙️ Live Spaces', action: () => navigate('/spaces') },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        if (tab.action) tab.action();
+                        else setActiveFeedTab(tab.id);
+                      }}
+                      className={cn(
+                        'flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer',
+                        activeFeedTab === tab.id
+                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/25'
+                          : isDark ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-700'
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                <FeedSkeleton />
               </div>
             </div>
           ) : (
