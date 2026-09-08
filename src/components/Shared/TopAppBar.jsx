@@ -1,487 +1,668 @@
+// src/components/Shared/TopAppBar.jsx - ARVDOUL TOP APP BAR vNEXT
+// Global · Contextual · Intelligent (Matching Image 1 & Image 2 Specs)
 import React, {
   useState,
   useEffect,
   useRef,
   useCallback,
   useMemo,
-  memo
+  memo,
 } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import { Search, Menu, X, ChevronLeft, Sparkles, Home, Bell } from "lucide-react";
+import {
+  Search,
+  Menu,
+  X,
+  ChevronLeft,
+  Sparkles,
+  Bell,
+  Check,
+  MoreVertical,
+  WifiOff,
+  RefreshCw,
+  SlidersHorizontal,
+  Share2,
+  Trash2,
+  Phone,
+  Video as VideoIcon,
+} from "lucide-react";
 import { useAppStore } from "../../store/appStore";
+import { ArvdoulEmblem } from "./ArvdoulLogo";
+import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 
-// Animation config matching BottomNav
-const ANIMATION_CONFIG = {
-  spring: { type: "spring", damping: 25, stiffness: 300, mass: 0.8 },
-  panelSpring: { type: "spring", damping: 35, stiffness: 400, mass: 0.9 },
-  fastSpring: { type: "spring", damping: 20, stiffness: 400 }
+// Animation configurations matching Arvdoul standard
+const SPRING = {
+  default: { type: "spring", damping: 26, stiffness: 340, mass: 0.8 },
+  snappy: { type: "spring", damping: 20, stiffness: 420 },
+  subtle: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
 };
 
-// Get theme colors matching BottomNav
-const getThemeColors = (theme) => ({
-  navBg: theme === "dark" 
-    ? "bg-gradient-to-b from-gray-900/98 via-gray-900/98 to-gray-800/98" 
-    : "bg-gradient-to-b from-white/98 via-white/98 to-gray-50/98",
-  border: theme === "dark" ? "border-gray-800/50" : "border-gray-300/50",
-  text: theme === "dark" ? "text-white" : "text-gray-900",
-  subtext: theme === "dark" ? "text-gray-300" : "text-gray-600",
-  plusGradient: theme === "dark" ? "from-purple-500 via-pink-600 to-purple-700" : "from-orange-500 via-red-500 to-orange-600",
-  handleGradient: theme === "dark" ? "from-purple-500/80 to-pink-600/80" : "from-orange-500/80 to-red-500/80",
-  panelBg: theme === "dark" 
-    ? "bg-gradient-to-b from-gray-900 via-gray-900 to-gray-800" 
-    : "bg-gradient-to-b from-white via-gray-50 to-gray-100",
-  cardBg: theme === "dark" ? "bg-gray-800/40" : "bg-white/60",
-  cardBorder: theme === "dark" ? "border-gray-700/50" : "border-gray-300/50",
-});
+// Official Design Tokens (Image 1 Specs)
+const TOKENS = {
+  dark: {
+    bg: "#03071B",
+    surface: "rgba(255, 255, 255, 0.06)",
+    elevated: "rgba(255, 255, 255, 0.09)",
+    border: "rgba(255, 255, 255, 0.08)",
+    textPrimary: "#FFFFFF",
+    textSecondary: "rgba(255, 255, 255, 0.7)",
+    brandGradient: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)",
+    brandGlow: "rgba(139, 30, 243, 0.35)",
+    shadow: "0 20px 48px rgba(0, 0, 0, 0.5)",
+    innerRing: "inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.3)",
+    pillBg: "bg-gray-900/85 backdrop-blur-2xl border border-white/10",
+  },
+  light: {
+    bg: "#F6F8FC",
+    surface: "rgba(255, 255, 255, 0.85)",
+    elevated: "rgba(255, 255, 255, 0.95)",
+    border: "rgba(0, 0, 0, 0.08)",
+    textPrimary: "#111827",
+    textSecondary: "rgba(0, 0, 0, 0.6)",
+    brandGradient: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)",
+    brandGlow: "rgba(139, 30, 243, 0.15)",
+    shadow: "0 18px 40px rgba(17, 24, 39, 0.09)",
+    innerRing: "inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(0, 0, 0, 0.03)",
+    pillBg: "bg-white/90 backdrop-blur-2xl border border-gray-200/70",
+  },
+};
 
-// Navigation paths
-const NAVIGATION_PATHS = {
+// Exact navigation routes
+const ROUTES = {
   home: "/home",
-  search: "/SearchScreen.jsx",
-  menu: "/MenuScreen.jsx",
+  search: "/search",
+  menu: "/menu",
+  notifications: "/notifications",
+  network: "/network",
+  coins: "/coins",
+  settings: "/settings",
   profile: "/profile",
-  settings: "/settings"
+  createPost: "/create-post",
 };
 
-// Perfect Circular Logo Component
-const PerfectCircularLogo = memo(({ theme, onClick, isActive }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const { playSound } = useSound();
-  const { track } = useAnalytics();
-  
-  const handleClick = useCallback((e) => {
-    e.preventDefault();
-    playSound("nav_click");
-    track("top_nav_logo_click", { theme, location: "top_bar" });
-    onClick?.();
-  }, [onClick, playSound, track, theme]);
-  
-  const logoUrl = theme === "dark" 
-    ? "/logo/logo-dark.png" 
-    : "/logo/logo-light.png";
-  
-  const fallbackLogo = (
-    <div className={cn(
-      "w-full h-full rounded-full flex items-center justify-center",
-      "bg-gradient-to-br",
-      theme === "dark" ? "from-purple-600 to-pink-600" : "from-orange-500 to-red-500"
-    )}>
-      <span className={cn(
-        "text-lg font-bold",
-        theme === "dark" ? "text-white" : "text-white"
-      )}>
-        A
-      </span>
-    </div>
-  );
-  
-  return (
-    <motion.button
-      onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      whileTap={{ scale: 0.92 }}
-      whileHover={{ scale: 1.08 }}
-      transition={{
-        scale: { type: "spring", stiffness: 400, damping: 15 },
-        rotate: { duration: 0.2, ease: "easeInOut" }
-      }}
-      className={cn(
-        "relative w-12 h-12 rounded-full",
-        "focus:outline-none focus:ring-2 focus:ring-offset-2",
-        isActive 
-          ? theme === "dark" 
-            ? "focus:ring-purple-500/50 focus:ring-offset-gray-900"
-            : "focus:ring-orange-500/50 focus:ring-offset-white"
-          : "focus:ring-transparent"
-      )}
-      aria-label="Arvdoul Home"
-      aria-pressed={isActive}
-    >
-      {/* Outer glow ring on active/hover */}
-      <div className={cn(
-        "absolute -inset-1 rounded-full opacity-0 transition-opacity duration-300",
-        isActive || isHovered ? "opacity-100" : "opacity-0",
-        theme === "dark" 
-          ? "bg-gradient-to-r from-purple-500/30 via-pink-500/30 to-purple-500/30" 
-          : "bg-gradient-to-r from-orange-500/30 via-red-500/30 to-orange-500/30"
-      )} />
-      
-      {/* Main container with perfect glassmorphism */}
-      <div className={cn(
-        "relative w-12 h-12 rounded-full",
-        "flex items-center justify-center",
-        "backdrop-blur-xl border-2",
-        theme === "dark" 
-          ? "bg-gray-900/80 border-gray-800/60" 
-          : "bg-white/80 border-gray-300/60",
-        "shadow-lg hover:shadow-xl transition-all duration-200",
-        isActive && "ring-2 ring-offset-2",
-        isActive 
-          ? theme === "dark" 
-            ? "ring-purple-500/40 ring-offset-gray-900" 
-            : "ring-orange-500/40 ring-offset-white"
-          : ""
-      )}>
-        {/* Inner glow effect */}
-        <div className={cn(
-          "absolute inset-1 rounded-full",
-          "bg-gradient-to-br",
-          theme === "dark" 
-            ? "from-gray-800/50 via-gray-900/50 to-gray-800/50" 
-            : "from-white/50 via-gray-50/50 to-white/50"
-        )} />
-        
-        {/* Logo image with perfect circular fill */}
-        <div className="relative w-10 h-10 rounded-full overflow-hidden">
-          <motion.img
-            src={logoUrl}
-            alt="Arvdoul"
-            className={cn(
-              "w-full h-full object-cover",
-              "transition-transform duration-200",
-              isHovered && "scale-110"
-            )}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: isLoaded ? 1 : 0 }}
-            transition={{ duration: 0.2 }}
-            onLoad={() => setIsLoaded(true)}
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.parentNode.appendChild(fallbackLogo);
-            }}
-          />
-          {!isLoaded && fallbackLogo}
-        </div>
-        
-        {/* Active indicator dot */}
-        {isActive && (
-          <motion.div
-            layoutId="topNavLogoActive"
-            className={cn(
-              "absolute -bottom-1 left-1/2 transform -translate-x-1/2",
-              "w-1.5 h-1.5 rounded-full",
-              "bg-gradient-to-r",
-              theme === "dark" 
-                ? "from-purple-500 to-pink-500" 
-                : "from-orange-500 to-red-500"
-            )}
-            transition={ANIMATION_CONFIG.fastSpring}
-          />
+// Circular Action Icon Button
+const CircularButton = memo(
+  ({
+    icon: Icon,
+    onClick,
+    isActive = false,
+    theme = "dark",
+    label,
+    badge = 0,
+    variant = "default",
+    children,
+  }) => {
+    const isDark = theme === "dark";
+    const [isHovered, setIsHovered] = useState(false);
+    const { playSound } = useSound();
+
+    const handleClick = useCallback(
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        playSound?.("ui_click");
+        onClick?.(e);
+      },
+      [onClick, playSound]
+    );
+
+    return (
+      <motion.button
+        onClick={handleClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        whileTap={{ scale: 0.92 }}
+        whileHover={{ scale: 1.06 }}
+        transition={SPRING.snappy}
+        aria-label={label}
+        className={cn(
+          "relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0",
+          "transition-all duration-200 outline-none focus:ring-2",
+          isDark
+            ? "bg-white/[0.07] hover:bg-white/[0.14] border border-white/[0.1] text-white focus:ring-purple-500/40"
+            : "bg-black/[0.04] hover:bg-black/[0.08] border border-black/[0.07] text-gray-800 focus:ring-purple-500/40",
+          isActive &&
+            (isDark
+              ? "bg-purple-600/30 border-purple-500/50 text-purple-300"
+              : "bg-purple-100 border-purple-300 text-purple-700")
         )}
-      </div>
-    </motion.button>
-  );
-});
+      >
+        {Icon && <Icon className="w-4 h-4 sm:w-5 sm:h-5 transition-transform" />}
+        {children}
 
-PerfectCircularLogo.displayName = "PerfectCircularLogo";
-
-// Perfect Circular Icon Component
-const PerfectCircularIcon = memo(({ 
-  icon: Icon, 
-  onClick, 
-  isActive = false,
-  theme,
-  label,
-  variant = "default",
-  showNotification = false,
-  notificationCount = 0,
-  isSearch = false
-}) => {
-  const [isPressed, setIsPressed] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const { playSound } = useSound();
-  
-  const handleClick = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    playSound("ui_click");
-    onClick?.();
-  }, [onClick, playSound]);
-  
-  return (
-    <motion.button
-      onClick={handleClick}
-      onMouseDown={() => setIsPressed(true)}
-      onMouseUp={() => setIsPressed(false)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        setIsPressed(false);
-      }}
-      whileTap={{ scale: 0.92 }}
-      whileHover={{ scale: 1.08 }}
-      transition={ANIMATION_CONFIG.spring}
-      className={cn(
-        "relative w-12 h-12 rounded-full",
-        "flex items-center justify-center",
-        "backdrop-blur-xl border-2",
-        "focus:outline-none focus:ring-2 focus:ring-offset-2",
-        theme === "dark" 
-          ? "bg-gray-900/80 border-gray-800/60 focus:ring-purple-500/50 focus:ring-offset-gray-900" 
-          : "bg-white/80 border-gray-300/60 focus:ring-orange-500/50 focus:ring-offset-white",
-        "shadow-lg hover:shadow-xl transition-all duration-200",
-        isActive && "ring-2 ring-offset-2",
-        isActive 
-          ? theme === "dark" 
-            ? "ring-purple-500/40 ring-offset-gray-900" 
-            : "ring-orange-500/40 ring-offset-white"
-          : ""
-      )}
-      aria-label={label}
-      aria-pressed={isActive}
-    >
-      {/* Hover/Active glow */}
-      {(isHovered || isActive) && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={cn(
-            "absolute -inset-1 rounded-full blur-md -z-10",
-            isSearch 
-              ? theme === "dark" 
-                ? "bg-gradient-to-r from-blue-500/20 to-cyan-500/20" 
-                : "bg-gradient-to-r from-blue-400/20 to-cyan-400/20"
-              : theme === "dark" 
-                ? "bg-gradient-to-r from-purple-500/20 to-pink-500/20" 
-                : "bg-gradient-to-r from-orange-500/20 to-red-500/20"
-          )}
-        />
-      )}
-      
-      {/* Icon container */}
-      <div className="relative flex items-center justify-center w-full h-full">
-        <Icon className={cn(
-          "w-5 h-5 transition-all duration-200",
-          isActive 
-            ? isSearch
-              ? theme === "dark" 
-                ? "text-blue-400" 
-                : "text-blue-600"
-              : theme === "dark" 
-                ? "text-purple-400" 
-                : "text-orange-500"
-            : theme === "dark" 
-              ? "text-gray-300" 
-              : "text-gray-600",
-          isHovered && "scale-110"
-        )} />
-        
-        {/* Notification badge */}
-        {showNotification && notificationCount > 0 && (
+        {/* Badge */}
+        {badge > 0 && (
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             className={cn(
-              "absolute -top-1 -right-1 flex items-center justify-center rounded-full text-xs font-bold",
-              "bg-gradient-to-br from-red-500 to-pink-600 text-white",
-              "shadow-lg ring-2 ring-white/20",
-              notificationCount > 99
-                ? "w-6 h-6 text-[9px]"
-                : notificationCount > 9
-                ? "w-5 h-5 text-[10px]"
-                : "w-4 h-4"
+              "absolute -top-1 -right-1 flex items-center justify-center rounded-full text-white font-bold",
+              "bg-gradient-to-r from-red-500 to-pink-600 shadow-md ring-2",
+              isDark ? "ring-[#03071B]" : "ring-white",
+              badge > 99
+                ? "px-1.5 h-4 text-[9px]"
+                : badge > 9
+                ? "w-4 h-4 text-[10px]"
+                : "w-3.5 h-3.5 text-[9px]"
             )}
           >
-            {notificationCount > 99 ? "99+" : notificationCount > 9 ? "9+" : notificationCount}
+            {badge > 99 ? "99+" : badge}
           </motion.span>
         )}
-      </div>
-      
-      {/* Active indicator dot */}
-      {isActive && (
-        <motion.div
-          layoutId={`topNavIconActive-${label}`}
-          className={cn(
-            "absolute -bottom-1 left-1/2 transform -translate-x-1/2",
-            "w-1.5 h-1.5 rounded-full",
-            isSearch
-              ? theme === "dark" 
-                ? "bg-gradient-to-r from-blue-400 to-cyan-400" 
-                : "bg-gradient-to-r from-blue-500 to-cyan-500"
-              : theme === "dark" 
-                ? "bg-gradient-to-r from-purple-500 to-pink-500" 
-                : "bg-gradient-to-r from-orange-500 to-red-500"
-          )}
-          transition={ANIMATION_CONFIG.fastSpring}
-        />
-      )}
-    </motion.button>
-  );
-});
-
-PerfectCircularIcon.displayName = "PerfectCircularIcon";
+      </motion.button>
+    );
+  }
+);
+CircularButton.displayName = "CircularButton";
 
 // Main TopAppBar Component
-const TopAppBar = () => {
+export const TopAppBar = ({
+  mode: propMode,
+  title: propTitle,
+  subtitle: propSubtitle,
+  onBack,
+  onAction,
+  onSearch,
+  showOfflineBanner = true,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useTheme();
   const { track } = useAnalytics();
   const { unreadCounts = {} } = useAppStore();
-  
-  // States
+
+  const isDark = theme === "dark";
+  const tokens = isDark ? TOKENS.dark : TOKENS.light;
+
+  // Scroll visibility state
   const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
-  
-  // Theme colors
-  const themeColors = useMemo(() => getThemeColors(theme), [theme]);
-  
-  // Handle scroll visibility - matches BottomNav logic
+  const lastScrollY = useRef(0);
+
+  // Network Connectivity State
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+
+  // Search input state
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Sync background status
+  useEffect(() => {
+    const updateConn = () => {
+      setIsOnline(navigator.onLine);
+      if (typeof backgroundSyncService?.getPendingCount === "function") {
+        setPendingCount(backgroundSyncService.getPendingCount());
+      }
+    };
+
+    updateConn();
+    window.addEventListener("online", updateConn);
+    window.addEventListener("offline", updateConn);
+    const interval = setInterval(updateConn, 4000);
+
+    return () => {
+      window.removeEventListener("online", updateConn);
+      window.removeEventListener("offline", updateConn);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Handle manual sync
+  const handleManualSync = async () => {
+    if (!isOnline || isSyncing) return;
+    setIsSyncing(true);
+    setSyncSuccess(false);
+    try {
+      if (typeof backgroundSyncService?.triggerSync === "function") {
+        const result = await backgroundSyncService.triggerSync();
+        setPendingCount(backgroundSyncService.getPendingCount());
+        if (result?.syncedCount > 0) {
+          setSyncSuccess(true);
+          setTimeout(() => setSyncSuccess(false), 3500);
+        }
+      }
+    } catch {
+      // Handled gracefully
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Scroll Awareness
   useEffect(() => {
     let ticking = false;
-    let lastScroll = 0;
-    
     const handleScroll = () => {
       if (!ticking) {
-        requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
           const currentY = window.scrollY;
-          const isScrollingUp = currentY < lastScroll;
-          const isAtTop = currentY < 50;
-          
-          if (isAtTop || isScrollingUp) {
+          const delta = currentY - lastScrollY.current;
+
+          if (currentY < 40) {
             setIsVisible(true);
-          } else if (currentY > lastScroll + 30) {
+          } else if (delta > 12 && currentY > 70) {
             setIsVisible(false);
+          } else if (delta < -8) {
+            setIsVisible(true);
           }
-          
-          lastScroll = currentY;
+
+          lastScrollY.current = currentY;
           ticking = false;
         });
         ticking = true;
       }
     };
-    
+
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-  
-  // Navigation handlers - simple navigation to screens
-  const handleLogoClick = useCallback(() => {
-    track("top_nav_logo_click");
-    if (location.pathname === NAVIGATION_PATHS.home || location.pathname === "/") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      navigate(NAVIGATION_PATHS.home);
+
+  // Determine current contextual mode (1 to 8)
+  const currentMode = useMemo(() => {
+    if (propMode) return propMode;
+
+    const path = location.pathname;
+    if (path === "/" || path === "/home" || path === "") {
+      return "brand"; // Mode 01: Brand / Home
     }
-  }, [navigate, location.pathname, track]);
-  
-  const handleSearchClick = useCallback(() => {
-    track("top_nav_search_click");
-    navigate(NAVIGATION_PATHS.search);
-  }, [navigate, track]);
-  
-  const handleMenuClick = useCallback(() => {
-    track("top_nav_menu_click");
-    navigate(NAVIGATION_PATHS.menu);
-  }, [navigate, track]);
-  
-  // Check active states
-  const isHomeActive = location.pathname === "/" || location.pathname === NAVIGATION_PATHS.home;
-  const isSearchActive = location.pathname === NAVIGATION_PATHS.search;
-  const isMenuActive = location.pathname === NAVIGATION_PATHS.menu;
-  
-  // Get notification counts
+    if (path.startsWith("/search")) {
+      return "search"; // Mode 04: Search
+    }
+    if (
+      path.startsWith("/create-post") ||
+      path.startsWith("/create-story") ||
+      path.startsWith("/image-editor")
+    ) {
+      return "composer"; // Mode 05: Composer
+    }
+    if (path.startsWith("/profile/") || path.startsWith("/user/")) {
+      return "detail"; // Mode 03: Detail
+    }
+    if (
+      path.startsWith("/notifications") ||
+      path.startsWith("/network") ||
+      path.startsWith("/coins") ||
+      path.startsWith("/saved") ||
+      path.startsWith("/settings") ||
+      path.startsWith("/community") ||
+      path.startsWith("/rankings") ||
+      path.startsWith("/badges")
+    ) {
+      return "contextual"; // Mode 02: Contextual
+    }
+    return "contextual";
+  }, [location.pathname, propMode]);
+
+  // Contextual Title derivation
+  const contextualTitle = useMemo(() => {
+    if (propTitle) return propTitle;
+    const path = location.pathname;
+    if (path.startsWith("/notifications")) return "Notifications";
+    if (path.startsWith("/network")) return "Network & Friends";
+    if (path.startsWith("/coins")) return "Coins & Wallet";
+    if (path.startsWith("/saved")) return "Saved Items";
+    if (path.startsWith("/settings")) return "Settings";
+    if (path.startsWith("/community")) return "Communities";
+    if (path.startsWith("/rankings")) return "Rankings";
+    if (path.startsWith("/badges")) return "Badges & Rewards";
+    if (path.startsWith("/create-post")) return "Create Post";
+    if (path.startsWith("/image-editor")) return "Image Studio";
+    return "Arvdoul";
+  }, [location.pathname, propTitle]);
+
+  // Back action helper
+  const handleBack = useCallback(() => {
+    if (onBack) {
+      onBack();
+    } else {
+      track?.("top_nav_back_click");
+      if (window.history.length > 2) {
+        navigate(-1);
+      } else {
+        navigate(ROUTES.home);
+      }
+    }
+  }, [onBack, navigate, track]);
+
   const notificationCount = unreadCounts.notifications || 0;
-  
+
   return (
     <>
-      {/* Main Navigation Bar - FLOATING with shadow like BottomNav */}
       <AnimatePresence>
         {isVisible && (
-          <motion.nav
-            initial={{ y: -100, opacity: 0 }}
+          <motion.header
+            id="arvdoul-top-app-bar"
+            initial={{ y: -70, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-            transition={ANIMATION_CONFIG.spring}
-            className={cn(
-              "fixed top-0 left-0 right-0 z-40",
-              "px-4 pt-safe-top pb-4"
-            )}
+            exit={{ y: -70, opacity: 0 }}
+            transition={SPRING.default}
+            className="fixed top-0 left-0 right-0 z-40 px-3 sm:px-6 pt-2 sm:pt-3 pointer-events-none"
           >
-            {/* Main Container with Rounded Edges and Shadow - FLOATING */}
-            <div className={cn(
-              "rounded-3xl mx-auto max-w-2xl px-5 py-3",
-              themeColors.navBg,
-              "border",
-              themeColors.border,
-              "shadow-3xl"
-            )}
-            style={{
-              boxShadow: theme === "dark" 
-                ? "0 -25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.05)"
-                : "0 -25px 50px -12px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.05)"
-            }}
-            >
-              <div className="flex items-center justify-between">
-                {/* Left: Logo and App Name */}
-                <div className="flex items-center gap-4">
-                  <PerfectCircularLogo 
-                    theme={theme} 
-                    onClick={handleLogoClick} 
-                    isActive={isHomeActive} 
-                  />
-                  
-                  {/* App Name with gradient matching BottomNav */}
-                  <div className="flex flex-col">
-                    <motion.h1
-                      className={cn(
-                        "text-2xl font-bold bg-gradient-to-r bg-clip-text text-transparent",
-                        theme === "dark"
-                          ? "from-purple-400 via-pink-400 to-purple-400"
-                          : "from-orange-500 via-red-500 to-orange-500",
-                        "tracking-tight leading-none"
-                      )}
+            <div className="max-w-4xl mx-auto flex flex-col items-center gap-1.5 pointer-events-auto">
+              {/* Floating Glass Pill App Bar */}
+              <div
+                className={cn(
+                  "w-full rounded-[26px] px-3 sm:px-5 py-2.5 sm:py-3",
+                  tokens.pillBg,
+                  "shadow-2xl transition-all duration-300 relative overflow-hidden"
+                )}
+                style={{
+                  boxShadow: tokens.shadow,
+                }}
+              >
+                {/* Mode 01: Brand / Home */}
+                {currentMode === "brand" && (
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Leading: Logo + Title */}
+                    <div
+                      onClick={() => {
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        track?.("top_nav_home_click");
+                      }}
+                      className="flex items-center gap-3 cursor-pointer group select-none"
                     >
-                      Arvdoul
-                    </motion.h1>
-                    <motion.p
-                      className={cn(
-                        "text-xs mt-0.5",
-                        themeColors.subtext
-                      )}
-                    >
-                      Connect & Create
-                    </motion.p>
+                      <div className="relative">
+                        <ArvdoulEmblem
+                          size={36}
+                          className="group-hover:scale-105 group-active:scale-95 transition-transform"
+                        />
+                        {!isOnline && (
+                          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-black" />
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="text-xl sm:text-2xl font-black tracking-tight"
+                            style={{
+                              backgroundImage: tokens.brandGradient,
+                              WebkitBackgroundClip: "text",
+                              WebkitTextFillColor: "transparent",
+                            }}
+                          >
+                            Arvdoul
+                          </span>
+                          <span
+                            className="hidden sm:inline-flex text-[10px] px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider"
+                            style={{
+                              background: isDark
+                                ? "rgba(139, 30, 243, 0.18)"
+                                : "rgba(139, 30, 243, 0.1)",
+                              color: "#8B1EF3",
+                              border: "1px solid rgba(139, 30, 243, 0.25)",
+                            }}
+                          >
+                            PRO
+                          </span>
+                        </div>
+                        <span
+                          className="text-[11px] font-medium leading-tight"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          Connect & Create
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions: Search + Menu */}
+                    <div className="flex items-center gap-2">
+                      <CircularButton
+                        icon={Search}
+                        label="Search"
+                        theme={theme}
+                        onClick={() => navigate(ROUTES.search)}
+                      />
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        badge={notificationCount}
+                        onClick={() => navigate(ROUTES.menu)}
+                      />
+                    </div>
                   </div>
-                </div>
-                
-                {/* Right: Action Icons */}
-                <div className="flex items-center gap-3">
-                  <PerfectCircularIcon
-                    icon={Search}
-                    onClick={handleSearchClick}
-                    isActive={isSearchActive}
-                    theme={theme}
-                    label="Search"
-                    isSearch={true}
-                    showNotification={false}
-                  />
-                  
-                  <PerfectCircularIcon
-                    icon={Menu}
-                    onClick={handleMenuClick}
-                    isActive={isMenuActive}
-                    theme={theme}
-                    label="Menu"
-                    showNotification={notificationCount > 0}
-                    notificationCount={notificationCount}
-                  />
-                </div>
+                )}
+
+                {/* Mode 02: Contextual Section */}
+                {currentMode === "contextual" && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <CircularButton
+                        icon={ChevronLeft}
+                        label="Back"
+                        theme={theme}
+                        onClick={handleBack}
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <h2
+                          className="text-base sm:text-lg font-bold truncate leading-tight"
+                          style={{ color: tokens.textPrimary }}
+                        >
+                          {contextualTitle}
+                        </h2>
+                        {propSubtitle && (
+                          <span
+                            className="text-xs truncate"
+                            style={{ color: tokens.textSecondary }}
+                          >
+                            {propSubtitle}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <CircularButton
+                        icon={Search}
+                        label="Search"
+                        theme={theme}
+                        onClick={() => navigate(ROUTES.search)}
+                      />
+                      <CircularButton
+                        icon={Menu}
+                        label="Menu"
+                        theme={theme}
+                        badge={notificationCount}
+                        onClick={() => navigate(ROUTES.menu)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode 03: Detail View */}
+                {currentMode === "detail" && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <CircularButton
+                        icon={ChevronLeft}
+                        label="Back"
+                        theme={theme}
+                        onClick={handleBack}
+                      />
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                          {contextualTitle.charAt(0)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span
+                            className="text-sm font-bold truncate leading-tight"
+                            style={{ color: tokens.textPrimary }}
+                          >
+                            {contextualTitle}
+                          </span>
+                          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Active now</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <CircularButton
+                        icon={Share2}
+                        label="Share"
+                        theme={theme}
+                        onClick={() => {
+                          if (navigator.share) {
+                            navigator.share({
+                              title: contextualTitle,
+                              url: window.location.href,
+                            });
+                          }
+                        }}
+                      />
+                      <CircularButton
+                        icon={MoreVertical}
+                        label="Options"
+                        theme={theme}
+                        onClick={onAction}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode 04: Search Mode */}
+                {currentMode === "search" && (
+                  <div className="flex items-center gap-2">
+                    <CircularButton
+                      icon={ChevronLeft}
+                      label="Back"
+                      theme={theme}
+                      onClick={handleBack}
+                    />
+                    <div className="flex-1 relative flex items-center">
+                      <Search
+                        className="w-4 h-4 absolute left-3 pointer-events-none"
+                        style={{ color: tokens.textSecondary }}
+                      />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          onSearch?.(e.target.value);
+                        }}
+                        placeholder="Search Arvdoul posts, creators, tags..."
+                        autoFocus
+                        className={cn(
+                          "w-full pl-9 pr-9 py-1.5 rounded-full text-sm outline-none transition-all",
+                          isDark
+                            ? "bg-white/[0.08] text-white placeholder-white/40 focus:bg-white/[0.12]"
+                            : "bg-black/[0.05] text-gray-900 placeholder-black/40 focus:bg-black/[0.08]"
+                        )}
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery("");
+                            onSearch?.("");
+                          }}
+                          className="absolute right-2.5 p-1 rounded-full text-white/50 hover:text-white"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <CircularButton
+                      icon={SlidersHorizontal}
+                      label="Filters"
+                      theme={theme}
+                      onClick={onAction}
+                    />
+                  </div>
+                )}
+
+                {/* Mode 05: Composer / Editor Mode */}
+                {currentMode === "composer" && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <CircularButton
+                        icon={X}
+                        label="Close"
+                        theme={theme}
+                        onClick={handleBack}
+                      />
+                      <span
+                        className="text-base font-bold"
+                        style={{ color: tokens.textPrimary }}
+                      >
+                        {contextualTitle}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={onAction}
+                      className="px-4 py-1.5 rounded-full text-white text-xs font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all"
+                      style={{
+                        backgroundImage: tokens.brandGradient,
+                      }}
+                    >
+                      Publish
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {/* Integrated Offline / Online Sync Status Pill (Image 1 & 2 Spec) */}
+              {showOfflineBanner && (!isOnline || syncSuccess || pendingCount > 0) && (
+                <motion.div
+                  initial={{ y: -10, opacity: 0, scale: 0.95 }}
+                  animate={{ y: 0, opacity: 1, scale: 1 }}
+                  exit={{ y: -10, opacity: 0, scale: 0.95 }}
+                  transition={SPRING.snappy}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-xl shadow-lg border",
+                    !isOnline
+                      ? "bg-red-950/85 text-red-200 border-red-500/40 shadow-red-950/40"
+                      : syncSuccess
+                      ? "bg-emerald-950/85 text-emerald-200 border-emerald-500/40 shadow-emerald-950/40"
+                      : "bg-purple-950/85 text-purple-200 border-purple-500/40 shadow-purple-950/40"
+                  )}
+                >
+                  {!isOnline ? (
+                    <>
+                      <WifiOff className="w-3.5 h-3.5 text-red-400 animate-pulse" />
+                      <span>
+                        Offline Mode · {pendingCount > 0 ? `${pendingCount} saved` : "Viewing cache"}
+                      </span>
+                    </>
+                  ) : syncSuccess ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Synced with cloud</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw
+                        className={cn("w-3.5 h-3.5 text-purple-400", isSyncing && "animate-spin")}
+                      />
+                      <span>{pendingCount} changes waiting to sync</span>
+                      <button
+                        onClick={handleManualSync}
+                        disabled={isSyncing}
+                        className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold transition"
+                      >
+                        {isSyncing ? "Syncing..." : "Sync"}
+                      </button>
+                    </>
+                  )}
+                </motion.div>
+              )}
             </div>
-          </motion.nav>
+          </motion.header>
         )}
       </AnimatePresence>
-      
-      {/* Spacer for fixed position */}
-      <div className="h-20" />
+
+      {/* Spacer so page content begins neatly under the floating app bar */}
+      <div className="h-16 sm:h-20" />
     </>
   );
 };
