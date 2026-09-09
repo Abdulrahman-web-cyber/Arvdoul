@@ -267,19 +267,45 @@ const NetworkIcon = memo(function NetworkIcon() {
   );
 });
 
-const ProfileIcon = memo(function ProfileIcon() {
+const ProfileIcon = memo(function ProfileIcon({ active }) {
+  const id = useId().replace(/:/g, "");
+  const gradientId = `arvdoul-profile-gradient-${id}`;
+
   return (
     <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
-      <circle cx="16" cy="11" r="5.2" stroke="currentColor" strokeWidth="1.65" />
+      <defs>
+        <linearGradient id={gradientId} x1="5" y1="5" x2="27" y2="27" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#C82BFF" />
+          <stop offset=".48" stopColor="#8B1EF3" />
+          <stop offset="1" stopColor="#055BFB" />
+        </linearGradient>
+      </defs>
+      <circle
+        cx="16"
+        cy="11"
+        r="5.2"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        fill={active ? `url(#${gradientId})` : "none"}
+        fillOpacity={active ? 0.2 : 0}
+        strokeWidth="1.65"
+      />
       <path
         d="M6 26.5c1-5.5 5-8.5 10-8.5s9 3 10 8.5"
-        stroke="currentColor"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth="1.65"
+        strokeLinecap="round"
+      />
+      {/* Base line for profile icon */}
+      <path
+        d="M5 26.5h22"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
         strokeWidth="1.65"
         strokeLinecap="round"
       />
     </svg>
   );
 });
+ProfileIcon.propTypes = { active: PropTypes.bool };
 
 const AlertsIcon = memo(function AlertsIcon() {
   return (
@@ -351,7 +377,7 @@ const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
   if (type === "home") return <span className={iconClass}><HomeIcon active={active} /></span>;
   if (type === "sparks") return <span className={iconClass}><SparksIcon /></span>;
   if (type === "chat") return <span className={iconClass}><ChatIcon /></span>;
-  if (type === "profile") return <span className={iconClass}><ProfileIcon /></span>;
+  if (type === "profile") return <span className={iconClass}><ProfileIcon active={active} /></span>;
   if (type === "network") return <span className={iconClass}><NetworkIcon /></span>;
   if (type === "coins") return <CoinsIcon />; // gold always
   if (type === "alerts") return <span className={iconClass}><AlertsIcon /></span>;
@@ -1160,8 +1186,8 @@ function BottomNav() {
                   />
                   <NavigationItem
                     item={NAV_ITEMS[4]}
-                    active={activeId === "network"}
-                    badgeCount={badges.network}
+                    active={activeId === "profile"}
+                    badgeCount={0}
                     coinBalance={coinBalance}
                     dark={dark}
                     reducedMotion={Boolean(reducedMotion)}

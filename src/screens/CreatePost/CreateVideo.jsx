@@ -624,8 +624,13 @@ export default function CreateVideo() {
   // ── Edit handler (opens VideoEditor) ─────────────────────────────
   const handleEdit = useCallback(
     (media) => {
-      // Navigate to the real video editor with the asset id.
-      navigate(media?.id ? `/video-editor?video=${encodeURIComponent(media.id)}` : '/video-editor');
+      navigate('/video-editor', {
+        state: {
+          videoFile: media?.file,
+          videoUrl: media?.preview || media?.url,
+          title: media?.name || 'Video Clip',
+        },
+      });
     },
     [navigate]
   );

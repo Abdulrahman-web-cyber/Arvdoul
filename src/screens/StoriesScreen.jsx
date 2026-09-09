@@ -18,8 +18,84 @@ import { getMonetizationService } from '../services/monetizationService';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // High definition sample stories matching Screenshot 2
+const SPONSORED_STORIES = [
+  {
+    id: 'story_sponsor_pro',
+    isSponsored: true,
+    user: {
+      id: 'sponsor_pro',
+      name: 'Arvdoul Pro Studio',
+      username: 'arvdoul.pro',
+      avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
+      verified: true,
+      category: 'Sponsored',
+      isCloseFriend: false,
+      isLive: false,
+    },
+    timeAgo: 'Sponsored',
+    itemsCount: 1,
+    activeItemIndex: 0,
+    mediaType: 'image',
+    badgeType: 'star',
+    mediaUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1000&auto=format&fit=crop&q=80',
+    caption: '⚡ 4K Multi-Track Video Export & Master Mixing Tools',
+    viewsCount: '154K',
+    ctaText: 'Claim 50% Off & +5 Coins',
+    ctaUrl: 'https://arvdoul.com/pro',
+    rewardCoins: 5,
+    items: [
+      {
+        id: 'sp_item_1',
+        url: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1000&auto=format&fit=crop&q=80',
+        type: 'image',
+        caption: 'Unlock Studio Video Plugins, 32-Track Stems, and 0% Creator Tips fee for 3 months! Watch to claim +5 ARVDOUL Coins.',
+        ctaText: 'Claim 50% Off & +5 Coins',
+        ctaUrl: 'https://arvdoul.com/pro',
+        rewardCoins: 5,
+      },
+    ],
+  },
+  {
+    id: 'story_sponsor_soundwave',
+    isSponsored: true,
+    user: {
+      id: 'sponsor_soundwave',
+      name: 'SoundWave Audio',
+      username: 'soundwave.gear',
+      avatar: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=150&auto=format&fit=crop&q=80',
+      verified: true,
+      category: 'Sponsored',
+      isCloseFriend: false,
+      isLive: false,
+    },
+    timeAgo: 'Sponsored',
+    itemsCount: 1,
+    activeItemIndex: 0,
+    mediaType: 'image',
+    badgeType: 'music',
+    mediaUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1000&auto=format&fit=crop&q=80',
+    caption: '🎧 Studio Reference Wireless Headphones — Zero Latency',
+    viewsCount: '98K',
+    ctaText: 'Shop Gear & Earn +5 Coins',
+    ctaUrl: 'https://soundwave.example.com',
+    rewardCoins: 5,
+    items: [
+      {
+        id: 'sp_item_2',
+        url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1000&auto=format&fit=crop&q=80',
+        type: 'image',
+        caption: 'Ultra-light titanium drivers engineered for music creators and video editors. Tap to discover special creator discounts.',
+        ctaText: 'Shop Gear & Earn +5 Coins',
+        ctaUrl: 'https://soundwave.example.com',
+        rewardCoins: 5,
+      },
+    ],
+  },
+];
+
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
+  { id: 'sponsored', label: 'Sponsored & Rewards', icon: Sparkles, color: 'text-amber-400' },
   { id: 'friends', label: 'Friends', icon: null },
   { id: 'following', label: 'Following', icon: null },
   { id: 'close_friends', label: 'Close Friends', icon: Star, color: 'text-green-400' },
@@ -95,13 +171,14 @@ export default function StoriesScreen() {
             })),
           };
         });
-        setStories(mapped);
+        const combined = [...mapped, ...SPONSORED_STORIES];
+        setStories(combined);
 
         // Deep link / Home entry (spec §51/33): jump straight into a specific
         // creator's Vibe sequence when arriving with state.
         const targetUserId = location.state?.vibeUserId;
-        if (targetUserId && mapped.length > 0) {
-          const idx = mapped.findIndex((s) => s.user?.id === targetUserId);
+        if (targetUserId && combined.length > 0) {
+          const idx = combined.findIndex((s) => s.user?.id === targetUserId);
           if (idx >= 0) {
             setActiveStoryIndex(idx);
             setActiveItemIndex(0);
@@ -110,7 +187,7 @@ export default function StoriesScreen() {
         }
       } catch (err) {
         console.error('Failed to load stories:', err);
-        if (!cancelled) setStories([]);
+        if (!cancelled) setStories([...SPONSORED_STORIES]);
       } finally {
         if (!cancelled) setStoriesLoading(false);
       }
@@ -123,6 +200,7 @@ export default function StoriesScreen() {
   const filteredStories = useMemo(() => {
     return stories.filter((story) => {
       // Category filter
+      if (activeCategory === 'sponsored' && !story.isSponsored) return false;
       if (activeCategory === 'friends' && story.user.category !== 'Friends') return false;
       if (activeCategory === 'following' && story.user.category !== 'Following' && story.user.category !== 'Friends') return false;
       if (activeCategory === 'close_friends' && !story.user.isCloseFriend) return false;
@@ -598,7 +676,13 @@ export default function StoriesScreen() {
                   </div>
                 </div>
 
-                {/* Top right badges: Close friends green star or Live badge */}
+                {/* Top right badges: Close friends green star or Live badge or Sponsored AD badge */}
+                {story.isSponsored && (
+                  <div className="px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-400 to-yellow-500 text-[8px] font-black text-slate-950 backdrop-blur-md flex items-center gap-0.5 shadow-lg">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    <span>AD</span>
+                  </div>
+                )}
                 {story.user.isCloseFriend && (
                   <div className="w-5 h-5 rounded-full bg-green-500/90 backdrop-blur-md flex items-center justify-center shadow-lg">
                     <Star className="w-3 h-3 text-white fill-white" />
@@ -786,6 +870,48 @@ export default function StoriesScreen() {
 
             {/* Bottom Action Rail: Reply Bar, Emojis, Gift */}
             <div className="absolute bottom-0 left-0 right-0 z-30 p-4 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-3">
+              {/* Sponsored CTA Banner & Coin Reward */}
+              {currentStory?.isSponsored && (
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-purple-900/80 via-indigo-900/80 to-blue-900/80 border border-purple-400/40 backdrop-blur-xl shadow-xl">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-500 flex items-center justify-center text-slate-950 font-black shadow-md">
+                      🪙
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white">Sponsored Partner</span>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                          +{currentStory.rewardCoins || 5} Coins
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-white/80 line-clamp-1">
+                        {currentStory.caption || 'Tap CTA below to visit and claim reward'}
+                      </span>
+                    </div>
+                  </div>
+                  <a
+                    href={currentStory.ctaUrl || 'https://arvdoul.com'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const svc = getMonetizationService();
+                        if (user?.uid) {
+                          await svc.recordAdClick(currentStory.id, 'stories', user.uid);
+                        }
+                        toast.success(`🎁 +${currentStory.rewardCoins || 5} ARVDOUL Coins credited!`);
+                      } catch {
+                        toast.success('🎁 Reward claimed!');
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] to-[#0EA3E6] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                  >
+                    {currentStory.ctaText || 'Learn More'}
+                  </a>
+                </div>
+              )}
+
               {/* Quick Emojis */}
               <div className="flex items-center justify-between px-2">
                 {QUICK_EMOJIS.map((emoji) => (

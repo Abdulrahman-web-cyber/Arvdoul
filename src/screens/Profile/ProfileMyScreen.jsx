@@ -15,7 +15,7 @@ import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
-import LoadingSpinner from '../../components/Shared/LoadingSpinner';
+import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 // Lazy load components
@@ -222,11 +222,8 @@ export default function ProfileMyScreen() {
           ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
           : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}>
-        <Suspense fallback={
-          <div className="flex items-center justify-center min-h-screen">
-            <LoadingSpinner />
-          </div>
-        }>
+        <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
+        <Suspense fallback={null}>
           <ProfileSkeleton theme={theme} />
         </Suspense>
       </div>

@@ -738,6 +738,17 @@ export default function VideoEditorScreen() {
             onApplyAITool={handleApplyAITool}
             isProcessingAI={isProcessingAI}
             aiStatusMessage={aiStatusMessage}
+            playbackSpeed={clipSpeed}
+            onSpeedChange={(spd) => {
+              setClipSpeed(spd);
+              if (selectedClipId) {
+                handleUpdateClip(selectedClipId, { speed: spd });
+              }
+            }}
+            isReverse={isReverse}
+            onToggleReverse={() => setIsReverse(!isReverse)}
+            selectedResolution={selectedResolution}
+            onSelectResolution={setSelectedResolution}
           />
         )}
       </div>

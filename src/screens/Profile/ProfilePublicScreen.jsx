@@ -22,6 +22,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import { generateDefaultAvatarSvg } from '../../utils/avatarUtils';
+import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 
 // Honest fallback when the public profile document is not yet created:
 // real fields only, zeroed counters, no fabricated identity.
@@ -159,6 +160,7 @@ export default function ProfilePublicScreen() {
       "min-h-screen pb-24 transition-colors duration-200",
       isDark ? "bg-[#0B0F17] text-white" : "bg-gray-50 text-gray-900"
     )}>
+      {loading && <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />}
       {/* Top Header App Bar */}
       <header className={cn(
         "sticky top-0 z-40 backdrop-blur-xl border-b transition-colors",

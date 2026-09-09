@@ -5,11 +5,11 @@ import { motion } from 'framer-motion';
 import {
   Palette, Sliders, Type, Music, Smile, Layers, Sparkles,
   Wand2, Plus, Check, Play, Pause, RefreshCw, Volume2, Mic,
-  Download, Image as ImageIcon, Zap, Scissors, Bot
+  Download, Image as ImageIcon, Zap, Scissors, Bot, Gauge, Shield, Grid, PenTool
 } from 'lucide-react';
 import {
   FILTERS_LIST, TRANSITIONS_LIST, EFFECTS_LIST, FONT_LIST,
-  STICKER_CATEGORIES, STOCK_AUDIO, STOCK_VIDEOS
+  STICKER_CATEGORIES, STOCK_AUDIO, STOCK_VIDEOS, RESOLUTION_PRESETS
 } from '../constants';
 
 export default function ToolPanels({
@@ -38,6 +38,12 @@ export default function ToolPanels({
   onApplyAITool,
   isProcessingAI = false,
   aiStatusMessage = '',
+  playbackSpeed = 1.0,
+  onSpeedChange,
+  isReverse = false,
+  onToggleReverse,
+  selectedResolution,
+  onSelectResolution,
 }) {
   // Local state for text adder
   const [newText, setNewText] = useState('New Title');
@@ -449,6 +455,134 @@ export default function ToolPanels({
                 </button>
               );
             })}
+          </div>
+        </div>
+      );
+
+    case 'speed':
+      return (
+        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-purple-400" />
+              <span className="text-xs sm:text-sm font-bold text-white">Playback Speed & Curve</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+              {playbackSpeed}x
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0].map((spd) => (
+              <button
+                key={spd}
+                onClick={() => onSpeedChange?.(spd)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  playbackSpeed === spd
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-600/40 scale-105'
+                    : 'bg-white/5 hover:bg-white/10 text-gray-300'
+                }`}
+              >
+                {spd}x
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 pt-2 border-t border-white/10">
+            <button
+              onClick={() => onToggleReverse?.()}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                isReverse
+                  ? 'bg-purple-600 text-white border-purple-400 shadow-md'
+                  : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+              }`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isReverse ? 'animate-spin' : ''}`} />
+              <span>Reverse Video</span>
+            </button>
+            <span className="text-[11px] text-gray-400">
+              Preserves audio pitch and maintains smooth frame pacing
+            </span>
+          </div>
+        </div>
+      );
+
+    case 'stabilize':
+      return (
+        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-purple-400" />
+              <span className="text-xs sm:text-sm font-bold text-white">Video Stabilization & Gyro Flow</span>
+            </div>
+            <span className="text-[11px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              Active
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              { id: 'standard', name: 'Standard Smooth', desc: 'Eliminates high-frequency handshake' },
+              { id: 'cinematic', name: 'Cinematic SteadyCam', desc: 'Simulates gimbal tracking movement' },
+              { id: 'action', name: 'Action Horizon Lock', desc: 'Locks orientation for high-speed motion' },
+            ].map((st, idx) => (
+              <div key={st.id} className="p-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/40 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">{st.name}</span>
+                  {idx === 0 && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">{st.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+
+    case 'draw':
+      return (
+        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <PenTool className="w-4 h-4 text-purple-400" />
+              <span className="text-xs sm:text-sm font-bold text-white">Draw & Annotate Video Frame</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff'].map((c) => (
+              <button
+                key={c}
+                onClick={() => onAddTextClip?.({ text: '✏️ Hand-drawn mark', color: c, fontSize: 24, fontFamily: 'Plus Jakarta Sans', bgColor: 'transparent' })}
+                className="w-7 h-7 rounded-full ring-2 ring-white/20 hover:scale-110 transition-transform shadow-md"
+                style={{ backgroundColor: c }}
+                title={`Mark in ${c}`}
+              />
+            ))}
+            <span className="text-xs text-gray-400">Click a color to drop an interactive annotation on the playhead</span>
+          </div>
+        </div>
+      );
+
+    case 'more':
+      return (
+        <div className="w-full bg-gray-950/70 dark:bg-gray-950/80 light:bg-white/80 rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-white/10 dark:border-white/10 light:border-gray-200 backdrop-blur-md shadow-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Grid className="w-4 h-4 text-purple-400" />
+              <span className="text-xs sm:text-sm font-bold text-white">Format, Aspect Ratio & Canvas</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {RESOLUTION_PRESETS.map((res) => (
+              <button
+                key={res.id}
+                onClick={() => onSelectResolution?.(res)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  selectedResolution?.id === res.id
+                    ? 'bg-purple-600 text-white ring-2 ring-purple-400/50 shadow-lg shadow-purple-600/30'
+                    : 'bg-white/5 hover:bg-white/10 text-gray-300 border border-white/5'
+                }`}
+              >
+                <span>{res.aspect}</span>
+                <span className="text-[10px] opacity-75">({res.label})</span>
+              </button>
+            ))}
           </div>
         </div>
       );

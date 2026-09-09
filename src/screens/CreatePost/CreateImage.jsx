@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import * as Icons from "lucide-react";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
+import { TopAppLoadingBanner } from "../../components/Navigation/RouteProgressBar.jsx";
 import { getStorageService } from "../../services/storageService";
 import { openDB } from "idb";
 import { getAuth } from "firebase/auth";
@@ -1811,7 +1812,7 @@ export default function CreateImage() {
 
       {editingMedia && (
         <Suspense
-          fallback={<div className="fixed inset-0 z-[999] bg-black flex items-center justify-center"><LoadingSpinner size="lg" /></div>}
+          fallback={<TopAppLoadingBanner label="Opening Image Studio..." />}
         >
           <ImageEditor
             key={editingMedia.id}
@@ -1826,7 +1827,7 @@ export default function CreateImage() {
 
       {showCollage && (
         <Suspense
-          fallback={<div className="fixed inset-0 z-[999] bg-black/70 flex items-center justify-center"><LoadingSpinner size="lg" /></div>}
+          fallback={<TopAppLoadingBanner label="Opening Collage Maker..." />}
         >
           <Collage
             images={mediaItems}

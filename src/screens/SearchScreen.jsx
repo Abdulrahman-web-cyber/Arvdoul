@@ -15,6 +15,7 @@ import SearchResults from '../components/search/SearchResults';
 import TrendingSection from '../components/search/TrendingSection';
 import CreatorCarousel from '../components/search/CreatorCarousel';
 import SearchFilters from '../components/search/SearchFilters';
+import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 
 /**
  * ARVDOUL Design Tokens
@@ -225,6 +226,11 @@ const SearchScreen = memo(() => {
           onCategoryClick={handleCategoryClick}
           isDark={isDark}
         />
+
+        {/* Sponsored Spotlight & Monetization */}
+        <div className="my-3">
+          <SponsoredPostCard placement="search" />
+        </div>
 
         {/* Trending Now */}
         <TrendingSection
