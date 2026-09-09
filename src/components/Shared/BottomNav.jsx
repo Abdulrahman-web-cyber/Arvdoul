@@ -47,7 +47,7 @@ const NAVIGATION_PATHS = Object.freeze({
   videos: "/videos",
   messages: "/messages",
   createPost: "/create-post",
-  requests: "/network",
+  profile: "/profile",
   coins: "/coins",
   notifications: "/notifications",
 });
@@ -82,12 +82,11 @@ const NAV_ITEMS = Object.freeze([
     isCreate: true,
   },
   {
-    id: "network",
-    label: "Network",
-    path: NAVIGATION_PATHS.requests,
-    icon: "network",
-    matchPaths: ["/network/*", "/requests/*"],
-    badgeKey: "network",
+    id: "profile",
+    label: "Profile",
+    path: NAVIGATION_PATHS.profile,
+    icon: "profile",
+    matchPaths: ["/profile", "/profile/*", "/user/*"],
   },
   {
     id: "coins",
@@ -268,6 +267,20 @@ const NetworkIcon = memo(function NetworkIcon() {
   );
 });
 
+const ProfileIcon = memo(function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
+      <circle cx="16" cy="11" r="5.2" stroke="currentColor" strokeWidth="1.65" />
+      <path
+        d="M6 26.5c1-5.5 5-8.5 10-8.5s9 3 10 8.5"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+});
+
 const AlertsIcon = memo(function AlertsIcon() {
   return (
     <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
@@ -338,6 +351,7 @@ const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
   if (type === "home") return <span className={iconClass}><HomeIcon active={active} /></span>;
   if (type === "sparks") return <span className={iconClass}><SparksIcon /></span>;
   if (type === "chat") return <span className={iconClass}><ChatIcon /></span>;
+  if (type === "profile") return <span className={iconClass}><ProfileIcon /></span>;
   if (type === "network") return <span className={iconClass}><NetworkIcon /></span>;
   if (type === "coins") return <CoinsIcon />; // gold always
   if (type === "alerts") return <span className={iconClass}><AlertsIcon /></span>;
@@ -971,13 +985,13 @@ function BottomNav() {
           <NavigationHandle
             dark={dark}
             reducedMotion={Boolean(reducedMotion)}
-            navigationVisible={visible}
+            navigationVisible={visible && !quickAccessOpen}
             onToggleNavigation={toggleNavigation}
             onOpenQuickAccess={openQuickAccess}
           />
 
           <AnimatePresence initial={false}>
-            {visible && (
+            {visible && !quickAccessOpen && (
               <motion.div
                 key="arvdoul-bottom-navigation"
                 id="arvdoul-bottom-navigation"

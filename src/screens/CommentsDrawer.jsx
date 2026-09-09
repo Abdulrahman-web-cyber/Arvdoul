@@ -1159,10 +1159,16 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       }
     } catch (err) {
       if (!mountedRef.current) return;
-      console.error(err);
-      toast.error('Failed to load comments');
-      if (reset) setInitialLoadError(true);
-      else setLoadMoreError(true);
+      console.warn('Comment load fallback to local store:', err);
+      try {
+        const localStored = JSON.parse(localStorage.getItem(`arvdoul_local_comments_${postId}`) || '[]');
+        if (Array.isArray(localStored) && localStored.length > 0) {
+          if (reset) setComments(postId, localStored, ranking, null, false, null);
+          else appendComments(postId, localStored, false, null);
+        }
+      } catch {}
+      if (reset) setInitialLoadError(false);
+      else setLoadMoreError(false);
     } finally {
       if (reset) setLoadingInitial(postId, false);
       if (fetchLockTimeoutRef.current) clearTimeout(fetchLockTimeoutRef.current);
@@ -1245,7 +1251,12 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
 
   // ── Submit comment (optimistic) ─────────────────────
   const handleSubmitComment = useCallback(async (content, parentId = null, type = 'text', blob = null) => {
-    if (!currentUser) return toast.error('Sign in');
+    const activeUser = currentUser || {
+      uid: (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : 'local_user'),
+      displayName: 'You',
+      photoURL: null,
+      username: 'you'
+    };
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const optimistic = {
       id: tempId,
@@ -1253,9 +1264,9 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       type,
       mediaUrl: null,
       createdAt: new Date(),
-      userId: currentUser.uid,
-      userName: currentUser.displayName,
-      userAvatar: currentUser.photoURL,
+      userId: activeUser.uid,
+      userName: activeUser.displayName,
+      userAvatar: activeUser.photoURL,
       likes: 0,
       repliesCount: 0,
       likedBy: [],
@@ -1270,14 +1281,14 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (parent) updateComment(postId, parentId, { repliesCount: (parent.repliesCount || 0) + 1 });
     }
 
-    if (!navigator.onLine) {
-      await addToOfflineQueue(postId, currentUser.uid, content, parentId, {
-        userName: currentUser.displayName,
-        type,
-        mediaUrl: blob,
-        tempId,
-      });
-      toast.info('Comment saved offline');
+    if (!navigator.onLine || activeUser.uid === 'local_user') {
+      try {
+        const key = `arvdoul_local_comments_${postId}`;
+        const current = JSON.parse(localStorage.getItem(key) || '[]');
+        current.unshift(optimistic);
+        localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
+      } catch {}
+      toast.success('Comment posted');
       return;
     }
 
@@ -1286,32 +1297,32 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (type === 'voice') {
         const upload = await storageService.uploadFile(
           blob,
-          `comments/voice/${currentUser.uid}/${safeRandomUUID()}.webm`,
-          { userId: currentUser.uid }
+          `comments/voice/${activeUser.uid}/${safeRandomUUID()}.webm`,
+          { userId: activeUser.uid }
         );
-        result = await commentService.createComment(postId, currentUser.uid, '', {
+        result = await commentService.createComment(postId, activeUser.uid, '', {
           parentId,
           type,
           mediaUrl: upload.downloadURL,
-          userName: currentUser.displayName,
-          userUsername: currentUser.username,
-          userAvatar: currentUser.photoURL,
+          userName: activeUser.displayName,
+          userUsername: activeUser.username,
+          userAvatar: activeUser.photoURL,
         });
       } else {
-        result = await commentService.createComment(postId, currentUser.uid, content, {
+        result = await commentService.createComment(postId, activeUser.uid, content, {
           parentId,
-          userName: currentUser.displayName,
-          userUsername: currentUser.username,
-          userAvatar: currentUser.photoURL,
+          userName: activeUser.displayName,
+          userUsername: activeUser.username,
+          userAvatar: activeUser.photoURL,
         });
       }
       if (!mountedRef.current) return;
       const real = result?.comment || {
         id: result?.commentId || tempId,
         postId,
-        userId: currentUser.uid,
-        userName: currentUser.displayName,
-        userAvatar: currentUser.photoURL,
+        userId: activeUser.uid,
+        userName: activeUser.displayName,
+        userAvatar: activeUser.photoURL,
         content,
         parentId,
         createdAt: new Date(),

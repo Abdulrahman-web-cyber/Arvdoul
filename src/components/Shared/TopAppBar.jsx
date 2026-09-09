@@ -280,6 +280,23 @@ export const TopAppBar = ({
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Sync search query with URL search param and external events
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("q") || "";
+    setSearchQuery(q);
+
+    const handleExternalQuery = (e) => {
+      if (typeof e.detail === "string") {
+        setSearchQuery(e.detail);
+      }
+    };
+    window.addEventListener("arvdoul:set_search_query", handleExternalQuery);
+    return () => {
+      window.removeEventListener("arvdoul:set_search_query", handleExternalQuery);
+    };
+  }, [location.search]);
+
   // Sync status (event-driven, no polling)
   useEffect(() => {
     const updateConn = () => {
@@ -635,8 +652,15 @@ export const TopAppBar = ({
                       type="text"
                       value={searchQuery}
                       onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        onSearch?.(e.target.value);
+                        const val = e.target.value;
+                        setSearchQuery(val);
+                        onSearch?.(val);
+                        window.dispatchEvent(new CustomEvent("arvdoul:search_query", { detail: val }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          window.dispatchEvent(new CustomEvent("arvdoul:search_submit", { detail: searchQuery }));
+                        }
                       }}
                       placeholder="Search Arvdoul posts, creators, tags..."
                       autoFocus={false}
@@ -652,6 +676,7 @@ export const TopAppBar = ({
                         onClick={() => {
                           setSearchQuery("");
                           onSearch?.("");
+                          window.dispatchEvent(new CustomEvent("arvdoul:search_query", { detail: "" }));
                         }}
                         className="absolute right-2.5 p-1 rounded-full"
                         style={{ color: tokens.iconSecondary }}
@@ -664,7 +689,10 @@ export const TopAppBar = ({
                     icon={SlidersHorizontal}
                     label="Filters"
                     theme={theme}
-                    onClick={onAction}
+                    onClick={() => {
+                      if (onAction) onAction();
+                      window.dispatchEvent(new CustomEvent("arvdoul:toggle_search_filters"));
+                    }}
                   />
                 </div>
               )}

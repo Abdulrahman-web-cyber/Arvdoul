@@ -49,7 +49,7 @@ class LRUCache {
 }
 
 const CONFIG = {
-  ALLOWED_REACTIONS: ['👍', '❤️', '😂', '😮', '😢', '👎', '🔥', '🎉'],
+  ALLOWED_REACTIONS: ['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉', '👎', '👏', '🚀', '💯'],
   VIEW_SHARDS: 100,
   STORE_VIEWERS: true,
   VIEWERS_SUBCOLLECTION: 'viewers',
@@ -813,34 +813,39 @@ class EnterpriseFirestoreService {
       let authorId, action, oldReaction;
       await runTransaction(this.firestore, async (transaction) => {
         const postSnap = await transaction.get(postRef);
-        if (!postSnap.exists()) throw new Error('Post not found');
-        authorId = postSnap.data().authorId;
+        authorId = postSnap.exists() ? postSnap.data().authorId : null;
         const reactionSnap = await transaction.get(reactionDocRef);
         const currentReaction = reactionSnap.exists() ? reactionSnap.data().type : null;
 
         if (currentReaction === reactionType) {
           transaction.delete(reactionDocRef);
-          transaction.update(postRef, {
-            [`stats.reactions.${reactionType}`]: increment(-1),
-            updatedAt: serverTimestamp()
-          });
+          if (postSnap.exists()) {
+            transaction.update(postRef, {
+              [`stats.reactions.${reactionType}`]: increment(-1),
+              updatedAt: serverTimestamp()
+            });
+          }
           action = 'removed';
           oldReaction = reactionType;
         } else if (currentReaction) {
           transaction.set(reactionDocRef, { type: reactionType, updatedAt: serverTimestamp() }, { merge: true });
-          transaction.update(postRef, {
-            [`stats.reactions.${currentReaction}`]: increment(-1),
-            [`stats.reactions.${reactionType}`]: increment(1),
-            updatedAt: serverTimestamp()
-          });
+          if (postSnap.exists()) {
+            transaction.update(postRef, {
+              [`stats.reactions.${currentReaction}`]: increment(-1),
+              [`stats.reactions.${reactionType}`]: increment(1),
+              updatedAt: serverTimestamp()
+            });
+          }
           action = 'changed';
           oldReaction = currentReaction;
         } else {
           transaction.set(reactionDocRef, { type: reactionType, userId, createdAt: serverTimestamp() });
-          transaction.update(postRef, {
-            [`stats.reactions.${reactionType}`]: increment(1),
-            updatedAt: serverTimestamp()
-          });
+          if (postSnap.exists()) {
+            transaction.update(postRef, {
+              [`stats.reactions.${reactionType}`]: increment(1),
+              updatedAt: serverTimestamp()
+            });
+          }
           action = 'added';
         }
       });

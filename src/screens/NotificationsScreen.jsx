@@ -2,7 +2,7 @@
 // Pixel-perfect replica of Arvdoul Luxury Design System with real-time Firestore synchronization
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -12,7 +12,7 @@ import {
   Sparkles, Check, X, Heart, MessageCircle, Gift, Users,
   AtSign, Eye, Radio, ChevronRight, ChevronDown, Clock,
   ArrowRight, ShieldCheck, DollarSign, Flame, Award,
-  Home, MessageSquare, Compass, User, RefreshCw
+  Home, MessageSquare, Compass, User, RefreshCw, UserPlus, Loader2
 } from 'lucide-react';
 import notificationsService from '../services/notificationsService';
 import { getMonetizationService } from '../services/monetizationService';
@@ -35,9 +35,23 @@ const FILTERS = [
 
 export default function NotificationsScreen() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme !== 'light';
+
+  const [mainTab, setMainTab] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('tab') === 'network' ? 'network' : 'alerts';
+  });
+
+  const [networkTab, setNetworkTab] = useState('requests');
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [recommended, setRecommended] = useState([]);
+  const [networkLoading, setNetworkLoading] = useState(false);
+  const [pendingNetworkAction, setPendingNetworkAction] = useState(null);
 
   const [activeFilter, setActiveFilter] = useState('All');
   const [notifications, setNotifications] = useState([]);
@@ -60,6 +74,56 @@ export default function NotificationsScreen() {
   });
   const [requestingPush, setRequestingPush] = useState(false);
   const [dismissPushBanner, setDismissPushBanner] = useState(false);
+
+  const loadNetwork = useCallback(async () => {
+    if (!user?.uid) return;
+    setNetworkLoading(true);
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      const [f, g, r] = await Promise.allSettled([
+        svc.getFollowers(user.uid, { limit: 50 }),
+        svc.getFollowing(user.uid, { limit: 50 }),
+        svc.getFriendRequests(user.uid, 'received'),
+      ]);
+      const recResult = await svc.getFriendRecommendations(user.uid, 5).catch(() => ({ success: false, recommendations: [] }));
+      setRecommended(recResult.recommendations || []);
+      setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
+      setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
+      setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
+    } catch {
+      // ignore
+    } finally {
+      setNetworkLoading(false);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (mainTab === 'network') {
+      loadNetwork();
+    }
+  }, [mainTab, loadNetwork]);
+
+  const handleNetworkRequest = async (requestId, accept) => {
+    if (!user?.uid || pendingNetworkAction) return;
+    setPendingNetworkAction(requestId);
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      if (accept) {
+        await svc.acceptFriendRequest(requestId, user.uid);
+        toast.success('Friend request accepted 🎉');
+      } else {
+        await svc.declineFriendRequest(requestId, user.uid);
+        toast.success('Friend request declined');
+      }
+      await loadNetwork();
+    } catch {
+      toast.error('Action failed');
+    } finally {
+      setPendingNetworkAction(null);
+    }
+  };
 
   const handleEnablePush = async () => {
     if (!user?.uid) {
@@ -297,6 +361,44 @@ export default function NotificationsScreen() {
           </div>
         </div>
 
+        {/* Main Tab Switcher: Alerts vs Network */}
+        <div className="max-w-xl mx-auto mt-3 flex items-center p-1 bg-white/[0.06] border border-white/10 rounded-full">
+          <button
+            onClick={() => setMainTab('alerts')}
+            className={cn(
+              "flex-1 py-1.5 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+              mainTab === 'alerts'
+                ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+                : isDark ? "text-white/70 hover:text-white" : "text-gray-600 hover:text-gray-900"
+            )}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>Alerts</span>
+            {unreadCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-white/20 text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setMainTab('network')}
+            className={cn(
+              "flex-1 py-1.5 px-4 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+              mainTab === 'network'
+                ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+                : isDark ? "text-white/70 hover:text-white" : "text-gray-600 hover:text-gray-900"
+            )}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Network & Friends</span>
+            {requests.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400 text-white">
+                {requests.length}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Collapsible Search Input */}
         <AnimatePresence>
           {showSearch && (
@@ -329,38 +431,332 @@ export default function NotificationsScreen() {
           )}
         </AnimatePresence>
 
-        {/* Horizontal Category Filters */}
-        <div className="max-w-xl mx-auto mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-          {FILTERS.map((f) => {
-            const isActive = activeFilter === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setActiveFilter(f.id)}
-                className={cn(
-                  "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
-                  isActive
-                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25 scale-[1.02]"
-                    : isDark
-                      ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
-                )}
-              >
-                {f.icon && <f.icon className="w-3.5 h-3.5" />}
-                {f.label}
-                {f.badge && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400/20 text-violet-300">
-                    {f.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Sub-Filters / Sub-Tabs */}
+        {mainTab === 'alerts' ? (
+          <div className="max-w-xl mx-auto mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+            {FILTERS.map((f) => {
+              const isActive = activeFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => {
+                    if (f.id === 'Friends') {
+                      setMainTab('network');
+                      setNetworkTab('requests');
+                    } else {
+                      setActiveFilter(f.id);
+                    }
+                  }}
+                  className={cn(
+                    "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
+                    isActive
+                      ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25 scale-[1.02]"
+                      : isDark
+                        ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
+                  )}
+                >
+                  {f.icon && <f.icon className="w-3.5 h-3.5" />}
+                  {f.label}
+                  {f.badge && (
+                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-400/20 text-violet-300">
+                      {f.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="max-w-xl mx-auto mt-3.5 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: 'requests', label: 'Requests', count: requests.length },
+              { id: 'followers', label: 'Followers', count: followers.length },
+              { id: 'following', label: 'Following', count: following.length },
+              { id: 'recommended', label: 'Suggested', count: recommended.length },
+            ].map((nt) => {
+              const isActive = networkTab === nt.id;
+              return (
+                <button
+                  key={nt.id}
+                  onClick={() => setNetworkTab(nt.id)}
+                  className={cn(
+                    "px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5",
+                    isActive
+                      ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/25 scale-[1.02]"
+                      : isDark
+                        ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/5"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200"
+                  )}
+                >
+                  <span>{nt.label}</span>
+                  {nt.count > 0 && (
+                    <span className={cn(
+                      "ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                      isActive ? "bg-white/20 text-white" : "bg-violet-500/20 text-violet-300"
+                    )}>
+                      {nt.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            <button
+              onClick={loadNetwork}
+              disabled={networkLoading}
+              title="Refresh network"
+              className={cn(
+                "p-2 rounded-full text-xs transition-colors ml-auto flex-shrink-0",
+                isDark ? "text-white/60 hover:text-white bg-white/5" : "text-slate-500 hover:text-slate-800 bg-slate-100"
+              )}
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", networkLoading && "animate-spin")} />
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Main Content Area */}
       <main className="max-w-xl mx-auto px-4 pt-4 space-y-6">
+        {mainTab === 'network' ? (
+          <div className="space-y-4">
+            {networkLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-arvdoul-text-secondary">
+                <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+                <p className="text-sm">Loading network connections...</p>
+              </div>
+            ) : networkTab === 'requests' ? (
+              requests.length === 0 ? (
+                <EmptyState
+                  title="No Pending Friend Requests"
+                  description="When someone sends you a friend request, you'll see them here."
+                  icon={Users}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {requests.map((req) => {
+                    const reqUser = req.sender || req.user || req;
+                    const reqName = reqUser.displayName || reqUser.username || reqUser.name || 'User';
+                    const reqId = req.id || req.requestId;
+                    return (
+                      <div
+                        key={reqId}
+                        className={cn(
+                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all",
+                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                        )}
+                      >
+                        <div
+                          onClick={() => navigate(`/profile/${reqUser.id || reqUser.uid}`)}
+                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                        >
+                          {reqUser.photoURL || reqUser.avatar ? (
+                            <img
+                              src={reqUser.photoURL || reqUser.avatar}
+                              alt={reqName}
+                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                              {reqName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{reqName}</p>
+                            <p className="text-xs text-arvdoul-text-secondary truncate">
+                              {reqUser.bio || 'Wants to connect with you'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleNetworkRequest(reqId, true)}
+                            disabled={pendingNetworkAction === reqId}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95 transition-all"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleNetworkRequest(reqId, false)}
+                            disabled={pendingNetworkAction === reqId}
+                            className={cn(
+                              "px-3 py-1.5 rounded-xl text-xs font-bold border transition-all",
+                              isDark ? "border-white/10 hover:bg-white/5 text-white/70" : "border-slate-300 hover:bg-slate-100 text-slate-600"
+                            )}
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : networkTab === 'followers' ? (
+              followers.length === 0 ? (
+                <EmptyState
+                  title="No Followers Yet"
+                  description="Share great stories and posts to grow your audience on Arvdoul."
+                  icon={Users}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {followers.map((fUser) => {
+                    const fName = fUser.displayName || fUser.username || 'Follower';
+                    return (
+                      <div
+                        key={fUser.id || fUser.uid}
+                        className={cn(
+                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
+                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                        )}
+                      >
+                        <div
+                          onClick={() => navigate(`/profile/${fUser.id || fUser.uid}`)}
+                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                        >
+                          {fUser.photoURL ? (
+                            <img
+                              src={fUser.photoURL}
+                              alt={fName}
+                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                              {fName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{fName}</p>
+                            {fUser.bio && (
+                              <p className="text-xs text-arvdoul-text-secondary truncate">{fUser.bio}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate(`/profile/${fUser.id || fUser.uid}`)}
+                          className={cn(
+                            "px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors",
+                            isDark ? "border-white/10 hover:bg-white/10 text-white/80" : "border-slate-300 hover:bg-slate-100 text-slate-700"
+                          )}
+                        >
+                          View
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : networkTab === 'following' ? (
+              following.length === 0 ? (
+                <EmptyState
+                  title="Not Following Anyone Yet"
+                  description="Follow creators and friends to see their latest sparks and posts."
+                  icon={Users}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {following.map((gUser) => {
+                    const gName = gUser.displayName || gUser.username || 'User';
+                    return (
+                      <div
+                        key={gUser.id || gUser.uid}
+                        className={cn(
+                          "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
+                          isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                        )}
+                      >
+                        <div
+                          onClick={() => navigate(`/profile/${gUser.id || gUser.uid}`)}
+                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                        >
+                          {gUser.photoURL ? (
+                            <img
+                              src={gUser.photoURL}
+                              alt={gName}
+                              className="w-11 h-11 rounded-full object-cover border border-white/10"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                              {gName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{gName}</p>
+                            {gUser.bio && (
+                              <p className="text-xs text-arvdoul-text-secondary truncate">{gUser.bio}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate(`/profile/${gUser.id || gUser.uid}`)}
+                          className={cn(
+                            "px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors",
+                            isDark ? "border-white/10 hover:bg-white/10 text-white/80" : "border-slate-300 hover:bg-slate-100 text-slate-700"
+                          )}
+                        >
+                          View
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : recommended.length === 0 ? (
+              <EmptyState
+                title="No Recommendations Available"
+                description="Check back later for suggested creators and friends."
+                icon={Sparkles}
+              />
+            ) : (
+                  <div className="space-y-2.5">
+                    {recommended.map((rUser) => {
+                      const rName = rUser.displayName || rUser.username || 'Suggested';
+                      return (
+                        <div
+                          key={rUser.id || rUser.uid}
+                          className={cn(
+                            "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
+                            isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
+                          )}
+                        >
+                          <div
+                            onClick={() => navigate(`/profile/${rUser.id || rUser.uid}`)}
+                            className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                          >
+                            {rUser.photoURL ? (
+                              <img
+                                src={rUser.photoURL}
+                                alt={rName}
+                                className="w-11 h-11 rounded-full object-cover border border-white/10"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                                {rName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm truncate">{rName}</p>
+                              <p className="text-xs text-arvdoul-text-secondary truncate">
+                                {rUser.bio || 'Suggested for you'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => navigate(`/profile/${rUser.id || rUser.uid}`)}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95 transition-all"
+                          >
+                            Connect
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+            }
+          </div>
+        ) : (
+          <>
         {/* Push Notification Opt-In Banner */}
         {pushStatus === 'default' && !dismissPushBanner && (
           <div className={cn(
@@ -698,6 +1094,8 @@ export default function NotificationsScreen() {
               </Button>
             }
           />
+        )}
+          </>
         )}
       </main>
 

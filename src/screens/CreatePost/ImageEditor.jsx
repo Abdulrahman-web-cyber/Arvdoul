@@ -494,6 +494,7 @@ const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [activeTool, setActiveTool] = useState('select');
   const [drawer, setDrawer] = useState(null);
@@ -555,7 +556,11 @@ const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }
           type: 'INIT_DOCUMENT',
           payload: { imageSrc: img.src, originalImage: img, width: img.naturalWidth, height: img.naturalHeight },
         });
-      } catch { toast.error('Failed to load image'); }
+        setLoadError(false);
+      } catch {
+        setLoadError(true);
+        toast.error('Failed to load image');
+      }
     })();
     return () => { if (loadedImg) cleanupImage(loadedImg); };
   }, [media]);
@@ -1044,8 +1049,53 @@ const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }
 
   // Loading
   if (!doc.originalImage) return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: tokens.bg }}>
-      <LoadingSpinner size={50} />
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 text-center" style={{ background: tokens.bg }}>
+      {loadError ? (
+        <div className="flex flex-col items-center max-w-xs space-y-4">
+          <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
+            <Icons.AlertCircle className="w-6 h-6" />
+          </div>
+          <h3 className="text-white text-base font-semibold">Unable to Load Image</h3>
+          <p className="text-xs text-white/60">The image file or preview could not be loaded into the editor.</p>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={() => {
+                setLoadError(false);
+                const src = media?.file || media?.url || media?.preview;
+                if (src) {
+                  loadImage(src).then(img => {
+                    setImageCache(prev => ({ ...prev, 'bg-img': img }));
+                    dispatchDoc({
+                      type: 'INIT_DOCUMENT',
+                      payload: { imageSrc: img.src, originalImage: img, width: img.naturalWidth, height: img.naturalHeight },
+                    });
+                  }).catch(() => setLoadError(true));
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center space-y-3">
+          <LoadingSpinner size={50} />
+          <p className="text-xs text-white/60">Opening Image Studio...</p>
+          <button
+            onClick={onClose}
+            className="text-[11px] text-white/40 hover:text-white/80 mt-2 underline"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -1406,7 +1456,7 @@ const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }
 
         {/* Current main photo */}
         <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl overflow-hidden shrink-0 border-2 border-purple-500 shadow-[0_0_10px_rgba(139,30,243,0.5)]">
-          <img src={doc.originalImage.src} alt="Main" className="w-full h-full object-cover" />
+          {doc.originalImage?.src && <img src={doc.originalImage.src} alt="Main" className="w-full h-full object-cover" />}
           <span className="absolute bottom-0.5 right-0.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-purple-600 text-white text-[7px] sm:text-[8px] font-bold flex items-center justify-center ring-1 ring-black">1</span>
         </div>
 

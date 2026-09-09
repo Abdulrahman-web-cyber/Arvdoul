@@ -371,13 +371,7 @@ export default function AppRoutes() {
       <Route path="/create" element={<Navigate to="/create-post" replace />} />
       <Route path="/create_post" element={<Navigate to="/create-post" replace />} />
       
-      <Route path="/network" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <NetworkScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
+      <Route path="/network" element={<Navigate to="/notifications?tab=network" replace />} />
       
       <Route path="/coins" element={
         <ProtectedRoute>

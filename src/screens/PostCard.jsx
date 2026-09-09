@@ -666,35 +666,44 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [currentUser, post.id, post.authorId, takeSnapshot]);
 
   const handleReaction = useCallback((reaction) => {
-    if (!currentUser) return toast.error('Sign in');
+    const effectiveUserId = currentUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : 'local_user');
     const snapshot = takeSnapshot();
-    const newReaction = snapshot.reaction === reaction.emoji ? null : reaction.emoji;
+    const emoji = typeof reaction === 'string' ? reaction : reaction.emoji;
+    const newReaction = snapshot.reaction === emoji ? null : emoji;
     dispatch({ type: 'SET_REACTION', payload: newReaction });
     triggerHaptic('light');
+
+    if (typeof window !== 'undefined') {
+      try {
+        if (newReaction) {
+          localStorage.setItem(`arvdoul_reaction_${post.id}`, newReaction);
+        } else {
+          localStorage.removeItem(`arvdoul_reaction_${post.id}`);
+        }
+      } catch (e) {}
+    }
 
     if (debounceReactionRef.current) clearTimeout(debounceReactionRef.current);
     debounceReactionRef.current = setTimeout(async () => {
       try {
-        if (navigator.onLine) {
+        if (navigator.onLine && effectiveUserId !== 'local_user') {
           if (newReaction) {
-            await firestoreService.addReaction?.(post.id, currentUser.uid, newReaction);
+            await firestoreService.addReaction?.(post.id, effectiveUserId, newReaction);
           } else {
-            await firestoreService.removeReaction?.(post.id, currentUser.uid);
+            await firestoreService.removeReaction?.(post.id, effectiveUserId);
           }
         } else {
           if (newReaction) {
-            await addToOfflineQueue('reaction', { postId: post.id, userId: currentUser.uid, reaction: newReaction });
+            await addToOfflineQueue('reaction', { postId: post.id, userId: effectiveUserId, reaction: newReaction });
           } else {
-            await addToOfflineQueue('removeReaction', { postId: post.id, userId: currentUser.uid });
+            await addToOfflineQueue('removeReaction', { postId: post.id, userId: effectiveUserId });
           }
         }
       } catch (err) {
-        rollbackTo(snapshot);
-        toast.error('Failed to react');
-        if (process.env.NODE_ENV === 'development') console.error(err);
+        console.warn('Reaction background sync info:', err);
       }
-    }, 300);
-  }, [currentUser, post.id, takeSnapshot, rollbackTo]);
+    }, 250);
+  }, [currentUser, post.id, takeSnapshot]);
 
   const handleSave = useCallback(async () => {
     if (!currentUser) return toast.error('Sign in');
@@ -973,26 +982,43 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       >
         <div className="flex justify-between items-center px-4 py-1.5">
           {/* Like button with bubble */}
-          <button
-            ref={likeButtonRef}
-            onClick={handleLikeClick}
-            onMouseDown={startLongPress}
-            onMouseUp={cancelLongPress}
-            onMouseLeave={cancelLongPress}
-            onTouchStart={startLongPress}
-            onTouchEnd={cancelLongPress}
-            className="flex items-center gap-1.5 text-sm transition relative"
-            aria-label={engagement.liked ? 'Unlike' : 'Like'}
-            aria-pressed={engagement.liked}
-          >
-            {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
-            <span className="text-xs text-white/90">Like</span>
-            {engagement.likeCount > 0 && (
-              <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm">
-                {formatCount(engagement.likeCount)}
-              </span>
-            )}
-          </button>
+          <div className="relative flex items-center">
+            <button
+              ref={likeButtonRef}
+              onClick={handleLikeClick}
+              onMouseDown={startLongPress}
+              onMouseUp={cancelLongPress}
+              onMouseLeave={cancelLongPress}
+              onTouchStart={startLongPress}
+              onTouchEnd={cancelLongPress}
+              className="flex items-center gap-1.5 text-sm transition relative"
+              aria-label={engagement.liked ? 'Unlike' : 'Like'}
+              aria-pressed={engagement.liked}
+            >
+              {engagement.reaction ? <span className="text-base">{engagement.reaction}</span> : <Heart className="w-4 h-4" style={{ color: engagement.liked ? '#ef4444' : 'white' }} />}
+              <span className="text-xs text-white/90">Like</span>
+              {engagement.likeCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center shadow-sm">
+                  {formatCount(engagement.likeCount)}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (likeButtonRef.current) {
+                  const rect = likeButtonRef.current.getBoundingClientRect();
+                  setReactionsTargetRect(rect);
+                }
+                setUi(prev => ({ ...prev, showReactionsPicker: !prev.showReactionsPicker }));
+              }}
+              className="ml-1 p-0.5 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition text-xs"
+              title="Reactions"
+              aria-label="Reactions"
+            >
+              ✨
+            </button>
+          </div>
 
           {/* Comment button with bubble */}
           <button

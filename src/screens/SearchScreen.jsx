@@ -1,6 +1,6 @@
 // src/screens/SearchScreen.jsx - ARVDOUL Ultimate Search System
 // Pixel-perfect design with ARVDOUL DNA gradient and glassmorphism
-import React, { memo, useCallback, useState, useMemo } from 'react';
+import React, { memo, useCallback, useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -10,7 +10,6 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useSearch } from '../hooks/useSearch';
 import { cn } from '../lib/utils';
-import SearchBar from '../components/search/SearchBar';
 import SearchSuggestions from '../components/search/SearchSuggestions';
 import SearchResults from '../components/search/SearchResults';
 import TrendingSection from '../components/search/TrendingSection';
@@ -84,11 +83,48 @@ const SearchScreen = memo(() => {
     handleBlur,
   } = useSearch();
 
+  // Listen for search events from unified TopAppBar
+  useEffect(() => {
+    const handleQueryChange = (e) => {
+      const newQ = e.detail ?? '';
+      updateQuery(newQ);
+      if (newQ && newQ.trim()) {
+        search(newQ);
+        setHasSearched(true);
+      } else {
+        setHasSearched(false);
+      }
+    };
+
+    const handleSearchSubmit = (e) => {
+      const q = e.detail || query;
+      if (q && q.trim()) {
+        search(q);
+        setHasSearched(true);
+      }
+    };
+
+    const handleToggleFilters = () => {
+      setShowFilters((prev) => !prev);
+    };
+
+    window.addEventListener('arvdoul:search_query', handleQueryChange);
+    window.addEventListener('arvdoul:search_submit', handleSearchSubmit);
+    window.addEventListener('arvdoul:toggle_search_filters', handleToggleFilters);
+
+    return () => {
+      window.removeEventListener('arvdoul:search_query', handleQueryChange);
+      window.removeEventListener('arvdoul:search_submit', handleSearchSubmit);
+      window.removeEventListener('arvdoul:toggle_search_filters', handleToggleFilters);
+    };
+  }, [updateQuery, search, query]);
+
   // Handle search submission
   const handleSearch = useCallback((searchQuery = query) => {
     if (searchQuery.trim()) {
       search(searchQuery);
       setHasSearched(true);
+      window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: searchQuery }));
     }
   }, [query, search]);
 
@@ -102,6 +138,7 @@ const SearchScreen = memo(() => {
       updateQuery(text);
       search(text);
       setHasSearched(true);
+      window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: text }));
     }
     handleBlur();
   }, [updateQuery, search, handleBlur]);
@@ -112,6 +149,7 @@ const SearchScreen = memo(() => {
     setTab(categoryId);
     search(categoryId);
     setHasSearched(true);
+    window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: categoryId }));
   }, [updateQuery, setTab, search]);
 
   // Handle result click
@@ -220,49 +258,46 @@ const SearchScreen = memo(() => {
           : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
       )}
     >
-      {/* Header with Gradient Title */}
-      <div className="px-4 pt-4 pb-2">
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={spring.card}
-          className="text-3xl font-black mb-4"
-          style={{
-            background: ARVDOUL_GRADIENT,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
-          Search
-        </motion.h1>
-
-        {/* Premium Search Bar */}
-        <div className="relative">
-          <SearchBar
-            value={query}
-            onChange={updateQuery}
-            onSearch={handleSearch}
-            onVoiceSearch={() => console.log('Voice search')}
-            onQRScan={() => console.log('QR scan')}
-            onFilters={() => setShowFilters(true)}
-            isFocused={showSuggestions}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            placeholder="Search Arvdoul..."
-          />
-
-          {/* Suggestions Dropdown */}
-          <SearchSuggestions
-            query={query}
-            suggestions={suggestions}
-            recentSearches={recent.slice(0, 5).map((q) => ({ id: q, text: q, type: 'recent' }))}
-            onSelect={handleSuggestionSelect}
-            onRemoveRecent={removeRecent}
-            visible={showSuggestions && !hasSearched}
-            loading={loading}
-          />
+      {/* Category Pills Bar (Under Unified TopAppBar) */}
+      <div className="px-4 pt-2 pb-3">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          {CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            const isSelected = selectedTab === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryClick(cat.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
+                  isSelected
+                    ? "bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white shadow-md shadow-purple-500/25"
+                    : isDark
+                    ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white"
+                    : "bg-black/[0.05] text-gray-700 hover:bg-black/[0.09] hover:text-gray-900"
+                )}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
         </div>
+
+        {/* Suggestions Dropdown (Powered by TopAppBar Search Query) */}
+        {query && !hasSearched && (
+          <div className="relative mt-2">
+            <SearchSuggestions
+              query={query}
+              suggestions={suggestions}
+              recentSearches={recent.slice(0, 5).map((q) => ({ id: q, text: q, type: 'recent' }))}
+              onSelect={handleSuggestionSelect}
+              onRemoveRecent={removeRecent}
+              visible={true}
+              loading={loading}
+            />
+          </div>
+        )}
       </div>
 
       {/* Main Content */}

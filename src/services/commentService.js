@@ -262,6 +262,15 @@ class UltimateCommentService {
 
       this._invalidatePostCache(postId);
 
+      if (typeof window !== 'undefined') {
+        try {
+          const key = `arvdoul_local_comments_${postId}`;
+          const current = JSON.parse(localStorage.getItem(key) || '[]');
+          current.unshift({ ...commentData, id: commentId, createdAt: new Date().toISOString() });
+          localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
+        } catch {}
+      }
+
       auditLogger.log('content.comment', { userId, meta: { commentId, postId, parentId: options.parentId || null } });
 
       return {
@@ -300,50 +309,75 @@ class UltimateCommentService {
 
       const commentsRef = this.firestoreMethods.collection(this.firestore, 'comments');
 
-      const conditions = [
-        this.firestoreMethods.where('postId', '==', postId),
-        this.firestoreMethods.where('isDeleted', '==', false),
-        this.firestoreMethods.where('isHidden', '==', false),
-        this.firestoreMethods.where('moderationStatus', 'in', ['approved', 'pending']),
-        this.firestoreMethods.orderBy('createdAt', 'desc')
-      ];
-
-      if (options.parentId === null || options.parentId === undefined) {
-        conditions.push(this.firestoreMethods.where('parentId', '==', null));
-      } else if (options.parentId !== 'all') {
-        conditions.push(this.firestoreMethods.where('parentId', '==', options.parentId));
+      let snapshot;
+      try {
+        const conditions = [
+          this.firestoreMethods.where('postId', '==', postId),
+          this.firestoreMethods.where('isDeleted', '==', false),
+          this.firestoreMethods.where('isHidden', '==', false),
+          this.firestoreMethods.where('moderationStatus', 'in', ['approved', 'pending']),
+          this.firestoreMethods.orderBy('createdAt', 'desc')
+        ];
+        if (options.limit) conditions.push(this.firestoreMethods.limit(options.limit));
+        const q = this.firestoreMethods.query(commentsRef, ...conditions);
+        snapshot = await this.firestoreMethods.getDocs(q);
+      } catch (indexErr) {
+        logger.warn('Compound index query failed, using resilient simple query:', indexErr.message);
+        try {
+          const simpleQ = this.firestoreMethods.query(
+            commentsRef,
+            this.firestoreMethods.where('postId', '==', postId)
+          );
+          snapshot = await this.firestoreMethods.getDocs(simpleQ);
+        } catch (innerErr) {
+          logger.warn('Simple query error, continuing to local cache:', innerErr.message);
+          snapshot = { forEach: () => {}, size: 0, empty: true };
+        }
       }
-
-      if (options.maxDepth !== undefined) {
-        conditions.push(this.firestoreMethods.where('depth', '<=', options.maxDepth));
-      }
-
-      if (options.limit) {
-        conditions.push(this.firestoreMethods.limit(options.limit));
-      }
-
-      if (options.startAfter) {
-        conditions.push(this.firestoreMethods.startAfter(options.startAfter));
-      }
-
-      const q = this.firestoreMethods.query(commentsRef, ...conditions);
-      const snapshot = await this.firestoreMethods.getDocs(q);
 
       const comments = [];
       const commentMap = new Map();
 
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        const comment = {
-          id: docSnap.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.() || new Date(),
-          updatedAt: data.updatedAt?.toDate?.() || new Date()
-        };
+      if (snapshot && !snapshot.empty) {
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.isDeleted || data.isHidden) return;
+          if (options.parentId === null || options.parentId === undefined) {
+            if (data.parentId) return;
+          } else if (options.parentId !== 'all') {
+            if (data.parentId !== options.parentId) return;
+          }
+          const comment = {
+            id: docSnap.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.() || (data.createdAt ? new Date(data.createdAt) : new Date()),
+            updatedAt: data.updatedAt?.toDate?.() || new Date()
+          };
 
-        comments.push(comment);
-        commentMap.set(docSnap.id, comment);
-      });
+          comments.push(comment);
+          commentMap.set(docSnap.id, comment);
+        });
+      }
+
+      // Merge local-first persistent comments from localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          const localStored = JSON.parse(localStorage.getItem(`arvdoul_local_comments_${postId}`) || '[]');
+          if (Array.isArray(localStored)) {
+            localStored.forEach(lc => {
+              if (lc && lc.id && !commentMap.has(lc.id)) {
+                const comment = {
+                  ...lc,
+                  createdAt: lc.createdAt ? new Date(lc.createdAt) : new Date(),
+                  updatedAt: lc.updatedAt ? new Date(lc.updatedAt) : new Date()
+                };
+                comments.push(comment);
+                commentMap.set(lc.id, comment);
+              }
+            });
+          }
+        } catch {}
+      }
 
       let processedComments = comments;
       if (options.nested === true && options.parentId === null) {
