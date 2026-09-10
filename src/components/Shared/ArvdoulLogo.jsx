@@ -1,14 +1,32 @@
 // src/components/Shared/ArvdoulLogo.jsx - ARVDOUL OFFICIAL BRAND LOGO SYSTEM
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 
 /**
- * ArvdoulEmblem - Precision faceted geometric "A" vector emblem
- * Featuring 3D polygonal gradients (Cyan left facet, Royal blue core, Magenta/Purple right facet)
+ * ArvdoulEmblem - Uses the official uploaded Arvdoul logo image with fallback to geometric vector emblem
  */
-export const ArvdoulEmblem = memo(({ size = 32, className = '' }) => {
+export const ArvdoulEmblem = memo(({ size = 32, className = '', theme = 'auto' }) => {
+  const [imageError, setImageError] = useState(false);
   const s = typeof size === 'number' ? `${size}px` : size;
+  const logoSrc = theme === 'light' ? '/logo/logo-light.png' : '/logo/logo-dark.png';
+
+  if (!imageError) {
+    return (
+      <img
+        src={logoSrc}
+        alt="Arvdoul"
+        width={typeof size === 'number' ? size : 32}
+        height={typeof size === 'number' ? size : 32}
+        onError={() => setImageError(true)}
+        className={`shrink-0 rounded-full object-cover shadow-sm transition-transform duration-300 ${className}`}
+        style={{ width: s, height: s }}
+        loading="eager"
+        decoding="async"
+      />
+    );
+  }
+
   return (
     <svg
       width={s}
@@ -173,7 +191,7 @@ const ArvdoulLogo = memo(({
     >
       {/* Emblem */}
       {variant !== 'wordmark' && (
-        <ArvdoulEmblem size={emblemSize} />
+        <ArvdoulEmblem size={emblemSize} theme={theme} />
       )}
 
       {/* Wordmark */}

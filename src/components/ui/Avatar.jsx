@@ -96,13 +96,22 @@ export const Avatar = memo(({
         className
       )}
     >
-      <img
-        src={effectiveSrc}
-        alt={alt}
-        onError={() => setHasError(true)}
-        className="w-full h-full rounded-full object-cover"
-        loading="lazy"
-      />
+      {hasError || !src ? (
+        <div
+          aria-hidden="true"
+          className="w-full h-full rounded-full flex items-center justify-center font-bold bg-gradient-to-br from-indigo-500 to-purple-600 text-white select-none"
+        >
+          {name ? name.charAt(0).toUpperCase() : 'U'}
+        </div>
+      ) : (
+        <img
+          src={effectiveSrc}
+          alt={alt}
+          onError={() => setHasError(true)}
+          className="w-full h-full rounded-full object-cover"
+          loading="lazy"
+        />
+      )}
 
       {/* Presence status dot (bottom-right) */}
       {status && (

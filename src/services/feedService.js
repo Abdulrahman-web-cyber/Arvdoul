@@ -601,6 +601,49 @@ class UltimateFeedService {
         }
       } catch {}
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
+      if (posts.length === 0) {
+        posts.push(
+          {
+            id: 'arvdoul_starter_welcome',
+            authorId: 'arvdoul_official',
+            authorName: 'Arvdoul Official',
+            authorUsername: 'arvdoul',
+            authorPhoto: '/logo/logo-dark.png',
+            isVerified: true,
+            type: 'text',
+            content: '✨ Welcome to Arvdoul — the creator network and social ecosystem! Explore Sparks & Reels, live audio spaces, instant messaging with voice notes, coin gifting, and vibrant creator communities. Tap "Create Post" to publish your first post!',
+            tags: ['Arvdoul', 'CreatorEconomy', 'Sparks', 'Welcome'],
+            stats: { likes: 142, comments: 19, shares: 45 },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            _source: 'starter_seed',
+            _score: 1.0
+          },
+          {
+            id: 'arvdoul_starter_sparks',
+            authorId: 'creator_hub',
+            authorName: 'Creator Hub',
+            authorUsername: 'creatorhub',
+            authorPhoto: '/assets/default-profile.png',
+            isVerified: true,
+            type: 'media',
+            content: '🔥 Discover Sparks & Reels! Head to the Sparks tab in the bottom bar to watch full-screen trending videos, tip creators with coins, and participate in prediction markets.',
+            media: [
+              {
+                type: 'image',
+                url: '/logo/logo-light.png',
+                thumbnail: '/logo/logo-light.png'
+              }
+            ],
+            tags: ['Sparks', 'Trending', 'Reels'],
+            stats: { likes: 88, comments: 12, shares: 27 },
+            createdAt: new Date(Date.now() - 3600000),
+            updatedAt: new Date(Date.now() - 3600000),
+            _source: 'starter_seed',
+            _score: 0.9
+          }
+        );
+      }
       return posts.slice(0, limit);
     } catch (error) {
       return [];

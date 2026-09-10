@@ -254,8 +254,16 @@ class RedisCacheManager extends CacheManager {
         const tx = idb.transaction(IDB_CACHE_STORE, 'readwrite');
         const index = tx.store.index('namespace');
         const entries = await index.getAll(namespace);
+        const cleanPattern = keyPattern.replace(/\*/g, '');
+        const regexPattern = new RegExp('^' + keyPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
         for (const entry of entries) {
-          if (entry.key.includes(keyPattern) || keyPattern === '*') {
+          const subKey = entry.key.startsWith(namespace + ':') ? entry.key.slice(namespace.length + 1) : entry.key;
+          if (
+            keyPattern === '*' ||
+            entry.key.includes(cleanPattern) ||
+            regexPattern.test(subKey) ||
+            regexPattern.test(entry.key)
+          ) {
             await tx.store.delete(entry.key);
           }
         }

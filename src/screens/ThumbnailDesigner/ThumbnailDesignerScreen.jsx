@@ -50,31 +50,43 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-// Studio base sample canvas (rich landscape artwork with high dynamic range)
-const SAMPLE_PHOTOS = [
+// Studio base canvas presets (vector gradient artwork, self-contained SVG)
+const STUDIO_CANVASES = [
   {
     id: 'photo-1',
     num: 1,
     name: 'Neon Cyber',
-    url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1400&q=80',
+    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%238B1EF3"/><stop offset="50%" stop-color="%234431F7"/><stop offset="100%" stop-color="%23055BFB"/></linearGradient></defs><rect width="100%" height="100%" fill="url(%23g1)"/></svg>',
   },
   {
     id: 'photo-2',
     num: 2,
-    name: 'Mountain Sunset',
-    url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1400&q=80',
+    name: 'Sunset Glow',
+    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><defs><linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23FF512F"/><stop offset="50%" stop-color="%23F09819"/><stop offset="100%" stop-color="%23DD2476"/></linearGradient></defs><rect width="100%" height="100%" fill="url(%23g2)"/></svg>',
   },
   {
     id: 'photo-3',
     num: 3,
     name: 'Midnight Urban',
-    url: 'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1400&q=80',
+    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><defs><linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%230F2027"/><stop offset="50%" stop-color="%23203A43"/><stop offset="100%" stop-color="%232C5364"/></linearGradient></defs><rect width="100%" height="100%" fill="url(%23g3)"/></svg>',
   },
   {
     id: 'photo-4',
     num: 4,
     name: 'Cosmic Sky',
-    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80',
+    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><defs><linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23141E30"/><stop offset="50%" stop-color="%23243B55"/><stop offset="100%" stop-color="%23000428"/></linearGradient></defs><rect width="100%" height="100%" fill="url(%23g4)"/></svg>',
+  },
+];
+
+// Honest empty initial composition (base canvas only, user adds custom layers)
+const INITIAL_LAYERS = [
+  {
+    id: 'layer-bg',
+    name: 'Base Canvas',
+    type: 'image',
+    visible: true,
+    locked: true,
+    opacity: 100,
   },
 ];
 
@@ -138,7 +150,7 @@ export default function ThumbnailDesignerScreen() {
   const isDark = theme !== 'light';
 
   // Photo filmstrip state
-  const [photos, setPhotos] = useState(SAMPLE_PHOTOS);
+  const [photos, setPhotos] = useState(STUDIO_CANVASES);
   const [activePhotoId, setActivePhotoId] = useState('photo-2'); // Photo 2 selected as in Image 3
   const fileInputRef = useRef(null);
 
@@ -165,43 +177,8 @@ export default function ThumbnailDesignerScreen() {
   const [activeFilter, setActiveFilter] = useState('v1');
 
   // Layers
-  const [layers, setLayers] = useState([
-    {
-      id: 'layer-text-1',
-      name: 'Title Typography',
-      type: 'text',
-      text: 'ARVDOUL',
-      font: 'bebas',
-      fontSize: 68,
-      color: '#FFFFFF',
-      x: 50,
-      y: 40,
-      visible: true,
-      locked: false,
-      opacity: 100,
-      shadow: true,
-    },
-    {
-      id: 'layer-sticker-1',
-      name: 'Badge Accent',
-      type: 'sticker',
-      label: '4K ULTRA',
-      x: 50,
-      y: 65,
-      visible: true,
-      locked: false,
-      opacity: 95,
-    },
-    {
-      id: 'layer-bg',
-      name: 'Base Image',
-      type: 'image',
-      visible: true,
-      locked: true,
-      opacity: 100,
-    },
-  ]);
-  const [selectedLayerId, setSelectedLayerId] = useState('layer-text-1');
+  const [layers, setLayers] = useState(INITIAL_LAYERS);
+  const [selectedLayerId, setSelectedLayerId] = useState('layer-bg');
   const [showLayersModal, setShowLayersModal] = useState(false);
 
   // History Stacks

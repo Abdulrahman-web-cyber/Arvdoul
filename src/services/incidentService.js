@@ -15,6 +15,11 @@ import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/fi
 import { alertingService } from './alertingService.js';
 import localforage from 'localforage';
 
+const isTestEnv = () =>
+  typeof process !== 'undefined' &&
+  process.env &&
+  (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined);
+
 class IncidentService {
   constructor() {
     this.incidentsLog = [];
@@ -59,41 +64,72 @@ class IncidentService {
 
   /**
    * Declares a new operational incident and escalates high severities dynamically.
+   * Supports both object options { title, severity, impactScope, ... } and positional args (severity, title, summary, commanderId).
    */
-  async declareIncident(severity, title, summary, commanderId) {
+  async declareIncident(severityOrOpts, titleArg, summaryArg, commanderIdArg) {
     try {
+      let severity = 'P0';
+      let title = '';
+      let summary = '';
+      let description = '';
+      let commanderId = 'commander_ops';
+      let impactScope = 'REGIONAL';
+      let affectedServices = [];
+
+      if (typeof severityOrOpts === 'object' && severityOrOpts !== null) {
+        severity = (severityOrOpts.severity || 'P0').toUpperCase();
+        title = severityOrOpts.title || '';
+        summary = severityOrOpts.summary || severityOrOpts.description || '';
+        description = severityOrOpts.description || summary;
+        commanderId = severityOrOpts.commanderId || 'ops_lead';
+        impactScope = severityOrOpts.impactScope || 'GLOBAL';
+        affectedServices = severityOrOpts.affectedServices || [];
+      } else {
+        severity = (severityOrOpts || 'P0').toUpperCase();
+        title = titleArg || '';
+        summary = summaryArg || '';
+        description = summary;
+        commanderId = commanderIdArg || 'ops_lead';
+      }
+
+      const secureHex = this._generateSecureHex(4);
+      const incidentId = 'inc_local_' + secureHex;
+
       const incident = {
-        severity, // 'p0' | 'p1' | 'p2' | 'p3'
+        id: incidentId,
+        incidentId,
+        severity,
         title,
         summary,
+        description,
         commanderId,
-        status: 'investigating', // 'investigating' | 'identified' | 'mitigated' | 'resolved'
+        impactScope,
+        affectedServices,
+        status: 'INVESTIGATING',
         declaredAt: new Date().toISOString(),
         timeline: [
           {
             timestamp: new Date().toISOString(),
-            status: 'investigating',
+            status: 'INVESTIGATING',
             note: 'Incident declared by ' + commanderId,
           },
         ],
       };
 
-      const secureHex = this._generateSecureHex(4);
-
       // Trigger automatic high-priority operations alert and pager dispatch for P0/P1 incidents
-      if (severity === 'p0' || severity === 'p1') {
+      const normSev = severity.toLowerCase();
+      if (normSev === 'p0' || normSev === 'p1') {
         await alertingService.triggerAlert(
-          'incident_' + severity + '_' + secureHex,
-          severity === 'p0' ? 'p0_critical' : 'p1_high',
+          'incident_' + normSev + '_' + secureHex,
+          normSev === 'p0' ? 'p0_critical' : 'p1_high',
           'CRITICAL OPERATIONAL INCIDENT DECLARED: ' + title,
-          { summary, commanderId, declaredAt: incident.declaredAt }
+          { incidentId, severity, summary, commanderId, declaredAt: incident.declaredAt }
         );
       }
 
-      let incidentId = 'inc_local_' + secureHex;
-
+      let persistedId = incidentId;
       try {
-        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+        if (isTestEnv()) {
           throw new Error('Skipping Firestore in tests');
         }
         const db = await getFirestoreInstance();
@@ -101,22 +137,27 @@ class IncidentService {
           ...incident,
           declaredAt: serverTimestamp()
         });
-        incidentId = docRef.id;
-        logger.info('[IncidentService] Persisted incident to Firestore: ' + incidentId);
+        persistedId = docRef.id;
+        incident.id = persistedId;
+        incident.incidentId = persistedId;
+        logger.info('[IncidentService] Persisted incident to Firestore: ' + persistedId);
       } catch (_) {
-        logger.warn('[IncidentService] Firestore unavailable. Incident registered locally: ' + incidentId);
+        logger.warn('[IncidentService] Firestore unavailable. Incident registered locally: ' + persistedId);
       }
 
-      logger.error('[IncidentService] Incident declared: ' + incidentId + ' [' + severity.toUpperCase() + '] - ' + title);
+      logger.error('[IncidentService] Incident declared: ' + persistedId + ' [' + severity + '] - ' + title);
 
       // Save locally with array bounding
       if (this.incidentsLog.length >= this.MAX_INCIDENTS_LOG) {
         this.incidentsLog.shift();
       }
-      this.incidentsLog.push({ id: incidentId, ...incident });
+      this.incidentsLog.push(incident);
       await this._saveStore();
 
-      return { success: true, incidentId };
+      return {
+        ...incident,
+        success: true,
+      };
     } catch (err) {
       logger.error('[IncidentService] Failed to declare incident:', { error: err.message });
       throw err;

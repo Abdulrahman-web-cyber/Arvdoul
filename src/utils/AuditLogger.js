@@ -16,6 +16,10 @@
 import { openDB } from 'idb';
 import { Logger, getCorrelationId } from './Logger.js';
 
+if (typeof globalThis.structuredClone !== 'function') {
+  globalThis.structuredClone = (val) => (val === undefined ? undefined : JSON.parse(JSON.stringify(val)));
+}
+
 const AUDIT_DB = 'arvdoul_audit';
 const AUDIT_STORE = 'events';
 const MAX_PENDING = 2000; // hard cap on local queue size

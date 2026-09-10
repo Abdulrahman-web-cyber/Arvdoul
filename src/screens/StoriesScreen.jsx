@@ -17,82 +17,6 @@ import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
-// High definition sample stories matching Screenshot 2
-const SPONSORED_STORIES = [
-  {
-    id: 'story_sponsor_pro',
-    isSponsored: true,
-    user: {
-      id: 'sponsor_pro',
-      name: 'Arvdoul Pro Studio',
-      username: 'arvdoul.pro',
-      avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Sponsored',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: 'Sponsored',
-    itemsCount: 1,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'star',
-    mediaUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1000&auto=format&fit=crop&q=80',
-    caption: '⚡ 4K Multi-Track Video Export & Master Mixing Tools',
-    viewsCount: '154K',
-    ctaText: 'Claim 50% Off & +5 Coins',
-    ctaUrl: 'https://arvdoul.com/pro',
-    rewardCoins: 5,
-    items: [
-      {
-        id: 'sp_item_1',
-        url: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1000&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Unlock Studio Video Plugins, 32-Track Stems, and 0% Creator Tips fee for 3 months! Watch to claim +5 ARVDOUL Coins.',
-        ctaText: 'Claim 50% Off & +5 Coins',
-        ctaUrl: 'https://arvdoul.com/pro',
-        rewardCoins: 5,
-      },
-    ],
-  },
-  {
-    id: 'story_sponsor_soundwave',
-    isSponsored: true,
-    user: {
-      id: 'sponsor_soundwave',
-      name: 'SoundWave Audio',
-      username: 'soundwave.gear',
-      avatar: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=150&auto=format&fit=crop&q=80',
-      verified: true,
-      category: 'Sponsored',
-      isCloseFriend: false,
-      isLive: false,
-    },
-    timeAgo: 'Sponsored',
-    itemsCount: 1,
-    activeItemIndex: 0,
-    mediaType: 'image',
-    badgeType: 'music',
-    mediaUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1000&auto=format&fit=crop&q=80',
-    caption: '🎧 Studio Reference Wireless Headphones — Zero Latency',
-    viewsCount: '98K',
-    ctaText: 'Shop Gear & Earn +5 Coins',
-    ctaUrl: 'https://soundwave.example.com',
-    rewardCoins: 5,
-    items: [
-      {
-        id: 'sp_item_2',
-        url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1000&auto=format&fit=crop&q=80',
-        type: 'image',
-        caption: 'Ultra-light titanium drivers engineered for music creators and video editors. Tap to discover special creator discounts.',
-        ctaText: 'Shop Gear & Earn +5 Coins',
-        ctaUrl: 'https://soundwave.example.com',
-        rewardCoins: 5,
-      },
-    ],
-  },
-];
-
 const CATEGORY_TABS = [
   { id: 'all', label: 'All', icon: null },
   { id: 'sponsored', label: 'Sponsored & Rewards', icon: Sparkles, color: 'text-amber-400' },
@@ -163,15 +87,23 @@ export default function StoriesScreen() {
             mediaUrl: storiesArr[0]?.media?.url || storiesArr[0]?.content || '',
             caption: storiesArr[0]?.content || '',
             viewsCount: String(storiesArr[0]?.stats?.views || 0),
+            isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
+            rewardCoins: storiesArr[0]?.rewardCoins || 0,
+            ctaText: storiesArr[0]?.ctaText || '',
+            ctaUrl: storiesArr[0]?.ctaUrl || '',
             items: storiesArr.map((st) => ({
               id: st.id,
               url: st.media?.url || st.content || '',
               type: st.type || 'image',
               caption: st.content || '',
+              duration: st.duration || 5,
+              ctaText: st.ctaText || '',
+              ctaUrl: st.ctaUrl || '',
+              rewardCoins: st.rewardCoins || 0,
             })),
           };
         });
-        const combined = [...mapped, ...SPONSORED_STORIES];
+        const combined = mapped;
         setStories(combined);
 
         // Deep link / Home entry (spec §51/33): jump straight into a specific
@@ -187,7 +119,7 @@ export default function StoriesScreen() {
         }
       } catch (err) {
         console.error('Failed to load stories:', err);
-        if (!cancelled) setStories([...SPONSORED_STORIES]);
+        if (!cancelled) setStories([]);
       } finally {
         if (!cancelled) setStoriesLoading(false);
       }
@@ -608,13 +540,39 @@ export default function StoriesScreen() {
             <div className="absolute -inset-3.5 rounded-full border border-purple-500/20 pointer-events-none" />
           </div>
 
-          <span className="text-xs md:text-sm font-bold tracking-tight text-center text-white">
+          <span className={cn(
+            'text-xs md:text-sm font-bold tracking-tight text-center',
+            isDark ? 'text-white' : 'text-slate-900'
+          )}>
             Add Story
           </span>
-          <span className="text-[10px] text-slate-400 text-center mt-0.5">
+          <span className={cn(
+            'text-[10px] text-center mt-0.5',
+            isDark ? 'text-slate-400' : 'text-slate-500'
+          )}>
             Share a moment
           </span>
         </motion.div>
+
+        {/* EMPTY STATE IF ZERO STORIES */}
+        {filteredStories.length === 0 && !storiesLoading && (
+          <div className={cn(
+            'col-span-2 aspect-[3/4.5] rounded-3xl p-4 flex flex-col items-center justify-center text-center border',
+            isDark
+              ? 'bg-white/[0.03] border-white/10 text-slate-400'
+              : 'bg-white border-slate-200 text-slate-500 shadow-sm'
+          )}>
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-2.5">
+              <Sparkles className="w-6 h-6 text-purple-500" />
+            </div>
+            <p className={cn('text-xs font-bold tracking-tight', isDark ? 'text-white' : 'text-slate-800')}>
+              No vibes in feed
+            </p>
+            <p className="text-[11px] mt-1 max-w-[170px] leading-relaxed">
+              Stories expire after 24 hours. Tap + to share your moment!
+            </p>
+          </div>
+        )}
 
         {/* STORY CARDS */}
         {filteredStories.map((story, index) => {

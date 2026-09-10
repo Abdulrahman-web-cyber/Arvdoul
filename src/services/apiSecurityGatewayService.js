@@ -13,6 +13,11 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
+const isTestEnv = () =>
+  typeof process !== 'undefined' &&
+  process.env &&
+  (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined);
+
 class APISecurityGatewayService {
   constructor() {
     this.quotaLimit = 1000; // 1,000 requests per key per day
@@ -101,7 +106,7 @@ class APISecurityGatewayService {
 
     // Try Firestore persistence (skipped in Jest test context to prevent eager firebase load hangs)
     try {
-      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+      if (isTestEnv()) {
         throw new Error('Skipping Firestore in tests');
       }
       const db = await getFirestoreInstance();
@@ -141,7 +146,7 @@ class APISecurityGatewayService {
     // Try reading from Firestore if missing from local memory (skipped in Jest tests)
     if (!record) {
       try {
-        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+        if (isTestEnv()) {
           throw new Error('Skipping Firestore in tests');
         }
         const db = await getFirestoreInstance();
@@ -184,7 +189,7 @@ class APISecurityGatewayService {
     this._persistLocalKeys();
 
     try {
-      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+      if (isTestEnv()) {
         throw new Error('Skipping Firestore in tests');
       }
       const db = await getFirestoreInstance();
