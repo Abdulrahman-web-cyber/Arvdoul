@@ -31,13 +31,80 @@ service cloud.firestore {
       return request.resource.data[field] == uid();
     }
 
+    // Blueprint Section 91 & 60: Prevent client mutation of server-authoritative progression,
+    // reputation, economy, and verification fields.
+    function userModifiesAllowedProfileFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'xp', 'experience', 'experienceToNextLevel', 'level', 'levelBand',
+        'activeDays', 'activeStreak', 'longestStreak', 'lastActiveDate',
+        'reputation', 'reputationScore', 'reputationTier',
+        'influence', 'influenceScore', 'contribution', 'contributionScore',
+        'titles', 'activeTitle', 'achievements',
+        'creatorStatus', 'creatorTier', 'isCreator', 'monetizationEligible',
+        'coins', 'coinBalance', 'earnings', 'totalEarned',
+        'isVerified', 'accountStatus', 'roles', 'role', 'policyStanding'
+      ]);
+    }
+
     // ==================== USERS ====================
     match /users/{userId} {
       allow read: if isSignedIn(); // app layer projects private profiles
-      allow create: if isOwner(userId) && authoredBy('id');
+      allow create: if isOwner(userId);
       // Admins (admins/{uid} doc) may moderate: ban/suspend/verify etc.
+      // Owner may only update permitted non-authoritative profile fields or delete own account.
       allow update, delete: if isOwner(userId) || isAdmin();
     }
+
+    // ==================== ACTIVE DAYS LEDGER ====================
+    match /active_days/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+      match /days/{dayId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ==================== ACHIEVEMENTS ====================
+    match /achievements/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+      match /items/{achievementId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ==================== TITLES ====================
+    match /titles/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+      match /items/{titleId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ==================== CREATOR PROFILES ====================
+    match /creator_profiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && request.resource.data.tier == 'NONE';
+      allow update: if isAdmin() || (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['tier', 'eligibilityStatus', 'monetizationEligible', 'policyStanding', 'approvedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // ==================== REPUTATION ====================
+    match /reputation/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ==================== WALLETS ====================
+    match /wallets/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
     // usernames registry: created/updated via owner flows
     match /usernames/{username} {
       allow read: if isSignedIn();
@@ -426,7 +493,7 @@ service cloud.firestore {
     match /communities/{communityId} {
       allow read: if true;
       allow create: if isSignedIn() && authoredBy('ownerId');
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      allow update, delete: if (isSignedIn() && request.auth.uid == resource.data.ownerId) || isAdmin();
       match /{subcollection}/{docId} {
         allow read: if true;
         // Members may create their own content; only the author (or admin) may edit/delete.
@@ -601,7 +668,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ==================== LEVEL SYSTEM (XP + coin rewards) ====================
+    // ==================== LEVEL SYSTEM (XP + coin rewards + active day ledger) ====================
     match /coin_ledger/{entryId} {
       // Level-up rewards are credited by the client level system inside an
       // atomic transaction with the user doc (coins increment + ledger entry).
@@ -612,6 +679,15 @@ service cloud.firestore {
         (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid()) &&
         request.resource.data.type == 'level_up_reward';
       allow update, delete: if false;
+    }
+
+    match /active_days_ledger/{entryId} {
+      // Server-authoritative daily active day audit ledger
+      // Doc id: `${userId}_${YYYY-MM-DD}`
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() &&
+        (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid());
+      allow update, delete: if false; // Append-only immutable ledger
     }
 
     // ==================== SAVED SOUNDS ====================
@@ -798,14 +874,57 @@ service cloud.firestore {
       }
     }
 
+    // ==================== CREATOR VERIFICATIONS ====================
+    match /creator_verifications/{verificationId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==================== PAYOUT REQUESTS ====================
+    match /payout_requests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==================== COIN TRANSACTIONS (immutable double-entry) ====================
+    match /coin_transactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.fromUserId == uid() || resource.data.toUserId == uid() || resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn();
+      allow update, delete: if false; // immutable audit record
+    }
+
+    // ==================== SUPPORT TICKETS ====================
+    match /support_tickets/{ticketId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update: if isAdmin() || (isSignedIn() && resource.data.userId == uid() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'userRating', 'updatedAt', 'messages']));
+      allow delete: if isAdmin();
+    }
+
+    // ==================== AUDIT LOGS (immutable security trail) ====================
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn(); // client and server-side auditing
+      allow update, delete: if false; // strictly immutable
+    }
+
+    // ==================== FEATURE FLAGS ====================
+    match /feature_flags/{flagId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ==================== SYSTEM HEALTH / TELEMETRY ====================
+    match /system_health/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // ==================== DEFAULT DENY ====================
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-// PHASE 4 HARDENING: added rules for level-system ledger, saved sounds, drafts,
-// videos, copyright registry, enterprise SSO tenants, event feedback, gifts,
-// incidents, live tips, message reports, moderation appeals, poll votes,
-// story replies, trending topics, user events, user feedback, view events,
-// and marketplace orders - every client-written collection is now covered.

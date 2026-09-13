@@ -13,6 +13,8 @@ import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import OfflineIndicator from '../components/ui/OfflineIndicator.jsx';
 import PageLoader from '../components/UI/PageLoader.jsx';
+import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
+import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
 import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';
 
 /**
@@ -228,6 +230,10 @@ export default function AppBootstrap() {
               
               {/* Global offline sync indicator */}
               <OfflineIndicator />
+              
+              {/* PWA Install and Update Banners */}
+              <PWAInstallBanner />
+              <SWUpdateBanner />
               
               {/* Toast notifications */}
               <Toaster 

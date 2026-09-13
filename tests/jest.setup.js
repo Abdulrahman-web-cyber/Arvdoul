@@ -15,6 +15,13 @@ import '@testing-library/jest-dom';
 import 'fake-indexeddb/auto';
 
 // ---------------------------------------------------------------------------
+// structuredClone polyfill (required by fake-indexeddb in some Node/jsdom versions)
+// ---------------------------------------------------------------------------
+if (typeof globalThis.structuredClone === 'undefined') {
+  globalThis.structuredClone = (val) => (val === undefined ? undefined : JSON.parse(JSON.stringify(val)));
+}
+
+// ---------------------------------------------------------------------------
 // TextEncoder / TextDecoder (Node 22 provides globals, but keep for parity)
 // ---------------------------------------------------------------------------
 if (typeof globalThis.TextEncoder === 'undefined' || typeof globalThis.TextDecoder === 'undefined') {

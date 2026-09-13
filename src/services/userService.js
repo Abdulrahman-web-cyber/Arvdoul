@@ -19,6 +19,17 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
+import {
+  PROFILE_TYPES,
+  VISIBILITY_SCOPES,
+  DEFAULT_PROFILE_PRIVACY,
+  SERVER_AUTHORITATIVE_FIELDS,
+  PROFILE_CONSTRAINTS,
+  isValidWebUrl,
+  sanitizeProfileUrl,
+  validateProfileUpdate,
+  canViewProfileSection
+} from '../config/profileContracts.js';
 
 const USER_CONFIG = {
   MAX_USERNAME_ATTEMPTS: 50,
@@ -343,9 +354,10 @@ class ProfessionalUserService {
   }
 
   // ==================== PROFILE CRUD ====================
-  async getUserProfile(userId, requesterId = null) {
+  async getUserProfile(userId, requesterId = null, options = {}) {
     await this._ensureInitialized();
-    const cacheKey = requesterId ? `profile_${userId}_${requesterId}` : `profile_${userId}`;
+    const viewAs = options.viewAs || null; // e.g. 'public', 'follower', 'connection'
+    const cacheKey = requesterId ? `profile_${userId}_${requesterId}_${viewAs || 'normal'}` : `profile_${userId}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < USER_CONFIG.CACHE_EXPIRY) {
       return cached.data;
@@ -369,17 +381,18 @@ class ProfessionalUserService {
           const synth = {
             id: userId,
             uid: userId,
-            username: localAuth.username || localAuth.email?.split('@')[0] || 'creator',
-            displayName: localAuth.displayName || localAuth.name || 'Creator',
+            username: localAuth.username || localAuth.email?.split('@')[0] || (userId ? `user_${userId.slice(0, 6)}` : 'user'),
+            displayName: localAuth.displayName || localAuth.name || 'User',
             email: localAuth.email || '',
-            bio: localAuth.bio || 'Welcome to my Arvdoul profile! 🚀',
-            photoURL: localAuth.photoURL || this.getAvatarUrl(userId, localAuth.displayName || 'Creator', null),
+            bio: localAuth.bio || '',
+            photoURL: localAuth.photoURL || this.getAvatarUrl(userId, localAuth.displayName || 'User', null),
             followerCount: 0,
             followingCount: 0,
             postCount: 0,
-            isVerified: false,
-            isCreator: true,
+            isVerified: Boolean(localAuth.isVerified),
+            isCreator: Boolean(localAuth.isCreator),
             createdAt: new Date(),
+            presence: { isOnline: false, status: 'offline', lastActive: null }
           };
           this.cache.set(cacheKey, { data: synth, timestamp: Date.now() });
           return synth;
@@ -388,33 +401,143 @@ class ProfessionalUserService {
       return null;
     }
 
-    const full = { id: snap.id, ...snap.data() };
+    const rawData = snap.data();
+    const full = { id: snap.id, uid: snap.id, ...rawData };
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
 
     // Overlay shard-backed follower/following counts (legacy fallback).
     await countersManager.apply({ data: full, docPath: `users/${userId}`, fields: ['followerCount', 'followingCount'], scope: 'top' });
 
-    // Privacy filter including block check
-    if (full.isPrivate && requesterId && requesterId !== userId) {
-      const isFriend = await this._areMutualFriends(userId, requesterId);
-      const blocked = await this.isBlocked(userId, requesterId);
-      if (!isFriend || blocked.blocked) {
-        const publicProfile = {
+    // Compute honest presence (Spec §42: only online if valid activity within 5 minutes)
+    const lastActiveDate = full.lastActive?.toDate ? full.lastActive.toDate() : (full.lastActive ? new Date(full.lastActive) : null);
+    const isRecent = lastActiveDate && (Date.now() - lastActiveDate.getTime() < 5 * 60 * 1000);
+    const isActuallyOnline = Boolean(full.isOnline && isRecent);
+    full.presence = {
+      isOnline: isActuallyOnline,
+      status: isActuallyOnline ? 'online' : 'offline',
+      lastActive: lastActiveDate ? lastActiveDate.toISOString() : null
+    };
+
+    // Evaluate Relationship & Bidirectional Block enforcement
+    const isOwner = requesterId === userId;
+    let viewerRelation = isOwner ? 'OWNER' : 'PUBLIC';
+
+    // Auto-record active day in server-authoritative ledger for owner
+    if (isOwner) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (full.lastActiveDay !== todayStr) {
+        import('./levelSystemService.js').then(({ levelSystemService }) => {
+          levelSystemService.recordActiveDay({ userId }).catch(() => {});
+        }).catch(() => {});
+      }
+    }
+
+    if (requesterId && requesterId !== userId) {
+      const [targetBlockedViewer, viewerBlockedTarget] = await Promise.all([
+        this.isBlocked(userId, requesterId),
+        this.isBlocked(requesterId, userId)
+      ]);
+
+      if (targetBlockedViewer?.blocked || viewerBlockedTarget?.blocked) {
+        const blockedProfile = {
           id: userId,
+          uid: userId,
           username: full.username,
           displayName: full.displayName,
           photoURL: full.photoURL,
+          isBlocked: true,
+          isBlockedByTarget: Boolean(targetBlockedViewer?.blocked),
+          isBlockedByViewer: Boolean(viewerBlockedTarget?.blocked),
+          isRestricted: true,
+          bio: '',
+          followerCount: 0,
+          followingCount: 0,
+          postCount: 0,
+          links: [],
+          presence: { isOnline: false, status: 'offline', lastActive: null },
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false
+        };
+        this.cache.set(cacheKey, { data: blockedProfile, timestamp: Date.now() });
+        return blockedProfile;
+      }
+
+      // Check follow & friend relationships
+      const [isFollowingTarget, isFriend] = await Promise.all([
+        this.getFollowStatus(requesterId, userId),
+        this._areMutualFriends(userId, requesterId)
+      ]);
+
+      if (isFriend) {
+        viewerRelation = 'CONNECTION';
+      } else if (isFollowingTarget?.isFollowing) {
+        viewerRelation = 'FOLLOWER';
+      }
+    }
+
+    // Support viewAs simulation for owner previewing public/follower views
+    if (isOwner && viewAs) {
+      if (viewAs === 'public') viewerRelation = 'PUBLIC';
+      else if (viewAs === 'follower') viewerRelation = 'FOLLOWER';
+      else if (viewAs === 'connection') viewerRelation = 'CONNECTION';
+    }
+
+    // Profile Privacy Projection
+    const userPrivacy = full.privacy || DEFAULT_PROFILE_PRIVACY;
+
+    if (viewerRelation !== 'OWNER') {
+      // If profile is strictly private and viewer is neither a connection nor follower
+      if (full.isPrivate && viewerRelation === 'PUBLIC') {
+        const restricted = {
+          id: userId,
+          uid: userId,
+          username: full.username,
+          displayName: full.displayName,
+          photoURL: full.photoURL,
+          coverPhotoURL: full.coverPhotoURL || null,
           bio: full.bio || '',
           isPrivate: true,
-          followerCount: full.followerCount,
-          followingCount: full.followingCount,
-          postCount: full.postCount,
-          isVerified: full.isVerified || false,
-          isCreator: full.isCreator || false,
+          isRestricted: true,
+          followerCount: full.followerCount || 0,
+          followingCount: full.followingCount || 0,
+          postCount: full.postCount || 0,
+          isVerified: Boolean(full.isVerified),
+          isCreator: Boolean(full.isCreator),
+          links: [],
+          presence: { isOnline: false, status: 'offline', lastActive: null },
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false
         };
-        this.cache.set(cacheKey, { data: publicProfile, timestamp: Date.now() });
-        return publicProfile;
+        this.cache.set(cacheKey, { data: restricted, timestamp: Date.now() });
+        return restricted;
       }
+
+      // Granular section-level masking
+      if (!canViewProfileSection('links', userPrivacy, viewerRelation)) {
+        full.links = [];
+      }
+      if (!canViewProfileSection('presence', userPrivacy, viewerRelation)) {
+        full.presence = { isOnline: false, status: 'offline', lastActive: null };
+      }
+      if (!canViewProfileSection('economicStatus', userPrivacy, viewerRelation)) {
+        delete full.coins;
+        delete full.coinBalance;
+        delete full.earnings;
+        delete full.totalEarned;
+      }
+      full.canViewActivity = canViewProfileSection('activity', userPrivacy, viewerRelation);
+      full.canViewAchievements = canViewProfileSection('achievements', userPrivacy, viewerRelation);
+      full.canViewTitles = canViewProfileSection('titles', userPrivacy, viewerRelation);
+      full.canViewFollowersList = canViewProfileSection('followersList', userPrivacy, viewerRelation);
+      full.canViewFollowingList = canViewProfileSection('followingList', userPrivacy, viewerRelation);
+    } else {
+      full.canViewActivity = true;
+      full.canViewAchievements = true;
+      full.canViewTitles = true;
+      full.canViewFollowersList = true;
+      full.canViewFollowingList = true;
     }
 
     this.cache.set(cacheKey, { data: full, timestamp: Date.now() });
@@ -543,7 +666,14 @@ class ProfessionalUserService {
   async updateUserProfile(userId, updates) {
     await this._ensureInitialized();
     const { doc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
-    const sanitise = (str) => (str || '').replace(/<[^>]*>/g, '').replace(/[<>]/g, '');
+
+    // Run schema validation and sanitization
+    const validation = validateProfileUpdate(updates);
+    if (!validation.valid) {
+      throw new Error(`Profile validation failed: ${validation.errors.join(', ')}`);
+    }
+
+    const sanitizedUpdates = { ...validation.sanitized };
 
     if (updates.username) {
       const newUsername = updates.username.toLowerCase().trim();
@@ -562,33 +692,28 @@ class ProfessionalUserService {
           transaction.set(newDoc, { userId, username: newUsername, updatedAt: serverTimestamp() });
           transaction.update(userDoc, { username: newUsername, updatedAt: serverTimestamp(), 'metadata.usernameUpdatedAt': serverTimestamp() });
         });
-        delete updates.username;
+        delete sanitizedUpdates.username;
       }
     }
 
-    if (updates.photoURL) {
-      updates.metadata = { ...updates.metadata, hasCustomAvatar: true, avatarUpdatedAt: serverTimestamp() };
+    if (sanitizedUpdates.photoURL) {
+      sanitizedUpdates.metadata = { ...(sanitizedUpdates.metadata || {}), hasCustomAvatar: true, avatarUpdatedAt: serverTimestamp() };
       this.avatarCache.delete(`avatar_${userId}`);
     }
 
-    if (updates.displayName && !updates.photoURL) {
+    if (sanitizedUpdates.displayName && !sanitizedUpdates.photoURL) {
       const current = await this.getUserProfile(userId);
       if (current && !current.metadata?.hasCustomAvatar) {
-        const newAvatar = this.getAvatarUrl(userId, updates.displayName, null);
-        updates.photoURL = newAvatar;
-        updates.metadata = { ...updates.metadata, hasCustomAvatar: false, avatarGeneratedAt: serverTimestamp() };
+        const newAvatar = this.getAvatarUrl(userId, sanitizedUpdates.displayName, null);
+        sanitizedUpdates.photoURL = newAvatar;
+        sanitizedUpdates.metadata = { ...(sanitizedUpdates.metadata || {}), hasCustomAvatar: false, avatarGeneratedAt: serverTimestamp() };
         this.avatarCache.set(`avatar_${userId}`, newAvatar);
       }
     }
 
-    if (updates.bio) updates.bio = sanitise(updates.bio);
-    if (updates.displayName) updates.displayName = sanitise(updates.displayName);
-    if (updates.website) updates.website = sanitise(updates.website);
-    if (updates.location) updates.location = sanitise(updates.location);
-
     const userRef = doc(this.firestore, 'users', userId);
     await updateDoc(userRef, {
-      ...updates,
+      ...sanitizedUpdates,
       updatedAt: serverTimestamp(),
       lastActive: serverTimestamp()
     });
@@ -727,6 +852,67 @@ class ProfessionalUserService {
     const { doc, getDoc } = await import('firebase/firestore');
     const snap = await getDoc(doc(this.firestore, 'follows', `${followerId}_${followingId}`));
     return { isFollowing: snap.exists() };
+  }
+
+  /**
+   * Evaluates comprehensive relationship state between two users
+   * @param {string} userA - Acting user ID
+   * @param {string} userB - Target user ID
+   * @returns {Promise<{ isOwner: boolean, isFollowing: boolean, isFollower: boolean, isMutualFriend: boolean, isBlocking: boolean, isBlockedBy: boolean, isBlocked: boolean, canMessage: boolean, canViewPrivate: boolean }>}
+   */
+  async getRelationshipState(userA, userB) {
+    if (!userA || !userB) {
+      return {
+        isOwner: false,
+        isFollowing: false,
+        isFollower: false,
+        isMutualFriend: false,
+        isBlocking: false,
+        isBlockedBy: false,
+        isBlocked: false,
+        canMessage: false,
+        canViewPrivate: false
+      };
+    }
+    if (userA === userB) {
+      return {
+        isOwner: true,
+        isFollowing: false,
+        isFollower: false,
+        isMutualFriend: false,
+        isBlocking: false,
+        isBlockedBy: false,
+        isBlocked: false,
+        canMessage: true,
+        canViewPrivate: true
+      };
+    }
+
+    const [fAtoB, fBtoA, bAtoB, bBtoA] = await Promise.all([
+      this.getFollowStatus(userA, userB),
+      this.getFollowStatus(userB, userA),
+      this.isBlocked(userA, userB),
+      this.isBlocked(userB, userA)
+    ]);
+
+    const isFollowing = Boolean(fAtoB?.isFollowing);
+    const isFollower = Boolean(fBtoA?.isFollowing);
+    const isMutualFriend = isFollowing && isFollower;
+    const isBlocking = Boolean(bAtoB?.blocked);
+    const isBlockedBy = Boolean(bBtoA?.blocked);
+    const isBlocked = isBlocking || isBlockedBy;
+
+    return {
+      isOwner: false,
+      isFollowing,
+      isFollower,
+      isMutualFriend,
+      isBlocking,
+      isBlockedBy,
+      isBlocked,
+      canMessage: !isBlocked,
+      canViewPrivate: !isBlocked && (isMutualFriend || isFollowing)
+    };
   }
 
   async getFriends(userId, options = {}) {
@@ -1304,6 +1490,7 @@ export const addCoins = (uid, amount, reason) => getUserService().addCoins(uid, 
 export const followUser = (fid, tid) => getUserService().followUser(fid, tid);
 export const unfollowUser = (fid, tid) => getUserService().unfollowUser(fid, tid);
 export const getFollowStatus = (fid, tid) => getUserService().getFollowStatus(fid, tid);
+export const getRelationshipState = (a, b) => getUserService().getRelationshipState(a, b);
 export const getFriends = (uid, opts) => getUserService().getFriends(uid, opts);
 export const getFollowers = (uid, opts) => getUserService().getFollowers(uid, opts);
 export const getFollowing = (uid, opts) => getUserService().getFollowing(uid, opts);
@@ -1361,6 +1548,7 @@ const userServiceExport = Object.assign(getUserService, {
   followUser,
   unfollowUser,
   getFollowStatus,
+  getRelationshipState,
   getFriends,
   getFollowers,
   getFollowing,

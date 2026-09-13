@@ -19,23 +19,23 @@ const { checkRateLimit } = require('./rateLimit');
 
 const db = admin.firestore();
 
-const LEVELS = [
-  { level: 1, xpRequired: 0, coinReward: 0 },
-  { level: 2, xpRequired: 100, coinReward: 10 },
-  { level: 3, xpRequired: 300, coinReward: 20 },
-  { level: 4, xpRequired: 600, coinReward: 30 },
-  { level: 5, xpRequired: 1000, coinReward: 40 },
-  { level: 6, xpRequired: 1500, coinReward: 50 },
-  { level: 7, xpRequired: 2100, coinReward: 60 },
-  { level: 8, xpRequired: 2800, coinReward: 70 },
-  { level: 9, xpRequired: 3600, coinReward: 80 },
-  { level: 10, xpRequired: 4500, coinReward: 100 },
-  { level: 11, xpRequired: 5500, coinReward: 120 },
-  { level: 12, xpRequired: 6600, coinReward: 140 },
-  { level: 13, xpRequired: 7800, coinReward: 160 },
-  { level: 14, xpRequired: 9100, coinReward: 180 },
-  { level: 15, xpRequired: 10500, coinReward: 200 },
-];
+const LEVELS = Array.from({ length: 100 }, (_, i) => {
+  const level = i + 1;
+  const xpRequired = 50 * level * (level - 1);
+  let coinReward = 0;
+  if (level > 1) {
+    if (level <= 15) {
+      const legacyRewards = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100, 120, 140, 160, 180, 200];
+      coinReward = legacyRewards[level - 1] || (level * 10);
+    } else {
+      coinReward = 200 + (level - 15) * 15;
+      if (level % 10 === 0) coinReward += 100;
+      if (level === 50) coinReward += 500;
+      if (level === 100) coinReward += 2500;
+    }
+  }
+  return { level, xpRequired, coinReward };
+});
 
 const XP_RULES = {
   post_created: { xp: 10, dailyCap: 100 },
@@ -159,5 +159,86 @@ exports.awardExperience = functions
     } catch (err) {
       functions.logger.error('awardExperience failed', { uid, action, error: err.message });
       throw new functions.https.HttpsError('internal', 'Could not award XP');
+    }
+  });
+
+exports.recordActiveDay = functions
+  .runWith({ memory: '256MB', timeoutSeconds: 60 })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
+    }
+    const uid = context.auth.uid;
+    await checkRateLimit(uid, 'recordActiveDay', 30, 60000);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterdayDate = new Date(Date.now() - 86400000);
+    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+
+    const userRef = db.doc(`users/${uid}`);
+    const ledgerRef = db.doc(`active_days_ledger/${uid}_${today}`);
+
+    try {
+      let result = null;
+      await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists) {
+          throw new functions.https.HttpsError('not-found', 'User not found');
+        }
+
+        const userData = userSnap.data();
+        const lastActiveDay = userData.lastActiveDay || null;
+
+        if (lastActiveDay === today) {
+          result = {
+            success: true,
+            activeStreak: userData.activeStreak || 1,
+            activeDaysCount: userData.activeDaysCount || 1,
+            alreadyRecordedToday: true,
+            lastActiveDay: today,
+          };
+          return;
+        }
+
+        let newStreak = 1;
+        if (lastActiveDay === yesterday) {
+          newStreak = (userData.activeStreak || 0) + 1;
+        } else {
+          newStreak = 1;
+        }
+
+        const newDaysCount = (userData.activeDaysCount || 0) + 1;
+
+        tx.set(ledgerRef, {
+          uid,
+          userId: uid,
+          date: today,
+          streak: newStreak,
+          totalDays: newDaysCount,
+          status: 'verified',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        tx.set(userRef, {
+          lastActiveDay: today,
+          activeStreak: newStreak,
+          activeDaysCount: newDaysCount,
+          lastActive: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        result = {
+          success: true,
+          activeStreak: newStreak,
+          activeDaysCount: newDaysCount,
+          alreadyRecordedToday: false,
+          lastActiveDay: today,
+        };
+      });
+
+      return result;
+    } catch (err) {
+      functions.logger.error('recordActiveDay failed', { uid, error: err.message });
+      throw new functions.https.HttpsError('internal', 'Could not record active day');
     }
   });

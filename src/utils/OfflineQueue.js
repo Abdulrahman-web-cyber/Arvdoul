@@ -213,6 +213,16 @@ class OfflineQueue {
     return this._memory.filter((o) => o.status === 'pending').length;
   }
 
+  /** Alias for length() */
+  async getPendingCount() {
+    return this.length();
+  }
+
+  /** Alias for process() */
+  async drain(handler) {
+    return this.process(handler);
+  }
+
   /** All pending operations (real unsynced local changes), newest first. */
   async getPending() {
     const db = await this._db();
@@ -267,5 +277,6 @@ class OfflineQueue {
   }
 }
 
+export { OfflineQueue };
 export const offlineQueue = new OfflineQueue();
 export default offlineQueue;

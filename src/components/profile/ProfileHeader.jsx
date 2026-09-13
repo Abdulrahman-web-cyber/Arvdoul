@@ -25,7 +25,7 @@
  * @property {Function} [onMutualFriendPress] - Mutual friend click handler
  */
 
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Settings, 
@@ -35,7 +35,13 @@ import {
   Shield,
   Crown,
   BadgeCheck,
-  MessageCircle
+  MessageCircle,
+  UserPlus,
+  UserCheck,
+  Coins,
+  Flame,
+  Landmark,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import ProfileAvatar from './ProfileAvatar';
@@ -45,6 +51,9 @@ import ProfileBadges from './ProfileBadges';
 import ProfileStats from './ProfileStats';
 import { useUser } from "../../context/UserContext";
 import ProfileOptionsMenu from './ProfileOptionsMenu';
+import ProfileTipModal from './ProfileTipModal';
+import { getCitizenTier } from '../../services/levelSystemService';
+import { toast } from 'sonner';
 
 /**
  * ProfileHeader Component
@@ -112,6 +121,56 @@ const ProfileHeader = memo(({
 
   // More options menu state
   const [showOptions, setShowOptions] = useState(false);
+  const [showTipModal, setShowTipModal] = useState(false);
+
+  // User auth context for follow/unfollow
+  const { userProfile: currentAuthUser, followUser, unfollowUser } = useUser();
+  const currentUserId = currentAuthUser?.uid || currentAuthUser?.id;
+  const targetUserId = profile?.uid || profile?.id;
+
+  const [isFollowing, setIsFollowing] = useState(
+    Boolean(profile?.isFollowing || profile?.relationship?.isFollowing)
+  );
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followerCount, setFollowerCount] = useState(profile?.followerCount || 0);
+
+  useEffect(() => {
+    setIsFollowing(Boolean(profile?.isFollowing || profile?.relationship?.isFollowing));
+    setFollowerCount(profile?.followerCount || 0);
+  }, [profile?.isFollowing, profile?.relationship?.isFollowing, profile?.followerCount]);
+
+  // Handle follow / unfollow toggle
+  const handleFollowToggle = useCallback(async () => {
+    if (!currentUserId) {
+      toast.error('Please sign in to follow creators');
+      return;
+    }
+    if (currentUserId === targetUserId) {
+      toast.error('You cannot follow yourself');
+      return;
+    }
+
+    setFollowLoading(true);
+    const previousState = isFollowing;
+    setIsFollowing(!previousState);
+    setFollowerCount(prev => Math.max(0, prev + (previousState ? -1 : 1)));
+
+    try {
+      if (previousState) {
+        if (unfollowUser) await unfollowUser(targetUserId);
+        toast.success(`Unfollowed @${profile?.username || 'user'}`);
+      } else {
+        if (followUser) await followUser(targetUserId);
+        toast.success(`Following @${profile?.username || 'user'}`);
+      }
+    } catch (err) {
+      setIsFollowing(previousState);
+      setFollowerCount(prev => Math.max(0, prev + (previousState ? 1 : -1)));
+      toast.error(err.message || 'Failed to update follow status');
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [currentUserId, targetUserId, isFollowing, followUser, unfollowUser, profile?.username]);
 
   // Handle more options
   const handleMoreOptions = useCallback(() => {
@@ -215,43 +274,88 @@ const ProfileHeader = memo(({
               </>
             ) : (
               <>
+                {/* Follow / Unfollow */}
+                <button
+                  onClick={handleFollowToggle}
+                  disabled={followLoading}
+                  className={cn(
+                    'px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-1.5 hover:scale-105 active:scale-95 shadow-md',
+                    isFollowing
+                      ? (theme === 'dark' 
+                          ? 'bg-gray-800 text-gray-200 hover:bg-gray-700 border border-gray-700' 
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300')
+                      : 'text-white'
+                  )}
+                  style={!isFollowing ? { background: buttonGradient } : undefined}
+                  aria-label={isFollowing ? 'Unfollow' : 'Follow'}
+                >
+                  {followLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isFollowing ? (
+                    <>
+                      <UserCheck className="w-4 h-4 text-emerald-500" />
+                      <span>Following</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Follow</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Tip Creator Button */}
+                <button
+                  onClick={() => setShowTipModal(true)}
+                  className={cn(
+                    'px-3.5 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-1.5 hover:scale-105 active:scale-95 shadow-md',
+                    'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white'
+                  )}
+                  aria-label="Tip Creator Coins"
+                >
+                  <Coins className="w-4 h-4 text-amber-200" />
+                  <span>Tip</span>
+                </button>
+
+                {/* Message */}
                 <button
                   onClick={handleMessage}
                   className={cn(
-                    'px-4 py-2 rounded-xl font-semibold text-sm',
-                    'text-white hover:opacity-90 transition-all duration-200',
-                    'flex items-center gap-2',
-                    'hover:scale-105 active:scale-95',
-                    'shadow-lg hover:shadow-xl'
+                    'p-2.5 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center hover:scale-105 active:scale-95 shadow-md',
+                    theme === 'dark' 
+                      ? 'bg-gray-800/80 hover:bg-gray-700/80 text-purple-400 border border-gray-700/50' 
+                      : 'bg-white/90 hover:bg-gray-100 text-purple-600 border border-gray-200'
                   )}
-                  style={{ background: buttonGradient }}
                   aria-label="Send Message"
                 >
-                  <MessageCircle className="w-4 h-4" aria-hidden="true" />
-                  <span>Message</span>
+                  <MessageCircle className="w-5 h-5" />
                 </button>
+
+                {/* Share */}
                 <button
                   onClick={handleShare}
                   className={cn(
                     'p-2.5 rounded-xl',
                     theme === 'dark' 
-                      ? 'bg-gray-800/80 hover:bg-gray-700/80' 
-                      : 'bg-white/80 hover:bg-gray-100',
+                      ? 'bg-gray-800/80 hover:bg-gray-700/80 text-gray-400 hover:text-white' 
+                      : 'bg-white/80 hover:bg-gray-100 text-gray-600',
                     'border border-gray-700/20 dark:border-gray-300/20',
                     'hover:scale-105 active:scale-95 transition-all duration-200',
                     'shadow-lg hover:shadow-xl'
                   )}
                   aria-label="Share Profile"
                 >
-                  <Share2 className="w-5 h-5 text-gray-600 dark:text-gray-400" aria-hidden="true" />
+                  <Share2 className="w-5 h-5" aria-hidden="true" />
                 </button>
+
+                {/* More Options */}
                 <button
                   onClick={handleMoreOptions}
                   className={cn(
                     'p-2.5 rounded-xl',
                     theme === 'dark' 
-                      ? 'bg-gray-800/80 hover:bg-gray-700/80' 
-                      : 'bg-white/80 hover:bg-gray-100',
+                      ? 'bg-gray-800/80 hover:bg-gray-700/80 text-gray-400 hover:text-white' 
+                      : 'bg-white/80 hover:bg-gray-100 text-gray-600',
                     'border border-gray-700/20 dark:border-gray-300/20',
                     'hover:scale-105 active:scale-95 transition-all duration-200',
                     'shadow-lg hover:shadow-xl'
@@ -292,9 +396,39 @@ const ProfileHeader = memo(({
           </p>
         )}
         
-        {/* Badges and Level */}
-        <div className="mt-3 flex items-center gap-3 flex-wrap">
+        {/* Badges, Level, Active Streak, and Citizenship Pills */}
+        <div className="mt-3 flex items-center gap-2.5 flex-wrap">
           <ProfileLevel level={level || profile.level} theme={theme} />
+          
+          {profile?.activeStreak > 0 && (
+            <span 
+              className={cn(
+                'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
+                'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 shadow-sm'
+              )}
+              title={`${profile.activeStreak} day consecutive active streak`}
+            >
+              <Flame className="w-3.5 h-3.5 fill-orange-500 text-orange-500" />
+              <span>{profile.activeStreak}d streak</span>
+            </span>
+          )}
+
+          {(() => {
+            const citizenTier = getCitizenTier(profile?.level || level || 1, profile?.activeDaysCount || profile?.activeStreak || 0);
+            return (
+              <span 
+                className={cn(
+                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
+                  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm'
+                )}
+                title={`Citizen Standing: ${citizenTier.tier} (${citizenTier.description})`}
+              >
+                <Landmark className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{citizenTier.tier}</span>
+              </span>
+            );
+          })()}
+
           <ProfileBadges badges={profile.badges || []} theme={theme} />
         </div>
         
@@ -321,7 +455,7 @@ const ProfileHeader = memo(({
         <div className="mt-4">
           <ProfileStats
             posts={profile.postCount || 0}
-            followers={profile.followerCount || 0}
+            followers={followerCount}
             following={profile.followingCount || 0}
             friends={profile.friendCount || 0}
             likes={profile.likesReceived || 0}
@@ -332,6 +466,19 @@ const ProfileHeader = memo(({
           />
         </div>
       </div>
+
+      {/* Creator Tip Modal */}
+      <ProfileTipModal
+        isOpen={showTipModal}
+        onClose={() => setShowTipModal(false)}
+        recipient={profile}
+        currentUser={currentAuthUser}
+        onTipSuccess={(amt) => {
+          if (profile) {
+            profile.coins = (profile.coins || 0) + amt;
+          }
+        }}
+      />
     </article>
   );
 });

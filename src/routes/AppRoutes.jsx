@@ -78,6 +78,13 @@ const AdminDashboardScreen = lazy(() => import("../screens/Admin/AdminDashboardS
 const AdminUserManagementScreen = lazy(() => import("../screens/Admin/AdminUserManagementScreen.jsx"));
 const AdminContentManagementScreen = lazy(() => import("../screens/Admin/AdminContentManagementScreen.jsx"));
 const AdminModerationQueueScreen = lazy(() => import("../screens/Admin/AdminModerationQueueScreen.jsx"));
+const AdminEconomyScreen = lazy(() => import("../screens/Admin/AdminEconomyScreen.jsx"));
+const AdminVerificationScreen = lazy(() => import("../screens/Admin/AdminVerificationScreen.jsx"));
+const AdminFeatureFlagsScreen = lazy(() => import("../screens/Admin/AdminFeatureFlagsScreen.jsx"));
+const AdminSystemHealthScreen = lazy(() => import("../screens/Admin/AdminSystemHealthScreen.jsx"));
+const AdminAuditLogsScreen = lazy(() => import("../screens/Admin/AdminAuditLogsScreen.jsx"));
+const AdminSupportTicketsScreen = lazy(() => import("../screens/Admin/AdminSupportTicketsScreen.jsx"));
+const AdminCommunityManagementScreen = lazy(() => import("../screens/Admin/AdminCommunityManagementScreen.jsx"));
 
 // Video Editor Screen
 const VideoEditorScreen = lazy(() => import("../screens/VideoEditor/VideoEditorScreen.jsx"));
@@ -727,6 +734,62 @@ export default function AppRoutes() {
         <AdminRoute>
           <Suspense fallback={<RouteFallback />}>
             <AdminModerationQueueScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/economy" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminEconomyScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/verification" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminVerificationScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/flags" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminFeatureFlagsScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/health" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminSystemHealthScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/audit-logs" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminAuditLogsScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/tickets" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminSupportTicketsScreen />
+          </Suspense>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/communities" element={
+        <AdminRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminCommunityManagementScreen />
           </Suspense>
         </AdminRoute>
       } />

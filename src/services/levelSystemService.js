@@ -21,26 +21,28 @@
 
 import { logger } from '../utils/Logger.js';
 
-/** Level curve — MUST stay aligned with monetizationService DEFAULT_CONFIG.LEVELS. */
-export const LEVELS = [
-  { level: 1, xpRequired: 0, coinReward: 0 },
-  { level: 2, xpRequired: 100, coinReward: 10 },
-  { level: 3, xpRequired: 300, coinReward: 20 },
-  { level: 4, xpRequired: 600, coinReward: 30 },
-  { level: 5, xpRequired: 1000, coinReward: 40 },
-  { level: 6, xpRequired: 1500, coinReward: 50 },
-  { level: 7, xpRequired: 2100, coinReward: 60 },
-  { level: 8, xpRequired: 2800, coinReward: 70 },
-  { level: 9, xpRequired: 3600, coinReward: 80 },
-  { level: 10, xpRequired: 4500, coinReward: 100 },
-  { level: 11, xpRequired: 5500, coinReward: 120 },
-  { level: 12, xpRequired: 6600, coinReward: 140 },
-  { level: 13, xpRequired: 7800, coinReward: 160 },
-  { level: 14, xpRequired: 9100, coinReward: 180 },
-  { level: 15, xpRequired: 10500, coinReward: 200 },
-];
+/** Level curve — 100 levels scaling progressively with mathematical consistency. */
+export const LEVELS = Array.from({ length: 100 }, (_, i) => {
+  const level = i + 1;
+  const xpRequired = 50 * level * (level - 1);
+  let coinReward = 0;
+  if (level > 1) {
+    if (level <= 15) {
+      // Preserve exact legacy coin rewards for levels 2-15
+      const legacyRewards = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100, 120, 140, 160, 180, 200];
+      coinReward = legacyRewards[level - 1] || (level * 10);
+    } else {
+      // Progressive scaling for levels 16 to 100
+      coinReward = 200 + (level - 15) * 15;
+      if (level % 10 === 0) coinReward += 100;
+      if (level === 50) coinReward += 500;
+      if (level === 100) coinReward += 2500;
+    }
+  }
+  return { level, xpRequired, coinReward };
+});
 
-/** Honest rank titles per level band. */
+/** Honest rank titles per level band across all 100 levels. */
 export const RANK_TITLES = [
   { minLevel: 1, title: 'Newcomer' },
   { minLevel: 3, title: 'Explorer' },
@@ -49,12 +51,82 @@ export const RANK_TITLES = [
   { minLevel: 10, title: 'Pro Creator' },
   { minLevel: 13, title: 'Elite Creator' },
   { minLevel: 15, title: 'Arvdoul Legend' },
+  { minLevel: 25, title: 'Vanguard' },
+  { minLevel: 40, title: 'Sovereign' },
+  { minLevel: 55, title: 'Apex Creator' },
+  { minLevel: 70, title: 'Paragon' },
+  { minLevel: 85, title: 'Ascendant' },
+  { minLevel: 100, title: 'Transcendent Legend' },
 ];
 
 /**
- * Real feature perks unlocked by level. These map to ACTUAL platform
- * capabilities (see liveService min level 5, monetization
- * WITHDRAWAL_MIN_LEVEL 10).
+ * Digital Citizenship tiers for platform governance, democratic participation,
+ * and nation standing.
+ */
+export const CITIZEN_TIERS = [
+  { minLevel: 1, minDays: 0, tier: 'Resident', icon: '🌱', description: 'Registered Arvdoul platform resident' },
+  { minLevel: 5, minDays: 7, tier: 'Citizen', icon: '🏛️', description: 'Full democratic voting and community participant' },
+  { minLevel: 15, minDays: 30, tier: 'Statesperson', icon: '📜', description: 'Established community pillar and trusted contributor' },
+  { minLevel: 30, minDays: 90, tier: 'Senator', icon: '⚖️', description: 'Platform legislative voter and policy proposer' },
+  { minLevel: 60, minDays: 180, tier: 'Chancellor', icon: '👑', description: 'High governing council member' },
+  { minLevel: 100, minDays: 365, tier: 'Founder', icon: '⭐', description: 'Permanent Founding Citizen of Arvdoul' },
+];
+
+/** Pure: resolve citizen tier from level and active days. */
+export function getCitizenTier(level = 1, activeDaysCount = 0) {
+  let matched = CITIZEN_TIERS[0];
+  for (const c of CITIZEN_TIERS) {
+    if (level >= c.minLevel || activeDaysCount >= c.minDays) {
+      matched = c;
+    }
+  }
+  return matched;
+}
+
+/**
+ * Decouples creator capabilities from raw XP grinding.
+ * Allows creators with approved status, creator tier, or minimum audience
+ * to stream, monetize, sell in shop, and receive tips without needing raw level 10.
+ */
+export function getCreatorCapabilities(profile) {
+  if (!profile) {
+    return {
+      isCreator: false,
+      creatorTier: 'standard',
+      canStream: false,
+      canMonetize: false,
+      canReceiveTips: false,
+      canWithdraw: false,
+      canCreateShop: false,
+    };
+  }
+
+  const isCreator = Boolean(profile.isCreator || profile.creatorTier || profile.creatorStatus === 'approved');
+  const level = profile.level || 1;
+  const followers = profile.followerCount || 0;
+  const isVerified = Boolean(profile.isVerified || profile.verified || profile.verificationBadge);
+  const tier = profile.creatorTier || (isCreator ? 'creator' : 'standard');
+
+  return {
+    isCreator,
+    creatorTier: tier,
+    // Live streaming: Available to all creators or anyone level >= 5
+    canStream: isCreator || level >= 5,
+    canStreamLive: isCreator || level >= 5,
+    // Monetization: Available to creators or anyone level >= 5
+    canMonetize: isCreator || tier === 'creator' || tier === 'partner' || level >= 5,
+    // Tips: Available to any creator, or users with >= 10 followers, or level >= 3
+    canReceiveTips: isCreator || followers >= 10 || level >= 3,
+    // Creator Shop: Available to creators or level >= 3
+    canCreateShop: isCreator || level >= 3,
+    canSellMerch: isCreator || level >= 3,
+    // Payouts & withdrawals: Available to verified creators, partner tier, or level >= 10
+    canWithdraw: isVerified || tier === 'partner' || tier === 'elite' || level >= 10,
+  };
+}
+
+/**
+ * Real feature perks unlocked by level across the 100-level roadmap.
  */
 export const LEVEL_PERKS = [
   { minLevel: 2, icon: '🎨', title: 'Advanced Editor', description: 'Unlock the full video & audio editor suite.' },
@@ -63,6 +135,11 @@ export const LEVEL_PERKS = [
   { minLevel: 10, icon: '💸', title: 'Creator Withdrawals', description: 'Withdraw your coin earnings to real money.' },
   { minLevel: 12, icon: '🏷️', title: 'Custom Badge', description: 'Personalize your profile badge color.' },
   { minLevel: 15, icon: '👑', title: 'Verified Priority', description: 'Priority support and verification review.' },
+  { minLevel: 20, icon: '⚡', title: 'Early Access Studio', description: 'Beta access to new AI generative creator tools.' },
+  { minLevel: 30, icon: '🏛️', title: 'Citizen Council', description: 'Submit and vote on constitutional governance proposals.' },
+  { minLevel: 50, icon: '💎', title: 'Arvdoul Sovereign', description: 'Exclusive diamond avatar border and sovereign crest.' },
+  { minLevel: 75, icon: '🪐', title: 'Nation Founder Circle', description: 'Host platform-wide global events and spaces.' },
+  { minLevel: 100, icon: '🌟', title: 'Transcendent Legend', description: 'Permanent monument in Arvdoul Hall of Fame.' },
 ];
 
 /**
@@ -336,6 +413,122 @@ class LevelSystemService {
   /** Invalidates the cached level for a user. */
   invalidate(userId) {
     this._cache.delete(this._cacheKey(userId));
+  }
+
+  /**
+   * Server-authoritative daily active day ledger and continuous streak tracking.
+   * Atomic Firestore transaction: checks lastActiveDay vs today/yesterday,
+   * updates activeStreak and activeDaysCount, writes to active_days_ledger collection,
+   * and awards daily_login XP.
+   *
+   * @param {Object} opts
+   * @param {string} opts.userId
+   * @returns {Promise<{success: boolean, activeStreak: number, activeDaysCount: number, alreadyRecordedToday: boolean}>}
+   */
+  async recordActiveDay({ userId }) {
+    if (!userId) return { success: false, error: 'User ID required' };
+
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const yesterdayDate = new Date(Date.now() - 86400000);
+    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+
+    // Try Cloud Function callable first if available
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const func = httpsCallable(getFunctions(), 'recordActiveDay');
+        const res = await func({ userId });
+        if (res.data?.success) {
+          this._cache.delete(this._cacheKey(userId));
+          return res.data;
+        }
+      } catch (err) {
+        // Fallback to atomic Firestore transaction
+      }
+    }
+
+    try {
+      const { getFirestoreInstance } = await import('../firebase/firebase.js');
+      const fstore = await import('firebase/firestore');
+      const db = await getFirestoreInstance();
+
+      const userRef = fstore.doc(db, 'users', userId);
+      const ledgerRef = fstore.doc(db, 'active_days_ledger', `${userId}_${today}`);
+
+      let result = null;
+
+      await fstore.runTransaction(db, async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists()) return;
+
+        const data = userSnap.data();
+        const lastActiveDay = data.lastActiveDay || null;
+
+        // If already logged today, keep existing streak
+        if (lastActiveDay === today) {
+          result = {
+            success: true,
+            activeStreak: data.activeStreak || 1,
+            activeDaysCount: data.activeDaysCount || 1,
+            alreadyRecordedToday: true,
+            lastActiveDay: today,
+          };
+          return;
+        }
+
+        let newStreak = 1;
+        if (lastActiveDay === yesterday) {
+          // Consecutive day active!
+          newStreak = (data.activeStreak || 0) + 1;
+        } else {
+          // Streak reset or fresh start
+          newStreak = 1;
+        }
+
+        const newDaysCount = (data.activeDaysCount || 0) + 1;
+
+        // Write immutable ledger entry for auditability
+        tx.set(ledgerRef, {
+          uid: userId,
+          userId,
+          date: today,
+          streak: newStreak,
+          totalDays: newDaysCount,
+          status: 'verified',
+          createdAt: fstore.serverTimestamp(),
+        }, { merge: true });
+
+        // Update user document with server-authoritative fields
+        tx.set(userRef, {
+          lastActiveDay: today,
+          activeStreak: newStreak,
+          activeDaysCount: newDaysCount,
+          lastActive: fstore.serverTimestamp(),
+          updatedAt: fstore.serverTimestamp(),
+        }, { merge: true });
+
+        result = {
+          success: true,
+          activeStreak: newStreak,
+          activeDaysCount: newDaysCount,
+          alreadyRecordedToday: false,
+          lastActiveDay: today,
+        };
+      });
+
+      // Best effort: award daily_login XP if not already recorded today
+      if (result && !result.alreadyRecordedToday) {
+        try {
+          await this.awardExperience({ userId, action: 'daily_login', source: today });
+        } catch {}
+      }
+
+      this._cache.delete(this._cacheKey(userId));
+      return result || { success: false };
+    } catch (err) {
+      logger.warn('[LevelSystem] recordActiveDay fallback failed:', { error: err.message });
+      return { success: false, error: err.message };
+    }
   }
 }
 

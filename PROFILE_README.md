@@ -41,7 +41,7 @@ The User Profile System is a comprehensive, production-ready profile management 
   - Daily stats and trends
   - Demographics and ranking
 
-### Components (22 total)
+### Components (25 total)
 
 Located in `src/components/profile/`:
 
@@ -69,22 +69,36 @@ Located in `src/components/profile/`:
 | ProfileAbout | Profile about/bio information |
 | ProfilePrivacyBadge | Privacy status indicator |
 | ProfileSkeleton | Loading skeleton for profiles |
+| ProfileOptionsMenu | Context menu for blocking, reporting, sharing, and settings |
+| ProfileProgression | Visual level, XP bar, daily streaks, and rank progress |
+| ProfileTipModal | Monetization tip transfer modal with coin balance validation |
 
-### Screens (12 total)
+### Screens (13 total)
 
 Located in `src/screens/Profile/`:
 
 | Screen | Route | Description |
 |--------|-------|-------------|
 | ProfileScreen | `/profile`, `/profile/:userId` | Main profile screen |
-| EditProfileScreen | `/profile/edit` | Edit profile form |
+| ProfilePublicScreen | `/u/:username` | Public unauthenticated / external profile view |
+| ProfileMyScreen | `/me` | Dedicated current user profile shortcut |
+| ProfilePreviewScreen | `/profile/preview` | Preview profile appearance before publishing |
+| EditProfileScreen | `/profile/edit` | Edit profile form with crop & link management |
 | CreatorDashboardScreen | `/profile/analytics` | Full analytics dashboard |
+| AnalyticsScreen | `/profile/:userId/analytics` | Deep metrics, audience demographics & charts |
 | FollowersScreen | `/profile/:userId/followers` | Followers list |
 | FollowingScreen | `/profile/:userId/following` | Following list |
 | FriendsScreen | `/profile/:userId/friends` | Mutual friends list |
 | HighlightsScreen | `/profile/highlights` | Manage highlights |
 | AboutScreen | `/profile/about` | Profile about section |
-| ProfileSettingsScreen | `/profile/settings` | Privacy and settings |
+| ProfileSettingsScreen | `/profile/settings` | Privacy, section visibility, and settings |
+
+### Hardening & Security Guarantees
+- **Server-Authoritative Guarding**: Strips `xp`, `level`, `reputation`, `balance`, and `activeStreak` from any client write attempts (`profileContracts.js`).
+- **XSS & Protocol Whitelist**: Validates website and profile links against strict HTTP/HTTPS protocol whitelist (`isValidWebUrl`, `sanitizeProfileUrl`), blocking `javascript:` and dangerous URI vectors.
+- **Privacy Scopes**: Enforces 4-tier visibility (`EVERYONE`, `FOLLOWERS`, `CONNECTIONS`, `ONLY_ME`) for profile sections (`canViewProfileSection`).
+- **Optimistic State with Auto-Rollback**: All profile edits, avatar/cover uploads, and follow states in `profileStore.js` update optimistically and automatically revert on network failure.
+- **Automated Test Coverage**: 45 unit & integration tests passing across `profileCompletion.test.js` (30 tests) and `profileSystemHardening.test.js` (15 tests).
 
 ### Hooks (5 total)
 

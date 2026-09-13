@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { 
   Users, FileText, Flag, AlertTriangle, Shield, TrendingUp,
   Eye, Clock, CheckCircle, XCircle, BarChart3, Settings,
-  Activity, DollarSign, MessageCircle
+  Activity, DollarSign, MessageCircle, Coins, Sliders,
+  ShieldCheck, UserCheck, Zap, Radio
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -240,50 +241,78 @@ const AdminDashboardScreen = () => {
 
         {/* Quick Actions */}
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-          Quick Actions
+          Platform Governance & Controls
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
           <QuickAction
             title="User Management"
             description="View and manage user accounts"
             icon={Users}
             route="/admin/users"
-            color="bg-blue-100 text-blue-600"
+            color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
           />
           <QuickAction
             title="Content Moderation"
-            description="Review reported content"
+            description="Review reported content and strikes"
             icon={Shield}
             route="/admin/moderation"
-            color="bg-red-100 text-red-600"
+            color="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
           />
           <QuickAction
             title="Content Management"
-            description="Manage posts and media"
+            description="Manage posts, media, and comments"
             icon={FileText}
             route="/admin/content"
-            color="bg-purple-100 text-purple-600"
+            color="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
           />
           <QuickAction
-            title="Analytics"
-            description="View platform analytics"
-            icon={BarChart3}
-            route="/admin/analytics"
-            color="bg-green-100 text-green-600"
+            title="Economy Oversight"
+            description="Tokenomics, treasury, and creator payouts"
+            icon={Coins}
+            route="/admin/economy"
+            color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
           />
           <QuickAction
-            title="Settings"
-            description="Configure platform settings"
-            icon={Settings}
-            route="/admin/settings"
-            color="bg-gray-100 text-gray-600"
+            title="Creator Verification"
+            description="Review creator badge applications"
+            icon={UserCheck}
+            route="/admin/verification"
+            color="bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
+          />
+          <QuickAction
+            title="Feature Flags"
+            description="Live overrides and emergency switches"
+            icon={Zap}
+            route="/admin/flags"
+            color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+          />
+          <QuickAction
+            title="System Health"
+            description="Observability, SLOs, and diagnostics"
+            icon={Activity}
+            route="/admin/health"
+            color="bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400"
+          />
+          <QuickAction
+            title="Security Audit Logs"
+            description="Forensic investigation and trails"
+            icon={ShieldCheck}
+            route="/admin/audit-logs"
+            color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400"
           />
           <QuickAction
             title="Support Tickets"
-            description="Handle user support requests"
+            description="AI triage and customer inquiries"
             icon={MessageCircle}
             route="/admin/tickets"
-            color="bg-amber-100 text-amber-600"
+            color="bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
+          />
+          <QuickAction
+            title="Community Governance"
+            description="Hub verification and community strikes"
+            icon={Users}
+            route="/admin/communities"
+            color="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400"
           />
         </div>
 

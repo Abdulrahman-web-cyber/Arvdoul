@@ -22,7 +22,13 @@ import {
   Link as LinkIcon,
   Calendar,
   Globe,
-  Shield
+  Shield,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Lock,
+  Eye,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -48,6 +54,13 @@ export default function EditProfileScreen() {
     education: '',
     language: 'English',
     isPrivate: false,
+    links: [],
+    privacy: {
+      profileVisibility: 'public',
+      onlinePresence: 'followers',
+      followersVisibility: 'public',
+      activityVisibility: 'public',
+    },
   });
   
   const [loading, setLoading] = useState(false);
@@ -71,7 +84,14 @@ export default function EditProfileScreen() {
         profession: userProfile.profession || '',
         education: userProfile.education || '',
         language: userProfile.language || 'English',
-        isPrivate: userProfile.isPrivate || false,
+        isPrivate: Boolean(userProfile.isPrivate),
+        links: Array.isArray(userProfile.links) ? userProfile.links : [],
+        privacy: {
+          profileVisibility: userProfile.privacy?.profileVisibility || 'public',
+          onlinePresence: userProfile.privacy?.onlinePresence || 'followers',
+          followersVisibility: userProfile.privacy?.followersVisibility || 'public',
+          activityVisibility: userProfile.privacy?.activityVisibility || 'public',
+        },
       });
       setAvatarPreview(userProfile.photoURL);
       setCoverPreview(userProfile.coverPhotoURL);
@@ -81,6 +101,59 @@ export default function EditProfileScreen() {
   // Handlers
   const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handlePrivacyChange = useCallback((key, value) => {
+    setFormData(prev => ({
+      ...prev,
+      privacy: {
+        ...(prev.privacy || {}),
+        [key]: value,
+      },
+    }));
+  }, []);
+
+  const handleAddLink = useCallback(() => {
+    if (formData.links.length >= 10) {
+      toast.error('Maximum 10 links allowed');
+      return;
+    }
+    const newLink = {
+      id: Date.now().toString(),
+      title: '',
+      url: '',
+      platform: 'custom',
+      isPrimary: formData.links.length === 0,
+    };
+    setFormData(prev => ({
+      ...prev,
+      links: [...prev.links, newLink],
+    }));
+  }, [formData.links]);
+
+  const handleUpdateLink = useCallback((index, field, value) => {
+    setFormData(prev => {
+      const updated = [...prev.links];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, links: updated };
+    });
+  }, []);
+
+  const handleRemoveLink = useCallback((index) => {
+    setFormData(prev => ({
+      ...prev,
+      links: prev.links.filter((_, i) => i !== index),
+    }));
+  }, []);
+
+  const handleTogglePrimaryLink = useCallback((index) => {
+    setFormData(prev => {
+      const updated = prev.links.map((link, i) => ({
+        ...link,
+        isPrimary: i === index,
+      }));
+      return { ...prev, links: updated };
+    });
   }, []);
   
   const handleAvatarChange = useCallback((e) => {
@@ -121,18 +194,24 @@ export default function EditProfileScreen() {
         await userService.uploadCoverPhoto(userProfile.uid, coverFile);
       }
       
+      // Clean links
+      const cleanedData = {
+        ...formData,
+        links: (formData.links || []).filter(l => l.url && l.url.trim().length > 0),
+      };
+      
       // Update profile
-      await updateUserProfile(formData);
+      await updateUserProfile(cleanedData);
       
       toast.success('Profile updated successfully!');
       navigate(-1);
     } catch (error) {
       console.error('Failed to update profile:', error);
-      toast.error('Failed to update profile');
+      toast.error(error.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
-  }, [formData, avatarFile, updateUserProfile, navigate, userProfile, userService]);
+  }, [formData, avatarFile, coverFile, updateUserProfile, navigate, userProfile, userService]);
   
   const handleCancel = useCallback(() => {
     navigate(-1);
@@ -306,15 +385,24 @@ export default function EditProfileScreen() {
           />
           
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-gray-400" />
-              Bio
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-gray-400" />
+                Bio
+              </label>
+              <span className={cn(
+                "text-xs",
+                formData.bio.length > 500 ? "text-red-500 font-bold" : "text-gray-400"
+              )}>
+                {formData.bio.length} / 500
+              </span>
+            </div>
             <textarea
               value={formData.bio}
               onChange={(e) => handleInputChange('bio', e.target.value)}
               placeholder="Tell us about yourself..."
               rows={4}
+              maxLength={500}
               className={cn(
                 'w-full px-4 py-2.5 rounded-xl resize-none',
                 'bg-gray-50 dark:bg-gray-800',
@@ -326,6 +414,102 @@ export default function EditProfileScreen() {
               )}
             />
           </div>
+        </div>
+
+        {/* Links Manager */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <LinkIcon className="w-4 h-4 text-purple-400" />
+                Profile Links
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Add up to 10 verified external links, portfolio, or socials
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddLink}
+              disabled={formData.links.length >= 10}
+              className={cn(
+                'px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all',
+                'bg-purple-600 hover:bg-purple-700 text-white shadow-sm disabled:opacity-50'
+              )}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Link
+            </button>
+          </div>
+
+          {formData.links.length === 0 ? (
+            <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-center text-xs text-gray-500 dark:text-gray-400">
+              No custom links added yet. Click &quot;Add Link&quot; to showcase your websites or projects.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {formData.links.map((link, idx) => (
+                <div
+                  key={link.id || idx}
+                  className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-700/80 bg-gray-50/50 dark:bg-gray-800/40 space-y-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={link.title}
+                      onChange={(e) => handleUpdateLink(idx, 'title', e.target.value)}
+                      placeholder="Title (e.g. My Portfolio, Twitter, YouTube)"
+                      className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    />
+                    <select
+                      value={link.platform || 'custom'}
+                      onChange={(e) => handleUpdateLink(idx, 'platform', e.target.value)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none"
+                    >
+                      <option value="custom">Custom</option>
+                      <option value="twitter">X / Twitter</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="youtube">YouTube</option>
+                      <option value="github">GitHub</option>
+                      <option value="linkedin">LinkedIn</option>
+                      <option value="discord">Discord</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePrimaryLink(idx)}
+                      title={link.isPrimary ? "Primary Link" : "Make Primary Link"}
+                      className={cn(
+                        "p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all",
+                        link.isPrimary
+                          ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                          : "text-gray-400 hover:text-amber-500"
+                      )}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLink(idx)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                      title="Remove link"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ExternalLink className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <input
+                      type="url"
+                      value={link.url}
+                      onChange={(e) => handleUpdateLink(idx, 'url', e.target.value)}
+                      placeholder="https://example.com"
+                      className="w-full px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         
         {/* Personal Info */}
@@ -389,8 +573,9 @@ export default function EditProfileScreen() {
         
         {/* Privacy */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Privacy
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Lock className="w-4 h-4 text-purple-400" />
+            Privacy & Permissions
           </h2>
           
           <label className={cn(
@@ -404,7 +589,7 @@ export default function EditProfileScreen() {
                 Private Account
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Only approved followers can see your posts
+                Only approved followers can see your posts and media
               </p>
             </div>
             <input
@@ -414,6 +599,78 @@ export default function EditProfileScreen() {
               className="w-5 h-5 text-purple-500 rounded focus:ring-purple-500"
             />
           </label>
+
+          {/* Granular Privacy Scopes */}
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40 space-y-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Audience Permissions
+            </p>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Profile Visibility</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Who can discover and view your profile</p>
+              </div>
+              <select
+                value={formData.privacy.profileVisibility}
+                onChange={(e) => handlePrivacyChange('profileVisibility', e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="public">Public</option>
+                <option value="connections">Connections Only</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Online Presence</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Who can see when you are active</p>
+              </div>
+              <select
+                value={formData.privacy.onlinePresence}
+                onChange={(e) => handlePrivacyChange('onlinePresence', e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="public">Everyone</option>
+                <option value="followers">Followers</option>
+                <option value="connections">Mutual Connections</option>
+                <option value="private">Nobody</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Followers / Following List</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Who can browse your social graph</p>
+              </div>
+              <select
+                value={formData.privacy.followersVisibility}
+                onChange={(e) => handlePrivacyChange('followersVisibility', e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="public">Public</option>
+                <option value="connections">Connections</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Achievements & Activity</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Who can view your achievements and citizenship rank</p>
+              </div>
+              <select
+                value={formData.privacy.activityVisibility}
+                onChange={(e) => handlePrivacyChange('activityVisibility', e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="public">Public</option>
+                <option value="connections">Connections</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
     </div>

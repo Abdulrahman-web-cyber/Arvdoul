@@ -1,6 +1,6 @@
 // src/components/profile/ProfileOptionsMenu.jsx - ARVDOUL PROFILE OPTIONS MENU (REAL)
 // Share, copy link, block/unblock, report — backed by userService.
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
@@ -11,9 +11,23 @@ import {
 const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light' }) => {
   const { user } = useAuth();
   const [busy, setBusy] = useState(null);
-  const [blocked, setBlocked] = useState(false);
+  const [blocked, setBlocked] = useState(Boolean(profile?.isBlocked || profile?.isBlockedByViewer));
 
   const userId = profile?.uid || profile?.id;
+
+  useEffect(() => {
+    let active = true;
+    if (user?.uid && userId && !isOwner) {
+      import('../../services/userService.js').then(({ getUserService }) => {
+        getUserService().isBlocked(user.uid, userId).then((res) => {
+          if (active && res?.blocked !== undefined) {
+            setBlocked(Boolean(res.blocked));
+          }
+        }).catch(() => {});
+      });
+    }
+    return () => { active = false; };
+  }, [user?.uid, userId, isOwner]);
   const profileUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/profile/${userId}`
     : `https://arvdoul.app/profile/${userId}`;

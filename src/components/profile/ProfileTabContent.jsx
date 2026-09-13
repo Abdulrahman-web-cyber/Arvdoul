@@ -37,9 +37,16 @@ import {
   Heart,
   MessageCircle,
   Share2,
-  MoreHorizontal
+  MoreHorizontal,
+  Eye,
+  Users,
+  Coins,
+  Award,
+  Info
 } from 'lucide-react';
 import ProfileMediaGrid from './ProfileMediaGrid';
+import ProfileAbout from './ProfileAbout';
+import ProfileProgression from './ProfileProgression';
 
 /**
  * Format number with K, M suffix
@@ -67,8 +74,12 @@ const ProfileTabContent = memo(({
   analytics = null,
   analyticsLoading = false,
   isOwner = false,
+  isRestricted = false,
+  isPrivate = false,
+  profile = null,
   onPostPress,
   onLoadMore,
+  onEdit,
   hasMore = true,
   theme = 'light',
 }) => {
@@ -375,9 +386,32 @@ const ProfileTabContent = memo(({
 
   // Memoized tab content
   const tabContent = useMemo(() => {
+    if (!isOwner && (isRestricted || isPrivate)) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+          <div className={cn(
+            "w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm",
+            theme === 'dark' ? "bg-white/5 text-purple-400 border border-white/10" : "bg-purple-50 text-purple-600 border border-purple-100"
+          )}>
+            <Lock className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+            This Account is Private
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
+            Follow this account to view their published posts, media, achievements, and creator updates.
+          </p>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'posts':
         return renderPosts();
+      case 'progression':
+        return <ProfileProgression profile={profile} isOwner={isOwner} theme={theme} />;
+      case 'about':
+        return <ProfileAbout user={profile} isCurrentUser={isOwner} onEdit={onEdit} />;
       case 'saved':
         return renderSaved();
       case 'shop':
@@ -387,7 +421,7 @@ const ProfileTabContent = memo(({
       default:
         return renderPosts();
     }
-  }, [activeTab, renderPosts, renderSaved, renderShop, renderAnalytics]);
+  }, [activeTab, isOwner, isRestricted, isPrivate, theme, profile, onEdit, renderPosts, renderSaved, renderShop, renderAnalytics]);
 
   return (
     <section 
@@ -400,8 +434,5 @@ const ProfileTabContent = memo(({
 });
 
 ProfileTabContent.displayName = 'ProfileTabContent';
-
-// Import icons used in analytics
-import { Eye, Users, Coins } from 'lucide-react';
 
 export default ProfileTabContent;

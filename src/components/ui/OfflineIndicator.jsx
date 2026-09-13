@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wifi, WifiOff, RefreshCw, CheckCircle2, Cloud, ArrowUpCircle } from 'lucide-react';
 import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
@@ -16,6 +17,8 @@ import { useTheme } from '../../context/ThemeContext';
 
 export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
   const { theme } = useTheme();
+  const location = useLocation();
+  const isSplash = location?.pathname === '/';
   const isDark = theme !== 'light';
 
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -81,8 +84,8 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
     }
   };
 
-  // Determine whether banner should be shown
-  const shouldShow = !isOnline || pendingCount > 0 || showOnlinePill || isSyncing;
+  // Determine whether banner should be shown (suppressed on splash screen)
+  const shouldShow = !isSplash && (!isOnline || pendingCount > 0 || showOnlinePill || isSyncing);
 
   return (
     <AnimatePresence>

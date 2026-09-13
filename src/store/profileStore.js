@@ -162,19 +162,19 @@ export const useProfileStore = create(
           try {
             const localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
             const fallbackProfile = {
-              id: userId || currentUserId || 'creator',
-              uid: userId || currentUserId || 'creator',
-              username: localAuth.username || localAuth.email?.split('@')[0] || 'creator',
-              displayName: localAuth.displayName || localAuth.name || 'Creator',
-              bio: localAuth.bio || 'Welcome to my Arvdoul profile! 🚀',
+              id: userId || currentUserId || '',
+              uid: userId || currentUserId || '',
+              username: localAuth.username || localAuth.email?.split('@')[0] || (currentUserId ? `user_${currentUserId.slice(0, 6)}` : 'user'),
+              displayName: localAuth.displayName || localAuth.name || 'User',
+              bio: localAuth.bio || '',
               photoURL: localAuth.photoURL || null,
               followerCount: 0,
               followingCount: 0,
               postCount: 0,
-              isVerified: false,
-              isCreator: true,
-              level: 1,
-              balance: 0,
+              isVerified: Boolean(localAuth.isVerified),
+              isCreator: Boolean(localAuth.isCreator),
+              level: Number(localAuth.level) || 1,
+              balance: Number(localAuth.coins) || 0,
             };
             set((state) => {
               state.profile = fallbackProfile;
@@ -203,6 +203,103 @@ export const useProfileStore = create(
         state.refreshKey += 1;
       });
       await get().loadProfile(userId, currentUserId);
+    },
+
+    /**
+     * Update user profile with optimistic state and validation
+     * @param {string} userId - User ID
+     * @param {Object} updates - Profile changes
+     */
+    updateProfile: async (userId, updates) => {
+      if (!userId || !updates) return;
+      const previousProfile = get().profile;
+
+      // Optimistic update
+      set((state) => {
+        if (state.profile) {
+          state.profile = { ...state.profile, ...updates };
+        }
+      });
+
+      try {
+        const userService = (await import('../services/userService.js')).getUserService();
+        await userService.updateUserProfile(userId, updates);
+        toast.success('Profile updated successfully!');
+      } catch (error) {
+        console.error('❌ Update profile failed, rolling back:', error);
+        set((state) => {
+          state.profile = previousProfile;
+          state.error = error.message;
+        });
+        toast.error(error.message || 'Failed to update profile');
+        throw error;
+      }
+    },
+
+    /**
+     * Upload and update user avatar
+     * @param {string} userId - User ID
+     * @param {File|Blob} file - Avatar file
+     */
+    updateAvatar: async (userId, file) => {
+      if (!userId || !file) return;
+      const previousPhotoURL = get().profile?.photoURL;
+
+      try {
+        const userService = (await import('../services/userService.js')).getUserService();
+        const uploadResult = await userService.uploadAvatar(userId, file);
+        const newPhotoURL = uploadResult?.downloadURL || uploadResult?.photoURL || uploadResult?.url || uploadResult;
+
+        set((state) => {
+          if (state.profile && newPhotoURL) {
+            state.profile.photoURL = newPhotoURL;
+          }
+        });
+        toast.success('Avatar updated successfully!');
+        return newPhotoURL;
+      } catch (error) {
+        console.error('❌ Update avatar failed:', error);
+        set((state) => {
+          if (state.profile) {
+            state.profile.photoURL = previousPhotoURL;
+          }
+        });
+        toast.error(error.message || 'Failed to upload avatar');
+        throw error;
+      }
+    },
+
+    /**
+     * Upload and update user cover photo
+     * @param {string} userId - User ID
+     * @param {File|Blob} file - Cover photo file
+     */
+    updateCoverPhoto: async (userId, file) => {
+      if (!userId || !file) return;
+      const previousCover = get().profile?.coverPhotoURL;
+
+      try {
+        const userService = (await import('../services/userService.js')).getUserService();
+        const uploadResult = await userService.uploadCoverPhoto(userId, file);
+        const newCoverURL = uploadResult?.downloadURL || uploadResult?.coverPhotoURL || uploadResult?.url || uploadResult;
+
+        set((state) => {
+          if (state.profile && newCoverURL) {
+            state.profile.coverPhotoURL = newCoverURL;
+          }
+        });
+        toast.success('Cover photo updated successfully!');
+        return newCoverURL;
+      } catch (error) {
+        console.error('❌ Update cover photo failed:', error);
+        set((state) => {
+          if (state.profile) {
+            state.profile.coverPhotoURL = previousCover;
+          }
+        });
+        toast.error(error.message || 'Failed to upload cover photo');
+        throw error;
+      }
     },
     
     // ==================== POSTS ACTIONS ====================

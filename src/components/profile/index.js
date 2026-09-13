@@ -28,3 +28,6 @@ export { default as ProfileAbout } from './ProfileAbout';
 export { default as ProfilePrivacyBadge } from './ProfilePrivacyBadge';
 export { default as ProfileSkeleton } from './ProfileSkeleton';
 export { default as AvatarUploadModal } from './AvatarUploadModal';
+export { default as ProfileOptionsMenu } from './ProfileOptionsMenu';
+export { default as ProfileProgression } from './ProfileProgression';
+export { default as ProfileTipModal } from './ProfileTipModal';

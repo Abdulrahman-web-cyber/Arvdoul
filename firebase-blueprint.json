@@ -83,12 +83,165 @@
         "totalStake": { "type": "number" }
       },
       "required": ["id", "question", "creatorId"]
+    },
+    "ActiveDayLedger": {
+      "title": "ActiveDayLedger",
+      "description": "Server-authoritative calendar day ledger record for a user's qualifying daily activities.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 10 },
+        "qualifyingEvents": { "type": "array" },
+        "firstQualifiedAt": { "type": "string" },
+        "lastQualifiedAt": { "type": "string" },
+        "status": { "type": "string", "enum": ["verified", "pending", "flagged"] },
+        "calculationVersion": { "type": "number" }
+      },
+      "required": ["uid", "date", "status"]
+    },
+    "Achievement": {
+      "title": "Achievement",
+      "description": "Server-validated permanent record of accomplishment with criteria versioning.",
+      "type": "object",
+      "properties": {
+        "achievementId": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["Progression", "Creation", "Creator", "Community", "Exploration", "Economy", "Events", "Social", "Citizenship", "Historical"] },
+        "criteriaVersion": { "type": "number" },
+        "earnedAt": { "type": "string" },
+        "source": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["earned", "revoked"] },
+        "metadata": { "type": "object" }
+      },
+      "required": ["achievementId", "category", "earnedAt"]
+    },
+    "Title": {
+      "title": "Title",
+      "description": "Recognition layer granted via multidimensional criteria or civic contribution.",
+      "type": "object",
+      "properties": {
+        "titleId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "enum": ["Creation", "Community", "Economic", "CivicRoyal", "Historical"] },
+        "criteriaVersion": { "type": "number" },
+        "grantedAt": { "type": "string" },
+        "provenance": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["titleId", "name", "category", "grantedAt"]
+    },
+    "CreatorProfile": {
+      "title": "CreatorProfile",
+      "description": "Creator capability class profile containing tier, eligibility, and monetization permissions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "tier": { "type": "string", "enum": ["NONE", "CREATOR", "ADVANCED", "PROFESSIONAL", "ELITE", "PARTNER"] },
+        "eligibilityStatus": { "type": "string", "enum": ["ineligible", "eligible", "approved", "suspended"] },
+        "monetizationEligible": { "type": "boolean" },
+        "policyStanding": { "type": "string", "enum": ["good", "warning", "restricted"] },
+        "approvedAt": { "type": "string" }
+      },
+      "required": ["uid", "tier", "eligibilityStatus"]
+    },
+    "UserReputation": {
+      "title": "UserReputation",
+      "description": "Server-evaluated trust, reliability, moderation standing, and community behavior record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "trust": { "type": "number" },
+        "reliability": { "type": "number" },
+        "contributions": { "type": "number" },
+        "moderation": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "tier": { "type": "string", "enum": ["Unestablished", "Developing", "Established", "Trusted", "Highly Trusted", "Exceptional"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "totalScore", "tier"]
+    },
+    "CreatorVerification": {
+      "title": "CreatorVerification",
+      "description": "Creator badge application with identity standing, follower count, and verification status.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "category": { "type": "string", "maxLength": 100 },
+        "submittedAt": { "type": "string" },
+        "reviewedAt": { "type": "string" },
+        "reviewedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "userId", "status"]
+    },
+    "PayoutRequest": {
+      "title": "PayoutRequest",
+      "description": "Creator withdrawal and disbursement request.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "coins": { "type": "number" },
+        "amountUsd": { "type": "number" },
+        "method": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected"] },
+        "requestedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "coins", "amountUsd", "status"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "User customer support inquiry and resolution thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved", "closed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "subject", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable administrative and financial security event trail.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "actor": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 64 },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "timestamp": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["id", "action", "timestamp"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
       "description": "Public and member profiles of Arvdoul users"
+    },
+    "/active_days/{userId}/days/{dayId}": {
+      "schema": "ActiveDayLedger",
+      "description": "Server-authoritative daily activity ledger"
+    },
+    "/achievements/{userId}/items/{achievementId}": {
+      "schema": "Achievement",
+      "description": "User earned achievements and milestones"
+    },
+    "/titles/{userId}/items/{titleId}": {
+      "schema": "Title",
+      "description": "User recognized titles and honours"
+    },
+    "/creator_profiles/{userId}": {
+      "schema": "CreatorProfile",
+      "description": "Creator capability metadata and status"
+    },
+    "/reputation/{userId}": {
+      "schema": "UserReputation",
+      "description": "User trust, integrity, and reputation standing"
     },
     "/posts/{postId}": {
       "schema": "Post",
@@ -105,6 +258,22 @@
     "/polls/{pollId}": {
       "schema": "Poll",
       "description": "Community votes and prediction markets"
+    },
+    "/creator_verifications/{verificationId}": {
+      "schema": "CreatorVerification",
+      "description": "Creator verification application records"
+    },
+    "/payout_requests/{requestId}": {
+      "schema": "PayoutRequest",
+      "description": "Creator payout withdrawal queue records"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Support tickets and automated triage resolutions"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Immutable security and administrative audit trail"
     }
   }
 }

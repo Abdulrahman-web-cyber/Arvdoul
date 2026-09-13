@@ -20,12 +20,11 @@ import React, { memo, useCallback } from 'react';
 import { cn } from '../../lib/utils';
 import { 
   Grid3x3, 
-  Video, 
   Bookmark, 
   BarChart2,
   ShoppingBag,
-  Heart,
-  Image
+  Award,
+  Info
 } from 'lucide-react';
 
 /**
@@ -40,26 +39,31 @@ const ProfileTabs = memo(({
   hasAnalytics = false,
   hasShop = false,
 }) => {
-  // Tab definitions
-  const tabs = [
+  // Base tabs visible to all users
+  const baseTabs = [
     { key: 'posts', label: 'Posts', icon: Grid3x3 },
-    { key: 'videos', label: 'Videos', icon: Video },
-    { key: 'reels', label: 'Reels', icon: Video },
-    { key: 'photos', label: 'Photos', icon: Image },
-    { key: 'saved', label: 'Saved', icon: Bookmark },
-    { key: 'likes', label: 'Likes', icon: Heart },
+    { key: 'progression', label: 'Progression', icon: Award },
   ];
-  
-  // Owner-only tabs
-  const ownerTabs = [
-    { key: 'shop', label: 'Shop', icon: ShoppingBag },
-    { key: 'analytics', label: 'Analytics', icon: BarChart2 },
-  ];
-  
-  // Filter tabs based on ownership
-  const visibleTabs = isOwner 
-    ? [...tabs, ...ownerTabs.filter(t => hasShop || t.key !== 'shop', t => hasAnalytics || t.key !== 'analytics')]
-    : tabs;
+
+  // Shop is visible to owner or when creator has shop items enabled
+  if (isOwner || hasShop) {
+    baseTabs.push({ key: 'shop', label: 'Shop', icon: ShoppingBag });
+  }
+
+  // Saved posts are private to owner
+  if (isOwner) {
+    baseTabs.push({ key: 'saved', label: 'Saved', icon: Bookmark });
+  }
+
+  // About & Links tab
+  baseTabs.push({ key: 'about', label: 'About', icon: Info });
+
+  // Analytics for owner
+  if (isOwner && hasAnalytics) {
+    baseTabs.push({ key: 'analytics', label: 'Analytics', icon: BarChart2 });
+  }
+
+  const visibleTabs = baseTabs;
   
   // Handle tab click
   const handleTabClick = useCallback((tabKey) => {

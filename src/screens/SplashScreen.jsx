@@ -17,7 +17,6 @@ export default function SplashScreen() {
   const [status, setStatus] = useState("Initializing");
   const [isReady, setIsReady] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
   
   const mountedRef = useRef(true);
   const progressIntervalRef = useRef(null);
@@ -257,21 +256,6 @@ export default function SplashScreen() {
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSkip(); }}
         style={{ background: themeConfig.background }}
       >
-        {/* Real-time Offline Detection Banner */}
-        <AnimatePresence>
-          {!isOnline && (
-            <motion.div
-              initial={{ y: -60, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -60, opacity: 0 }}
-              className="absolute top-0 left-0 right-0 bg-red-600/90 backdrop-blur-md text-white py-3 px-6 text-center text-xs font-bold shadow-lg z-[10000] flex items-center justify-center gap-2"
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-              📡 You are offline. Waiting for connection to continue...
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Subtle animated gradient background */}
         <motion.div
           initial={{ opacity: 0 }}

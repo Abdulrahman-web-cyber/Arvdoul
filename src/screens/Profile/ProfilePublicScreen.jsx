@@ -23,6 +23,8 @@ import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import { generateDefaultAvatarSvg } from '../../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
+import ProfileProgression from '../../components/profile/ProfileProgression';
+import ProfileAbout from '../../components/profile/ProfileAbout';
 
 // Honest fallback when the public profile document is not yet created:
 // real fields only, zeroed counters, no fabricated identity.
@@ -110,38 +112,57 @@ export default function ProfilePublicScreen() {
     return () => { isMounted = false; };
   }, [userId, currentUser?.uid]);
 
-  // Follow / Unfollow handler
+  // Follow / Unfollow handler with optimistic update and rollback
   const handleToggleFollow = async () => {
-    setIsFollowing((prev) => !prev);
-    if (!isFollowing) {
-      toast.success(`You are now following ${profileData.displayName}! 🎉`);
-    } else {
-      toast.info(`Unfollowed ${profileData.displayName}`);
+    if (!currentUser?.uid) {
+      toast.error('Please sign in to follow users');
+      return;
     }
+    const willFollow = !isFollowing;
+    setIsFollowing(willFollow);
 
-    if (currentUser?.uid && userId) {
-      try {
-        const userServiceModule = await import('../../services/userService.js');
-        const userService = userServiceModule.getUserService();
-        if (!isFollowing) {
-          await userService.followUser(currentUser.uid, userId);
-        } else {
-          await userService.unfollowUser(currentUser.uid, userId);
-        }
-      } catch (e) {
-        console.warn('Follow update err:', e);
+    try {
+      const userServiceModule = await import('../../services/userService.js');
+      const userService = userServiceModule.getUserService();
+      if (willFollow) {
+        await userService.followUser(currentUser.uid, userId);
+        toast.success(`You are now following ${profileData.displayName}! 🎉`);
+      } else {
+        await userService.unfollowUser(currentUser.uid, userId);
+        toast.info(`Unfollowed ${profileData.displayName}`);
       }
+    } catch (e) {
+      setIsFollowing(!willFollow); // Rollback on error
+      toast.error(e.message || 'Failed to update follow status');
+      console.warn('Follow update err:', e);
     }
   };
 
-  // Send Coin Gift Handler
+  // Send Coin Gift Handler - wired to real double-entry coin ledger
   const handleSendGift = async () => {
+    if (!currentUser?.uid) {
+      toast.error('Please sign in to send gifts');
+      return;
+    }
+    if (currentUser.uid === userId) {
+      toast.error('You cannot send coins to yourself');
+      return;
+    }
     setIsGifting(true);
     try {
+      const { getMonetizationService } = await import('../../services/monetizationService.js');
+      const monetizationService = getMonetizationService();
+      await monetizationService.transferCoins(
+        currentUser.uid,
+        userId,
+        Number(giftCoins),
+        'profile_gift',
+        { recipientName: profileData.displayName }
+      );
       toast.success(`Sent ${giftCoins} Coins to ${profileData.displayName}! 🪙`);
       setShowGiftModal(false);
     } catch (e) {
-      toast.error('Failed to send gift');
+      toast.error(e.message || 'Failed to send gift. Check coin balance.');
     } finally {
       setIsGifting(false);
     }
@@ -442,9 +463,10 @@ export default function ProfilePublicScreen() {
         )}>
           {[
             { id: 'posts', label: 'Posts', icon: Grid },
+            { id: 'progression', label: 'Progression', icon: Award },
             { id: 'reels', label: 'Sparks', icon: Film },
             { id: 'shop', label: 'Store', icon: DollarSign },
-            { id: 'about', label: 'About', icon: Award }
+            { id: 'about', label: 'About', icon: ShieldCheck }
           ].map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -507,6 +529,14 @@ export default function ProfilePublicScreen() {
           </div>
         )}
 
+        {activeTab === 'progression' && (
+          <ProfileProgression
+            profile={profileData}
+            isOwner={false}
+            theme={isDark ? 'dark' : 'light'}
+          />
+        )}
+
         {activeTab === 'reels' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {profileData.posts.filter((p) => p.type === 'video' || p.views).map((reel) => (
@@ -556,22 +586,11 @@ export default function ProfilePublicScreen() {
         )}
 
         {activeTab === 'about' && (
-          <div className={cn(
-            "p-6 rounded-2xl border space-y-4",
-            isDark ? "bg-white/[0.02] border-white/10" : "bg-white border-gray-200"
-          )}>
-            <h3 className="text-lg font-bold">About & Creator Credentials</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                <span className="text-xs text-purple-400 font-bold uppercase block">Community Standing</span>
-                <p className="font-semibold text-white mt-1">98.4% Top Tier Reputation Score</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                <span className="text-xs text-blue-400 font-bold uppercase block">Badges Earned</span>
-                <p className="font-semibold text-white mt-1">Diamond Creator, Live Space Host, VIP</p>
-              </div>
-            </div>
-          </div>
+          <ProfileAbout
+            profile={profileData}
+            isOwner={false}
+            theme={isDark ? 'dark' : 'light'}
+          />
         )}
       </main>
 

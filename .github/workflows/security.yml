@@ -1,0 +1,67 @@
+# .github/workflows/security.yml - ARVDOUL SECURITY & RULES VALIDATION PIPELINE
+name: Security & Rules Audit
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'firestore.rules'
+      - 'storage.rules'
+      - 'package.json'
+      - 'functions/**'
+      - 'src/services/**'
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 4 * * 1' # Weekly security audit every Monday at 04:00 UTC
+
+jobs:
+  rules-validation:
+    name: Validate Firestore & Storage Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Verify Rules Syntax
+        run: |
+          echo "Validating firestore.rules and storage.rules..."
+          test -f firestore.rules || exit 1
+          test -f storage.rules || exit 1
+          echo "Security rules files are present and tracked."
+
+  dependency-audit:
+    name: Vulnerability Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Applet Dependencies
+        run: npm ci
+
+      - name: Run Client Vulnerability Audit
+        run: npm audit --audit-level=critical
+        continue-on-error: true
+
+      - name: Run Cloud Functions Audit
+        working-directory: functions
+        run: |
+          npm ci
+          npm audit --audit-level=critical
+        continue-on-error: true

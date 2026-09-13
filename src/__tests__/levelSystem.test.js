@@ -214,4 +214,31 @@ describe('awardExperience (mocked Firestore)', () => {
       fresh.levelSystemService.awardExperience({ action: 'daily_login' })
     ).rejects.toThrow('LEVEL_NO_USER');
   });
+
+  test('citizenship tiers escalate with level and active days', async () => {
+    const { getCitizenTier } = await import('../services/levelSystemService.js');
+    expect(getCitizenTier(1, 0).tier).toBe('Resident');
+    expect(getCitizenTier(10, 7).tier).toBe('Citizen');
+    expect(getCitizenTier(25, 30).tier).toBe('Statesperson');
+    expect(getCitizenTier(50, 90).tier).toBe('Senator');
+    expect(getCitizenTier(75, 180).tier).toBe('Chancellor');
+    expect(getCitizenTier(100, 365).tier).toBe('Founder');
+  });
+
+  test('creator capabilities are decoupled from raw level', async () => {
+    const { getCreatorCapabilities } = await import('../services/levelSystemService.js');
+    // Basic user
+    const basic = getCreatorCapabilities({ level: 1, followerCount: 10 });
+    expect(basic.canReceiveTips).toBe(true);
+    expect(basic.canStreamLive).toBe(false);
+    expect(basic.canMonetize).toBe(false);
+
+    // Level 10 or verified creator
+    const streamUser = getCreatorCapabilities({ level: 10, followerCount: 50 });
+    expect(streamUser.canStreamLive).toBe(true);
+
+    const verifiedCreator = getCreatorCapabilities({ isCreator: true, isVerified: true, followerCount: 200 });
+    expect(verifiedCreator.canStreamLive).toBe(true);
+    expect(verifiedCreator.canSellMerch).toBe(true);
+  });
 });

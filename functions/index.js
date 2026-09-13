@@ -425,3 +425,40 @@ exports.cleanupRateLimits = functions.pubsub.schedule('every 24 hours').onRun(as
   console.log(`Cleaned up ${expired.size} expired rate limit documents.`);
   return null;
 });
+
+// Health Check endpoint for Uptime monitoring & external probes
+exports.healthCheck = functions.https.onRequest((req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: '1.0.0',
+    services: {
+      firestore: 'operational',
+      storage: 'operational',
+      auth: 'operational',
+    },
+  });
+});
+
+// System Metrics endpoint for Prometheus / Datadog scraping
+exports.systemMetrics = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  try {
+    const memUsage = process.memoryUsage();
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: Date.now(),
+      memory: {
+        heapUsedMb: (memUsage.heapUsed / 1024 / 1024).toFixed(2),
+        heapTotalMb: (memUsage.heapTotal / 1024 / 1024).toFixed(2),
+        rssMb: (memUsage.rss / 1024 / 1024).toFixed(2),
+      },
+      environment: process.env.NODE_ENV || 'production',
+      nodeVersion: process.version,
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});

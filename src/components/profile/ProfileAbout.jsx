@@ -25,11 +25,16 @@ import {
  * @param {Object} props
  */
 const ProfileAbout = ({
-  profile = {},
+  profile,
+  user,
   theme = 'light',
-  isOwner = false,
+  isOwner,
+  isCurrentUser,
   onEdit,
 }) => {
+  const resolvedProfile = profile || user || {};
+  const resolvedIsOwner = Boolean(isOwner ?? isCurrentUser);
+
   const {
     bio,
     location,
@@ -41,7 +46,18 @@ const ProfileAbout = ({
     education,
     interests = [],
     socialLinks = {},
-  } = profile;
+    links = [],
+  } = resolvedProfile;
+
+  const resolvedLinks = Array.isArray(links) && links.length > 0
+    ? links
+    : Object.entries(socialLinks).map(([platform, url]) => ({
+        id: platform,
+        title: platform,
+        url,
+        platform,
+        isPrimary: false,
+      }));
 
   const infoItems = [
     { icon: MapPin, label: 'Location', value: location },
@@ -68,7 +84,7 @@ const ProfileAbout = ({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           About
         </h3>
-        {isOwner && (
+        {resolvedIsOwner && (
           <button
             onClick={onEdit}
             className={cn(
@@ -153,25 +169,31 @@ const ProfileAbout = ({
         </div>
       )}
 
-      {/* Social Links */}
-      {Object.keys(socialLinks).length > 0 && (
+      {/* Links */}
+      {resolvedLinks.length > 0 && (
         <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Social Links</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2.5 flex items-center gap-1.5">
+            <LinkIcon className="w-4 h-4 text-purple-400" />
+            Links & Socials
+          </p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(socialLinks).map(([platform, url]) => (
+            {resolvedLinks.map((link, idx) => (
               <a
-                key={platform}
-                href={url}
+                key={link.id || idx}
+                href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-sm font-medium',
-                  'bg-gray-100 dark:bg-gray-800',
-                  'hover:bg-gray-200 dark:hover:bg-gray-700',
-                  'transition-colors'
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm',
+                  link.isPrimary
+                    ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                 )}
               >
-                {platform}
+                <span>{link.title || link.platform || 'Link'}</span>
+                {link.isPrimary && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                )}
               </a>
             ))}
           </div>
@@ -207,7 +229,7 @@ const ProfileAbout = ({
       {/* Empty State */}
       {!bio && infoItems.length === 0 && careerItems.length === 0 && interests.length === 0 && (
         <p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
-          {isOwner ? 'Add information about yourself' : 'No information available'}
+          {resolvedIsOwner ? 'Add information about yourself' : 'No information available'}
         </p>
       )}
     </div>
