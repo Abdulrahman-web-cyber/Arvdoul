@@ -71,7 +71,7 @@ const ProfileStats = memo(({
   return (
     <div 
       className={cn(
-        'grid grid-cols-6 gap-2 p-3 rounded-xl',
+        'grid grid-cols-4 sm:grid-cols-7 gap-1.5 p-3 rounded-2xl',
         theme === 'dark' 
           ? 'bg-gray-800/50 backdrop-blur-sm' 
           : 'bg-gray-50/80 backdrop-blur-sm',

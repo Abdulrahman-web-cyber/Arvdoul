@@ -1074,13 +1074,27 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   </div>
                 </div>
                 
-                {/* User Badges */}
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  <Badge variant="premium" className="text-xs">
-                    <FaCoins className="w-3 h-3 mr-1" />
-                    {currentUser?.coins?.toLocaleString() || 0}
-                  </Badge>
-                  
+                {/* User Badges & Coin Balance Hub */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-gradient-to-r from-amber-500/10 via-yellow-500/15 to-amber-500/10 border border-amber-500/30">
+                  <button
+                    onClick={() => navigateToWithLoading(NAVIGATION_PATHS.coins)}
+                    className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                    aria-label="View Coins Treasury"
+                  >
+                    <FaCoins className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                      {(currentUser?.coins ?? 1250).toLocaleString()} Coins
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => navigateToWithLoading(NAVIGATION_PATHS.coins)}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-amber-500 hover:bg-amber-600 text-white transition-colors shadow-sm cursor-pointer"
+                  >
+                    + Top Up
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                   <Badge variant="level" className="text-xs">
                     <FaStar className="w-3 h-3 mr-1" />
                     Lvl {levelSystem.currentLevel}

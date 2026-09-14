@@ -48,6 +48,7 @@ const NAVIGATION_PATHS = Object.freeze({
   messages: "/messages",
   createPost: "/create-post",
   profile: "/profile",
+  vibes: "/vibes",
   coins: "/coins",
   notifications: "/notifications",
 });
@@ -89,11 +90,11 @@ const NAV_ITEMS = Object.freeze([
     matchPaths: ["/profile", "/profile/*", "/user/*"],
   },
   {
-    id: "coins",
-    label: "Coins",
-    path: NAVIGATION_PATHS.coins,
-    icon: "coins",
-    matchPaths: ["/coins/*"],
+    id: "vibes",
+    label: "Vibes",
+    path: NAVIGATION_PATHS.vibes,
+    icon: "vibes",
+    matchPaths: ["/vibes", "/vibes/*", "/stories", "/stories/*"],
   },
   {
     id: "alerts",
@@ -321,7 +322,71 @@ const AlertsIcon = memo(function AlertsIcon() {
 });
 
 /* ==========================================================================
-   COINS ICON – Enhanced Gold Version (using provided SVG with gradients)
+   VIBES / STORIES ICON – Custom Brand SVG with Dynamic Aura
+   ========================================================================== */
+
+const VibesIcon = memo(function VibesIcon({ active, dark }) {
+  const id = useId().replace(/:/g, "");
+  const gradientId = `arvdoul-vibes-${id}`;
+
+  return (
+    <svg
+      viewBox="0 0 28 28"
+      className="w-[26px] h-[26px]"
+      fill="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#F43F5E" />
+          <stop offset="35%" stopColor="#D946EF" />
+          <stop offset="70%" stopColor="#8B5CF6" />
+          <stop offset="100%" stopColor="#06B6D4" />
+        </linearGradient>
+      </defs>
+      {/* Outer Story Ring */}
+      <circle
+        cx="14"
+        cy="14"
+        r="11"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth={active ? "2.3" : "1.8"}
+        strokeDasharray={active ? "69" : "8 3"}
+        strokeLinecap="round"
+      />
+      {/* Dynamic Soundwave / Pulse concentric ring */}
+      <circle
+        cx="14"
+        cy="14"
+        r="7.2"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth="1.5"
+        strokeOpacity={active ? "0.9" : "0.55"}
+      />
+      {/* Vibrant Core Orb */}
+      <circle
+        cx="14"
+        cy="14"
+        r="3.2"
+        fill={active ? `url(#${gradientId})` : "currentColor"}
+      />
+      {/* Playful Top-Right Vibe Sparkle */}
+      <path
+        d="M21 5.5L21.7 7.1L23.3 7.8L21.7 8.5L21 10.1L20.3 8.5L18.7 7.8L20.3 7.1L21 5.5Z"
+        fill={active ? "#F43F5E" : (dark ? "#E2E8F0" : "#475569")}
+        opacity={active ? 1 : 0.85}
+      />
+    </svg>
+  );
+});
+
+VibesIcon.propTypes = {
+  active: PropTypes.bool.isRequired,
+  dark: PropTypes.bool.isRequired,
+};
+
+/* ==========================================================================
+   COINS ICON – Enhanced Gold Version
    ========================================================================== */
 
 const CoinsIcon = memo(function CoinsIcon() {
@@ -379,6 +444,7 @@ const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
   if (type === "chat") return <span className={iconClass}><ChatIcon /></span>;
   if (type === "profile") return <span className={iconClass}><ProfileIcon active={active} /></span>;
   if (type === "network") return <span className={iconClass}><NetworkIcon /></span>;
+  if (type === "vibes") return <VibesIcon active={active} dark={dark} />;
   if (type === "coins") return <CoinsIcon />; // gold always
   if (type === "alerts") return <span className={iconClass}><AlertsIcon /></span>;
   return null;
@@ -1195,7 +1261,7 @@ function BottomNav() {
                   />
                   <NavigationItem
                     item={NAV_ITEMS[5]}
-                    active={activeId === "coins"}
+                    active={activeId === "vibes"}
                     badgeCount={0}
                     coinBalance={coinBalance}
                     dark={dark}

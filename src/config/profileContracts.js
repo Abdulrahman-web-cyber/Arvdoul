@@ -332,9 +332,34 @@ export function validateProfileUpdate(rawUpdates = {}) {
       case 'privacy': {
         if (val && typeof val === 'object') {
           const mergedPrivacy = { ...DEFAULT_PROFILE_PRIVACY };
-          for (const section of Object.keys(DEFAULT_PROFILE_PRIVACY)) {
-            if (Object.values(VISIBILITY_SCOPES).includes(val[section])) {
-              mergedPrivacy[section] = val[section];
+          const keyMappings = {
+            profileVisibility: 'profileInfo',
+            onlinePresence: 'presence',
+            followersVisibility: 'followersList',
+            activityVisibility: 'activity',
+          };
+          const valueMappings = {
+            public: VISIBILITY_SCOPES.EVERYONE,
+            everyone: VISIBILITY_SCOPES.EVERYONE,
+            followers: VISIBILITY_SCOPES.FOLLOWERS,
+            connections: VISIBILITY_SCOPES.CONNECTIONS,
+            private: VISIBILITY_SCOPES.ONLY_ME,
+            only_me: VISIBILITY_SCOPES.ONLY_ME,
+          };
+          const normalizeScope = (v) => {
+            if (!v) return null;
+            if (Object.values(VISIBILITY_SCOPES).includes(v)) return v;
+            return valueMappings[String(v).toLowerCase()] || null;
+          };
+
+          for (const [k, v] of Object.entries(val)) {
+            const canonicalKey = keyMappings[k] || k;
+            const normalizedVal = normalizeScope(v);
+            if (canonicalKey in DEFAULT_PROFILE_PRIVACY && normalizedVal) {
+              mergedPrivacy[canonicalKey] = normalizedVal;
+              if (k === 'activityVisibility' && !val.achievements) {
+                mergedPrivacy.achievements = normalizedVal;
+              }
             }
           }
           sanitized.privacy = mergedPrivacy;

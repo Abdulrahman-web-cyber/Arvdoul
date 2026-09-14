@@ -64,7 +64,7 @@ const ProfileAbout = ({
     { icon: LinkIcon, label: 'Website', value: website, href: website },
     { icon: Calendar, label: 'Birthday', value: birthday },
     { icon: User, label: 'Gender', value: gender },
-    { icon: Globe, label: 'Language', value: profile.language || 'English' },
+    { icon: Globe, label: 'Language', value: resolvedProfile.language || 'English' },
   ].filter(item => item.value);
 
   const careerItems = [

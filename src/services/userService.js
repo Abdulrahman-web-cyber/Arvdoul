@@ -66,6 +66,7 @@ class ProfessionalUserService {
     this.usernameAttempts = new Map();
     this.avatarCache = new Map();
     this.recommendationCache = new Map();
+    this.inFlightRequests = new Map();
     this._cacheCleanupInterval = null;
 
     // User service ready
@@ -355,12 +356,29 @@ class ProfessionalUserService {
 
   // ==================== PROFILE CRUD ====================
   async getUserProfile(userId, requesterId = null, options = {}) {
+    if (!userId) return null;
     await this._ensureInitialized();
     const viewAs = options.viewAs || null; // e.g. 'public', 'follower', 'connection'
     const cacheKey = requesterId ? `profile_${userId}_${requesterId}_${viewAs || 'normal'}` : `profile_${userId}`;
+
+    // L1 Memory cache
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < USER_CONFIG.CACHE_EXPIRY) {
       return cached.data;
+    }
+
+    // L2 LocalStorage cache
+    if (typeof window !== 'undefined' && !viewAs) {
+      try {
+        const rawSaved = localStorage.getItem(`arvdoul_prof_${userId}`);
+        if (rawSaved) {
+          const parsed = JSON.parse(rawSaved);
+          if (parsed && Date.now() - (parsed._cachedAt || 0) < USER_CONFIG.CACHE_EXPIRY) {
+            this.cache.set(cacheKey, { data: parsed, timestamp: Date.now() });
+            return parsed;
+          }
+        }
+      } catch {}
     }
 
     const { doc, getDoc } = await import('firebase/firestore');
@@ -368,37 +386,66 @@ class ProfessionalUserService {
     try {
       snap = await Promise.race([
         getDoc(doc(this.firestore, 'users', userId)),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('User fetch timeout')), 4500))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('User fetch timeout')), 3500))
       ]);
     } catch (fetchErr) {
-      logger.warn('getDoc for user profile timed out or failed, using local/synthesized profile', { userId, error: fetchErr.message });
+      logger.warn('getDoc for user profile timed out or failed, using local/synthesized profile', { userId, error: fetchErr?.message });
     }
 
     if (!snap || !snap.exists()) {
+      let localAuth = {};
       try {
-        const localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
-        if (localAuth && (localAuth.uid === userId || requesterId === userId || !requesterId)) {
-          const synth = {
-            id: userId,
-            uid: userId,
-            username: localAuth.username || localAuth.email?.split('@')[0] || (userId ? `user_${userId.slice(0, 6)}` : 'user'),
-            displayName: localAuth.displayName || localAuth.name || 'User',
-            email: localAuth.email || '',
-            bio: localAuth.bio || '',
-            photoURL: localAuth.photoURL || this.getAvatarUrl(userId, localAuth.displayName || 'User', null),
-            followerCount: 0,
-            followingCount: 0,
-            postCount: 0,
-            isVerified: Boolean(localAuth.isVerified),
-            isCreator: Boolean(localAuth.isCreator),
-            createdAt: new Date(),
-            presence: { isOnline: false, status: 'offline', lastActive: null }
-          };
-          this.cache.set(cacheKey, { data: synth, timestamp: Date.now() });
-          return synth;
+        localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
+      } catch {}
+
+      const isSelf = Boolean(
+        (localAuth?.uid && localAuth.uid === userId) ||
+        requesterId === userId ||
+        (!requesterId && localAuth?.uid === userId)
+      );
+
+      const synth = {
+        id: userId,
+        uid: userId,
+        username: isSelf
+          ? (localAuth.username || localAuth.email?.split('@')[0] || `user_${userId.slice(0, 6)}`)
+          : (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`),
+        displayName: isSelf
+          ? (localAuth.displayName || localAuth.name || 'User')
+          : 'Creator',
+        email: isSelf ? (localAuth.email || '') : '',
+        bio: isSelf ? (localAuth.bio || '') : '',
+        photoURL: isSelf
+          ? (localAuth.photoURL || this.getAvatarUrl(userId, localAuth.displayName || 'User', null))
+          : this.getAvatarUrl(userId, 'Creator', null),
+        coverPhotoURL: null,
+        followerCount: isSelf ? (Number(localAuth.followerCount) || 0) : 0,
+        followingCount: isSelf ? (Number(localAuth.followingCount) || 0) : 0,
+        postCount: 0,
+        likesReceived: 0,
+        friendCount: 0,
+        coins: isSelf ? (Number(localAuth.coins) || 100) : 0,
+        level: isSelf ? (Number(localAuth.level) || 1) : 1,
+        reputation: 100,
+        isVerified: Boolean(isSelf && localAuth.isVerified),
+        isCreator: Boolean(isSelf && localAuth.isCreator),
+        createdAt: new Date().toISOString(),
+        presence: { isOnline: false, status: 'offline', lastActive: null },
+        canViewActivity: true,
+        canViewAchievements: true,
+        canViewTitles: true,
+        canViewFollowersList: true,
+        canViewFollowingList: true,
+        _cachedAt: Date.now()
+      };
+
+      this.cache.set(cacheKey, { data: synth, timestamp: Date.now() });
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`arvdoul_prof_${userId}`, JSON.stringify(synth));
         }
       } catch {}
-      return null;
+      return synth;
     }
 
     const rawData = snap.data();
@@ -540,17 +587,27 @@ class ProfessionalUserService {
       full.canViewFollowingList = true;
     }
 
+    full._cachedAt = Date.now();
     this.cache.set(cacheKey, { data: full, timestamp: Date.now() });
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`arvdoul_prof_${userId}`, JSON.stringify(full));
+      }
+    } catch {}
     return full;
   }
 
   async _areMutualFriends(userA, userB) {
-    const { doc, getDoc } = await import('firebase/firestore');
-    const [f1, f2] = await Promise.all([
-      getDoc(doc(this.firestore, 'follows', `${userA}_${userB}`)),
-      getDoc(doc(this.firestore, 'follows', `${userB}_${userA}`))
-    ]);
-    return f1.exists() && f2.exists();
+    if (!userA || !userB || userA === userB) return false;
+    try {
+      const [f1, f2] = await Promise.all([
+        this.getFollowStatus(userA, userB).catch(() => ({ isFollowing: false })),
+        this.getFollowStatus(userB, userA).catch(() => ({ isFollowing: false }))
+      ]);
+      return Boolean(f1?.isFollowing && f2?.isFollowing);
+    } catch {
+      return false;
+    }
   }
 
   async createUserProfile(userId, profileData) {
@@ -848,10 +905,22 @@ class ProfessionalUserService {
   }
 
   async getFollowStatus(followerId, followingId) {
-    await this._ensureInitialized();
-    const { doc, getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(this.firestore, 'follows', `${followerId}_${followingId}`));
-    return { isFollowing: snap.exists() };
+    if (!followerId || !followingId || followerId === followingId) return { isFollowing: false };
+    const cacheKey = `follow_${followerId}_${followingId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 60000) {
+      return cached.data;
+    }
+    try {
+      await this._ensureInitialized();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(this.firestore, 'follows', `${followerId}_${followingId}`));
+      const result = { isFollowing: snap.exists() };
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } catch {
+      return { isFollowing: false };
+    }
   }
 
   /**
@@ -1287,10 +1356,22 @@ class ProfessionalUserService {
   }
 
   async isBlocked(blockerId, blockedId) {
-    await this._ensureInitialized();
-    const { doc, getDoc } = await import('firebase/firestore');
-    const snap = await getDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
-    return { success: true, blocked: snap.exists() };
+    if (!blockerId || !blockedId || blockerId === blockedId) return { success: true, blocked: false };
+    const cacheKey = `block_${blockerId}_${blockedId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 60000) {
+      return cached.data;
+    }
+    try {
+      await this._ensureInitialized();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
+      const result = { success: true, blocked: snap.exists() };
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } catch {
+      return { success: true, blocked: false };
+    }
   }
 
   async getBlockedUsers(userId) {

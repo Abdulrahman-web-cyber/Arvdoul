@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
+import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../../config/profileContracts.js';
 
 /**
  * EditProfileScreen Component
@@ -56,10 +57,11 @@ export default function EditProfileScreen() {
     isPrivate: false,
     links: [],
     privacy: {
-      profileVisibility: 'public',
-      onlinePresence: 'followers',
-      followersVisibility: 'public',
-      activityVisibility: 'public',
+      profileInfo: DEFAULT_PROFILE_PRIVACY.profileInfo,
+      presence: DEFAULT_PROFILE_PRIVACY.presence,
+      followersList: DEFAULT_PROFILE_PRIVACY.followersList,
+      activity: DEFAULT_PROFILE_PRIVACY.activity,
+      economicStatus: DEFAULT_PROFILE_PRIVACY.economicStatus,
     },
   });
   
@@ -73,6 +75,7 @@ export default function EditProfileScreen() {
   // Load current profile data
   useEffect(() => {
     if (userProfile) {
+      const p = userProfile.privacy || {};
       setFormData({
         displayName: userProfile.displayName || '',
         username: userProfile.username || '',
@@ -87,10 +90,11 @@ export default function EditProfileScreen() {
         isPrivate: Boolean(userProfile.isPrivate),
         links: Array.isArray(userProfile.links) ? userProfile.links : [],
         privacy: {
-          profileVisibility: userProfile.privacy?.profileVisibility || 'public',
-          onlinePresence: userProfile.privacy?.onlinePresence || 'followers',
-          followersVisibility: userProfile.privacy?.followersVisibility || 'public',
-          activityVisibility: userProfile.privacy?.activityVisibility || 'public',
+          profileInfo: p.profileInfo || (p.profileVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.profileVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
+          presence: p.presence || (p.onlinePresence === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.onlinePresence === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : p.onlinePresence === 'public' ? VISIBILITY_SCOPES.EVERYONE : VISIBILITY_SCOPES.FOLLOWERS),
+          followersList: p.followersList || (p.followersVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.followersVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
+          activity: p.activity || (p.activityVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.activityVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
+          economicStatus: p.economicStatus || VISIBILITY_SCOPES.ONLY_ME,
         },
       });
       setAvatarPreview(userProfile.photoURL);
@@ -612,13 +616,13 @@ export default function EditProfileScreen() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">Who can discover and view your profile</p>
               </div>
               <select
-                value={formData.privacy.profileVisibility}
-                onChange={(e) => handlePrivacyChange('profileVisibility', e.target.value)}
+                value={formData.privacy.profileInfo}
+                onChange={(e) => handlePrivacyChange('profileInfo', e.target.value)}
                 className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
               >
-                <option value="public">Public</option>
-                <option value="connections">Connections Only</option>
-                <option value="private">Private</option>
+                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
               </select>
             </div>
 
@@ -628,14 +632,14 @@ export default function EditProfileScreen() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">Who can see when you are active</p>
               </div>
               <select
-                value={formData.privacy.onlinePresence}
-                onChange={(e) => handlePrivacyChange('onlinePresence', e.target.value)}
+                value={formData.privacy.presence}
+                onChange={(e) => handlePrivacyChange('presence', e.target.value)}
                 className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
               >
-                <option value="public">Everyone</option>
-                <option value="followers">Followers</option>
-                <option value="connections">Mutual Connections</option>
-                <option value="private">Nobody</option>
+                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Mutual Connections</option>
+                <option value={VISIBILITY_SCOPES.ONLY_ME}>Nobody</option>
               </select>
             </div>
 
@@ -645,13 +649,16 @@ export default function EditProfileScreen() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">Who can browse your social graph</p>
               </div>
               <select
-                value={formData.privacy.followersVisibility}
-                onChange={(e) => handlePrivacyChange('followersVisibility', e.target.value)}
+                value={formData.privacy.followersList}
+                onChange={(e) => {
+                  handlePrivacyChange('followersList', e.target.value);
+                  handlePrivacyChange('followingList', e.target.value);
+                }}
                 className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
               >
-                <option value="public">Public</option>
-                <option value="connections">Connections</option>
-                <option value="private">Private</option>
+                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
               </select>
             </div>
 
@@ -661,13 +668,33 @@ export default function EditProfileScreen() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">Who can view your achievements and citizenship rank</p>
               </div>
               <select
-                value={formData.privacy.activityVisibility}
-                onChange={(e) => handlePrivacyChange('activityVisibility', e.target.value)}
+                value={formData.privacy.activity}
+                onChange={(e) => {
+                  handlePrivacyChange('activity', e.target.value);
+                  handlePrivacyChange('achievements', e.target.value);
+                }}
                 className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
               >
-                <option value="public">Public</option>
-                <option value="connections">Connections</option>
-                <option value="private">Private</option>
+                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Financial Stats & Earnings</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Visibility of coin balance and tipping revenue</p>
+              </div>
+              <select
+                value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
+                onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me (Private)</option>
+                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Mutual Connections</option>
+                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
               </select>
             </div>
           </div>

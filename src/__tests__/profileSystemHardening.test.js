@@ -81,6 +81,23 @@ describe('Profile System Hardening & Validation Contracts', () => {
       expect(result.sanitized.privacy.presence).toBe(VISIBILITY_SCOPES.CONNECTIONS);
       expect(result.sanitized.privacy.achievements).toBe(DEFAULT_PROFILE_PRIVACY.achievements);
     });
+
+    test('normalizes legacy UI privacy aliases and lowercase scope values', () => {
+      const result = validateProfileUpdate({
+        privacy: {
+          profileVisibility: 'connections',
+          onlinePresence: 'private',
+          followersVisibility: 'public',
+          activityVisibility: 'followers',
+        }
+      });
+      expect(result.valid).toBe(true);
+      expect(result.sanitized.privacy.profileInfo).toBe(VISIBILITY_SCOPES.CONNECTIONS);
+      expect(result.sanitized.privacy.presence).toBe(VISIBILITY_SCOPES.ONLY_ME);
+      expect(result.sanitized.privacy.followersList).toBe(VISIBILITY_SCOPES.EVERYONE);
+      expect(result.sanitized.privacy.activity).toBe(VISIBILITY_SCOPES.FOLLOWERS);
+      expect(result.sanitized.privacy.achievements).toBe(VISIBILITY_SCOPES.FOLLOWERS);
+    });
   });
 
   describe('URL Sanitization & Injection Defense', () => {

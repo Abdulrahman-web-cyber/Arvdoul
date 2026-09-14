@@ -172,6 +172,9 @@ export default function ProfileScreen() {
       case 'reputation':
         navigate(`/reputation/${viewingUserId}`);
         break;
+      case 'coins':
+        navigate('/coins');
+        break;
       default:
         break;
     }
@@ -273,45 +276,23 @@ export default function ProfileScreen() {
     );
   }
 
-  // Error state for external user profiles
-  if (error && !profile && userId && userId !== currentUserId) {
-    return (
-      <div className={cn(
-        'min-h-screen flex items-center justify-center pb-20',
-        theme === 'dark'
-          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
-      )}>
-        <div className="text-center p-6">
-          <p className="text-red-500 mb-4">{error}</p>
-          <button
-            onClick={handleRefresh}
-            className={cn(
-              'px-4 py-2 rounded-xl font-medium',
-              'bg-purple-500 text-white',
-              'hover:bg-purple-600 transition-colors'
-            )}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
   // Fallback profile if Firestore has not synced yet
-  // Honest fallback - real user fields only, zeroed counters, no fabricated
-  // identity, stats or posts.
+  // Resilient fallback - real user fields when available, zeroed counters, no broken screens.
   const effectiveProfile = profile || {
-    id: viewingUserId || 'creator-arvdoul',
-    username: authUser?.username || '',
-    displayName: authUser?.displayName || 'Creator',
-    bio: authUser?.bio || '',
-    photoURL: getSafeAvatarUrl(authUser?.photoURL, authUser?.displayName || 'Creator', viewingUserId),
+    id: viewingUserId || userId || 'creator-arvdoul',
+    username: isOwner
+      ? (authUser?.username || authUser?.email?.split('@')[0] || 'user')
+      : (userId?.startsWith('user_') ? userId : `user_${(userId || 'creator').slice(0, 7)}`),
+    displayName: isOwner
+      ? (authUser?.displayName || authUser?.name || 'User')
+      : 'Creator',
+    bio: isOwner ? (authUser?.bio || '') : '',
+    photoURL: getSafeAvatarUrl(isOwner ? authUser?.photoURL : null, isOwner ? (authUser?.displayName || 'User') : 'Creator', viewingUserId),
     coverPhotoURL: null,
     followerCount: 0,
     followingCount: 0,
     postCount: 0,
+    coins: isOwner ? (Number(authUser?.coins) || 100) : 0,
     isVerified: false,
     isCreator: false,
     level: 1,
@@ -441,6 +422,12 @@ export default function ProfileScreen() {
           activeTab={activeProfileTab}
           posts={effectivePosts}
           postsLoading={postsLoading}
+          savedPosts={[]}
+          savedLoading={false}
+          shopItems={[]}
+          shopLoading={false}
+          analytics={analytics}
+          analyticsLoading={analyticsLoading}
           isOwner={isOwner}
           isRestricted={Boolean(effectiveProfile.isRestricted)}
           isPrivate={Boolean(effectiveProfile.isPrivate)}

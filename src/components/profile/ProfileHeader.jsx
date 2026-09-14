@@ -257,6 +257,19 @@ const ProfileHeader = memo(({
                   <span>Edit Profile</span>
                 </button>
                 <button
+                  onClick={() => navigate('/coins')}
+                  className={cn(
+                    'px-3.5 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-1.5 hover:scale-105 active:scale-95 shadow-md',
+                    'bg-gradient-to-r from-amber-500/15 via-yellow-500/20 to-amber-500/15 hover:from-amber-500/25 hover:to-yellow-500/30',
+                    'border border-amber-500/30 text-amber-600 dark:text-amber-300'
+                  )}
+                  aria-label="Coins Wallet"
+                  title="View Coins & Wallet"
+                >
+                  <Coins className="w-4 h-4 text-amber-500" />
+                  <span>{(profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0).toLocaleString()}</span>
+                </button>
+                <button
                   onClick={onSettingsPress || (() => navigate('/profile/settings'))}
                   className={cn(
                     'p-2.5 rounded-xl',
