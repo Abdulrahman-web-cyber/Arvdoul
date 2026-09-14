@@ -501,6 +501,20 @@ export default function AppRoutes() {
       } />
       
       {/* Followers list */}
+      <Route path="/followers" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FollowersScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/followers" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FollowersScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
       <Route path="/profile/:userId/followers" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -510,6 +524,20 @@ export default function AppRoutes() {
       } />
       
       {/* Following list */}
+      <Route path="/following" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FollowingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/following" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FollowingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
       <Route path="/profile/:userId/following" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -519,6 +547,20 @@ export default function AppRoutes() {
       } />
       
       {/* Friends list */}
+      <Route path="/friends" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FriendsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/friends" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <FriendsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
       <Route path="/profile/:userId/friends" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -995,8 +1037,6 @@ export default function AppRoutes() {
       <Route path="/trending" element={<Navigate to="/home" replace />} />
       <Route path="/email-verification" element={<Navigate to="/verify-email" replace />} />
       <Route path="/analytics" element={<Navigate to="/profile/analytics" replace />} />
-      <Route path="/followers" element={<Navigate to="/network" replace />} />
-      <Route path="/following" element={<Navigate to="/network" replace />} />
       <Route path="/auth" element={<Navigate to="/login" replace />} />
       
       {/* ========== ERROR & CATCH-ALL ========== */}

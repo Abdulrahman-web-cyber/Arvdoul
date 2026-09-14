@@ -530,7 +530,7 @@ export default function NotificationsScreen() {
                 <EmptyState
                   title="No Pending Friend Requests"
                   description="When someone sends you a friend request, you'll see them here."
-                  icon={Users}
+                  icon={<Users className="w-8 h-8" />}
                 />
               ) : (
                 <div className="space-y-2.5">
@@ -597,7 +597,7 @@ export default function NotificationsScreen() {
                 <EmptyState
                   title="No Followers Yet"
                   description="Share great stories and posts to grow your audience on Arvdoul."
-                  icon={Users}
+                  icon={<Users className="w-8 h-8" />}
                 />
               ) : (
                 <div className="space-y-2.5">
@@ -652,7 +652,7 @@ export default function NotificationsScreen() {
                 <EmptyState
                   title="Not Following Anyone Yet"
                   description="Follow creators and friends to see their latest sparks and posts."
-                  icon={Users}
+                  icon={<Users className="w-8 h-8" />}
                 />
               ) : (
                 <div className="space-y-2.5">
@@ -706,7 +706,7 @@ export default function NotificationsScreen() {
               <EmptyState
                 title="No Recommendations Available"
                 description="Check back later for suggested creators and friends."
-                icon={Sparkles}
+                icon={<Sparkles className="w-8 h-8" />}
               />
             ) : (
                   <div className="space-y-2.5">

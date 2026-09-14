@@ -8,11 +8,28 @@ import { MessageCircle, Plus } from 'lucide-react';
 const EmptyState = React.memo(({
   title = 'No messages',
   description = 'Start a conversation with a friend',
-  icon: Icon = MessageCircle,
+  icon = MessageCircle,
   action,
   actionLabel = 'Start chat',
   theme,
 }) => {
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) return icon;
+    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null)) {
+      const IconComponent = icon;
+      return (
+        <IconComponent className={cn(
+          'w-12 h-12',
+          theme === 'dark'
+            ? 'text-gray-600'
+            : 'text-gray-400'
+        )} />
+      );
+    }
+    return null;
+  };
+
   return (
     <div className={cn(
       'flex flex-col items-center justify-center min-h-96 gap-4 p-6',
@@ -26,12 +43,7 @@ const EmptyState = React.memo(({
           ? 'bg-gray-800'
           : 'bg-gray-100'
       )}>
-        <Icon className={cn(
-          'w-12 h-12',
-          theme === 'dark'
-            ? 'text-gray-600'
-            : 'text-gray-400'
-        )} />
+        {renderIcon()}
       </div>
       
       <div className="text-center gap-2 flex flex-col">

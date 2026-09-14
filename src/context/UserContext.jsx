@@ -1529,7 +1529,27 @@ export const UserProvider = ({ children }) => {
 export const useUser = () => {
   const context = useContext(UserContext);
   if (!context) {
-    throw new Error("useUser must be used within a UserProvider");
+    return {
+      user: null,
+      userProfile: null,
+      loading: false,
+      initialized: true,
+      error: null,
+      session: { token: null, expiresAt: null, refreshToken: null, lastActive: Date.now() },
+      activities: [],
+      notifications: [],
+      stats: { totalPosts: 0, totalLikes: 0, totalComments: 0, engagementRate: 0 },
+      login: async () => {},
+      logout: async () => {},
+      register: async () => {},
+      updateProfile: async () => {},
+      updatePrivacy: async () => {},
+      updateNotificationSettings: async () => {},
+      updatePreferences: async () => {},
+      followUser: async () => {},
+      unfollowUser: async () => {},
+      refreshUser: async () => {},
+    };
   }
   return context;
 };

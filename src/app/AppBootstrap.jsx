@@ -8,6 +8,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '../context/ThemeContext.jsx';
 import { AuthProvider } from '../context/AuthContext.jsx';
+import { UserProvider } from '../context/UserContext.jsx';
 import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
@@ -220,37 +221,39 @@ export default function AppBootstrap() {
           {/* Main application renders immediately without blocking screens */}
           <BrowserRouter>
             <AuthProvider>
-              {/* Global motion policy: every Framer Motion animation respects
-                  prefers-reduced-motion (WCAG 2.2 2.3.3). */}
-              <MotionConfig reducedMotion="user">
-                <Suspense fallback={null}>
-                  <AppRoutes />
-                </Suspense>
-              </MotionConfig>
-              
-              {/* Global offline sync indicator */}
-              <OfflineIndicator />
-              
-              {/* PWA Install and Update Banners */}
-              <PWAInstallBanner />
-              <SWUpdateBanner />
-              
-              {/* Toast notifications */}
-              <Toaster 
-                position="top-right"
-                toastOptions={{
-                  className: 'font-sans backdrop-blur-sm',
-                  duration: 4000,
-                  style: {
-                    background: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(0, 0, 0, 0.1)',
-                  }
-                }}
-                richColors
-                closeButton
-                expand
-              />
+              <UserProvider>
+                {/* Global motion policy: every Framer Motion animation respects
+                    prefers-reduced-motion (WCAG 2.2 2.3.3). */}
+                <MotionConfig reducedMotion="user">
+                  <Suspense fallback={null}>
+                    <AppRoutes />
+                  </Suspense>
+                </MotionConfig>
+                
+                {/* Global offline sync indicator */}
+                <OfflineIndicator />
+                
+                {/* PWA Install and Update Banners */}
+                <PWAInstallBanner />
+                <SWUpdateBanner />
+                
+                {/* Toast notifications */}
+                <Toaster 
+                  position="top-right"
+                  toastOptions={{
+                    className: 'font-sans backdrop-blur-sm',
+                    duration: 4000,
+                    style: {
+                      background: 'rgba(255, 255, 255, 0.95)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(0, 0, 0, 0.1)',
+                    }
+                  }}
+                  richColors
+                  closeButton
+                  expand
+                />
+              </UserProvider>
             </AuthProvider>
           </BrowserRouter>
         </GlobalErrorBoundary>

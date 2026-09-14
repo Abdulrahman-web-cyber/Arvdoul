@@ -230,6 +230,7 @@ const ProfileHeader = memo(({
           <ProfileAvatar
             src={profile.photoURL}
             name={profile.displayName}
+            userId={profile.id || profile.uid}
             size={128}
             level={level || profile.level}
             onPress={onAvatarPress}

@@ -10,8 +10,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Search, Users, Loader2 } from 'lucide-react';
+import { ArrowLeft, Search, Users, Loader2, UserCheck, MessageCircle } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 /**
  * FriendsScreen Component
@@ -26,30 +27,36 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Load friends (mutual friends between current user and viewed user)
+  const targetId = userId || currentUser?.uid;
+  const isMutualCheck = userId && currentUser?.uid && userId !== currentUser.uid;
+
+  // Load friends (mutual friends between current user and viewed user, or target user's friends)
   useEffect(() => {
+    let isMounted = true;
     const loadFriends = async () => {
       setLoading(true);
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
-        if (currentUser?.uid && userId) {
+        if (isMutualCheck) {
           const result = await userService.getMutualFriends(currentUser.uid, userId);
-          setFriends(result.mutualFriends || []);
+          if (isMounted) setFriends(result?.mutualFriends || []);
+        } else if (targetId) {
+          const result = await userService.getFriends(targetId);
+          if (isMounted) setFriends(result?.friends || []);
         } else {
-          setFriends([]);
+          if (isMounted) setFriends([]);
         }
       } catch (error) {
         console.error('Failed to load friends:', error);
-        setFriends([]);
+        if (isMounted) setFriends([]);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     
-    if (currentUser?.uid && userId) {
-      loadFriends();
-    }
-  }, [currentUser?.uid, userId]);
+    loadFriends();
+    return () => { isMounted = false; };
+  }, [currentUser?.uid, userId, targetId, isMutualCheck]);
   
   const filteredFriends = friends.filter(f => 
     f.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -142,17 +149,14 @@ export default function FriendsScreen() {
                     'ring-violet-500/40 ring-offset-transparent',
                     'bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500'
                   )}>
-                    {friend.photoURL ? (
-                      <img
-                        src={friend.photoURL}
-                        alt={friend.displayName}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white font-bold">
-                        {(friend.displayName || 'U')[0].toUpperCase()}
-                      </div>
-                    )}
+                    <img
+                      src={getSafeAvatarUrl(friend.photoURL, friend.displayName, friend.id)}
+                      alt={friend.displayName || 'Friend'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = getSafeAvatarUrl(null, friend.displayName, friend.id);
+                      }}
+                    />
                   </div>
                 </button>
                 

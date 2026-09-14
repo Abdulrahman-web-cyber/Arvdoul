@@ -101,7 +101,8 @@ export function generateDefaultAvatarSvg(userId = '', displayName = 'User', size
 
 /**
  * Returns a safe avatar URL. If given a custom photoURL,
- * returns it. Otherwise returns the official uploaded /assets/default-profile.png.
+ * returns it. Otherwise returns the custom deterministic SVG avatar,
+ * using /assets/default-profile.png as the fallback.
  */
 export function getSafeAvatarUrl(photoURL, displayName = 'User', userId = '') {
   if (
@@ -109,9 +110,15 @@ export function getSafeAvatarUrl(photoURL, displayName = 'User', userId = '') {
     typeof photoURL === 'string' &&
     photoURL.trim() !== '' &&
     !photoURL.includes('default-avatar') &&
-    !photoURL.includes('placeholder')
+    !photoURL.includes('placeholder') &&
+    !photoURL.includes('default-profile') &&
+    !photoURL.includes('default_profile')
   ) {
     return photoURL;
   }
-  return '/assets/default-profile.png';
+  try {
+    return generateDefaultAvatarSvg(userId, displayName);
+  } catch {
+    return '/assets/default-profile.png';
+  }
 }

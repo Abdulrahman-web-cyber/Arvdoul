@@ -17,14 +17,28 @@ import React from 'react';
  * @param {string} [props.className]
  */
 export default function EmptyState({ title, description, icon, action, className = '' }) {
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null && icon.$$typeof)) {
+      const IconComponent = icon;
+      return <IconComponent className="w-7 h-7" aria-hidden="true" />;
+    }
+    return null;
+  };
+
+  const renderedIcon = renderIcon();
+
   return (
     <div
       role="status"
       className={`flex flex-col items-center justify-center text-center px-6 py-14 ${className}`}
     >
-      {icon && (
+      {renderedIcon && (
         <div aria-hidden="true" className="mb-4 w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
-          {icon}
+          {renderedIcon}
         </div>
       )}
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h3>

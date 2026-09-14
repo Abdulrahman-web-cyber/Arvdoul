@@ -25,15 +25,49 @@ import GlassButton from './GlassButton';
  * @param {Function} props.onAction - Button handler
  */
 const EmptyState = memo(({
-  icon: Icon,
+  icon,
   title,
   description,
   actionLabel,
   onAction,
-  actionIcon: ActionIcon,
+  actionIcon,
   className = '',
 }) => {
   const { isDark, colors, gradient, spring, spacing } = useTheme();
+
+  // Safe Icon Renderer
+  const renderIconContent = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    if (typeof icon === 'function') {
+      const IconComponent = icon;
+      return <IconComponent className="w-16 h-16" />;
+    }
+    if (typeof icon === 'object' && icon !== null) {
+      // ForwardRef / Lucide React icon object
+      const IconComponent = icon;
+      try {
+        return <IconComponent className="w-16 h-16" />;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Safe Action Icon Renderer
+  const safeActionIcon = useMemo(() => {
+    if (!actionIcon) return undefined;
+    if (React.isValidElement(actionIcon)) {
+      return () => actionIcon;
+    }
+    if (typeof actionIcon === 'function' || typeof actionIcon === 'object') {
+      return actionIcon;
+    }
+    return undefined;
+  }, [actionIcon]);
 
   // Animation variants
   const containerVariants = useMemo(() => ({
@@ -78,7 +112,7 @@ const EmptyState = memo(({
       aria-live="polite"
     >
       {/* Animated Icon */}
-      {Icon && (
+      {icon && (
         <motion.div
           {...iconVariants}
           className={`
@@ -101,7 +135,7 @@ const EmptyState = memo(({
               backgroundClip: 'text',
             }}
           >
-            <Icon className="w-16 h-16" />
+            {renderIconContent()}
           </div>
         </motion.div>
       )}
@@ -138,7 +172,7 @@ const EmptyState = memo(({
           variant="gradient"
           size="md"
           onClick={onAction}
-          icon={ActionIcon}
+          icon={safeActionIcon}
         >
           {actionLabel}
         </GlassButton>

@@ -332,49 +332,48 @@ const VibesIcon = memo(function VibesIcon({ active, dark }) {
   return (
     <svg
       viewBox="0 0 28 28"
-      className="w-[26px] h-[26px]"
+      className="w-[26px] h-[26px] transition-transform duration-200"
       fill="none"
       aria-hidden="true"
     >
       <defs>
         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#F43F5E" />
-          <stop offset="35%" stopColor="#D946EF" />
-          <stop offset="70%" stopColor="#8B5CF6" />
+          <stop offset="0%" stopColor="#FF1493" />
+          <stop offset="30%" stopColor="#A855F7" />
+          <stop offset="70%" stopColor="#3B82F6" />
           <stop offset="100%" stopColor="#06B6D4" />
         </linearGradient>
       </defs>
-      {/* Outer Story Ring */}
+      {/* Outer segmented story vibe halo */}
       <circle
         cx="14"
         cy="14"
         r="11"
         stroke={active ? `url(#${gradientId})` : "currentColor"}
-        strokeWidth={active ? "2.3" : "1.8"}
-        strokeDasharray={active ? "69" : "8 3"}
+        strokeWidth={active ? "2.2" : "1.75"}
+        strokeDasharray={active ? "17 3.5 17 3.5" : "5 2.5"}
         strokeLinecap="round"
       />
-      {/* Dynamic Soundwave / Pulse concentric ring */}
+      {/* Dynamic concentric pulse ring */}
       <circle
         cx="14"
         cy="14"
-        r="7.2"
+        r="7.5"
         stroke={active ? `url(#${gradientId})` : "currentColor"}
-        strokeWidth="1.5"
-        strokeOpacity={active ? "0.9" : "0.55"}
+        strokeWidth="1.4"
+        strokeOpacity={active ? "0.95" : "0.5"}
       />
-      {/* Vibrant Core Orb */}
-      <circle
-        cx="14"
-        cy="14"
-        r="3.2"
-        fill={active ? `url(#${gradientId})` : "currentColor"}
-      />
-      {/* Playful Top-Right Vibe Sparkle */}
+      {/* Playful & Energetic Vibe Pulse / Play Glyph */}
       <path
-        d="M21 5.5L21.7 7.1L23.3 7.8L21.7 8.5L21 10.1L20.3 8.5L18.7 7.8L20.3 7.1L21 5.5Z"
-        fill={active ? "#F43F5E" : (dark ? "#E2E8F0" : "#475569")}
-        opacity={active ? 1 : 0.85}
+        d="M12.5 10.5L17.5 14L12.5 17.5V10.5Z"
+        fill={active ? `url(#${gradientId})` : "currentColor"}
+        strokeLinejoin="round"
+      />
+      {/* Vibe Sparkle star */}
+      <path
+        d="M21 4.5L21.6 6.1L23.2 6.7L21.6 7.3L21 8.9L20.4 7.3L18.8 6.7L20.4 6.1L21 4.5Z"
+        fill={active ? "#F43F5E" : (dark ? "#F1F5F9" : "#334155")}
+        opacity={active ? 1 : 0.75}
       />
     </svg>
   );

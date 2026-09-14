@@ -14,6 +14,7 @@ import { ArrowLeft, Search, UserPlus, UserMinus, Loader2 } from 'lucide-react';
 import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 /**
  * FollowersScreen Component
@@ -29,26 +30,36 @@ export default function FollowersScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
+  const targetUserId = userId || currentUser?.uid;
+
   // Load followers
   useEffect(() => {
+    let isMounted = true;
     const loadFollowers = async () => {
       setLoading(true);
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
-        const result = await userService.getFollowers(userId);
-        setFollowers(result.followers || []);
+        if (targetUserId) {
+          const result = await userService.getFollowers(targetUserId);
+          if (isMounted) setFollowers(result.followers || []);
+        } else {
+          if (isMounted) setFollowers([]);
+        }
       } catch (error) {
         console.error('Failed to load followers:', error);
-        setFollowers([]);
+        if (isMounted) setFollowers([]);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     
-    if (userId) {
+    if (targetUserId) {
       loadFollowers();
+    } else {
+      setLoading(false);
     }
-  }, [userId]);
+    return () => { isMounted = false; };
+  }, [targetUserId]);
   
   const handleFollow = useCallback((followerId) => {
     if (currentUser?.uid) {
@@ -148,17 +159,14 @@ export default function FollowersScreen() {
                     'ring-violet-500/40 ring-offset-transparent',
                     'bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500'
                   )}>
-                    {follower.photoURL ? (
-                      <img
-                        src={follower.photoURL}
-                        alt={follower.displayName}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white font-bold">
-                        {(follower.displayName || 'U')[0].toUpperCase()}
-                      </div>
-                    )}
+                    <img
+                      src={getSafeAvatarUrl(follower.photoURL, follower.displayName, follower.id)}
+                      alt={follower.displayName || 'Follower'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = getSafeAvatarUrl(null, follower.displayName, follower.id);
+                      }}
+                    />
                   </div>
                 </button>
                 
