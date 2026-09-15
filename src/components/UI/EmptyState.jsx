@@ -41,18 +41,8 @@ const EmptyState = memo(({
     if (React.isValidElement(icon)) {
       return icon;
     }
-    if (typeof icon === 'function') {
-      const IconComponent = icon;
-      return <IconComponent className="w-16 h-16" />;
-    }
-    if (typeof icon === 'object' && icon !== null) {
-      // ForwardRef / Lucide React icon object
-      const IconComponent = icon;
-      try {
-        return <IconComponent className="w-16 h-16" />;
-      } catch {
-        return null;
-      }
+    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null)) {
+      return React.createElement(icon, { className: 'w-16 h-16' });
     }
     return null;
   };

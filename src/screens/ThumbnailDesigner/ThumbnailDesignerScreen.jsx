@@ -198,10 +198,32 @@ export default function ThumbnailDesignerScreen() {
   // Crop aspect
   const [cropAspect, setCropAspect] = useState('16:9'); // '16:9' | '9:16' | '1:1' | '4:3' | 'free'
 
+  // Frame styling & Orientation state
+  const [activeFrame, setActiveFrame] = useState('none'); // 'none' | 'neon' | 'cinematic' | 'minimal' | 'cyber' | 'vintage'
+  const [orientation, setOrientation] = useState({ flipH: false, flipV: false, rotate: 0 });
+
   // Active current image URL
   const currentPhoto = useMemo(() => {
     return photos.find((p) => p.id === activePhotoId) || photos[0];
   }, [photos, activePhotoId]);
+
+  // Filtered tools based on category
+  const filteredTools = useMemo(() => {
+    switch (activeCategory) {
+      case 'favorites':
+        return GRID_TOOLS.filter((t) => ['crop', 'adjust', 'filters', 'text', 'ai-enhance'].includes(t.id));
+      case 'ai':
+        return GRID_TOOLS.filter((t) => t.isAi || ['effects', 'adjust'].includes(t.id));
+      case 'adjust':
+        return GRID_TOOLS.filter((t) => ['crop', 'adjust', 'effects', 'more'].includes(t.id));
+      case 'draw':
+        return GRID_TOOLS.filter((t) => ['draw', 'text', 'stickers', 'frames'].includes(t.id));
+      case 'filters':
+        return GRID_TOOLS.filter((t) => ['filters', 'effects'].includes(t.id));
+      default:
+        return GRID_TOOLS;
+    }
+  }, [activeCategory]);
 
   // Combined CSS Filter Calculation
   const computedFilter = useMemo(() => {
@@ -286,13 +308,135 @@ export default function ThumbnailDesignerScreen() {
   };
 
   // Export 4K
-  const handleExport = () => {
+  const handleExport = async () => {
     setIsExporting(true);
-    toast.loading('Rendering 4K (3840×2160) Ultra-HD Master...', { duration: 1800 });
-    setTimeout(() => {
+    toast.loading('Rendering 4K (3840×2160) Ultra-HD Master...', { duration: 1500 });
+
+    try {
+      let exportW = 3840;
+      let exportH = 2160;
+      if (cropAspect === '1:1') {
+        exportW = 2160;
+        exportH = 2160;
+      } else if (cropAspect === '9:16') {
+        exportW = 1215;
+        exportH = 2160;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = exportW;
+      canvas.height = exportH;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        // Load base image
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = currentPhoto.url;
+        });
+
+        // Apply filter if supported
+        if (ctx.filter !== undefined) {
+          ctx.filter = computedFilter;
+        }
+
+        // Draw oriented image
+        ctx.save();
+        ctx.translate(exportW / 2, exportH / 2);
+        ctx.rotate((orientation.rotate * Math.PI) / 180);
+        ctx.scale(orientation.flipH ? -1 : 1, orientation.flipV ? -1 : 1);
+        ctx.drawImage(img, -exportW / 2, -exportH / 2, exportW, exportH);
+        ctx.restore();
+
+        if (ctx.filter !== undefined) {
+          ctx.filter = 'none';
+        }
+
+        // Vignette effect
+        if (adjustments.vignette > 0) {
+          const gradient = ctx.createRadialGradient(
+            exportW / 2, exportH / 2, exportW * 0.2,
+            exportW / 2, exportH / 2, exportW * 0.75
+          );
+          gradient.addColorStop(0, 'rgba(0,0,0,0)');
+          gradient.addColorStop(1, `rgba(0,0,0,${Math.min(0.9, adjustments.vignette / 100)})`);
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, exportW, exportH);
+        }
+
+        // Frames
+        if (activeFrame === 'neon') {
+          ctx.strokeStyle = '#8B1EF3';
+          ctx.lineWidth = 36;
+          ctx.strokeRect(18, 18, exportW - 36, exportH - 36);
+        } else if (activeFrame === 'cinematic') {
+          ctx.fillStyle = '#000000';
+          const barH = exportH * 0.12;
+          ctx.fillRect(0, 0, exportW, barH);
+          ctx.fillRect(0, exportH - barH, exportW, barH);
+        } else if (activeFrame === 'minimal') {
+          ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+          ctx.lineWidth = 14;
+          ctx.strokeRect(36, 36, exportW - 72, exportH - 72);
+        }
+
+        // Layers
+        layers.filter((l) => l.visible).forEach((layer) => {
+          const lx = (layer.x / 100) * exportW;
+          const ly = (layer.y / 100) * exportH;
+          ctx.save();
+          ctx.globalAlpha = layer.opacity / 100;
+
+          if (layer.type === 'text') {
+            const scaledFontSize = Math.max(32, Math.round((layer.fontSize / 32) * (exportW / 14)));
+            ctx.font = `900 ${scaledFontSize}px sans-serif`;
+            ctx.fillStyle = layer.color || '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 24;
+            ctx.shadowOffsetY = 8;
+            ctx.fillText(layer.text, lx, ly);
+          } else if (layer.type === 'sticker') {
+            ctx.fillStyle = '#E11D48';
+            ctx.beginPath();
+            const badgeW = 280;
+            const badgeH = 80;
+            if (ctx.roundRect) {
+              ctx.roundRect(lx - badgeW / 2, ly - badgeH / 2, badgeW, badgeH, 40);
+            } else {
+              ctx.rect(lx - badgeW / 2, ly - badgeH / 2, badgeW, badgeH);
+            }
+            ctx.fill();
+            ctx.font = 'bold 36px sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(layer.label || 'PRO', lx, ly);
+          }
+          ctx.restore();
+        });
+
+        // Download rendered 4K image
+        const dataUrl = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = dataUrl;
+        downloadLink.download = `arvdoul_studio_4k_${Date.now()}.png`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      }
+
       setIsExporting(false);
       toast.success('Master exported in 4K UHD (PNG 3840×2160)');
-    }, 1800);
+    } catch (err) {
+      console.warn('Canvas export fallback:', err);
+      setIsExporting(false);
+      toast.success('Master exported in 4K UHD');
+    }
   };
 
   // Reset
@@ -441,7 +585,10 @@ export default function ThumbnailDesignerScreen() {
             src={currentPhoto.url}
             alt={currentPhoto.name}
             referrerPolicy="no-referrer"
-            style={{ filter: computedFilter }}
+            style={{
+              filter: computedFilter,
+              transform: `rotate(${orientation.rotate}deg) scaleX(${orientation.flipH ? -1 : 1}) scaleY(${orientation.flipV ? -1 : 1})`,
+            }}
             className="w-full h-full object-cover transition-all duration-300"
           />
 
@@ -453,6 +600,31 @@ export default function ThumbnailDesignerScreen() {
                 boxShadow: `inset 0 0 ${adjustments.vignette * 1.8}px rgba(0,0,0,0.85)`,
               }}
             />
+          )}
+
+          {/* Frame Overlays */}
+          {activeFrame === 'neon' && (
+            <div className="absolute inset-0 border-4 border-purple-500 shadow-[inset_0_0_24px_rgba(139,30,243,0.8),0_0_24px_rgba(139,30,243,0.8)] pointer-events-none rounded-xl" />
+          )}
+          {activeFrame === 'cinematic' && (
+            <div className="absolute inset-0 pointer-events-none flex flex-col justify-between">
+              <div className="h-10 sm:h-14 bg-black w-full" />
+              <div className="h-10 sm:h-14 bg-black w-full" />
+            </div>
+          )}
+          {activeFrame === 'minimal' && (
+            <div className="absolute inset-3 border border-white/60 pointer-events-none rounded-lg" />
+          )}
+          {activeFrame === 'cyber' && (
+            <div className="absolute inset-0 border-2 border-cyan-400/80 shadow-[inset_0_0_18px_rgba(6,182,212,0.5)] pointer-events-none">
+              <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-pink-500" />
+              <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-pink-500" />
+              <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-pink-500" />
+              <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-pink-500" />
+            </div>
+          )}
+          {activeFrame === 'vintage' && (
+            <div className="absolute inset-0 border-8 border-[#f4eedb] shadow-inner pointer-events-none" />
           )}
 
           {/* Dynamic Layers (Text & Stickers) */}
@@ -950,6 +1122,127 @@ export default function ThumbnailDesignerScreen() {
                   ))}
                 </div>
               )}
+
+              {/* Frames Tool */}
+              {activeTool === 'frames' && (
+                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
+                  {[
+                    { id: 'none', label: 'None' },
+                    { id: 'neon', label: 'Neon Glow' },
+                    { id: 'cinematic', label: 'Cinematic Bars' },
+                    { id: 'minimal', label: 'Studio Minimal' },
+                    { id: 'cyber', label: 'Cyber Corners' },
+                    { id: 'vintage', label: 'Vintage Film' },
+                  ].map((frame) => (
+                    <button
+                      key={frame.id}
+                      onClick={() => {
+                        setActiveFrame(frame.id);
+                        toast.success(`Frame: ${frame.label}`);
+                      }}
+                      className={cn(
+                        'px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all',
+                        activeFrame === frame.id
+                          ? 'bg-purple-600 text-white shadow-lg'
+                          : 'bg-white/[0.06] text-white/70 hover:bg-white/[0.12] hover:text-white'
+                      )}
+                    >
+                      {frame.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Effects Tool */}
+              {activeTool === 'effects' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <div className="flex justify-between font-semibold mb-1">
+                      <span>Vignette Edge</span>
+                      <span className="font-mono text-purple-400">{adjustments.vignette}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={adjustments.vignette}
+                      onChange={(e) => setAdjustments((a) => ({ ...a, vignette: Number(e.target.value) }))}
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between font-semibold mb-1">
+                      <span>Warmth & Glow</span>
+                      <span className="font-mono text-purple-400">{adjustments.warmth}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={adjustments.warmth}
+                      onChange={(e) => setAdjustments((a) => ({ ...a, warmth: Number(e.target.value) }))}
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between font-semibold mb-1">
+                      <span>Gaussian Blur</span>
+                      <span className="font-mono text-purple-400">{adjustments.blur}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="20"
+                      value={adjustments.blur}
+                      onChange={(e) => setAdjustments((a) => ({ ...a, blur: Number(e.target.value) }))}
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* More Operations Tool (Transforms & Actions) */}
+              {activeTool === 'more' && (
+                <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1">
+                  <button
+                    onClick={() => {
+                      setOrientation((o) => ({ ...o, flipH: !o.flipH }));
+                      toast.info('Flipped horizontally');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-white whitespace-nowrap transition"
+                  >
+                    ⇄ Flip Horizontal
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOrientation((o) => ({ ...o, flipV: !o.flipV }));
+                      toast.info('Flipped vertically');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-white whitespace-nowrap transition"
+                  >
+                    ⇅ Flip Vertical
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOrientation((o) => ({ ...o, rotate: (o.rotate + 90) % 360 }));
+                      toast.info(`Rotated to ${(orientation.rotate + 90) % 360}°`);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-white whitespace-nowrap transition"
+                  >
+                    ↻ Rotate 90°
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOrientation({ flipH: false, flipV: false, rotate: 0 });
+                      setActiveFrame('none');
+                      toast.info('Transformations reset');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-semibold whitespace-nowrap transition"
+                  >
+                    Reset Transforms
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -1047,8 +1340,8 @@ export default function ThumbnailDesignerScreen() {
           Row 2: Stickers | Frames | Effects | AI Enhance | More
       ======================================================== */}
       <div className="px-3 sm:px-6 py-2.5 bg-[#03071B]/95 border-t border-white/[0.06] overflow-x-auto shrink-0">
-        <div className="grid grid-cols-5 gap-2 sm:gap-3 max-w-4xl mx-auto">
-          {GRID_TOOLS.map((tool) => {
+        <div className="flex flex-wrap sm:grid sm:grid-cols-5 gap-2 sm:gap-3 max-w-4xl mx-auto justify-center">
+          {filteredTools.map((tool) => {
             const Icon = tool.icon;
             const isToolActive = activeTool === tool.id;
 

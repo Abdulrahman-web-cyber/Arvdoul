@@ -61,6 +61,14 @@ const initialState = {
   // Position
   position: null,
   positionLoading: false,
+
+  // Saved Posts
+  savedPosts: [],
+  savedLoading: false,
+
+  // Shop Items
+  shopItems: [],
+  shopLoading: false,
   
   // UI state
   activeTab: 'posts',
@@ -449,6 +457,54 @@ export const useProfileStore = create(
         console.error('❌ Load highlights failed:', error);
         set((state) => {
           state.highlightsLoading = false;
+        });
+      }
+    },
+
+    /**
+     * Load user saved posts
+     * @param {string} userId - User ID
+     */
+    loadSavedPosts: async (userId) => {
+      if (!userId) return;
+      set((state) => {
+        state.savedLoading = true;
+      });
+      try {
+        const { getFirestoreService } = await import('../services/firestoreService.js');
+        const res = await getFirestoreService().getSavedPosts(userId);
+        const posts = Array.isArray(res) ? res : res?.posts || [];
+        set((state) => {
+          state.savedPosts = posts;
+          state.savedLoading = false;
+        });
+      } catch (error) {
+        console.error('❌ Load saved posts failed:', error);
+        set((state) => {
+          state.savedLoading = false;
+        });
+      }
+    },
+
+    /**
+     * Load creator shop items
+     * @param {string} [userId] - Creator user ID
+     */
+    loadShopItems: async (userId) => {
+      set((state) => {
+        state.shopLoading = true;
+      });
+      try {
+        const { marketplaceService } = await import('../services/marketplaceService.js');
+        const items = await marketplaceService.getProducts();
+        set((state) => {
+          state.shopItems = items || [];
+          state.shopLoading = false;
+        });
+      } catch (error) {
+        console.error('❌ Load shop items failed:', error);
+        set((state) => {
+          state.shopLoading = false;
         });
       }
     },

@@ -22,14 +22,28 @@ export default function EmptyState({ title, description, icon, action, className
     if (React.isValidElement(icon)) {
       return icon;
     }
-    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null && icon.$$typeof)) {
-      const IconComponent = icon;
-      return <IconComponent className="w-7 h-7" aria-hidden="true" />;
+    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null && (icon.$$typeof || icon.render))) {
+      return React.createElement(icon, { className: 'w-7 h-7', 'aria-hidden': true });
+    }
+    return null;
+  };
+
+  const renderAction = () => {
+    if (!action) return null;
+    if (React.isValidElement(action)) {
+      return action;
+    }
+    if (typeof action === 'function' || (typeof action === 'object' && action !== null && (action.$$typeof || action.render))) {
+      return React.createElement(action);
+    }
+    if (typeof action === 'string' || typeof action === 'number') {
+      return <span>{action}</span>;
     }
     return null;
   };
 
   const renderedIcon = renderIcon();
+  const renderedAction = renderAction();
 
   return (
     <div
@@ -41,11 +55,15 @@ export default function EmptyState({ title, description, icon, action, className
           {renderedIcon}
         </div>
       )}
-      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{title}</h3>
+      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+        {typeof title === 'string' || typeof title === 'number' ? title : (React.isValidElement(title) ? title : String(title || ''))}
+      </h3>
       {description && (
-        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400 max-w-sm">{description}</p>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+          {typeof description === 'string' || typeof description === 'number' ? description : (React.isValidElement(description) ? description : String(description || ''))}
+        </p>
       )}
-      {action && <div className="mt-5">{action}</div>}
+      {renderedAction && <div className="mt-5">{renderedAction}</div>}
     </div>
   );
 }

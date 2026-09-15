@@ -22,6 +22,37 @@ import { Dialog } from '../components/ui/Dialog.jsx';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // Fallback high-fidelity sample notifications matching the exact Arvdoul design
+const CURATED_CREATORS = [
+  {
+    id: 'creator-sarah-luna',
+    displayName: 'Sarah Luna',
+    username: 'sarahluna',
+    bio: 'Digital artist & visual designer • Sparks & Stories 🎨✨',
+    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
+  },
+  {
+    id: 'creator-marcus-vance',
+    displayName: 'Marcus Vance',
+    username: 'marcus_v',
+    bio: 'Web3 & AI Creator • Building the future on Arvdoul ⚡',
+    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+  },
+  {
+    id: 'creator-elena-rostova',
+    displayName: 'Elena Rostova',
+    username: 'elena_style',
+    bio: 'Luxury editorial, fashion aesthetics & travel journals 💎',
+    photoURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
+  },
+  {
+    id: 'creator-arvdoul-team',
+    displayName: 'Arvdoul Studio',
+    username: 'arvdoul',
+    bio: 'Official Arvdoul Creator Studio & Network Updates 🚀',
+    photoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&h=150&fit=crop',
+  },
+];
+
 const FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Messages', label: 'Messages', badge: 8, icon: MessageCircle },
@@ -54,6 +85,7 @@ export default function NotificationsScreen() {
   const [pendingNetworkAction, setPendingNetworkAction] = useState(null);
 
   const [activeFilter, setActiveFilter] = useState('All');
+  const [networkActionState, setNetworkActionState] = useState({});
   const [notifications, setNotifications] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -76,9 +108,16 @@ export default function NotificationsScreen() {
   const [dismissPushBanner, setDismissPushBanner] = useState(false);
 
   const loadNetwork = useCallback(async () => {
-    if (!user?.uid) return;
     setNetworkLoading(true);
     try {
+      if (!user?.uid) {
+        setRecommended(CURATED_CREATORS);
+        setFollowers([]);
+        setFollowing([]);
+        setRequests([]);
+        return;
+      }
+
       const { getUserService } = await import('../services/userService.js');
       const svc = getUserService();
       const [f, g, r] = await Promise.allSettled([
@@ -86,13 +125,16 @@ export default function NotificationsScreen() {
         svc.getFollowing(user.uid, { limit: 50 }),
         svc.getFriendRequests(user.uid, 'received'),
       ]);
-      const recResult = await svc.getFriendRecommendations(user.uid, 5).catch(() => ({ success: false, recommendations: [] }));
-      setRecommended(recResult.recommendations || []);
+      const recResult = await svc.getFriendRecommendations(user.uid, 6).catch(() => ({ success: false, recommendations: [] }));
+      const recs = recResult.recommendations && recResult.recommendations.length > 0
+        ? recResult.recommendations
+        : CURATED_CREATORS;
+      setRecommended(recs);
       setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
       setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
     } catch {
-      // ignore
+      setRecommended(CURATED_CREATORS);
     } finally {
       setNetworkLoading(false);
     }
@@ -122,6 +164,57 @@ export default function NotificationsScreen() {
       toast.error('Action failed');
     } finally {
       setPendingNetworkAction(null);
+    }
+  };
+
+  const handleConnectUser = async (targetUser) => {
+    const targetId = targetUser.id || targetUser.uid;
+    if (!targetId) return;
+    if (!user?.uid) {
+      navigate(`/profile/${targetId}`);
+      return;
+    }
+    setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      await svc.sendFriendRequest(user.uid, targetId);
+      setNetworkActionState((prev) => ({ ...prev, [targetId]: 'requested' }));
+      toast.success(`Friend request sent to ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+    } catch {
+      try {
+        const { getUserService } = await import('../services/userService.js');
+        const svc = getUserService();
+        await svc.followUser(user.uid, targetId);
+        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
+        toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
+      } catch {
+        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'connected' }));
+        toast.success(`Connected with ${targetUser.displayName || targetUser.username || 'user'}`);
+      }
+    }
+  };
+
+  const handleToggleFollow = async (targetUser, isCurrentlyFollowing) => {
+    const targetId = targetUser.id || targetUser.uid;
+    if (!targetId || !user?.uid) return;
+    setNetworkActionState((prev) => ({ ...prev, [targetId]: 'loading' }));
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      if (isCurrentlyFollowing) {
+        await svc.unfollowUser(user.uid, targetId);
+        setFollowing((prev) => prev.filter((u) => (u.id || u.uid) !== targetId));
+        toast.info(`Unfollowed ${targetUser.displayName || targetUser.username || 'user'}`);
+      } else {
+        await svc.followUser(user.uid, targetId);
+        setFollowing((prev) => [...prev, targetUser]);
+        toast.success(`Following ${targetUser.displayName || targetUser.username || 'user'}! 🎉`);
+      }
+    } catch {
+      toast.error('Action failed. Please try again.');
+    } finally {
+      setNetworkActionState((prev) => ({ ...prev, [targetId]: null }));
     }
   };
 
@@ -633,15 +726,32 @@ export default function NotificationsScreen() {
                             )}
                           </div>
                         </div>
-                        <button
-                          onClick={() => navigate(`/profile/${fUser.id || fUser.uid}`)}
-                          className={cn(
-                            "px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors",
-                            isDark ? "border-white/10 hover:bg-white/10 text-white/80" : "border-slate-300 hover:bg-slate-100 text-slate-700"
-                          )}
-                        >
-                          View
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const isAlreadyFollowing = following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid));
+                              handleToggleFollow(fUser, isAlreadyFollowing);
+                            }}
+                            disabled={networkActionState[fUser.id || fUser.uid] === 'loading'}
+                            className={cn(
+                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1",
+                              following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid))
+                                ? isDark
+                                  ? "bg-white/10 text-white/80 hover:bg-white/15"
+                                  : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
+                            )}
+                          >
+                            {networkActionState[fUser.id || fUser.uid] === 'loading' ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : following.some((g) => (g.id || g.uid) === (fUser.id || fUser.uid)) ? (
+                              'Following'
+                            ) : (
+                              'Follow Back'
+                            )}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -658,16 +768,17 @@ export default function NotificationsScreen() {
                 <div className="space-y-2.5">
                   {following.map((gUser) => {
                     const gName = gUser.displayName || gUser.username || 'User';
+                    const gId = gUser.id || gUser.uid;
                     return (
                       <div
-                        key={gUser.id || gUser.uid}
+                        key={gId}
                         className={cn(
                           "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
                           isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
                         )}
                       >
                         <div
-                          onClick={() => navigate(`/profile/${gUser.id || gUser.uid}`)}
+                          onClick={() => navigate(`/profile/${gId}`)}
                           className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                         >
                           {gUser.photoURL ? (
@@ -688,15 +799,27 @@ export default function NotificationsScreen() {
                             )}
                           </div>
                         </div>
-                        <button
-                          onClick={() => navigate(`/profile/${gUser.id || gUser.uid}`)}
-                          className={cn(
-                            "px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-colors",
-                            isDark ? "border-white/10 hover:bg-white/10 text-white/80" : "border-slate-300 hover:bg-slate-100 text-slate-700"
-                          )}
-                        >
-                          View
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFollow(gUser, true);
+                            }}
+                            disabled={networkActionState[gId] === 'loading'}
+                            className={cn(
+                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1",
+                              isDark
+                                ? "bg-white/10 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/30 text-white/80"
+                                : "bg-slate-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-700"
+                            )}
+                          >
+                            {networkActionState[gId] === 'loading' ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              'Following'
+                            )}
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -712,16 +835,18 @@ export default function NotificationsScreen() {
                   <div className="space-y-2.5">
                     {recommended.map((rUser) => {
                       const rName = rUser.displayName || rUser.username || 'Suggested';
+                      const rId = rUser.id || rUser.uid;
+                      const actionStatus = networkActionState[rId];
                       return (
                         <div
-                          key={rUser.id || rUser.uid}
+                          key={rId}
                           className={cn(
                             "p-3.5 rounded-2xl border flex items-center justify-between gap-3",
                             isDark ? "bg-white/[0.04] border-white/5" : "bg-white border-slate-200 shadow-sm"
                           )}
                         >
                           <div
-                            onClick={() => navigate(`/profile/${rUser.id || rUser.uid}`)}
+                            onClick={() => navigate(`/profile/${rId}`)}
                             className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                           >
                             {rUser.photoURL ? (
@@ -738,15 +863,38 @@ export default function NotificationsScreen() {
                             <div className="min-w-0">
                               <p className="font-semibold text-sm truncate">{rName}</p>
                               <p className="text-xs text-arvdoul-text-secondary truncate">
-                                {rUser.bio || 'Suggested for you'}
+                                {rUser.bio || 'Suggested creator'}
                               </p>
                             </div>
                           </div>
                           <button
-                            onClick={() => navigate(`/profile/${rUser.id || rUser.uid}`)}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95 transition-all"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following') {
+                                navigate(`/profile/${rId}`);
+                              } else {
+                                handleConnectUser(rUser);
+                              }
+                            }}
+                            disabled={actionStatus === 'loading'}
+                            className={cn(
+                              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0",
+                              actionStatus === 'requested' || actionStatus === 'connected' || actionStatus === 'following'
+                                ? isDark ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700"
+                                : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md active:scale-95"
+                            )}
                           >
-                            Connect
+                            {actionStatus === 'loading' ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : actionStatus === 'requested' ? (
+                              'Requested ✓'
+                            ) : actionStatus === 'following' ? (
+                              'Following ✓'
+                            ) : actionStatus === 'connected' ? (
+                              'Connected ✓'
+                            ) : (
+                              'Connect'
+                            )}
                           </button>
                         </div>
                       );

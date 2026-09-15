@@ -6,9 +6,10 @@
  * @component
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft } from 'lucide-react';
 import ProfileAbout from '../../components/profile/ProfileAbout';
@@ -21,7 +22,17 @@ export default function AboutScreen() {
   const navigate = useNavigate();
   const { userId } = useParams();
   const { theme } = useTheme();
-  const { profile, isOwner, loadProfile } = useProfileStore();
+  const { user: authUser } = useAuth();
+  const { profile, isOwner, loadProfile, isLoading } = useProfileStore();
+
+  const currentUserId = authUser?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid');
+  const targetId = userId || currentUserId;
+
+  useEffect(() => {
+    if (targetId && (!profile || (profile.id !== targetId && profile.uid !== targetId))) {
+      loadProfile(targetId, currentUserId);
+    }
+  }, [targetId, currentUserId, profile, loadProfile]);
   
   const handleEdit = () => {
     navigate('/profile/edit');

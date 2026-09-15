@@ -527,16 +527,6 @@ export const UserProvider = ({ children }) => {
   // Services
   const cacheManager = useRef(new UserCacheManager());
 
-  /** ---------- INITIALIZATION ---------- */
-  useEffect(() => {
-    initializeUser();
-
-    return () => {
-      cleanup();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   /** ---------- CLEANUP ---------- */
   const cleanup = useCallback(() => {
     if (authUnsubscribeRef.current) {
@@ -563,116 +553,125 @@ export const UserProvider = ({ children }) => {
     debounceTimersRef.current = {};
   }, []);
 
-  /** ---------- AUTH STATE LISTENER ---------- */
-  const initializeUser = useCallback(async () => {
+  /** ---------- LOGOUT ---------- */
+  const logout = useCallback(async () => {
     try {
-      setLoading(true);
-
-      // Try to load from cache first
-      const cachedUser = await cacheManager.current.get("current_user");
-      const cachedProfile = await cacheManager.current.get("user_profile");
-
-      if (cachedUser && cachedProfile) {
-        setUser(cachedUser);
-        setUserProfile(cachedProfile);
-        setInitialized(true);
+      if (userProfile?.uid) {
+        // Track logout activity
+        await ActivityTracker.track(userProfile.uid, "logout", {
+          timestamp: new Date().toISOString()
+        });
       }
 
-      // Setup auth state listener
-      authUnsubscribeRef.current = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (!firebaseUser) {
-          setUser(null);
-          setUserProfile(null);
-          setLoading(false);
-          setInitialized(true);
-          await cacheManager.current.clear();
-          return;
-        }
+      await signOut(auth);
 
-        await handleAuthenticatedUser(firebaseUser);
+      // Clear local state
+      setUser(null);
+      setUserProfile(null);
+      setSession({
+        token: null,
+        expiresAt: null,
+        refreshToken: null,
+        lastActive: null
       });
 
-    } catch (error) {
-      console.error("User initialization failed:", error);
-      setError("Failed to initialize user session");
-      setLoading(false);
-      setInitialized(true);
-    }
-  }, []);
+      // Clear cache
+      await cacheManager.current.clear();
 
-  /** ---------- HANDLE AUTHENTICATED USER ---------- */
-  const handleAuthenticatedUser = useCallback(async (firebaseUser) => {
-    try {
-      // Load user profile
-      await loadUserProfile(firebaseUser.uid);
+      // Clear local storage
+      try { localStorage.removeItem("user_session"); } catch (e) { /* ignore */ }
 
-      // Setup session management
-      initializeSession(firebaseUser);
+      // Cleanup listeners
+      cleanup();
 
-      // Track login activity
-      await ActivityTracker.track(firebaseUser.uid, "login", {
-        method: firebaseUser.providerData[0]?.providerId || "unknown",
-        emailVerified: firebaseUser.emailVerified,
-        multiFactorEnabled: firebaseUser.multiFactor?.enrolledFactors?.length > 0
-      });
-
-      // Security monitoring
-      await SecurityMonitor.detectSuspiciousActivity(firebaseUser.uid, "login");
-
-      setLoading(false);
-      setInitialized(true);
+      toast.success("Logged out successfully");
 
     } catch (error) {
-      console.error("User authentication handling failed:", error);
-      setError("Failed to load user profile");
-      setLoading(false);
-    }
-  }, []);
-
-  /** ---------- LOAD USER PROFILE ---------- */
-  const loadUserProfile = useCallback(async (userId) => {
-    try {
-      const cachedProfile = await cacheManager.current.get(`profile_${userId}`);
-      if (cachedProfile) {
-        setUserProfile(cachedProfile);
-      }
-
-      // Setup real-time profile listener
-      const userRef = doc(db, "users", userId);
-
-      profileUnsubscribeRef.current = onSnapshot(userRef, async (snapshot) => {
-        if (!snapshot.exists()) {
-          // Create initial profile if doesn't exist
-          await createInitialProfile(userId);
-          return;
-        }
-
-        const profileData = snapshot.data();
-        const enhancedProfile = {
-          ...profileData,
-          lastSeen: new Date().toISOString(),
-          isOnline: true
-        };
-
-        setUserProfile(enhancedProfile);
-        await cacheManager.current.set(`profile_${userId}`, enhancedProfile);
-
-        // Update user stats if they exist
-        if (profileData.stats) {
-          setStats(profileData.stats);
-        }
-
-        // Update notifications
-        if (profileData.notifications) {
-          setNotifications(profileData.notifications);
-        }
-      });
-
-    } catch (error) {
-      console.error("Profile loading failed:", error);
+      console.error("Logout failed:", error);
+      toast.error("Logout failed");
       throw error;
     }
+  }, [userProfile, cleanup]);
+
+  /** ---------- UTILITIES ---------- */
+  const checkUsernameExists = useCallback(async (username) => {
+    if (!username) return false;
+
+    try {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("username", "==", username.toLowerCase()));
+      const snapshot = await getDocs(q);
+
+      return !snapshot.empty;
+    } catch (error) {
+      console.error("Username check failed:", error);
+      return false;
+    }
   }, []);
+
+  const updateLastActive = useCallback(async () => {
+    if (!userProfile?.uid) return;
+
+    try {
+      const userRef = doc(db, "users", userProfile.uid);
+      await updateDoc(userRef, {
+        lastActive: serverTimestamp()
+      });
+
+      setSession(prev => ({
+        ...prev,
+        lastActive: Date.now()
+      }));
+    } catch (error) {
+      console.error("Last active update failed:", error);
+    }
+  }, [userProfile]);
+
+  const checkSessionValidity = useCallback(() => {
+    try {
+      if (!session || !session.expiresAt) return;
+      if (Date.now() > session.expiresAt) {
+        toast.warning("Your session has expired. Please log in again.");
+        logout();
+      }
+    } catch (e) {
+      console.error("checkSessionValidity error:", e);
+    }
+  }, [session, logout]);
+
+  const setupInactivityTracker = useCallback(() => {
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+
+    const resetInactivityTimer = () => {
+      setSession(prev => ({
+        ...prev,
+        lastActive: Date.now()
+      }));
+    };
+
+    events.forEach(event => {
+      try {
+        document.addEventListener(event, resetInactivityTimer);
+      } catch (e) {
+        // ignore in non-browser envs
+      }
+    });
+
+    inactivityTimerRef.current = setInterval(() => {
+      try {
+        const inactiveTime = Date.now() - (session?.lastActive || Date.now());
+        if (inactiveTime > 5 * 60 * 1000) { // 5 minutes
+          // User is inactive
+          if (inactiveTime > 10 * 60 * 1000) { // 10 minutes
+            toast.info("You've been inactive. Session will expire soon.");
+          }
+        }
+      } catch (e) {
+        console.error("inactivityTimer error:", e);
+      }
+    }, 60000); // Check every minute
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   /** ---------- CREATE INITIAL PROFILE ---------- */
   const createInitialProfile = useCallback(async (userId) => {
@@ -722,6 +721,51 @@ export const UserProvider = ({ children }) => {
     }
   }, []);
 
+  /** ---------- LOAD USER PROFILE ---------- */
+  const loadUserProfile = useCallback(async (userId) => {
+    try {
+      const cachedProfile = await cacheManager.current.get(`profile_${userId}`);
+      if (cachedProfile) {
+        setUserProfile(cachedProfile);
+      }
+
+      // Setup real-time profile listener
+      const userRef = doc(db, "users", userId);
+
+      profileUnsubscribeRef.current = onSnapshot(userRef, async (snapshot) => {
+        if (!snapshot.exists()) {
+          // Create initial profile if doesn't exist
+          await createInitialProfile(userId);
+          return;
+        }
+
+        const profileData = snapshot.data();
+        const enhancedProfile = {
+          ...profileData,
+          lastSeen: new Date().toISOString(),
+          isOnline: true
+        };
+
+        setUserProfile(enhancedProfile);
+        await cacheManager.current.set(`profile_${userId}`, enhancedProfile);
+
+        // Update user stats if they exist
+        if (profileData.stats) {
+          setStats(profileData.stats);
+        }
+
+        // Update notifications
+        if (profileData.notifications) {
+          setNotifications(profileData.notifications);
+        }
+      });
+
+    } catch (error) {
+      console.error("Profile loading failed:", error);
+      throw error;
+    }
+  }, [createInitialProfile]);
+
   /** ---------- SESSION MANAGEMENT ---------- */
   const initializeSession = useCallback((firebaseUser) => {
     const sessionToken = uuidv4();
@@ -761,72 +805,83 @@ export const UserProvider = ({ children }) => {
 
     // Update last active
     updateLastActive();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkSessionValidity, setupInactivityTracker, updateLastActive]);
 
-  const checkSessionValidity = useCallback(() => {
+  /** ---------- HANDLE AUTHENTICATED USER ---------- */
+  const handleAuthenticatedUser = useCallback(async (firebaseUser) => {
     try {
-      if (!session || !session.expiresAt) return;
-      if (Date.now() > session.expiresAt) {
-        toast.warning("Your session has expired. Please log in again.");
-        logout();
-      }
-    } catch (e) {
-      console.error("checkSessionValidity error:", e);
-    }
-  }, [session, logout]);
+      // Load user profile
+      await loadUserProfile(firebaseUser.uid);
 
-  const setupInactivityTracker = useCallback(() => {
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+      // Setup session management
+      initializeSession(firebaseUser);
 
-    const resetInactivityTimer = () => {
-      setSession(prev => ({
-        ...prev,
-        lastActive: Date.now()
-      }));
-    };
-
-    events.forEach(event => {
-      try {
-        document.addEventListener(event, resetInactivityTimer);
-      } catch (e) {
-        // ignore in non-browser envs
-      }
-    });
-
-    inactivityTimerRef.current = setInterval(() => {
-      try {
-        const inactiveTime = Date.now() - (session?.lastActive || Date.now());
-        if (inactiveTime > 5 * 60 * 1000) { // 5 minutes
-          // User is inactive
-          if (inactiveTime > 10 * 60 * 1000) { // 10 minutes
-            toast.info("You've been inactive. Session will expire soon.");
-          }
-        }
-      } catch (e) {
-        console.error("inactivityTimer error:", e);
-      }
-    }, 60000); // Check every minute
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
-
-  const updateLastActive = useCallback(async () => {
-    if (!userProfile?.uid) return;
-
-    try {
-      const userRef = doc(db, "users", userProfile.uid);
-      await updateDoc(userRef, {
-        lastActive: serverTimestamp()
+      // Track login activity
+      await ActivityTracker.track(firebaseUser.uid, "login", {
+        method: firebaseUser.providerData[0]?.providerId || "unknown",
+        emailVerified: firebaseUser.emailVerified,
+        multiFactorEnabled: firebaseUser.multiFactor?.enrolledFactors?.length > 0
       });
 
-      setSession(prev => ({
-        ...prev,
-        lastActive: Date.now()
-      }));
+      // Security monitoring
+      await SecurityMonitor.detectSuspiciousActivity(firebaseUser.uid, "login");
+
+      setLoading(false);
+      setInitialized(true);
+
     } catch (error) {
-      console.error("Last active update failed:", error);
+      console.error("User authentication handling failed:", error);
+      setError("Failed to load user profile");
+      setLoading(false);
     }
-  }, [userProfile]);
+  }, [loadUserProfile, initializeSession]);
+
+  /** ---------- AUTH STATE LISTENER ---------- */
+  const initializeUser = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // Try to load from cache first
+      const cachedUser = await cacheManager.current.get("current_user");
+      const cachedProfile = await cacheManager.current.get("user_profile");
+
+      if (cachedUser && cachedProfile) {
+        setUser(cachedUser);
+        setUserProfile(cachedProfile);
+        setInitialized(true);
+      }
+
+      // Setup auth state listener
+      authUnsubscribeRef.current = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!firebaseUser) {
+          setUser(null);
+          setUserProfile(null);
+          setLoading(false);
+          setInitialized(true);
+          await cacheManager.current.clear();
+          return;
+        }
+
+        await handleAuthenticatedUser(firebaseUser);
+      });
+
+    } catch (error) {
+      console.error("User initialization failed:", error);
+      setError("Failed to initialize user session");
+      setLoading(false);
+      setInitialized(true);
+    }
+  }, [handleAuthenticatedUser]);
+
+  /** ---------- INITIALIZATION ---------- */
+  useEffect(() => {
+    initializeUser();
+
+    return () => {
+      cleanup();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** ---------- USER PROFILE MANAGEMENT ---------- */
   const updateProfile = useCallback(async (updates) => {
@@ -1326,22 +1381,6 @@ export const UserProvider = ({ children }) => {
     }
   }, [userProfile]);
 
-  /** ---------- UTILITIES ---------- */
-  const checkUsernameExists = useCallback(async (username) => {
-    if (!username) return false;
-
-    try {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("username", "==", username.toLowerCase()));
-      const snapshot = await getDocs(q);
-
-      return !snapshot.empty;
-    } catch (error) {
-      console.error("Username check failed:", error);
-      return false;
-    }
-  }, []);
-
   const refreshUserData = useCallback(async () => {
     if (!userProfile?.uid) return;
 
@@ -1406,46 +1445,6 @@ export const UserProvider = ({ children }) => {
       throw error;
     }
   }, [userProfile]);
-
-  /** ---------- LOGOUT ---------- */
-  const logout = useCallback(async () => {
-    try {
-      if (userProfile?.uid) {
-        // Track logout activity
-        await ActivityTracker.track(userProfile.uid, "logout", {
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      await signOut(auth);
-
-      // Clear local state
-      setUser(null);
-      setUserProfile(null);
-      setSession({
-        token: null,
-        expiresAt: null,
-        refreshToken: null,
-        lastActive: null
-      });
-
-      // Clear cache
-      await cacheManager.current.clear();
-
-      // Clear local storage
-      try { localStorage.removeItem("user_session"); } catch (e) { /* ignore */ }
-
-      // Cleanup listeners
-      cleanup();
-
-      toast.success("Logged out successfully");
-
-    } catch (error) {
-      console.error("Logout failed:", error);
-      toast.error("Logout failed");
-      throw error;
-    }
-  }, [userProfile, cleanup]);
 
   /** ---------- CONTEXT VALUE ---------- */
   const contextValue = useMemo(() => ({

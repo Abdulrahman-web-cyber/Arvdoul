@@ -82,6 +82,28 @@ export default function ProfilePublicScreen() {
           const userService = userServiceModule.getUserService();
           const fetched = await userService.getUserProfile(userId, currentUser?.uid);
           
+          let userPosts = [];
+          try {
+            const { getFirestoreService } = await import('../../services/firestoreService.js');
+            const postsRes = await getFirestoreService().getPostsByUser(userId, { limit: 30 });
+            if (postsRes?.posts && Array.isArray(postsRes.posts)) {
+              userPosts = postsRes.posts;
+            }
+          } catch (postErr) {
+            console.warn('User posts fetch note:', postErr);
+          }
+
+          if (currentUser?.uid && userId !== currentUser.uid) {
+            try {
+              const status = await userService.checkFollowStatus(currentUser.uid, userId);
+              if (isMounted) setIsFollowing(Boolean(status?.isFollowing || fetched?.isFollowing));
+            } catch (followErr) {
+              if (isMounted && fetched?.isFollowing !== undefined) {
+                setIsFollowing(Boolean(fetched.isFollowing));
+              }
+            }
+          }
+          
           if (fetched && isMounted) {
             setProfileData((prev) => ({
               ...prev,
@@ -92,11 +114,12 @@ export default function ProfilePublicScreen() {
               photoURL: fetched.photoURL || prev.photoURL,
               bio: fetched.bio || prev.bio,
               location: fetched.location || prev.location,
+              posts: userPosts.length > 0 ? userPosts : (fetched.posts || prev.posts),
               stats: {
                 ...prev.stats,
                 followers: fetched.followerCount ? String(fetched.followerCount) : prev.stats.followers,
                 following: fetched.followingCount ? String(fetched.followingCount) : prev.stats.following,
-                posts: fetched.postCount ? String(fetched.postCount) : prev.stats.posts
+                posts: userPosts.length > 0 ? String(userPosts.length) : (fetched.postCount ? String(fetched.postCount) : prev.stats.posts)
               }
             }));
           }
@@ -242,17 +265,23 @@ export default function ProfilePublicScreen() {
       <main className="max-w-4xl mx-auto px-4 pt-4">
         {/* Cover Photo */}
         <div className="relative w-full h-44 sm:h-60 rounded-2xl overflow-hidden bg-gradient-to-r from-purple-900/60 via-indigo-900/60 to-blue-900/60 shadow-lg border border-white/10">
-          <img
-            src={profileData.coverPhotoURL}
-            alt="Cover"
-            className="w-full h-full object-cover"
-          />
+          {profileData.coverPhotoURL ? (
+            <img
+              src={profileData.coverPhotoURL}
+              alt="Cover"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-r from-purple-950 via-indigo-950 to-blue-950 flex items-center justify-center">
+              <div className="w-full h-full opacity-20 bg-[radial-gradient(#872FE2_1px,transparent_1px)] [background-size:16px_16px]" />
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           
           {/* Creator Rank / Tier Badge */}
           <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/20 text-xs font-semibold text-white shadow-sm">
             <Crown className="w-3.5 h-3.5 text-amber-400" />
-            <span>{profileData.rank}</span>
+            <span>{profileData.rank || 'Creator'}</span>
           </div>
         </div>
 
@@ -572,7 +601,7 @@ export default function ProfilePublicScreen() {
                   Creator Presets & LUTs Store
                 </h3>
                 <p className="text-xs text-gray-300 mt-1">
-                  Download pro video colour grades, audio presets & 3D assets directly from Alyssa.
+                  Download pro video colour grades, audio presets & 3D assets directly from {profileData.displayName || 'this creator'}.
                 </p>
               </div>
               <button

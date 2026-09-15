@@ -57,6 +57,10 @@ export default function ProfileScreen() {
     postsLoading,
     postsHasMore,
     postsCursor,
+    savedPosts,
+    savedLoading,
+    shopItems,
+    shopLoading,
     highlights,
     highlightsLoading,
     level,
@@ -67,6 +71,8 @@ export default function ProfileScreen() {
     loadProfile,
     loadPosts,
     loadMorePosts,
+    loadSavedPosts,
+    loadShopItems,
     loadHighlights,
     loadMutualFriends,
     follow,
@@ -129,7 +135,14 @@ export default function ProfileScreen() {
   // Handlers
   const handleTabChange = useCallback((tab) => {
     setActiveProfileTab(tab);
-  }, []);
+    if (tab === 'posts' && !posts.length) {
+      loadPosts(viewingUserId);
+    } else if (tab === 'saved' && !savedPosts.length && isOwner) {
+      loadSavedPosts(currentUserId);
+    } else if (tab === 'shop' && !shopItems.length) {
+      loadShopItems(viewingUserId);
+    }
+  }, [posts.length, viewingUserId, loadPosts, savedPosts.length, isOwner, loadSavedPosts, currentUserId, shopItems.length, loadShopItems]);
   
   const handleFollow = useCallback(() => {
     if (currentUserId && viewingUserId) {
@@ -422,10 +435,10 @@ export default function ProfileScreen() {
           activeTab={activeProfileTab}
           posts={effectivePosts}
           postsLoading={postsLoading}
-          savedPosts={[]}
-          savedLoading={false}
-          shopItems={[]}
-          shopLoading={false}
+          savedPosts={savedPosts || []}
+          savedLoading={savedLoading}
+          shopItems={shopItems || []}
+          shopLoading={shopLoading}
           analytics={analytics}
           analyticsLoading={analyticsLoading}
           isOwner={isOwner}

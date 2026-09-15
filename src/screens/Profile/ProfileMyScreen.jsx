@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useState, Suspense, lazy, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
@@ -39,9 +40,11 @@ export default function ProfileMyScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
 
-  // Get current user from app store
-  const currentUser = useAppStore((state) => state.currentUser);
-  const currentUserId = currentUser?.uid;
+  // Get current user from auth context and app store
+  const { user: authContextUser } = useAuth();
+  const authStoreUser = useAppStore((state) => state.currentUser);
+  const currentUser = authStoreUser || authContextUser;
+  const currentUserId = currentUser?.uid || authContextUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || JSON.parse(localStorage.getItem('user') || '{}')?.uid) : null);
 
   // Profile store
   const {
@@ -53,6 +56,10 @@ export default function ProfileMyScreen() {
     postsLoading,
     postsHasMore,
     postsCursor,
+    savedPosts,
+    savedLoading,
+    shopItems,
+    shopLoading,
     highlights,
     highlightsLoading,
     level,
@@ -62,6 +69,8 @@ export default function ProfileMyScreen() {
     loadProfile,
     loadPosts,
     loadMorePosts,
+    loadSavedPosts,
+    loadShopItems,
     loadHighlights,
     loadLevel,
     loadBalance,
@@ -113,8 +122,12 @@ export default function ProfileMyScreen() {
 
     if (tab === 'posts' && !posts.length) {
       loadPosts(currentUserId);
+    } else if (tab === 'saved' && !savedPosts.length) {
+      loadSavedPosts(currentUserId);
+    } else if (tab === 'shop' && !shopItems.length) {
+      loadShopItems(currentUserId);
     }
-  }, [setActiveTab, posts.length, loadPosts, currentUserId]);
+  }, [setActiveTab, posts.length, loadPosts, savedPosts.length, loadSavedPosts, shopItems.length, loadShopItems, currentUserId]);
 
   // Refresh handler
   const handleRefresh = useCallback(async () => {
@@ -230,8 +243,8 @@ export default function ProfileMyScreen() {
     );
   }
 
-  // Error state
-  if (error) {
+  // Error state: only block screen if neither profile NOR user credentials exist
+  if (error && !profile && !currentUser && !currentUserId) {
     return (
       <div className={cn(
         'min-h-screen pb-20 flex items-center justify-center',
@@ -278,6 +291,7 @@ export default function ProfileMyScreen() {
     followerCount: 0,
     followingCount: 0,
     postCount: 0,
+    coins: Number(currentUser?.coins) || balance || 100,
     isVerified: false,
     isCreator: false,
     level: level || 1,
@@ -393,12 +407,20 @@ return (
             </div>
           }>
             <ProfileTabContent
+              profile={effectiveProfile}
               activeTab={localActiveTab}
               posts={effectivePosts}
               postsLoading={postsLoading}
+              savedPosts={savedPosts || []}
+              savedLoading={savedLoading}
+              shopItems={shopItems || []}
+              shopLoading={shopLoading}
+              analytics={analytics}
+              analyticsLoading={analyticsLoading}
               isOwner={true}
               onPostPress={handlePostPress}
               onLoadMore={handleLoadMorePosts}
+              onEdit={handleEditProfile}
               hasMore={postsHasMore}
               theme={theme}
             />

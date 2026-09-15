@@ -8,6 +8,7 @@
 
 import React, { memo } from 'react';
 import { cn } from '../../lib/utils';
+import { sanitizeProfileUrl } from '../../config/profileContracts.js';
 import { 
   MapPin, 
   Link as LinkIcon, 
@@ -116,9 +117,9 @@ const ProfileAbout = ({
               >
                 <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <span className="text-gray-600 dark:text-gray-400">{item.label}:</span>
-                {item.href ? (
+                {item.href && sanitizeProfileUrl(item.href) ? (
                   <a
-                    href={item.href}
+                    href={sanitizeProfileUrl(item.href)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-purple-600 dark:text-purple-400 hover:underline truncate"
@@ -177,25 +178,29 @@ const ProfileAbout = ({
             Links & Socials
           </p>
           <div className="flex flex-wrap gap-2">
-            {resolvedLinks.map((link, idx) => (
-              <a
-                key={link.id || idx}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm',
-                  link.isPrimary
-                    ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                )}
-              >
-                <span>{link.title || link.platform || 'Link'}</span>
-                {link.isPrimary && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                )}
-              </a>
-            ))}
+            {resolvedLinks.map((link, idx) => {
+              const safeUrl = sanitizeProfileUrl(link.url);
+              if (!safeUrl) return null;
+              return (
+                <a
+                  key={link.id || idx}
+                  href={safeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm',
+                    link.isPrimary
+                      ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-purple-500/20'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  )}
+                >
+                  <span>{link.title || link.platform || 'Link'}</span>
+                  {link.isPrimary && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  )}
+                </a>
+              );
+            })}
           </div>
         </div>
       )}

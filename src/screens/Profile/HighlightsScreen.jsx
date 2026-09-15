@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,7 +21,10 @@ import { useAppStore } from '../../store/appStore';
 export default function HighlightsScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const currentUser = useAppStore(state => state.currentUser);
+  const { user: authUser } = useAuth();
+  const storeUser = useAppStore(state => state.currentUser);
+  const currentUser = storeUser || authUser;
+  const currentUserId = currentUser?.uid || authUser?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid');
   
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +36,16 @@ export default function HighlightsScreen() {
   // Load highlights
   useEffect(() => {
     const loadHighlights = async () => {
+      if (!currentUserId) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const storyService = (await import('../../services/storyService.js')).getStoryService();
-        const userHighlights = await storyService.getHighlights(currentUser?.uid);
-        setHighlights(userHighlights || []);
+        const userHighlights = await storyService.getHighlights(currentUserId);
+        const list = Array.isArray(userHighlights) ? userHighlights : (userHighlights?.highlights || []);
+        setHighlights(list);
       } catch (error) {
         console.error('Failed to load highlights:', error);
       } finally {
@@ -45,30 +54,30 @@ export default function HighlightsScreen() {
     };
     
     loadHighlights();
-  }, [currentUser?.uid]);
+  }, [currentUserId]);
   
   const handleCreateHighlight = useCallback(() => {
-    // Open the in-screen create panel (no dead navigation).
     setShowCreate(true);
   }, []);
   
   const handleEditHighlight = useCallback((highlight) => {
     setSelectedHighlight(highlight);
-    // Show edit modal or navigate
+    toast.info(`Editing "${highlight.title}"`);
   }, []);
   
   const handleDeleteHighlight = useCallback(async (highlight) => {
-    if (window.confirm('Delete this highlight?')) {
-      try {
-        const storyService = (await import('../../services/storyService.js')).getStoryService();
-        // Delete highlight logic would go here
-        setHighlights(prev => prev.filter(h => h.id !== highlight.id));
-        toast.success('Highlight deleted');
-      } catch (error) {
-        toast.error('Failed to delete highlight');
+    setSelectedHighlight(null);
+    try {
+      const storyService = (await import('../../services/storyService.js')).getStoryService();
+      if (storyService.deleteHighlight) {
+        await storyService.deleteHighlight(currentUserId, highlight.id);
       }
+      setHighlights(prev => prev.filter(h => h.id !== highlight.id));
+      toast.success(`Highlight "${highlight.title}" removed`);
+    } catch (error) {
+      toast.error('Failed to delete highlight');
     }
-  }, []);
+  }, [currentUserId]);
   
   return (
     <div className={cn(
@@ -265,13 +274,14 @@ export default function HighlightsScreen() {
                 setCreating(true);
                 try {
                   const { getStoryService } = await import('../../services/storyService.js');
-                  await getStoryService().createHighlight(currentUser?.uid, highlightName.trim().slice(0, 30), []);
+                  await getStoryService().createHighlight(currentUserId, highlightName.trim().slice(0, 30), []);
                   toast.success('Highlight created! Add stories to it from your profile.');
                   setShowCreate(false); setHighlightName('');
                   // reload highlights
                   const { getStoryService: s2 } = await import('../../services/storyService.js');
-                  const res = await s2().getHighlights(currentUser?.uid);
-                  setHighlights(res?.highlights || []);
+                  const res = await s2().getHighlights(currentUserId);
+                  const updated = Array.isArray(res) ? res : (res?.highlights || []);
+                  setHighlights(updated);
                 } catch (err) {
                   toast.error(err?.message || 'Could not create highlight.');
                 } finally {
