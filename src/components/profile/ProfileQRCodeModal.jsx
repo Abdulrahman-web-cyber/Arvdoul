@@ -9,11 +9,11 @@
  */
 
 import React, { memo, useState, useEffect } from 'react';
-import QRCode from 'qrcode';
 import { X, Copy, Check, Share2, Download, QrCode, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 
 const ProfileQRCodeModal = memo(({
   isOpen,
@@ -40,14 +40,13 @@ const ProfileQRCodeModal = memo(({
     if (!isOpen || !profileUrl) return;
 
     setQrLoading(true);
-    QRCode.toDataURL(profileUrl, {
+    generateQrDataUrl(profileUrl, {
       width: 400,
       margin: 2,
       color: {
         dark: '#090d16',
         light: '#ffffff'
-      },
-      errorCorrectionLevel: 'H' // High redundancy allows overlaying profile accent without breaking scans
+      }
     })
       .then((url) => {
         if (isMounted) {
