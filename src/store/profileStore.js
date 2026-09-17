@@ -18,6 +18,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
+import { useAppStore } from './appStore.js';
 
 // ==================== INITIAL STATE ====================
 const initialState = {
@@ -148,24 +149,40 @@ export const useProfileStore = create(
           console.warn('Could not fetch position:', e);
         }
         
-        // Resolve profile with safe fallback guarantee
-        const resolvedProfile = profile || {
+        // Resolve profile with safe fallback guarantee & real auth user linkage
+        const appCurrentUser = useAppStore.getState().currentUser;
+        const fallbackDisplayName = isOwner
+          ? (appCurrentUser?.displayName || appCurrentUser?.name || appCurrentUser?.email?.split('@')[0] || 'Member')
+          : 'Creator';
+        const fallbackUsername = isOwner
+          ? (appCurrentUser?.username || appCurrentUser?.email?.split('@')[0] || (currentUserId ? `user_${currentUserId.slice(0, 6)}` : 'user'))
+          : (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`);
+
+        const resolvedProfile = profile ? {
+          ...profile,
+          displayName: (profile.displayName && profile.displayName !== 'User' && profile.displayName !== 'Creator')
+            ? profile.displayName
+            : fallbackDisplayName,
+          username: (profile.username && !profile.username.startsWith('user_'))
+            ? profile.username
+            : fallbackUsername,
+        } : {
           id: userId,
           uid: userId,
-          username: isOwner ? (currentUserId ? `user_${currentUserId.slice(0, 6)}` : 'user') : (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`),
-          displayName: isOwner ? 'User' : 'Creator',
-          bio: '',
-          photoURL: null,
-          followerCount: 0,
-          followingCount: 0,
+          username: fallbackUsername,
+          displayName: fallbackDisplayName,
+          bio: appCurrentUser?.bio || '',
+          photoURL: appCurrentUser?.photoURL || null,
+          followerCount: appCurrentUser?.followerCount || 0,
+          followingCount: appCurrentUser?.followingCount || 0,
           postCount: 0,
           likesReceived: 0,
           friendCount: 0,
-          coins: isOwner ? (balance || 100) : 0,
-          level: level || 1,
+          coins: isOwner ? (balance || appCurrentUser?.coins || 100) : 0,
+          level: level || appCurrentUser?.level || 1,
           reputation: 100,
-          isVerified: false,
-          isCreator: false,
+          isVerified: Boolean(appCurrentUser?.isVerified),
+          isCreator: Boolean(appCurrentUser?.isCreator),
           canViewActivity: true,
           canViewAchievements: true,
           canViewTitles: true,

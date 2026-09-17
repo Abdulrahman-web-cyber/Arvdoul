@@ -28,11 +28,13 @@ import {
   ExternalLink,
   Lock,
   Eye,
-  Check
+  Check,
+  Navigation
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../../config/profileContracts.js';
+import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 
 /**
  * EditProfileScreen Component
@@ -67,6 +69,7 @@ export default function EditProfileScreen() {
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
@@ -522,13 +525,48 @@ export default function EditProfileScreen() {
             Personal Information
           </h2>
           
-          <div className="grid grid-cols-2 gap-4">
-            <InputField
-              icon={MapPin}
-              label="Location"
-              field="location"
-              placeholder="City, Country"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-purple-400" />
+                  Location
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(true)}
+                  className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1 transition-colors"
+                >
+                  <Navigation className="w-3 h-3" />
+                  <span>GPS / Select</span>
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => handleInputChange('location', e.target.value)}
+                  placeholder="City, Country"
+                  className={cn(
+                    'w-full px-4 py-2.5 rounded-xl pr-10',
+                    'bg-gray-50 dark:bg-gray-800',
+                    'border border-gray-200 dark:border-gray-700',
+                    'text-gray-900 dark:text-white',
+                    'placeholder-gray-400 dark:placeholder-gray-500',
+                    'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                    'transition-colors'
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(true)}
+                  title="Detect or choose location"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                >
+                  <MapPin className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             
             <InputField
               icon={Globe}
@@ -700,6 +738,21 @@ export default function EditProfileScreen() {
           </div>
         </div>
       </div>
+
+      {/* Interactive Location Setup Modal */}
+      {showLocationModal && (
+        <ProfileLocationModal
+          isOpen={showLocationModal}
+          onClose={() => setShowLocationModal(false)}
+          currentLocation={formData.location}
+          userId={userProfile?.id || userProfile?.uid}
+          theme={theme}
+          onLocationUpdated={(newLoc) => {
+            setFormData(prev => ({ ...prev, location: newLoc }));
+            setShowLocationModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }

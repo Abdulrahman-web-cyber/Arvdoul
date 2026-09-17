@@ -398,25 +398,43 @@ class ProfessionalUserService {
         localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
       } catch {}
 
+      let authUser = null;
+      try {
+        const firebase = await import('../firebase/firebase.js');
+        const auth = await firebase.getAuthInstance();
+        if (auth?.currentUser && (auth.currentUser.uid === userId || requesterId === userId)) {
+          authUser = auth.currentUser;
+        }
+      } catch {}
+
       const isSelf = Boolean(
+        (authUser?.uid === userId) ||
         (localAuth?.uid && localAuth.uid === userId) ||
         requesterId === userId ||
         (!requesterId && localAuth?.uid === userId)
       );
 
+      const realDisplayName = (isSelf && authUser?.displayName) ||
+        (isSelf && localAuth?.displayName) ||
+        (isSelf && localAuth?.name) ||
+        (isSelf && authUser?.email?.split('@')[0]) ||
+        (isSelf && localAuth?.email?.split('@')[0]) ||
+        (isSelf ? 'Member' : 'Creator');
+
+      const realUsername = (isSelf && localAuth?.username) ||
+        (isSelf && authUser?.email?.split('@')[0]) ||
+        (isSelf && localAuth?.email?.split('@')[0]) ||
+        (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`);
+
       const synth = {
         id: userId,
         uid: userId,
-        username: isSelf
-          ? (localAuth.username || localAuth.email?.split('@')[0] || `user_${userId.slice(0, 6)}`)
-          : (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`),
-        displayName: isSelf
-          ? (localAuth.displayName || localAuth.name || 'User')
-          : 'Creator',
-        email: isSelf ? (localAuth.email || '') : '',
+        username: realUsername,
+        displayName: realDisplayName,
+        email: isSelf ? (authUser?.email || localAuth.email || '') : '',
         bio: isSelf ? (localAuth.bio || '') : '',
         photoURL: isSelf
-          ? (localAuth.photoURL || this.getAvatarUrl(userId, localAuth.displayName || 'User', null))
+          ? (authUser?.photoURL || localAuth.photoURL || this.getAvatarUrl(userId, realDisplayName, null))
           : this.getAvatarUrl(userId, 'Creator', null),
         coverPhotoURL: null,
         followerCount: isSelf ? (Number(localAuth.followerCount) || 0) : 0,
@@ -429,6 +447,7 @@ class ProfessionalUserService {
         reputation: 100,
         isVerified: Boolean(isSelf && localAuth.isVerified),
         isCreator: Boolean(isSelf && localAuth.isCreator),
+        location: isSelf ? (localAuth.location || '') : '',
         createdAt: new Date().toISOString(),
         presence: { isOnline: false, status: 'offline', lastActive: null },
         canViewActivity: true,
@@ -450,6 +469,32 @@ class ProfessionalUserService {
 
     const rawData = snap.data();
     const full = { id: snap.id, uid: snap.id, ...rawData };
+
+    // Resolve real displayName & username if missing or generic in document
+    let authUser = null;
+    try {
+      const firebase = await import('../firebase/firebase.js');
+      const auth = await firebase.getAuthInstance();
+      if (auth?.currentUser && (auth.currentUser.uid === userId || requesterId === userId)) {
+        authUser = auth.currentUser;
+      }
+    } catch {}
+
+    const isSelfUser = Boolean((authUser?.uid === userId) || (requesterId === userId));
+    full.displayName = (full.displayName && full.displayName !== 'User')
+      ? full.displayName
+      : (full.name && full.name !== 'User')
+        ? full.name
+        : (isSelfUser && authUser?.displayName)
+          ? authUser.displayName
+          : (full.email ? full.email.split('@')[0] : (isSelfUser ? 'Member' : 'Creator'));
+
+    full.username = (full.username && !full.username.startsWith('user_'))
+      ? full.username
+      : (isSelfUser && authUser?.email?.split('@')[0])
+        ? authUser.email.split('@')[0]
+        : (full.email ? full.email.split('@')[0] : (full.username || `user_${userId.slice(0, 7)}`));
+
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
 
     // Overlay shard-backed follower/following counts (legacy fallback).

@@ -12,9 +12,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Bell, Home, MessageCircle, PlayCircle, UserPlus } from "lucide-react";
 import { useTheme } from "@context/ThemeContext";
+import { useAuth } from "@context/AuthContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useAppStore } from "../../store/appStore";
+import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
 
 /* ==========================================================================
@@ -465,12 +467,19 @@ const NavigationItem = memo(function NavigationItem({
   badgeCount,
   coinBalance,
   dark,
+  user,
   reducedMotion,
   onNavigate,
 }) {
   const handleClick = useCallback(() => {
     onNavigate(item.path, item.id);
   }, [item.id, item.path, onNavigate]);
+
+  const isProfile = item.id === "profile";
+  const userAvatar = isProfile && user ? getSafeAvatarUrl(user.photoURL, user.displayName || user.username || 'You', user.id || user.uid) : null;
+  const labelText = isProfile && (user?.displayName || user?.username)
+    ? (user.displayName || user.username).split(' ')[0].slice(0, 8)
+    : item.label;
 
   return (
     <motion.button
@@ -499,7 +508,24 @@ const NavigationItem = memo(function NavigationItem({
       )}
 
       <span className="relative z-10 flex h-[34px] w-[48px] shrink-0 items-center justify-center">
-        <NavigationIcon type={item.icon} active={active} dark={dark} />
+        {isProfile && userAvatar ? (
+          <div className="relative flex items-center justify-center">
+            <img
+              src={userAvatar}
+              alt={user?.displayName || "Profile"}
+              className={`w-[26px] h-[26px] rounded-full object-cover transition-transform duration-200 ${
+                active
+                  ? "ring-2 ring-purple-500 scale-105 shadow-md shadow-purple-500/20"
+                  : "ring-1 ring-slate-400/40 dark:ring-white/20"
+              }`}
+            />
+            {user?.isCreator && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 border border-white dark:border-[#060816]" />
+            )}
+          </div>
+        ) : (
+          <NavigationIcon type={item.icon} active={active} dark={dark} />
+        )}
         <NavBadge count={badgeCount} dark={dark} reducedMotion={Boolean(reducedMotion)} />
       </span>
 
@@ -525,7 +551,7 @@ const NavigationItem = memo(function NavigationItem({
             : dark ? "text-white/[0.72]" : "text-[#111827]/[0.72]",
         ].join(" ")}
       >
-        {item.label}
+        {labelText}
       </span>
 
       <span className="relative z-10 mt-[2px] flex h-[3px] w-full shrink-0 items-center justify-center">
@@ -822,7 +848,9 @@ function BottomNav() {
   const { playSound } = useSound();
   const { trackEvent } = useAnalytics();
 
+  const { user: authUser, userProfile } = useAuth();
   const currentUser = useAppStore((state) => state.currentUser);
+  const effectiveUser = userProfile || currentUser || authUser;
   const unreadCounts = useAppStore((state) => state.unreadCounts);
 
   const reducedMotion = useReducedMotion();
@@ -1255,6 +1283,7 @@ function BottomNav() {
                     badgeCount={0}
                     coinBalance={coinBalance}
                     dark={dark}
+                    user={effectiveUser}
                     reducedMotion={Boolean(reducedMotion)}
                     onNavigate={navigateTo}
                   />

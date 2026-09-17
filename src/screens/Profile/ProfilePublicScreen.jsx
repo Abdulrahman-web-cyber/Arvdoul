@@ -32,6 +32,7 @@ import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileTipModal from '../../components/profile/ProfileTipModal';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
+import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 
 // Modals
 const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
@@ -59,6 +60,7 @@ export default function ProfilePublicScreen() {
   // Modals
   const [showTipModal, setShowTipModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   // Load profile and related data
@@ -256,8 +258,14 @@ export default function ProfilePublicScreen() {
     return {
       ...profileData,
       id: profileData.id || profileData.uid || userId,
-      username: profileData.username || 'creator',
-      displayName: profileData.displayName || profileData.name || 'Creator',
+      username: (profileData.username && !profileData.username.startsWith('user_') && profileData.username !== 'creator')
+        ? profileData.username
+        : (profileData.username || profileData.handle || (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`)),
+      displayName: (profileData.displayName && profileData.displayName !== 'User' && profileData.displayName !== 'Creator')
+        ? profileData.displayName
+        : (profileData.name && profileData.name !== 'User' && profileData.name !== 'Creator')
+          ? profileData.name
+          : (profileData.username || 'Creator'),
       bio: profileData.bio || '',
       photoURL: getSafeAvatarUrl(profileData.photoURL, profileData.displayName || 'Creator', userId),
       coverPhotoURL: profileData.coverPhotoURL || null,
@@ -342,6 +350,8 @@ export default function ProfilePublicScreen() {
             level={effectiveProfile.level || 1}
             theme={theme}
             onBack={() => navigate(-1)}
+            onOpenQrCode={() => setShowQrModal(true)}
+            onOpenQrScanner={() => setShowScannerModal(true)}
             onOpenNotifications={() => navigate('/notifications')}
             onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
             onOpenOptions={() => setShowOptionsMenu(true)}
@@ -454,6 +464,15 @@ export default function ProfilePublicScreen() {
           profile={effectiveProfile}
           theme={theme}
         />
+
+        {/* QR Scanner Modal */}
+        {showScannerModal && (
+          <ProfileQRScannerModal
+            isOpen={showScannerModal}
+            onClose={() => setShowScannerModal(false)}
+            theme={theme}
+          />
+        )}
 
         {/* Options Menu */}
         {showOptionsMenu && (

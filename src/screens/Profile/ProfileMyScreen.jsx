@@ -32,6 +32,8 @@ import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
+import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
+import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 
 // Modals & Extras
 const ProfileSkeleton = lazy(() => import('../../components/profile/ProfileSkeleton'));
@@ -46,6 +48,8 @@ export default function ProfileMyScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
 
@@ -214,6 +218,8 @@ export default function ProfileMyScreen() {
             position={position}
             theme={theme}
             onOpenQrCode={() => setShowQrModal(true)}
+            onOpenQrScanner={() => setShowScannerModal(true)}
+            onOpenLocationSetup={() => setShowLocationModal(true)}
             onOpenNotifications={() => navigate('/notifications')}
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowAvatarModal(true)}
@@ -307,6 +313,29 @@ export default function ProfileMyScreen() {
           profile={effectiveProfile}
           theme={theme}
         />
+
+        {/* QR Scanner Modal */}
+        {showScannerModal && (
+          <ProfileQRScannerModal
+            isOpen={showScannerModal}
+            onClose={() => setShowScannerModal(false)}
+            theme={theme}
+          />
+        )}
+
+        {/* Location Setup Modal */}
+        {showLocationModal && (
+          <ProfileLocationModal
+            isOpen={showLocationModal}
+            onClose={() => setShowLocationModal(false)}
+            currentLocation={effectiveProfile?.location}
+            userId={currentUserId}
+            theme={theme}
+            onLocationUpdated={(newLoc) => {
+              loadProfile(currentUserId, currentUserId);
+            }}
+          />
+        )}
 
         {/* Options Menu Dialog */}
         {showOptionsMenu && (

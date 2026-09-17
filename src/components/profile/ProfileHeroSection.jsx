@@ -27,6 +27,7 @@ import {
   Send,
   MoreHorizontal,
   QrCode,
+  ScanLine,
   User,
   ExternalLink
 } from 'lucide-react';
@@ -42,6 +43,8 @@ const ProfileHeroSection = memo(({
   theme = 'light',
   onBack,
   onOpenQrCode,
+  onOpenQrScanner,
+  onOpenLocationSetup,
   onOpenNotifications,
   onOpenMessages,
   onOpenOptions,
@@ -60,9 +63,17 @@ const ProfileHeroSection = memo(({
   const rankTitle = useMemo(() => getRankTitle(effectiveLevel), [effectiveLevel]);
   const citizenStanding = useMemo(() => getCitizenTier(effectiveLevel, profile?.activeDaysCount || 1), [effectiveLevel, profile?.activeDaysCount]);
 
-  // Safe avatar and display strings
-  const displayName = profile?.displayName || profile?.name || (isOwner ? 'Your Profile' : 'Creator');
-  const username = profile?.username || (isOwner ? 'user' : 'creator');
+  // Safe avatar and display strings with actual identity resolution
+  const displayName = (profile?.displayName && profile?.displayName !== 'User' && profile?.displayName !== 'Creator')
+    ? profile.displayName
+    : (profile?.name && profile?.name !== 'User' && profile?.name !== 'Creator')
+      ? profile.name
+      : (isOwner ? 'Member' : 'Creator');
+
+  const username = (profile?.username && !profile?.username.startsWith('user_') && profile?.username !== 'user' && profile?.username !== 'creator')
+    ? profile.username
+    : (profile?.username || (isOwner ? 'user' : 'creator'));
+
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
   const bio = profile?.bio || (isOwner ? '' : '');
   const location = profile?.location || profile?.city || '';
@@ -135,6 +146,20 @@ const ProfileHeroSection = memo(({
                 title="Profile QR Code"
               >
                 <QrCode className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={onOpenQrScanner}
+                className={cn(
+                  "p-2.5 rounded-2xl border transition-all flex items-center justify-center",
+                  isDark
+                    ? "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white"
+                    : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
+                )}
+                aria-label="Scan QR Code"
+                title="Scan Another User's QR Code"
+              >
+                <ScanLine className="w-4 h-4 text-purple-500" />
               </button>
 
               <button
@@ -304,12 +329,35 @@ const ProfileHeroSection = memo(({
 
               {/* Meta Info: Location, Website, Joined Date */}
               <div className="flex items-center gap-4 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex-wrap pt-1">
-                {location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                {location ? (
+                  <button
+                    type="button"
+                    onClick={isOwner ? onOpenLocationSetup : undefined}
+                    className={cn(
+                      "flex items-center gap-1 transition-colors text-left",
+                      isOwner ? "hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer group" : "cursor-default"
+                    )}
+                    title={isOwner ? "Tap to change location" : "User location"}
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-500 transition-colors" />
                     <span>{location}</span>
-                  </span>
-                )}
+                    {isOwner && (
+                      <span className="text-[10px] text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        (edit)
+                      </span>
+                    )}
+                  </button>
+                ) : isOwner ? (
+                  <button
+                    type="button"
+                    onClick={onOpenLocationSetup}
+                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 font-semibold transition-all cursor-pointer"
+                    title="Set Up Your Location"
+                  >
+                    <MapPin className="w-3 h-3" />
+                    <span>+ Set Location</span>
+                  </button>
+                ) : null}
                 {website && (
                   <a
                     href={`https://${website.replace(/^https?:\/\//, '')}`}
