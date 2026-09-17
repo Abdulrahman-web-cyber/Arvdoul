@@ -23,7 +23,9 @@ import {
   Phone, 
   Gift, 
   MoreHorizontal,
-  Loader2
+  Loader2,
+  Clock,
+  Users
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -34,7 +36,10 @@ const ProfileActionBar = memo(({
   coinsBalance = 0,
   isFollowing = false,
   followLoading = false,
+  friendshipStatus = 'none', // 'none' | 'pending' | 'received' | 'friends'
+  friendRequestLoading = false,
   onFollowToggle,
+  onFriendRequestToggle,
   onOpenQrCode,
   onOpenTipModal,
   onOpenOptionsMenu,
@@ -47,6 +52,11 @@ const ProfileActionBar = memo(({
   const buttonGradient = 'linear-gradient(135deg, #9333ea 0%, #6366f1 50%, #06b6d4 100%)';
 
   const coinsValue = Number(profile?.coins ?? profile?.coinBalance ?? coinsBalance ?? 0);
+
+  // Level gating: users must reach Level 3 or have creator/verified status to have public followers.
+  // Otherwise, they participate in the mutual Friend Request system.
+  const targetLevel = Number(profile?.level) || 1;
+  const canBeFollowed = targetLevel >= 3 || Boolean(profile?.isCreator || profile?.isVerified);
 
   if (isOwner) {
     return (
@@ -150,35 +160,86 @@ const ProfileActionBar = memo(({
   return (
     <div className="w-full">
       <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-        {/* 1. Follow / Following Button (Prominent Gradient) */}
-        <button
-          onClick={onFollowToggle}
-          disabled={followLoading}
-          className={cn(
-            "flex-1 sm:flex-initial sm:min-w-[150px] flex items-center justify-center gap-2 py-2.5 px-5 rounded-2xl font-bold text-xs transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md",
-            isFollowing
-              ? (isDark 
-                  ? "bg-white/10 border border-white/15 text-white hover:bg-white/15" 
-                  : "bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200")
-              : "text-white shadow-purple-500/25"
-          )}
-          style={!isFollowing ? { background: buttonGradient } : undefined}
-          title={isFollowing ? 'Unfollow' : 'Follow'}
-        >
-          {followLoading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : isFollowing ? (
-            <>
-              <UserCheck className="w-4 h-4 text-emerald-500" />
-              <span>Following</span>
-            </>
-          ) : (
-            <>
-              <UserPlus className="w-4 h-4" />
-              <span>Follow</span>
-            </>
-          )}
-        </button>
+        {/* 1. Follow / Following (Level >= 3 or Creator) OR Friend Request (Level < 3) */}
+        {canBeFollowed ? (
+          <button
+            onClick={onFollowToggle}
+            disabled={followLoading}
+            className={cn(
+              "flex-1 sm:flex-initial sm:min-w-[150px] flex items-center justify-center gap-2 py-2.5 px-5 rounded-2xl font-bold text-xs transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md",
+              isFollowing
+                ? (isDark 
+                    ? "bg-white/10 border border-white/15 text-white hover:bg-white/15" 
+                    : "bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200")
+                : "text-white shadow-purple-500/25"
+            )}
+            style={!isFollowing ? { background: buttonGradient } : undefined}
+            title={isFollowing ? 'Unfollow' : 'Follow'}
+          >
+            {followLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isFollowing ? (
+              <>
+                <UserCheck className="w-4 h-4 text-emerald-500" />
+                <span>Following</span>
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-4 h-4" />
+                <span>Follow</span>
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={onFriendRequestToggle}
+            disabled={friendRequestLoading}
+            className={cn(
+              "flex-1 sm:flex-initial sm:min-w-[150px] flex items-center justify-center gap-2 py-2.5 px-5 rounded-2xl font-bold text-xs transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md",
+              friendshipStatus === 'friends'
+                ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                : friendshipStatus === 'pending'
+                  ? "bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400"
+                  : friendshipStatus === 'received'
+                    ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white"
+                    : "text-white shadow-purple-500/25"
+            )}
+            style={friendshipStatus === 'none' ? { background: buttonGradient } : undefined}
+            title={
+              friendshipStatus === 'friends'
+                ? 'You are Friends'
+                : friendshipStatus === 'pending'
+                  ? 'Friend Request Sent'
+                  : friendshipStatus === 'received'
+                    ? 'Accept Friend Request'
+                    : 'Send Friend Request (Level 3 unlocks Public Follow)'
+            }
+          >
+            {friendRequestLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : friendshipStatus === 'friends' ? (
+              <>
+                <Users className="w-4 h-4 text-emerald-500" />
+                <span>Friends</span>
+              </>
+            ) : friendshipStatus === 'pending' ? (
+              <>
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span>Requested</span>
+              </>
+            ) : friendshipStatus === 'received' ? (
+              <>
+                <UserCheck className="w-4 h-4" />
+                <span>Accept Friend</span>
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-4 h-4" />
+                <span>Add Friend</span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* 2. Message */}
         <button

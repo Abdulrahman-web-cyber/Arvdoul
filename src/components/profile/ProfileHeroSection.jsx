@@ -258,7 +258,9 @@ const ProfileHeroSection = memo(({
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">
                   {displayName}
                 </h1>
-                <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-500/10 shrink-0" aria-label="Verified" />
+                {Boolean(profile?.isVerified || profile?.verified) && (
+                  <BadgeCheck className="w-5 h-5 text-blue-500 fill-blue-500/10 shrink-0" aria-label="Verified" />
+                )}
               </div>
 
               {/* Username */}
@@ -268,50 +270,69 @@ const ProfileHeroSection = memo(({
 
               {/* Badges Chips */}
               <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>Verified</span>
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  <Star className="w-3 h-3 fill-amber-500/30" />
-                  <span>Top Creator</span>
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                  <Crown className="w-3 h-3" />
-                  <span>Premium</span>
-                </span>
+                {Boolean(profile?.isVerified || profile?.verified) && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>Verified</span>
+                  </span>
+                )}
+
+                {(profile?.isCreator || effectiveLevel >= 5) ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    <Star className="w-3 h-3 fill-amber-500/30" />
+                    <span>{effectiveLevel >= 15 ? 'Top Creator' : 'Creator'}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <Award className="w-3 h-3" />
+                    <span>{effectiveLevel >= 3 ? 'Citizen' : 'Resident'}</span>
+                  </span>
+                )}
+
+                {Boolean(profile?.isPremium || profile?.vip) && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                    <Crown className="w-3 h-3" />
+                    <span>Premium</span>
+                  </span>
+                )}
               </div>
 
               {/* Bio */}
               <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 max-w-xl line-clamp-2 sm:line-clamp-3">
-                {bio}
+                {bio || (isOwner ? 'Welcome to my Arvdoul profile! Share moments, post vibes, and explore the universe.' : 'Arvdoul creator and explorer.')}
               </p>
 
               {/* Meta Info: Location, Website, Joined Date */}
               <div className="flex items-center gap-4 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex-wrap pt-1">
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{location}</span>
-                </span>
-                <a
-                  href={`https://${website.replace(/^https?:\/\//, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:underline"
-                >
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>{website.replace(/^https?:\/\//, '')}</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{joinedDate}</span>
-                </span>
+                {location && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{location}</span>
+                  </span>
+                )}
+                {website && (
+                  <a
+                    href={`https://${website.replace(/^https?:\/\//, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:underline"
+                  >
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>{website.replace(/^https?:\/\//, '')}</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
+                {joinedDate && (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{joinedDate}</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* 3. Level & Experience Card (Right block matching uploaded image) */}
+          {/* 3. Level & Experience Card */}
           <div className={cn(
             "w-full lg:w-72 p-4 rounded-2xl border transition-all shrink-0",
             isDark
@@ -336,7 +357,7 @@ const ProfileHeroSection = memo(({
 
               {/* Rank Position Pill */}
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                #{position?.position || 14} Global Rank
+                {position?.title || (position?.position ? `#${position.position} Rank` : (profile?.profilePosition || 'Citizen'))}
               </span>
             </div>
 
@@ -345,13 +366,13 @@ const ProfileHeroSection = memo(({
               <div className="flex items-center justify-between text-[11px] font-bold">
                 <span className="text-slate-500 dark:text-slate-400">XP Progress</span>
                 <span className="text-purple-600 dark:text-purple-400">
-                  {levelInfo.currentLevelXp ? levelInfo.currentLevelXp.toLocaleString() : '12,540'} / {levelInfo.nextLevelXp ? levelInfo.nextLevelXp.toLocaleString() : '20,000'} XP
+                  {Number(levelInfo?.currentLevelXp ?? (userExperience % 1000)).toLocaleString()} / {Number(levelInfo?.nextLevelXp ?? 1000).toLocaleString()} XP
                 </span>
               </div>
               <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/10">
                 <div 
                   className="h-full rounded-full bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-400 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(8, (levelInfo.progress || 0.62) * 100))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(5, Math.round((levelInfo?.progress || 0.35) * 100)))}%` }}
                 />
               </div>
             </div>

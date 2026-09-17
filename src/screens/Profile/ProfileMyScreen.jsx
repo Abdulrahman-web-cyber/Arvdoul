@@ -245,18 +245,22 @@ export default function ProfileMyScreen() {
             }}
           />
 
-          {/* 4. Story Highlights Carousel */}
+          {/* 4. Story Highlights / Vibes Carousel */}
           <ProfileHighlightsSection
             highlights={highlights}
+            userId={currentUserId}
             isOwner={true}
             theme={theme}
             onAddHighlight={() => navigate('/create-story')}
           />
 
-          {/* 5. Creator Dashboard Analytics */}
+          {/* 5. Creator Dashboard Analytics (with Level Gating) */}
           <ProfileCreatorDashboard
             analytics={analytics}
             ranking={ranking}
+            userLevel={level || effectiveProfile?.level || 1}
+            userXp={effectiveProfile?.experience || 0}
+            isCreator={effectiveProfile?.isCreator}
             theme={theme}
             timeframe={timeframe}
             onTimeframeChange={setTimeframe}

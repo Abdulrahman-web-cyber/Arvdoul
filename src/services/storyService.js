@@ -1091,8 +1091,6 @@ class UltimateStoryService {
 
   async getHighlights(userId, options = {}) {
     await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser || currentUser.uid !== userId) throw enhanceError({ code: 'permission-denied' }, 'You can only view your own highlights');
 
     const cacheKey = userId;
     const cached = this.highlightsCache.get(cacheKey);
@@ -1100,16 +1098,50 @@ class UltimateStoryService {
       return { success: true, highlights: cached.data, cached: true };
     }
 
-    const q = this.fs.query(
-      this.fs.collection(this.firestore, 'highlights'),
-      this.fs.where('userId', '==', userId),
-      this.fs.orderBy('createdAt', 'desc'),
-      this.fs.limit(options.limit || 50)
-    );
-    const snap = await this.fs.getDocs(q);
-    const highlights = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    this.highlightsCache.set(cacheKey, { data: highlights, timestamp: Date.now() });
-    return { success: true, highlights };
+    try {
+      const q = this.fs.query(
+        this.fs.collection(this.firestore, 'highlights'),
+        this.fs.where('userId', '==', userId),
+        this.fs.orderBy('createdAt', 'desc'),
+        this.fs.limit(options.limit || 50)
+      );
+      const snap = await this.fs.getDocs(q);
+      const highlights = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      this.highlightsCache.set(cacheKey, { data: highlights, timestamp: Date.now() });
+      return { success: true, highlights };
+    } catch (err) {
+      // Fallback query without orderBy in case composite index is still building
+      try {
+        const fallbackQ = this.fs.query(
+          this.fs.collection(this.firestore, 'highlights'),
+          this.fs.where('userId', '==', userId),
+          this.fs.limit(options.limit || 50)
+        );
+        const snap = await this.fs.getDocs(fallbackQ);
+        const highlights = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return { success: true, highlights };
+      } catch (innerErr) {
+        logger.warn('[StoryService] getHighlights query note', innerErr);
+        return { success: true, highlights: [] };
+      }
+    }
+  }
+
+  async getUserStories(userId, options = {}) {
+    await this.ensureInitialized();
+    try {
+      const q = this.fs.query(
+        this.fs.collection(this.firestore, 'stories'),
+        this.fs.where('userId', '==', userId),
+        this.fs.where('isDeleted', '==', false),
+        this.fs.limit(options.limit || 30)
+      );
+      const snap = await this.fs.getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (err) {
+      logger.warn('[StoryService] getUserStories error', err);
+      return [];
+    }
   }
 
   async getHighlightStories(highlightId, options = {}) {
@@ -1823,6 +1855,7 @@ const storyService = {
   addToHighlight: (...args) => getStoryService().addToHighlight(...args),
   removeFromHighlight: (...args) => getStoryService().removeFromHighlight(...args),
   getHighlights: (...args) => getStoryService().getHighlights(...args),
+  getUserStories: (...args) => getStoryService().getUserStories(...args),
   getHighlightStories: (...args) => getStoryService().getHighlightStories(...args),
   searchStories: (...args) => getStoryService().searchStories(...args),
   getTemplates: () => getStoryService().getTemplates(),

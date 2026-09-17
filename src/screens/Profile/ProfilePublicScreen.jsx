@@ -51,6 +51,9 @@ export default function ProfilePublicScreen() {
   const [mutualFriends, setMutualFriends] = useState([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState('none'); // 'none' | 'pending' | 'received' | 'friends'
+  const [pendingRequestId, setPendingRequestId] = useState(null);
+  const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   
   // Modals
@@ -96,7 +99,7 @@ export default function ProfilePublicScreen() {
           }
         }
 
-        // 4. Fetch mutual friends
+        // 4. Fetch mutual friends and friend request status
         if (currentUser?.uid && userId !== currentUser.uid) {
           try {
             const mutual = await userService.getMutualFriends(currentUser.uid, userId);
@@ -104,8 +107,36 @@ export default function ProfilePublicScreen() {
             if (isMounted) {
               setMutualFriends(friendsList);
             }
+
+            // Check if mutual friends directly
+            const areFriends = await userService._areMutualFriends(currentUser.uid, userId).catch(() => false);
+            if (areFriends) {
+              if (isMounted) setFriendshipStatus('friends');
+            } else {
+              // Check sent friend requests
+              const sent = await userService.getFriendRequests(currentUser.uid, 'sent').catch(() => ({ requests: [] }));
+              const sentReq = sent.requests?.find(r => r.toUserId === userId);
+              if (sentReq) {
+                if (isMounted) {
+                  setFriendshipStatus('pending');
+                  setPendingRequestId(sentReq.id);
+                }
+              } else {
+                // Check received friend requests
+                const received = await userService.getFriendRequests(currentUser.uid, 'received').catch(() => ({ requests: [] }));
+                const recReq = received.requests?.find(r => r.fromUserId === userId);
+                if (recReq) {
+                  if (isMounted) {
+                    setFriendshipStatus('received');
+                    setPendingRequestId(recReq.id);
+                  }
+                } else {
+                  if (isMounted) setFriendshipStatus('none');
+                }
+              }
+            }
           } catch (mutualErr) {
-            console.warn('Mutual friends note:', mutualErr);
+            console.warn('Mutual friends and request note:', mutualErr);
           }
         }
 
@@ -177,6 +208,47 @@ export default function ProfilePublicScreen() {
       setFollowLoading(false);
     }
   }, [currentUser?.uid, isFollowing, userId, profileData?.username, profileData?.followerCount, profileData?.followersCount, navigate]);
+
+  // Handle Friend Request Toggle (For Newcomer level 1-2 profiles)
+  const handleFriendRequestToggle = useCallback(async () => {
+    if (!currentUser?.uid) {
+      toast.error('Please sign in to send a friend request');
+      navigate('/login');
+      return;
+    }
+
+    if (friendshipStatus === 'friends') {
+      toast.info(`You and @${profileData?.username || 'user'} are already friends!`);
+      return;
+    }
+
+    if (friendshipStatus === 'pending') {
+      toast.info('Friend request already sent. Waiting for acceptance.');
+      return;
+    }
+
+    setFriendRequestLoading(true);
+    try {
+      const userServiceModule = await import('../../services/userService.js');
+      const userService = userServiceModule.getUserService();
+
+      if (friendshipStatus === 'received' && pendingRequestId) {
+        await userService.acceptFriendRequest(pendingRequestId, currentUser.uid);
+        setFriendshipStatus('friends');
+        toast.success(`You and @${profileData?.username || 'user'} are now friends!`);
+      } else if (friendshipStatus === 'none') {
+        const res = await userService.sendFriendRequest(currentUser.uid, userId);
+        setFriendshipStatus('pending');
+        if (res?.requestId) setPendingRequestId(res.requestId);
+        toast.success(`Friend request sent to @${profileData?.username || 'user'}`);
+      }
+    } catch (e) {
+      console.error('Friend request error:', e);
+      toast.error(e?.message || 'Could not process friend request');
+    } finally {
+      setFriendRequestLoading(false);
+    }
+  }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
 
   // Real profile data without mock fallbacks
   const effectiveProfile = useMemo(() => {
@@ -276,14 +348,17 @@ export default function ProfilePublicScreen() {
             onAvatarClick={() => setShowQrModal(true)}
           />
 
-          {/* 2. Public Action Bar: Follow, Message, Call, Gift, Options */}
+          {/* 2. Public Action Bar: Follow / Add Friend, Message, Call, Gift, Options */}
           <ProfileActionBar
             isOwner={false}
             theme={theme}
             profile={effectiveProfile}
             isFollowing={isFollowing}
             followLoading={followLoading}
+            friendshipStatus={friendshipStatus}
+            friendRequestLoading={friendRequestLoading}
             onFollowToggle={handleFollowToggle}
+            onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
             onOpenOptionsMenu={() => setShowOptionsMenu(true)}
             onCallPress={() => toast.info('Starting secure audio call...')}
@@ -310,9 +385,10 @@ export default function ProfilePublicScreen() {
             }}
           />
 
-          {/* 5. Highlights Carousel */}
+          {/* 5. Highlights / Vibes Carousel */}
           <ProfileHighlightsSection
             highlights={effectiveProfile?.highlights || []}
+            userId={userId}
             isOwner={false}
             theme={theme}
           />
