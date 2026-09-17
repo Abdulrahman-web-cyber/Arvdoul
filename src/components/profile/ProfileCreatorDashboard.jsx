@@ -29,15 +29,17 @@ import {
 import { cn } from '../../lib/utils';
 
 // Clean SVG Sparklines
-const Sparkline = ({ color = '#a855f7', data = [10, 25, 18, 32, 28, 45, 52] }) => {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+const Sparkline = ({ color = '#a855f7', data = [0, 0] }) => {
+  const safeData = Array.isArray(data) && data.length > 0 ? data : [0, 0];
+  const min = Math.min(...safeData);
+  const max = Math.max(...safeData);
   const range = max - min || 1;
   const width = 80;
   const height = 28;
 
-  const points = data.map((val, idx) => {
-    const x = (idx / (data.length - 1)) * width;
+  const points = safeData.map((val, idx) => {
+    const denom = Math.max(1, safeData.length - 1);
+    const x = (idx / denom) * width;
     const y = height - ((val - min) / range) * (height - 6) - 3;
     return `${x},${y}`;
   }).join(' ');
@@ -73,10 +75,45 @@ const ProfileCreatorDashboard = memo(({
     onTimeframeChange?.(val);
   };
 
-  const views = analytics?.totalViews ?? 24500;
-  const reach = analytics?.totalReach ?? 18200;
-  const engagement = analytics?.totalEngagement ?? 4820;
-  const coins = analytics?.coinsEarned ?? 1250;
+  const views = Number(analytics?.totalViews ?? 0);
+  const reach = Number(analytics?.totalReach ?? 0);
+  const engagement = Number(analytics?.totalEngagement ?? 0);
+  const coins = Number(analytics?.coinsEarned ?? 0);
+
+  const changes = analytics?.changes || {};
+  const dailyStats = Array.isArray(analytics?.dailyStats) ? analytics.dailyStats : [];
+
+  const viewsSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.views) || 0) : [0, views];
+  const reachSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.reach) || 0) : [0, reach];
+  const engagementSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.engagement) || 0) : [0, engagement];
+  const coinsSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.coins) || 0) : [0, coins];
+
+  const renderTrendBadge = (changeVal) => {
+    if (changeVal === undefined || changeVal === null || isNaN(changeVal)) {
+      return (
+        <span className="text-[10px] font-medium text-slate-400">
+          --
+        </span>
+      );
+    }
+    const num = Number(changeVal);
+    const isPositive = num >= 0;
+    const sign = isPositive ? '+' : '';
+    return (
+      <span className={cn(
+        "flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+        isPositive 
+          ? "text-emerald-500 bg-emerald-500/10" 
+          : "text-rose-500 bg-rose-500/10"
+      )}>
+        {sign}{num.toFixed(1)}%
+      </span>
+    );
+  };
+
+  // Rank info
+  const standingPercentile = ranking?.percentile ? `Top ${ranking.percentile}%` : 'Active';
+  const standingLabel = ranking?.rank ? `Rank #${ranking.rank} Global` : (ranking?.tier || 'Creator');
 
   return (
     <div className={cn(
@@ -141,14 +178,12 @@ const ProfileCreatorDashboard = memo(({
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Profile Views
             </span>
-            <span className="flex items-center text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-              +15.3%
-            </span>
+            {renderTrendBadge(changes.views)}
           </div>
           <div className="text-lg font-black tracking-tight mb-2">
             {Number(views).toLocaleString()}
           </div>
-          <Sparkline color="#8b5cf6" data={[12, 18, 15, 24, 28, 38, 48]} />
+          <Sparkline color="#8b5cf6" data={viewsSeries} />
         </div>
 
         {/* 2. Reach */}
@@ -160,14 +195,12 @@ const ProfileCreatorDashboard = memo(({
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Reach
             </span>
-            <span className="flex items-center text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-              +22.1%
-            </span>
+            {renderTrendBadge(changes.reach)}
           </div>
           <div className="text-lg font-black tracking-tight mb-2">
             {Number(reach).toLocaleString()}
           </div>
-          <Sparkline color="#06b6d4" data={[8, 14, 22, 19, 29, 36, 44]} />
+          <Sparkline color="#06b6d4" data={reachSeries} />
         </div>
 
         {/* 3. Engagement */}
@@ -179,14 +212,12 @@ const ProfileCreatorDashboard = memo(({
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Engagement
             </span>
-            <span className="flex items-center text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-              +18.6%
-            </span>
+            {renderTrendBadge(changes.engagement)}
           </div>
           <div className="text-lg font-black tracking-tight mb-2">
             {Number(engagement).toLocaleString()}
           </div>
-          <Sparkline color="#ec4899" data={[15, 20, 18, 25, 33, 40, 52]} />
+          <Sparkline color="#ec4899" data={engagementSeries} />
         </div>
 
         {/* 4. Coins Earned */}
@@ -198,14 +229,12 @@ const ProfileCreatorDashboard = memo(({
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Coins Earned
             </span>
-            <span className="flex items-center text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-              +35.7%
-            </span>
+            {renderTrendBadge(changes.coins)}
           </div>
           <div className="text-lg font-black tracking-tight text-amber-500 mb-2">
             🪙 {Number(coins).toLocaleString()}
           </div>
-          <Sparkline color="#f59e0b" data={[5, 12, 18, 28, 35, 48, 65]} />
+          <Sparkline color="#f59e0b" data={coinsSeries} />
         </div>
 
         {/* 5. Standing */}
@@ -223,14 +252,14 @@ const ProfileCreatorDashboard = memo(({
           </div>
           <div>
             <div className="text-lg font-black tracking-tight text-purple-700 dark:text-purple-300">
-              Top 1%
+              {standingPercentile}
             </div>
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Among Creators
             </div>
           </div>
           <div className="pt-2 text-[10px] font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-            <span>Rank #14 Global</span>
+            <span>{standingLabel}</span>
             <TrendingUp className="w-3 h-3" />
           </div>
         </div>

@@ -51,22 +51,22 @@ const ProfileHeroSection = memo(({
   const isDark = theme === 'dark';
 
   // Compute real level & progression from levelSystemService
-  const userExperience = profile?.experience || profile?.xp || (profile?.level ? 50 * profile.level * (profile.level - 1) : 12540);
+  const userExperience = profile?.experience ?? profile?.xp ?? (profile?.level ? 50 * profile.level * (profile.level - 1) : 0);
   const levelInfo = useMemo(() => {
     return getLevelInfo(userExperience);
   }, [userExperience]);
 
   const effectiveLevel = level || profile?.level || levelInfo.level || 1;
   const rankTitle = useMemo(() => getRankTitle(effectiveLevel), [effectiveLevel]);
-  const citizenStanding = useMemo(() => getCitizenTier(effectiveLevel, profile?.activeDaysCount || 30), [effectiveLevel, profile?.activeDaysCount]);
+  const citizenStanding = useMemo(() => getCitizenTier(effectiveLevel, profile?.activeDaysCount || 1), [effectiveLevel, profile?.activeDaysCount]);
 
   // Safe avatar and display strings
   const displayName = profile?.displayName || profile?.name || (isOwner ? 'Your Profile' : 'Creator');
   const username = profile?.username || (isOwner ? 'user' : 'creator');
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
-  const bio = profile?.bio || (isOwner ? 'Welcome to your Arvdoul profile. Share posts, connect with friends, and level up!' : 'Welcome to my Arvdoul profile.');
-  const location = profile?.location || profile?.city || 'Global Citizen';
-  const website = profile?.website || profile?.link || (username ? `arvdoul.com/@${username}` : 'arvdoul.com');
+  const bio = profile?.bio || (isOwner ? '' : '');
+  const location = profile?.location || profile?.city || '';
+  const website = profile?.website || profile?.link || '';
   
   // Format joined date
   const joinedDate = useMemo(() => {
@@ -75,10 +75,10 @@ const ProfileHeroSection = memo(({
         const date = profile.createdAt?.toDate ? profile.createdAt.toDate() : new Date(profile.createdAt);
         return `Joined ${date.toLocaleString('en-US', { month: 'short', year: 'numeric' })}`;
       } catch (e) {
-        return 'Joined 2024';
+        return '';
       }
     }
-    return 'Joined March 2024';
+    return '';
   }, [profile?.createdAt]);
 
   return (

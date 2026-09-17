@@ -61,15 +61,17 @@ export default function FollowingScreen() {
     return () => { isMounted = false; };
   }, [targetUserId]);
   
-  const handleFollow = useCallback((followingId) => {
+  const handleFollow = useCallback(async (followingId) => {
     if (currentUser?.uid) {
-      follow(currentUser.uid, followingId);
+      setFollowing(prev => prev.map(u => u.id === followingId ? { ...u, isFollowing: true } : u));
+      await follow(currentUser.uid, followingId);
     }
   }, [currentUser?.uid, follow]);
   
-  const handleUnfollow = useCallback((followingId) => {
+  const handleUnfollow = useCallback(async (followingId) => {
     if (currentUser?.uid) {
-      unfollow(currentUser.uid, followingId);
+      setFollowing(prev => prev.map(u => u.id === followingId ? { ...u, isFollowing: false } : u));
+      await unfollow(currentUser.uid, followingId);
     }
   }, [currentUser?.uid, unfollow]);
   
@@ -185,8 +187,9 @@ export default function FollowingScreen() {
                 </div>
                 
                 <FollowButton
-                  isFollowing={true}
+                  isFollowing={user.isFollowing !== undefined ? user.isFollowing : true}
                   loading={followLoading}
+                  onFollow={() => handleFollow(user.id)}
                   onUnfollow={() => handleUnfollow(user.id)}
                   theme={theme}
                   size="sm"

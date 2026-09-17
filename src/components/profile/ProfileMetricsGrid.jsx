@@ -46,7 +46,15 @@ const ProfileMetricsGrid = memo(({
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? 0;
   const likesCount = profile?.likesReceived ?? profile?.likesCount ?? 0;
   const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
-  const profileViews = analytics?.totalViews ?? profile?.viewsCount ?? profile?.profileViews ?? 1240;
+  const profileViews = analytics?.totalViews ?? profile?.viewsCount ?? profile?.profileViews ?? 0;
+
+  const followersTrend = analytics?.changes?.reach && Number(analytics.changes.reach) !== 0
+    ? `${Number(analytics.changes.reach) > 0 ? '+' : ''}${Number(analytics.changes.reach).toFixed(1)}%`
+    : null;
+
+  const viewsTrend = analytics?.changes?.views && Number(analytics.changes.views) !== 0
+    ? `${Number(analytics.changes.views) > 0 ? '+' : ''}${Number(analytics.changes.views).toFixed(1)}%`
+    : null;
 
   const cards = isOwner
     ? [
@@ -75,7 +83,7 @@ const ProfileMetricsGrid = memo(({
           icon: UserCheck,
           color: 'text-indigo-500',
           bgColor: 'bg-indigo-500/10',
-          trend: '+12.6%'
+          trend: followersTrend
         },
         {
           key: 'following',
@@ -93,7 +101,7 @@ const ProfileMetricsGrid = memo(({
           icon: Eye,
           color: 'text-cyan-500',
           bgColor: 'bg-cyan-500/10',
-          trend: '+18.4%'
+          trend: viewsTrend
         },
         {
           key: 'coins',

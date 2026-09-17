@@ -543,11 +543,13 @@ service cloud.firestore {
     // ==================== ANALYTICS ====================
     match /profile_analytics/{userId} {
       allow read: if isSignedIn();
-      // Totals live in sharded counters; owners may only update dailyStats
-      // so they cannot inflate their own aggregate analytics.
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dailyStats', 'lastUpdated']);
+      // Allow signed-in users to initialize or record dailyStats for profile views;
+      // owners have full update access for non-authoritative stats
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isOwner(userId) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dailyStats', 'lastUpdated'])
+      );
       allow delete: if isAdmin();
     }
     match /post_analytics/{postId} {
@@ -558,6 +560,11 @@ service cloud.firestore {
     match /profile_views/{viewId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
+    }
+    // Sharded counters for views, reach, likes, and follows (CountersManager.js)
+    match /counter_shards/{shardId} {
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
     // ==================== MODERATION / ADMIN ====================

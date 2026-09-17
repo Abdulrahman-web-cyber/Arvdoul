@@ -216,6 +216,33 @@
         "metadata": { "type": "object" }
       },
       "required": ["id", "action", "timestamp"]
+    },
+    "ProfileAnalytics": {
+      "title": "ProfileAnalytics",
+      "description": "User profile metrics, daily stats, and reach aggregations.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "totalViews": { "type": "number" },
+        "totalReach": { "type": "number" },
+        "totalEngagement": { "type": "number" },
+        "coinsEarned": { "type": "number" },
+        "dailyStats": { "type": "object" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["totalEngagement"]
+    },
+    "CounterShard": {
+      "title": "CounterShard",
+      "description": "Distributed sharded counter document for high-throughput metrics.",
+      "type": "object",
+      "properties": {
+        "count": { "type": "number" },
+        "docPath": { "type": "string", "maxLength": 256 },
+        "field": { "type": "string", "maxLength": 64 },
+        "shardIndex": { "type": "number" }
+      },
+      "required": ["count", "docPath", "field", "shardIndex"]
     }
   },
   "firestore": {
@@ -274,6 +301,14 @@
     "/audit_logs/{logId}": {
       "schema": "AuditLog",
       "description": "Immutable security and administrative audit trail"
+    },
+    "/profile_analytics/{userId}": {
+      "schema": "ProfileAnalytics",
+      "description": "User profile metrics, daily stats, and reach aggregations"
+    },
+    "/counter_shards/{shardId}": {
+      "schema": "CounterShard",
+      "description": "Distributed counter shards for high-frequency writes"
     }
   }
 }

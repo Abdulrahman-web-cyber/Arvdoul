@@ -61,15 +61,17 @@ export default function FollowersScreen() {
     return () => { isMounted = false; };
   }, [targetUserId]);
   
-  const handleFollow = useCallback((followerId) => {
+  const handleFollow = useCallback(async (followerId) => {
     if (currentUser?.uid) {
-      follow(currentUser.uid, followerId);
+      setFollowers(prev => prev.map(f => f.id === followerId ? { ...f, isFollowing: true } : f));
+      await follow(currentUser.uid, followerId);
     }
   }, [currentUser?.uid, follow]);
   
-  const handleUnfollow = useCallback((followerId) => {
+  const handleUnfollow = useCallback(async (followerId) => {
     if (currentUser?.uid) {
-      unfollow(currentUser.uid, followerId);
+      setFollowers(prev => prev.map(f => f.id === followerId ? { ...f, isFollowing: false } : f));
+      await unfollow(currentUser.uid, followerId);
     }
   }, [currentUser?.uid, unfollow]);
   

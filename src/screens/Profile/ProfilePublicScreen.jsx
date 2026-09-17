@@ -46,6 +46,7 @@ export default function ProfilePublicScreen() {
 
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState(null);
   const [posts, setPosts] = useState([]);
   const [mutualFriends, setMutualFriends] = useState([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -99,12 +100,27 @@ export default function ProfilePublicScreen() {
         if (currentUser?.uid && userId !== currentUser.uid) {
           try {
             const mutual = await userService.getMutualFriends(currentUser.uid, userId);
-            if (isMounted && Array.isArray(mutual)) {
-              setMutualFriends(mutual);
+            const friendsList = Array.isArray(mutual) ? mutual : (mutual?.mutualFriends || []);
+            if (isMounted) {
+              setMutualFriends(friendsList);
             }
           } catch (mutualErr) {
             console.warn('Mutual friends note:', mutualErr);
           }
+        }
+
+        // 5. Track profile view in analytics & fetch analytics
+        try {
+          const analyticsService = (await import('../../services/analyticsService.js')).default;
+          if (currentUser?.uid && userId !== currentUser.uid) {
+            analyticsService.trackProfileView(currentUser.uid, userId).catch(() => {});
+          }
+          const userAnalytics = await analyticsService.getUserAnalytics(userId, '30d');
+          if (isMounted && userAnalytics) {
+            setAnalytics(userAnalytics);
+          }
+        } catch (analyticsErr) {
+          console.warn('Analytics note:', analyticsErr);
         }
 
         if (isMounted && fetched) {
@@ -143,14 +159,14 @@ export default function ProfilePublicScreen() {
         toast.success(`Following @${profileData?.username || 'creator'}`);
         setProfileData(prev => prev ? ({
           ...prev,
-          followerCount: (Number(prev.followerCount) || 0) + 1
+          followerCount: (Number(prev.followerCount || prev.followersCount) || 0) + 1
         }) : prev);
       } else {
         await userService.unfollowUser(currentUser.uid, userId);
         toast.info(`Unfollowed @${profileData?.username || 'creator'}`);
         setProfileData(prev => prev ? ({
           ...prev,
-          followerCount: Math.max(0, (Number(prev.followerCount) || 1) - 1)
+          followerCount: Math.max(0, (Number(prev.followerCount || prev.followersCount) || 1) - 1)
         }) : prev);
       }
     } catch (e) {
@@ -160,28 +176,29 @@ export default function ProfilePublicScreen() {
     } finally {
       setFollowLoading(false);
     }
-  }, [currentUser?.uid, isFollowing, userId, profileData?.username, navigate]);
+  }, [currentUser?.uid, isFollowing, userId, profileData?.username, profileData?.followerCount, profileData?.followersCount, navigate]);
 
-  // Fallback profile if Firestore is yet to populate
+  // Real profile data without mock fallbacks
   const effectiveProfile = useMemo(() => {
-    if (profileData) return profileData;
+    if (!profileData) return null;
     return {
-      id: userId || 'creator',
-      username: 'alexmorgan',
-      displayName: 'Alex Morgan',
-      bio: 'Senior 3D Artist & Motion Designer. Crafting immersive generative worlds on Arvdoul.',
-      photoURL: getSafeAvatarUrl(null, 'Alex Morgan', userId),
-      coverPhotoURL: null,
-      followerCount: 48200,
-      followingCount: 312,
-      postCount: posts?.length || 184,
-      likesReceived: 142800,
-      coins: 1450,
-      isVerified: true,
-      isCreator: true,
-      level: 24,
-      location: 'New York, USA',
-      website: 'alexmorgan.design',
+      ...profileData,
+      id: profileData.id || profileData.uid || userId,
+      username: profileData.username || 'creator',
+      displayName: profileData.displayName || profileData.name || 'Creator',
+      bio: profileData.bio || '',
+      photoURL: getSafeAvatarUrl(profileData.photoURL, profileData.displayName || 'Creator', userId),
+      coverPhotoURL: profileData.coverPhotoURL || null,
+      followerCount: Number(profileData.followerCount ?? profileData.followersCount ?? 0),
+      followingCount: Number(profileData.followingCount ?? 0),
+      postCount: posts?.length ?? profileData.postCount ?? 0,
+      likesReceived: Number(profileData.likesReceived ?? profileData.likesCount ?? 0),
+      coins: Number(profileData.coins ?? profileData.coinBalance ?? 0),
+      isVerified: Boolean(profileData.isVerified),
+      isCreator: Boolean(profileData.isCreator),
+      level: profileData.level || 1,
+      location: profileData.location || profileData.city || '',
+      website: profileData.website || profileData.link || '',
     };
   }, [profileData, userId, posts?.length]);
 
@@ -195,6 +212,42 @@ export default function ProfilePublicScreen() {
         <Suspense fallback={null}>
           <ProfileSkeleton theme={theme} />
         </Suspense>
+      </div>
+    );
+  }
+
+  if (!loading && !effectiveProfile) {
+    return (
+      <div className={cn(
+        "min-h-screen flex items-center justify-center p-4",
+        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center text-2xl font-bold">
+            ?
+          </div>
+          <h2 className="text-xl font-black">Creator Profile Not Found</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            This account may have been renamed, removed, or is not yet available on Arvdoul.
+          </p>
+          <div className="pt-2 flex justify-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="px-5 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="px-5 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity"
+            >
+              Discover Creators
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -214,7 +267,7 @@ export default function ProfilePublicScreen() {
           <ProfileHeroSection
             profile={effectiveProfile}
             isOwner={false}
-            level={effectiveProfile.level || 24}
+            level={effectiveProfile.level || 1}
             theme={theme}
             onBack={() => navigate(-1)}
             onOpenNotifications={() => navigate('/notifications')}
@@ -249,6 +302,7 @@ export default function ProfilePublicScreen() {
             isOwner={false}
             theme={theme}
             profile={effectiveProfile}
+            analytics={analytics}
             onMetricPress={(key) => {
               if (key === 'followers') navigate(`/profile/${userId}/followers`);
               else if (key === 'following') navigate(`/profile/${userId}/following`);
@@ -279,7 +333,7 @@ export default function ProfilePublicScreen() {
               isOwner={false}
               theme={theme}
               counts={{
-                posts: posts?.length || 184,
+                posts: posts?.length || 0,
               }}
             />
           </div>

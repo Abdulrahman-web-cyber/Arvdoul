@@ -31,8 +31,12 @@ const ProfileSocialConnections = memo(({
     : (count > 0 ? `${count} friends in common` : 'Connect to discover common friends');
 
   // Shared communities from profile categories or interests
-  const communities = profile?.communities || profile?.tags || ['Designers', 'Gamers', 'Creators'];
-  const followsYou = Boolean(profile?.followsYou || profile?.relationship?.followsViewer);
+  const communities = Array.isArray(profile?.communities) 
+    ? profile.communities 
+    : (Array.isArray(profile?.tags) 
+      ? profile.tags 
+      : (Array.isArray(profile?.interests) ? profile.interests : []));
+  const followsYou = Boolean(profile?.followsYou || profile?.relationship?.followsViewer || profile?.isFollower);
 
   return (
     <div className={cn(
@@ -50,14 +54,14 @@ const ProfileSocialConnections = memo(({
         >
           {/* Avatar Pile */}
           <div className="flex -space-x-2 overflow-hidden shrink-0">
-            {count > 0 ? (
-              (mutualFriends.length > 0 ? mutualFriends.slice(0, 3) : [{ id: 1 }, { id: 2 }]).map((friend, i) => (
+            {count > 0 && mutualFriends.length > 0 ? (
+              mutualFriends.slice(0, 3).map((friend, i) => (
                 <div
-                  key={friend.id || i}
+                  key={friend.id || friend.uid || i}
                   className="w-8 h-8 rounded-full ring-2 ring-white dark:ring-[#0d1424] bg-slate-800 overflow-hidden"
                 >
                   <img
-                    src={getSafeAvatarUrl(friend.photoURL, friend.displayName || `Friend ${i}`, friend.id || i)}
+                    src={getSafeAvatarUrl(friend.photoURL, friend.displayName || `Friend ${i}`, friend.id || friend.uid || i)}
                     alt=""
                     className="w-full h-full object-cover"
                   />
@@ -88,10 +92,10 @@ const ProfileSocialConnections = memo(({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold">
-              {communities.length} shared communities
+              {communities.length > 0 ? `${communities.length} shared topics` : 'Creator Profile'}
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {communities.slice(0, 3).join(', ')}
+              {communities.length > 0 ? communities.slice(0, 3).join(', ') : 'Creative sharing & posts'}
             </p>
           </div>
         </div>

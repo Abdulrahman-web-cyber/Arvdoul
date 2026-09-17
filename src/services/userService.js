@@ -923,6 +923,10 @@ class ProfessionalUserService {
     }
   }
 
+  async checkFollowStatus(followerId, followingId) {
+    return this.getFollowStatus(followerId, followingId);
+  }
+
   /**
    * Evaluates comprehensive relationship state between two users
    * @param {string} userA - Acting user ID
@@ -998,7 +1002,14 @@ class ProfessionalUserService {
       q = query(q, startAfterDoc(startAfter));
     }
 
-    const snap = await getDocs(q);
+    let snap;
+    try {
+      snap = await getDocs(q);
+    } catch (err) {
+      // Fallback in case composite index (followerId + followingId) is pending
+      const fallbackQ = query(followsRef, where('followerId', '==', userId), fLimit(limit));
+      snap = await getDocs(fallbackQ);
+    }
     if (snap.empty) return { success: true, friends: [], hasMore: false, nextCursor: null };
 
     const friendIds = snap.docs.map(d => d.data().followingId);
@@ -1031,7 +1042,14 @@ class ProfessionalUserService {
       q = query(q, startAfterDoc(startAfter));
     }
 
-    const snap = await getDocs(q);
+    let snap;
+    try {
+      snap = await getDocs(q);
+    } catch (err) {
+      // Fallback in case composite index (followingId + followerId) is pending
+      const fallbackQ = query(followsRef, where('followingId', '==', userId), fLimit(limit));
+      snap = await getDocs(fallbackQ);
+    }
     if (snap.empty) return { success: true, followers: [], hasMore: false, nextCursor: null };
 
     const followerIds = snap.docs.map(d => d.data().followerId);
@@ -1571,6 +1589,7 @@ export const addCoins = (uid, amount, reason) => getUserService().addCoins(uid, 
 export const followUser = (fid, tid) => getUserService().followUser(fid, tid);
 export const unfollowUser = (fid, tid) => getUserService().unfollowUser(fid, tid);
 export const getFollowStatus = (fid, tid) => getUserService().getFollowStatus(fid, tid);
+export const checkFollowStatus = (fid, tid) => getUserService().checkFollowStatus(fid, tid);
 export const getRelationshipState = (a, b) => getUserService().getRelationshipState(a, b);
 export const getFriends = (uid, opts) => getUserService().getFriends(uid, opts);
 export const getFollowers = (uid, opts) => getUserService().getFollowers(uid, opts);
@@ -1629,6 +1648,7 @@ const userServiceExport = Object.assign(getUserService, {
   followUser,
   unfollowUser,
   getFollowStatus,
+  checkFollowStatus,
   getRelationshipState,
   getFriends,
   getFollowers,
