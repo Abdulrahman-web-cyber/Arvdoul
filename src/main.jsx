@@ -112,8 +112,9 @@ try {
     </React.StrictMode>
   );
   
-  // Remove loading spinner after React renders (max 500ms)
-  setTimeout(removeLoadingSpinner, 500);
+  // Remove loading banner immediately when React begins mounting
+  requestAnimationFrame(removeLoadingSpinner);
+  setTimeout(removeLoadingSpinner, 300);
   
   console.log('✅ Application rendered');
   

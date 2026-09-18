@@ -260,7 +260,9 @@ export default function ProfilePublicScreen() {
       id: profileData.id || profileData.uid || userId,
       username: (profileData.username && !profileData.username.startsWith('user_') && profileData.username !== 'creator')
         ? profileData.username
-        : (profileData.username || profileData.handle || (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`)),
+        : (profileData.handle && !profileData.handle.startsWith('user_'))
+          ? profileData.handle
+          : (profileData.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || profileData.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (profileData.username && !profileData.username.startsWith('user_') ? profileData.username : 'creator')),
       displayName: (profileData.displayName && profileData.displayName !== 'User' && profileData.displayName !== 'Creator')
         ? profileData.displayName
         : (profileData.name && profileData.name !== 'User' && profileData.name !== 'Creator')

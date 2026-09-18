@@ -29,7 +29,11 @@ import {
   Lock,
   Eye,
   Check,
-  Navigation
+  Navigation,
+  Sparkles,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -74,14 +78,23 @@ export default function EditProfileScreen() {
   const [coverFile, setCoverFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [coverPreview, setCoverPreview] = useState(null);
-  
+  const [usernameAvailability, setUsernameAvailability] = useState(null); // 'checking' | 'available' | 'taken' | 'invalid' | 'current'
+  const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
+
   // Load current profile data
   useEffect(() => {
     if (userProfile) {
       const p = userProfile.privacy || {};
+      let initialUsername = userProfile.username || '';
+      if (!initialUsername || initialUsername.startsWith('user_') || initialUsername === 'user' || initialUsername === 'creator') {
+        const fromEmail = userProfile.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        const fromName = userProfile.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        initialUsername = fromEmail || fromName || '';
+      }
+
       setFormData({
         displayName: userProfile.displayName || '',
-        username: userProfile.username || '',
+        username: initialUsername,
         bio: userProfile.bio || '',
         location: userProfile.location || '',
         website: userProfile.website || '',
@@ -104,6 +117,67 @@ export default function EditProfileScreen() {
       setCoverPreview(userProfile.coverPhotoURL);
     }
   }, [userProfile]);
+
+  // Live username availability check with debounce
+  useEffect(() => {
+    const raw = formData.username?.trim().toLowerCase();
+    if (!raw) {
+      setUsernameAvailability(null);
+      return;
+    }
+    if (raw === userProfile?.username) {
+      setUsernameAvailability('current');
+      return;
+    }
+    if (!/^[a-z0-9_]{3,30}$/.test(raw)) {
+      setUsernameAvailability('invalid');
+      return;
+    }
+
+    setUsernameAvailability('checking');
+    const timer = setTimeout(async () => {
+      try {
+        if (userService?.checkUsernameAvailability) {
+          const res = await userService.checkUsernameAvailability(raw);
+          setUsernameAvailability(res?.available ? 'available' : 'taken');
+        } else {
+          setUsernameAvailability('available');
+        }
+      } catch {
+        setUsernameAvailability(null);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [formData.username, userProfile?.username, userService]);
+
+  // Unique generated username handler using userService
+  const handleGenerateUsername = useCallback(async () => {
+    setIsGeneratingUsername(true);
+    try {
+      const base = formData.displayName || userProfile?.displayName || userProfile?.email?.split('@')[0] || 'creator';
+      const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'creator';
+      let uniqueUser = '';
+      if (userService?.generateUniqueUsername) {
+        uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
+        // Ensure no leftover user_ prefix
+        if (uniqueUser.startsWith('user_')) {
+          uniqueUser = uniqueUser.replace(/^user_/, `${cleanBase}_`);
+        }
+      } else {
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        uniqueUser = `${cleanBase}_${rand}`;
+      }
+      setFormData(prev => ({ ...prev, username: uniqueUser }));
+      setUsernameAvailability('available');
+      toast.success(`Generated: @${uniqueUser}`);
+    } catch (e) {
+      console.warn('Generate username err:', e);
+      toast.error('Could not generate unique username');
+    } finally {
+      setIsGeneratingUsername(false);
+    }
+  }, [formData.displayName, userProfile, userService]);
   
   // Handlers
   const handleInputChange = useCallback((field, value) => {
@@ -188,15 +262,34 @@ export default function EditProfileScreen() {
   }, []);
   
   const handleSave = useCallback(async () => {
+    const rawUser = formData.username?.trim().toLowerCase();
+    if (!rawUser) {
+      toast.error('Username cannot be empty');
+      return;
+    }
+    if (!/^[a-z0-9_]{3,30}$/.test(rawUser)) {
+      toast.error('Username must be 3-30 characters (letters, numbers, or underscores)');
+      return;
+    }
+
     setSaving(true);
     
     try {
+      if (rawUser !== userProfile?.username && userService?.checkUsernameAvailability) {
+        const check = await userService.checkUsernameAvailability(rawUser);
+        if (!check.available) {
+          toast.error(`@${rawUser} is already taken. Please choose another or click Auto-Generate.`);
+          setSaving(false);
+          return;
+        }
+      }
+
       // Upload avatar if changed
       if (avatarFile) {
         await userService.uploadAvatar(userProfile.uid, avatarFile);
       }
       
-      // Upload cover photo if changed (was previously discarded — fixed)
+      // Upload cover photo if changed
       if (coverFile) {
         await userService.uploadCoverPhoto(userProfile.uid, coverFile);
       }
@@ -204,6 +297,7 @@ export default function EditProfileScreen() {
       // Clean links
       const cleanedData = {
         ...formData,
+        username: rawUser,
         links: (formData.links || []).filter(l => l.url && l.url.trim().length > 0),
       };
       
@@ -300,15 +394,26 @@ export default function EditProfileScreen() {
       </div>
       
       {/* Form */}
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Avatar & Cover */}
-        <div className="space-y-4">
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        {/* 1. Avatar & Cover Card */}
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                Profile Media
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Customize your public banner and avatar image
+              </p>
+            </div>
+          </div>
+
           {/* Cover */}
           <div className="relative">
             <div 
               className={cn(
-                'h-40 rounded-2xl overflow-hidden',
-                'bg-gradient-to-r from-purple-500 to-blue-500'
+                'h-36 sm:h-44 rounded-xl overflow-hidden',
+                'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-500 shadow-inner'
               )}
             >
               {coverPreview && (
@@ -321,11 +426,12 @@ export default function EditProfileScreen() {
             </div>
             <label className={cn(
               'absolute bottom-3 right-3',
-              'p-2 rounded-full',
-              'bg-black/50 hover:bg-black/70',
-              'text-white cursor-pointer transition-colors'
+              'px-3 py-1.5 rounded-full',
+              'bg-black/60 hover:bg-black/80 text-white text-xs font-semibold cursor-pointer transition-colors',
+              'flex items-center gap-1.5 shadow-md backdrop-blur-sm'
             )}>
-              <Camera className="w-4 h-4" />
+              <Camera className="w-3.5 h-3.5" />
+              <span>Change Banner</span>
               <input
                 type="file"
                 accept="image/*"
@@ -335,47 +441,67 @@ export default function EditProfileScreen() {
             </label>
           </div>
           
-          {/* Avatar */}
-          <div className="relative -mt-12 ml-4 z-10">
-            <div className={cn(
-              'w-24 h-24 rounded-full',
-              'border-4 border-white dark:border-gray-900',
-              'overflow-hidden bg-gray-200 dark:bg-gray-700'
-            )}>
-              {avatarPreview ? (
-                <img
-                  src={avatarPreview}
-                  alt="Avatar"
-                  className="w-full h-full object-cover"
+          {/* Avatar & Avatar upload */}
+          <div className="flex items-center gap-4 pt-1">
+            <div className="relative">
+              <div className={cn(
+                'w-20 h-20 sm:w-24 sm:h-24 rounded-full',
+                'border-4 border-white dark:border-[#0d1527] shadow-lg',
+                'overflow-hidden bg-slate-200 dark:bg-slate-800 ring-2 ring-purple-500/20'
+              )}>
+                {avatarPreview ? (
+                  <img
+                    src={avatarPreview}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <User className="w-8 h-8 text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <label className={cn(
+                'absolute bottom-0 right-0',
+                'p-2 rounded-full',
+                'bg-purple-600 hover:bg-purple-700 shadow-md',
+                'text-white cursor-pointer transition-colors'
+              )}>
+                <Camera className="w-3.5 h-3.5" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <User className="w-8 h-8 text-gray-400" />
-                </div>
-              )}
+              </label>
             </div>
-            <label className={cn(
-              'absolute bottom-0 right-0',
-              'p-1.5 rounded-full',
-              'bg-purple-500 hover:bg-purple-600',
-              'text-white cursor-pointer transition-colors'
-            )}>
-              <Camera className="w-4 h-4" />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarChange}
-                className="hidden"
-              />
-            </label>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Profile Avatar</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">JPG, PNG, or GIF. Max 5MB.</p>
+              <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 cursor-pointer pt-0.5">
+                <span>Upload new photo</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
         </div>
         
-        {/* Basic Info */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Basic Information
-          </h2>
+        {/* 2. Basic Information Card */}
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+              Basic Information
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Your public identity and display details
+            </p>
+          </div>
           
           <InputField
             icon={User}
@@ -384,12 +510,83 @@ export default function EditProfileScreen() {
             placeholder="Your display name"
           />
           
-          <InputField
-            icon={User}
-            label="Username"
-            field="username"
-            placeholder="your_username"
-          />
+          {/* Username Field with Live Checker and Auto-Generator */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <User className="w-4 h-4 text-purple-400" />
+                <span>Username</span>
+              </label>
+
+              {/* Live Status Badge */}
+              <div className="flex items-center gap-2">
+                {usernameAvailability === 'checking' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-500 animate-pulse">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Checking...
+                  </span>
+                )}
+                {usernameAvailability === 'available' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Available
+                  </span>
+                )}
+                {usernameAvailability === 'current' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-500/10 px-2 py-0.5 rounded-full">
+                    Current Handle
+                  </span>
+                )}
+                {usernameAvailability === 'taken' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
+                    <AlertCircle className="w-3 h-3" />
+                    Handle Taken
+                  </span>
+                )}
+                {usernameAvailability === 'invalid' && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                    3-30 chars (letters, numbers, _)
+                  </span>
+                )}
+
+                {/* Auto-Generate Unique Username Button */}
+                <button
+                  type="button"
+                  onClick={handleGenerateUsername}
+                  disabled={isGeneratingUsername}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-500/15 to-blue-500/15 hover:from-purple-500/25 hover:to-blue-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  title="Generate a unique clean username without raw UID"
+                >
+                  <Sparkles className={cn("w-3 h-3", isGeneratingUsername && "animate-spin")} />
+                  <span>{isGeneratingUsername ? 'Generating...' : 'Auto-Generate'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
+                @
+              </span>
+              <input
+                type="text"
+                value={formData.username}
+                onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                placeholder="your_unique_username"
+                className={cn(
+                  'w-full pl-8 pr-4 py-2.5 rounded-xl text-sm font-medium',
+                  'bg-gray-50 dark:bg-gray-800/80',
+                  'border border-gray-200 dark:border-gray-700',
+                  'text-gray-900 dark:text-white',
+                  'placeholder-gray-400 dark:placeholder-gray-500',
+                  'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
+                  'transition-colors'
+                )}
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Only letters, numbers, and underscores. This becomes your unique Arvdoul profile link.
+            </p>
+          </div>
           
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -398,7 +595,7 @@ export default function EditProfileScreen() {
                 Bio
               </label>
               <span className={cn(
-                "text-xs",
+                "text-xs font-mono",
                 formData.bio.length > 500 ? "text-red-500 font-bold" : "text-gray-400"
               )}>
                 {formData.bio.length} / 500
@@ -407,12 +604,12 @@ export default function EditProfileScreen() {
             <textarea
               value={formData.bio}
               onChange={(e) => handleInputChange('bio', e.target.value)}
-              placeholder="Tell us about yourself..."
-              rows={4}
+              placeholder="Tell others what you do, build, or share..."
+              rows={3}
               maxLength={500}
               className={cn(
-                'w-full px-4 py-2.5 rounded-xl resize-none',
-                'bg-gray-50 dark:bg-gray-800',
+                'w-full px-4 py-2.5 rounded-xl resize-none text-sm',
+                'bg-gray-50 dark:bg-gray-800/80',
                 'border border-gray-200 dark:border-gray-700',
                 'text-gray-900 dark:text-white',
                 'placeholder-gray-400 dark:placeholder-gray-500',
@@ -423,16 +620,16 @@ export default function EditProfileScreen() {
           </div>
         </div>
 
-        {/* Links Manager */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        {/* 3. Links Manager Card */}
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <LinkIcon className="w-4 h-4 text-purple-400" />
                 Profile Links
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Add up to 10 verified external links, portfolio, or socials
+                Add verified external links, portfolio, or socials (up to 10)
               </p>
             </div>
             <button
@@ -450,7 +647,7 @@ export default function EditProfileScreen() {
           </div>
 
           {formData.links.length === 0 ? (
-            <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-center text-xs text-gray-500 dark:text-gray-400">
+            <div className="p-5 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-center text-xs text-gray-500 dark:text-gray-400">
               No custom links added yet. Click &quot;Add Link&quot; to showcase your websites or projects.
             </div>
           ) : (
@@ -519,11 +716,16 @@ export default function EditProfileScreen() {
           )}
         </div>
         
-        {/* Personal Info */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Personal Information
-          </h2>
+        {/* 4. Personal Information Card */}
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+              Personal Information
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Location, demographics, and contact details
+            </p>
+          </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -548,8 +750,8 @@ export default function EditProfileScreen() {
                   onChange={(e) => handleInputChange('location', e.target.value)}
                   placeholder="City, Country"
                   className={cn(
-                    'w-full px-4 py-2.5 rounded-xl pr-10',
-                    'bg-gray-50 dark:bg-gray-800',
+                    'w-full px-4 py-2.5 rounded-xl pr-10 text-sm',
+                    'bg-gray-50 dark:bg-gray-800/80',
                     'border border-gray-200 dark:border-gray-700',
                     'text-gray-900 dark:text-white',
                     'placeholder-gray-400 dark:placeholder-gray-500',
@@ -592,45 +794,57 @@ export default function EditProfileScreen() {
           </div>
         </div>
         
-        {/* Professional Info */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Professional Information
-          </h2>
+        {/* 5. Professional Information Card */}
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+              Professional Information
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Work history, discipline, and education credentials
+            </p>
+          </div>
           
-          <InputField
-            icon={Shield}
-            label="Profession"
-            field="profession"
-            placeholder="What do you do?"
-          />
-          
-          <InputField
-            icon={Globe}
-            label="Education"
-            field="education"
-            placeholder="Where did you study?"
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <InputField
+              icon={Shield}
+              label="Profession"
+              field="profession"
+              placeholder="What do you do?"
+            />
+            
+            <InputField
+              icon={Globe}
+              label="Education"
+              field="education"
+              placeholder="Where did you study?"
+            />
+          </div>
         </div>
         
-        {/* Privacy */}
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Lock className="w-4 h-4 text-purple-400" />
-            Privacy & Permissions
-          </h2>
+        {/* 6. Privacy & Permissions Card */}
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Lock className="w-4 h-4 text-purple-400" />
+              Privacy & Permissions
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Control who can interact with your profile and view your content
+            </p>
+          </div>
           
           <label className={cn(
             'flex items-center justify-between p-4 rounded-xl',
-            'bg-gray-50 dark:bg-gray-800',
+            'bg-gray-50 dark:bg-gray-800/60',
             'border border-gray-200 dark:border-gray-700',
             'cursor-pointer'
           )}>
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">
+              <p className="font-semibold text-gray-900 dark:text-white text-sm">
                 Private Account
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 Only approved followers can see your posts and media
               </p>
             </div>
@@ -638,12 +852,12 @@ export default function EditProfileScreen() {
               type="checkbox"
               checked={formData.isPrivate}
               onChange={(e) => handleInputChange('isPrivate', e.target.checked)}
-              className="w-5 h-5 text-purple-500 rounded focus:ring-purple-500"
+              className="w-5 h-5 text-purple-500 rounded focus:ring-purple-500 cursor-pointer"
             />
           </label>
 
           {/* Granular Privacy Scopes */}
-          <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40 space-y-4">
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40 space-y-3.5">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
               Audience Permissions
             </p>
@@ -736,6 +950,35 @@ export default function EditProfileScreen() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Bottom Sticky Action Bar */}
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className={cn(
+              'px-6 py-2.5 rounded-xl font-semibold text-sm',
+              'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600',
+              'text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:opacity-95 transition-all',
+              'disabled:opacity-50 flex items-center gap-2 cursor-pointer'
+            )}
+          >
+            {saving ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Save Changes
+          </button>
         </div>
       </div>
 

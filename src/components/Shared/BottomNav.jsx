@@ -340,10 +340,9 @@ const VibesIcon = memo(function VibesIcon({ active, dark }) {
     >
       <defs>
         <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#FF1493" />
-          <stop offset="30%" stopColor="#A855F7" />
-          <stop offset="70%" stopColor="#3B82F6" />
-          <stop offset="100%" stopColor="#06B6D4" />
+          <stop offset="0%" stopColor="#C82BFF" />
+          <stop offset="48%" stopColor="#8B1EF3" />
+          <stop offset="100%" stopColor="#055BFB" />
         </linearGradient>
       </defs>
       {/* Outer segmented story vibe halo */}
@@ -352,30 +351,30 @@ const VibesIcon = memo(function VibesIcon({ active, dark }) {
         cy="14"
         r="11"
         stroke={active ? `url(#${gradientId})` : "currentColor"}
-        strokeWidth={active ? "2.2" : "1.75"}
-        strokeDasharray={active ? "17 3.5 17 3.5" : "5 2.5"}
+        strokeWidth={active ? "2.2" : "1.65"}
+        strokeDasharray={active ? "16 3" : "5.5 2.5"}
         strokeLinecap="round"
       />
       {/* Dynamic concentric pulse ring */}
       <circle
         cx="14"
         cy="14"
-        r="7.5"
+        r="7.2"
         stroke={active ? `url(#${gradientId})` : "currentColor"}
         strokeWidth="1.4"
-        strokeOpacity={active ? "0.95" : "0.5"}
+        strokeOpacity={active ? "0.95" : "0.6"}
       />
       {/* Playful & Energetic Vibe Pulse / Play Glyph */}
       <path
-        d="M12.5 10.5L17.5 14L12.5 17.5V10.5Z"
+        d="M12.5 10.5L17.2 14L12.5 17.5V10.5Z"
         fill={active ? `url(#${gradientId})` : "currentColor"}
         strokeLinejoin="round"
       />
       {/* Vibe Sparkle star */}
       <path
         d="M21 4.5L21.6 6.1L23.2 6.7L21.6 7.3L21 8.9L20.4 7.3L18.8 6.7L20.4 6.1L21 4.5Z"
-        fill={active ? "#F43F5E" : (dark ? "#F1F5F9" : "#334155")}
-        opacity={active ? 1 : 0.75}
+        fill={active ? "#A855F7" : "currentColor"}
+        opacity={active ? 1 : 0.85}
       />
     </svg>
   );
@@ -445,7 +444,7 @@ const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
   if (type === "chat") return <span className={iconClass}><ChatIcon /></span>;
   if (type === "profile") return <span className={iconClass}><ProfileIcon active={active} /></span>;
   if (type === "network") return <span className={iconClass}><NetworkIcon /></span>;
-  if (type === "vibes") return <VibesIcon active={active} dark={dark} />;
+  if (type === "vibes") return <span className={iconClass}><VibesIcon active={active} dark={dark} /></span>;
   if (type === "coins") return <CoinsIcon />; // gold always
   if (type === "alerts") return <span className={iconClass}><AlertsIcon /></span>;
   return null;
@@ -487,11 +486,13 @@ const NavigationItem = memo(function NavigationItem({
       onClick={handleClick}
       aria-label={item.label}
       aria-current={active ? "page" : undefined}
-      whileTap={reducedMotion ? undefined : { scale: 0.975 }}
+      whileTap={reducedMotion ? undefined : { scale: 0.96 }}
+      whileHover={reducedMotion ? undefined : { y: -1 }}
       transition={MOTION.press}
       className="
-        relative flex h-[82px] min-w-0 flex-1 touch-manipulation flex-col items-center
+        group relative flex h-[82px] min-w-0 flex-1 touch-manipulation flex-col items-center
         justify-start overflow-visible rounded-[20px] px-0 pt-[9px] outline-none
+        transition-all duration-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.05]
         focus-visible:ring-2 focus-visible:ring-[#8B1EF3]/70
       "
     >
@@ -501,13 +502,13 @@ const NavigationItem = memo(function NavigationItem({
           className="pointer-events-none absolute left-1/2 top-[13px] h-[38px] w-[62px] -translate-x-1/2 rounded-full"
           style={{
             background: dark
-              ? "radial-gradient(circle,rgba(139,30,243,.08),transparent 72%)"
-              : "radial-gradient(circle,rgba(139,30,243,.065),transparent 72%)",
+              ? "radial-gradient(circle,rgba(139,30,243,.14),transparent 72%)"
+              : "radial-gradient(circle,rgba(139,30,243,.09),transparent 72%)",
           }}
         />
       )}
 
-      <span className="relative z-10 flex h-[34px] w-[48px] shrink-0 items-center justify-center">
+      <span className="relative z-10 flex h-[34px] w-[48px] shrink-0 items-center justify-center group-hover:scale-105 transition-transform duration-200">
         {isProfile && userAvatar ? (
           <div className="relative flex items-center justify-center">
             <img
@@ -516,7 +517,7 @@ const NavigationItem = memo(function NavigationItem({
               className={`w-[26px] h-[26px] rounded-full object-cover transition-transform duration-200 ${
                 active
                   ? "ring-2 ring-purple-500 scale-105 shadow-md shadow-purple-500/20"
-                  : "ring-1 ring-slate-400/40 dark:ring-white/20"
+                  : "ring-1 ring-slate-400/40 dark:ring-white/20 group-hover:ring-purple-400/60"
               }`}
             />
             {user?.isCreator && (
@@ -543,12 +544,12 @@ const NavigationItem = memo(function NavigationItem({
 
       <span
         className={[
-          "relative z-10 flex h-[17px] shrink-0 items-start justify-center whitespace-nowrap px-[2px] text-[11px] leading-[17px]",
+          "relative z-10 flex h-[17px] shrink-0 items-start justify-center whitespace-nowrap px-[2px] text-[11px] leading-[17px] transition-colors duration-200",
           item.id === "coins" ? "mt-[5px]" : "mt-[8px]",
           active ? "font-semibold" : "font-medium",
           active
             ? dark ? "text-white" : "text-[#111827]"
-            : dark ? "text-white/[0.72]" : "text-[#111827]/[0.72]",
+            : dark ? "text-white/[0.72] group-hover:text-white" : "text-[#111827]/[0.72] group-hover:text-[#111827]",
         ].join(" ")}
       >
         {labelText}

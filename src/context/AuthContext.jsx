@@ -175,12 +175,16 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   
   const isProfileComplete = computeProfileComplete(user, userProfile);
   
+  const cleanDerivedUsername = (userProfile?.username && !userProfile.username.startsWith('user_'))
+    ? userProfile.username
+    : (user.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || user.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (userProfile?.username || 'member'));
+
   const userData = {
     uid: user.uid,
     email: user.email,
     emailVerified: user.emailVerified,
     displayName: userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
-    username: userProfile?.username || user.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '_') || `user_${user.uid?.slice(0, 8)}`,
+    username: cleanDerivedUsername,
     photoURL: getSafeAvatarUrl(
       userProfile?.photoURL || user.photoURL,
       userProfile?.displayName || user.displayName || user.email?.split('@')[0] || 'User',
@@ -477,7 +481,7 @@ export function AuthProvider({ children }) {
           } else {
             const onboarding = !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true;
             const basicName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
-            const fallbackUsername = (firebaseUser.email?.split('@')[0] || `user_${firebaseUser.uid.slice(0, 6)}`).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+            const fallbackUsername = (firebaseUser.email?.split('@')[0] || firebaseUser.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'arvdoul_member').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
             const fallbackProfile = {
               uid: firebaseUser.uid,
               displayName: basicName,

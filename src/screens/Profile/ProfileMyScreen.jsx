@@ -9,7 +9,7 @@
  * @component
  */
 
-import React, { useCallback, useEffect, useState, Suspense, lazy, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -156,10 +156,25 @@ export default function ProfileMyScreen() {
   }, [currentUserId, profile]);
 
   // Fallback profile if Firestore is yet to populate
-  const effectiveProfile = profile || {
+  const cleanUsername = useMemo(() => {
+    const raw = profile?.username || currentUser?.username;
+    if (raw && !raw.startsWith('user_') && raw !== 'user' && raw !== 'creator') {
+      return raw;
+    }
+    const fromEmail = (currentUser?.email || profile?.email)?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (fromEmail && fromEmail !== 'user') return fromEmail;
+    const fromName = (currentUser?.displayName || profile?.displayName)?.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (fromName && fromName !== 'user') return fromName;
+    return 'creator';
+  }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
+
+  const effectiveProfile = profile ? {
+    ...profile,
+    username: cleanUsername,
+  } : {
     id: currentUserId || 'my-arvdoul-creator',
-    username: currentUser?.username || currentUser?.email?.split('@')[0] || 'creator',
-    displayName: currentUser?.displayName || currentUser?.name || 'Your Profile',
+    username: cleanUsername,
+    displayName: currentUser?.displayName || currentUser?.name || (currentUser?.email?.split('@')[0] || 'Your Profile'),
     bio: currentUser?.bio || '',
     photoURL: getSafeAvatarUrl(currentUser?.photoURL, currentUser?.displayName || 'Your Profile', currentUserId),
     coverPhotoURL: currentUser?.coverPhotoURL || null,

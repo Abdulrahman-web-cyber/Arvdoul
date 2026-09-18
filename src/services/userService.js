@@ -493,7 +493,7 @@ class ProfessionalUserService {
       ? full.username
       : (isSelfUser && authUser?.email?.split('@')[0])
         ? authUser.email.split('@')[0]
-        : (full.email ? full.email.split('@')[0] : (full.username || `user_${userId.slice(0, 7)}`));
+        : (full.email ? full.email.split('@')[0] : (full.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (full.username && !full.username.startsWith('user_') ? full.username : 'creator')));
 
     full.photoURL = this.getAvatarUrl(userId, full.displayName || full.username, full.photoURL);
 

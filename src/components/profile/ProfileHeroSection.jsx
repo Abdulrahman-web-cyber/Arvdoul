@@ -70,12 +70,24 @@ const ProfileHeroSection = memo(({
       ? profile.name
       : (isOwner ? 'Member' : 'Creator');
 
-  const username = (profile?.username && !profile?.username.startsWith('user_') && profile?.username !== 'user' && profile?.username !== 'creator')
-    ? profile.username
-    : (profile?.username || (isOwner ? 'user' : 'creator'));
+  // Derive genuine unique username without showing raw uid or placeholder 'user'
+  const username = useMemo(() => {
+    const rawUser = profile?.username;
+    if (rawUser && !rawUser.startsWith('user_') && rawUser !== 'user' && rawUser !== 'creator') {
+      return rawUser;
+    }
+    const base = (profile?.displayName || profile?.name || profile?.email?.split('@')[0] || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '')
+      .slice(0, 16);
+    if (base && base !== 'user' && base !== 'creator') {
+      return base;
+    }
+    return (rawUser && !rawUser.startsWith('user_')) ? rawUser : (isOwner ? 'arvdoul_member' : 'creator');
+  }, [profile?.username, profile?.displayName, profile?.name, profile?.email, isOwner]);
 
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
-  const bio = profile?.bio || (isOwner ? '' : '');
+  const bio = profile?.bio?.trim() || '';
   const location = profile?.location || profile?.city || '';
   const website = profile?.website || profile?.link || '';
   
@@ -323,9 +335,19 @@ const ProfileHeroSection = memo(({
               </div>
 
               {/* Bio */}
-              <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 max-w-xl line-clamp-2 sm:line-clamp-3">
-                {bio || (isOwner ? 'Welcome to my Arvdoul profile! Share moments, post vibes, and explore the universe.' : 'Arvdoul creator and explorer.')}
-              </p>
+              {bio ? (
+                <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 max-w-xl line-clamp-2 sm:line-clamp-3">
+                  {bio}
+                </p>
+              ) : isOwner ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/profile/edit')}
+                  className="inline-flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium transition-colors"
+                >
+                  <span>+ Add a bio</span>
+                </button>
+              ) : null}
 
               {/* Meta Info: Location, Website, Joined Date */}
               <div className="flex items-center gap-4 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 flex-wrap pt-1">
