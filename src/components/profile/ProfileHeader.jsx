@@ -45,7 +45,6 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import ProfileAvatar from './ProfileAvatar';
-import ProfileCoverPhoto from './ProfileCoverPhoto';
 import ProfileLevel from './ProfileLevel';
 import ProfileBadges from './ProfileBadges';
 import ProfileStats from './ProfileStats';
@@ -214,18 +213,10 @@ const ProfileHeader = memo(({
       )}
       aria-label={`${profile.displayName || 'User'}'s Profile`}
     >
-      {/* Cover Photo */}
-      <ProfileCoverPhoto
-        coverUrl={profile.coverPhotoURL}
-        onPress={onCoverPress}
-        isOwner={isOwner}
-        theme={theme}
-      />
-      
       {/* Profile Info Section */}
-      <div className="px-4 pb-4">
+      <div className="p-6">
         {/* Avatar and Actions Row */}
-        <div className="flex items-end justify-between -mt-14 relative z-10">
+        <div className="flex items-end justify-between relative z-10">
           {/* Avatar with ARVDOUL DNA gradient ring */}
           <ProfileAvatar
             src={profile.photoURL}

@@ -13,6 +13,8 @@
 
 import '@testing-library/jest-dom';
 import 'fake-indexeddb/auto';
+import nodeUtil from 'node:util';
+import nodeCrypto from 'node:crypto';
 
 // ---------------------------------------------------------------------------
 // structuredClone polyfill (required by fake-indexeddb in some Node/jsdom versions)
@@ -25,18 +27,16 @@ if (typeof globalThis.structuredClone === 'undefined') {
 // TextEncoder / TextDecoder (Node 22 provides globals, but keep for parity)
 // ---------------------------------------------------------------------------
 if (typeof globalThis.TextEncoder === 'undefined' || typeof globalThis.TextDecoder === 'undefined') {
-  const { TextEncoder, TextDecoder } = await import('node:util');
-  globalThis.TextEncoder = TextEncoder;
-  globalThis.TextDecoder = TextDecoder;
+  globalThis.TextEncoder = nodeUtil.TextEncoder;
+  globalThis.TextDecoder = nodeUtil.TextDecoder;
 }
 
 // ---------------------------------------------------------------------------
 // WebCrypto (crypto.subtle) - required by fieldEncryptionService, messagesService
 // ---------------------------------------------------------------------------
 if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
-  const { webcrypto } = await import('node:crypto');
   Object.defineProperty(globalThis, 'crypto', {
-    value: webcrypto,
+    value: nodeCrypto.webcrypto,
     configurable: true,
     writable: true,
   });

@@ -12,6 +12,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Lock, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,6 +25,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileActionBar from '../../components/profile/ProfileActionBar';
 import ProfileSocialConnections from '../../components/profile/ProfileSocialConnections';
+import ProfileMutualFriends from '../../components/profile/ProfileMutualFriends';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileFeaturedSection from '../../components/profile/ProfileFeaturedSection';
@@ -270,7 +272,6 @@ export default function ProfilePublicScreen() {
           : (profileData.username || 'Creator'),
       bio: profileData.bio || '',
       photoURL: getSafeAvatarUrl(profileData.photoURL, profileData.displayName || 'Creator', userId),
-      coverPhotoURL: profileData.coverPhotoURL || null,
       followerCount: Number(profileData.followerCount ?? profileData.followersCount ?? 0),
       followingCount: Number(profileData.followingCount ?? 0),
       postCount: posts?.length ?? profileData.postCount ?? 0,
@@ -278,6 +279,18 @@ export default function ProfilePublicScreen() {
       coins: Number(profileData.coins ?? profileData.coinBalance ?? 0),
       isVerified: Boolean(profileData.isVerified),
       isCreator: Boolean(profileData.isCreator),
+      isPrivate: Boolean(profileData.isPrivate),
+      isRestricted: Boolean(profileData.isRestricted),
+      canViewActivity: profileData.canViewActivity !== false,
+      canViewAchievements: profileData.canViewAchievements !== false,
+      canViewTitles: profileData.canViewTitles !== false,
+      canViewFollowersList: profileData.canViewFollowersList !== false,
+      canViewFollowingList: profileData.canViewFollowingList !== false,
+      links: Array.isArray(profileData.links) ? profileData.links : [],
+      pronouns: profileData.pronouns || '',
+      profession: profileData.profession || '',
+      education: profileData.education || '',
+      presence: profileData.presence || { isOnline: false, status: 'offline', lastActive: null },
       level: profileData.level || 1,
       location: profileData.location || profileData.city || '',
       website: profileData.website || profileData.link || '',
@@ -384,6 +397,15 @@ export default function ProfilePublicScreen() {
             onMutualClick={() => navigate(`/profile/${userId}/mutual-friends`)}
           />
 
+          {/* 3b. Mutual Friends Line */}
+          {mutualFriends && mutualFriends.length > 0 && (
+            <ProfileMutualFriends
+              mutualFriends={mutualFriends}
+              theme={theme}
+              onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+            />
+          )}
+
           {/* 4. 6-Cards Key Metrics Grid */}
           <ProfileMetricsGrid
             isOwner={false}
@@ -397,51 +419,80 @@ export default function ProfilePublicScreen() {
             }}
           />
 
-          {/* 5. Highlights / Vibes Carousel */}
-          <ProfileHighlightsSection
-            highlights={effectiveProfile?.highlights || []}
-            userId={userId}
-            isOwner={false}
-            theme={theme}
-          />
+          {effectiveProfile.isRestricted ? (
+            /* Restricted / Private Account Access Gate */
+            <div className={cn(
+              "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-6",
+              isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
+            )}>
+              <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                  Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
+                </p>
+              </div>
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={handleFollowToggle}
+                  className="px-6 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* 5. Highlights / Vibes Carousel */}
+              <ProfileHighlightsSection
+                highlights={effectiveProfile?.highlights || []}
+                userId={userId}
+                isOwner={false}
+                theme={theme}
+              />
 
-          {/* 6. Featured by Creator Section */}
-          <ProfileFeaturedSection
-            profile={effectiveProfile}
-            posts={posts}
-            theme={theme}
-            onPostClick={(post) => navigate(`/post/${post.id}`)}
-          />
+              {/* 6. Featured by Creator Section */}
+              <ProfileFeaturedSection
+                profile={effectiveProfile}
+                posts={posts}
+                theme={theme}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
 
-          {/* 7. Multi-Tab Navigation Bar */}
-          <div className="sticky top-2 z-30 pt-1">
-            <ProfileTabsBar
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              isOwner={false}
-              theme={theme}
-              counts={{
-                posts: posts?.length || 0,
-              }}
-            />
-          </div>
+              {/* 7. Multi-Tab Navigation Bar */}
+              <div className="sticky top-2 z-30 pt-1">
+                <ProfileTabsBar
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  isOwner={false}
+                  theme={theme}
+                  counts={{
+                    posts: posts?.length || 0,
+                  }}
+                />
+              </div>
 
-          {/* 8. Pinned Posts Section */}
-          <ProfilePinnedPosts
-            posts={posts}
-            theme={theme}
-            onPostClick={(post) => navigate(`/post/${post.id}`)}
-          />
+              {/* 8. Pinned Posts Section */}
+              <ProfilePinnedPosts
+                posts={posts}
+                theme={theme}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
 
-          {/* 9. Media Feed Grid */}
-          <ProfileFeedGrid
-            posts={posts}
-            activeTab={activeTab}
-            loading={loading}
-            theme={theme}
-            profile={effectiveProfile}
-            onPostClick={(post) => navigate(`/post/${post.id}`)}
-          />
+              {/* 9. Media Feed Grid */}
+              <ProfileFeedGrid
+                posts={posts}
+                activeTab={activeTab}
+                loading={loading}
+                theme={theme}
+                profile={effectiveProfile}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
+            </>
+          )}
 
         </div>
 

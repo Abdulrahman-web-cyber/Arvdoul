@@ -19,7 +19,6 @@ export { default as CreatorDashboard } from './CreatorDashboard';
 export { default as CreatorCharts } from './CreatorCharts';
 export { default as ProfileMutualFriends } from './ProfileMutualFriends';
 export { default as ProfileSocialStatus } from './ProfileSocialStatus';
-export { default as ProfileCoverPhoto } from './ProfileCoverPhoto';
 export { default as ProfileAvatar } from './ProfileAvatar';
 export { default as ProfileStatsGrid } from './ProfileStatsGrid';
 export { default as ProfileAchievements } from './ProfileAchievements';

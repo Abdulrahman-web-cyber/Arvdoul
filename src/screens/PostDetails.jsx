@@ -12,6 +12,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { triggerHaptic } from '../utils/haptics';
 
 const CommentsDrawer = React.lazy(() => import('./CommentsDrawer.jsx'));
+const PostOptionsDrawer = React.lazy(() => import('./PostOptionsDrawer.jsx'));
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -24,6 +25,7 @@ export default function PostDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showComments, setShowComments] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const dragX = useMotionValue(0);
   const [exitAnimating, setExitAnimating] = useState(false);
   const winWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
@@ -73,7 +75,7 @@ export default function PostDetails() {
               currentUser={currentUser}
               navigate={navigate}
               onOpenComments={() => setShowComments(true)}
-              onOpenOptions={() => {}}
+              onOpenOptions={() => setShowOptions(true)}
               isVisible
             />
           </ErrorBoundary>
@@ -81,6 +83,7 @@ export default function PostDetails() {
       </motion.div>
 
       {showComments && <Suspense fallback={<div className="p-4">Loading comments…</div>}><CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={post} currentUser={currentUser} theme={theme} /></Suspense>}
+      {showOptions && <Suspense fallback={null}><PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={post} currentUser={currentUser} onPostDeleted={() => navigate('/home')} /></Suspense>}
     </div>
   );
 }

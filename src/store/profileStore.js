@@ -327,39 +327,6 @@ export const useProfileStore = create(
       }
     },
 
-    /**
-     * Upload and update user cover photo
-     * @param {string} userId - User ID
-     * @param {File|Blob} file - Cover photo file
-     */
-    updateCoverPhoto: async (userId, file) => {
-      if (!userId || !file) return;
-      const previousCover = get().profile?.coverPhotoURL;
-
-      try {
-        const userService = (await import('../services/userService.js')).getUserService();
-        const uploadResult = await userService.uploadCoverPhoto(userId, file);
-        const newCoverURL = uploadResult?.downloadURL || uploadResult?.coverPhotoURL || uploadResult?.url || uploadResult;
-
-        set((state) => {
-          if (state.profile && newCoverURL) {
-            state.profile.coverPhotoURL = newCoverURL;
-          }
-        });
-        toast.success('Cover photo updated successfully!');
-        return newCoverURL;
-      } catch (error) {
-        console.error('❌ Update cover photo failed:', error);
-        set((state) => {
-          if (state.profile) {
-            state.profile.coverPhotoURL = previousCover;
-          }
-        });
-        toast.error(error.message || 'Failed to upload cover photo');
-        throw error;
-      }
-    },
-    
     // ==================== POSTS ACTIONS ====================
     /**
      * Load user posts

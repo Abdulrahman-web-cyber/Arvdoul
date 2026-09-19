@@ -177,7 +177,6 @@ export default function ProfileMyScreen() {
     displayName: currentUser?.displayName || currentUser?.name || (currentUser?.email?.split('@')[0] || 'Your Profile'),
     bio: currentUser?.bio || '',
     photoURL: getSafeAvatarUrl(currentUser?.photoURL, currentUser?.displayName || 'Your Profile', currentUserId),
-    coverPhotoURL: currentUser?.coverPhotoURL || null,
     followerCount: Number(currentUser?.followerCount || currentUser?.followersCount) || 0,
     followingCount: Number(currentUser?.followingCount) || 0,
     postCount: posts?.length || 0,

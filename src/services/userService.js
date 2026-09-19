@@ -237,25 +237,6 @@ class ProfessionalUserService {
     return result;
   }
 
-  /**
-   * Upload a profile cover photo (banner) to Storage and persist the URL.
-   * Mirrors uploadAvatar; path: banners/{userId} (covered by storage.rules).
-   * @param {string} userId
-   * @param {File} file
-   * @returns {Promise<{downloadURL: string}>}
-   */
-  async uploadCoverPhoto(userId, file) {
-    const storageService = getStorageService();
-    const result = await storageService.uploadFileWithProgress(file, `banners/${userId}`, {
-      compressImages: true,
-      maxSize: 5 * 1024 * 1024,
-      userId,
-    });
-    await this.updateUserProfile(userId, { coverPhotoURL: result.downloadURL });
-    this._invalidateUserCache(userId);
-    return result;
-  }
-
   // ==================== USERNAME SYSTEM (instant & robust) ====================
   async checkUsernameAvailability(username, excludeUserId = null) {
     try {
@@ -383,11 +364,32 @@ class ProfessionalUserService {
 
     const { doc, getDoc } = await import('firebase/firestore');
     let snap = null;
+    let resolvedUserId = userId;
+
+    // Handle @username or username passed instead of uid
+    const cleanId = String(userId || '').replace(/^@/, '').toLowerCase().trim();
+
     try {
       snap = await Promise.race([
-        getDoc(doc(this.firestore, 'users', userId)),
+        getDoc(doc(this.firestore, 'users', resolvedUserId)),
         new Promise((_, reject) => setTimeout(() => reject(new Error('User fetch timeout')), 3500))
       ]);
+
+      if (!snap || !snap.exists()) {
+        // Attempt username lookup
+        const unameSnap = await getDoc(doc(this.firestore, 'usernames', cleanId)).catch(() => null);
+        if (unameSnap && unameSnap.exists() && unameSnap.data()?.userId) {
+          resolvedUserId = unameSnap.data().userId;
+          snap = await getDoc(doc(this.firestore, 'users', resolvedUserId)).catch(() => null);
+        } else {
+          // Attempt previous username lookup for immutable redirect
+          const prevSnap = await getDoc(doc(this.firestore, 'previous_usernames', cleanId)).catch(() => null);
+          if (prevSnap && prevSnap.exists() && prevSnap.data()?.userId) {
+            resolvedUserId = prevSnap.data().userId;
+            snap = await getDoc(doc(this.firestore, 'users', resolvedUserId)).catch(() => null);
+          }
+        }
+      }
     } catch (fetchErr) {
       logger.warn('getDoc for user profile timed out or failed, using local/synthesized profile', { userId, error: fetchErr?.message });
     }
@@ -436,7 +438,6 @@ class ProfessionalUserService {
         photoURL: isSelf
           ? (authUser?.photoURL || localAuth.photoURL || this.getAvatarUrl(userId, realDisplayName, null))
           : this.getAvatarUrl(userId, 'Creator', null),
-        coverPhotoURL: null,
         followerCount: isSelf ? (Number(localAuth.followerCount) || 0) : 0,
         followingCount: isSelf ? (Number(localAuth.followingCount) || 0) : 0,
         postCount: 0,
@@ -587,7 +588,6 @@ class ProfessionalUserService {
           username: full.username,
           displayName: full.displayName,
           photoURL: full.photoURL,
-          coverPhotoURL: full.coverPhotoURL || null,
           bio: full.bio || '',
           isPrivate: true,
           isRestricted: true,
@@ -787,10 +787,19 @@ class ProfessionalUserService {
         const userDoc = doc(this.firestore, 'users', userId);
         const oldDoc = doc(this.firestore, 'usernames', oldUsername);
         const newDoc = doc(this.firestore, 'usernames', newUsername);
+        const prevDoc = doc(this.firestore, 'previous_usernames', oldUsername);
         await runTransaction(this.firestore, async (transaction) => {
           const snap = await transaction.get(newDoc);
           if (snap.exists()) throw new Error(`Username "${newUsername}" taken.`);
-          transaction.delete(oldDoc);
+          if (oldUsername) {
+            transaction.set(prevDoc, {
+              userId,
+              oldUsername,
+              currentUsername: newUsername,
+              replacedAt: serverTimestamp()
+            });
+            transaction.delete(oldDoc);
+          }
           transaction.set(newDoc, { userId, username: newUsername, updatedAt: serverTimestamp() });
           transaction.update(userDoc, { username: newUsername, updatedAt: serverTimestamp(), 'metadata.usernameUpdatedAt': serverTimestamp() });
         });

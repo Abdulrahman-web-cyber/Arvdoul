@@ -97,7 +97,7 @@ export const PROFILE_CONSTRAINTS = {
   USERNAME: {
     MIN_LENGTH: 3,
     MAX_LENGTH: 30,
-    PATTERN: /^[a-zA-Z0-9_]+$/
+    PATTERN: /^[a-zA-Z0-9._]+$/
   },
   BIO: {
     MAX_LENGTH: 500
@@ -377,14 +377,6 @@ export function validateProfileUpdate(rawUpdates = {}) {
       case 'photoURL': {
         if (typeof val === 'string') {
           sanitized.photoURL = val;
-        }
-        break;
-      }
-
-      case 'coverPhotoURL':
-      case 'coverPhoto': {
-        if (typeof val === 'string') {
-          sanitized.coverPhotoURL = val;
         }
         break;
       }

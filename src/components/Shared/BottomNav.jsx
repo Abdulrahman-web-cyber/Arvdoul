@@ -877,13 +877,21 @@ function BottomNav() {
     accumulatedScrollRef.current = 0;
     directionRef.current = null;
 
-    const handleScroll = () => {
+    const handleScroll = (event) => {
       if (scrollFrameRef.current !== null) return;
       if (ignoreScrollRef.current) return;
 
+      const target = event?.target && (event.target !== window && event.target !== document)
+        ? event.target
+        : (document.scrollingElement || document.documentElement);
+
+      const targetScrollY = target && typeof target.scrollTop === 'number' && target.scrollTop > 0
+        ? target.scrollTop
+        : (window.scrollY || 0);
+
       scrollFrameRef.current = window.requestAnimationFrame(() => {
         scrollFrameRef.current = null;
-        const currentY = Math.max(window.scrollY || 0, 0);
+        const currentY = Math.max(targetScrollY, 0);
         const delta = currentY - lastScrollYRef.current;
         lastScrollYRef.current = currentY;
 
@@ -901,7 +909,7 @@ function BottomNav() {
           return;
         }
 
-        if (Math.abs(delta) < 1) return;
+        if (Math.abs(delta) < 2) return;
         const newDirection = delta > 0 ? "down" : "up";
 
         if (directionRef.current !== newDirection) {
@@ -921,9 +929,9 @@ function BottomNav() {
       });
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("scroll", handleScroll, { capture: true });
       if (scrollFrameRef.current !== null) {
         window.cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = null;

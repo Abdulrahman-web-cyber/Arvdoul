@@ -39,6 +39,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../../config/profileContracts.js';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
+import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 
 /**
  * EditProfileScreen Component
@@ -74,10 +75,9 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
-  const [coverFile, setCoverFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
-  const [coverPreview, setCoverPreview] = useState(null);
   const [usernameAvailability, setUsernameAvailability] = useState(null); // 'checking' | 'available' | 'taken' | 'invalid' | 'current'
   const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
 
@@ -87,8 +87,8 @@ export default function EditProfileScreen() {
       const p = userProfile.privacy || {};
       let initialUsername = userProfile.username || '';
       if (!initialUsername || initialUsername.startsWith('user_') || initialUsername === 'user' || initialUsername === 'creator') {
-        const fromEmail = userProfile.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
-        const fromName = userProfile.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        const fromEmail = userProfile.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9._]/g, '');
+        const fromName = userProfile.displayName?.toLowerCase().replace(/[^a-z0-9._]/g, '');
         initialUsername = fromEmail || fromName || '';
       }
 
@@ -114,7 +114,6 @@ export default function EditProfileScreen() {
         },
       });
       setAvatarPreview(userProfile.photoURL);
-      setCoverPreview(userProfile.coverPhotoURL);
     }
   }, [userProfile]);
 
@@ -129,7 +128,7 @@ export default function EditProfileScreen() {
       setUsernameAvailability('current');
       return;
     }
-    if (!/^[a-z0-9_]{3,30}$/.test(raw)) {
+    if (!/^[a-z0-9._]{3,30}$/.test(raw)) {
       setUsernameAvailability('invalid');
       return;
     }
@@ -237,38 +236,34 @@ export default function EditProfileScreen() {
     });
   }, []);
   
-  const handleAvatarChange = useCallback((e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAvatarFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleAvatarCropped = useCallback(async (file) => {
+    if (!file) return;
+    setAvatarFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setAvatarPreview(objectUrl);
   }, []);
-  
-  const handleCoverChange = useCallback((e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setCoverFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCoverPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
+
+  const handleRemoveAvatar = useCallback(async () => {
+    if (!userProfile?.uid) return;
+    const defaultAvatar = userService?.getAvatarUrl
+      ? userService.getAvatarUrl(userProfile.uid, formData.displayName || 'Creator', null)
+      : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(formData.displayName || 'Creator')}&backgroundColor=6366f1`;
+
+    setAvatarFile(null);
+    setAvatarPreview(defaultAvatar);
+    if (userService?.updateUserProfile) {
+      await userService.updateUserProfile(userProfile.uid, { photoURL: defaultAvatar });
     }
-  }, []);
-  
+  }, [userProfile?.uid, formData.displayName, userService]);
+
   const handleSave = useCallback(async () => {
     const rawUser = formData.username?.trim().toLowerCase();
     if (!rawUser) {
       toast.error('Username cannot be empty');
       return;
     }
-    if (!/^[a-z0-9_]{3,30}$/.test(rawUser)) {
-      toast.error('Username must be 3-30 characters (letters, numbers, or underscores)');
+    if (!/^[a-z0-9._]{3,30}$/.test(rawUser)) {
+      toast.error('Username must be 3-30 characters (letters, numbers, dots, or underscores)');
       return;
     }
 
@@ -285,13 +280,8 @@ export default function EditProfileScreen() {
       }
 
       // Upload avatar if changed
-      if (avatarFile) {
+      if (avatarFile && userProfile?.uid) {
         await userService.uploadAvatar(userProfile.uid, avatarFile);
-      }
-      
-      // Upload cover photo if changed
-      if (coverFile) {
-        await userService.uploadCoverPhoto(userProfile.uid, coverFile);
       }
       
       // Clean links
@@ -312,7 +302,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [formData, avatarFile, coverFile, updateUserProfile, navigate, userProfile, userService]);
+  }, [formData, avatarFile, updateUserProfile, navigate, userProfile, userService]);
   
   const handleCancel = useCallback(() => {
     navigate(-1);
@@ -395,99 +385,65 @@ export default function EditProfileScreen() {
       
       {/* Form */}
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {/* 1. Avatar & Cover Card */}
+        {/* 1. Avatar Photo Card */}
         <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                Profile Media
+                Profile Photo
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Customize your public banner and avatar image
+                Crop and customize your public identity avatar (1:1 circular)
               </p>
             </div>
           </div>
 
-          {/* Cover */}
-          <div className="relative">
-            <div 
-              className={cn(
-                'h-36 sm:h-44 rounded-xl overflow-hidden',
-                'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-500 shadow-inner'
-              )}
-            >
-              {coverPreview && (
-                <img
-                  src={coverPreview}
-                  alt="Cover"
-                  className="w-full h-full object-cover"
-                />
-              )}
+          <div className="flex flex-col sm:flex-row items-center gap-5 pt-2">
+            <div className="relative group cursor-pointer" onClick={() => setShowAvatarModal(true)}>
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-[#B416DB] via-[#4B6BFF] to-[#0EA3E6] shadow-lg">
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-10 h-10 text-gray-400" />
+                  )}
+                </div>
+              </div>
+
+              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
             </div>
-            <label className={cn(
-              'absolute bottom-3 right-3',
-              'px-3 py-1.5 rounded-full',
-              'bg-black/60 hover:bg-black/80 text-white text-xs font-semibold cursor-pointer transition-colors',
-              'flex items-center gap-1.5 shadow-md backdrop-blur-sm'
-            )}>
-              <Camera className="w-3.5 h-3.5" />
-              <span>Change Banner</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleCoverChange}
-                className="hidden"
-              />
-            </label>
-          </div>
-          
-          {/* Avatar & Avatar upload */}
-          <div className="flex items-center gap-4 pt-1">
-            <div className="relative">
-              <div className={cn(
-                'w-20 h-20 sm:w-24 sm:h-24 rounded-full',
-                'border-4 border-white dark:border-[#0d1527] shadow-lg',
-                'overflow-hidden bg-slate-200 dark:bg-slate-800 ring-2 ring-purple-500/20'
-              )}>
-                {avatarPreview ? (
-                  <img
-                    src={avatarPreview}
-                    alt="Avatar"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-gray-400" />
-                  </div>
+
+            <div className="space-y-2 text-center sm:text-left">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarModal(true)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 shadow-md shadow-purple-500/20 transition-all flex items-center gap-1.5"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Change Photo</span>
+                </button>
+
+                {avatarPreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 transition-colors flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Reset to Default</span>
+                  </button>
                 )}
               </div>
-              <label className={cn(
-                'absolute bottom-0 right-0',
-                'p-2 rounded-full',
-                'bg-purple-600 hover:bg-purple-700 shadow-md',
-                'text-white cursor-pointer transition-colors'
-              )}>
-                <Camera className="w-3.5 h-3.5" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarChange}
-                  className="hidden"
-                />
-              </label>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Profile Avatar</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">JPG, PNG, or GIF. Max 5MB.</p>
-              <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 cursor-pointer pt-0.5">
-                <span>Upload new photo</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarChange}
-                  className="hidden"
-                />
-              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                1:1 aspect ratio with interactive zoom & crop. WebP compressed.
+              </p>
             </div>
           </div>
         </div>
@@ -545,7 +501,7 @@ export default function EditProfileScreen() {
                 )}
                 {usernameAvailability === 'invalid' && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                    3-30 chars (letters, numbers, _)
+                    3-30 chars (letters, numbers, dots, _)
                   </span>
                 )}
 
@@ -570,7 +526,7 @@ export default function EditProfileScreen() {
               <input
                 type="text"
                 value={formData.username}
-                onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
                 placeholder="your_unique_username"
                 className={cn(
                   'w-full pl-8 pr-4 py-2.5 rounded-xl text-sm font-medium',
@@ -981,6 +937,18 @@ export default function EditProfileScreen() {
           </button>
         </div>
       </div>
+
+      {/* Avatar Upload & Crop Modal */}
+      {showAvatarModal && (
+        <AvatarUploadModal
+          isOpen={showAvatarModal}
+          onClose={() => setShowAvatarModal(false)}
+          onUpload={handleAvatarCropped}
+          onRemoveAvatar={handleRemoveAvatar}
+          currentAvatarUrl={avatarPreview}
+          theme={theme}
+        />
+      )}
 
       {/* Interactive Location Setup Modal */}
       {showLocationModal && (
