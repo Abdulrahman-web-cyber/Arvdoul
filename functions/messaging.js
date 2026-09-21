@@ -1,7 +1,7 @@
-// functions/messaging.js – ARVDOUL MESSAGING CLOUD FUNCTIONS (PRODUCTION V6 · WORLD‑CLASS)
-// 🔐 Exactly‑once scheduled dispatch · Secure calling · Privacy‑aware push
-// 💬 Hybrid Algolia + Firestore fallback search · Rate‑limited · Self‑healing
-// 🚀 Surpasses Facebook Messenger & WhatsApp – engineered for global scale
+// functions/messaging.js — messaging callables and triggers
+//
+// Scheduled dispatch runs exactly-once. Includes privacy-aware push, hybrid
+// Algolia + Firestore search, and rate limiting.
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -34,12 +34,7 @@ if (USE_ALGOLIA) {
   algoliaIndex = client.initIndex(ALGOLIA_MESSAGES_INDEX);
 }
 
-const { CloudTasksClient } = require('@google-cloud/tasks');
-const tasksClient = new CloudTasksClient();
-const projectId = process.env.GCLOUD_PROJECT;
-const location = process.env.CLOUD_TASKS_LOCATION || 'us-central1';
-const pushQueueName = process.env.PUSH_QUEUE_NAME || 'push-queue';
-const pushWorkerUrl = process.env.PUSH_WORKER_URL || 'https://example.com/push';
+const { enqueuePush } = require('./pushQueue');
 
 // ----------------------------------------------------------------------
 //  LOGGING
@@ -139,29 +134,6 @@ async function getUserDisplayInfo(userId) {
   if (!userDoc.exists) return { displayName: 'Unknown', photoURL: null };
   const u = userDoc.data();
   return { displayName: u.displayName || u.username || userId, photoURL: u.photoURL || null };
-}
-
-async function sendPushToQueue(userId, payload) {
-  try {
-    const parent = tasksClient.queuePath(projectId, location, pushQueueName);
-    const task = {
-      httpRequest: {
-        httpMethod: 'POST',
-        url: pushWorkerUrl,
-        body: Buffer.from(JSON.stringify({ userId, payload })).toString('base64'),
-        headers: { 'Content-Type': 'application/json' },
-      },
-    };
-    await tasksClient.createTask({ parent, task });
-  } catch (error) {
-    log('WARN', 'Push enqueue failed, storing in Firestore fallback', { userId, error: error.message });
-    await db.collection('push_queue').add({
-      userId,
-      payload,
-      status: 'pending',
-      createdAt: FieldValue.serverTimestamp(),
-    });
-  }
 }
 
 /**
@@ -357,7 +329,7 @@ async function processScheduledMessage(docRef) {
     .map(async (uid) => {
       const allowed = await canSendPushToRecipient(senderId, uid);
       if (!allowed) return;
-      sendPushToQueue(uid, {
+      enqueuePush(uid, {
         type: 'message',
         title: `Message from ${senderName}`,
         body: content ? content.slice(0, 100) : '',
@@ -556,10 +528,12 @@ exports.cleanupOldCalls = functions.pubsub
        content ASC, createdAt DESC  → search fallback
   4. calls: status ASC, createdAt ASC → cleanup (with status filter)
   5. user_settings: single‑field index on messagePermission (if needed)
-*/// E2E PLACEHOLDER — Phase 4 S
-// Implement Signal Protocol / ECDH + AES-GCM
-// Client encrypts payload; server stores only encrypted blobs
-// Rules enforce encrypted content only
+*/
+
+// Roadmap: end-to-end encryption. Implement Signal Protocol / ECDH + AES-GCM.
+// The client encrypts the payload and the server stores only encrypted blobs,
+// with security rules enforcing encrypted content. Tracked work, not shipped
+// behavior.
 
 // ======================================================================
 //  UNREAD COUNTERS — server-authoritative increments

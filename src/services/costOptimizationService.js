@@ -1,11 +1,4 @@
-/**
- * src/services/costOptimizationService.js - ARVDOUL CLOUD COST OPTIMIZATION v8.0
- *
- * Implements:
- * 1. Read Query Profile Analysis: Analyzes database usage frequency.
- * 2. Cache TTL Recommendations: Suggests dynamic local and edge storage caching TTL rules.
- * 3. CDN Egress Optimization: Identifies opportunities to compress static assets or increase CDN caching ratios.
- */
+// src/services/costOptimizationService.js
 
 import { logger } from '../utils/Logger.js';
 import { costMonitoringService } from './costMonitoringService.js';

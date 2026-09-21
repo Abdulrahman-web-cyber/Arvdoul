@@ -1,10 +1,4 @@
-/**
- * src/components/profile/ProfileLevel.jsx - ARVDOUL Profile Level Component
- * 
- * Displays user level with XP progress bar.
- * 
- * @component
- */
+// src/components/profile/ProfileLevel.jsx
 
 /**
  * @typedef {Object} ProfileLevelProps

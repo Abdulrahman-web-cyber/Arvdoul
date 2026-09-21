@@ -1,10 +1,4 @@
-/**
- * src/components/profile/ProfileMutualFriends.jsx - ARVDOUL Profile Mutual Friends Component
- * 
- * Shows mutual friends with avatar chips.
- * 
- * @component
- */
+// src/components/profile/ProfileMutualFriends.jsx
 
 /**
  * @typedef {Object} ProfileMutualFriendsProps
@@ -16,6 +10,7 @@
 import React, { memo, useCallback } from 'react';
 import { cn } from '../../lib/utils';
 import { Users } from 'lucide-react';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 /**
  * Get initials from name
@@ -86,7 +81,7 @@ const ProfileMutualFriends = memo(({
             >
               {friend.photoURL ? (
                 <img
-                  src={friend.photoURL}
+                  src={getSafeAvatarUrl(friend.photoURL, friend.displayName || friend.name, friend.id)}
                   alt={friend.displayName || 'User'}
                   className="w-full h-full object-cover"
                 />

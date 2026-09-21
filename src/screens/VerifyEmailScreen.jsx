@@ -1,6 +1,4 @@
-// src/screens/VerifyEmailScreen.jsx – ARVDOUL SUPREMACY • FIXED VERIFICATION DETECTION
-// ✅ Waits for auth • Reads URL parameters • Immediate redirect on verified
-// 🔐 Perfect navigation to SetupProfile • No stale closures
+// src/screens/VerifyEmailScreen.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";

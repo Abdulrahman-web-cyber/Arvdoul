@@ -1,14 +1,4 @@
-/**
- * src/services/escalationService.js - ARVDOUL TIER-1 TO TIER-3 MODERATION ESCALATION ENGINE
- *
- * Implements:
- * 1. Multi-Stage Escalation Hierarchy:
- *    - Tier 1: Frontline AI and community moderators (Spam, standard profanity)
- *    - Tier 2: Senior trust & safety team (Harassment, copyright disputes, hate speech)
- *    - Tier 3: Legal, Executive & Law Enforcement Officers (CSAM, terrorism, immediate physical threat)
- * 2. Automatic Emergency Escalation: Instantly elevates critical safety risks to Tier 3.
- * 3. SLA Breach Alerts: Tracks resolution timers and logs warning alerts if tickets are breached.
- */
+// src/services/escalationService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

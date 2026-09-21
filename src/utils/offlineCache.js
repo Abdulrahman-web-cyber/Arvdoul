@@ -1,6 +1,4 @@
-/**
- * ARVDOUL Offline Cache Utility
- */
+// src/utils/offlineCache.js
 
 const DEFAULT_TTL = 6 * 60 * 60 * 1000; // 6 hours
 

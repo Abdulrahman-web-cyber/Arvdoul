@@ -1,44 +1,9 @@
-/**
- * src/components/profile/ProfileFeaturedSection.jsx - ARVDOUL Featured by Creator
- * 
- * Recreates the 'Featured by [Name]' section for Public Profile view:
- * - Header with Sparkles icon and 'See all >' button
- * - Grid / carousel of creator's featured media projects & sparks
- * 
- * @component
- */
+// src/components/profile/ProfileFeaturedSection.jsx
 
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Pin, Heart, ChevronRight, Play } from 'lucide-react';
 import { cn } from '../../lib/utils';
-
-const DEFAULT_FEATURED = [
-  {
-    id: 'feat-1',
-    title: 'Neon Cyberpunk 3D Visualizer',
-    type: 'video',
-    mediaURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-    likes: 1240,
-    category: '3D Motion'
-  },
-  {
-    id: 'feat-2',
-    title: 'Arvdoul UI Design Architecture v2',
-    type: 'image',
-    mediaURL: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&auto=format&fit=crop&q=80',
-    likes: 980,
-    category: 'UI/UX'
-  },
-  {
-    id: 'feat-3',
-    title: 'Midnight Ambient Audio & Beat',
-    type: 'audio',
-    mediaURL: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-    likes: 1450,
-    category: 'Sound Track'
-  }
-];
 
 const ProfileFeaturedSection = memo(({
   profile,
@@ -51,10 +16,7 @@ const ProfileFeaturedSection = memo(({
 
   const creatorName = profile?.displayName || 'Creator';
   
-  // Use real pinned or high-like posts if available, otherwise defaults
-  const items = posts.length > 0
-    ? posts.slice(0, 3)
-    : DEFAULT_FEATURED;
+  const items = posts.slice(0, 3);
 
   return (
     <div className={cn(
@@ -75,7 +37,7 @@ const ProfileFeaturedSection = memo(({
         </div>
 
         <button
-          onClick={() => navigate(`/profile/${profile?.id || profile?.uid}/posts`)}
+          onClick={() => navigate(`/profile/${profile?.id || profile?.uid}`)}
           className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:opacity-80 transition-opacity"
         >
           <span>See all</span>
@@ -84,6 +46,11 @@ const ProfileFeaturedSection = memo(({
       </div>
 
       {/* Grid of 3 Featured Cards */}
+      {items.length === 0 ? (
+        <div className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          No featured posts yet.
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {items.map((item) => (
           <div
@@ -119,7 +86,7 @@ const ProfileFeaturedSection = memo(({
               <div className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1 font-semibold text-rose-400">
                   <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                  {item.likes || 120}
+                  {item.likes ?? 0}
                 </span>
                 {item.type === 'video' && (
                   <span className="flex items-center gap-1 font-semibold text-amber-300">
@@ -132,6 +99,7 @@ const ProfileFeaturedSection = memo(({
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 });

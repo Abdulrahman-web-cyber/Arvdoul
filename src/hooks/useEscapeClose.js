@@ -1,6 +1,4 @@
 // src/hooks/useEscapeClose.js
-// Closes a modal/drawer when Escape is pressed (WCAG 2.2 — dialog dismissal).
-// Safe in jsdom (no window listeners leak; cleanup on unmount).
 import { useEffect } from 'react';
 
 export function useEscapeClose(open, onClose, { ignoreInputs = false } = {}) {

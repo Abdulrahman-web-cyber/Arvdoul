@@ -1,10 +1,4 @@
-/**
- * src/components/profile/ProfileBadges.jsx - ARVDOUL Profile Badges Component
- * 
- * Displays profile badges (Premium, Verified, Top Creator).
- * 
- * @component
- */
+// src/components/profile/ProfileBadges.jsx
 
 /**
  * @typedef {Object} ProfileBadgesProps

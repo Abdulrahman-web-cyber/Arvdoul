@@ -1,5 +1,5 @@
 // src/screens/BadgeScreen.jsx - ARVDOUL BADGES & ACHIEVEMENTS
-// Per Constitution v5.0 - Grid of badges with earned/locked states
+// - Grid of badges with earned/locked states
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';

@@ -1,8 +1,4 @@
-/**
- * src/__tests__/apiSecurityGateway.test.js
- * Real assertions for the API security gateway: key generation with SHA-256
- * secret hashing, scope enforcement, quota tracking and validation.
- */
+// src/__tests__/apiSecurityGateway.test.js
 
 import { jest } from '@jest/globals';
 

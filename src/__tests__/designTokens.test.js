@@ -1,12 +1,4 @@
-/**
- * src/__tests__/designTokens.test.js
- * Enforces the design-token contract:
- *   - required semantic token groups exist and are non-trivial
- *   - motion tokens carry a reduced-motion policy
- *   - tokens.css declares the global prefers-reduced-motion kill-switch
- *   - tokens.json is a versioned subset in parity with tokens.js
- *   - no hardcoded brand hex colors leak into the design-system components
- */
+// src/__tests__/designTokens.test.js
 
 import fs from 'node:fs';
 import path from 'node:path';

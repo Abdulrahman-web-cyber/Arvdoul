@@ -1,14 +1,4 @@
-// src/services/authService.js – PRODUCTION V23 – ARVDOUL SUPREMACY (FINAL FIXED)
-// ✅ EMAIL • PHONE • GOOGLE — all three methods work perfectly
-// 🔐 TOTP MFA fully implemented (enroll, finalize, sign‑in with second factor)
-// 🔧 Smart displayName from firstName + lastName (signup_step1 via sessionStorage)
-// 🚫 NEVER deletes Firebase Auth user on profile creation failure (stores pending)
-// 📱 REAL PHONE AUTH – zero mock, full error transparency
-// 🛡️ Client + server rate limiting (server via optional Cloud Function)
-// 🧹 Proper reCAPTCHA cleanup with SDK‑compatible monkey‑patch
-// 🎉 Welcome notification after successful sign‑up (non‑blocking)
-// 📁 All imports are dynamic (tree‑shakable, avoid circular deps)
-// 🔧 CRITICAL FIX: Force `auth.settings` to exist so RecaptchaVerifier doesn’t throw.
+// src/services/authService.js
 
 import { logger, setCorrelationId, getCorrelationId } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
@@ -47,12 +37,11 @@ class ProductionAuthService {
     this.initialized = false;
     this.verificationStates = new Map();
     this.recaptchaVerifiers = new Map();
-    logger.warn('// Auth Service V23 – ARVDOUL SUPREMACY (FINAL FIXED)');
   }
 
   async initialize() {
     if (this.initialized) return this.auth;
-    logger.warn('// Initializing production auth service...');
+    logger.info('Initializing auth service');
     try {
       const firebaseApp = await import('../firebase/firebase.js');
       const { getAuthInstance } = firebaseApp;

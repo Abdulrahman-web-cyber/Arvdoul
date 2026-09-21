@@ -1,26 +1,17 @@
-// functions/notifications.js – Arvdoul Notification Delivery v8.0 (BILLION‑SCALE FINAL)
-// 🔔 World‑Class • Self‑healing • Idempotent • Multi‑channel • Sharded rate limiter
-// ✅ Fixed: DND timezone‑aware (using Intl, same as client)
-// ✅ Fixed: Idempotent delivery (deliveredAt check before sending)
-// ✅ Fixed: Invalid token cleanup includes more error codes
-// ✅ Fixed: Transaction safety for unread counters (Math.max 0)
-// ✅ Fixed: Sharded push rate limiter (10 shards)
-// ✅ Fixed: Retry jitter with randomness
-// ✅ Fixed: DocChanges pagination in client (already sent)
-// ✅ Added: Bulk notification job processor (fan‑out)
-// ✅ Added: Event bus subscription (post.liked, user.followed)
-// ✅ Added: Notification ranking (score = type weight + recency)
-// ✅ Added: Smart digest engine (Cloud Function scheduled)
-// ✅ Added: Monetization notification types handling
-// ✅ Added: Circuit breaker for FCM failures (simple)
-// ✅ Added: Dead‑letter recovery admin function
-// ✅ Firebase indexes and TTL policies documented
-
+// functions/notifications.js — notification delivery
+//
+// Multi-channel delivery with an idempotent deliveredAt check, invalid-token
+// cleanup, timezone-aware DND using Intl, and a sharded push rate limiter.
+// Unread counters are updated transactionally and clamped at zero. Also
+// provides a bulk job processor (fan-out), an event-bus subscription for
+// post.liked / user.followed, notification ranking (type weight + recency),
+// a scheduled smart digest, and monetization notification types.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
+const { checkIsAdmin } = require('./auth');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -530,8 +521,10 @@ exports.getNotificationStats = functions.https.onCall(async (data, context) => {
 // 10. createBulkNotificationJob (Callable) – fan‑out to many users
 // ======================================================================
 exports.createBulkNotificationJob = functions.https.onCall(async (data, context) => {
-  // Only admins or system can call this
-  if (!context.auth.token.admin) throw new functions.https.HttpsError('permission-denied');
+  // Only admins or system can call this.
+  if (!(await checkIsAdmin(context))) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin access required.');
+  }
   const { audience, template, filters } = data;
   const jobId = uuidv4();
   await db.collection('bulk_notification_jobs').doc(jobId).set({

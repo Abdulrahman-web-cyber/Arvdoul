@@ -1,4 +1,4 @@
-// src/screens/PostCard/VideoCard.jsx – Arvdoul Ultimate Engine (999999999999/20)
+// src/screens/PostCard/VideoCard.jsx – Arvdoul Engine (999999999999/20)
 // All critical issues fixed: no polling, proper cleanup, session recovery, XP milestones, drag seek, network recovery.
 
 import React, {

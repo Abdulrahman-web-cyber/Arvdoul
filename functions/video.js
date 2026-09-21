@@ -1,13 +1,9 @@
-// functions/video.js – ARVDOUL SUPREME VIDEO CLOUD FUNCTIONS V6.0 (BILLION-SCALE FINAL)
-// 🚀 MUX-POWERED • FULLY IMPLEMENTED • NO STUBS
-// 📌 ALL CRITICAL FIXES APPLIED – FEED INTEGRATION, CURSOR AGGREGATION, DOUBLE-ENTRY LEDGER
-// ✅ watermarkVideoInternal, moderateVideoInternal, generateAudioFingerprintInternal all implemented
-// ✅ Vertex AI embeddings, Pinecone integration, viral scoring via Cloud Tasks
-// ✅ Proper FFmpeg commands with argument escaping
-// ✅ Firebase transaction fixes, parallel get inside transaction removed
-// ✅ Cloud Tasks body encoding fixed (JSON, not base64)
-// ✅ Min instances reduced where appropriate, heavy functions isolated
-
+// functions/video.js — video processing and delivery
+//
+// Implemented internals: watermarkVideoInternal, moderateVideoInternal,
+// generateAudioFingerprintInternal. Vertex AI embeddings, Pinecone
+// integration, and viral scoring via Cloud Tasks. FFmpeg commands escape
+// their arguments. Mux is the transcoding/CDN provider.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { Mux } = require('@mux/mux-node');
@@ -52,6 +48,7 @@ const Video = mux.Video;
 //  CLOUD TASKS (for async notifications and viral scoring)
 // ----------------------------------------------------------------------
 const tasksClient = new CloudTasksClient();
+const { enqueuePush } = require('./pushQueue');
 const projectId = process.env.GCLOUD_PROJECT;
 const location = process.env.CLOUD_TASKS_LOCATION || 'us-central1';
 const queueName = process.env.PUSH_QUEUE_NAME || 'push-queue';
@@ -435,9 +432,8 @@ exports.likeVideo = onCall(async (data, context) => {
     });
 
     if (action === 'liked' && authorId && authorId !== uid) {
-      await enqueueTask(process.env.PUSH_WORKER_URL, {
-        userId: authorId,
-        payload: { type: 'like', senderId: uid, videoId, title: 'New like' },
+      await enqueuePush(authorId, {
+        type: 'like', senderId: uid, videoId, title: 'New like',
       });
     }
     return { success: true, action };
@@ -551,9 +547,8 @@ exports.payPerView = onCall(async (data, context) => {
 
       const transferResult = await transferCoinsInternal(uid, ownerId, price, 'pay_per_view', { videoId, idempotencyKey: `ppv_${uid}_${videoId}` });
       t.set(purchaseRef, { userId: uid, videoId, price, createdAt: FieldValue.serverTimestamp() });
-      await enqueueTask(process.env.PUSH_WORKER_URL, {
-        userId: ownerId,
-        payload: { type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase' },
+      await enqueuePush(ownerId, {
+        type: 'purchase', senderId: uid, videoId, amount: price, title: 'New purchase',
       });
       return { success: true, ...transferResult };
     });
@@ -583,9 +578,8 @@ exports.sendTip = onCall(async (data, context) => {
 
     const transferResult = await transferCoinsInternal(uid, ownerId, amount, 'tip', { videoId, message: message || '', idempotencyKey: `tip_${uid}_${videoId}_${Date.now()}` });
     await db.collection('tips').add({ videoId, fromUserId: uid, toUserId: ownerId, amount, message: message || '', createdAt: FieldValue.serverTimestamp() });
-    await enqueueTask(process.env.PUSH_WORKER_URL, {
-      userId: ownerId,
-      payload: { type: 'tip', senderId: uid, videoId, amount, title: 'You received a tip!' },
+    await enqueuePush(ownerId, {
+      type: 'tip', senderId: uid, videoId, amount, title: 'You received a tip!',
     });
     return { success: true, ...transferResult };
   } catch (error) {
@@ -719,24 +713,8 @@ exports.stopLiveStream = onCall(async (data, context) => {
   }
 });
 
-// ======================================================================
-//  12. reportVideo
-// ======================================================================
-exports.reportVideo = onCall(async (data, context) => {
-  const uid = validateAuth(context);
-  const { videoId, reason } = data;
-  if (!videoId || !reason) throw new functions.https.HttpsError('invalid-argument', 'videoId and reason required');
-
-  await checkRateLimit(uid, 'reportVideo', 5, 60000);
-
-  try {
-    await db.collection('video_reports').add({ videoId, reportedBy: uid, reason, status: 'pending', createdAt: FieldValue.serverTimestamp() });
-    return { success: true };
-  } catch (error) {
-    logger.error('reportVideo', error);
-    throw new functions.https.HttpsError('internal', error.message);
-  }
-});
+// reportVideo now lives in functions/moderation.js (unified reportContent path)
+// so every report type shares one validation, de-duplication and storage flow.
 
 // ======================================================================
 //  13. getVideoRecommendations (basic)
@@ -1023,7 +1001,6 @@ exports.cleanupOldShareEvents = pubsub.schedule('every 24 hours').onRun(async ()
   oldEvents.forEach(doc => batch.delete(doc.ref));
   await batch.commit();
   return null;
-});// VIDEO CDN / ADAPTIVE BITRATE — Phase 5 U placeholder
-// Replace direct Storage URLs with CDN edge URLs (Cloudflare / Mux / AWS CloudFront)
-// Add HLS/DASH manifest generation for adaptive bitrate
-// TODO: integrate Mux / Cloudflare Stream / AWS MediaConvert pipeline
+});// Roadmap: video CDN / adaptive bitrate. Replace direct Storage URLs with CDN
+// edge URLs (Cloudflare / Mux / AWS CloudFront) and generate HLS/DASH manifests
+// for adaptive bitrate. Tracked work, not shipped behavior.

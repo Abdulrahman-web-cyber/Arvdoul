@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { ARVDOUL_GRADIENT } from '../context/ThemeProvider';
 
 /**
- * ARVDOUL 404 SCREEN — Design-system backed, theme-adaptive, accessible & world-class.
+ * ARVDOUL 404 screen - design-system backed, theme-adaptive, accessible.
  */
 export default function NotFoundScreen() {
   const { t } = useTranslation();

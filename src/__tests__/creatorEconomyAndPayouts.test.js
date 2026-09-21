@@ -1,6 +1,4 @@
-/**
- * @jest-environment jsdom
- */
+// src/__tests__/creatorEconomyAndPayouts.test.js
 
 describe('Phase 8: Creator Economy, Double-Entry Ledger & Payouts Integrity', () => {
   describe('Double-Entry Ledger Integrity', () => {

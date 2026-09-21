@@ -1,31 +1,24 @@
-// functions/monetization.js – ARVDOUL MONETIZATION ENGINE v8.0 (PRODUCTION‑HARDENED)
-// 🔒 Idempotent · Double‑entry ledger · Wallet locking · Global sharded rate limiter (10 shards)
-// 🔒 Stripe idempotent payouts with distributed lock · Cloud Tasks push (retry config)
-// 🔒 Velocity & new‑account abuse detection · Self‑gift / collusion detection
-// 🔒 O(1) coin supply aggregate (incremental, not full scan) · Coin‑to‑fiat conversion config
-// 🔒 Scheduled coin audit using counter diff · Stuck lock recovery
-// 🔒 STRIPE WEBHOOK for subscription events
-// ⚠️ REQUIRED COMPOSITE INDEXES (create in Firebase Console):
+// functions/monetization.js — monetization engine
+//
+// Double-entry ledger, wallet locking, sharded rate limiting, and idempotent
+// Stripe payouts behind a distributed lock. Cloud Tasks push with retry
+// config, velocity and new-account abuse detection, self-gift / collusion
+// detection, an incremental O(1) coin-supply aggregate, scheduled coin audit
+// via counter diff, stuck-lock recovery, and a Stripe webhook for
+// subscription events.
+//
+// Required composite indexes (create in Firebase Console):
 // ads: active ASC, startDate ASC, endDate ASC, placements ARRAY, priority DESC
 // coin_transactions: userId ASC, createdAt DESC
 // ledger_entries: debitAccount ASC, creditAccount ASC, createdAt DESC
 // withdrawal_requests: status ASC, createdAt ASC
 // ad_impressions: userId ASC, timestamp ASC
 // fraud_limits: __system__ TTL field = expireAt
-// gift_details: createdAt DESC (per post subcollection)
-//
-// ⚠️ REQUIRED TTL POLICIES (enable in Firebase Console):
-// - coin_transactions.expireAt (365 days)
-// - idempotency_ledger.expireAt (30 days)
-// - ad_impressions.expireAt (90 days)
-// - fraud_limits.expireAt (48 hours)
-// - rate_limits/*/shards.expireAt (1 hour)
-
 const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
-const { CloudTasksClient } = require('@google-cloud/tasks');
+const { enqueuePush } = require('./pushQueue');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -98,56 +91,10 @@ const createLedgerEntry = (transaction, debitAccount, creditAccount, amount, met
 };
 
 // ----------------------------------------------------------------------
-// PUSH NOTIFICATIONS – Cloud Tasks with retry config
-// ----------------------------------------------------------------------
-const projectId = process.env.GCLOUD_PROJECT || functions.config().project?.id;
-const location = functions.config().push?.location || 'us-central1';
-const queueName = functions.config().push?.queue || 'push-queue';
-
-let tasksClient;
-const getTasksClient = () => {
-  if (!tasksClient) tasksClient = new CloudTasksClient();
-  return tasksClient;
-};
-
-const sendPushToQueue = async (userId, payload) => {
-  try {
-    const client = getTasksClient();
-    const parent = client.queuePath(projectId, location, queueName);
-    const task = {
-      httpRequest: {
-        httpMethod: 'POST',
-        url: `${functions.config().push?.worker_url}/push`,
-        body: Buffer.from(JSON.stringify({ userId, payload })).toString('base64'),
-        headers: { 'Content-Type': 'application/json' },
-      },
-      retryConfig: {
-        maxAttempts: 5,
-        maxBackoff: '60s',
-        minBackoff: '1s',
-        maxDoublings: 5,
-      },
-    };
-    await client.createTask({ parent, task });
-    logEvent('push_queued_cloud_task', { userId });
-  } catch (error) {
-    if (error.code === 5 || error.code === 3) {
-      console.error('Cloud Tasks config error – push skipped:', error.message);
-      return;
-    }
-    await admin.firestore().collection('push_queue').add({
-      userId,
-      payload,
-      status: 'pending',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
-};
-
-// ----------------------------------------------------------------------
 // SHARDED RATE LIMITER – globally accurate by aggregating all shards
 // ----------------------------------------------------------------------
 const { checkRateLimit } = require('./rateLimit');
+const { LEVEL_GATES } = require('./levelConfig.cjs');
 
 // ----------------------------------------------------------------------
 // FRAUD PROTECTION – daily velocity, new account, interaction pairs
@@ -490,7 +437,7 @@ exports.transferCoins = functions.https.onCall(async (data, context) => {
         expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
 
-      sendPushToQueue(toUserId, {
+      enqueuePush(toUserId, {
         title: 'Coins received',
         body: `You received ${amount} coins from ${senderUid}`,
         type: 'coin_transfer',
@@ -596,7 +543,7 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
       });
 
       if (authorUid !== senderUid) {
-        sendPushToQueue(authorUid, {
+        enqueuePush(authorUid, {
           title: 'New gift received!',
           body: `You received a ${giftType} gift worth ${giftValue} coins`,
           type: 'gift_received',
@@ -710,7 +657,7 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     }
     if (!paymentMethod || !paymentDetails) throw new functions.https.HttpsError('invalid-argument', 'paymentMethod and paymentDetails required.');
 
-    const minLevel = functions.config().app?.withdrawal_min_level || 10;
+    const minLevel = functions.config().app?.withdrawal_min_level || LEVEL_GATES.withdrawals;
     const userRef = admin.firestore().collection('users').doc(uid);
     const userSnap = await userRef.get();
     if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
@@ -984,10 +931,8 @@ exports.getSponsoredSearchResult = functions.https.onCall(async (data, context) 
     } catch (_) {}
 
     const adsSnapshot = await admin.firestore().collection('ads')
-      .where('active', '==', true)
-      .where('startDate', '<=', new Date())
-      .where('endDate', '>=', new Date())
       .where('placements', 'array-contains', 'search')
+      .where('active', '==', true)
       .orderBy('priority', 'desc')
       .limit(20)
       .get();
@@ -995,18 +940,30 @@ exports.getSponsoredSearchResult = functions.https.onCall(async (data, context) 
     let bestAd = null;
     let bestScore = -1;
     const queryLower = query.toLowerCase();
+    const now = new Date();
+    const withinSchedule = (value) => {
+      const date = value?.toDate ? value.toDate() : (value instanceof Date ? value : null);
+      return !date || (date <= now);
+    };
+    const notExpired = (value) => {
+      const date = value?.toDate ? value.toDate() : (value instanceof Date ? value : null);
+      return !date || (date >= now);
+    };
 
     adsSnapshot.docs.forEach(doc => {
       const ad = doc.data();
-      const keywords = ad.keywords || [];
-      const matchCount = keywords.filter(kw => queryLower.includes(kw.toLowerCase())).length;
-      if (matchCount === 0) return;
+      if (!withinSchedule(ad.startDate) || !notExpired(ad.endDate)) return;
+      const keywords = (ad.keywords || []).map((kw) => String(kw).toLowerCase());
+      const matchCount = keywords.filter(kw => kw && queryLower.includes(kw)).length;
+      // Ads without keywords are valid catch-all inventory; keep them with a
+      // neutral score so the priority ordering still applies.
+      const relevance = matchCount > 0 ? matchCount : 0.5;
 
       if (ad.targetAgeMin && userProfile.age < ad.targetAgeMin) return;
       if (ad.targetAgeMax && userProfile.age > ad.targetAgeMax) return;
       if (ad.targetCountry && userProfile.country && ad.targetCountry !== userProfile.country) return;
 
-      const score = matchCount + (ad.priority || 0) * 0.1;
+      const score = relevance + (ad.priority || 0) * 0.1;
       if (score > bestScore) {
         bestScore = score;
         bestAd = { id: doc.id, ...ad };
@@ -1078,7 +1035,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
           // Call internal addCoins logic (or schedule a cloud task)
           console.log(`Granting ${coinAmount} coins to ${userId} for subscription renewal`);
           // Fire off a Cloud Function or queue a task to add coins idempotently
-          await sendPushToQueue(userId, {
+          await enqueuePush(userId, {
             title: 'Subscription renewed',
             body: `You received ${coinAmount} coins!`,
             type: 'subscription_renewal',

@@ -1,12 +1,4 @@
-/**
- * src/services/rebalancingService.js - ARVDOUL DYNAMIC SHARDING & PARTITION REBALANCER
- *
- * Implements:
- * 1. Velocity-Based Dynamic Sharding: Auto-scales shard count from 10 to 100+ when write velocity > 50 writes/sec
- * 2. Consistent Hashing Ring: Distributes counter writes smoothly with minimum key movement during resharding
- * 3. Shard Load Balancing: Detects hot partitions exceeding 120% average variance and redistributes write hashes
- * 4. Scale Persistence: Persists all dynamic scaling decisions in persistent storage (localStorage) to survive restarts.
- */
+// src/services/rebalancingService.js
 
 import { logger } from '../utils/Logger.js';
 import { countersManager } from '../utils/CountersManager.js';

@@ -1,7 +1,4 @@
-/**
- * ARVDOUL shared-utility unit tests.
- * Covers CacheManager, RateLimiter, IdempotencyStore, ErrorHandler, Logger.
- */
+// src/utils/__tests__/core.test.js
 import { CacheManager } from '../CacheManager.js';
 import { RateLimiter } from '../RateLimiter.js';
 import { IdempotencyStore } from '../IdempotencyKey.js';

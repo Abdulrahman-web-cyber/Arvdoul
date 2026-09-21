@@ -1,8 +1,4 @@
 // src/components/feed/VibeStrip.jsx
-// HOME ENTRY POINT for Vibes (spec §33/34): a compact strip of creator rings.
-// It is a GATEWAY, not the viewer — tapping opens the canonical dedicated
-// Vibes experience (/stories) positioned at that creator's sequence.
-// The Home feed stays a feed.
 
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

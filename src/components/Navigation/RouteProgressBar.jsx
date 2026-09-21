@@ -1,6 +1,4 @@
 // src/components/Navigation/RouteProgressBar.jsx
-// World-class, ultra-fine top progress bar for background route transitions & data fetching
-// Inspired by Linear, Vercel, YouTube, and GitHub
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

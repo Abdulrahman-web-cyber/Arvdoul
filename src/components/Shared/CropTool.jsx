@@ -1,9 +1,4 @@
-/**
- * CropTool.jsx - Professional Crop Tool Component
- * @description Provides image cropping with aspect ratios, zoom, and rotation
- * @module Shared/CropTool
- * @requires React, framer-motion, lucide-react, prop-types
- */
+// src/components/Shared/CropTool.jsx
 
 import React, { useState, useCallback, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';

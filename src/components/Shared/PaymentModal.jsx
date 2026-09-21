@@ -1,6 +1,4 @@
-// src/components/Shared/PaymentModal.jsx - ARVDOUL SECURE CHECKOUT (Stripe)
-// Real card collection via Stripe Elements → PaymentMethod → server-verified
-// purchase. No free-coin paths, no mocks.
+// src/components/Shared/PaymentModal.jsx
 import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';

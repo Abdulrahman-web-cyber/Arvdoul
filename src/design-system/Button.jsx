@@ -1,14 +1,4 @@
-/**
- * src/design-system/Button.jsx
- * ARVDOUL DESIGN SYSTEM — BUTTON PRIMITIVE
- *
- * Exhaustive variant/state coverage:
- *   variants: primary (brand gradient), secondary, ghost, outline, destructive, success
- *   sizes:    sm, md, lg
- *   states:   loading, disabled, hover, focus-visible, active
- *   a11y:     real <button>, aria-disabled, aria-busy, focus ring, keyboard native
- * No hardcoded brand hex values - surfaces come from the design tokens.
- */
+// src/design-system/Button.jsx
 
 import React from 'react';
 import { cn } from '../lib/utils.js';

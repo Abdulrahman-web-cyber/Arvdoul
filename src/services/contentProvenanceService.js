@@ -1,12 +1,4 @@
-/**
- * src/services/contentProvenanceService.js - ARVDOUL CONTENT PROVENANCE & C2PA ATTESTATION ENGINE v1.0
- * 
- * Production-grade content provenance & authenticity assurance:
- * • C2PA-inspired tamper-evident metadata manifests for images, audio, and videos
- * • Cryptographic media fingerprinting & tamper detection
- * • AI-Generated Content (AIGC) declaration & synthetic media risk scoring
- * • Provenance chain of custody (capture ➔ edit ➔ publish)
- */
+// src/services/contentProvenanceService.js
 
 import { logger } from '../utils/Logger.js';
 

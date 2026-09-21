@@ -1,5 +1,5 @@
 // src/components/Videos/VideoComments.jsx - ARVDOUL VIDEO COMMENTS
-// World-class glass bottom sheet with real-time comments & rapid emoji reactions
+// glass bottom sheet with real-time comments & rapid emoji reactions
 
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,7 +23,7 @@ import PropTypes from 'prop-types';
 const EMOJI_PRESETS = ['🔥', '❤️', '👏', '😂', '🚀', '💡', '💯', '🙌'];
 
 /**
- * VideoComments - World-Class Comments bottom sheet with real-time updates
+ * VideoComments - comments bottom sheet with real-time updates
  */
 const VideoComments = memo(({
   isOpen = false,

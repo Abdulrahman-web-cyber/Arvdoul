@@ -1,8 +1,4 @@
-/**
- * src/offline/syncEngine.js - High-Performance Offline Synchronization Engine.
- * Coordinates between IndexedDB (OfflineQueue), online network transitions,
- * server APIs, and reactive UI sync status indicators.
- */
+// src/offline/syncEngine.js
 
 import { OfflineQueue } from '../utils/OfflineQueue';
 

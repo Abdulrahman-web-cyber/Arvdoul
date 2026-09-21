@@ -1,12 +1,4 @@
-/**
- * src/__tests__/introScreen.test.jsx
- * IntroScreen integrity gates:
- *   - NO fabricated statistics (the old "10M+ users / 99.99% uptime / 500K+
- *     communities / <50ms latency" claims must never return)
- *   - honest product pillars render
- *   - i18n strings resolve
- *   - axe: zero accessibility violations
- */
+// src/__tests__/introScreen.test.jsx
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';

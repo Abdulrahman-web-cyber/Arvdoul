@@ -1,22 +1,4 @@
-// src/services/notificationsService.js – ARVDOUL NOTIFICATIONS v30 (BILLION‑SCALE FINAL)
-// 🔔 WORLD'S MOST ADVANCED NOTIFICATION SYSTEM • REAL‑TIME • SMART • PRODUCTION READY
-// 💰 FULL INTEGRATION WITH MONETIZATION SERVICE • COIN REWARDS • ZERO MOCK DATA
-// ✅ FIXED: offline queue IndexedDB with cursor iteration, tx.done removed
-// ✅ FIXED: DND timezone‑aware, enforced in send path
-// ✅ FIXED: grouping O(n) using Map, async display name resolved in metadata
-// ✅ FIXED: LRU cache for notifications and prefs, memory leaks cleared
-// ✅ FIXED: service worker push (registration.showNotification) for background
-// ✅ FIXED: docChanges() instead of whole snapshot rebuild
-// ✅ FIXED: deep merge for notification preferences
-// ✅ FIXED: getCurrentUser dynamic, navigator.onLine safe for SSR
-// ✅ ADDED: Event bus subscriptions (post.liked, user.followed, etc.)
-// ✅ ADDED: Notification ranking engine (score based on signals)
-// ✅ ADDED: Smart digest engine (batch similar notifications)
-// ✅ ADDED: Sharded unread counters (client aggregates)
-// ✅ ADDED: Notification search, filter, categories
-// ✅ ADDED: Monetization notification types (coin reward, payout, streak)
-// ✅ ADDED: Bulk notification jobs (REAL, actual CF)
-// ✅ ADDED: AI ranking REAL (client can ask for sorted list)
+// src/services/notificationsService.js
 
 import { getFirestoreInstance, getAuthInstance, getMessagingInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';

@@ -1,5 +1,5 @@
 // src/components/search/SearchBar.jsx - ARVDOUL Premium Search Bar
-// Pixel-perfect design with ARVDOUL DNA gradient and glassmorphism
+// Arvdoul search bar.
 import React, { memo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Mic, QrCode, SlidersHorizontal, X } from 'lucide-react';

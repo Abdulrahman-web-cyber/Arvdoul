@@ -1,11 +1,4 @@
-/**
- * src/hooks/useLive.js - ARVDOUL Live Streaming Hook
- * 
- * Custom hook for live streaming functionality.
- * Provides stream management, viewer tracking, and monetization.
- * 
- * @module hooks/useLive
- */
+// src/hooks/useLive.js
 
 import { useCallback, useEffect, useState } from 'react';
 import { getLiveService } from '../services/liveService';

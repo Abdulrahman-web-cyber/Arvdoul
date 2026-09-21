@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminEconomyScreen.jsx - ARVDOUL ECONOMY OVERSIGHT & LEDGER
-// ✅ Platform coin liquidity, revenue, and treasury oversight
-// ✅ Payout review, approval, and rejection workflow with audit logging
-// ✅ Real-time transaction ledger explorer
+// src/screens/Admin/AdminEconomyScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -39,138 +36,23 @@ const AdminEconomyScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [payoutFilter, setPayoutFilter] = useState('pending'); // 'all' | 'pending' | 'completed' | 'rejected'
 
-  // Metric states
+  // Metric states - populated from server aggregates only.
   const [metrics, setMetrics] = useState({
-    circulatingCoins: 4825900,
-    totalTreasuryUsd: 144777,
-    platformFeeRate: 30, // 30% platform take on gifts/tips
-    pendingPayoutsTotal: 12450,
-    completedPayoutsTotal: 86420,
-    monthlyVolumeUsd: 38910,
+    circulatingCoins: 0,
+    totalTreasuryUsd: 0,
+    platformFeeRate: 0,
+    pendingPayoutsTotal: 0,
+    completedPayoutsTotal: 0,
+    monthlyVolumeUsd: 0,
   });
 
   // Payout queue items
-  const [payouts, setPayouts] = useState([
-    {
-      id: 'payout-101',
-      userId: 'usr_sarah_craft',
-      creatorName: 'Sarah Jenkins',
-      handle: '@sarahcraft',
-      tier: 'Chancellor',
-      level: 48,
-      coins: 25000,
-      amountUsd: 250.0,
-      method: 'Stripe Direct',
-      destination: '**** 4242 (USD)',
-      requestedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      status: 'pending',
-      riskScore: 'Low (0.02)',
-    },
-    {
-      id: 'payout-102',
-      userId: 'usr_leo_sound',
-      creatorName: 'Leonardo V.',
-      handle: '@leosoundfx',
-      tier: 'Senator',
-      level: 32,
-      coins: 50000,
-      amountUsd: 500.0,
-      method: 'PayPal',
-      destination: 'leo.sound@example.com',
-      requestedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-      status: 'pending',
-      riskScore: 'Low (0.05)',
-    },
-    {
-      id: 'payout-103',
-      userId: 'usr_crypto_dan',
-      creatorName: 'Dan Sparks',
-      handle: '@dansparks',
-      tier: 'Citizen',
-      level: 16,
-      coins: 10000,
-      amountUsd: 100.0,
-      method: 'Bank Wire',
-      destination: 'JP Morgan Chase **** 8812',
-      requestedAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-      status: 'pending',
-      riskScore: 'Medium (0.42)',
-    },
-    {
-      id: 'payout-104',
-      userId: 'usr_maya_tech',
-      creatorName: 'Maya Thorne',
-      handle: '@mayathorne',
-      tier: 'Chancellor',
-      level: 75,
-      coins: 120000,
-      amountUsd: 1200.0,
-      method: 'Stripe Direct',
-      destination: '**** 9901 (EUR)',
-      requestedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      status: 'completed',
-      riskScore: 'Low (0.01)',
-    },
-  ]);
+    // Payouts are loaded from Firestore; no local seed data is ever shown.
+  const [payouts, setPayouts] = useState([]);
 
   // Recent transactions ledger
-  const [transactions, setTransactions] = useState([
-    {
-      id: 'tx-901',
-      type: 'tip',
-      from: '@alex_dev',
-      to: '@sarahcraft',
-      coins: 500,
-      feeCoins: 150,
-      usdValue: 5.0,
-      timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-902',
-      type: 'coin_purchase',
-      from: '@elena_w',
-      to: 'Arvdoul Treasury',
-      coins: 2500,
-      feeCoins: 0,
-      usdValue: 24.99,
-      timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-903',
-      type: 'gift',
-      from: '@marcus_t',
-      to: '@leosoundfx',
-      coins: 1200,
-      feeCoins: 360,
-      usdValue: 12.0,
-      timestamp: new Date(Date.now() - 1000 * 60 * 75).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-904',
-      type: 'subscription',
-      from: '@clara_music',
-      to: '@sarahcraft',
-      coins: 800,
-      feeCoins: 240,
-      usdValue: 8.0,
-      timestamp: new Date(Date.now() - 1000 * 60 * 140).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-905',
-      type: 'payout',
-      from: 'Arvdoul Treasury',
-      to: '@mayathorne',
-      coins: 120000,
-      feeCoins: 0,
-      usdValue: 1200.0,
-      timestamp: new Date(Date.now() - 86400000 * 3).toISOString(),
-      status: 'confirmed',
-    },
-  ]);
+    // Transactions are loaded from Firestore; no local seed data is ever shown.
+  const [transactions, setTransactions] = useState([]);
 
   // Load live data from Firestore if available
   const loadData = useCallback(async () => {
@@ -185,12 +67,10 @@ const AdminEconomyScreen = () => {
         const snap = await getDocs(
           query(collection(firestore, 'payout_requests'), orderBy('createdAt', 'desc'), limit(50))
         );
-        if (!snap.empty) {
-          const livePayouts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setPayouts(livePayouts);
-        }
+        setPayouts(snap.empty ? [] : snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (e) {
-        // Fallback to seeded demo state if collection is fresh
+        toast.error('Could not load payout requests.');
+        setPayouts([]);
       }
 
       // Attempt to load transaction ledger
@@ -198,12 +78,10 @@ const AdminEconomyScreen = () => {
         const txSnap = await getDocs(
           query(collection(firestore, 'coin_transactions'), orderBy('createdAt', 'desc'), limit(50))
         );
-        if (!txSnap.empty) {
-          const liveTx = txSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setTransactions(liveTx);
-        }
+        setTransactions(txSnap.empty ? [] : txSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (e) {
-        // Keep active baseline
+        toast.error('Could not load transaction ledger.');
+        setTransactions([]);
       }
     } catch (err) {
       toast.error('Could not sync live economy data');
@@ -412,7 +290,7 @@ const AdminEconomyScreen = () => {
                   ${metrics.totalTreasuryUsd.toLocaleString()}
                 </div>
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
-                  100% full-reserve backing on user coin liabilities
+                  Treasury balance against outstanding coin liabilities
                 </p>
               </div>
 

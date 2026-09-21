@@ -1,12 +1,4 @@
-/**
- * src/components/ui/OfflineIndicator.jsx - ARVDOUL OFFLINE & ONLINE SYNC STATUS BANNER
- * 
- * Production-ready top banner:
- * • Top-anchored with elegant spring motion & glassmorphic aesthetics
- * • Visual states: Offline (amber/red pulse), Syncing (spinning purple), Reconnected Online (emerald glow), Queued items
- * • Manual trigger sync button with haptic/sound feedback
- * • Does not obstruct app interactions, respects safe-area-inset
- */
+// src/components/ui/OfflineIndicator.jsx
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';

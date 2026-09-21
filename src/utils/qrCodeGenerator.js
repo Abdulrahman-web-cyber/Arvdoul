@@ -1,10 +1,4 @@
-/**
- * src/utils/qrCodeGenerator.js - Standalone, Pure-JS Scannable QR Code Generator
- * 
- * 100% Zero-Dependency QR Code generation for Arvdoul profiles.
- * Works flawlessly in all environments: Termux, Android, iOS, web, production builds.
- * Implements ISO/IEC 18004 QR Code specification (Byte mode, Versions 1-10, ECC L/M/Q/H).
- */
+// src/utils/qrCodeGenerator.js
 
 // ==================== GALOIS FIELD GF(256) ====================
 const EXP_TABLE = new Uint8Array(256);

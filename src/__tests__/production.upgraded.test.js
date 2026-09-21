@@ -1,5 +1,5 @@
 // src/__tests__/production.upgraded.test.js
-// FAANG-grade Unit and Integration tests for upgraded Arvdoul system services
+// Unit and Integration tests for upgraded Arvdoul system services
 
 import { jest } from '@jest/globals';
 import 'fake-indexeddb/auto';

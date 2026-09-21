@@ -1,12 +1,4 @@
-/**
- * src/services/textModerationService.js - ARVDOUL ADVANCED TEXT MODERATION & TOXICITY ENGINE
- *
- * Implements:
- * 1. Multi-Category NLP Rule Engine: Detects Hate Speech, Severe Toxicity, Harassment, Sexual Violence,
- *    Doxxing (phone, SSN, home address extraction), and Racial/Religious Slurs.
- * 2. Leet-Speak & Obfuscation Normalizer: De-obfuscates masked characters (e.g. '@$$', 'b!tch', 'f.u.c.k', 'k1ll y0ur5e1f').
- * 3. Exact Category Scoring & Confidence Level.
- */
+// src/services/textModerationService.js
 
 import { logger } from '../utils/Logger.js';
 

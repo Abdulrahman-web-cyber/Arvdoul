@@ -1,12 +1,4 @@
-/**
- * src/services/communityGovernanceService.js - ARVDOUL COMMUNITY GOVERNANCE & DAO VOTING ENGINE v1.0
- * 
- * Production-grade community governance & decentralized decision making:
- * • Quadratic Voting Engine (voteWeight = sqrt(credits)) to counteract plutocratic whale dominance
- * • Liquid Democracy / Vote Delegation (delegating voting power to domain experts with direct override)
- * • Complete proposal lifecycle (DRAFT ➔ ACTIVE ➔ PASSED/REJECTED ➔ QUEUED ➔ EXECUTED)
- * • Quorum enforcement, passing thresholds, and timelock execution windows
- */
+// src/services/communityGovernanceService.js
 
 import { logger } from '../utils/Logger.js';
 

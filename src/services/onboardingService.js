@@ -1,15 +1,4 @@
-/**
- * src/services/onboardingService.js - ARVDOUL PROGRESSIVE USER ONBOARDING & TOPIC GRAPH
- *
- * Implements:
- * 1. Multi-Step Onboarding State Machine:
- *    - Step 1: Profile customization (Avatar, display name, handle, bio)
- *    - Step 2: Topic & Interest Selection (Gaming, AI, Music, Comedy, Fashion, Crypto, Tech, Lifestyle)
- *    - Step 3: Creator Follow Suggestions (Top 5 popular creators based on selected topics)
- *    - Step 4: Notification Permissions & Passkey Enrollment
- * 2. Onboarding Completion Tracking with Firestore and localForage persistence.
- * 3. Topic Graph relationships suggestions.
- */
+// src/services/onboardingService.js
 
 import { logger } from '../utils/Logger.js';
 import localforage from 'localforage';

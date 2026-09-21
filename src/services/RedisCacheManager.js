@@ -1,14 +1,4 @@
-/**
- * src/services/RedisCacheManager.js - ARVDOUL DISTRIBUTED CACHING ENGINE
- *
- * Implements a high-throughput multi-tier caching architecture combining:
- * 1. L1 Micro-Cache: In-memory LRU with sub-millisecond lookups
- * 2. L2 Distributed Cache: Cloud Memorystore / Upstash Redis HTTP API with auto-fallback
- * 3. L3 Persistent Offline Cache: IndexedDB storage for offline persistence
- *
- * Supports cache-aside, write-through, probabilistic early expiration (X-Fetch algorithm to prevent cache stampedes),
- * pattern-based invalidation, and telemetry integration.
- */
+// src/services/RedisCacheManager.js
 
 import { CacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';

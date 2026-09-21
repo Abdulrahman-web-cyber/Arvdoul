@@ -127,7 +127,7 @@ ArrowButton.displayName = 'ArrowButton';
 const CreatorCard = memo(({ creator, index, onFollow, onClick, isDark }) => {
   const handleFollow = useCallback((e) => {
     e.stopPropagation();
-    onFollow?.(creator.id || creator.uid);
+    onFollow?.(creator);
   }, [onFollow, creator]);
 
   const handleClick = useCallback(() => {

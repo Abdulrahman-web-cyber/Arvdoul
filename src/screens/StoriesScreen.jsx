@@ -1,8 +1,8 @@
 // src/screens/StoriesScreen.jsx - ARVDOUL STORIES & VIBES IMMERSIVE SCREEN
-// 100% Pixel-perfect replica of Arvdoul Stories Grid & Interactive Viewer from user design specs
+// Arvdoul stories grid and interactive viewer.
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -55,14 +55,32 @@ export default function StoriesScreen() {
 
   const progressIntervalRef = useRef(null);
 
+  // Deep-link targets. `highlight` opens a saved highlight; `vibe` opens a
+  // creator's live sequence.
+  const [searchParams] = useSearchParams();
+  const { highlightId: highlightIdParam } = useParams();
+  const highlightId = highlightIdParam || searchParams.get('highlight');
+  const vibeId = searchParams.get('vibe');
+
   // Load REAL stories from storyService (Firestore-backed feed)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
+        // A highlight deep link renders the saved highlight as a single group
+        // instead of the live feed, so the viewer behaves identically.
+        let groups = [];
+        if (highlightId) {
+          const res = await getStoryService().getHighlightStories(highlightId, { limit: 50 });
+          const highlightStories = res?.stories || [];
+          if (highlightStories.length > 0) {
+            groups = [{ userId: highlightStories[0].userId, stories: highlightStories }];
+          }
+        } else {
+          const feed = await getStoryService().getStoriesFeed(user?.uid || '', { cacheFirst: false, limit: 30 });
+          groups = feed?.groups || [];
+        }
         if (cancelled) return;
-        const groups = feed?.groups || [];
         const mapped = groups.map((g) => {
           const storiesArr = g.stories || [];
           const author = storiesArr[0]?.authorName || g.userId;
@@ -106,11 +124,11 @@ export default function StoriesScreen() {
         const combined = mapped;
         setStories(combined);
 
-        // Deep link / Home entry (spec §51/33): jump straight into a specific
-        // creator's Vibe sequence when arriving with state.
-        const targetUserId = location.state?.vibeUserId;
+        // Deep link resolution: `/stories?vibe=<id>` and the Home entry
+        // (location.state) both target a creator's Vibe sequence.
+        const targetUserId = location.state?.vibeUserId || vibeId;
         if (targetUserId && combined.length > 0) {
-          const idx = combined.findIndex((s) => s.user?.id === targetUserId);
+          const idx = combined.findIndex((s) => s.user?.id === targetUserId || s.id === targetUserId);
           if (idx >= 0) {
             setActiveStoryIndex(idx);
             setActiveItemIndex(0);
@@ -126,7 +144,7 @@ export default function StoriesScreen() {
     };
     load();
     return () => { cancelled = true; };
-  }, [user?.uid]);
+  }, [user?.uid, highlightId, vibeId]);
 
   // Filter stories based on active category & search
   const filteredStories = useMemo(() => {

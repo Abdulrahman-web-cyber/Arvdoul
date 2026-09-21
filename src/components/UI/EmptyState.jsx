@@ -1,6 +1,4 @@
-// src/components/UI/EmptyState.jsx - ARVDOUL WORLD-CLASS EMPTY STATE
-// Futuristic empty state with ARVDOUL DNA gradient accents
-// Surpasses TikTok, Instagram, YouTube with premium UI
+// src/components/UI/EmptyState.jsx
 
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -8,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import GlassButton from './GlassButton';
 
 /**
- * EmptyState - World-class empty state component
+ * EmptyState - empty state component
  * 
  * Features:
  * - ARVDOUL DNA gradient accents

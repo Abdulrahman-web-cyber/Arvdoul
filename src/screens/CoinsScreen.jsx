@@ -1,6 +1,4 @@
-// src/screens/CoinsScreen.jsx - ARVDOUL COINS & MONETIZATION (PRODUCTION)
-// Real flows only: live balance, CF-verified purchases, ad-earn rewards,
-// transaction history and withdrawal requests. No demo/simulated paths.
+// src/screens/CoinsScreen.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -51,6 +49,7 @@ export default function CoinsScreen() {
   const [adTimer, setAdTimer] = useState(0);
   const adIntervalRef = useRef(null);
   const adEligibleRef = useRef(Date.now());
+  const balanceRef = useRef(null);
 
   const [paymentPkg, setPaymentPkg] = useState(null); // coin package being bought
   const [subTier, setSubTier] = useState(null); // subscription tier being bought
@@ -82,7 +81,10 @@ export default function CoinsScreen() {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       if (!monetization) setMonetization(svc);
       const bal = await svc.getBalance(user.uid);
-      setBalance(typeof bal === 'number' ? bal : Number(bal?.coins ?? bal?.balance ?? 0));
+      const next = typeof bal === 'number' ? bal : Number(bal?.coins ?? bal?.balance ?? 0);
+      setBalance(next);
+      balanceRef.current = next;
+      return next;
     } catch (err) {
       toast.error('Could not load your coin balance.');
     } finally {
@@ -182,8 +184,9 @@ export default function CoinsScreen() {
     try {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const result = await svc.getAd('feed', user.uid, {});
-      setAd(result?.ad || null);
-      if (!result?.ad) toast.info('No ads available right now — check back soon.');
+      // getAd resolves to the ad object itself (or null when no inventory).
+      setAd(result || null);
+      if (!result) toast.info('No ads available right now — check back soon.');
     } catch (err) {
       setAd(null);
     } finally {
@@ -214,8 +217,15 @@ export default function CoinsScreen() {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const res = await svc.watchAd('feed', ad.id, 30, {});
       if (res?.success) {
-        toast.success(`+${res.coinsAdded ?? AD_REWARD_COINS} coins earned!`);
-        await loadBalance();
+        // Gift the confirmed balance delta rather than assuming the fixed rate.
+        const prior = balanceRef.current;
+        const after = await loadBalance();
+        const earned = (typeof res.coinsAdded === 'number')
+          ? res.coinsAdded
+          : (typeof after === 'number' && typeof prior === 'number' ? Math.max(0, after - prior) : AD_REWARD_COINS);
+        toast.success(`+${earned} coins earned!`);
+      } else {
+        toast.error('Ad reward could not be granted.');
       }
     } catch (err) {
       toast.error('Ad reward could not be granted.');

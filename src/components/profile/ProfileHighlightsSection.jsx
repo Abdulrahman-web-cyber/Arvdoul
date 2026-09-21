@@ -1,64 +1,10 @@
-/**
- * src/components/profile/ProfileHighlightsSection.jsx - ARVDOUL Profile Vibes & Stories
- * 
- * Production-ready Vibes & Stories gallery:
- * - Perfectly proportioned rectangular cards (9:16 story ratio)
- * - Actual real vibes & stories data fetching from `storyService`
- * - Rectangular '+ Create Vibe' card for profile owner
- * - Sleek gradient overlays, category tags, view indicators, and hover zooms
- * 
- * @component
- */
+// src/components/profile/ProfileHighlightsSection.jsx
 
 import React, { memo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Zap, Plus, ChevronRight, Play, Eye, Flame, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import storyService from '../../services/storyService';
-
-// High-fidelity fallback vibes when user has not yet posted vibes
-const DEFAULT_VIBES = [
-  { 
-    id: 'vibe-1', 
-    title: 'Neon Nights', 
-    tag: '⚡ Vibe', 
-    views: '2.4k',
-    cover: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&auto=format&fit=crop&q=80',
-    date: 'Recent'
-  },
-  { 
-    id: 'vibe-2', 
-    title: 'Studio Session', 
-    tag: '🎧 Beat', 
-    views: '1.8k',
-    cover: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=500&auto=format&fit=crop&q=80',
-    date: 'Yesterday'
-  },
-  { 
-    id: 'vibe-3', 
-    title: 'City Sunset', 
-    tag: '🌆 Mood', 
-    views: '3.1k',
-    cover: 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=500&auto=format&fit=crop&q=80',
-    date: '2d ago'
-  },
-  { 
-    id: 'vibe-4', 
-    title: 'Live Stage', 
-    tag: '🔥 Performance', 
-    views: '4.5k',
-    cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&auto=format&fit=crop&q=80',
-    date: '3d ago'
-  },
-  { 
-    id: 'vibe-5', 
-    title: 'Behind Scenes', 
-    tag: '🎬 BTS', 
-    views: '980',
-    cover: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=500&auto=format&fit=crop&q=80',
-    date: '5d ago'
-  },
-];
 
 const ProfileHighlightsSection = memo(({
   highlights = [],
@@ -139,15 +85,15 @@ const ProfileHighlightsSection = memo(({
     if (realVibes.length > 0) return realVibes;
     if (Array.isArray(highlights) && highlights.length > 0) {
       return highlights.map(h => ({
-        id: h.id || Math.random().toString(),
+        id: h.id,
         title: h.title || 'Vibe',
         tag: '⚡ Vibe',
-        views: h.views || '1.2k',
-        cover: h.cover || h.coverUrl || DEFAULT_VIBES[0].cover,
+        views: h.views,
+        cover: h.cover || h.coverUrl,
         date: 'Recent'
       }));
     }
-    return DEFAULT_VIBES;
+    return [];
   }, [realVibes, highlights]);
 
   return (
@@ -184,6 +130,11 @@ const ProfileHighlightsSection = memo(({
 
       {/* Horizontal Carousel with Rectangular Cards */}
       <div className="flex items-center gap-3.5 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth">
+        {items.length === 0 && !isOwner && (
+          <div className="w-full py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            No vibes yet.
+          </div>
+        )}
         {/* Rectangular '+ Create Vibe' Card for Owner */}
         {isOwner && (
           <button
@@ -212,12 +163,17 @@ const ProfileHighlightsSection = memo(({
         {items.map((item) => (
           <div
             key={item.id}
-            onClick={() => onHighlightPress?.(item) || navigate(`/stories?vibe=${item.id}`)}
+            onClick={() => {
+              // Only one navigation path may run: calling the optional handler
+              // and then navigating too would open two viewers.
+              if (onHighlightPress) onHighlightPress(item);
+              else navigate(`/stories?vibe=${item.id}`);
+            }}
             className="relative w-28 sm:w-36 h-48 sm:h-56 rounded-2xl overflow-hidden shrink-0 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 border border-black/10 dark:border-white/10"
           >
             {/* Background Media Thumbnail */}
             <img
-              src={item.cover || DEFAULT_VIBES[0].cover}
+              src={item.cover || ''}
               alt={item.title}
               className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               loading="lazy"

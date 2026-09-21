@@ -1,11 +1,4 @@
-/**
- * src/services/BackgroundSyncService.js - ARVDOUL BACKGROUND SYNC API ENGINE
- *
- * Implements:
- * 1. Background Sync Registration: Hooks into ServiceWorker Registration Sync API (`navigator.serviceWorker.ready.then(reg => reg.sync.register('arvdoul-sync'))`).
- * 2. Background Queue Processing: Automatically drains offline queue items even when browser window is minimized or tab is backgrounded.
- * 3. Dead-Letter Queue (DLQ) Management: Moves persistent failing operations (>5 retries) to DLQ with detailed failure reason and alerts.
- */
+// src/services/BackgroundSyncService.js
 
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { logger } from '../utils/Logger.js';

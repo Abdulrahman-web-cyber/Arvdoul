@@ -1,6 +1,4 @@
-/**
- * @jest-environment jsdom
- */
+// src/__tests__/offlineSyncEngine.test.js
 
 import { jest } from '@jest/globals';
 import {

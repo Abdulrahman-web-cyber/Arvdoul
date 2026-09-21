@@ -1,6 +1,4 @@
-// src/data/countryCodes.js - ULTIMATE ENTERPRISE EDITION
-// 🌍 COMPLETE WORLD COVERAGE • EVERY COUNTRY • PRODUCTION READY
-// ✅ Perfect for international phone verification • Real Flag Emojis
+// src/data/countryCodes.js
 
 // Enhanced flag emoji generator with fallback
 const getFlagEmoji = (iso) => {

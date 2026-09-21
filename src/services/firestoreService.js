@@ -1,13 +1,4 @@
-// src/services/firestoreService.js - ARVDOUL ENTERPRISE PRO MAX v5.0 (BILLION-SCALE)
-// 🚀 REAL-TIME SYNC • ALL POST TYPES • SUBCOLLECTION‑BASED LIKES/SAVES/REACTIONS
-// 🔥 MONETIZATION • NOTIFICATIONS • SHARDED COUNTERS • NO ARRAY LIMITS
-// ✅ ATOMIC LIKES/SAVES • CORRECT VIEW SHARDS • IDEMPOTENT REACTIONS • FULLY IMPLEMENTED
-// ✅ UNLIKE / UNSAVE / REMOVE REACTION • NOTIFICATIONS OUTSIDE TX
-// ✅ FIXED: getPostsByUser pagination, getSavedPosts denormalised, getLikedPosts via subcollection
-// ✅ ADDED: sharePost, sendGift, addReaction, removeReaction, incrementCommentCount
-// ✅ REMOVED: client‑side scheduled jobs (moved to Cloud Functions)
-// ✅ SCALABLE: savedBy/likedBy/poll.votes replaced with subcollections
-// ✅ ADDED: saveDraft, getDraft, deleteDraft, publishToPlatform (Pillar 11 Gaps resolved)
+// src/services/firestoreService.js
 
 import { countersManager } from '../utils/CountersManager.js';
 import { cacheManager } from '../utils/CacheManager.js';

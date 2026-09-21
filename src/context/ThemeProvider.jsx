@@ -1,6 +1,4 @@
-// src/context/ThemeProvider.jsx - ARVDOUL ULTIMATE THEME SYSTEM
-// World-class design system with ARVDOUL DNA gradient, glassmorphism, and spring animations
-// Surpasses TikTok, Instagram, YouTube with futuristic UI
+// src/context/ThemeProvider.jsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
 
@@ -205,7 +203,7 @@ const ThemeContext = createContext(null);
 // ==================== HOOK ====================
 
 /**
- * useTheme - World-class theme hook with full ARVDOUL design system
+ * useTheme - theme hook with full ARVDOUL design system
  * 
  * @returns {Object} Theme context with all utilities
  * 
@@ -269,7 +267,7 @@ function safeStorageSet(key, value) {
 }
 
 /**
- * ThemeProvider - World-class theme provider with ARVDOUL design system
+ * ThemeProvider - theme provider with ARVDOUL design system
  */
 export const ThemeProvider = memo(({ children }) => {
   const [theme, setThemeState] = useState(() => {

@@ -1,6 +1,4 @@
 // src/services/soundService.js
-// 🎵 ARVDOUL SOUNDS & MUSIC DISCOVERY SERVICE
-// Audio track catalog, viral trend metrics, waveform synthesis, and real Firestore persistence
 
 import { svcLogger } from './ServiceKit.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';

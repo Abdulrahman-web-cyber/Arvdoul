@@ -1,11 +1,4 @@
-/**
- * src/hooks/useAnalytics.js - ARVDOUL Analytics Hook
- * 
- * Custom hook for analytics management including event tracking and
- * profile analytics loading.
- * 
- * @module hooks/useAnalytics
- */
+// src/hooks/useAnalytics.js
 
 import { useCallback, useEffect } from 'react';
 import { useAnalyticsStore } from '../store/analyticsStore';

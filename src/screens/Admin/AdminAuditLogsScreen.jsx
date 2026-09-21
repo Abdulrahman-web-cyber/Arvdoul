@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminAuditLogsScreen.jsx - ARVDOUL SECURITY AUDIT LOG EXPLORER
-// ✅ Centralized security & compliance event inspection
-// ✅ Actor filtering, action classification, and forensic payload viewer
-// ✅ Exportable compliance trail (GDPR / SOC2 ready)
+// src/screens/Admin/AdminAuditLogsScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -27,89 +24,16 @@ import { useAuth } from '../../context/AuthContext';
 const AdminAuditLogsScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Logs are read from the server-written audit collections only. There is no
+  // seeded/fallback content: an empty trail renders the empty state rather
+  // than inventing administrative events that never happened.
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState('all');
   const [expandedLogId, setExpandedLogId] = useState(null);
 
-  // Baseline seed logs
-  const fallbackLogs = [
-    {
-      id: 'log-501',
-      actor: 'admin_security_service',
-      actorEmail: 'admin@arvdoul.platform',
-      action: 'FEATURE_FLAG_OVERRIDDEN',
-      category: 'System',
-      severity: 'warning',
-      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-      metadata: {
-        flag: 'feed.ml_ranking',
-        previousValue: false,
-        newValue: true,
-        clientIp: '192.0.2.1',
-      },
-    },
-    {
-      id: 'log-502',
-      actor: 'system_payout_engine',
-      actorEmail: 'treasury@arvdoul.platform',
-      action: 'PAYOUT_APPROVED',
-      category: 'Economy',
-      severity: 'info',
-      timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-      metadata: {
-        payoutId: 'payout-101',
-        creatorId: 'usr_sarah_craft',
-        amountUsd: 250.0,
-        amountCoins: 25000,
-      },
-    },
-    {
-      id: 'log-503',
-      actor: 'admin_moderator_01',
-      actorEmail: 'moderation@arvdoul.platform',
-      action: 'USER_SUSPENDED',
-      category: 'Moderation',
-      severity: 'critical',
-      timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-      metadata: {
-        targetUserId: 'usr_spam_bot_9',
-        reason: 'Automated DM phishing violation',
-        durationDays: 7,
-      },
-    },
-    {
-      id: 'log-504',
-      actor: 'admin_trust_lead',
-      actorEmail: 'trust@arvdoul.platform',
-      action: 'CREATOR_VERIFICATION_APPROVED',
-      category: 'Governance',
-      severity: 'info',
-      timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-      metadata: {
-        applicantId: 'verif-204',
-        applicantUserId: 'usr_elena_sound',
-        badge: 'Verified Creator',
-      },
-    },
-    {
-      id: 'log-505',
-      actor: 'auth_security_guard',
-      actorEmail: 'system',
-      action: 'RATE_LIMIT_TRIGGERED',
-      category: 'Security',
-      severity: 'warning',
-      timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
-      metadata: {
-        endpoint: '/api/v1/auth/login',
-        ip: '203.0.113.195',
-        threshold: '5 requests / 60s',
-      },
-    },
-  ];
-
-  // Fetch audit logs from Firestore
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
@@ -117,17 +41,33 @@ const AdminAuditLogsScreen = () => {
       const { getFirestoreInstance } = await import('../../firebase/firebase.js');
       const firestore = await getFirestoreInstance();
 
-      const snap = await getDocs(
-        query(collection(firestore, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100))
-      );
+      const readCollection = async (name, orderField) => {
+        const snap = await getDocs(
+          query(collection(firestore, name), orderBy(orderField, 'desc'), limit(100))
+        );
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      };
 
-      if (!snap.empty) {
-        setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } else {
-        setLogs(fallbackLogs);
-      }
+      const [auditDocs, moderationDocs] = await Promise.all([
+        readCollection('audit_logs', 'timestamp'),
+        readCollection('moderation_logs', 'createdAt'),
+      ]);
+
+      // moderation_logs store createdAt as a Firestore Timestamp; normalise to
+      // the ISO shape the table renders so both sources sort together.
+      const normalise = (entry) => ({
+        ...entry,
+        timestamp: entry.timestamp
+          || (entry.createdAt?.toDate ? entry.createdAt.toDate().toISOString() : entry.createdAt),
+      });
+
+      const merged = [...auditDocs, ...moderationDocs.map(normalise)]
+        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+        .slice(0, 100);
+
+      setLogs(merged);
     } catch (e) {
-      setLogs(fallbackLogs);
+      setLogs([]);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-// 🛡️ ARVDOUL GLOBAL ERROR BOUNDARY v3
+// 🛡️ ARVDOUL GLOBAL ERROR BOUNDARY
 // Theme-aware + Neon system + production-grade crash UI
 
 import React, { Component, createRef } from 'react';

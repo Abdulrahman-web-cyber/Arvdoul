@@ -1,12 +1,4 @@
-/**
- * src/components/profile/ProfileTabsBar.jsx - ARVDOUL Profile Tabs Navigation
- * 
- * Recreates the exact multi-tab navigation bar from the uploaded designs:
- * Tabs: Posts, Videos, Reels, Photos, Stories, Saved (Owner only), Tagged, About.
- * Features an active pill indicator, count badges, and sticky positioning.
- * 
- * @component
- */
+// src/components/profile/ProfileTabsBar.jsx
 
 import React, { memo } from 'react';
 import { 

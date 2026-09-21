@@ -1,15 +1,4 @@
-/**
- * src/__tests__/introRobust.test.jsx
- * Regression tests for the intro "Temporary Glitch" crashes:
- *   1. ThemeProvider must survive BLOCKED localStorage (sandboxed iframe -
- *      the provider's useState initializer used to throw SecurityError and
- *      unmount the app on first render).
- *   2. matchMedia-missing environments must not crash theme resolution
- *      (IntroScreen's resolvedTheme used to call window.matchMedia
- *      unguarded).
- *   3. The intro error boundary persists diagnostics + offers an escape
- *      hatch instead of dead-ending the user.
- */
+// src/__tests__/introRobust.test.jsx
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';

@@ -1,13 +1,4 @@
-/**
- * src/services/incidentService.js - ARVDOUL INCIDENT MANAGEMENT & POSTMORTEM ENGINE v8.0
- *
- * Implements:
- * 1. P0-P3 Incident Lifecycle: Tracks incident declaration, incident commander assignment, status updates, and resolution.
- * 2. SLA Timeline Tracking: Measures Mean-Time-To-Detect (MTTD) and Mean-Time-To-Resolve (MTTR).
- * 3. Blameless Postmortem Generator: Creates structured root-cause analysis templates with 5-whys and prevention action items.
- * 4. Alerting Integration: Automatically escalates high-priority (P0/P1) incidents through PagerDuty and Ops channels.
- * 5. Persistent LocalForage Incident Store: Saves incident statuses to local storage to persist across sessions.
- */
+// src/services/incidentService.js
 
 import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';

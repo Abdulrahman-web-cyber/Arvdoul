@@ -1,9 +1,4 @@
-/**
- * src/__tests__/useDoubleTap.test.js
- * Regression: the old hook wired BOTH onClick and onTouchEnd - on mobile a
- * single tap fired both handlers, so ONE tap triggered the "double tap"
- * action. The fixed hook wires onClick only and fires exactly once per pair.
- */
+// src/__tests__/useDoubleTap.test.js
 
 import { jest } from '@jest/globals';
 import React from 'react';

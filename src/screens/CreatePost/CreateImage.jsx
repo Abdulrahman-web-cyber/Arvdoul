@@ -1,8 +1,4 @@
 // src/screens/CreatePost/CreateImage.jsx
-// ARVDOUL IMAGE STUDIO – ULTIMATE PRODUCTION FINAL
-// ✅ All issues fixed: card width, arrows, toolbar spacing, delete payload
-// ✅ Draft saving comment, unused code removed, accessibility improved
-// ✅ Fully responsive, pixel‑perfect, production‑ready
 
 import React, {
   useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense,

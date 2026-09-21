@@ -1,8 +1,4 @@
-// src/screens/DataUsageScreen.jsx - ARVDOUL DATA USAGE
-// REAL implementation: storage usage from the browser's Storage API, cache
-// clearing that actually clears (settingsService + Cache API), and a GDPR
-// export that actually calls the exportUserData Cloud Function and lets the
-// user download the returned data. No fake timers, no invented GB numbers.
+// src/screens/DataUsageScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

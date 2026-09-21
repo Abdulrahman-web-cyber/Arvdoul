@@ -1,7 +1,4 @@
-// src/components/Shared/DrawingTool.jsx - ARVDOUL DRAWING TOOL (REAL)
-// Premium freehand drawing controls: brush color presets, size, eraser,
-// undo/clear. Controlled component — integrates with the ImageEditor canvas
-// drawing engine (drawColor / drawBrushSize / tool mode).
+// src/components/Shared/DrawingTool.jsx
 import React, { useState } from 'react';
 import { Brush, Eraser, Undo2, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';

@@ -1,6 +1,4 @@
 // src/services/marketplaceService.js
-// 🛍️ ARVDOUL CREATOR MARKETPLACE & COMMERCE SERVICE
-// Digital assets, presets, sound packs, creator merchandise, and real Firestore transactions.
 
 import { svcLogger } from './ServiceKit.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';

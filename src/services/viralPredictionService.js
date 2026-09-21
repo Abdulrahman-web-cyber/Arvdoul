@@ -1,11 +1,4 @@
-/**
- * src/services/viralPredictionService.js - ARVDOUL VIRAL CONTENT PREDICTION & ACCELERATION ENGINE v8.0
- *
- * Implements:
- * 1. Early Velocity Curve Extrapolation: Measures 5-minute initial engagement gradient against platform historical distribution.
- * 2. High-Potential Content Boost: Automatically flags content with viral coefficient > 1.2 for expanded recommendation distribution.
- * 3. Cold-Start Early Testing: Injects promising creator content into 100-user micro-batches to measure completion rate.
- */
+// src/services/viralPredictionService.js
 
 import { logger } from '../utils/Logger.js';
 

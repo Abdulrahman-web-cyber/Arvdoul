@@ -1,9 +1,4 @@
-/**
- * src/__tests__/phase18ChaosAndAuditLedger.test.js
- * Verification test suite for Phase 18:
- * - Chaos Engineering, Automated Red-Teaming & Resilient Fail-Safe Injector (Feature 54)
- * - Enterprise Regulatory Audit Log & Immutable Hash-Chained Ledger (Feature 55)
- */
+// src/__tests__/phase18ChaosAndAuditLedger.test.js
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

@@ -1,12 +1,4 @@
-/**
- * src/services/CounterReconciliationService.js - ARVDOUL COUNTER READ REPAIR & RECONCILIATION v8.0
- *
- * Implements:
- * 1. Read-Repair Verification: Computes exact sum across all shards and compares against parent document summary.
- * 2. Automatic Drift Repair: Automatically synchronizes parent document stats when drift exceeds 5% or 10 units.
- * 3. Daily Scheduled Audit: Sweeps active posts, reels, and profiles to maintain 100% counter integrity.
- * 4. LocalForage Reconciliation Logs: Securely logs audits and reparations locally to survive page refreshes.
- */
+// src/services/CounterReconciliationService.js
 
 import { logger } from '../utils/Logger.js';
 import { countersManager } from '../utils/CountersManager.js';

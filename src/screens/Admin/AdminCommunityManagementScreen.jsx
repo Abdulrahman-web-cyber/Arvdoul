@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminCommunityManagementScreen.jsx - ARVDOUL COMMUNITY GOVERNANCE & DIRECTORY
-// ✅ Community space administration, strike issuance, and verified status badge
-// ✅ Search, filter by privacy tier, and member oversight
-// ✅ Server-authoritative audit logging on governance interventions
+// src/screens/Admin/AdminCommunityManagementScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -31,61 +28,8 @@ const AdminCommunityManagementScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [privacyFilter, setPrivacyFilter] = useState('all');
 
-  // Baseline community list
-  const [communities, setCommunities] = useState([
-    {
-      id: 'comm-101',
-      name: 'Synthesizer & Audio Production',
-      slug: 'audio-synthesis',
-      description: 'Modular synthesis patch sharing, sound design challenges, and DAW workflows.',
-      memberCount: 8420,
-      postCount: 1240,
-      privacy: 'public',
-      isVerified: true,
-      ownerHandle: '@leosoundfx',
-      ownerId: 'usr_leo_sound',
-      strikesCount: 0,
-    },
-    {
-      id: 'comm-102',
-      name: 'Generative 3D Visuals & Shaders',
-      slug: 'glsl-threejs',
-      description: 'Exploring WebGL, Raymarching, GLSL, and creative computational graphics.',
-      memberCount: 6200,
-      postCount: 980,
-      privacy: 'public',
-      isVerified: true,
-      ownerHandle: '@sarahcraft',
-      ownerId: 'usr_sarah_craft',
-      strikesCount: 0,
-    },
-    {
-      id: 'comm-103',
-      name: 'Private Alpha Testers Guild',
-      slug: 'alpha-guild',
-      description: 'Confidential feature rollout discussions and preview builds feedback.',
-      memberCount: 140,
-      postCount: 450,
-      privacy: 'private',
-      isVerified: false,
-      ownerHandle: '@arvdoul_lead',
-      ownerId: 'usr_admin_owner',
-      strikesCount: 0,
-    },
-    {
-      id: 'comm-104',
-      name: 'Crypto Pump & Quick Arbitrage',
-      slug: 'quick-arbitrage-alerts',
-      description: 'High frequency crypto signaling and telegram trading group.',
-      memberCount: 410,
-      postCount: 120,
-      privacy: 'public',
-      isVerified: false,
-      ownerHandle: '@cryptosignals99',
-      ownerId: 'usr_crypto_bot',
-      strikesCount: 2,
-    },
-  ]);
+  // Communities are loaded from Firestore; no local seed data is ever shown.
+  const [communities, setCommunities] = useState([]);
 
   // Load from Firestore
   useEffect(() => {
@@ -96,11 +40,12 @@ const AdminCommunityManagementScreen = () => {
         const firestore = await getFirestoreInstance();
 
         const snap = await getDocs(query(collection(firestore, 'communities'), limit(50)));
-        if (!snap.empty) {
-          setCommunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
+        setCommunities(
+          snap.empty ? [] : snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        );
       } catch (e) {
-        // Fallback
+        toast.error('Could not load communities.');
+        setCommunities([]);
       } finally {
         setLoading(false);
       }

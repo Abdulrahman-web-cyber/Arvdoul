@@ -1,12 +1,4 @@
-/**
- * src/services/aiCoPilotDirectorService.js - ARVDOUL AUTONOMOUS AI CREATION CO-PILOT v1.0
- * 
- * Production-grade creative director & content intelligence:
- * • Script & storyboard generator for viral reels, audio spaces, and long-form content
- * • Real-time hook strength, pacing, and tone scoring heuristics
- * • Multi-modal asset prompt generator (visual thumbnails, audio/music cues)
- * • Pre-flight community safety & guideline validation scan
- */
+// src/services/aiCoPilotDirectorService.js
 
 import { logger } from '../utils/Logger.js';
 

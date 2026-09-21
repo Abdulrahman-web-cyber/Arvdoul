@@ -1,6 +1,4 @@
-/**
- * @jest-environment jsdom
- */
+// src/__tests__/adminGovernanceAndFlags.test.js
 
 describe('Phase 8: Admin Suite, Governance & Feature Flags Integrity', () => {
   describe('Admin Authorization Gates', () => {

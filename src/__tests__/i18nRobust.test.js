@@ -1,17 +1,4 @@
-/**
- * src/__tests__/i18nRobust.test.js
- * Regression test for the intro "Temporary Glitch" crash:
- * the async i18n init could race/fail (blocked storage in sandboxed
- * iframes), leaving react-i18next with NO instance so useTranslation()
- * threw and every error boundary caught a spurious crash.
- *
- * Fix: SYNCHRONOUS, failure-proof base init at module load.
- * This test proves:
- *   1. i18n.isInitialized === true immediately at import (no async wait)
- *   2. useTranslation() renders real strings on the very first render
- *   3. withLanguage injects a working t
- *   4. initI18n() survives blocked localStorage (never throws)
- */
+// src/__tests__/i18nRobust.test.js
 import { jest } from '@jest/globals';
 import React from 'react';
 import { render, screen } from '@testing-library/react';

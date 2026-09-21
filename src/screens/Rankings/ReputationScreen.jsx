@@ -1,6 +1,4 @@
-// src/screens/Rankings/ReputationScreen.jsx – ARVDOUL REPUTATION SCREEN V1
-// ⭐ User Reputation Profile with Scores, Badges, History
-// ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
+// src/screens/Rankings/ReputationScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';

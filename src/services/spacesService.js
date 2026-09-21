@@ -1,6 +1,4 @@
-// src/services/spacesService.js - ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES SERVICE - PRODUCTION READY v6.0
-// 🎙️ ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES SERVICE
-// Enterprise multi-user audio rooms with speaker stages, reactions, coin tipping, and Firestore synchronization.
+// src/services/spacesService.js
 
 import { svcLogger } from './ServiceKit.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';

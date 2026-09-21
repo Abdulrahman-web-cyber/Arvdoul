@@ -1,5 +1,5 @@
-// src/screens/NotificationsScreen.jsx - ARVDOUL ULTIMATE NOTIFICATIONS SCREEN
-// Pixel-perfect replica of Arvdoul Luxury Design System with real-time Firestore synchronization
+// src/screens/NotificationsScreen.jsx - ARVDOUL NOTIFICATIONS SCREEN
+// Arvdoul notifications screen (real-time Firestore).
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -20,38 +20,6 @@ import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/ui/Dialog.jsx';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
-
-// Fallback high-fidelity sample notifications matching the exact Arvdoul design
-const CURATED_CREATORS = [
-  {
-    id: 'creator-sarah-luna',
-    displayName: 'Sarah Luna',
-    username: 'sarahluna',
-    bio: 'Digital artist & visual designer • Sparks & Stories 🎨✨',
-    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 'creator-marcus-vance',
-    displayName: 'Marcus Vance',
-    username: 'marcus_v',
-    bio: 'Web3 & AI Creator • Building the future on Arvdoul ⚡',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 'creator-elena-rostova',
-    displayName: 'Elena Rostova',
-    username: 'elena_style',
-    bio: 'Luxury editorial, fashion aesthetics & travel journals 💎',
-    photoURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 'creator-arvdoul-team',
-    displayName: 'Arvdoul Studio',
-    username: 'arvdoul',
-    bio: 'Official Arvdoul Creator Studio & Network Updates 🚀',
-    photoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&h=150&fit=crop',
-  },
-];
 
 const FILTERS = [
   { id: 'All', label: 'All' },
@@ -111,7 +79,7 @@ export default function NotificationsScreen() {
     setNetworkLoading(true);
     try {
       if (!user?.uid) {
-        setRecommended(CURATED_CREATORS);
+        setRecommended([]);
         setFollowers([]);
         setFollowing([]);
         setRequests([]);
@@ -128,13 +96,13 @@ export default function NotificationsScreen() {
       const recResult = await svc.getFriendRecommendations(user.uid, 6).catch(() => ({ success: false, recommendations: [] }));
       const recs = recResult.recommendations && recResult.recommendations.length > 0
         ? recResult.recommendations
-        : CURATED_CREATORS;
+        : [];
       setRecommended(recs);
       setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
       setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
     } catch {
-      setRecommended(CURATED_CREATORS);
+      setRecommended([]);
     } finally {
       setNetworkLoading(false);
     }

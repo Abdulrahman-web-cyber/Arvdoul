@@ -1,6 +1,4 @@
-// src/screens/PostCard/TextCard.jsx – Arvdoul Final (All Issues Resolved)
-// Solid random backgrounds, no gradients, no expand button, perfect responsive.
-// Includes: summary, listen (TTS), translate, copy, reading time, sentiment, topic, markdown.
+// src/screens/PostCard/TextCard.jsx
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

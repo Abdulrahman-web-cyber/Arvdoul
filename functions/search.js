@@ -1,27 +1,17 @@
-// functions/search.js – ARVDOUL REAL‑TIME ALGOLIA INDEXING (v4.0 · FINAL)
+// functions/search.js — real-time Algolia indexing
 //
-// 🔍 Firestore triggers for users, posts, and videos.
-// ⚡ Real‑time sync with Algolia, partial updates, retry logic, and structured logging.
-// 🌐 Designed for billions of users – event‑driven, no reads inside loops, batch‑safe.
-// ✅ Added: batch reindexing function, dead‑letter queue for failed indexing.
+// Firestore triggers for users, posts, and videos keep Algolia in sync with
+// partial updates, retries, and structured logging. Also provides a batch
+// reindex function and a dead-letter queue for failed indexing. No reads
+// inside loops; all writes are batched.
 //
-// Environment variables (set via Firebase CLI):
+// Required configuration:
 //   firebase functions:config:set algolia.app_id="YOUR_APP_ID" algolia.admin_key="YOUR_ADMIN_API_KEY"
 //
 // Required Algolia indices (create in dashboard):
 //   - users
 //   - posts
 //   - videos
-//   - arvdoul_suggestions (for query suggestions)
-//
-// ⚠️  FACETS & SEARCHABLE ATTRIBUTES – configure in Algolia dashboard:
-//   USERS: searchable on username, displayName, bio; facets on isVerified, isCreator, location
-//   POSTS: searchable on content, hashtags, tags; facets on type, hashtags
-//   VIDEOS: searchable on title, description, tags; facets on category, duration, visibility
-//   Replica indices (e.g., users_date_desc) are kept in sync automatically.
-//
-// 📦 Dependencies: algoliasearch
-
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const algoliasearch = require('algoliasearch');

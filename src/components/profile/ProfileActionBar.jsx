@@ -1,12 +1,4 @@
-/**
- * src/components/profile/ProfileActionBar.jsx - ARVDOUL Profile Action Bar
- * 
- * Recreates the exact Action Bar from the design samples in both Light and Dark themes.
- * Handles owner actions (Edit, Share, QR Code, Coins, Insights, Settings) and 
- * visitor actions (Follow, Message, Call, Gift/Tip, More).
- * 
- * @component
- */
+// src/components/profile/ProfileActionBar.jsx
 
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +20,7 @@ import {
   Users
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
 
 const ProfileActionBar = memo(({
   isOwner = false,
@@ -56,7 +49,7 @@ const ProfileActionBar = memo(({
   // Level gating: users must reach Level 3 or have creator/verified status to have public followers.
   // Otherwise, they participate in the mutual Friend Request system.
   const targetLevel = Number(profile?.level) || 1;
-  const canBeFollowed = targetLevel >= 3 || Boolean(profile?.isCreator || profile?.isVerified);
+  const canBeFollowed = targetLevel >= LEVEL_GATES.publicFollowers || Boolean(profile?.isCreator || profile?.isVerified);
 
   if (isOwner) {
     return (
@@ -160,7 +153,7 @@ const ProfileActionBar = memo(({
   return (
     <div className="w-full">
       <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-        {/* 1. Follow / Following (Level >= 3 or Creator) OR Friend Request (Level < 3) */}
+        {/* 1. Follow / Following (publicFollowers gate or Creator) OR Friend Request */}
         {canBeFollowed ? (
           <button
             onClick={onFollowToggle}
@@ -212,7 +205,7 @@ const ProfileActionBar = memo(({
                   ? 'Friend Request Sent'
                   : friendshipStatus === 'received'
                     ? 'Accept Friend Request'
-                    : 'Send Friend Request (Level 3 unlocks Public Follow)'
+                    : `Send Friend Request (Level ${LEVEL_GATES.publicFollowers} unlocks Public Follow)`
             }
           >
             {friendRequestLoading ? (

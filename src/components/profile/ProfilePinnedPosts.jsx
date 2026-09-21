@@ -1,41 +1,9 @@
-/**
- * src/components/profile/ProfilePinnedPosts.jsx - ARVDOUL Pinned Posts Section
- * 
- * Recreates the Pinned Posts row from the uploaded designs:
- * - Header with Pin icon and 'View all >' link
- * - 3 pinned post cards with aspect ratio, pinned badge, likes counter & click handler
- * 
- * @component
- */
+// src/components/profile/ProfilePinnedPosts.jsx
 
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pin, Heart, ChevronRight, Play } from 'lucide-react';
 import { cn } from '../../lib/utils';
-
-const DEFAULT_PINNED = [
-  {
-    id: 'pin-1',
-    title: 'Visual Architecture Showcase',
-    type: 'video',
-    mediaURL: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&auto=format&fit=crop&q=80',
-    likes: 3420,
-  },
-  {
-    id: 'pin-2',
-    title: 'Arvdoul Mobile App Launch',
-    type: 'image',
-    mediaURL: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80',
-    likes: 2180,
-  },
-  {
-    id: 'pin-3',
-    title: 'Sound Design & Synth Session',
-    type: 'audio',
-    mediaURL: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=600&auto=format&fit=crop&q=80',
-    likes: 1890,
-  }
-];
 
 const ProfilePinnedPosts = memo(({
   posts = [],
@@ -47,7 +15,7 @@ const ProfilePinnedPosts = memo(({
 
   const pinnedItems = (posts && posts.filter(p => p.isPinned).length > 0)
     ? posts.filter(p => p.isPinned).slice(0, 3)
-    : (posts.length > 0 ? posts.slice(0, 3) : DEFAULT_PINNED);
+    : posts.slice(0, 3);
 
   return (
     <div className={cn(
@@ -68,7 +36,7 @@ const ProfilePinnedPosts = memo(({
         </div>
 
         <button
-          onClick={() => navigate('/posts?pinned=true')}
+          onClick={() => navigate('/profile')}
           className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:opacity-80 transition-opacity"
         >
           <span>View all</span>
@@ -77,6 +45,11 @@ const ProfilePinnedPosts = memo(({
       </div>
 
       {/* 3 Pinned Cards */}
+      {pinnedItems.length === 0 ? (
+        <div className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          No pinned posts yet.
+        </div>
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {pinnedItems.map((item) => (
           <div
@@ -85,7 +58,7 @@ const ProfilePinnedPosts = memo(({
             className="group relative aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900"
           >
             <img
-              src={item.mediaURL || item.thumbnailUrl || item.mediaUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'}
+              src={item.mediaURL || item.thumbnailUrl || item.mediaUrl || ''}
               alt={item.title || 'Pinned post'}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               loading="lazy"
@@ -109,7 +82,7 @@ const ProfilePinnedPosts = memo(({
               <div className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1 font-semibold text-rose-400">
                   <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                  {item.likes || item.likesCount || 340}
+                  {item.likes || item.likesCount || 0}
                 </span>
                 {item.type === 'video' && (
                   <span className="flex items-center gap-1 font-semibold text-cyan-300">
@@ -122,6 +95,7 @@ const ProfilePinnedPosts = memo(({
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 });

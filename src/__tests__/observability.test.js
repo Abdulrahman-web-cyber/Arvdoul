@@ -1,9 +1,4 @@
-/**
- * src/__tests__/observability.test.js
- * Real assertions for the observability layer: metrics collection with
- * Prometheus export, spans/tracing, SLO/error-budget math, cost accounting,
- * RUM vitals evaluation and route timing.
- */
+// src/__tests__/observability.test.js
 
 import { jest } from '@jest/globals';
 import { metricsService } from '../services/metricsService.js';

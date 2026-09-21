@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminUserManagementScreen.jsx - ARVDOUL USER MANAGEMENT
-// ✅ List and search users
-// ✅ View user details
-// ✅ Suspend/Ban/Verify/Roles
+// src/screens/Admin/AdminUserManagementScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -56,25 +53,15 @@ const AdminUserManagementScreen = () => {
            u.username?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // User action — real Firestore updates (ban/suspend/verify/restore)
+  // Privileged account actions run through the server, which re-verifies admin
+  // membership, applies only the fields it recognises, and writes an audit log.
   const handleUserAction = async (userId, action) => {
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-      const ref = doc(firestore, 'users', userId);
-      const payload = { updatedAt: serverTimestamp() };
-      switch (action) {
-        case 'ban': payload.accountStatus = 'banned'; break;
-        case 'suspend': payload.accountStatus = 'suspended'; break;
-        case 'unban':
-        case 'restore': payload.accountStatus = 'active'; break;
-        case 'verify': payload.isVerified = true; break;
-        case 'unverify': payload.isVerified = false; break;
-        default: break;
-      }
-      await updateDoc(ref, payload);
-      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...payload } : u)));
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const applyAction = httpsCallable(getFunctions(), 'applyUserAdminAction');
+      const { data } = await applyAction({ userId, action });
+      const applied = data?.applied || {};
+      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...applied } : u)));
       toast.success(`User ${action.replace(/([A-Z])/g, ' $1').toLowerCase()}d`);
       setShowUserModal(false);
     } catch (error) {

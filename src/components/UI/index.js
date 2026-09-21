@@ -1,6 +1,4 @@
-// src/components/UI/index.js - ARVDOUL WORLD-CLASS UI COMPONENTS
-// Premium component library with ARVDOUL DNA design system
-// Surpasses TikTok, Instagram, YouTube with futuristic UI
+// src/components/UI/index.js
 
 export { default as GlassCard } from './GlassCard';
 export { default as GlassButton } from './GlassButton';

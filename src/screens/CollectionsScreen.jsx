@@ -1,9 +1,4 @@
-/**
- * src/screens/CollectionsScreen.jsx - ARVDOUL Ultimate Collections & Folders Manager
- * 
- * Production-ready collections management with custom folders, cover art,
- * privacy controls, batch organization, and live item counts.
- */
+// src/screens/CollectionsScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

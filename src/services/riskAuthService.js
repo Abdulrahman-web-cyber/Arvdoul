@@ -1,13 +1,4 @@
-/**
- * src/services/riskAuthService.js - ARVDOUL ADAPTIVE RISK-BASED AUTHENTICATION ENGINE
- *
- * Implements:
- * 1. Adaptive Multi-Factor Evaluation: Combines device reputation, IP geolocation, session age, and operation criticality.
- * 2. Step-Up Authentication Enforcement: Mandates biometric passkey or TOTP verification before high-value actions
- *    (e.g., password change, creator payout withdrawal, API key generation, account deletion).
- * 3. Dynamic Friction Management: Delivers frictionless 0-click experience for trusted low-risk sessions while shielding sensitive actions.
- * 4. Impossible Travel Speed Audit (CWE-20): Flags logins separated by geographic impossible travel speeds.
- */
+// src/services/riskAuthService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

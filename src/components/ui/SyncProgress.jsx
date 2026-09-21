@@ -1,10 +1,4 @@
-/**
- * src/components/ui/SyncProgress.jsx - ARVDOUL BACKGROUND SYNC PROGRESS BAR
- *
- * Implements:
- * 1. Visual progress bar showing remaining items in the IndexedDB synchronization queue.
- * 2. Error retry badges and conflict count warnings.
- */
+// src/components/ui/SyncProgress.jsx
 
 import React from 'react';
 import { RefreshCw, Check, AlertTriangle } from 'lucide-react';

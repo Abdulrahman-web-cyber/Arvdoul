@@ -1,18 +1,4 @@
-/**
- * src/services/analyticsService.js - ARVDOUL Ultimate Analytics Service
- * 
- * Comprehensive analytics tracking for user profiles, posts, and engagement metrics.
- * Features:
- * - Profile view tracking and analytics
- * - Post analytics with daily stats
- * - Creator ranking system
- * - Audience demographics
- * - Engagement trends and growth metrics
- * - Coin earning history
- * 
- * @author ARVDOUL Engineering Team
- * @version 1.0.0
- */
+// src/services/analyticsService.js
 
 import { produce } from 'immer';
 import { logger } from '../utils/Logger.js';
@@ -267,7 +253,7 @@ class UltimateAnalyticsService {
       try {
         analytics.ranking = await this.getCreatorRanking(userId);
       } catch (rankErr) {
-        analytics.ranking = { rank: null, totalCreators: 100, percentile: 50 };
+        analytics.ranking = { rank: null, totalCreators: 0, percentile: null };
       }
 
       this.cache.set(cacheKey, analytics);
@@ -286,7 +272,7 @@ class UltimateAnalyticsService {
         growthRate: 0,
         activeDays: 1,
         demographics: { ageGroups: {}, gender: {}, locations: {}, interests: {} },
-        ranking: { rank: 1, totalCreators: 100, percentile: 99 },
+        ranking: { rank: null, totalCreators: 0, percentile: null },
         changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
         lastUpdated: new Date().toISOString(),
       };

@@ -1,9 +1,4 @@
-/**
- * FilterTool.jsx - Professional Image Filter Component
- * @description Provides comprehensive filter presets with thumbnails, favorites, and search
- * @module Shared/FilterTool
- * @requires React, framer-motion, lucide-react, prop-types
- */
+// src/components/Shared/FilterTool.jsx
 
 import React, { useState, useCallback, useMemo, useEffect, memo, useRef } from "react";
 import { useTheme } from '../../context/ThemeContext';

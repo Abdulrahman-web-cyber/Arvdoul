@@ -1,13 +1,4 @@
-/**
- * src/screens/Profile/ProfileScreen.jsx - ARVDOUL Master Profile Screen Controller
- * 
- * Central controller that dynamically renders ProfileMyScreen for the profile owner
- * or ProfilePublicScreen for visitors and creators.
- * 
- * Also supports owner "View As Public" preview mode seamlessly.
- * 
- * @component
- */
+// src/screens/Profile/ProfileScreen.jsx
 
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';

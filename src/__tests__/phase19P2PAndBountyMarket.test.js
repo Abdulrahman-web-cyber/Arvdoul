@@ -1,7 +1,4 @@
-/**
- * src/__tests__/phase19P2PAndBountyMarket.test.js - ARVDOUL PHASE 19 TEST SUITE
- * Verifies P2P storage mesh chunking, peer seeding, bitfields, and creator bounty escrow.
- */
+// src/__tests__/phase19P2PAndBountyMarket.test.js
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { DecentralizedStorageMeshService, PINNING_TIERS } from '../services/decentralizedStorageMeshService.js';

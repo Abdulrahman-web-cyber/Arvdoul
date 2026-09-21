@@ -1,16 +1,4 @@
-/**
- * src/screens/MessagingScreen.jsx - ARVDOUL MASTER MESSAGES & INBOX HUB
- * 
- * 100% Pixel-perfect replica of the Arvdoul Messages Screenshots (Image 2 & Image 3)
- * Featuring:
- * - Brand Header with Logo / Online User Avatar, Search, AI Sparkles & New Message + Button
- * - Universal Search Bar with Filter Sliders
- * - Categorized Filter Pills (All, Unread, Groups, Personal, Channels, Archived)
- * - Pinned Carousel with Typing Indicators, Audio badges, and unread counters
- * - Rich Conversation List Items with Voice Waveforms, Media Thumbnails, PDF badges, Mute / Pin icons, and Unread counts
- * - Floating Glowing Cosmic Message FAB
- * - Integrated BottomNav & real message transitions
- */
+// src/screens/MessagingScreen.jsx
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

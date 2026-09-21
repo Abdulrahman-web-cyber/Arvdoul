@@ -1,12 +1,4 @@
-/**
- * src/services/digitalEscrowService.js - ARVDOUL DIGITAL GOODS ESCROW & MILESTONE CONTRACTS v1.0
- * 
- * Production-grade creator sponsorship & commissioned work escrow:
- * • Milestone-based escrow contracts (sponsorships, collaborations, digital assets)
- * • Finite state machine (CREATED ➔ FUNDED ➔ IN_PROGRESS ➔ DELIVERED ➔ RELEASED / DISPUTED / REFUNDED)
- * • Multi-party dispute arbitration & proportional split refunds
- * • Balance conservation invariants (Funded === Released + Refunded + PlatformFee)
- */
+// src/services/digitalEscrowService.js
 
 import { logger } from '../utils/Logger.js';
 

@@ -1,13 +1,4 @@
-/**
- * src/utils/IdempotencyKey.js - ARVDOUL Idempotency Store
- *
- * Client-side idempotency key generation and dedupe with TTL.
- * Primary correctness still lives in Firestore transactions / Cloud
- * Functions; this utility prevents duplicate double-tap submissions and
- * gives services a shared, consistent implementation.
- *
- * Zero dependencies.
- */
+// src/utils/IdempotencyKey.js
 
 function randomId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
