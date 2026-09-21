@@ -1,9 +1,4 @@
-/**
- * TextTool.jsx - Professional Typography Engine Component
- * @description Provides comprehensive text editing with fonts, effects, and styles
- * @module Shared/TextTool
- * @requires React, framer-motion, lucide-react, prop-types
- */
+// src/components/Shared/TextTool.jsx
 
 import React, { useState, useCallback, useMemo, memo, useEffect } from "react";
 import { useTheme } from '../../context/ThemeContext';

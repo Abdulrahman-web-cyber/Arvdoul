@@ -1,19 +1,4 @@
-/**
- * src/services/alertingService.js - ARVDOUL THRESHOLD ALERTING & ANOMALY TRIGGER v8.0
- *
- * Implements:
- * 1. Multi-Condition Threshold Alerting:
- *    - Error rate > 1.0% over 5-minute window -> P1 Alert
- *    - P99 latency > 500ms -> P2 Alert
- *    - Daily Firestore read/write quota consumption > 85% -> P1 Alert
- *    - Active CSAM/Terrorism detection -> P0 Critical Page
- * 2. Deduplication & Alert Grouping: Suppresses storming duplicate notifications within 15-minute alert cooldown.
- * 3. Multi-Channel Dispatch: In-app notification, webhook, and PagerDuty notification sinks.
- * 4. URL Validation: Validates webhook and dispatch URLs to prevent SSRF (CWE-918).
- * 5. Persistent Cooldowns: Saves state in localStorage to survive restarts and coordinate across tabs.
- * 6. HMAC Payload Signing: Secures outbound webhook payloads against tampering.
- * 7. Alert Status Lifecycle (CWE-732): Tracks alert state (firing, acknowledged, resolved) and supports manual escalation.
- */
+// src/services/alertingService.js
 
 import { logger } from '../utils/Logger.js';
 import CryptoJS from 'crypto-js';

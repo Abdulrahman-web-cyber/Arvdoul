@@ -1,6 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.jsx - ARVDOUL ADMIN DASHBOARD
-// ✅ Platform overview and stats
-// ✅ Quick access to admin functions
+// src/screens/Admin/AdminDashboardScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -19,6 +17,7 @@ const AdminDashboardScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -42,22 +41,24 @@ const AdminDashboardScreen = () => {
     }
     const init = async () => {
       try {
-        const { doc, getDoc } = await import('firebase/firestore');
+        const { collection, getCountFromServer, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
         const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+        const { fetchAdminStatus } = await import('../../services/callableService.js');
         const firestore = await getFirestoreInstance();
 
-        // Real admin gate: membership in the `admins` collection (matches
-        // the server-side isAdmin() used by monetization functions).
+        // The `admins` collection is not client-readable, so membership is
+        // confirmed through the getAdminStatus callable (the same server check
+        // the rules and AdminRoute use). Reading the doc directly would be
+        // denied and would abort the whole dashboard load.
         if (!user?.uid) { navigate('/login'); return; }
-        const adminSnap = await getDoc(doc(firestore, 'admins', user.uid));
-        if (!adminSnap.exists()) {
+        const isAdminUser = await fetchAdminStatus();
+        if (!isAdminUser) {
           setError('You do not have admin access.');
           setLoading(false);
           return;
         }
 
         // Real platform stats via aggregate count queries.
-        const { collection, getCountFromServer, query, where } = await import('firebase/firestore');
         const count = async (path, constraints = []) => {
           try {
             const colRef = constraints.length
@@ -80,16 +81,28 @@ const AdminDashboardScreen = () => {
         // pending reports across all report collections (honest sum).
         const pendingUser = await count('user_reports', [where('status', '==', 'pending')]);
         const pendingVideo = await count('video_reports', [where('status', '==', 'pending')]);
+        const pendingPost = await count('post_reports', [where('status', '==', 'pending')]);
+        const pendingStory = await count('story_reports', [where('status', '==', 'pending')]);
         setStats({
           totalUsers: users,
           activeUsers,
           totalPosts: posts,
           totalReports: reports,
-          pendingReports: pendingReports + pendingUser + pendingVideo,
+          pendingReports: pendingReports + pendingUser + pendingVideo + pendingPost + pendingStory,
           totalCommunities: communities,
           totalEvents: events,
           revenue: 0, // real USD revenue requires the Stripe payout pipeline; never estimated
         });
+
+        // Recent activity is the real audit trail (server-written). No seeded rows.
+        try {
+          const activitySnap = await getDocs(
+            query(collection(firestore, 'moderation_logs'), orderBy('createdAt', 'desc'), limit(5))
+          );
+          setRecentActivity(activitySnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        } catch {
+          setRecentActivity([]);
+        }
       } catch (err) {
         setError('Could not load admin data.');
       } finally {
@@ -321,24 +334,40 @@ const AdminDashboardScreen = () => {
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
             Recent Activity
           </h2>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                <div className="w-10 h-10 rounded-full bg-gray-200" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900 dark:text-white">
-                    User action description here
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {i} hours ago
-                  </p>
-                </div>
-                <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
-                  Action
-                </span>
-              </div>
-            ))}
-          </div>
+          {recentActivity.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No administrative activity has been recorded yet.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {recentActivity.map((entry) => {
+                const timestamp = entry.createdAt?.toDate
+                  ? entry.createdAt.toDate()
+                  : entry.createdAt
+                    ? new Date(entry.createdAt)
+                    : null;
+                return (
+                  <div key={entry.id} className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-gray-500 dark:text-gray-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 dark:text-white truncate">
+                        {entry.action?.replace(/_/g, ' ') || 'Administrative action'}
+                        {entry.targetId ? ` · ${entry.targetId}` : ''}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {timestamp ? timestamp.toLocaleString() : 'Timestamp unavailable'}
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 text-xs rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                      {entry.actorId || entry.actorUid || 'system'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

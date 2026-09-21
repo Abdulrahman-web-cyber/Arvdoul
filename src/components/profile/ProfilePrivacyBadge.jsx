@@ -1,6 +1,4 @@
-/**
- * src/components/profile/ProfilePrivacyBadge.jsx - ARVDOUL Profile Privacy Badge Component
- */
+// src/components/profile/ProfilePrivacyBadge.jsx
 import React, { memo } from 'react';
 import { cn } from '../../lib/utils';
 import { Lock } from 'lucide-react';

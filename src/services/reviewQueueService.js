@@ -1,11 +1,4 @@
-/**
- * src/services/reviewQueueService.js - ARVDOUL HUMAN REVIEW QUEUE MANAGER
- *
- * Implements:
- * 1. Moderation Ticket Ingestion: Queues flagged posts, comments, media, and user reports with priority tags (P0, P1, P2, P3).
- * 2. SLA Timer Tracking: Enforces SLA response windows (P0 < 15 mins, P1 < 2 hrs, P2 < 24 hrs).
- * 3. Moderator Actions & Decision Auditing: Records approve, reject, strike, and tag decisions with immutable audit trail.
- */
+// src/services/reviewQueueService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

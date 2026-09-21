@@ -26,6 +26,26 @@ service cloud.firestore {
     function isMember(userId, participantIds) {
       return isSignedIn() && userId in (participantIds || []);
     }
+    // Fields only the server (Cloud Functions / Admin SDK) may ever change.
+    // Mirrors SERVER_AUTHORITATIVE_FIELDS in src/config/profileContracts.js;
+    // a parity test in functionsContract.test.js keeps the two lists in step.
+    // Clients that attempt to write any of these are rejected outright.
+    function touchesServerAuthoritativeFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'xp', 'experience', 'experienceToNextLevel',
+        'level', 'levelBand',
+        'activeDays', 'activeDaysCount', 'activeStreak', 'longestStreak',
+        'lastActiveDate', 'lastActiveDay',
+        'reputation', 'reputationScore', 'reputationTier',
+        'influence', 'influenceScore', 'contribution', 'contributionScore',
+        'titles', 'activeTitle',
+        'achievements', 'creatorStatus', 'creatorTier', 'isCreator',
+        'monetizationEligible', 'coins', 'coinBalance', 'earnings',
+        'totalEarned', 'isVerified', 'accountStatus', 'roles', 'role',
+        'policyStanding'
+      ]);
+    }
+
     // Immutable authorship on create
     function authoredBy(field) {
       return request.resource.data[field] == uid();
@@ -50,9 +70,14 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn(); // app layer projects private profiles
       allow create: if isOwner(userId);
-      // Admins (admins/{uid} doc) may moderate: ban/suspend/verify etc.
-      // Owner may only update permitted non-authoritative profile fields or delete own account.
-      allow update, delete: if isOwner(userId) || isAdmin();
+      // Admins (admins/{uid} doc) may moderate via the applyUserAdminAction
+      // callable; a direct admin write from the client is refused so every
+      // privileged change leaves a server-side audit entry.
+      // Owners may edit their own profile but never a server-authoritative
+      // field (level, XP, coins, verification, status, roles, ...). Account
+      // deletion goes through the deleteUserData callable.
+      allow update: if isOwner(userId) && !touchesServerAuthoritativeFields();
+      allow delete: if false;
     }
 
     // ==================== ACTIVE DAYS LEDGER ====================
@@ -110,6 +135,13 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Only the owner may create/update/delete a username doc that belongs to them.
       allow create, update, delete: if isSignedIn() && request.resource.data.userId == uid();
+    }
+    // Immutable username history: readable so old share/QR links keep resolving,
+    // writable only by the owner who held the previous username.
+    match /previous_usernames/{username} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if false;
     }
     match /user_settings/{userId} {
       allow read, update, delete: if isOwner(userId);
@@ -184,6 +216,13 @@ service cloud.firestore {
         allow read: if true;
         allow write: if isSignedIn() && dislikerId == uid();
       }
+      // Edit history is appended by the comment author only; the record must
+      // name the editor, so it cannot be forged as another user's edit.
+      match /history/{historyId} {
+        allow read: if true;
+        allow create: if isSignedIn() && request.resource.data.editedBy == uid();
+        allow update, delete: if false;
+      }
     }
 
     // ==================== SOCIAL GRAPH ====================
@@ -198,7 +237,10 @@ service cloud.firestore {
     }
     match /blocks/{blockId} {
       allow read: if isSignedIn();
-      allow create, delete: if isSignedIn() && resource.data.blockerId == uid();
+      // On create `resource` is null, so the blocker must be asserted from the
+      // incoming payload; on delete it must match the stored owner.
+      allow create: if isSignedIn() && request.resource.data.blockerId == uid();
+      allow delete: if isSignedIn() && resource.data.blockerId == uid();
     }
     match /friend_requests/{requestId} {
       allow read: if isSignedIn() &&
@@ -288,6 +330,31 @@ service cloud.firestore {
           vibeVisibleToViewer(vibeData(), uid());
         allow update, delete: if isSignedIn() && resource.data.userId == uid();
       }
+      // Interactive stickers (poll / quiz / countdown / emoji slider). The
+      // creator materialises these when the Vibe is published; viewers may
+      // only ever UPDATE an active, visible Vibe's sticker (their vote), never
+      // create or delete one. Without these matches Firestore rules fell
+      // through to the deny-all catch-all and every vote/answer failed.
+      match /polls/{pollId} {
+        allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        allow create, delete: if isSignedIn() && vibeData().userId == uid();
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+      }
+      match /quizzes/{quizId} {
+        allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        allow create, delete: if isSignedIn() && vibeData().userId == uid();
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+      }
+      match /countdowns/{countdownId} {
+        allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        allow create, delete: if isSignedIn() && vibeData().userId == uid();
+        allow update: if isSignedIn() && vibeData().userId == uid();
+      }
+      match /emoji_sliders/{sliderId} {
+        allow read: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+        allow create, delete: if isSignedIn() && vibeData().userId == uid();
+        allow update: if isSignedIn() && vibeIsActive(vibeData()) && vibeVisibleToViewer(vibeData(), uid());
+      }
     }
     match /archived_stories/{storyId} {
       // Archive is PRIVATE to the creator (spec §31) — never public.
@@ -298,6 +365,16 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       allow update, delete: if isSignedIn() && resource.data.userId == uid();
+      // Highlight contents inherit the parent's visibility: readable by any
+      // signed-in user (the parent highlight itself is public), writable only
+      // by the highlight's owner.
+      function highlightOwner() {
+        return get(/databases/$(database)/documents/highlights/$(highlightId)).data.userId;
+      }
+      match /highlightStories/{storyId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && highlightOwner() == uid();
+      }
     }
 
     // ==================== MESSAGING (participant-scoped) ====================
@@ -417,12 +494,26 @@ service cloud.firestore {
     match /push_tokens/{tokenId} {
       allow read, write, delete: if isSignedIn() && resource.data.userId == uid();
       allow create: if isSignedIn() && request.resource.data.userId == uid();
+      // Device registrations live one level deeper and Firestore rules do NOT
+      // cascade, so the parent grant above does not cover them. Without this
+      // nested match every registerPushToken()/removePushToken() call failed
+      // with permission-denied and push notifications silently stopped.
+      match /devices/{deviceId} {
+        allow read, write: if isOwner(tokenId);
+      }
     }
 
     // ==================== COINS / MONETIZATION ====================
     match /coin_transactions/{txId} {
-      allow read: if isSignedIn() && resource.data.userId == uid();
-      allow write: if false; // server-only (Cloud Functions)
+      // Written only by Cloud Functions (monetization/levelSystem). Clients may
+      // read their own entries; any client write is rejected.
+      allow read: if isSignedIn() && (
+        resource.data.userId == uid() ||
+        resource.data.fromUserId == uid() ||
+        resource.data.toUserId == uid() ||
+        isAdmin()
+      );
+      allow create, update, delete: if false;
     }
     match /transactions/{txId} {
       allow read: if isSignedIn() && resource.data.userId == uid();
@@ -561,20 +652,22 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
     }
-    // Sharded counters for views, reach, likes, and follows (CountersManager.js)
-    match /counter_shards/{shardId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
+    // Sharded counters: rules defined once, above, under idempotency_ledger.
 
     // ==================== MODERATION / ADMIN ====================
+    // A reporter may read back only their own report; moderators read all.
+    // (An unrestricted `read` here exposed every report body to any signed-in
+    // user.) Report writes go through the reportContent callable, which stamps
+    // reporterId server-side.
     match /comment_reports/{reportId} {
-      allow read, create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow delete: if isAdmin();
     }
     match /user_reports/{reportId} {
-      allow read, create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow delete: if isAdmin();
     }
@@ -583,12 +676,26 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.reportedBy == uid();
       allow update, delete: if isAdmin();
     }
+    // Post/story reports are written by the reportContent callable (Admin SDK),
+    // so clients only ever read their own or moderate as admin.
+    match /post_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
+    match /story_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
     match /moderation_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false; // server-verified
     }
     match /admins/{userId} {
-      allow read: if isSignedIn();
+      // A client learns its own status through the getAdminStatus callable, so
+      // the roster stays unreadable and cannot be enumerated.
+      allow read: if false;
       allow write: if false; // server-only
     }
 
@@ -610,6 +717,29 @@ service cloud.firestore {
       allow create: if isSignedIn() && uid() in request.resource.data.participants;
       match /ice/{candidateId} {
         allow read, write: if isSignedIn() && uid() in callParticipants();
+      }
+    }
+    // WebRTC signaling for live streams and spaces. The room id equals the
+    // stream/space id; participants are resolved from that parent document.
+    // Kept separate from `calls` so the two flows cannot inherit each other's
+    // access rules. Room documents carry SDP/ICE, so access is participants-only.
+    match /signaling_rooms/{roomId} {
+      function signalingParticipants() {
+        // A signing-in member of the parent live stream or space may join.
+        return isSignedIn() && (
+          uid() in get(/databases/$(database)/documents/live_streams/$(roomId)).data.participants ||
+          uid() in get(/databases/$(database)/documents/spaces/$(roomId)).data.participants
+        );
+      }
+      // Membership is resolved from the parent stream/space, not from this
+      // document: room docs only carry the offer/answer payload.
+      allow read, create, update: if signalingParticipants();
+      allow delete: if isAdmin();
+      match /hostCandidates/{candidateId} {
+        allow read, write: if signalingParticipants();
+      }
+      match /clientCandidates/{candidateId} {
+        allow read, write: if signalingParticipants();
       }
     }
     match /rate_limits/{key} {
@@ -895,12 +1025,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // ==================== COIN TRANSACTIONS (immutable double-entry) ====================
-    match /coin_transactions/{txId} {
-      allow read: if isSignedIn() && (resource.data.fromUserId == uid() || resource.data.toUserId == uid() || resource.data.userId == uid() || isAdmin());
-      allow create: if isSignedIn();
-      allow update, delete: if false; // immutable audit record
-    }
+
 
     // ==================== SUPPORT TICKETS ====================
     match /support_tickets/{ticketId} {
@@ -925,6 +1050,67 @@ service cloud.firestore {
 
     // ==================== SYSTEM HEALTH / TELEMETRY ====================
     match /system_health/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ==================== API KEYS (owner-scoped) ====================
+    // Records store only a SHA-256 hash of the secret (never the raw key).
+    match /api_keys/{keyId} {
+      allow read, delete: if isOwner(resource.data.userId);
+      allow create, update: if isOwner(request.resource.data.userId);
+    }
+
+    // ==================== ACCOUNT DELETIONS (owner-scoped) ====================
+    match /account_deletions/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) && request.resource.data.userId == userId;
+      allow delete: if isAdmin();
+    }
+
+    // ==================== SECURITY ALERTS (owner-scoped) ====================
+    match /security_alerts/{alertId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==================== CREATOR TAX PROFILES (owner-only, encrypted at rest) ====================
+    match /creator_tax_profiles/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && request.resource.data.userId == userId;
+    }
+
+    // ==================== FEED PERSONALIZATION (owner-only) ====================
+    match /user_feed_preferences/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    match /user_interest_vectors/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ==================== DAILY UPLOAD COUNTERS (owner-scoped shards) ====================
+    match /daily_upload_counters/{shardId} {
+      allow read, delete: if isOwner(resource.data.userId);
+      allow create, update: if isOwner(request.resource.data.userId);
+    }
+
+    // ==================== ENGAGEMENT COIN EVENTS (owner-authored, immutable) ====================
+    match /coin_events/{eventId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==================== VIDEO PURCHASES (entitlement record) ====================
+    // Entitlements are written by the server; buyers may read their own.
+    match /video_purchases/{purchaseId} {
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow write: if false;
+    }
+
+    // ==================== APP CONFIG (server-managed, authenticated read) ====================
+    match /config/{configId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

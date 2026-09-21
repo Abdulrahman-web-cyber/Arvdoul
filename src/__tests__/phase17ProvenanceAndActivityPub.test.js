@@ -1,9 +1,4 @@
-/**
- * src/__tests__/phase17ProvenanceAndActivityPub.test.js
- * Verification test suite for Phase 17:
- * - Content Provenance, Cryptographic Watermarking & Deepfake Risk Scoring (Feature 52)
- * - Multi-Tenant Federation & ActivityPub Mesh Protocol (Feature 53)
- */
+// src/__tests__/phase17ProvenanceAndActivityPub.test.js
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

@@ -1,5 +1,4 @@
-// src/routes/AppRoutes.jsx - ULTIMATE PRODUCTION VERSION FIXED V2
-// 🏆 PERFECT ROUTING • COMPLETE MESSAGING • PRODUCTION READY
+// src/routes/AppRoutes.jsx
 import React, { lazy, Suspense, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
@@ -47,7 +46,6 @@ const FollowingScreen = lazy(() => import("../screens/Profile/FollowingScreen.js
 const FriendsScreen = lazy(() => import("../screens/Profile/FriendsScreen.jsx"));
 const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.jsx"));
 const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
-const ProfileSettingsScreen = lazy(() => import("../screens/Profile/ProfileSettingsScreen.jsx"));
 // Legacy screens
 const PostDetails = lazy(() => import("../screens/PostDetails.jsx"));
 const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
@@ -57,6 +55,7 @@ const CollectionsScreen = lazy(() => import("../screens/CollectionsScreen.jsx"))
 const LiveScreen = lazy(() => import("../screens/LiveScreen.jsx"));
 // Video Analytics Screen
 const VideoAnalyticsScreen = lazy(() => import("../screens/VideoAnalyticsScreen.jsx"));
+const PostAnalyticsScreen = lazy(() => import("../screens/PostAnalyticsScreen.jsx"));
 const ReelsScreen = lazy(() => import("../screens/ReelsScreen.jsx"));
 const VideoDetailScreen = lazy(() => import("../screens/VideoDetailScreen.jsx"));
 const CallScreen = lazy(() => import("../screens/CallScreen.jsx"));
@@ -85,6 +84,7 @@ const AdminSystemHealthScreen = lazy(() => import("../screens/Admin/AdminSystemH
 const AdminAuditLogsScreen = lazy(() => import("../screens/Admin/AdminAuditLogsScreen.jsx"));
 const AdminSupportTicketsScreen = lazy(() => import("../screens/Admin/AdminSupportTicketsScreen.jsx"));
 const AdminCommunityManagementScreen = lazy(() => import("../screens/Admin/AdminCommunityManagementScreen.jsx"));
+const AdminAccessScreen = lazy(() => import("../screens/Admin/AdminAccessScreen.jsx"));
 
 // Video Editor Screen
 const VideoEditorScreen = lazy(() => import("../screens/VideoEditor/VideoEditorScreen.jsx"));
@@ -127,7 +127,7 @@ import {
 } from "../components/ErrorBoundary/SectionErrorBoundary.jsx";
 import { RouteProgressBar, RouteSkeletonShell } from "../components/Navigation/RouteProgressBar.jsx";
 
-// World-class non-blocking route transition fallback (ambient skeleton + top glow line)
+// Non-blocking route transition fallback (ambient skeleton + top glow line)
 const RouteLoadingFallback = ({ variant = "default" }) => (
   <RouteSkeletonShell variant={variant} />
 );
@@ -157,8 +157,9 @@ const MessagingLayout = ({ children }) => {
 };
 
 // ==================== ADMIN ROUTE (server-verified gate) ====================
-// Any signed-in user reaching /admin is checked against the `admins`
-// collection (mirrors the server-side isAdmin() used by Cloud Functions).
+// Any signed-in user reaching /admin has their own grant checked by the
+// getAdminStatus callable. The client deliberately has no read access to the
+// admins collection, so the roster cannot be enumerated.
 const AdminRoute = ({ children }) => {
   const { user } = useAuth();
   const [allowed, setAllowed] = useState(null);
@@ -168,11 +169,9 @@ const AdminRoute = ({ children }) => {
     const check = async () => {
       if (!user?.uid) { if (mounted) setAllowed(false); return; }
       try {
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-        const snap = await getDoc(doc(firestore, 'admins', user.uid));
-        if (mounted) setAllowed(snap.exists());
+        const { fetchAdminStatus } = await import('../services/callableService.js');
+        const isAdmin = await fetchAdminStatus();
+        if (mounted) setAllowed(isAdmin);
       } catch (err) {
         if (mounted) setAllowed(false);
       }
@@ -419,6 +418,14 @@ export default function AppRoutes() {
           </Suspense>
         </ProtectedRoute>
       } />
+      {/* Legacy highlight links resolve to the stories viewer. */}
+      <Route path="/highlight/:highlightId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <StoriesScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
 
       <Route path="/vibes" element={
         <ProtectedRoute>
@@ -578,14 +585,8 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       
-      {/* Profile settings */}
-      <Route path="/profile/settings" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ProfileSettingsScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
+      {/* Profile settings - canonical settings live at /settings */}
+      <Route path="/profile/settings" element={<Navigate to="/settings" replace />} />
       
       {/* ========== SETTINGS & UTILITY ROUTES ========== */}
       <Route path="/settings" element={
@@ -680,6 +681,14 @@ export default function AppRoutes() {
       } />
 
       {/* Video Analytics */}
+      <Route path="/post/:postId/analytics" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PostAnalyticsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
       <Route path="/video-analytics" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
@@ -742,6 +751,14 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <EventDetailScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/event/:eventId/edit" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreateEventScreen />
           </Suspense>
         </ProtectedRoute>
       } />
@@ -834,6 +851,18 @@ export default function AppRoutes() {
             <AdminCommunityManagementScreen />
           </Suspense>
         </AdminRoute>
+      } />
+
+      {/* Admin access management. Deliberately authenticated-only (not
+          AdminRoute) because this is where the platform owner claims the very
+          first admin grant; the Cloud Function enforces who may actually do
+          it. */}
+      <Route path="/admin/access" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AdminAccessScreen />
+          </Suspense>
+        </ProtectedRoute>
       } />
 
       {/* Video Editor Route */}

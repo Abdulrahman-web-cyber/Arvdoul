@@ -1,9 +1,4 @@
-/**
- * src/__tests__/settingsScreen.test.jsx
- * Settings screen: renders (skeleton → content), persists toggles through
- * settingsService, shows the level card, zero axe violations.
- * Services are mocked so the test is hermetic.
- */
+// src/__tests__/settingsScreen.test.jsx
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

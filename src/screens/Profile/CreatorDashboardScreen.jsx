@@ -1,10 +1,4 @@
-/**
- * src/screens/Profile/CreatorDashboardScreen.jsx - ARVDOUL Creator Dashboard Screen
- * 
- * Full analytics dashboard for creators.
- * 
- * @component
- */
+// src/screens/Profile/CreatorDashboardScreen.jsx
 
 import React, { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

@@ -1,9 +1,4 @@
-/**
- * src/__tests__/phase14AICoPilotAndPredictive.test.js
- * Verification test suite for Phase 14:
- * - Autonomous AI Creation Co-Pilot Studio
- * - Predictive Audience Engagement & Trajectory Forecasting
- */
+// src/__tests__/phase14AICoPilotAndPredictive.test.js
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

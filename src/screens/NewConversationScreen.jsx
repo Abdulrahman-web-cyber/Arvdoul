@@ -36,7 +36,7 @@ const NewConversationScreen = () => {
     const loadFriends = async () => {
       try {
         setLoadingFriends(true);
-        const result = await userService.getUserFriends(user.uid, { limit: 50 });
+        const result = await userService.getFriends(user.uid, { limit: 50 });
         if (result.success) {
           setFriends(result.friends || []);
         }

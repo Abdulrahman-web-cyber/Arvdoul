@@ -1,12 +1,4 @@
-/**
- * src/services/searchAbuseService.js - ARVDOUL SEARCH SCRAPING & ABUSE DEFENSE v8.0
- *
- * Implements:
- * 1. Search Query Rate Limiting: Restricts users/IPs to maximum 30 queries per minute (configurable sliding window).
- * 2. Scraping Pattern Detection: Detects sequential dictionary sweeps, rapid single-character variations,
- *    suspicious sequential IDs, and excessively long searches.
- * 3. CAPTCHA Challenge Trigger on suspicious scraping velocity.
- */
+// src/services/searchAbuseService.js
 
 import { logger } from '../utils/Logger.js';
 

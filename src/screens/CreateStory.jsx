@@ -1,5 +1,5 @@
 // src/screens/CreateStory.jsx - ARVDOUL STORY CAMERA & CREATIVE STUDIO
-// 100% Pixel-perfect implementation matching Arvdoul Story Camera screenshot
+// Arvdoul story camera screen.
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -32,8 +32,7 @@ const CREATIVE_TOOLS = [
 
 const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'LAYOUT'];
 
-// Story background templates - real gradient presets (no fabricated photos)
-const SAMPLE_DRAFTS = [
+const BACKGROUND_PRESETS = [
   { id: 'd1', gradient: 'linear-gradient(135deg, #FF512F, #F09819)', label: 'Sunset' },
   { id: 'd2', gradient: 'linear-gradient(135deg, #0F2027, #2C5364)', label: 'City lights' },
   { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Mountain' },
@@ -662,26 +661,25 @@ export default function CreateStory() {
             </div>
           </div>
 
-          {/* Bottom Drafts Strip */}
+          {/* Bottom Background Presets Strip */}
           <div className="p-4 rounded-3xl bg-white/[0.04] border border-white/10 space-y-3">
             <div className="flex items-center justify-between text-xs font-bold">
               <span className="flex items-center gap-1.5 text-violet-300">
                 <Sparkles className="w-3.5 h-3.5" />
                 QUICK TIP
               </span>
-              <span className="text-[10px] text-white/50">Drafts (5)</span>
+              <span className="text-[10px] text-white/50">Backgrounds</span>
             </div>
             <p className="text-[11px] text-arvdoul-text-secondary">
               Swipe right to open gallery or left to view drafts.
             </p>
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {SAMPLE_DRAFTS.map((d) => (
+              {BACKGROUND_PRESETS.map((d) => (
                 <div
                   key={d.id}
                   onClick={() => {
-                    // Apply the gradient template as the story background
                     setBackgroundGradient(d.gradient);
-                    toast.success(`Draft "${d.label}" loaded!`);
+                    toast.success(`"${d.label}" background applied`);
                   }}
                   className="w-11 h-14 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-400 transition-all flex-shrink-0"
                   style={{ background: d.gradient }}

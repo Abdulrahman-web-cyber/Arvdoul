@@ -1,12 +1,4 @@
-/**
- * src/services/passkeyService.js - ARVDOUL FIDO2 / WEBAUTHN PASSKEY ENGINE
- *
- * Implements:
- * 1. WebAuthn Passkey Registration: `navigator.credentials.create()` with biometric (Touch ID, Face ID, Windows Hello)
- *    and hardware security key (YubiKey) attestation.
- * 2. Biometric Authentication Challenge: `navigator.credentials.get()` for phishing-resistant, passwordless sign-in.
- * 3. Firestore Credential Management: Stores public key credentials, counter state, and authenticator transport flags securely.
- */
+// src/services/passkeyService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

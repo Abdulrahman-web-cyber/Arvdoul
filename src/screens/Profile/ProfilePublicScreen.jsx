@@ -1,14 +1,4 @@
-/**
- * src/screens/Profile/ProfilePublicScreen.jsx - ARVDOUL Public Profile Screen
- * 
- * Production-grade public profile viewing screen for other creators & users.
- * Rebuilt to perfectly match the uploaded design specifications across Light and Dark themes.
- * Fully integrated with real system data, server-authoritative level & progression,
- * optimistic follow/unfollow, direct messaging, coin tipping modal, mutual friends,
- * social connections, featured creations, and responsive layout.
- * 
- * @component
- */
+// src/screens/Profile/ProfilePublicScreen.jsx
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -18,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { shareProfile } from '../../utils/shareUtils';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -173,7 +164,6 @@ export default function ProfilePublicScreen() {
     return () => { isMounted = false; };
   }, [userId, currentUser?.uid]);
 
-  // Optimistic Follow / Unfollow
   const handleFollowToggle = useCallback(async () => {
     if (!currentUser?.uid) {
       toast.error('Please sign in to follow this creator');
@@ -297,6 +287,21 @@ export default function ProfilePublicScreen() {
     };
   }, [profileData, userId, posts?.length]);
 
+  // Profile share
+  const handleShare = useCallback(async () => {
+    try {
+      const result = await shareProfile(effectiveProfile, {
+        title: `${effectiveProfile.displayName || 'Profile'} on Arvdoul`,
+      });
+      if (result.cancelled) return;
+      if (result.shared) toast.success('Profile shared!');
+      else if (result.copied) toast.success('Profile link copied to clipboard!');
+      else toast.error('Could not share this profile.');
+    } catch (error) {
+      toast.error('Could not share this profile.');
+    }
+  }, [effectiveProfile]);
+
   if (loading && !profileData) {
     return (
       <div className={cn(
@@ -386,6 +391,7 @@ export default function ProfilePublicScreen() {
             onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
             onOpenOptionsMenu={() => setShowOptionsMenu(true)}
+            onSharePress={handleShare}
             onCallPress={() => toast.info('Starting secure audio call...')}
           />
 
@@ -394,7 +400,7 @@ export default function ProfilePublicScreen() {
             mutualFriends={mutualFriends}
             profile={effectiveProfile}
             theme={theme}
-            onMutualClick={() => navigate(`/profile/${userId}/mutual-friends`)}
+            onMutualClick={() => navigate(`/profile/${userId}/friends`)}
           />
 
           {/* 3b. Mutual Friends Line */}

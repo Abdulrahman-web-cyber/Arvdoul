@@ -1,12 +1,4 @@
-/**
- * src/__tests__/settingsService.test.js
- * Real assertions for the settings service:
- *  - defaults merge (partial docs, nulls, unknown groups)
- *  - dotted-path get/set immutability
- *  - updateSetting persists via Firestore merge + optimistic cache
- *  - rollback on persist failure
- *  - clearApplicationCache preserves auth keys and clears the rest
- */
+// src/__tests__/settingsService.test.js
 
 import { jest } from '@jest/globals';
 import {

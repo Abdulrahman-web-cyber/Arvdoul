@@ -1,10 +1,4 @@
-/**
- * src/__tests__/videoData.test.js
- * Guards the mock-data removals:
- *   - videoData.js must NOT contain fabricated users/videos
- *   - it still exports the real VIRTUAL_GIFTS catalog
- *   - videoService must NOT reference INITIAL_VIDEOS (honest empty feed)
- */
+// src/__tests__/noFabricatedData.test.js
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -418,11 +412,15 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
   });
 });
 
-describe('Level gate - aligned with the real 15-level curve', () => {
-  test('no "Level 25" monetization gate (max level is 15)', () => {
+describe('Level gate - aligned with the real level curve', () => {
+  test('monetization gate reads the shared LEVEL_GATES single source of truth', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
     expect(src).not.toContain('Level 25');
-    expect(src).toContain('MONETIZATION_MIN_LEVEL = 10');
+    // The threshold is no longer a second literal in the view; it comes from
+    // src/shared/levelConfig.cjs so the UI and server can never disagree.
+    expect(src).toContain('MONETIZATION_MIN_LEVEL = LEVEL_GATES.withdrawals');
+    const shared = fs.readFileSync(path.join(root, 'src', 'shared', 'levelConfig.cjs'), 'utf8');
+    expect(shared).toContain('withdrawals: 10');
   });
 });
 
@@ -458,13 +456,15 @@ describe('Poll wagers - real coin debit', () => {
 
 describe('Engagement coin rewards - wired to the real ledger', () => {
   test('components no longer destructure undefined addCoins/followUser from useAuth', () => {
-    const feed = fs.readFileSync(path.join(root, 'src/components/Home/ReelsFeed.jsx'), 'utf8');
+    const reels = fs.readFileSync(path.join(root, 'src/screens/ReelsScreen.jsx'), 'utf8');
     const modal = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
     const card = fs.readFileSync(path.join(root, 'src/components/Home/PostCard.jsx'), 'utf8');
-    expect(feed).not.toContain('addCoins, followUser } = useAuth');
+    expect(reels).not.toContain('addCoins, followUser } = useAuth');
     expect(modal).not.toContain('addCoins } = useAuth');
     expect(card).not.toContain('addCoins } = useAuth');
-    expect(feed).toContain('getUserService().followUser(user.uid, uid)');
+    // Follow must go through the real social graph, not local state.
+    expect(reels).toContain('userService.followUser(user.uid, creator.id)');
+    expect(reels).toContain('userService.unfollowUser(user.uid, creator.id)');
     expect(card).toContain('"like"');
   });
 });
@@ -490,9 +490,32 @@ describe('Admin - no fabricated stats', () => {
 
   test('rules allow admin moderation of users and posts', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    expect(rules).toContain('allow update, delete: if isOwner(userId) || isAdmin();');
+    // Admins moderate through the applyUserAdminAction callable (server writes
+    // via the Admin SDK bypass rules). A direct admin client write to
+    // /users/{id} is intentionally refused so every privileged change is
+    // audited server-side.
+    expect(rules).toContain('allow update: if isOwner(userId) && !touchesServerAuthoritativeFields();');
+    expect(rules).toContain('allow delete: if false;');
     expect(rules).toContain('|| isAdmin());');
     expect(rules).toContain('match /video_reports/{reportId}');
+  });
+
+  test('rules forbid client writes to server-authoritative user fields', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('function touchesServerAuthoritativeFields()');
+    const block = rules.slice(
+      rules.indexOf('function touchesServerAuthoritativeFields()'),
+      rules.indexOf('function authoredBy(field)')
+    );
+    // The rule list and the client contract list must cover the same fields.
+    const contracts = fs.readFileSync(path.join(root, 'src/config/profileContracts.js'), 'utf8');
+    const contractList = contracts.slice(
+      contracts.indexOf('export const SERVER_AUTHORITATIVE_FIELDS = ['),
+      contracts.indexOf('];', contracts.indexOf('export const SERVER_AUTHORITATIVE_FIELDS = ['))
+    );
+    const fields = [...contractList.matchAll(/'([a-zA-Z]+)'/g)].map((m) => m[1]);
+    const missing = fields.filter((f) => !block.includes(`'${f}'`));
+    expect(missing).toEqual([]);
   });
 });
 

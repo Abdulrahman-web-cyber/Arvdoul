@@ -1,22 +1,4 @@
-// src/screens/HomeScreen.jsx – ARVDOUL ULTIMATE FEED v33.0 (FINAL – ENTERPRISE ULTRA PRO MAX)
-// ✅ All critical issues from deep audit fixed:
-//   - Retry closure captures correct reset/skipCache parameters
-//   - feedRef used instead of feedStateRef for cache logic
-//   - MediaPreloader counters reset properly per batch
-//   - SessionEngine sliding window (no aggressive full reset)
-//   - VisibilityProvider root condition fixed (null = not ready)
-//   - useMemo dependencies corrected
-//   - Consolidated feedRuntimeRef (single source of truth)
-//   - pendingRequestPromises cleanup with .finally()
-//   - Session token (sessionId) prevents stale async updates
-//   - IntersectionObserver disconnects before recreate
-//   - insertNewPosts sorts new posts by createdAt desc
-//   - Set rebuild optimized (only on length change)
-//   - Offline fallback prioritises cache over error state
-//   - hasMore uses consistent logic (nextCursor priority)
-// ✅ Extreme styling – Arvdoul purple gradient, glassmorphism, smooth animations
-// ✅ Production‑ready, surpasses TikTok/Instagram/Facebook feed architecture
-// ✅ No file splitting – single unified screen
+// src/screens/HomeScreen.jsx
 
 import React, { useState, useEffect, useCallback, useRef, useReducer, useContext, createContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';

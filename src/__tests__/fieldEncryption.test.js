@@ -1,8 +1,4 @@
-/**
- * src/__tests__/fieldEncryption.test.js
- * Real cryptographic round-trip tests for fieldEncryptionService
- * (AES-256-GCM + PBKDF2, zero-knowledge field encryption).
- */
+// src/__tests__/fieldEncryption.test.js
 
 import { fieldEncryptionService } from '../services/fieldEncryptionService.js';
 

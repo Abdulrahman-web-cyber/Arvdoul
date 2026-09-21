@@ -1,18 +1,4 @@
-/**
- * src/services/userIntegrityService.js - ARVDOUL USER INTEGRITY & TRUST ENGINE v8.0
- *
- * Implements:
- * 1. Multi-Dimensional Trust Score (0-100): Evaluates account age, phone/email verification, strike history,
- *    report ratio, and verified creator status.
- * 2. Strike & Warning Lifecycle: Enforces progressive discipline:
- *    - 1st Strike: Warning notice + educational policy acknowledgment
- *    - 2nd Strike: 24-hour posting / commenting restriction
- *    - 3rd Strike: 7-day shadowban / reach restriction
- *    - 4th Strike: Permanent account suspension
- * 3. Farm & Sybil Defense: Detects coordinated like/follow networks operating from shared subnets or device hashes.
- * 4. Ban Evasion Interception: Prevents banned users from creating alt accounts matching hardware hashes or payment methods.
- * 5. Appeals Management Pipeline: User appeal submission and human review lifecycle.
- */
+// src/services/userIntegrityService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

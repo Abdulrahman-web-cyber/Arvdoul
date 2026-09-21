@@ -1,7 +1,4 @@
-/**
- * src/__tests__/validationService.test.js
- * Real assertions for the strict input validation layer.
- */
+// src/__tests__/validationService.test.js
 
 import { validationService } from '../services/validationService.js';
 

@@ -1,9 +1,4 @@
-// src/firebase/firebase.js - ULTRA PRO MAX ENTERPRISE EDITION V4
-// 🏢 Perfect Singleton • Zero Race Conditions • Global Ready
-// 🔐 Complete Firebase v12.7.0+ Support • All Services Working
-// ✅ FIXED: Added getStorageInstance and getMessagingInstance exports
-// 🔧 CRITICAL FIX: Force `auth.settings.appVerificationDisabledForTesting` to exist
-//    immediately after creating the Auth instance, so RecaptchaVerifier never crashes.
+// src/firebase/firebase.js
 
 // ==================== ENTERPRISE CONFIGURATION ====================
 // Environment-overridable Firebase config. VITE_FIREBASE_* takes precedence

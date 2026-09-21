@@ -1,13 +1,4 @@
-/**
- * src/services/metricsService.js - ARVDOUL TIME-SERIES METRICS & PERCENTILES COLLECTOR
- *
- * Implements:
- * 1. Counters, Gauges & Histograms: Records API latencies, query counts, memory allocations, and network payloads.
- * 2. Percentile Calculations: Computes p50, p90, p95, and p99 latency percentiles with reservoir sampling.
- * 3. Metrics Summary Export for Dashboards.
- * 4. Prometheus Exporter Adapter: Exports current metrics state in a standard Prometheus scraping line format.
- * 5. Input Sanitization (CRLF/Injection prevention): Strips newline/control characters to secure Prometheus scraping (CWE-93).
- */
+// src/services/metricsService.js
 
 class MetricsService {
   constructor() {

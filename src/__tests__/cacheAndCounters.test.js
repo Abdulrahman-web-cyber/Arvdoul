@@ -1,9 +1,4 @@
-/**
- * src/__tests__/cacheAndCounters.test.js
- * Real assertions for the caching and counter layers: CacheManager,
- * RedisCacheManager, CacheInvalidationService, TTL optimization and
- * sharded counters (with mocked Firestore).
- */
+// src/__tests__/cacheAndCounters.test.js
 
 import { jest } from '@jest/globals';
 import { CacheManager, cacheManager } from '../utils/CacheManager.js';

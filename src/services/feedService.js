@@ -1,12 +1,4 @@
-// src/services/feedService.js – ARVDOUL ULTRA FEED ENGINE v24.2 (Complete, Fixed, Production‑Ready)
-// ✅ All methods present, including _startEngagementTracker
-// ✅ Immediate initialisation with timeout fallback – never hangs
-// ✅ Graceful fallback – always returns a valid feed result
-// ✅ Fixed diversity loop O(n) instead of O(n²)
-// ✅ Efficient following feed using batched IN queries (same as server)
-// ✅ Cursor compressed & URL‑safe
-// ✅ Pending awards processed in parallel with error isolation
-// Upgrades: Feed poisoning validation, scrape protection, and A/B test split models.
+// src/services/feedService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
@@ -14,6 +6,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { firestoreService } from './firestoreService.js';
+import { ALGORITHM_VERSION } from '../config/platformContracts.js';
 
 const FEED_CONFIG = {
   FEED_TYPES: {
@@ -211,8 +204,9 @@ class UltimateFeedService {
     this.interestVectorCache = new Map();
     this.coinLedger = new Map();
     this.activeUsers = new Set();
-    this.algorithmVersion = 'v24.2';
+    this.algorithmVersion = ALGORITHM_VERSION;
     this.mlCache = new Map();
+    this.diversityMetrics = new Map();
     this.healthMetrics = { avgLatency: 0, lastLatency: 0 };
 
     this._readyPromise = this._initWithTimeout();
@@ -446,8 +440,7 @@ class UltimateFeedService {
       const followsSnap = await this.firestoreMethods.getDocs(
         this.firestoreMethods.query(
           this.firestoreMethods.collection(this.firestore, 'follows'),
-          this.firestoreMethods.where('followerId', '==', userId),
-          this.firestoreMethods.orderBy('__name__')
+          this.firestoreMethods.where('followerId', '==', userId)
         )
       );
       const followedIds = followsSnap.docs.map(doc => doc.data().followingId);
@@ -1315,16 +1308,18 @@ class UltimateFeedService {
       const mon = await _getMonetization();
       const ad = await mon.getAd(FEED_CONFIG.MONETISATION.AD_PLACEMENT, userId, { feedPosition: adIndex });
       if (!ad) return null;
+      // Only surface fields the ad record actually provides. Never invent ad
+      // copy or point at assets that do not ship with the bundle.
       return {
         id: ad.id || `ad_${userId}_${adIndex}`,
         type: 'ad',
         adType: ad.type || 'display',
-        title: ad.title || 'Sponsored',
-        content: ad.description || ad.content || 'Discover amazing products',
-        imageUrl: ad.imageUrl || ad.image || '/assets/ad-REAL.png',
-        link: ad.targetUrl || ad.link || '/ads',
-        advertiser: ad.advertiser || 'Advertiser',
-        cta: ad.cta || 'Learn More',
+        title: ad.title || '',
+        content: ad.description || ad.content || '',
+        imageUrl: ad.imageUrl || ad.image || (ad.media && ad.media.thumbnailUrl) || '',
+        link: ad.targetUrl || ad.link || '',
+        advertiser: ad.advertiser || ad.advertiserName || '',
+        cta: ad.cta || '',
         isAd: true,
         _source: 'monetisation',
       };

@@ -1,5 +1,4 @@
-// src/screens/PostCard.jsx – ARVDOUL ULTIMATE POST CARD (FINAL PERFECT)
-// Perfect rounded edges, compact height, larger avatar, bubble counts, all bugs fixed.
+// src/screens/PostCard.jsx — post card
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,7 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService';
 import commentService from '../services/commentService';
-import * as userService from '../services/userService';
+import { LEVEL_GATES } from '../shared/levelConfig.cjs';
+import * as userService from '../services/userService.js';
 import * as monetizationService from '../services/monetizationService';
 import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
@@ -507,8 +507,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
   // Memoized post data
   const likedBySet = useMemo(() => new Set(post.likedBy || []), [post.likedBy]);
-  const isCreator = (post.authorLevel || 0) >= 5;
-  const isPremium = (post.authorLevel || 0) >= 8;
+  const isCreator = (post.authorLevel || 0) >= LEVEL_GATES.creatorProfile;
+  const isPremium = (post.authorLevel || 0) >= LEVEL_GATES.customBadge;
   const hasMedia = !!(post.media && post.media.length > 0);
 
   const isInitiallyLiked = useMemo(() => {

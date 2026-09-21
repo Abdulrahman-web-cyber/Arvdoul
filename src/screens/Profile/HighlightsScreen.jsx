@@ -1,10 +1,4 @@
-/**
- * src/screens/Profile/HighlightsScreen.jsx - ARVDOUL Highlights Screen
- * 
- * Manage story highlights.
- * 
- * @component
- */
+// src/screens/Profile/HighlightsScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -161,7 +155,7 @@ export default function HighlightsScreen() {
                 )}
               >
                 <button
-                  onClick={() => navigate(`/highlight/${highlight.id}`)}
+                  onClick={() => navigate(`/stories?highlight=${highlight.id}`)}
                   className="w-full"
                 >
                   <div className={cn(

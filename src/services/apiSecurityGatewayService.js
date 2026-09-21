@@ -1,12 +1,4 @@
-/**
- * src/services/apiSecurityGatewayService.js - ARVDOUL API SECURITY GATEWAY
- *
- * Implements:
- * 1. API Key Provisioning & Cryptographic Rotation: Generates scoped SHA-256 hashed API keys for developers and internal microservices.
- * 2. Scope & Permission Check: Verifies read/write/admin scopes on each API invocation.
- * 3. Usage & Quota Metering: Tracks API calls against tier quotas.
- * 4. Persistent Key Store: Stores and verifies hashed keys using local persistent fallback and Firestore.
- */
+// src/services/apiSecurityGatewayService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

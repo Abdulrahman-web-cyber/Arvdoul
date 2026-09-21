@@ -1,5 +1,5 @@
 // src/screens/Collaboration/ProjectDashboardScreen.jsx - ARVDOUL PROJECT DASHBOARD
-// Per Constitution v5.0 - Grid of collaboration projects
+// - Grid of collaboration projects
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';

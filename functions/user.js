@@ -1,14 +1,15 @@
-// functions/user.js – ARVDOUL USER OPERATIONS (PRODUCTION V6 · FINAL)
-// ✅ deleteUserData – complete cascade with sub‑collection cleanup BEFORE parent deletion
-// ✅ getMutualFriends – O(2) queries, all mutual friends (up to 200 follows each)
-// ✅ generateFriendRecommendations – O(followers) mutual detection, parallel friends‑of‑friends
-// 🔐 Auth enforced · idempotent · audit trail · GDPR compliant
-// ⚡ Zero orphans · cursor‑based offload · safety caps everywhere
-// 🔧 FIXED: removed invalid Promise.all inside transaction, side effects outside
-// 🔧 FIXED: transaction retry wrapper added for robustness
-// 🔧 FIXED: deleteUserData now also removes username mapping and all graph connections
-
-const functions = require('firebase-functions');
+// functions/user.js — user account operations
+//
+// deleteUserData          cascade delete with subcollection cleanup before
+//                         parent removal (keeps the username mapping and graph
+//                         connections consistent)
+// getMutualFriends        two queries; up to 200 follows per side
+// generateFriendRecommendations
+//                         mutual detection across followers with parallel
+//                         friends-of-friends lookup
+//
+// Auth required. Idempotent, audited, and GDPR-compliant. Cursor-based
+// offloading with safety caps so no orphan records are left behind.
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
 
@@ -136,14 +137,9 @@ async function enqueueDeletionTask(userId, remainingCollections = [], cursors = 
   }
 }
 
-const getUserIdFromContext = (context) => {
-  if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
-  }
-  return context.auth.uid;
-};
-
-const isAdmin = (context) => !!context.auth?.token?.admin;
+// Auth + admin checks live in functions/auth.js so every module agrees on
+// what an admin is (admins/{uid} doc, plus an optional custom claim).
+const { getUserIdFromContext, checkIsAdmin } = require('./auth');
 
 // ----------------------------------------------------------------------
 //  1. deleteUserData (callable) – COMPLETE CASCADE, SUBCOLLECTIONS FIRST
@@ -153,7 +149,7 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
   await checkRateLimit(callerUid, 'deleteUserData', 2, 3600000); // max 2 deletions/hour
   const { userId } = data;
   if (!userId) throw new functions.https.HttpsError('invalid-argument', 'userId is required.');
-  if (callerUid !== userId && !isAdmin(context)) {
+  if (callerUid !== userId && !(await checkIsAdmin(context))) {
     throw new functions.https.HttpsError('permission-denied', 'You cannot delete this account.');
   }
 
@@ -410,7 +406,7 @@ exports.getMutualFriends = functions.https.onCall(async (data, context) => {
 exports.generateFriendRecommendations = functions.https.onCall(async (data, context) => {
   const uid = getUserIdFromContext(context);
   await checkRateLimit(uid, 'friendRecommendations', 5, 60000);
-  if (!isAdmin(context)) {
+  if (!(await checkIsAdmin(context))) {
     throw new functions.https.HttpsError('permission-denied', 'Only administrators can generate recommendations.');
   }
 

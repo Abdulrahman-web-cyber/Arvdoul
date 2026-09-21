@@ -1,12 +1,4 @@
-/**
- * src/services/manipulatedMediaService.js - ARVDOUL AI-GENERATED & DEEPFAKE MEDIA DETECTOR v8.0
- *
- * Implements:
- * 1. C2PA / Content Credentials Metadata Inspector: Reads signed provenance metadata from JPEG/PNG/MP4 EXIF chunks.
- * 2. Visual Artifact & Facial Warping Detector: Identifies deepfake facial boundary blending and temporal blinking anomalies.
- * 3. Transparent Disclosure Labeling: Automatically attaches "AI-Generated Media" transparency label to compliant posts.
- * 4. Deepfake Detection Simulator: Scans images for visual artifact anomalies.
- */
+// src/services/manipulatedMediaService.js
 
 import { logger } from '../utils/Logger.js';
 

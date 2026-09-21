@@ -1,7 +1,4 @@
-/**
- * src/utils/cropImage.js - ARVDOUL Canvas Cropping & Compression Utility
- * Crops and compresses an image to an optimized square avatar blob/file.
- */
+// src/utils/cropImage.js
 
 const createImage = (url) =>
   new Promise((resolve, reject) => {

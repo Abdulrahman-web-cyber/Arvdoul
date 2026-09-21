@@ -1,9 +1,6 @@
-// src/screens/Community/CommunityDirectoryScreen.jsx - ARVDOUL COMMUNITY DIRECTORY
-// ✅ Browse and search communities
-// ✅ Filter by privacy type
-// ✅ Sort by popularity, newest, active
+// src/screens/Community/CommunityDirectoryScreen.jsx
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -27,7 +24,7 @@ const CommunityDirectoryScreen = () => {
   const [filter, setFilter] = useState('all'); // all, public, private, secret
   const [sortBy, setSortBy] = useState('popular'); // popular, newest, active
   const [viewMode, setViewMode] = useState('grid'); // grid, list
-  const [page, setPage] = useState(1);
+  const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [myCommunities, setMyCommunities] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
@@ -36,30 +33,26 @@ const CommunityDirectoryScreen = () => {
   const loadCommunities = useCallback(async (reset = false) => {
     try {
       setLoading(true);
-      const currentPage = reset ? 1 : page;
-      
+
       const result = await communityService.listCommunities({
-        page: currentPage,
         sortBy,
         filter: filter === 'all' ? null : filter,
-        searchQuery
+        searchQuery,
+        cursor: reset ? null : cursor
       });
 
-      if (reset) {
-        setCommunities(result.communities);
-      } else {
-        setCommunities(prev => [...prev, ...result.communities]);
-      }
-      
+      setCommunities(prev =>
+        reset ? result.communities : [...prev, ...result.communities]
+      );
       setHasMore(result.hasMore);
-      setPage(currentPage + 1);
+      setCursor(result.nextCursor);
     } catch (error) {
       console.error('Failed to load communities:', error);
       toast.error('Failed to load communities');
     } finally {
       setLoading(false);
     }
-  }, [communityService, page, sortBy, filter, searchQuery]);
+  }, [communityService, cursor, sortBy, filter, searchQuery]);
 
   // Load user's communities
   const loadMyCommunities = useCallback(async () => {
@@ -77,15 +70,19 @@ const CommunityDirectoryScreen = () => {
   useEffect(() => {
     loadCommunities(true);
     loadMyCommunities();
-  }, [sortBy, filter]);
+  }, [sortBy, filter, loadCommunities, loadMyCommunities]);
 
-  // Search debounce
+  // Search debounce. Skip the first run so an empty query does not trigger a
+  // duplicate reload right after the initial load above.
+  const lastQueryRef = useRef(searchQuery);
   useEffect(() => {
+    if (lastQueryRef.current === searchQuery) return undefined;
     const timer = setTimeout(() => {
+      lastQueryRef.current = searchQuery;
       loadCommunities(true);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, loadCommunities]);
 
   // Load more
   const handleLoadMore = useCallback(() => {

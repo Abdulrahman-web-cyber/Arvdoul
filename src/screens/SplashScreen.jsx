@@ -1,4 +1,4 @@
-// src/screens/SplashScreen.jsx - ULTIMATE PROFESSIONAL PRODUCTION VERSION
+// src/screens/SplashScreen.jsx
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";

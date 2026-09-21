@@ -1,12 +1,4 @@
-/**
- * src/services/immutableAuditLedgerService.js - ARVDOUL IMMUTABLE AUDIT LEDGER & REGULATORY COMPLIANCE v1.0
- * 
- * Enterprise cryptographic audit logging & regulatory assurance:
- * • Cryptographically chained blocks (Merkleized hash-chain: prevHash + data ➔ currentHash)
- * • SOC 2 Type II, GDPR, HIPAA, and ISO 27001 audit tagging
- * • Mathematical proof of ledger immutability & tamper detection
- * • Automated compliance verification report generator
- */
+// src/services/immutableAuditLedgerService.js
 
 import { logger } from '../utils/Logger.js';
 

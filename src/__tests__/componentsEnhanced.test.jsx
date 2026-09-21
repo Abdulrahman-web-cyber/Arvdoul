@@ -1,10 +1,4 @@
-/**
- * src/__tests__/componentsEnhanced.test.jsx
- * Behavior + accessibility gates for the enhanced primitives:
- * Tabs (keyboard nav, aria), Avatar (badges, status, keyboard click),
- * Card (variants, interactive), BottomSheet (dialog semantics, Escape,
- * focus trap, focus restore).
- */
+// src/__tests__/componentsEnhanced.test.jsx
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

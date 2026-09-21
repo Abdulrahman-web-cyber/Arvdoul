@@ -1,6 +1,4 @@
-/**
- * src/components/profile/ProfileAchievements.jsx - ARVDOUL Profile Achievements Component
- */
+// src/components/profile/ProfileAchievements.jsx
 
 import React, { memo } from 'react';
 import { cn } from '../../lib/utils';

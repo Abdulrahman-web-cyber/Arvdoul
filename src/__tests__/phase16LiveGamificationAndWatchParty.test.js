@@ -1,9 +1,4 @@
-/**
- * src/__tests__/phase16LiveGamificationAndWatchParty.test.js
- * Verification test suite for Phase 16:
- * - Interactive Live Stream Gamification, Polls & Q&A
- * - Low-Latency Ephemeral Co-Browsing & Media Watch Parties
- */
+// src/__tests__/phase16LiveGamificationAndWatchParty.test.js
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

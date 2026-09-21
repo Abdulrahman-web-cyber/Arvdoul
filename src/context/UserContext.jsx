@@ -43,6 +43,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { auth, db, storage } from "../firebase/firebase";
 import { toast } from "sonner";
+import { validateProfileUpdate } from "../config/profileContracts.js";
 import CryptoJS from "crypto-js";
 import localforage from "localforage";
 import { v4 as uuidv4 } from "uuid";
@@ -80,60 +81,19 @@ const USER_CONFIG = {
 
 /** ---------- ADVANCED USER VALIDATION ---------- */
 class UserValidator {
+  /**
+   * Delegates to the canonical profile validator (src/config/profileContracts.js)
+   * so there is one definition of what a valid profile update is, and so
+   * server-authoritative fields (level, XP, coins, isVerified, ...) are stripped
+   * here as well as in userService.
+   */
   static validateProfileUpdate(updates) {
+    const { valid, sanitized, errors: list } = validateProfileUpdate(updates);
     const errors = {};
-    const warnings = {};
-
-    // Username validation
-    if (updates.username !== undefined) {
-      if (updates.username.length < USER_CONFIG.MIN_USERNAME_LENGTH) {
-        errors.username = `Username must be at least ${USER_CONFIG.MIN_USERNAME_LENGTH} characters`;
-      } else if (updates.username.length > USER_CONFIG.MAX_USERNAME_LENGTH) {
-        errors.username = `Username must be less than ${USER_CONFIG.MAX_USERNAME_LENGTH} characters`;
-      } else if (!/^[a-zA-Z0-9_.]+$/.test(updates.username)) {
-        errors.username = "Username can only contain letters, numbers, underscores, and periods";
-      } else if (/^[0-9]/.test(updates.username)) {
-        errors.username = "Username cannot start with a number";
-      }
-    }
-
-    // Bio validation
-    if (updates.bio !== undefined) {
-      if (updates.bio.length > USER_CONFIG.MAX_BIO_LENGTH) {
-        errors.bio = `Bio must be less than ${USER_CONFIG.MAX_BIO_LENGTH} characters`;
-      }
-    }
-
-    // Nickname validation
-    if (updates.nickname !== undefined) {
-      if (updates.nickname.length > USER_CONFIG.MAX_NICKNAME_LENGTH) {
-        errors.nickname = `Nickname must be less than ${USER_CONFIG.MAX_NICKNAME_LENGTH} characters`;
-      }
-    }
-
-    // Display name validation
-    if (updates.displayName !== undefined) {
-      if (updates.displayName.trim().length < 2) {
-        errors.displayName = "Name must be at least 2 characters";
-      }
-      if (updates.displayName.trim().length > 50) {
-        warnings.displayName = "Name is quite long";
-      }
-    }
-
-    // Privacy settings validation
-    if (updates.privacy !== undefined) {
-      const validPrivacy = ['public', 'private', 'friends_only', 'mutual_friends'];
-      if (!validPrivacy.includes(updates.privacy)) {
-        errors.privacy = "Invalid privacy setting";
-      }
-    }
-
-    return {
-      isValid: Object.keys(errors).length === 0,
-      errors,
-      warnings
-    };
+    list.forEach((message) => {
+      errors[message.split(' ')[0].toLowerCase()] = message;
+    });
+    return { isValid: valid, errors, warnings: {}, sanitized };
   }
 
   static validatePasswordChange(currentPassword, newPassword) {

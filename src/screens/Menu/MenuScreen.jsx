@@ -1,6 +1,4 @@
-// src/screens/Menu/MenuScreen.jsx – ARVDOUL SUPREME MENU & STUDIO HUB
-// 🎯 Advanced Floating Card Navigation Hub • Pro Creator Control Center
-// ✅ WCAG 2.1 AA Compliant • Glassmorphism • Real User Data • Instant Filter Search
+// src/screens/Menu/MenuScreen.jsx
 
 import React, { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -46,6 +44,7 @@ import {
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
+import { getCitizenTier, LEVEL_GATES } from "../../shared/levelConfig.cjs";
 
 // Animation Variants
 const containerVariants = {
@@ -77,7 +76,10 @@ export default function MenuScreen() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const activeUser = currentUser || user;
-  const userCoins = activeUser?.coins ?? 1250;
+  const userLevel = Number(activeUser?.level) || 1;
+  const isCreatorAccount = Boolean(activeUser?.isCreator) || userLevel >= LEVEL_GATES.creatorProfile;
+  const citizenLabel = getCitizenTier(userLevel, activeUser?.activeDaysCount || 0).tier;
+  const userCoins = Number(activeUser?.coins ?? 0) || 0;
   const formattedCoins = userCoins >= 1000 ? `${(userCoins / 1000).toFixed(1)}k` : `${userCoins}`;
 
   // Quick Action Launchers (Top Bento Banner)
@@ -244,12 +246,14 @@ export default function MenuScreen() {
                   <h1 className="text-xl sm:text-2xl font-black tracking-tight">
                     {activeUser?.displayName || "Creator"}
                   </h1>
-                  <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-400 text-xs font-bold">
-                    PRO
-                  </span>
+                  {isCreatorAccount && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-400 text-xs font-bold">
+                      CREATOR
+                    </span>
+                  )}
                 </div>
                 <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                  @{activeUser?.username || "creator"} • Citizen Level 4
+                  @{activeUser?.username || "creator"} • {citizenLabel}
                 </p>
               </div>
             </div>
@@ -534,7 +538,7 @@ export default function MenuScreen() {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-            Arvdoul Supreme Suite • v3.0.0 Pro • 100% Production Ready
+            Arvdoul
           </p>
         </div>
       </div>

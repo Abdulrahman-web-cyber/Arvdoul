@@ -1,6 +1,4 @@
 // src/screens/Spaces/SpacesScreen.jsx
-// 🎙️ ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES
-// Real-time audio stages, speaker hand raising, super coin tipping, and interactive reactions
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

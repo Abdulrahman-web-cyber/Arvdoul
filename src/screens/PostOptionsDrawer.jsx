@@ -1,13 +1,4 @@
-// src/screens/PostOptionsDrawer.jsx – ARVDOUL ULTIMATE (PRODUCTION‑READY – FIXED)
-// ✅ All bugs fixed, UI perfected, offline queue solid, accessibility enhanced
-// ✅ Boost only visible to author
-// ✅ Edit / Analytics navigation fixed
-// ✅ Drawer stays open after non‑destructive actions
-// ✅ Delete timer only removes post locally, no forced navigation
-// ✅ Follow state refreshes on drawer open
-// ✅ Mounted checks prevent async state updates after unmount
-// ✅ Safety section UI flawless (no cracks / scratches)
-// ✅ Modals race‑safe, analytics flushed on unmount
+// src/screens/PostOptionsDrawer.jsx
 
 import React, {
   useState, useCallback, useEffect, useRef, useMemo, useReducer
@@ -568,7 +559,9 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       toast.success('Report submitted');
       debouncedAnalytics('post_option_click', { action: 'report', postId: post.id, reason: reportReason });
       setReportReason('');
-    } catch { toast.error('Report failed'); }
+    } catch (err) {
+      toast.error(err?.code === 'functions/already-exists' ? 'You already reported this post' : 'Report failed');
+    }
     finally { dispatchUI({ type: 'SET_LOADING_ACTION', payload: null }); closeModal(); }
   });
 

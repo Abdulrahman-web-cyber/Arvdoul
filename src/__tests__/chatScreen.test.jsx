@@ -1,12 +1,4 @@
-/**
- * src/__tests__/chatScreen.test.jsx
- * ChatScreen integrity gates:
- *   - NO mock/simulated content (the old INITIAL_MESSAGES "Isabella"
- *     auto-responder is gone)
- *   - wires to the real messaging service (sendMessage / reactToMessage /
- *     markMessageAsRead)
- *   - renders loading, empty, and conversation states
- */
+// src/__tests__/chatScreen.test.jsx
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

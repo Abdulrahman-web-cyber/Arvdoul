@@ -1,12 +1,4 @@
-/**
- * src/services/imageModerationService.js - ARVDOUL IMAGE SAFETY CLASSIFICATION ENGINE v8.0
- *
- * Implements:
- * 1. Multi-Class Visual Inspection: Evaluates images for Adult/NSFW Nudity, Graphic Violence/Gore,
- *    Weapons/Firearms, and Medical Distress.
- * 2. Client-Side Skin-Tone & Edge Frequency Heuristics: Rapid pre-filtering before cloud vision dispatch.
- * 3. Fallback Cloud Vision Pipeline with safety confidence ratings.
- */
+// src/services/imageModerationService.js
 
 import { logger } from '../utils/Logger.js';
 

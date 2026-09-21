@@ -1,11 +1,4 @@
-/**
- * src/services/copyrightDetectionService.js - ARVDOUL COPYRIGHT & PERCEPTUAL HASHING ENGINE v8.0
- *
- * Implements:
- * 1. 64-bit Perceptual Hash (dHash/pHash) Simulation: Generates visual media fingerprints.
- * 2. Hamming Distance Matching: Verifies overlap proximity against registered copyrighted assets.
- * 3. DMCA Legal Notice & Takedown Log: Generates automated DMCA review cases.
- */
+// src/services/copyrightDetectionService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

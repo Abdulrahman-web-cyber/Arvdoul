@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminFeatureFlagsScreen.jsx - ARVDOUL FEATURE FLAGS & KILL SWITCHES
-// ✅ Interactive control center for runtime flags and emergency kill switches
-// ✅ Category filtering, instant overrides, and fallback reset
-// ✅ Server-authoritative audit logging on every administrative toggle
+// src/screens/Admin/AdminFeatureFlagsScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

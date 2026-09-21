@@ -1,8 +1,4 @@
-// src/context/AuthContext.jsx - ULTIMATE PRODUCTION V33 - NO BLINK, STABLE LOADING
-// 🎯 SINGLE SOURCE OF TRUTH (ZUSTAND) • REALTIME PROFILE SYNC • MULTI-TAB COORDINATION
-// 🔧 FIXED: Removed `user` dependency from auth listener – prevents re-subscription on every profile change
-// 🔧 ADDED: `initialProfileLoaded` flag to avoid loading flicker after first load
-// ✅ NO BLINKING • SMOOTH AUTH TRANSITIONS
+// src/context/AuthContext.jsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -940,7 +936,6 @@ export function AuthProvider({ children }) {
     if (!userService || !user) throw new Error('Services not ready');
     try {
       await userService.updateUserProfile(user.uid, updates);
-      toast.success('Profile updated!');
     } catch (error) {
       const errorMessage = normalizeFirebaseError(error);
       debouncedToast(errorMessage, 'error');

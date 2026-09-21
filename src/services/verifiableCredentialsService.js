@@ -1,12 +1,4 @@
-/**
- * src/services/verifiableCredentialsService.js - ARVDOUL VERIFIABLE CREDENTIALS & ATTESTATION ENGINE v1.0
- * 
- * Production-grade creator identity claims & tamper-evident attestations:
- * • W3C-aligned Verifiable Credentials format for creator achievements, verification badges, and brand deals
- * • Cryptographic payload hashing & tamper-evident signature verification
- * • Zero-Knowledge selective disclosure claims (e.g. "Tier: Gold", "Earnings > $10k" without leaking raw data)
- * • Revocation registry & expiration lifecycle management
- */
+// src/services/verifiableCredentialsService.js
 
 import { logger } from '../utils/Logger.js';
 

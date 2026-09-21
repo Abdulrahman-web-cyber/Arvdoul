@@ -1,14 +1,4 @@
-/**
- * src/services/botProtectionService.js - ARVDOUL BOT DEFENSE & BEHAVIORAL ENTROPY ENGINE
- *
- * Implements:
- * 1. Cursor & Touch Trajectory Entropy Analysis: Measures curvature variance, acceleration jitter, and trajectory micro-deviations.
- *    Bots exhibit linear or 0-jitter curves; real humans produce high-entropy fractal motion.
- * 2. Keystroke Dynamics: Analyzes flight time and dwell time distributions during form completion.
- * 3. Invisible Bot Scoring: Assigns behavioral confidence score (0.00 = bot, 1.00 = verified human).
- * 4. Headless Browser Detection: Inspects navigator flags, user-agents, WebGL renderers, and plugin limits.
- * 5. Touch Event Dynamics: Tracks tactile trajectory micro-movements on mobile/touch interfaces.
- */
+// src/services/botProtectionService.js
 
 import { logger } from '../utils/Logger.js';
 

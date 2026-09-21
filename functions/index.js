@@ -1,7 +1,7 @@
-// functions/index.js – ENTERPRISE ULTIMATE PRODUCTION V3
-// 🔥 Fully compatible with Arvdoul client services
-// 🔒 Atomic transactions, idempotency, sharded counters, scheduled cleanups
-// 📦 Supports coins, gifts, boosts, withdrawals, ads, videos, push, email
+// functions/index.js — Cloud Functions entry point
+//
+// Loads every feature module so their exports are registered for deploy.
+// Covers coins, gifts, boosts, withdrawals, ads, videos, push, and email.
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -33,6 +33,11 @@ require('./ai.js');
 require('./saml.js');
 // Level system (server-authoritative XP; client prefers this callable).
 require('./levelSystem.js');
+// Moderation, reporting, AI authoring and post-performance prediction.
+require('./moderation.js');
+// Server-authoritative admin actions (ban/suspend/verify, user directory,
+// report resolution). The client never writes privileged user fields directly.
+require('./admin.js');
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -48,33 +53,6 @@ const VIDEO_CONFIG = {
   },
 };
 
-const MONETIZATION_CONFIG = {
-  LEVELS: [
-    { level: 1, xpRequired: 0, coinReward: 0 },
-    { level: 2, xpRequired: 100, coinReward: 10 },
-    { level: 3, xpRequired: 300, coinReward: 20 },
-    { level: 4, xpRequired: 600, coinReward: 30 },
-    { level: 5, xpRequired: 1000, coinReward: 40 },
-    { level: 6, xpRequired: 1500, coinReward: 50 },
-    { level: 7, xpRequired: 2100, coinReward: 60 },
-    { level: 8, xpRequired: 2800, coinReward: 70 },
-    { level: 9, xpRequired: 3600, coinReward: 80 },
-    { level: 10, xpRequired: 4500, coinReward: 100 },
-    { level: 11, xpRequired: 5500, coinReward: 120 },
-    { level: 12, xpRequired: 6600, coinReward: 140 },
-    { level: 13, xpRequired: 7800, coinReward: 160 },
-    { level: 14, xpRequired: 9100, coinReward: 180 },
-    { level: 15, xpRequired: 10500, coinReward: 200 },
-  ],
-  WITHDRAWAL_MIN_LEVEL: 10,
-  GIFTS: [
-    { type: 'rose', value: 5 },
-    { type: 'crown', value: 50 },
-    { type: 'diamond', value: 100 },
-    { type: 'rocket', value: 500 },
-  ],
-  BOOST_COST_PER_DAY: 10,
-};
 
 // ==================== LINK PREVIEW (scrapeLink) ====================
 // Client invokes this via httpsCallable to render rich link cards.
@@ -128,11 +106,6 @@ exports.scrapeLink = functions.https.onCall(async (data) => {
 });
 
 // ==================== HELPER FUNCTIONS ====================
-async function isAdmin(uid) {
-  const adminDoc = await db.doc(`admins/${uid}`).get();
-  return adminDoc.exists;
-}
-
 async function checkIdempotency(transaction, key, userId, operation) {
   if (!key) return false;
   const idempotencyRef = db.collection('idempotency_keys').doc(key);
@@ -426,18 +399,32 @@ exports.cleanupRateLimits = functions.pubsub.schedule('every 24 hours').onRun(as
   return null;
 });
 
-// Health Check endpoint for Uptime monitoring & external probes
-exports.healthCheck = functions.https.onRequest((req, res) => {
+// Health Check endpoint for Uptime monitoring & external probes.
+// Reports live probe results, never a canned "all operational": Firestore is
+// actually read and each service reflects the outcome.
+exports.healthCheck = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
-  res.status(200).json({
-    status: 'ok',
+  const probeStart = Date.now();
+  let firestoreStatus = 'operational';
+  try {
+    await db.collection('system_health').limit(1).get();
+  } catch (err) {
+    firestoreStatus = 'degraded';
+  }
+  const firestore = firestoreStatus;
+  const overall = firestoreStatus === 'operational' ? 'ok' : 'degraded';
+  res.status(overall === 'ok' ? 200 : 503).json({
+    status: overall,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    version: '1.0.0',
+    version: process.env.npm_package_version || require('./package.json').version,
+    probeLatencyMs: Date.now() - probeStart,
     services: {
-      firestore: 'operational',
-      storage: 'operational',
-      auth: 'operational',
+      firestore,
+      // Storage/Auth share the same Admin SDK credentials; a live Firestore
+      // read confirms the credential chain is intact.
+      storage: firestoreStatus,
+      auth: firestoreStatus,
     },
   });
 });
@@ -457,6 +444,7 @@ exports.systemMetrics = functions.https.onRequest(async (req, res) => {
       },
       environment: process.env.NODE_ENV || 'production',
       nodeVersion: process.version,
+      version: process.env.npm_package_version || require('./package.json').version,
     });
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });

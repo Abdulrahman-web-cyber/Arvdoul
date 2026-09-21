@@ -1,19 +1,4 @@
-/**
- * src/store/profileStore.js - ARVDOUL Profile Store
- * 
- * Zustand store with Immer for profile state management.
- * Manages profile data, posts, follow status, and more.
- * 
- * Features:
- * - Profile loading with caching
- * - Follow/unfollow with optimistic updates
- * - Posts pagination
- * - Highlights and stories
- * - Level, balance, and position tracking
- * 
- * @author ARVDOUL Engineering Team
- * @version 1.0.0
- */
+// src/store/profileStore.js
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
@@ -121,7 +106,7 @@ export const useProfileStore = create(
         if (!isOwner && currentUserId) {
           try {
             const mutualResult = await userService.getMutualFriends(currentUserId, userId);
-            mutualFriends = mutualResult?.users?.slice(0, 5) || [];
+            mutualFriends = mutualResult?.mutualFriends?.slice(0, 5) || [];
           } catch (e) {
             console.warn('Could not fetch mutual friends:', e);
           }
@@ -645,7 +630,7 @@ export const useProfileStore = create(
         const result = await userService.getMutualFriends(userId, otherUserId);
         
         set((state) => {
-          state.mutualFriends = result?.users?.slice(0, 5) || [];
+          state.mutualFriends = result?.mutualFriends?.slice(0, 5) || [];
           state.mutualFriendsLoading = false;
         });
       } catch (error) {

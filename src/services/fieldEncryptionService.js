@@ -1,13 +1,4 @@
-/**
- * src/services/fieldEncryptionService.js - ARVDOUL FIELD-LEVEL ENCRYPTION ENGINE v8.0
- *
- * Implements:
- * 1. Client-Side Envelope Encryption (AES-GCM 256-bit): Encrypts sensitive PII fields (phone, legal tax ID, SSN, bank details)
- *    before writing to Firestore documents.
- * 2. Key Derivation & HKDF / PBKDF2: Securely derives symmetric keys with unique initialization vectors (IV) per record.
- * 3. Zero-Knowledge Decryption: Only authorized user sessions holding the master decryption context can read plaintext PII.
- * 4. Key backup and recovery using a high-entropy recovery seed.
- */
+// src/services/fieldEncryptionService.js
 
 import { logger } from '../utils/Logger.js';
 

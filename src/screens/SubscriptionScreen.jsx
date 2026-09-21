@@ -1,5 +1,5 @@
 // src/screens/SubscriptionScreen.jsx - ARVDOUL SUBSCRIPTION TIERS
-// Per Constitution v5.0 - Premium/Creator/Enterprise tiers
+// - Premium/Creator/ tiers
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';

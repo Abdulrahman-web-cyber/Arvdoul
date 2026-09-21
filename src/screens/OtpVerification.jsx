@@ -1,5 +1,4 @@
-// This file reflects: ultra pro max production, all critical fixes applied
-// src/screens/OTPVerification.jsx – ARVDOUL SUPREMACY • BILLION‑USER SCALE
+// src/screens/OtpVerification.jsx — phone OTP verification
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";

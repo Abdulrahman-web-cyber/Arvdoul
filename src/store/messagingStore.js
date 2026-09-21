@@ -1,6 +1,4 @@
-// src/store/messagingStore.js - ARVDOUL MESSAGING STORE
-// 🎯 PRODUCTION-READY ZUSTAND STORE WITH IMMER
-// ✅ Optimistic updates, real-time subscriptions, offline support
+// src/store/messagingStore.js
 
 import { create } from 'zustand';
 import { produce } from 'immer';

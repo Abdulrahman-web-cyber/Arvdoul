@@ -1,13 +1,4 @@
-/**
- * src/services/childSafetyService.js - ARVDOUL CSAM DETECTION AND COMPLIANCE ENGINE v8.0
- *
- * Implements Microsoft PhotoDNA equivalent hash verification, automated child sexual
- * abuse material (CSAM) interception, automated NCMEC legal reporting triggers,
- * and Azure AI Content Safety Image Scan API integration.
- *
- * Designed to completely shield and insulate Arvdoul from App Store bans, enforcing
- * zero-tolerance child-safety safeguards automatically at the edge.
- */
+// src/services/childSafetyService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

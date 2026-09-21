@@ -1,10 +1,4 @@
-/**
- * src/screens/Profile/EditProfileScreen.jsx - ARVDOUL Edit Profile Screen
- * 
- * Screen for editing user profile information.
- * 
- * @component
- */
+// src/screens/Profile/EditProfileScreen.jsx
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -37,7 +31,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
-import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../../config/profileContracts.js';
+import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY, PROFILE_CONSTRAINTS } from '../../config/profileContracts.js';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 
@@ -115,7 +109,10 @@ export default function EditProfileScreen() {
       });
       setAvatarPreview(userProfile.photoURL);
     }
-  }, [userProfile]);
+    // Intentionally keyed on uid only: serializing the whole profile here would
+    // re-run on every profile snapshot and discard in-progress edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile?.uid]);
 
   // Live username availability check with debounce
   useEffect(() => {
@@ -257,13 +254,30 @@ export default function EditProfileScreen() {
   }, [userProfile?.uid, formData.displayName, userService]);
 
   const handleSave = useCallback(async () => {
+    if (saving) return;
+
     const rawUser = formData.username?.trim().toLowerCase();
-    if (!rawUser) {
-      toast.error('Username cannot be empty');
-      return;
+    const displayName = formData.displayName?.trim() || '';
+    const bio = formData.bio || '';
+
+    const validationErrors = [];
+    if (!displayName) {
+      validationErrors.push('Display name cannot be empty');
+    } else if (displayName.length > PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH) {
+      validationErrors.push(`Display name must be under ${PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH} characters`);
+    } else if (!PROFILE_CONSTRAINTS.DISPLAY_NAME.PATTERN.test(displayName)) {
+      validationErrors.push('Display name contains unsupported characters');
     }
-    if (!/^[a-z0-9._]{3,30}$/.test(rawUser)) {
-      toast.error('Username must be 3-30 characters (letters, numbers, dots, or underscores)');
+    if (!rawUser) {
+      validationErrors.push('Username cannot be empty');
+    } else if (!/^[a-z0-9._]{3,30}$/.test(rawUser)) {
+      validationErrors.push('Username must be 3-30 characters (letters, numbers, dots, or underscores)');
+    }
+    if (bio.length > PROFILE_CONSTRAINTS.BIO.MAX_LENGTH) {
+      validationErrors.push(`Bio must be under ${PROFILE_CONSTRAINTS.BIO.MAX_LENGTH} characters`);
+    }
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0]);
       return;
     }
 
@@ -287,6 +301,7 @@ export default function EditProfileScreen() {
       // Clean links
       const cleanedData = {
         ...formData,
+        displayName,
         username: rawUser,
         links: (formData.links || []).filter(l => l.url && l.url.trim().length > 0),
       };
@@ -302,7 +317,7 @@ export default function EditProfileScreen() {
     } finally {
       setSaving(false);
     }
-  }, [formData, avatarFile, updateUserProfile, navigate, userProfile, userService]);
+  }, [formData, avatarFile, updateUserProfile, navigate, userProfile?.uid, userProfile?.username, userService, saving]);
   
   const handleCancel = useCallback(() => {
     navigate(-1);

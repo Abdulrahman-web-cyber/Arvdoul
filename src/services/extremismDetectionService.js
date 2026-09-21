@@ -1,11 +1,4 @@
-/**
- * src/services/extremismDetectionService.js - ARVDOUL VIOLENT EXTREMISM & TERRORISM DETECTION v8.0
- *
- * Implements:
- * 1. Keyword & Organization Token Matchers: Detects references to verified terrorist organizations or violent groups.
- * 2. Leet-Speak De-Obfuscation: Standardizes character substitutions to prevent obfuscated recruitment.
- * 3. Law Enforcement Escalation: Flags critical instances needing automated triage and audit filing.
- */
+// src/services/extremismDetectionService.js
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

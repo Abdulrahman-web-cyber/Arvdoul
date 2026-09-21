@@ -1,6 +1,4 @@
-// src/screens/Collaboration/CollaborationScreen.jsx – ARVDOUL COLLABORATION SCREEN V1
-// 🤝 Content Collaboration with Roles, Permissions, Review Workflow
-// ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
+// src/screens/Collaboration/CollaborationScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';

@@ -1,65 +1,16 @@
-// functions/comments.js — ARVDOUL COMMENT MODERATION & MENTIONS SYSTEM v5.0 (FINAL)
-// 🔥 Perspective API · Smart Re‑moderation · Batch Mentions · Cloud Tasks Push
-// ✅ All previous issues resolved: per‑user rate limiting, idempotent moderation,
-//    strict 5‑mention limit, cursor‑safe cleanup, structured logging, proper skip logic.
-// ⚠️ Required Perspective API key: firebase functions:config:set perspective.api_key="YOUR_KEY"
-// ⚠️ Required Firestore indexes (documented at bottom)
+// functions/comments.js — comment moderation and mentions
+//
+// Perspective API moderation, re-moderation, batched mentions, Cloud Tasks
+// push. Per-user rate limiting, idempotent moderation, a strict 5-mention
+// limit, cursor-safe cleanup, and structured logging.
+//
+// Required configuration:
+//   firebase functions:config:set perspective.api_key="YOUR_KEY"
+// Required Firestore composite indexes are documented at the bottom of this file.
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const { CloudTasksClient } = require('@google-cloud/tasks');
-
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
-
-const db = admin.firestore();
-const FieldValue = admin.firestore.FieldValue;
-
-// ----------------------------------------------------------------------
-//  Cloud Tasks Client (with retry config)
-// ----------------------------------------------------------------------
-const projectId = process.env.GCLOUD_PROJECT;
-const location = process.env.CLOUD_TASKS_LOCATION || 'us-central1';
-const queueName = process.env.PUSH_QUEUE_NAME || 'push-queue';
-const pushWorkerUrl = process.env.PUSH_WORKER_URL || 'https://example.com/push';
-
-let tasksClient;
-function getTasksClient() {
-  if (!tasksClient) tasksClient = new CloudTasksClient();
-  return tasksClient;
-}
-
-async function sendPushToQueue(userId, payload) {
-  try {
-    const client = getTasksClient();
-    const parent = client.queuePath(projectId, location, queueName);
-    const task = {
-      httpRequest: {
-        httpMethod: 'POST',
-        url: pushWorkerUrl,
-        body: Buffer.from(JSON.stringify({ userId, payload })).toString('base64'),
-        headers: { 'Content-Type': 'application/json' },
-      },
-      retryConfig: {
-        maxAttempts: 5,
-        maxBackoff: '60s',
-        minBackoff: '1s',
-        maxDoublings: 5,
-      },
-    };
-    await client.createTask({ parent, task });
-    log('info', 'Push task enqueued', { userId });
-  } catch (error) {
-    log('error', 'Cloud Tasks push failed, falling back to Firestore', { error: error.message });
-    await db.collection('push_queue').add({
-      userId,
-      payload,
-      status: 'pending',
-      createdAt: FieldValue.serverTimestamp(),
-    });
-  }
-}
+const { enqueuePush } = require('./pushQueue');
 
 // ----------------------------------------------------------------------
 //  Structured Logging Helper
@@ -329,7 +280,7 @@ exports.processMentions = functions.firestore
 
     // Send push notifications via Cloud Tasks (with fallback)
     const pushPromises = mentionedUserIds.map(userId =>
-      sendPushToQueue(userId, {
+      enqueuePush(userId, {
         type: 'mention',
         title: 'You were mentioned in a comment',
         body: `${commentData.userName || 'Someone'} mentioned you in a comment`,

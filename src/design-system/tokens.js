@@ -1,19 +1,4 @@
-/**
- * src/design-system/tokens.js
- * ARVDOUL DESIGN TOKENS — SINGLE SOURCE OF TRUTH
- *
- * Every visual decision in the app must come from these tokens. The values
- * here are mirrored 1:1 into tokens.css (CSS variables) and tokens.json
- * (versioned payload usable by backend email templates / tooling). The
- * `designTokens.test.js` suite enforces:
- *   - required semantic token groups exist
- *   - motion tokens include a reduced-motion policy
- *   - tokens.css declares the prefers-reduced-motion kill-switch
- *   - JS <-> JSON parity
- *
- * Versioning: bump `version` on ANY visual change. A version bump should
- * trigger a visual regression review of the whole app.
- */
+// src/design-system/tokens.js
 
 export const TOKEN_VERSION = '1.0.0';
 

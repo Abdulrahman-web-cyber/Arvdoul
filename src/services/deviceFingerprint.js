@@ -1,12 +1,4 @@
-/**
- * src/services/deviceFingerprint.js - ARVDOUL PERSISTENT DEVICE FINGERPRINTING
- *
- * Implements:
- * 1. Multi-Signal Device Fingerprinting: Synthesizes Canvas 2D rendering hash, WebGL vendor/renderer parameters,
- *    AudioContext oscillator decay curves, screen color depth/resolution, hardware concurrency, and timezone offset.
- * 2. Privacy-Preserving FNV-1a Hashing: Generates a deterministic device ID without exposing sensitive hardware data.
- * 3. Anomaly & Bot Detection Signals: Flags automated headless browsers (Puppeteer, Selenium, PhantomJS).
- */
+// src/services/deviceFingerprint.js
 
 class DeviceFingerprint {
   constructor() {

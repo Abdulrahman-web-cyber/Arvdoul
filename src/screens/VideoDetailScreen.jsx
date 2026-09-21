@@ -1,7 +1,4 @@
-// src/screens/VideoDetailScreen.jsx - ARVDOUL VIDEO DETAIL (PRODUCTION)
-// Loads a single video by id (or url param), plays it, shows creator info,
-// engagement rail (like/comment/share), and a comments sheet.
-// Route: /video/:videoId  (wired from SearchScreen + deep links).
+// src/screens/VideoDetailScreen.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -93,7 +90,8 @@ export default function VideoDetailScreen() {
     if (!video?.userId) { toast.info('External videos cannot be liked.'); return; }
     try {
       const res = await videoService.likeVideo(video.id);
-      const nowLiked = res?.data?.liked ?? !liked;
+      // The server toggles; `action` is the authoritative post-write state.
+      const nowLiked = res?.action ? res.action === 'liked' : !liked;
       setLiked(nowLiked);
       setLikeCount((c) => Math.max(0, c + (nowLiked ? 1 : -1)));
     } catch (err) {

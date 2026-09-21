@@ -1,14 +1,4 @@
-// src/services/userService.js — ARVDOUL PROFESSIONAL USER SERVICE V6.0 (BILLION-SCALE FINAL)
-// ✅ PRIVACY‑AWARE • ATOMIC SOCIAL GRAPH • ROBUST AVATARS
-// 💰 INTEGRATED MONETIZATION • PROFILE POSITIONS (KING/QUEEN/RICH)
-// 🔧 FIXED: getFriends pagination uses document snapshot cursor
-// 🔧 FIXED: friend acceptance counter logic (mutual follow)
-// 🔧 FIXED: N+1 profile loading → parallel batching
-// 🔧 FIXED: block enforcement inside follow transaction
-// 🔧 FIXED: cache invalidation after all social mutations
-// 🔧 FIXED: deleteAccount cleans up all graph data + username mapping
-// 🔧 ADDED: searchUsers fallback with tokenized search
-// 🚀 PRODUCTION‑HARDENED FOR BILLIONS OF USERS
+// src/services/userService.js
 
 import { addCoins as monetizationAddCoins } from './monetizationService.js';
 import { getStorageService } from './storageService.js';
@@ -336,6 +326,35 @@ class ProfessionalUserService {
   }
 
   // ==================== PROFILE CRUD ====================
+  /**
+   * Resolves a profile by username, falling back to the immutable
+   * previous_usernames index so shared/QR links keep working after a rename.
+   * @param {string} username - Username, optionally prefixed with '@'
+   * @returns {Promise<Object|null>} Profile, or null when not found
+   */
+  async getUserByUsername(username) {
+    if (!username || typeof username !== 'string') return null;
+    const clean = username.replace(/^@/, '').toLowerCase().trim();
+    if (!clean) return null;
+
+    await this._ensureInitialized();
+    const { doc, getDoc } = await import('firebase/firestore');
+
+    for (const collection of ['usernames', 'previous_usernames']) {
+      try {
+        const snap = await getDoc(doc(this.firestore, collection, clean));
+        const userId = snap.exists() ? snap.data()?.userId : null;
+        if (userId) {
+          const profile = await this.getUserProfile(userId);
+          if (profile) return profile;
+        }
+      } catch (error) {
+        logger.warn(`Username lookup failed in ${collection}:`, error);
+      }
+    }
+    return null;
+  }
+
   async getUserProfile(userId, requesterId = null, options = {}) {
     if (!userId) return null;
     await this._ensureInitialized();
@@ -395,77 +414,10 @@ class ProfessionalUserService {
     }
 
     if (!snap || !snap.exists()) {
-      let localAuth = {};
-      try {
-        localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
-      } catch {}
-
-      let authUser = null;
-      try {
-        const firebase = await import('../firebase/firebase.js');
-        const auth = await firebase.getAuthInstance();
-        if (auth?.currentUser && (auth.currentUser.uid === userId || requesterId === userId)) {
-          authUser = auth.currentUser;
-        }
-      } catch {}
-
-      const isSelf = Boolean(
-        (authUser?.uid === userId) ||
-        (localAuth?.uid && localAuth.uid === userId) ||
-        requesterId === userId ||
-        (!requesterId && localAuth?.uid === userId)
-      );
-
-      const realDisplayName = (isSelf && authUser?.displayName) ||
-        (isSelf && localAuth?.displayName) ||
-        (isSelf && localAuth?.name) ||
-        (isSelf && authUser?.email?.split('@')[0]) ||
-        (isSelf && localAuth?.email?.split('@')[0]) ||
-        (isSelf ? 'Member' : 'Creator');
-
-      const realUsername = (isSelf && localAuth?.username) ||
-        (isSelf && authUser?.email?.split('@')[0]) ||
-        (isSelf && localAuth?.email?.split('@')[0]) ||
-        (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`);
-
-      const synth = {
-        id: userId,
-        uid: userId,
-        username: realUsername,
-        displayName: realDisplayName,
-        email: isSelf ? (authUser?.email || localAuth.email || '') : '',
-        bio: isSelf ? (localAuth.bio || '') : '',
-        photoURL: isSelf
-          ? (authUser?.photoURL || localAuth.photoURL || this.getAvatarUrl(userId, realDisplayName, null))
-          : this.getAvatarUrl(userId, 'Creator', null),
-        followerCount: isSelf ? (Number(localAuth.followerCount) || 0) : 0,
-        followingCount: isSelf ? (Number(localAuth.followingCount) || 0) : 0,
-        postCount: 0,
-        likesReceived: 0,
-        friendCount: 0,
-        coins: isSelf ? (Number(localAuth.coins) || 100) : 0,
-        level: isSelf ? (Number(localAuth.level) || 1) : 1,
-        reputation: 100,
-        isVerified: Boolean(isSelf && localAuth.isVerified),
-        isCreator: Boolean(isSelf && localAuth.isCreator),
-        location: isSelf ? (localAuth.location || '') : '',
-        createdAt: new Date().toISOString(),
-        presence: { isOnline: false, status: 'offline', lastActive: null },
-        canViewActivity: true,
-        canViewAchievements: true,
-        canViewTitles: true,
-        canViewFollowersList: true,
-        canViewFollowingList: true,
-        _cachedAt: Date.now()
-      };
-
-      this.cache.set(cacheKey, { data: synth, timestamp: Date.now() });
-      try {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(`arvdoul_prof_${userId}`, JSON.stringify(synth));
-        }
-      } catch {}
-      return synth;
+      // No document exists. Never synthesize an identity: an invented
+      // displayName/username/avatar would be indistinguishable from a real
+      // profile. Callers receive null and render an explicit not-found state.
+      return null;
     }
 
     const rawData = snap.data();
@@ -642,17 +594,23 @@ class ProfessionalUserService {
     return full;
   }
 
+  /**
+   * Canonical friendship check: two users are friends when they follow each
+   * other. `areFriends` (public) delegates here so both paths cannot drift.
+   */
+  async areFriends(userIdA, userIdB) {
+    if (!userIdA || !userIdB || userIdA === userIdB) return false;
+    await this._ensureInitialized();
+    const { doc, getDoc } = await import('firebase/firestore');
+    const [a, b] = await Promise.all([
+      getDoc(doc(this.firestore, 'follows', `${userIdA}_${userIdB}`)),
+      getDoc(doc(this.firestore, 'follows', `${userIdB}_${userIdA}`)),
+    ]);
+    return a.exists() && b.exists();
+  }
+
   async _areMutualFriends(userA, userB) {
-    if (!userA || !userB || userA === userB) return false;
-    try {
-      const [f1, f2] = await Promise.all([
-        this.getFollowStatus(userA, userB).catch(() => ({ isFollowing: false })),
-        this.getFollowStatus(userB, userA).catch(() => ({ isFollowing: false }))
-      ]);
-      return Boolean(f1?.isFollowing && f2?.isFollowing);
-    } catch {
-      return false;
-    }
+    return this.areFriends(userA, userB);
   }
 
   async createUserProfile(userId, profileData) {
@@ -779,6 +737,16 @@ class ProfessionalUserService {
 
     if (updates.username) {
       const newUsername = updates.username.toLowerCase().trim();
+      const { MIN_LENGTH, MAX_LENGTH, PATTERN } = PROFILE_CONSTRAINTS.USERNAME;
+      if (
+        newUsername.length < MIN_LENGTH ||
+        newUsername.length > MAX_LENGTH ||
+        !PATTERN.test(newUsername)
+      ) {
+        throw new Error(
+          `Username must be ${MIN_LENGTH}-${MAX_LENGTH} characters using only letters, numbers, dots, and underscores`
+        );
+      }
       const oldUsername = await this._getCurrentUsername(userId);
       if (oldUsername !== newUsername) {
         const check = await this.checkUsernameAvailability(newUsername, userId);
@@ -979,6 +947,55 @@ class ProfessionalUserService {
 
   async checkFollowStatus(followerId, followingId) {
     return this.getFollowStatus(followerId, followingId);
+  }
+
+  /**
+   * Batch relationship lookup: for the viewer, returns follow state toward each
+   * target in one query. This is the single source of truth used by list UIs.
+   * @param {string} viewerId - Acting user ID
+   * @param {string[]} targetIds - Target user IDs
+   * @returns {Promise<Map<string, {isFollowing: boolean, isFollower: boolean, isMutualFriend: boolean}>>}
+   */
+  async getFollowStates(viewerId, targetIds = []) {
+    const states = new Map();
+    const targets = [...new Set((targetIds || []).filter(Boolean))];
+
+    for (const id of targets) {
+      if (id === viewerId) {
+        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
+      }
+    }
+
+    if (!viewerId || targets.length === 0) return states;
+
+    try {
+      await this._ensureInitialized();
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const followsRef = collection(this.firestore, 'follows');
+
+      const [outgoing, incoming] = await Promise.all([
+        getDocs(query(followsRef, where('followerId', '==', viewerId))),
+        getDocs(query(followsRef, where('followingId', '==', viewerId))),
+      ]);
+
+      const following = new Set(outgoing.docs.map((d) => d.data().followingId));
+      const followers = new Set(incoming.docs.map((d) => d.data().followerId));
+
+      for (const id of targets) {
+        if (id === viewerId) continue;
+        const isFollowing = following.has(id);
+        const isFollower = followers.has(id);
+        states.set(id, { isFollowing, isFollower, isMutualFriend: isFollowing && isFollower });
+      }
+    } catch {
+      for (const id of targets) {
+        if (id !== viewerId && !states.has(id)) {
+          states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
+        }
+      }
+    }
+
+    return states;
   }
 
   /**
@@ -1280,22 +1297,6 @@ class ProfessionalUserService {
     });
   }
 
-  /**
-   * True when the two users have mutual follow edges (i.e. are friends).
-   * @param {string} userIdA
-   * @param {string} userIdB
-   */
-  async areFriends(userIdA, userIdB) {
-    if (!userIdA || !userIdB || userIdA === userIdB) return false;
-    await this._ensureInitialized();
-    const { doc, getDoc } = await import('firebase/firestore');
-    const [a, b] = await Promise.all([
-      getDoc(doc(this.firestore, 'follows', `${userIdA}_${userIdB}`)),
-      getDoc(doc(this.firestore, 'follows', `${userIdB}_${userIdA}`)),
-    ]);
-    return a.exists() && b.exists();
-  }
-
   async acceptFriendRequest(requestId, userId) {
     await this._ensureInitialized();
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
@@ -1441,8 +1442,11 @@ class ProfessionalUserService {
       const result = { success: true, blocked: snap.exists() };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
-    } catch {
-      return { success: true, blocked: false };
+    } catch (err) {
+      // A failed read must never be reported as "not blocked". Tell the
+      // caller the check is inconclusive so it can fail closed.
+      this.logger?.warn?.('[UserService] Block check failed', { error: err?.message });
+      return { success: false, blocked: true, inconclusive: true };
     }
   }
 
@@ -1457,46 +1461,38 @@ class ProfessionalUserService {
   }
 
   // ==================== REPORTING ====================
+  // Routed through the reportContent callable so rate limiting, de-duplication
+  // and the report record shape match every other report type.
   async reportUser(reporterId, reportedId, reason, details = '') {
     await this._ensureInitialized();
-    const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
-    await addDoc(collection(this.firestore, 'user_reports'), {
-      reporterId, reportedId, reason, details: details.replace(/<[^>]*>/g, ''), status: 'pending', createdAt: serverTimestamp()
-    });
-    return { success: true };
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const func = httpsCallable(getFunctions(), 'reportUser');
+    const res = await func({ targetId: reportedId, reason, details });
+    return { success: true, ...(res?.data || {}) };
   }
 
   // ==================== ACCOUNT DELETION ====================
+  // The server-side cascade is the only thing that actually deletes the
+  // account, so its result is authoritative: if the callable fails we surface
+  // the failure rather than reporting a deletion that never happened.
   async deleteAccount(userId) {
     await this._ensureInitialized();
-    const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
     const { getFunctions, httpsCallable } = await import('firebase/functions');
 
-    await updateDoc(doc(this.firestore, 'users', userId), {
-      accountStatus: 'deletion_scheduled',
-      deletionScheduledAt: serverTimestamp(),
-      isOnline: false,
-      updatedAt: serverTimestamp()
-    });
+    const functions = getFunctions();
+    const func = httpsCallable(functions, 'deleteUserData');
+    const result = await func({ userId });
 
     try {
       const { getAuth, signOut } = await import('firebase/auth');
       const auth = getAuth();
       if (auth.currentUser?.uid === userId) await signOut(auth);
-    } catch (e) {
-      // Sign out error
-    }
-
-    try {
-      const functions = getFunctions();
-      const func = httpsCallable(functions, 'deleteUserData');
-      await func({ userId });
-    } catch (e) {
-      // deleteUserData function unavailable
+    } catch (signOutError) {
+      logger.warn('Sign-out after account deletion failed', signOutError);
     }
 
     this._invalidateUserCache(userId);
-    return { success: true, message: 'Account deletion scheduled. You have been logged out.' };
+    return { success: true, ...(result?.data || {}), message: 'Account deleted.' };
   }
 
   // ==================== SEARCH ====================
@@ -1673,6 +1669,7 @@ export const deleteAccount = (uid) => getUserService().deleteAccount(uid);
 
 // Search
 export const searchUsers = (q, opts) => getUserService().searchUsers(q, opts);
+export const getUserByUsername = (username) => getUserService().getUserByUsername(username);
 
 // Activity
 export const updateLastActive = (uid) => getUserService().updateLastActive(uid);
@@ -1722,6 +1719,7 @@ const userServiceExport = Object.assign(getUserService, {
   reportUser,
   deleteAccount,
   searchUsers,
+  getUserByUsername,
   updateLastActive,
   markProfileComplete,
   getUserPublicKey,

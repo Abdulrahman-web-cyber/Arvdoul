@@ -1,5 +1,5 @@
 import { logger } from '../utils/Logger.js';
-// src/services/rankingService.js – ARVDOUL RANKINGS & REPUTATION SERVICE V1
+// src/services/rankingService.js – ARVDOUL RANKINGS & REPUTATION SERVICE
 // 🏆 Ranking System for Creators, Content, Communities
 // ✅ Creator Rankings • Wealth Rankings • Reputation • Community Rankings
 

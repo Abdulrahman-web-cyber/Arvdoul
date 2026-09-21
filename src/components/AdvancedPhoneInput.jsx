@@ -1,4 +1,4 @@
-// src/components/AdvancedPhoneInput.jsx - PERFECT PHONE INPUT
+// src/components/AdvancedPhoneInput.jsx
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { sortedCountryCodes } from "@data/countryCodes";

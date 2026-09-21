@@ -1,9 +1,4 @@
 // src/screens/VideoEditor/components/ExportModal.jsx
-// REAL client-side renderer: seeks every clip frame-by-frame onto an
-// offscreen canvas, records the canvas stream with MediaRecorder, and
-// produces a genuine .webm file the user can download or post. Progress is
-// real (rendered frames / total frames). No fabricated URLs, no fake
-// percentages, no demo videos.
 
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';

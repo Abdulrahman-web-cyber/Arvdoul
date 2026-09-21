@@ -1,9 +1,4 @@
-/**
- * src/screens/SavedScreen.jsx - ARVDOUL Ultimate Saved & Bookmarks Screen
- * 
- * Production-ready saved items manager with collection folders, filters,
- * multi-select batch actions, search, and rich media previews.
- */
+// src/screens/SavedScreen.jsx
 
 import React, { useState, useEffect, useMemo, useCallback} from 'react';
 import { useNavigate } from 'react-router-dom';

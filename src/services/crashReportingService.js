@@ -1,14 +1,4 @@
-/**
- * src/services/crashReportingService.js - ARVDOUL CRASH REPORTING & ERROR DEDUPLICATION
- *
- * Implements:
- * 1. Global Unhandled Rejection & Error Listeners: Captures unhandled promises, runtime syntax errors, and DOM exceptions.
- * 2. Fingerprinting & Deduplication: Hashes stack trace call frames to group duplicate crashes into single issue buckets.
- * 3. Breadcrumb Trail: Collects last 20 user actions (navigation, clicks, network calls) before the crash.
- * 4. Sentry / Telemetry Exporter: Dispatches grouped crashes to real or mock Sentry endpoints.
- * 5. URL Security Validation: Sanitizes and validates the target endpoint before sending telemetry to prevent SSRF (CWE-918).
- * 6. PII Redaction: Clears sensitive info (emails, phone, auth secrets) from metadata logs prior to export (CWE-209).
- */
+// src/services/crashReportingService.js
 
 import { logger } from '../utils/Logger.js';
 

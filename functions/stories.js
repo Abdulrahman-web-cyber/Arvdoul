@@ -1,19 +1,10 @@
-// functions/stories.js – ARVDOUL STORIES CLOUD FUNCTIONS (DEFINITIVE FINAL)
-// 🎬 BILLION‑USER READY • ZERO STUBS • FULLY RESILIENT & SELF‑HEALING
-// ================================================================================
-//   HYBRID FAN‑OUT · ATOMIC MODERATION · ASYNC VIDEO MODERATION (CORRECT POLLING)
-//   OIDC AUTHENTICATION FIXED · RECOVERY FOR STUCK MODERATIONS · RATE LIMITING
-//   SHARDED COUNTERS · CLEANUP · RETRY WITH FIXED DEADLOCK
+// functions/stories.js — stories callables and triggers
 //
-//   ✅ Retry deadlock resolved (status reset to pending)
-//   ✅ Video worker now uses operation.promise() with timeout (no busy polling)
-//   ✅ Moderation pipeline fully self‑healing (no more stuck stories)
-//   ✅ Rate‑limit errors no longer cause infinite retries
-//   ✅ Cloud Tasks secured with proper Firebase ID token verification
-//   ✅ Scheduled recovery for stories stuck in 'processing' state
-//   ✅ Fanout idempotent (task name deduplication)
-// ================================================================================
-
+// Hybrid fan-out, atomic moderation, and async video moderation driven by
+// operation.promise() with a timeout (no busy polling). Includes recovery for
+// stories stuck in 'processing', sharded counters, cleanup jobs, and retry
+// handling. Cloud Tasks requests are secured with Firebase ID token
+// verification and fanout tasks are deduplicated by task name.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { CloudTasksClient } = require('@google-cloud/tasks');
@@ -870,6 +861,89 @@ exports.onStoryReactionCreate = functions.firestore
       await snap.ref.delete(); // rollback
     }
   });
+
+// ----------------------------------------------------------------------
+//  11. generateCaptionForImage – callable: AI caption for an image story
+//
+//  storyService calls this (STORY_CONFIG.AI_CAPTION.CLOUD_FUNCTION) before
+//  publishing an image story with no text. The caller supplies either an
+//  `imageUrl` (as today) or a ready-made `mediaDescription`. The image URL is
+//  never fetched server-side (SSRF surface); the caption is produced from the
+//  caller's own description or draft text via the AI gateway, and is scoped to
+//  the authenticated uid like every other AI write.
+// ----------------------------------------------------------------------
+exports.generateCaptionForImage = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const userId = context.auth.uid;
+
+  const description = typeof data?.mediaDescription === 'string'
+    ? data.mediaDescription.slice(0, 500)
+    : '';
+  const draft = typeof data?.content === 'string' ? data.content.slice(0, 500) : '';
+  // `imageUrl` is accepted for call-site compatibility but is not dereferenced.
+  const hasImageReference = typeof data?.imageUrl === 'string' && data.imageUrl.length > 0;
+
+  if (!description && !draft && !hasImageReference) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Provide a mediaDescription, draft content, or imageUrl.'
+    );
+  }
+
+  await checkRateLimit(userId, 'generateCaptionForImage', 20, 60000);
+
+  const apiKey = process.env.AI_OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'AI captioning is not configured. Contact support.'
+    );
+  }
+
+  const prompt = [
+    'Write one short, vivid caption for an image story (max 140 characters).',
+    draft ? `Draft/topic: ${draft}` : '',
+    description ? `Image description: ${description}` : '',
+    !description && !draft ? 'No description was provided; write a neutral, inviting caption.' : '',
+    'Return only the caption text, no quotes, no hashtags.',
+  ].filter(Boolean).join('\n');
+
+  const model = process.env.AI_MODEL || 'gpt-4o-mini';
+  let res;
+  try {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You write concise, engaging social captions.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 120,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (err) {
+    throw new functions.https.HttpsError('unavailable', `AI provider unreachable: ${err.message}`);
+  }
+
+  if (!res.ok) {
+    throw new functions.https.HttpsError('internal', `AI provider error (${res.status})`);
+  }
+
+  const json = await res.json();
+  const caption = json?.choices?.[0]?.message?.content?.trim();
+  if (!caption) {
+    throw new functions.https.HttpsError('internal', 'AI provider returned no caption.');
+  }
+
+  log('info', 'Story caption generated', { userId, model });
+  return { success: true, caption };
+});
 
 // ==================== REQUIRED FIRESTORE INDEXES ====================
 /*

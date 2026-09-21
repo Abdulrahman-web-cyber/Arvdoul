@@ -1,5 +1,5 @@
 // src/screens/Collaboration/ProjectDetailScreen.jsx - ARVDOUL PROJECT DETAIL
-// Per Constitution v5.0 - Team, content versions, review workflow
+// - Team, content versions, review workflow
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';

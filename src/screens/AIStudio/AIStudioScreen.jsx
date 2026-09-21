@@ -1,6 +1,4 @@
 // src/screens/AIStudio/AIStudioScreen.jsx
-// 🌟 ARVDOUL AI CREATIVE CO-PILOT STUDIO
-// Comprehensive AI toolkit: Viral Hooks, Caption Crafter, Reel Scriptwriter, Prompt Studio, Viral Analyzer & Localization
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';

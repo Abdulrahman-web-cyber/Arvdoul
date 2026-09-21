@@ -1,9 +1,4 @@
-/**
- * src/__tests__/designSystem.test.jsx
- * Accessibility + behavior gates for the design-system primitives:
- * Button (variants/sizes/loading/disabled), EmptyState, ErrorState,
- * Skeleton, and the NotFound screen. Zero axe violations required.
- */
+// src/__tests__/designSystem.test.jsx
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';

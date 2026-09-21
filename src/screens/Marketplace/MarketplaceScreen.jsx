@@ -1,6 +1,4 @@
 // src/screens/Marketplace/MarketplaceScreen.jsx
-// 🛍️ ARVDOUL CREATOR MARKETPLACE & STORE
-// Digital presets, sample packs, creator merchandise, 1-click coin checkout, and digital delivery
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

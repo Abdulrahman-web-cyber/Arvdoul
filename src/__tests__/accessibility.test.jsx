@@ -1,9 +1,4 @@
-/**
- * src/__tests__/accessibility.test.jsx
- * Automated accessibility gates (axe-core) on the shared UI primitives.
- * These tests fail CI when a change introduces a WCAG 2.1 AA violation in
- * core navigation/input components.
- */
+// src/__tests__/accessibility.test.jsx
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
@@ -63,6 +58,12 @@ jest.mock('../lib/utils.js', () => ({
 }));
 jest.mock('../context/ThemeContext.jsx', () => ({
   useTheme: () => ({ theme: 'dark', isDark: true }),
+}));
+jest.mock('../context/AuthContext.jsx', () => ({
+  useAuth: () => ({
+    user: { uid: 'u1', username: 'tester' },
+    userProfile: { uid: 'u1', username: 'tester' },
+  }),
 }));
 jest.mock('../hooks/useSound.js', () => ({ useSound: () => ({ playSound: () => {} }) }));
 jest.mock('../hooks/useAnalytics.js', () => ({ useAnalytics: () => ({ track: () => {} }) }));

@@ -1,17 +1,4 @@
 // src/screens/CreatePost/CreatePoll.jsx
-// ARVDOUL ULTIMATE POLL CREATOR – FINAL PRODUCTION‑READY
-// ✅ Design replicates CreateText (floating header, glass card, DNA gradient)
-// ✅ Options as reducer‑owned strings, stable UUIDs via ref (preserved on add/remove)
-// ✅ Duplicate detection blocks content readiness, warning once per session
-// ✅ Poll expiry via custom DateTimePicker only (presets removed)
-// ✅ Coin reward fully wired to reducer, negative values prevented
-// ✅ Allow multiple choices shown only when more than 2 options
-// ✅ Anonymous voting removed entirely
-// ✅ Autosave with versioning, AbortController cleanup, save‑race protection
-// ✅ Live preview, character counters, keyboard shortcut
-// ✅ Save indicator updates every second, buttons type="button"
-// ✅ Remove button placed beside the input inside the same card (no absolute)
-// ✅ Slightly wider card (max‑w‑3xl), fully responsive, zero stubs
 
 import React, {
   useEffect, useCallback, useState, useRef, useMemo, lazy, Suspense

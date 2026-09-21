@@ -180,7 +180,17 @@
     "deleteAccountDesc": "Supprimer définitivement votre compte et vos données",
     "deleteWarning": "Cela supprimera définitivement votre compte, vos publications et vos données. Action irréversible.",
     "confirmDelete": "Supprimer mon compte",
-    "deleting": "Suppression..."
+    "deleting": "Suppression...",
+    "aboutDesc": "Version, politiques et support",
+    "highlights": "À la une du profil",
+    "highlightsDesc": "Créez et organisez vos stories épinglées",
+    "creatorStudio": "Studio créateur et analyses",
+    "creatorStudioDesc": "Impressions, rétention et statistiques de performance",
+    "consentSection": "Consentement et utilisation des données",
+    "consentAnalytics": "Analyses d’usage",
+    "consentAds": "Publicités personnalisées",
+    "consentAiTraining": "Entraînement des modèles d’IA",
+    "consentDesc": "Vous contrôlez l’utilisation de vos données. Le traitement essentiel ne peut pas être désactivé."
   },
   "level": {
     "title": "Niveau et progression",

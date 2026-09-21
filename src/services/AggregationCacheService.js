@@ -1,14 +1,4 @@
-/**
- * src/services/AggregationCacheService.js - ARVDOUL AGGREGATION CACHING ENGINE
- *
- * Implements:
- * 1. Count / Sum / Average Aggregation Caching: Intercepts expensive queries and stores computed metrics in fast cache.
- * 2. Event-driven and mutation-based cache invalidation.
- * 3. TTL with sliding expiration for high-traffic analytical endpoints.
- * 4. Cache Stampede Protection (Single-Flight): Coalesces concurrent identical aggregation requests.
- * 5. Multi-Tier Distributed Cache backing (Redis support).
- * 6. Cache Poisoning Sanitization: Validates and sanitizes dynamic query filter objects to prevent key attacks.
- */
+// src/services/AggregationCacheService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';

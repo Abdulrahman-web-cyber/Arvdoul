@@ -1,11 +1,4 @@
-/**
- * src/services/liveInteractiveGamificationService.js - ARVDOUL LIVE STREAM GAMIFICATION & INTERACTION v1.0
- * 
- * Production-grade live broadcast engagement:
- * • Sub-second audience live micro-polls with percentage distribution computation
- * • Collaborative stream goals (e.g. tip milestones, like counters) with unlocked reward states
- * • Upvotable Audience Q&A queue with host pins and answer status tracking
- */
+// src/services/liveInteractiveGamificationService.js
 
 import { logger } from '../utils/Logger.js';
 

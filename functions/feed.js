@@ -1,8 +1,8 @@
-// functions/feed.js — Arvdoul Feed Engine v10.0 (FINAL FIXED)
-// ✅ Pull model now O(1) per followed user (batched IN queries)
-// ✅ Following feed works for celebrities (no fan-out needed)
-// ✅ All composite indexes documented
-// ✅ Sharded rate limiting, cursor recovery, stale task cleanup
+// functions/feed.js — Arvdoul feed engine
+//
+// Pull model: O(1) per followed user via batched `in` queries. The following
+// feed also works for high-follower accounts without fan-out.
+// Sharded rate limiting, cursor recovery, and stale-task cleanup.
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
@@ -556,7 +556,85 @@ exports.getPersonalizedFeed = functions.https.onCall(async (data, context) => {
 });
 
 // ----------------------------------------------------------------------
-// 8. GET FOLLOWING FEED (Callable) – FIXED: batched IN queries, O(1) reads
+// 8. GET ML-PERSONALIZED FEED (Callable) – paginated, ML experiment group
+//
+// The client (feedService._getMLPersonalizedFeed) asks for this endpoint when
+// it selects the `ml_personalized` experiment arm. It returns the paginated
+// shape that service expects: { feed, nextCursor }. Scoring is deterministic
+// and derived from real signals (engagement + recency + topic affinity from
+// the caller's own user_events); no synthetic scores are invented.
+// ----------------------------------------------------------------------
+exports.getPersonalizedFeedML = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+  const userId = context.auth.uid;
+  await checkFeedRateLimit(userId);
+
+  const pageSize = Math.min(Math.max(Number(data?.limit) || 20, 1), 50);
+  const lastPostId = data?.lastPostId || null;
+
+  try {
+    // Topic affinity from the caller's own recent interactions.
+    const userTopics = new Set();
+    const recentEvents = await db.collection('user_events')
+      .where('userId', '==', userId)
+      .orderBy('timestamp', 'desc')
+      .limit(50)
+      .get();
+    recentEvents.forEach((doc) => {
+      (doc.data().topics || []).forEach((t) => userTopics.add(t));
+    });
+
+    const blockedSnap = await db.collection('blocks').where('blockerId', '==', userId).get();
+    const blockedIds = new Set(blockedSnap.docs.map((d) => d.data().blockedId));
+
+    let query = db.collection('posts')
+      .where('status', '==', 'published')
+      .where('visibility', '==', 'public')
+      .where('isDeleted', '==', false)
+      .orderBy('personalizationScore', 'desc')
+      .orderBy('createdAt', 'desc');
+
+    if (lastPostId) {
+      const lastDoc = await db.collection('posts').doc(lastPostId).get();
+      if (!lastDoc.exists) {
+        throw new functions.https.HttpsError('not-found', `Post not found: ${lastPostId}`);
+      }
+      query = query.startAfter(lastDoc);
+    }
+
+    const snapshot = await query.limit(pageSize).get();
+    const feed = snapshot.docs
+      .map((doc) => {
+        const p = { id: doc.id, ...doc.data() };
+        if (p.personalizationScore == null) {
+          const engagement = (p.likes || 0) + (p.comments || 0) * 2 + (p.shares || 0) * 3;
+          const ageHours = p.createdAt ? (Date.now() - p.createdAt.toDate().getTime()) / 3600000 : 0;
+          p.personalizationScore = engagement * Math.exp(-ageHours / 48);
+        }
+        // Topic affinity boost, only when the caller has a real signal.
+        if (userTopics.size > 0 && Array.isArray(p.topics) && p.topics.some((t) => userTopics.has(t))) {
+          p.personalizationScore *= 1.2;
+        }
+        return p;
+      })
+      .filter((p) => !blockedIds.has(p.authorId));
+
+    const nextCursor = snapshot.docs.length === pageSize
+      ? snapshot.docs[snapshot.docs.length - 1].id
+      : null;
+
+    return { feed, nextCursor, personalized: true, generatedAt: new Date().toISOString() };
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error('getPersonalizedFeedML error:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// ----------------------------------------------------------------------
+// 9. GET FOLLOWING FEED (Callable) – FIXED: batched IN queries, O(1) reads
 // ----------------------------------------------------------------------
 exports.getFollowingFeed = functions.https.onCall(async (data, context) => {
   if (!context.auth || !context.auth.uid) {
@@ -667,4 +745,8 @@ exports.feedHealthCheck = functions.https.onCall(async (data, context) => {
   7. Collection group "feeds": postId ASC, __name__ ASC (for invalidation)
   8. fanout_tasks: status ASC, createdAt ASC (for cleanup)
   9. fanout_tasks: status ASC, updatedAt ASC (for stuck recovery)
-*//* AI RANKING PLACEHOLDER — Phase 5 T: Replace chronological query with ML-ranked feed using user embeddings, watch-time weights, and diversity filtering. TODO: integrate TensorFlow Lite / Python scoring service. */
+*/
+
+// Roadmap: ML-ranked feed. Replace the chronological query with ranking that
+// uses user embeddings, watch-time weights, and diversity filtering. Tracked
+// work, not shipped behavior.

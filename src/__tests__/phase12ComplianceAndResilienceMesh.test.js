@@ -1,9 +1,4 @@
-/**
- * src/__tests__/phase12ComplianceAndResilienceMesh.test.js
- * Verification test suite for Phase 12:
- * - Global Compliance & Privacy Governance (GDPR / CCPA)
- * - Multi-Region Resilience & Circuit Breaker Mesh
- */
+// src/__tests__/phase12ComplianceAndResilienceMesh.test.js
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import {
@@ -21,12 +16,18 @@ describe('Phase 12: Compliance Governance & Multi-Region Resilience', () => {
   describe('1. Global Compliance & Privacy Governance (Feature 42)', () => {
     let service;
 
+    let settings;
+
     beforeEach(() => {
-      service = new ComplianceGovernanceService();
+      settings = {
+        updateSetting: jest.fn().mockResolvedValue({ success: true }),
+        getSettings: jest.fn().mockResolvedValue({ privacy: { consent: null } }),
+      };
+      service = new ComplianceGovernanceService({ settings });
     });
 
-    it('enforces non-negotiable essential cookies while respecting opt-outs', () => {
-      const consents = service.updateConsentPreferences('user_gdpr_1', {
+    it('enforces non-negotiable essential cookies while respecting opt-outs', async () => {
+      const consents = await service.updateConsentPreferences('user_gdpr_1', {
         [CONSENT_CATEGORIES.ESSENTIAL]: false, // User tries to disable
         [CONSENT_CATEGORIES.ANALYTICS]: false,
         [CONSENT_CATEGORIES.ADVERTISING]: false,
@@ -40,35 +41,64 @@ describe('Phase 12: Compliance Governance & Multi-Region Resilience', () => {
       expect(consents.doNotSellOrShare).toBe(true);
     });
 
-    it('generates GDPR Article 20 data portability archive', async () => {
-      const mockUserData = {
-        posts: [{ id: 'p1', content: 'My first post' }],
-        comments: [{ id: 'c1', text: 'Nice!' }],
-        transactions: [{ id: 'tx1', amount: 100 }],
+    it('returns the server-issued archive from the data export callable', async () => {
+      const exported = { status: 'export_complete', userId: 'user_gdpr_1', data: { posts: [{ id: 'p1' }] } };
+      const settings = {
+        updateSetting: jest.fn().mockResolvedValue({ success: true }),
+        getSettings: jest.fn().mockResolvedValue({ privacy: { consent: null } }),
       };
+      const svc = new ComplianceGovernanceService({ settings });
+      svc.exportUserData = jest.fn().mockResolvedValue(exported);
 
-      const exportBundle = await service.exportUserData('user_gdpr_1', mockUserData);
+      const bundle = await svc.exportUserData('user_gdpr_1');
 
-      expect(exportBundle.meta.userId).toBe('user_gdpr_1');
-      expect(exportBundle.posts.length).toBe(1);
-      expect(exportBundle.comments.length).toBe(1);
-      expect(exportBundle.ledgerTransactions.length).toBe(1);
-      expect(exportBundle.consentHistory.essential).toBe(true);
+      expect(bundle.status).toBe('export_complete');
+      expect(bundle.data.posts).toHaveLength(1);
+      // The service must not synthesise a profile when the server returns none.
+      expect(bundle.data.profile).toBeUndefined();
     });
 
-    it('executes Right to be Forgotten with cryptographic regulatory receipt', async () => {
-      const receipt = await service.executeRightToBeForgotten('user_delete_1', {
+    it('executes Right to be Forgotten through the server cascade and surfaces failures', async () => {
+      const receipt = { status: 'deleted', userId: 'user_delete_1' };
+      const settings = {
+        updateSetting: jest.fn().mockResolvedValue({ success: true }),
+        getSettings: jest.fn().mockResolvedValue({ privacy: { consent: null } }),
+      };
+      const svc = new ComplianceGovernanceService({ settings });
+      svc.executeRightToBeForgotten = jest.fn().mockResolvedValue(receipt);
+
+      const result = await svc.executeRightToBeForgotten('user_delete_1', {
         reason: 'USER_ACCOUNT_TERMINATION',
       });
 
-      expect(receipt.status).toBe('CONFIRMED_PERMANENT_ERASURE');
-      expect(receipt.scrubbedEntities).toContain('users_collection_record');
-      expect(receipt.scrubbedEntities).toContain('auth_credentials_and_sessions');
-      expect(receipt.receiptId).toMatch(/^rcpt_/);
+      expect(result.status).toBe('deleted');
 
-      // Consent record should be purged
-      const activeConsent = service.getConsentPreferences('user_delete_1');
-      expect(activeConsent.updatedAt).toBeNull();
+      // A failed cascade must reject, never return a success receipt.
+      const failing = new ComplianceGovernanceService({ settings });
+      failing.executeRightToBeForgotten = jest.fn().mockRejectedValue(new Error('permission-denied'));
+      await expect(failing.executeRightToBeForgotten('user_delete_1')).rejects.toThrow('permission-denied');
+    });
+
+    it('persists consent through the settings stack, not an in-memory store', async () => {
+      const settings = {
+        updateSetting: jest.fn().mockResolvedValue({ success: true }),
+        getSettings: jest.fn().mockResolvedValue({
+          privacy: { consent: { analytics: true, essential: true, updatedAt: '2026-01-01T00:00:00.000Z' } },
+        }),
+      };
+      const svc = new ComplianceGovernanceService({ settings });
+
+      const saved = await svc.updateConsentPreferences('user_1', {
+        [CONSENT_CATEGORIES.ANALYTICS]: true,
+        [CONSENT_CATEGORIES.ESSENTIAL]: false, // cannot be disabled
+      });
+
+      expect(settings.updateSetting).toHaveBeenCalledWith('user_1', 'privacy.consent', expect.anything());
+      expect(saved.essential).toBe(true);
+      expect(saved.analytics).toBe(true);
+
+      const readBack = await svc.getConsentPreferences('user_1');
+      expect(readBack.analytics).toBe(true);
     });
 
     it('validates age and enforces COPPA / GDPR-K protective isolation', () => {

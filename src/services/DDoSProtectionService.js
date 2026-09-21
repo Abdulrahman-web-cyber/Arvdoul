@@ -1,12 +1,4 @@
-/**
- * src/services/DDoSProtectionService.js - ARVDOUL DDOS MITIGATION & RATE LIMITER
- *
- * Implements:
- * 1. Sliding Window Rate Limiter: Enforces per-IP and per-client token bucket limits.
- * 2. Adaptive Traffic Throttling: Automatically escalates challenge levels when global throughput spikes >300%.
- * 3. Graceful Degradation: Shields database write pipelines from request flooding.
- * 4. Automatic Temporary Ban List: Automatically suspends client IPs on consecutive rate breaches.
- */
+// src/services/DDoSProtectionService.js
 
 import { logger } from '../utils/Logger.js';
 

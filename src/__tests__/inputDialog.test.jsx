@@ -1,9 +1,4 @@
-/**
- * src/__tests__/inputDialog.test.jsx
- * Accessibility + behavior gates for the Input and Dialog primitives.
- *   - Input: label wiring, aria-invalid/describedby, validation states, loading
- *   - Dialog: role/aria-modal, Escape close, focus trap, focus restore
- */
+// src/__tests__/inputDialog.test.jsx
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

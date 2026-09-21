@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminModerationQueueScreen.jsx - ARVDOUL MODERATION QUEUE
-// ✅ Review reported content
-// ✅ Take moderation actions
-// ✅ View moderation history
+// src/screens/Admin/AdminModerationQueueScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -33,16 +30,27 @@ const AdminModerationQueueScreen = () => {
         const adminSnap = await getDoc(doc(firestore, 'admins', user?.uid || ''));
         if (!adminSnap.exists()) { setLoading(false); return; }
 
-        const [commentReports, userReports, videoReports] = await Promise.all([
-          getDocs(query(collection(firestore, 'comment_reports'), orderBy('createdAt', 'desc'), limit(100))),
-          getDocs(query(collection(firestore, 'user_reports'), orderBy('createdAt', 'desc'), limit(100))),
-          getDocs(query(collection(firestore, 'video_reports'), orderBy('createdAt', 'desc'), limit(100))),
-        ]);
-        const mapped = [
-          ...commentReports.docs.map(d => ({ id: d.id, type: 'comment', status: d.data().status || 'pending', ...d.data() })),
-          ...userReports.docs.map(d => ({ id: d.id, type: 'user', status: d.data().status || 'pending', ...d.data() })),
-          ...videoReports.docs.map(d => ({ id: d.id, type: 'video', status: d.data().status || 'pending', ...d.data() })),
+        // Every report collection the reportContent callable can write to must
+        // appear here, otherwise reports silently never reach a moderator.
+        const reportCollections = [
+          ['comment_reports', 'comment'],
+          ['user_reports', 'user'],
+          ['video_reports', 'video'],
+          ['post_reports', 'post'],
+          ['story_reports', 'story'],
         ];
+        const results = await Promise.all(
+          reportCollections.map(([name]) =>
+            getDocs(query(collection(firestore, name), orderBy('createdAt', 'desc'), limit(100)))
+              .then(snap => ({ name, snap }))
+              .catch(() => ({ name, snap: null }))
+          )
+        );
+        const mapped = results.flatMap(({ name, snap }) => {
+          if (!snap) return [];
+          const type = reportCollections.find(([n]) => n === name)[1];
+          return snap.docs.map(d => ({ id: d.id, collection: name, type, status: d.data().status || 'pending', ...d.data() }));
+        });
         setReports(mapped.sort((a, b) => new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0)));
       } catch (err) {
         toast.error('Could not load moderation queue.');
@@ -65,10 +73,8 @@ const AdminModerationQueueScreen = () => {
       const { getFirestoreInstance } = await import('../../firebase/firebase.js');
       const firestore = await getFirestoreInstance();
       const report = reports.find(r => r.id === reportId);
-      const collectionName =
-        report?.type === 'user' ? 'user_reports'
-        : report?.type === 'video' ? 'video_reports'
-        : 'comment_reports';
+      const collectionName = report?.collection;
+      if (!collectionName) throw new Error('Unknown report collection');
       const ref = doc(firestore, collectionName, reportId);
       await updateDoc(ref, {
         status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'pending',

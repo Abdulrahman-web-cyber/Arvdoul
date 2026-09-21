@@ -1,10 +1,4 @@
-/**
- * src/__tests__/securityServices.test.js
- * Real assertions for the security service layer: WAF, CSRF, DDoS, PoW
- * challenges, security headers, CSP, session anomaly detection and
- * sanitization. These are the enforcement points of the platform's
- * OWASP / anti-abuse posture and must never regress.
- */
+// src/__tests__/securityServices.test.js
 
 import { wafService } from '../services/WAFService.js';
 import { csrfService } from '../services/CSRFService.js';

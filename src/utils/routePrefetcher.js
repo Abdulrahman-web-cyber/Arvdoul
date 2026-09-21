@@ -1,7 +1,4 @@
 // src/utils/routePrefetcher.js
-// Ultra-performance background route and data prefetcher.
-// Pre-loads code chunks and critical stores into memory during idle frames,
-// making bottom-nav and tab navigation feel INSTANTANEOUS with zero suspense flickers.
 
 const prefetchedModules = new Set();
 

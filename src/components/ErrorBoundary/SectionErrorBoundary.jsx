@@ -1,29 +1,24 @@
-import React, { Component } from "react";
+import React from "react";
 import { AlertCircle, RefreshCw, Layers, MessageSquare, User, Image, Sparkles } from "lucide-react";
+import { ErrorBoundary } from "../ErrorBoundary.jsx";
 
 /**
  * SectionErrorBoundary - Catches runtime exceptions in isolated UI sections
  * without crashing the main application or kicking the user out of their session.
+ * Built on the canonical ErrorBoundary so recovery/reset semantics stay unified.
  */
-export class SectionErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
+export class SectionErrorBoundary extends ErrorBoundary {
   componentDidCatch(error, errorInfo) {
-    console.warn(`[SectionErrorBoundary:${this.props.sectionName || "Section"}] caught error:`, error, errorInfo);
+    console.warn(
+      `[SectionErrorBoundary:${this.props.sectionName || "Section"}] caught error:`,
+      error,
+      errorInfo
+    );
+    this.props.onError?.(error, errorInfo);
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
-    if (this.props.onReset) {
-      this.props.onReset();
-    }
+    this.reset();
   };
 
   render() {

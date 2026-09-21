@@ -1,12 +1,4 @@
-/**
- * src/services/ReadOptimizer.js - ARVDOUL READ OPTIMIZER & N+1 QUERY BATCHER
- *
- * Implements:
- * 1. Automatic DataLoader-style Batching: Intercepts single document get requests in a 50ms window
- *    and coalesces them into a single `documentId in [...]` or `getAll()` batch fetch.
- * 2. Field Selection Engine (Projection): Strips unneeded payload fields to reduce document transfer size by >60%.
- * 3. In-Flight Deduping: Prevents multiple concurrent components from executing duplicate queries for identical documents.
- */
+// src/services/ReadOptimizer.js
 
 import { logger } from '../utils/Logger.js';
 import { cacheManager } from '../utils/CacheManager.js';

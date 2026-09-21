@@ -1,10 +1,4 @@
-/**
- * src/__tests__/profileSystemHardening.test.js - ARVDOUL Profile System Hardening Tests
- * 
- * Verifies profile contracts, validation rules, privacy visibility scopes,
- * XSS-preventing URL sanitization, server-authoritative field stripping,
- * and optimistic state updates in useProfileStore.
- */
+// src/__tests__/profileSystemHardening.test.js
 
 import { jest } from '@jest/globals';
 import {

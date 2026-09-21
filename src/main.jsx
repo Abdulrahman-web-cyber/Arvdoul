@@ -1,4 +1,4 @@
-// src/main.jsx - ULTIMATE FIXED VERSION
+// src/main.jsx - FIXED VERSION
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import AppBootstrap from './app/AppBootstrap.jsx';

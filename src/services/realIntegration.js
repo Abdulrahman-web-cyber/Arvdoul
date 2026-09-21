@@ -1,18 +1,4 @@
-/**
- * src/services/realIntegration.js - ARVDOUL EXTERNAL INTEGRATION REGISTRY
- *
- * The single source of truth for third-party provider configuration.
- * Replaces the previous placeholder export with a real, fail-loud registry:
- *
- *  - `integrationRegistry.isConfigured(name)`  - is the provider wired up?
- *  - `integrationRegistry.requireConfigured(name)` - throws a clear error when
- *    a provider is REQUIRED but unconfigured (no silent mock behavior).
- *  - `integrationRegistry.getConfig(name)` - typed env/config access.
- *
- * Providers are configured via `import.meta.env` (VITE_*) for client keys and
- * documented in `.env.example`. Server-side secrets must NEVER be prefixed
- * with VITE_ - they live in Cloud Functions env only.
- */
+// src/services/realIntegration.js
 
 import { logger } from '../utils/Logger.js';
 

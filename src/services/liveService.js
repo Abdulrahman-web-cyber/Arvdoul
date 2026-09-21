@@ -1,25 +1,11 @@
-/**
- * src/services/liveService.js - ARVDOUL Ultimate Live Streaming Service - PRODUCTION READY v5.0
- * 
- * Comprehensive live streaming functionality for creators with real WebRTC signaling fallback.
- * Features:
- * - Level-based live streaming (min level 5)
- * - Live stream management (start, end, join, leave)
- * - Real WebRTC P2P signaling rooms implemented serverless over Firestore
- * - Real-time comments and viewer tracking
- * - Gifts and tips system
- * - Monetization settings
- * - Analytics and earnings tracking
- * 
- * @author ARVDOUL Engineering Team
- * @version 5.0.0
- */
+// src/services/liveService.js
 
 import { produce } from 'immer';
 import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { logger } from '../utils/Logger.js';
+import { LEVEL_GATES } from '../shared/levelConfig.cjs';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
@@ -29,7 +15,7 @@ import { secureRandom } from '../lib/utils.js';
 
 // ==================== CONFIGURATION ====================
 const LIVE_CONFIG = {
-  MIN_LEVEL_TO_START: 5,
+  MIN_LEVEL_TO_START: LEVEL_GATES.liveStreaming,
   VIEWER_LIMITS: {
     5: 50,
     10: 100,

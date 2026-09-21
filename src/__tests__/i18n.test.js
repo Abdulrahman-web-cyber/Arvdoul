@@ -1,10 +1,4 @@
-/**
- * src/__tests__/i18n.test.js
- * Enforces translation integrity: every locale must be a strict superset of
- * the English key tree (missing keys break the UI silently), and RTL locales
- * must be flagged correctly. This test fails CI when a translator forgets a
- * key or when a new UI string is added only to en.json.
- */
+// src/__tests__/i18n.test.js
 
 import en from '../i18n/locales/en.json';
 import es from '../i18n/locales/es.json';

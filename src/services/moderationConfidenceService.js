@@ -1,13 +1,4 @@
-/**
- * src/services/moderationConfidenceService.js - ARVDOUL MODERATION CONFIDENCE ROUTING ENGINE
- *
- * Implements:
- * 1. Bayesian Threshold Decision Engine:
- *    - Confidence >= 0.90 -> Auto-Action (Immediate Block or Instant Approval)
- *    - Confidence 0.50 - 0.89 -> Route to Human Review Queue with Priority Score
- *    - Confidence < 0.50 -> Auto-Allow with Soft Background Watchlist
- * 2. Creator Trust Score Weighting: Multiplies confidence threshold with creator reputation score.
- */
+// src/services/moderationConfidenceService.js
 
 import { logger } from '../utils/Logger.js';
 
