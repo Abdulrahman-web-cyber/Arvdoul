@@ -10,3 +10,7 @@ export { default as FollowingScreen } from './FollowingScreen';
 export { default as FriendsScreen } from './FriendsScreen';
 export { default as HighlightsScreen } from './HighlightsScreen';
 export { default as AboutScreen } from './AboutScreen';
+export { default as ProfileSettingsScreen } from './ProfileSettingsScreen';
+export { default as ProfilePreviewScreen } from './ProfilePreviewScreen';
+export { default as AnalyticsScreen } from './AnalyticsScreen';
+export { default as UserListScreen } from './UserListScreen';

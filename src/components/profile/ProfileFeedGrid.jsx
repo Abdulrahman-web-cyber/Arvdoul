@@ -124,13 +124,26 @@ const ProfileFeedGrid = memo(({
                 isReel ? "aspect-[9/16]" : "aspect-square"
               )}
             >
-              {/* Media Thumbnail */}
-              <img
-                src={item.mediaURL || item.thumbnailUrl || item.mediaUrl || ''}
-                alt={item.title || item.caption || 'Media item'}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
+              {/* Media Thumbnail or Text Content Fallback */}
+              {(item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image) ? (
+                <img
+                  src={item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image}
+                  alt={item.title || item.caption || item.text || 'Media item'}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col justify-between p-3.5 bg-gradient-to-br from-purple-900/40 via-indigo-950/40 to-slate-900 border border-white/5">
+                  <span className="text-[11px] font-semibold text-slate-200 line-clamp-4 leading-relaxed">
+                    {item.content || item.caption || item.text || item.title || 'Post'}
+                  </span>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="capitalize">{item.type || 'post'}</span>
+                    <span>{item.createdAt ? new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Video Indicator at Top Right */}
               {isVid && (

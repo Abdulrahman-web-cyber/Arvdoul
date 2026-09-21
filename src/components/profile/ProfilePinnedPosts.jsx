@@ -57,12 +57,22 @@ const ProfilePinnedPosts = memo(({
             onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
             className="group relative aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-md bg-slate-900"
           >
-            <img
-              src={item.mediaURL || item.thumbnailUrl || item.mediaUrl || ''}
-              alt={item.title || 'Pinned post'}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              loading="lazy"
-            />
+            {(item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image) ? (
+              <img
+                src={item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image}
+                alt={item.title || item.caption || item.text || 'Pinned post'}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-full h-full p-4 flex flex-col justify-between bg-gradient-to-br from-indigo-900/40 via-purple-950/40 to-slate-900">
+                <span className="text-xs font-semibold text-slate-200 line-clamp-3">
+                  {item.content || item.caption || item.text || item.title || 'Pinned Post'}
+                </span>
+                <span className="text-[10px] text-slate-400 capitalize">{item.type || 'post'}</span>
+              </div>
+            )}
 
             {/* Gradient Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />

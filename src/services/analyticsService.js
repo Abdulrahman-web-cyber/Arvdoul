@@ -1008,4 +1008,16 @@ export const recordFollowerSnapshot = (userId, followerCount) =>
 export const clearAnalyticsCache = (userId) => 
   getAnalyticsService().clearCache(userId);
 
-export default getAnalyticsService;
+const analyticsService = new Proxy(getAnalyticsService, {
+  get(target, prop) {
+    if (prop in target) return target[prop];
+    const instance = target();
+    const value = instance[prop];
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  }
+});
+
+export default analyticsService;

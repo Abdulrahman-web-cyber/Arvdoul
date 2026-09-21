@@ -171,13 +171,20 @@ const ProfileHighlightsSection = memo(({
             }}
             className="relative w-28 sm:w-36 h-48 sm:h-56 rounded-2xl overflow-hidden shrink-0 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 border border-black/10 dark:border-white/10"
           >
-            {/* Background Media Thumbnail */}
-            <img
-              src={item.cover || ''}
-              alt={item.title}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-              loading="lazy"
-            />
+            {/* Background Media Thumbnail or Fallback Gradient */}
+            {item.cover ? (
+              <img
+                src={item.cover}
+                alt={item.title}
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-tr from-purple-900 via-indigo-950 to-slate-900 flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-purple-400/40" />
+              </div>
+            )}
 
             {/* Cinematic Gradient Vignette */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/20 group-hover:via-black/20 transition-colors duration-300" />
