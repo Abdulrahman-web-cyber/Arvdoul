@@ -68,22 +68,29 @@ export default function ProfilePublicScreen() {
   // Load profile and related data
   useEffect(() => {
     let isMounted = true;
+    const cleanUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
+
     const loadPublicProfile = async () => {
-      if (!userId) return;
+      if (!cleanUserId) return;
       setLoading(true);
+
+      const safetyTimer = setTimeout(() => {
+        if (isMounted) setLoading(false);
+      }, 6000);
 
       try {
         const userServiceModule = await import('../../services/userService.js');
         const userService = userServiceModule.getUserService();
 
         // 1. Fetch user profile
-        const fetched = await userService.getUserProfile(userId, currentUser?.uid);
+        const fetched = await userService.getUserProfile(cleanUserId, currentUser?.uid);
+        const targetUid = fetched?.id || fetched?.uid || cleanUserId;
         
         // 2. Fetch posts
         let userPosts = [];
         try {
           const { getFirestoreService } = await import('../../services/firestoreService.js');
-          const postsRes = await getFirestoreService().getPostsByUser(userId, { limit: 30 });
+          const postsRes = await getFirestoreService().getPostsByUser(targetUid, { limit: 30 });
           if (postsRes?.posts && Array.isArray(postsRes.posts)) {
             userPosts = postsRes.posts;
           }
@@ -92,9 +99,9 @@ export default function ProfilePublicScreen() {
         }
 
         // 3. Fetch follow status
-        if (currentUser?.uid && userId !== currentUser.uid) {
+        if (currentUser?.uid && targetUid !== currentUser.uid) {
           try {
-            const status = await userService.checkFollowStatus(currentUser.uid, userId);
+            const status = await userService.checkFollowStatus(currentUser.uid, targetUid);
             if (isMounted) setIsFollowing(Boolean(status?.isFollowing || fetched?.isFollowing));
           } catch (followErr) {
             if (isMounted && fetched?.isFollowing !== undefined) {
@@ -104,22 +111,22 @@ export default function ProfilePublicScreen() {
         }
 
         // 4. Fetch mutual friends and friend request status
-        if (currentUser?.uid && userId !== currentUser.uid) {
+        if (currentUser?.uid && targetUid !== currentUser.uid) {
           try {
-            const mutual = await userService.getMutualFriends(currentUser.uid, userId);
+            const mutual = await userService.getMutualFriends(currentUser.uid, targetUid);
             const friendsList = Array.isArray(mutual) ? mutual : (mutual?.mutualFriends || []);
             if (isMounted) {
               setMutualFriends(friendsList);
             }
 
-            // Check if mutual friends directly
-            const areFriends = await userService._areMutualFriends(currentUser.uid, userId).catch(() => false);
+            // Check if mutual friends directly using canonical areFriends
+            const areFriends = await userService.areFriends(currentUser.uid, targetUid).catch(() => false);
             if (areFriends) {
               if (isMounted) setFriendshipStatus('friends');
             } else {
               // Check sent friend requests
               const sent = await userService.getFriendRequests(currentUser.uid, 'sent').catch(() => ({ requests: [] }));
-              const sentReq = sent.requests?.find(r => r.toUserId === userId);
+              const sentReq = sent.requests?.find(r => r.toUserId === targetUid);
               if (sentReq) {
                 if (isMounted) {
                   setFriendshipStatus('pending');
@@ -128,7 +135,7 @@ export default function ProfilePublicScreen() {
               } else {
                 // Check received friend requests
                 const received = await userService.getFriendRequests(currentUser.uid, 'received').catch(() => ({ requests: [] }));
-                const recReq = received.requests?.find(r => r.fromUserId === userId);
+                const recReq = received.requests?.find(r => r.fromUserId === targetUid);
                 if (recReq) {
                   if (isMounted) {
                     setFriendshipStatus('received');
@@ -147,10 +154,10 @@ export default function ProfilePublicScreen() {
         // 5. Track profile view in analytics & fetch analytics
         try {
           const analyticsService = (await import('../../services/analyticsService.js')).default;
-          if (currentUser?.uid && userId !== currentUser.uid) {
-            analyticsService.trackProfileView(currentUser.uid, userId).catch(() => {});
+          if (currentUser?.uid && targetUid !== currentUser.uid) {
+            analyticsService.trackProfileView(currentUser.uid, targetUid).catch(() => {});
           }
-          const userAnalytics = await analyticsService.getUserAnalytics(userId, '30d');
+          const userAnalytics = await analyticsService.getUserAnalytics(targetUid, '30d');
           if (isMounted && userAnalytics) {
             setAnalytics(userAnalytics);
           }
@@ -165,6 +172,7 @@ export default function ProfilePublicScreen() {
       } catch (err) {
         console.warn('Public profile fetch error:', err);
       } finally {
+        clearTimeout(safetyTimer);
         if (isMounted) setLoading(false);
       }
     };

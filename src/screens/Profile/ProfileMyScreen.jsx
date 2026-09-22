@@ -59,74 +59,63 @@ export default function ProfileMyScreen() {
   const currentUser = authStoreUser || authContextUser;
   const currentUserId = currentUser?.uid || authContextUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || JSON.parse(localStorage.getItem('user') || '{}')?.uid) : null);
 
-  // Profile store
-  const {
-    profile,
-    loading,
-    error,
-    posts,
-    postsLoading,
-    postsHasMore,
-    savedPosts,
-    savedLoading,
-    highlights,
-    level,
-    balance,
-    position,
-    loadProfile,
-    loadPosts,
-    loadMorePosts,
-    loadSavedPosts,
-    loadHighlights,
-    loadLevel,
-    loadBalance,
-    loadPosition,
-    clear,
-  } = useProfileStore();
+  // Profile store - reactive state selectors
+  const profile = useProfileStore((state) => state.profile);
+  const loading = useProfileStore((state) => state.loading);
+  const error = useProfileStore((state) => state.error);
+  const posts = useProfileStore((state) => state.posts);
+  const postsLoading = useProfileStore((state) => state.postsLoading);
+  const postsHasMore = useProfileStore((state) => state.postsHasMore);
+  const savedPosts = useProfileStore((state) => state.savedPosts);
+  const savedLoading = useProfileStore((state) => state.savedLoading);
+  const highlights = useProfileStore((state) => state.highlights);
+  const level = useProfileStore((state) => state.level);
+  const balance = useProfileStore((state) => state.balance);
+  const position = useProfileStore((state) => state.position);
 
-  // Analytics store
-  const {
-    analytics,
-    loading: analyticsLoading,
-    timeframe,
-    ranking,
-    loadAnalytics,
-    setTimeframe,
-  } = useAnalyticsStore();
+  // Analytics store - reactive state selectors
+  const analytics = useAnalyticsStore((state) => state.analytics);
+  const analyticsLoading = useAnalyticsStore((state) => state.loading);
+  const timeframe = useAnalyticsStore((state) => state.timeframe);
+  const ranking = useAnalyticsStore((state) => state.ranking);
+  const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
-  // Load user data on mount
+  // Load user data on mount without thrashing or clearing cache
   useEffect(() => {
-    if (currentUserId) {
-      loadProfile(currentUserId, currentUserId);
-      loadHighlights(currentUserId);
-      loadLevel(currentUserId);
-      loadBalance(currentUserId);
-      loadPosition(currentUserId);
-      loadAnalytics(currentUserId, timeframe);
-      loadPosts(currentUserId);
-    }
+    if (!currentUserId) return;
 
-    return () => {
-      clear();
-    };
-  }, [currentUserId, loadProfile, loadHighlights, loadLevel, loadBalance, loadPosition, loadAnalytics, loadPosts, timeframe, clear]);
+    const profileStore = useProfileStore.getState();
+    const analyticsStore = useAnalyticsStore.getState();
+
+    profileStore.loadProfile(currentUserId, currentUserId);
+    profileStore.loadHighlights(currentUserId);
+    profileStore.loadLevel(currentUserId);
+    profileStore.loadBalance(currentUserId);
+    profileStore.loadPosition(currentUserId);
+    profileStore.loadPosts(currentUserId);
+
+    analyticsStore.loadAnalytics(currentUserId, timeframe);
+  }, [currentUserId, timeframe]);
 
   // Tab change handler
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
-    if (tab === 'saved' && (!savedPosts || savedPosts.length === 0)) {
-      loadSavedPosts(currentUserId);
+    if (tab === 'saved' && (!savedPosts || savedPosts.length === 0) && currentUserId) {
+      useProfileStore.getState().loadSavedPosts(currentUserId);
     }
-  }, [currentUserId, savedPosts, loadSavedPosts]);
+  }, [currentUserId, savedPosts]);
 
   // Pull to refresh
   const handleRefresh = useCallback(async () => {
+    if (!currentUserId) return;
     setIsRefreshing(true);
     try {
-      await Promise.all([
-        loadProfile(currentUserId, currentUserId),
-        loadAnalytics(currentUserId, timeframe),
-        loadPosts(currentUserId),
+      const profileStore = useProfileStore.getState();
+      const analyticsStore = useAnalyticsStore.getState();
+      await Promise.allSettled([
+        profileStore.loadProfile(currentUserId, currentUserId),
+        analyticsStore.loadAnalytics(currentUserId, timeframe),
+        profileStore.loadPosts(currentUserId),
       ]);
       toast.success('Profile refreshed');
     } catch (e) {
@@ -134,7 +123,7 @@ export default function ProfileMyScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentUserId, loadProfile, loadAnalytics, loadPosts, timeframe]);
+  }, [currentUserId, timeframe]);
 
   // Handle Share
   const handleShare = useCallback(async () => {
@@ -189,7 +178,7 @@ export default function ProfileMyScreen() {
 
   const isDark = theme === 'dark';
 
-  if (loading && !profile) {
+  if (loading && !profile && !currentUser) {
     return (
       <div className={cn(
         'min-h-screen pb-20',
@@ -214,6 +203,9 @@ export default function ProfileMyScreen() {
             : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
         )}
       >
+        {loading && !profile && (
+          <TopAppLoadingBanner isAnimating={true} label="Syncing profile..." />
+        )}
         {/* Top Refreshing Pill */}
         {isRefreshing && (
           <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg animate-pulse">

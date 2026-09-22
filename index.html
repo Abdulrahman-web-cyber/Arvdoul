@@ -80,78 +80,20 @@
         -webkit-tap-highlight-color: transparent;
       }
       
-      /* Instant initial splash styles */
-      .initial-splash {
+      /* App Loading fallback indicator */
+      .app-loading {
         position: fixed;
-        inset: 0;
-        background: #03071B;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        user-select: none;
-      }
-
-      .splash-logo-circle {
-        width: 112px;
-        height: 112px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.15));
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(139, 92, 246, 0.25);
-        margin-bottom: 24px;
-        animation: pulseLogo 2s ease-in-out infinite;
-      }
-
-      .splash-logo-circle img {
-        width: 96px;
-        height: 96px;
-        border-radius: 50%;
-        object-fit: cover;
-      }
-
-      .splash-title {
-        font-size: 32px;
-        font-weight: 700;
-        color: #FFFFFF;
-        letter-spacing: -0.025em;
-        margin: 0 0 24px 0;
-      }
-
-      .splash-bar-container {
-        width: 192px;
-        height: 4px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.1);
-        overflow: hidden;
-        position: relative;
-      }
-
-      .splash-bar-fill {
-        position: absolute;
         top: 0;
-        bottom: 0;
         left: 0;
-        width: 45%;
+        right: 0;
+        height: 2.5px;
         background: linear-gradient(90deg, #8B1EF3, #3B82F6, #EC4899);
-        border-radius: 999px;
-        box-shadow: 0 0 12px rgba(139, 30, 243, 0.5);
-        animation: splashShimmer 1.4s ease-in-out infinite;
+        z-index: 99999;
+        animation: topLoadingShimmer 1.5s ease-in-out infinite;
       }
-
-      @keyframes pulseLogo {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.03); }
-      }
-
-      @keyframes splashShimmer {
-        0% { left: -45%; width: 45%; }
-        50% { width: 60%; }
-        100% { left: 100%; width: 45%; }
+      @keyframes topLoadingShimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
       }
     </style>
     
@@ -166,18 +108,9 @@
     </script>
   </head>
   <body>
-    <!-- Root container with immediate visual splash screen -->
+    <!-- Root container -->
     <div id="root">
-      <div class="initial-splash" id="initial-splash">
-        <div class="splash-logo-circle">
-          <img src="/icons/icon.png" alt="Arvdoul" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-          <span style="display:none; font-size:36px; font-weight:bold; color:white;">A</span>
-        </div>
-        <h1 class="splash-title">Arvdoul</h1>
-        <div class="splash-bar-container">
-          <div class="splash-bar-fill"></div>
-        </div>
-      </div>
+      <div class="app-loading" aria-hidden="true"></div>
     </div>
     
     <!-- Main React Entry -->

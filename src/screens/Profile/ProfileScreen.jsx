@@ -23,7 +23,13 @@ export default function ProfileScreen() {
   const authUser = authStoreUser || authContextUser;
   const currentUserId = authUser?.uid || authContextUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || JSON.parse(localStorage.getItem('user') || '{}')?.uid) : null);
 
-  const isOwner = !userId || userId === currentUserId || userId === 'me';
+  const cleanUserId = userId ? String(userId).replace(/^@/, '').toLowerCase().trim() : null;
+  const currentUsername = (authUser?.username || authUser?.email?.split('@')[0] || '').toLowerCase().trim();
+
+  const isOwner = !cleanUserId || 
+    cleanUserId === currentUserId || 
+    cleanUserId === 'me' || 
+    (currentUsername && cleanUserId === currentUsername);
 
   if (isOwner) {
     return <ProfileMyScreen />;

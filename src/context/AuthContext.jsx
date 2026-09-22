@@ -415,7 +415,7 @@ export function AuthProvider({ children }) {
           initialProfileLoaded.current = true;
           isFirstSnapshot = false;
         }
-      }, 8000);
+      }, 2500);
       
       const unsubscribe = onSnapshot(userDocRef, 
         (snap) => {
@@ -556,7 +556,7 @@ export function AuthProvider({ children }) {
     // if auth initialization hangs (e.g. a dynamic import that never resolves).
     const authReadyTimer = setTimeout(() => {
       setAuthInitialized(true);
-    }, 10000);
+    }, 3000);
     
     const setupAuthListener = async () => {
       try {
