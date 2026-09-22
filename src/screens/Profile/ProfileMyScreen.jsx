@@ -338,7 +338,7 @@ export default function ProfileMyScreen() {
             userId={currentUserId}
             theme={theme}
             onLocationUpdated={(newLoc) => {
-              loadProfile(currentUserId, currentUserId);
+              useProfileStore.getState().loadProfile(currentUserId, currentUserId);
             }}
           />
         )}
@@ -368,7 +368,7 @@ export default function ProfileMyScreen() {
               onUpload={(newUrl) => {
                 setShowAvatarModal(false);
                 toast.success('Avatar updated successfully!');
-                loadProfile(currentUserId, currentUserId);
+                useProfileStore.getState().loadProfile(currentUserId, currentUserId);
               }}
               currentAvatar={effectiveProfile?.photoURL}
               userId={currentUserId}
