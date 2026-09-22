@@ -1,4 +1,6 @@
-// src/screens/Rankings/RankingsScreen.jsx
+// src/screens/Rankings/RankingsScreen.jsx – ARVDOUL RANKINGS SCREEN V1
+// 🏆 Leaderboards, Rankings, Reputation, Badges
+// ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

@@ -1,4 +1,14 @@
-// src/components/profile/ProfileMetricsGrid.jsx
+/**
+ * src/components/profile/ProfileMetricsGrid.jsx - ARVDOUL Profile Metrics Grid
+ * 
+ * Recreates the 6 key metric cards grid from the uploaded designs:
+ * Owner: Posts, Friends, Followers (+ trend), Following, Profile Views (+ trend), Coins
+ * Public: Posts, Followers, Following, Friends, Likes, Coins
+ * 
+ * Responsive across mobile (2-3 cols), tablet (3-6 cols), desktop (6 cols).
+ * 
+ * @component
+ */
 
 import React, { memo } from 'react';
 import { 

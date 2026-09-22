@@ -1,4 +1,14 @@
-// src/utils/RateLimiter.js
+/**
+ * src/utils/RateLimiter.js - ARVDOUL Rate Limiter
+ *
+ * Client-side sliding-window rate limiter. IMPORTANT: client-side limits are
+ * a UX guard, never a security boundary - server-side enforcement lives in
+ * Cloud Functions / Firestore rules (see functions/*.js). This utility
+ * provides the shared, consistent implementation every service uses.
+ *
+ * Storage: in-memory Map + optional localStorage persistence (guarded).
+ * Zero dependencies.
+ */
 
 const FALLBACK_MAX = 1000;
 

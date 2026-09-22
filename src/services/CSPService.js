@@ -1,4 +1,11 @@
-// src/services/CSPService.js
+/**
+ * src/services/CSPService.js - ARVDOUL CONTENT SECURITY POLICY (CSP) MANAGER
+ *
+ * Implements:
+ * 1. Strict Content Security Policy (CSP Level 3): Generates cryptographically secure nonces for inline scripts/styles.
+ * 2. Violation Reporting Pipeline: Directs CSP report-uri/report-to telemetry to central security logging sink.
+ * 3. Frame Ancestor Protection: Prevents UI redressing & clickjacking attacks.
+ */
 
 import { logger } from '../utils/Logger.js';
 

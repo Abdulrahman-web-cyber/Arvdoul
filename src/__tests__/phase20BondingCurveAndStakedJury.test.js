@@ -1,4 +1,7 @@
-// src/__tests__/phase20BondingCurveAndStakedJury.test.js
+/**
+ * src/__tests__/phase20BondingCurveAndStakedJury.test.js - ARVDOUL PHASE 20 TEST SUITE
+ * Verifies Bancor bonding curve continuous pricing and Staked Moderation Jury with commit-reveal.
+ */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { DecentralizedTokenBondingCurveService } from '../services/decentralizedTokenBondingCurveService.js';

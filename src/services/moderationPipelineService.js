@@ -1,4 +1,11 @@
-// src/services/moderationPipelineService.js
+/**
+ * src/services/moderationPipelineService.js - ARVDOUL MASTER MODERATION PIPELINE ORCHESTRATOR
+ *
+ * Implements:
+ * 1. Synchronous Pre-Publish ML Gate: Evaluates text, links, photos, videos, and CSAM hashes before permitting document write.
+ * 2. Asynchronous Post-Publish Background Pipeline: Performs deep frame moderation and fact-checking without blocking user UI.
+ * 3. Unified Decision Pipeline: Routes cleanly to instant block, human review queue, or instant publish.
+ */
 
 import { textModerationService } from './textModerationService.js';
 import { selfHarmDetectionService } from './selfHarmDetectionService.js';

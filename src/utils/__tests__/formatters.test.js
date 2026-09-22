@@ -1,4 +1,6 @@
-// src/utils/__tests__/formatters.test.js
+/**
+ * ARVDOUL pure-logic formatter tests (no mocks, no Firebase).
+ */
 import { formatDuration, formatViewCount, getInitials } from '../videoUtils.js';
 import { saveToCache, loadFromCache } from '../offlineCache.js';
 

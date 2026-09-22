@@ -1,4 +1,17 @@
-// src/components/profile/ProfileCreatorDashboard.jsx
+/**
+ * src/components/profile/ProfileCreatorDashboard.jsx - ARVDOUL Creator Dashboard Component
+ * 
+ * Recreates the Creator Dashboard section from the uploaded designs:
+ * - Header with BarChart2 icon and timeframe dropdown
+ * - 5 metric cards:
+ *   1. Profile Views (with sparkline curve)
+ *   2. Reach (with sparkline curve)
+ *   3. Engagement (with sparkline curve)
+ *   4. Coins Earned (with sparkline curve)
+ *   5. Top Creator Ranking ("Top 1% Among Creators" with Crown icon)
+ * 
+ * @component
+ */
 
 import React, { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +27,6 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
 
 // Clean SVG Sparklines
 const Sparkline = ({ color = '#a855f7', data = [0, 0] }) => {
@@ -60,12 +72,12 @@ const ProfileCreatorDashboard = memo(({
   const isDark = theme === 'dark';
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
-  // Gating check: creator status, or the canonical creatorProfile level gate.
+  // Gating check: User must be Level 5+ or have creator status
   const effectiveLevel = Number(userLevel) || 1;
-  const requiredLevel = LEVEL_GATES.creatorProfile;
-  const isEligibleCreator = isCreator || effectiveLevel >= requiredLevel;
+  const isEligibleCreator = isCreator || effectiveLevel >= 5;
 
   if (!isEligibleCreator) {
+    const requiredLevel = 5;
     const progressPercent = Math.min(100, Math.max(10, Math.round((effectiveLevel / requiredLevel) * 100)));
 
     return (
@@ -83,7 +95,7 @@ const ProfileCreatorDashboard = memo(({
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5" />
-                <span>Level {requiredLevel} Creator Milestone</span>
+                <span>Level 5 Creator Milestone</span>
               </span>
               <span className="text-xs font-semibold text-slate-400">
                 Locked
@@ -95,14 +107,14 @@ const ProfileCreatorDashboard = memo(({
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              Reach <strong className="text-purple-500">Level {requiredLevel}</strong> to unlock real-time audience analytics, monetization tools, creator coin tips, and top ranking perks.
+              Reach <strong className="text-purple-500">Level 5</strong> to unlock real-time audience analytics, monetization tools, creator coin tips, and top ranking perks.
             </p>
 
             {/* Level Progress Bar */}
             <div className="pt-2 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-500 dark:text-slate-400">Current Standing</span>
-                <span className="text-purple-600 dark:text-purple-400">Level {effectiveLevel} of {requiredLevel}</span>
+                <span className="text-purple-600 dark:text-purple-400">Level {effectiveLevel} of 5</span>
               </div>
 
               <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden p-0.5">
@@ -114,7 +126,7 @@ const ProfileCreatorDashboard = memo(({
 
               <div className="flex items-center justify-between text-[11px] text-slate-400">
                 <span>🌱 Citizen Status</span>
-                <span>⭐ {Math.max(0, requiredLevel - effectiveLevel)} more {requiredLevel - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
+                <span>⭐ {5 - effectiveLevel} more {5 - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
               </div>
             </div>
           </div>
@@ -130,7 +142,7 @@ const ProfileCreatorDashboard = memo(({
             </button>
 
             <button
-              onClick={() => navigate('/badges')}
+              onClick={() => navigate('/rewards')}
               className={cn(
                 "px-5 py-2.5 rounded-2xl font-bold text-xs border transition-all text-center",
                 isDark ? "bg-white/5 hover:bg-white/10 border-white/10 text-white" : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"

@@ -1,4 +1,9 @@
-// src/services/discoveryService.js
+/**
+ * src/services/discoveryService.js - ARVDOUL DISCOVERY & PERSONALIZED ALGORITHMIC RECOMMENDATIONS
+ *
+ * Implements advanced multi-objective optimizations, multi-armed bandit content exploration,
+ * Gumbel-distribution freshness balancing, location filters, and cold-start interest prefetching.
+ */
 
 import { logger } from '../utils/Logger.js';
 

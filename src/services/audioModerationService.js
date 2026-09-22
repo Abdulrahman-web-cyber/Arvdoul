@@ -1,4 +1,11 @@
-// src/services/audioModerationService.js
+/**
+ * src/services/audioModerationService.js - ARVDOUL AUDIO & SPEECH SAFETY ENGINE v8.0
+ *
+ * Implements:
+ * 1. Web Speech API Real-Time Audio Transcription: Transcribes spoken words from microphone and audio tracks.
+ * 2. Toxic Speech NLP Classification: Inspects transcribed speech using text moderation engine.
+ * 3. Audio Level & Screaming/Distress Frequency Analysis: Monitors decibel spikes and acoustic distress signals.
+ */
 
 import { textModerationService } from './textModerationService.js';
 import { logger } from '../utils/Logger.js';

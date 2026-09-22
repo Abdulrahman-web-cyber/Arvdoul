@@ -1,4 +1,12 @@
-// src/services/TTLOptimizationService.js
+/**
+ * src/services/TTLOptimizationService.js - ARVDOUL DYNAMIC TTL OPTIMIZER
+ *
+ * Implements:
+ * 1. Access Velocity Tracking: Monitors key hit rates per minute.
+ * 2. Exponential TTL Extension: Extends TTL up to 15 minutes for viral/trending items (>1000 hits/min)
+ *    and compresses TTL down to 10 seconds for volatile real-time streams.
+ * 3. Cache Retention Optimization: Maximizes hit ratio while strictly preventing memory bloat.
+ */
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { redisCacheManager } from './RedisCacheManager.js';

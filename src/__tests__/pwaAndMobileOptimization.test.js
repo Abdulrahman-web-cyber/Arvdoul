@@ -1,4 +1,6 @@
-// src/__tests__/pwaAndMobileOptimization.test.js
+/**
+ * @jest-environment jsdom
+ */
 
 import { jest } from '@jest/globals';
 import {

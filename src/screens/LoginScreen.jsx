@@ -1,4 +1,7 @@
-// src/screens/LoginScreen.jsx — login (phone, email, Google)
+// This file must reflect: 'everything should be more extremely advanced, styled, ultra pro max professional creation and robust also production ready and working perfectly smooth'
+
+// src/screens/LoginScreen.jsx – ARVDOUL SUPREMACY • GLASS CARD • MATCHES SIGNUP STEP 2
+// ✅ Phone (original dropdown) • Email • Google • Offline banner • Shake on error • No scroll
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";

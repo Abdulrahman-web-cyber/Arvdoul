@@ -1,4 +1,4 @@
-// src/screens/SplashScreen.jsx
+// src/screens/SplashScreen.jsx - ULTIMATE PROFESSIONAL PRODUCTION VERSION
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -147,29 +147,38 @@ export default function SplashScreen() {
     };
   }, [preloadLogo, statusSequence]);
 
-  // When auth initializes, complete to 100% and navigate cleanly
+  // When auth initializes (or safety timeout expires), complete to 100% and navigate cleanly
   useEffect(() => {
-    if (!authInitialized) return;
+    let completeTimer;
+    let navTimer;
 
-    const completeTimer = setTimeout(() => {
+    const proceed = () => {
       if (!mountedRef.current) return;
       setProgress(100);
       setStatus("Ready");
       setShowComplete(true);
 
-      const navTimer = setTimeout(() => {
+      navTimer = setTimeout(() => {
         if (!mountedRef.current) return;
         const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
         navigate(target, { 
           replace: true,
           state: { fromSplash: true }
         });
-      }, 450);
+      }, 350);
+    };
 
-      return () => clearTimeout(navTimer);
-    }, 1200);
+    if (authInitialized) {
+      completeTimer = setTimeout(proceed, 800);
+    } else {
+      // Safety fallback: never leave user waiting longer than 2.4s total
+      completeTimer = setTimeout(proceed, 2400);
+    }
 
-    return () => clearTimeout(completeTimer);
+    return () => {
+      clearTimeout(completeTimer);
+      clearTimeout(navTimer);
+    };
   }, [authInitialized, isAuthenticated, needsOnboarding, navigate]);
 
   // Quick skip on tap / click
@@ -178,67 +187,53 @@ export default function SplashScreen() {
     navigate(target, { replace: true, state: { fromSplash: true } });
   }, [isAuthenticated, needsOnboarding, navigate]);
 
-  // Perfect circular logo component
+  // Circular logo component
   const PerfectLogo = useMemo(() => (
     <div className="relative w-28 h-28">
-      {/* Circular container - PERFECT circle */}
+      {/* Circular container */}
       <motion.div
         initial={{ scale: 0.85, opacity: 0 }}
-        animate={{ 
-          scale: logoLoaded ? 1 : 0.85, 
-          opacity: logoLoaded ? 1 : 0.7 
-        }}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ 
           type: "spring",
           stiffness: 320,
           damping: 22,
           mass: 0.8
         }}
-        className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-white/5 to-white/10 backdrop-blur-sm shadow-2xl relative z-10"
+        className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm shadow-2xl relative z-10 p-1 flex items-center justify-center"
         style={{
           boxShadow: themeConfig.isDark
-            ? '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)'
-            : '0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+            ? '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08)'
+            : '0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.08)'
         }}
       >
-        {/* Logo image - PERFECTLY fills circle */}
+        {/* Logo image */}
         <img
           src={themeConfig.logo}
           alt="Arvdoul"
-          className={`w-full h-full object-cover transition-all duration-500 ease-out ${
-            logoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-          }`}
-          style={{
-            transform: logoLoaded ? 'scale(1.05)' : 'scale(0.95)', // Perfect zoom to fill circle
+          className="w-full h-full object-cover rounded-full transition-all duration-300"
+          onLoad={() => {
+            if (mountedRef.current) {
+              setLogoLoaded(true);
+            }
           }}
           onError={(e) => {
-            // Ultimate fallback
             e.target.style.display = 'none';
             const parent = e.target.parentElement;
-            parent.className = "w-full h-full rounded-full flex items-center justify-center";
-            parent.style.background = themeConfig.accentGradient;
-            
-            const fallback = document.createElement('div');
-            fallback.className = "text-4xl font-bold text-white";
-            fallback.style.fontFamily = "'Inter', -apple-system, sans-serif";
-            fallback.textContent = "A";
-            parent.appendChild(fallback);
+            if (parent) {
+              parent.className = "w-full h-full rounded-full flex items-center justify-center";
+              parent.style.background = themeConfig.accentGradient;
+              const fallback = document.createElement('div');
+              fallback.className = "text-4xl font-bold text-white tracking-wider";
+              fallback.style.fontFamily = "'Inter', -apple-system, sans-serif";
+              fallback.textContent = "A";
+              parent.appendChild(fallback);
+            }
           }}
         />
       </motion.div>
-      
-      {/* Loading placeholder */}
-      {!logoLoaded && (
-        <div className="absolute inset-0 rounded-full animate-pulse z-20"
-          style={{ 
-            background: themeConfig.isDark 
-              ? 'linear-gradient(90deg, #334155, #475569, #334155)'
-              : 'linear-gradient(90deg, #e2e8f0, #cbd5e1, #e2e8f0)'
-          }}
-        />
-      )}
     </div>
-  ), [logoLoaded, themeConfig]);
+  ), [themeConfig]);
 
   return (
     <AnimatePresence mode="wait">
@@ -278,11 +273,8 @@ export default function SplashScreen() {
           {/* App Name - Professional Typography */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
-            animate={{ 
-              opacity: logoLoaded ? 1 : 0, 
-              y: logoLoaded ? 0 : 8 
-            }}
-            transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
             className="text-center"
           >
             <h1 

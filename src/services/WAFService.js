@@ -1,4 +1,12 @@
-// src/services/WAFService.js
+/**
+ * src/services/WAFService.js - ARVDOUL WEB APPLICATION FIREWALL (WAF)
+ *
+ * Implements:
+ * 1. OWASP Top 10 Real-Time Inspection: Detects SQL Injection (SQLi), Cross-Site Scripting (XSS),
+ *    Remote Code Execution (RCE), Path Traversal, and XML External Entity (XXE) attack vectors.
+ * 2. Signature & Regex Engine: Evaluates query params, request bodies, and headers against known threat signatures.
+ * 3. Automatic Request Dropping & IP Penalization.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

@@ -1,4 +1,11 @@
-// src/services/taxReportingService.js
+/**
+ * src/services/taxReportingService.js - ARVDOUL CREATOR TAX COMPLIANCE & 1099-K REPORTING
+ *
+ * Implements:
+ * 1. W-9 / W-8BEN Tax Form Collection & Verification: Securely captures Taxpayer Identification Numbers (TIN/SSN/EIN).
+ * 2. 1099-K Threshold Monitoring: Tracks creator annual gross payouts against IRS threshold ($600).
+ * 3. Tax Document Vault & PDF Export: Provides annual tax statement exports for creators.
+ */
 
 import { fieldEncryptionService } from './fieldEncryptionService.js';
 import { logger } from '../utils/Logger.js';

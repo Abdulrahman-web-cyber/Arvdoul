@@ -1,4 +1,12 @@
-// src/services/SecureHeadersService.js
+/**
+ * src/services/SecureHeadersService.js - ARVDOUL SECURE HTTP HEADERS SERVICE
+ *
+ * Implements:
+ * 1. Comprehensive HSTS (HTTP Strict Transport Security): 2-year max-age with preload and includeSubDomains.
+ * 2. X-Content-Type-Options: nosniff to prevent MIME type confusion attacks.
+ * 3. Referrer-Policy: strict-origin-when-cross-origin.
+ * 4. Permissions-Policy: Restricts camera, microphone, and geolocation strictly to trusted origins.
+ */
 
 class SecureHeadersService {
   getSecurityHeaders() {

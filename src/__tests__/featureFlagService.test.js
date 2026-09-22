@@ -1,4 +1,9 @@
-// src/__tests__/featureFlagService.test.js
+/**
+ * src/__tests__/featureFlagService.test.js
+ * Real assertions for the feature flag service: fail-closed reads, override
+ * precedence (override > remote > default), localStorage persistence, and
+ * subscription notifications.
+ */
 
 import { jest } from '@jest/globals';
 import { featureFlagService, FeatureFlagService, DEFAULT_FLAGS } from '../services/featureFlagService.js';

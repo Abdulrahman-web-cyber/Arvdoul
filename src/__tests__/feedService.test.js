@@ -1,4 +1,11 @@
-// src/__tests__/feedService.test.js
+/**
+ * src/__tests__/feedService.test.js
+ * Real assertions for the feed ranking/ranking-adjacent pure logic:
+ * deterministic shuffle, stable hashing, cursor codec round-trips,
+ * fallback scoring monotonicity, and diversity enforcement.
+ * (Firestore-dependent paths are intentionally not exercised here —
+ * the Firebase singleton is mocked so init falls back to offline mode.)
+ */
 
 import { jest } from '@jest/globals';
 

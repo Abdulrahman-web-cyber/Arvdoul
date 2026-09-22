@@ -1,4 +1,20 @@
-// src/utils/OfflineQueue.js
+/**
+ * src/utils/OfflineQueue.js - ARVDOUL Persistent Offline Queue (hardened)
+ *
+ * IndexedDB-backed operation queue with exponential backoff retry and
+ * online-event draining. Used for critical writes (messages, follows,
+ * likes, uploads) so they survive network drops.
+ *
+ * Backed by `idb`. Falls back to an in-memory queue when IndexedDB is
+ * unavailable.
+ *
+ * Hardening (vs. v1):
+ *  - Idempotency: an op with the same `idempotencyKey` is de-duplicated.
+ *  - Bounded growth: capped at MAX_QUEUE_SIZE (evicts oldest low-priority op).
+ *  - Priority: high/medium/low ordering (messages before likes before analytics).
+ *  - Concurrent batch drain (DRAIN_CONCURRENCY) instead of one-at-a-time.
+ *  - Multi-tab safety: only one tab drains at a time via a TTL claim.
+ */
 
 import { openDB } from 'idb';
 

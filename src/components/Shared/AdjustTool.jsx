@@ -1,4 +1,9 @@
-// src/components/Shared/AdjustTool.jsx
+/**
+ * AdjustTool.jsx - Professional Image Adjustment Component
+ * @description Provides comprehensive image adjustments including exposure, temperature, tint, and more
+ * @module Shared/AdjustTool
+ * @requires React, framer-motion, lucide-react, prop-types
+ */
 
 import React, { useState, useCallback, useMemo, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';

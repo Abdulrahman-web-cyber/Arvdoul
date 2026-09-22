@@ -1,4 +1,21 @@
-// src/services/settingsService.js
+/**
+ * src/services/settingsService.js
+ * ARVDOUL USER SETTINGS SERVICE — real persistence
+ *
+ * The settings screen previously kept toggles in local useState: they reset
+ * on every visit and never reached the server. This service makes settings
+ * a real system:
+ *
+ *  - Typed DEFAULT_SETTINGS merged with the user's Firestore doc
+ *    (`users/{uid}/settings`) - missing keys fall back to defaults
+ *  - getSettings(): local cache → Firestore, realtime subscription support
+ *  - updateSetting(path, value): optimistic local update + Firestore write
+ *    (merge), offline ops go through the offline queue with idempotency
+ *  - clearApplicationCache(): REAL cache clearing - localStorage (preserving
+ *    auth/session), IndexedDB (all arvdoul databases), CacheManager,
+ *    RedisCacheManager
+ *  - Fully unit-tested with a mocked Firestore layer
+ */
 
 import { logger } from '../utils/Logger.js';
 import { cacheManager } from '../utils/CacheManager.js';

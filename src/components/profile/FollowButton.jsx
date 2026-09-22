@@ -1,4 +1,10 @@
-// src/components/profile/FollowButton.jsx
+/**
+ * src/components/profile/FollowButton.jsx - ARVDOUL Follow Button Component
+ * 
+ * Follow/Unfollow button with loading state and ARVDOUL DNA gradient.
+ * 
+ * @component
+ */
 
 /**
  * @typedef {Object} FollowButtonProps

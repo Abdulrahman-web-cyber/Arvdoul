@@ -1,4 +1,9 @@
-// src/components/Shared/RotateTool.jsx
+/**
+ * RotateTool.jsx - Professional Rotate Tool Component
+ * @description Provides rotation and flip controls for images
+ * @module Shared/RotateTool
+ * @requires React, framer-motion, lucide-react, prop-types
+ */
 
 import React, { useCallback, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';

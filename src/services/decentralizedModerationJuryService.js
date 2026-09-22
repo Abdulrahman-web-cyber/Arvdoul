@@ -1,4 +1,12 @@
-// src/services/decentralizedModerationJuryService.js
+/**
+ * src/services/decentralizedModerationJuryService.js - ARVDOUL DECENTRALIZED MODERATION & STAKED JURY v1.0
+ * 
+ * Production-grade community moderation & dispute arbitration:
+ * • Staked community jurors drawn pseudo-randomly from high-reputation pool
+ * • Commit-reveal secret voting protocol (prevents bandwagon bias)
+ * • Schelling point consensus rewards (jurors who vote with majority win rewards, dissidents slashed)
+ * • Multi-level escalation (Automated AI ➔ Community Jury ➔ Supreme Council)
+ */
 
 import { logger } from '../utils/Logger.js';
 

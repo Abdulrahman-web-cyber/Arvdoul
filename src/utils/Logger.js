@@ -1,4 +1,15 @@
-// src/utils/Logger.js
+/**
+ * src/utils/Logger.js - ARVDOUL Structured Logger
+ *
+ * Shared logging utility required by the service-layer refactoring program
+ * (see REFACTOR_PROGRESS.md). Provides:
+ * - Level-based filtering (debug | info | warn | error | fatal)
+ * - Correlation ID propagation (global + per-instance)
+ * - PII redaction before anything is written
+ * - Structured JSON output (console sink; swap for Sentry/DataDog in prod)
+ *
+ * Zero dependencies. Safe to import from any client module.
+ */
 
 // ==================== LEVELS ====================
 export const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40, fatal: 50 };

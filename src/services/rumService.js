@@ -1,4 +1,20 @@
-// src/services/rumService.js
+/**
+ * src/services/rumService.js - ARVDOUL REAL USER MONITORING (RUM) & CORE WEB VITALS
+ *
+ * Implements:
+ * 1. Web Vitals Observers: Largest Contentful Paint (LCP < 2.5s), Cumulative
+ *    Layout Shift (CLS < 0.1), Interaction to Next Paint (INP < 200ms), and
+ *    Time to First Byte (TTFB < 800ms) via `PerformanceObserver`.
+ * 2. Route Transition Timings: SPA client-side navigation latency.
+ * 3. Network Connection Quality: `navigator.connection` (downlink,
+ *    effectiveType, rtt) with slow-connection warnings.
+ * 4. Metrics Pipeline: `attachToMetrics()` forwards every vital into the
+ *    shared metricsService (Prometheus-exportable) so RUM data reaches
+ *    dashboards instead of dying in the console.
+ *
+ * The service degrades gracefully: every browser API is feature-detected, so
+ * it is safe in jsdom, older browsers, and privacy-restricted contexts.
+ */
 
 import { logger } from '../utils/Logger.js';
 

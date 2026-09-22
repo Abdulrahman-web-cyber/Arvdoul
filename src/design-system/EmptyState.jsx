@@ -1,4 +1,10 @@
-// src/design-system/EmptyState.jsx
+/**
+ * src/design-system/EmptyState.jsx
+ * ARVDOUL DESIGN SYSTEM — EMPTY STATE
+ *
+ * The guide's empty-state contract: explain, guide, inspire, enable.
+ * i18n-ready: pass translated strings as props (or defaults for dev).
+ */
 
 import React from 'react';
 

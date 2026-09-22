@@ -1,15 +1,13 @@
-// src/screens/SearchScreen.jsx - ARVDOUL Search System
-// Arvdoul search screen.
+// src/screens/SearchScreen.jsx - ARVDOUL Ultimate Search System
+// Pixel-perfect design with ARVDOUL DNA gradient and glassmorphism
 import React, { memo, useCallback, useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { 
   Video, Users, FileText, Image, Radio, Calendar, BarChart2, 
   HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { useUser } from '../context/UserContext';
 import { useSearch } from '../hooks/useSearch';
 import { cn } from '../lib/utils';
 import SearchSuggestions from '../components/search/SearchSuggestions';
@@ -59,7 +57,6 @@ const DISCOVERY_ITEMS = [
 const SearchScreen = memo(() => {
   const navigate = useNavigate();
   const { isDark, spring } = useTheme();
-  const { user, followUser, unfollowUser } = useUser();
   
   const [showFilters, setShowFilters] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -172,9 +169,7 @@ const SearchScreen = memo(() => {
         navigate(`/post/${result.id || result.objectID}`);
         break;
       default:
-        if (result.id || result.objectID) {
-          navigate(`/post/${result.id || result.objectID}`);
-        }
+        console.log('Navigate to:', result.id);
     }
   }, [navigate]);
 
@@ -183,26 +178,10 @@ const SearchScreen = memo(() => {
     navigate(`/profile/${creator.id || creator.uid}`);
   }, [navigate]);
 
-  // Handle follow / unfollow against the canonical social graph. UserContext
-  // owns the follow transaction and surfaces its own success/error toasts;
-  // the creator carousel carries the current relationship state.
-  const handleFollow = useCallback(async (creator) => {
-    const targetId = typeof creator === 'string' ? creator : creator?.id || creator?.uid;
-    if (!targetId) return;
-    if (!user?.uid) {
-      toast.info('Sign in to follow creators.');
-      return;
-    }
-    try {
-      if (typeof creator === 'object' && creator?.isFollowing) {
-        await unfollowUser(targetId);
-      } else {
-        await followUser(targetId);
-      }
-    } catch {
-      // UserContext already reported the failure via toast.
-    }
-  }, [user?.uid, followUser, unfollowUser]);
+  // Handle follow
+  const handleFollow = useCallback((creatorId) => {
+    console.log('Follow creator:', creatorId);
+  }, []);
 
   // Show search results or home content
   const renderContent = () => {

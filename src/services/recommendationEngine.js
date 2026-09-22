@@ -1,4 +1,13 @@
-// src/services/recommendationEngine.js
+/**
+ * src/services/recommendationEngine.js - ARVDOUL INTELLIGENT RECOMMENDATION & RANKING ENGINE v1.0
+ * 
+ * Production-grade algorithmic content ranking and discovery pipeline:
+ * • Multi-vector relevance scoring (Recency Time-Decay, Creator Affinity, Content Velocity, Topic Match)
+ * • Exponential time-decay function with configurable half-life
+ * • Anti-fatigue & author diversity interleaving (O(n) max-per-window sliding window)
+ * • Real-time user interest vector adaptation & cold-start heuristics
+ * • Explainable recommendation reasons for transparent UI disclosure
+ */
 
 import { logger } from '../utils/Logger.js';
 

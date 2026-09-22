@@ -1,4 +1,8 @@
-// src/components/Videos/VideoGiftModal.jsx
+// src/components/Videos/VideoGiftModal.jsx - ARVDOUL VIRTUAL GIFT MODAL
+// Send coin gifts to creators — REAL double-entry coin transfer via the
+// monetization ledger (transferCoins CF with atomic fallback). The local
+// store is only updated AFTER the server confirms the debit; no free gifts,
+// no fabricated balances.
 
 import React, { useState, memo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

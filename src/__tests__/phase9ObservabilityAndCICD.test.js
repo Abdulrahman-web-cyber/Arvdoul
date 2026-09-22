@@ -1,4 +1,13 @@
-// src/__tests__/phase9ObservabilityAndCICD.test.js
+/**
+ * src/__tests__/phase9ObservabilityAndCICD.test.js - Phase 9 Observability & CI/CD Telemetry Tests
+ *
+ * Validates:
+ * 1. Distributed Tracing & Span Lifecycle.
+ * 2. Real User Monitoring (RUM) & Core Web Vitals telemetry.
+ * 3. Crash Reporting, Fingerprinting, and PII Redaction.
+ * 4. Offline crash buffering & online drain.
+ * 5. SLO & Error Budget calculation.
+ */
 
 import { jest } from '@jest/globals';
 import { observabilityService } from '../services/observabilityService.js';

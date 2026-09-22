@@ -1,4 +1,7 @@
-// src/screens/Admin/AdminContentManagementScreen.jsx
+// src/screens/Admin/AdminContentManagementScreen.jsx - ARVDOUL CONTENT MANAGEMENT
+// ✅ List and search content
+// ✅ Moderate content
+// ✅ Delete/Hide content
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

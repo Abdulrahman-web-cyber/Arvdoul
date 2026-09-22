@@ -1,4 +1,11 @@
-// src/services/logAggregationService.js
+/**
+ * src/services/logAggregationService.js - ARVDOUL STRUCTURED LOG AGGREGATOR & RETENTION v8.0
+ *
+ * Implements:
+ * 1. Unified JSON Structured Log Ingestion: Ingests trace-correlated logs with severity levels (DEBUG, INFO, WARN, ERROR, CRITICAL).
+ * 2. Retention Policies: Separates 30-day operational telemetry from 7-year regulatory compliance audit trails.
+ * 3. Batch Flusher: Batches telemetry records in 5-second windows to optimize network egress.
+ */
 
 import { logger } from '../utils/Logger.js';
 

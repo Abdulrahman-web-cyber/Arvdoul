@@ -1,4 +1,9 @@
-// src/__tests__/phase15GovernanceAndRevenueSplits.test.js
+/**
+ * src/__tests__/phase15GovernanceAndRevenueSplits.test.js
+ * Verification test suite for Phase 15:
+ * - Decentralized Community Governance, Liquid Democracy & Quadratic Voting
+ * - Collaborative Creator Revenue Splits & Syndicate Accounting
+ */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

@@ -1,4 +1,6 @@
-// src/utils/security.js
+/**
+ * ARVDOUL Security Utilities
+ */
 
 /**
  * Sanitizes an input string to protect against basic XSS attacks.

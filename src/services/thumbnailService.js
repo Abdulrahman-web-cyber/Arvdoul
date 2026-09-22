@@ -1,5 +1,5 @@
 import { logger } from '../utils/Logger.js';
-// src/services/thumbnailService.js – ARVDOUL THUMBNAIL DESIGNER SERVICE
+// src/services/thumbnailService.js – ARVDOUL THUMBNAIL DESIGNER SERVICE V1
 // 🖼️ Professional Thumbnail Designer with Auto-generation, Editor, Export
 // ✅ Canvas-based Editing • Text Overlays • Filters • Export Presets
 

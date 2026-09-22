@@ -1,4 +1,6 @@
-// src/screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx
+// src/screens/ThumbnailDesigner/ThumbnailDesignerScreen.jsx - ARVDOUL IMAGE STUDIO & THUMBNAIL DESIGNER
+// 100% Pixel-Perfect Replica of Arvdoul Image Studio (Matching Screenshot 3 / vNext Studio Specs)
+// Global · Contextual · Intelligent · Full Canvas Manipulation · Multi-Photo Filmstrip · 10-Tool Grid
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';

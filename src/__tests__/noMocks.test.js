@@ -1,4 +1,12 @@
-// src/__tests__/noMocks.test.js
+/**
+ * src/__tests__/noMocks.test.js
+ * Guards the "zero mock data / zero stubs" contract:
+ *   - copyrightDetectionService uses a REAL registry (no fabricated works)
+ *   - manipulatedMediaService uses REAL statistical analysis (no dummy triggers)
+ *   - childSafetyService hashes with real SHA-256
+ *   - aiStudioService never calls OpenAI from the client (gateway only)
+ *   - integrationRegistry fails loud instead of mocking
+ */
 
 import { jest } from '@jest/globals';
 

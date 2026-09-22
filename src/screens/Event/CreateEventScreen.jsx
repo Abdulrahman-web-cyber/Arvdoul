@@ -1,7 +1,10 @@
-// src/screens/Event/CreateEventScreen.jsx
+// src/screens/Event/CreateEventScreen.jsx - ARVDOUL CREATE EVENT
+// ✅ Create new event with all settings
+// ✅ Cover image upload
+// ✅ Ticket tiers and capacity
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -15,8 +18,6 @@ import { format } from 'date-fns';
 
 const CreateEventScreen = () => {
   const navigate = useNavigate();
-  const { eventId } = useParams();
-  const isEdit = Boolean(eventId);
   const { user } = useAuth();
   const eventService = getEventService();
   const storageService = getStorageService();
@@ -24,7 +25,6 @@ const CreateEventScreen = () => {
   // Form state
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(isEdit);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -46,48 +46,6 @@ const CreateEventScreen = () => {
 
   // Cover input ref
   const coverInputRef = useRef(null);
-
-  // Edit mode: load the existing event into the form.
-  useEffect(() => {
-    if (!isEdit || !eventId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const event = await eventService.getEvent(eventId);
-        if (cancelled) return;
-        if (!event) {
-          toast.error('Event not found');
-          navigate('/event', { replace: true });
-          return;
-        }
-        const start = event.startDate?.toDate?.() || (event.startDate ? new Date(event.startDate) : null);
-        const end = event.endDate?.toDate?.() || (event.endDate ? new Date(event.endDate) : null);
-        setFormData({
-          title: event.title || '',
-          description: event.description || '',
-          coverImage: null,
-          coverPreview: event.coverImage || '',
-          startDate: start ? format(start, 'yyyy-MM-dd') : '',
-          startTime: start ? format(start, 'HH:mm') : '',
-          endDate: end ? format(end, 'yyyy-MM-dd') : '',
-          endTime: end ? format(end, 'HH:mm') : '',
-          type: event.type || 'digital',
-          location: event.location || '',
-          capacity: event.capacity || 0,
-          privacy: event.privacy || 'public',
-          tickets: {
-            tiers: event.tickets?.tiers?.length ? event.tickets.tiers : [{ name: 'General', price: 0, quantity: 100 }],
-            isFree: event.tickets?.isFree !== false,
-          },
-        });
-      } catch (err) {
-        if (!cancelled) toast.error(err?.message || 'Failed to load event');
-      } finally {
-        if (!cancelled) setInitialLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isEdit, eventId, eventService, navigate]);
 
   // Handle input change
   const handleChange = useCallback((field, value) => {
@@ -223,53 +181,36 @@ const CreateEventScreen = () => {
         ? new Date(`${formData.endDate}T${formData.endTime}`)
         : null;
 
-      const payload = {
+      // Create event
+      const event = await eventService.createEvent(user.uid, {
         title: formData.title.trim(),
         description: formData.description.trim(),
+        coverImage: coverUrl,
         startDate: startDateTime,
         endDate: endDateTime,
         type: formData.type,
         location: formData.location.trim(),
         capacity: formData.capacity,
         privacy: formData.privacy,
-        tickets: formData.tickets,
-      };
-      if (coverUrl) payload.coverImage = coverUrl;
+        tickets: formData.tickets
+      });
 
-      if (isEdit) {
-        await eventService.updateEvent(eventId, payload, user.uid);
-        if (publishNow) {
-          await eventService.publishEvent(eventId, user.uid);
-          toast.success('Event updated and published!');
-        } else {
-          toast.success('Event updated!');
-        }
-        navigate(`/event/${eventId}`);
+      // Publish if requested
+      if (publishNow) {
+        await eventService.publishEvent(event.id, user.uid);
+        toast.success('Event created and published!');
       } else {
-        const event = await eventService.createEvent(user.uid, payload);
-        if (publishNow) {
-          await eventService.publishEvent(event.id, user.uid);
-          toast.success('Event created and published!');
-        } else {
-          toast.success('Event created as draft!');
-        }
-        navigate(`/event/${event.id}`);
+        toast.success('Event created as draft!');
       }
+
+      navigate(`/event/${event.id}`);
     } catch (error) {
       console.error('Failed to create event:', error);
       toast.error(error.message || 'Failed to create event');
     } finally {
       setLoading(false);
     }
-  }, [user?.uid, formData, storageService, eventService, navigate, isEdit, eventId]);
-
-  if (initialLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" role="status" aria-label="Loading event" />
-      </div>
-    );
-  }
+  }, [user?.uid, formData, storageService, eventService, navigate]);
 
   // Event type options
   const typeOptions = [
@@ -312,7 +253,7 @@ const CreateEventScreen = () => {
               <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-300" />
             </button>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              {isEdit ? 'Edit Event' : 'Create Event'}
+              Create Event
             </h1>
             <div className="w-10" />
           </div>

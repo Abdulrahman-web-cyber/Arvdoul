@@ -1,4 +1,15 @@
-// src/components/profile/ProfileLocationModal.jsx
+/**
+ * src/components/profile/ProfileLocationModal.jsx - ARVDOUL Profile Location Setup Modal
+ * 
+ * Provides an enterprise-grade location configuration dialog:
+ * - One-tap GPS auto-detection with reverse-geocoding (City, Country)
+ * - Searchable curated global cities & territories
+ * - Custom location text input
+ * - Granular location privacy settings (Public, Country Only, Hidden)
+ * - Live Firestore synchronization via userService
+ * 
+ * @component
+ */
 
 import React, { memo, useState, useEffect } from 'react';
 import { 

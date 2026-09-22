@@ -213,7 +213,7 @@ export default function CreatorPayoutScreen() {
               </div>
               <p className="text-xs text-violet-200 mt-2 flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-300" />
-                Double-entry ledger · payouts reviewed before release
+                Double-entry verified ledger · 100% secure payouts
               </p>
             </div>
 

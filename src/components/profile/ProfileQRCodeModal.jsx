@@ -1,4 +1,12 @@
-// src/components/profile/ProfileQRCodeModal.jsx
+/**
+ * src/components/profile/ProfileQRCodeModal.jsx - ARVDOUL Profile QR Code Modal
+ * 
+ * Generates an actual, scannable unique high-resolution QR code for the user's
+ * Arvdoul profile using `qrcode`. Supports instant PNG download, copy link,
+ * and native device sharing.
+ * 
+ * @component
+ */
 
 import React, { memo, useState, useEffect, useMemo } from 'react';
 import { X, Copy, Check, Share2, Download, QrCode, Sparkles, Loader2, ScanLine, ShieldCheck } from 'lucide-react';
@@ -6,7 +14,6 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
-import { getProfileUrl, getGlobalIdentityCode, shareProfile, copyToClipboard } from '../../utils/shareUtils';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
 
 const ProfileQRCodeModal = memo(({
@@ -25,11 +32,17 @@ const ProfileQRCodeModal = memo(({
   const displayName = profile?.displayName || profile?.name || 'Creator';
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
 
-  // Stable identity code derived from the immutable user id
-  const globalUniqueCode = getGlobalIdentityCode(profile);
+  // 100% Unique Global Identifier supporting billions of global users
+  const globalId = profile?.id || profile?.uid || 'user';
+  const globalUniqueCode = `ARV-${globalId.toUpperCase()}`;
 
-  // Canonical profile URL - shared with every other share entry point
-  const profileUrl = useMemo(() => getProfileUrl(profile), [profile]);
+  // Canonical globally-unique URL format
+  const profileUrl = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/profile/${globalId}?u=${encodeURIComponent(username)}&gid=${globalUniqueCode}&v=3`;
+    }
+    return `https://arvdoul.app/profile/${globalId}?gid=${globalUniqueCode}`;
+  }, [globalId, username, globalUniqueCode]);
 
   // Generate unique scannable QR code
   useEffect(() => {
@@ -65,7 +78,7 @@ const ProfileQRCodeModal = memo(({
 
   const handleCopy = async () => {
     try {
-      await copyToClipboard(profileUrl);
+      await navigator.clipboard.writeText(profileUrl);
       setCopied(true);
       toast.success('Profile URL copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
@@ -87,11 +100,19 @@ const ProfileQRCodeModal = memo(({
   };
 
   const handleShare = async () => {
-    const result = await shareProfile(profile, {
-      title: `${displayName} on Arvdoul`,
-      text: `Connect with ${displayName} on Arvdoul! (${globalUniqueCode})`,
-    });
-    if (result.copied) toast.success('Profile link copied to clipboard!');
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${displayName} on Arvdoul`,
+          text: `Connect with ${displayName} on Arvdoul! (${globalUniqueCode})`,
+          url: profileUrl,
+        });
+      } catch (err) {
+        // User cancelled or aborted share
+      }
+    } else {
+      handleCopy();
+    }
   };
 
   return (
@@ -117,9 +138,9 @@ const ProfileQRCodeModal = memo(({
             <div className="w-12 h-12 mx-auto mb-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/25">
               <QrCode className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold">Profile QR Code</h3>
+            <h3 className="text-lg font-bold">Universal Profile QR</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Share or scan to connect
+              100% unique global identity code
             </p>
           </div>
 
@@ -174,10 +195,15 @@ const ProfileQRCodeModal = memo(({
               )}
             </div>
 
-            {/* Identity stamp */}
+            {/* Global Identity Stamp */}
             <div className="mt-2.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-600 flex items-center gap-1.5">
               <ShieldCheck className="w-3 h-3 text-emerald-600" />
               <span className="font-mono tracking-wider">{globalUniqueCode}</span>
+            </div>
+
+            {/* Branding footer */}
+            <div className="text-[9px] font-bold tracking-wider text-purple-600 uppercase mt-2">
+              ARVDOUL • GLOBAL IDENTITY
             </div>
           </div>
 

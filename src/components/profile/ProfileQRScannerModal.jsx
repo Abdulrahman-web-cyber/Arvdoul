@@ -1,4 +1,18 @@
-// src/components/profile/ProfileQRScannerModal.jsx
+/**
+ * src/components/profile/ProfileQRScannerModal.jsx - ARVDOUL QR Scanner Modal
+ * 
+ * High-performance, robust QR Code scanner that allows a user to scan another
+ * user's unique Arvdoul QR code and navigate directly to their real profile.
+ * 
+ * Features:
+ * - Real-time camera viewfinder with laser scan sweep and optical target frame
+ * - Hardware acceleration using BarcodeDetector API when available
+ * - File upload scanning (upload screenshot or photo of QR code)
+ * - Manual Arvdoul Global ID / Username input as 100% reliable fallback
+ * - Instant parsing & direct profile navigation
+ * 
+ * @component
+ */
 
 import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -52,38 +66,48 @@ const ProfileQRScannerModal = memo(({
     }
   }, []);
 
-  // Parse QR string into a target user identifier.
-  // Canonical links are /profile/<handle>; the explicit uid param wins because
-  // it is immutable, while <handle> may be a username.
+  // Parse QR string into target user identifier
   const parseQRContent = useCallback((rawText) => {
     if (!rawText) return null;
     const text = String(rawText).trim();
 
-    // 1. Explicit immutable user id param
-    const uidMatch = text.match(/[?&](?:uid|gid)=([^&#]+)/);
-    if (uidMatch && uidMatch[1]) return decodeURIComponent(uidMatch[1]);
-
-    // 2. Arvdoul web link: https://arvdoul.app/profile/username or /profile/uid
+    // 1. Arvdoul web link: https://arvdoul.app/profile/username or /profile/uid
     const webProfileMatch = text.match(/\/profile\/([^?&#/]+)/);
-    if (webProfileMatch && webProfileMatch[1]) return decodeURIComponent(webProfileMatch[1]);
+    if (webProfileMatch && webProfileMatch[1]) {
+      return webProfileMatch[1];
+    }
 
-    // 3. Username param
+    // 2. Query param uid or u: ?uid=... or &u=...
+    const uidMatch = text.match(/[?&]uid=([^&#]+)/);
+    if (uidMatch && uidMatch[1]) {
+      return uidMatch[1];
+    }
     const uMatch = text.match(/[?&]u=([^&#]+)/);
-    if (uMatch && uMatch[1]) return decodeURIComponent(uMatch[1]);
+    if (uMatch && uMatch[1]) {
+      return uMatch[1];
+    }
 
-    // 4. Deep link: arvdoul://user/:id
+    // 3. Deep link: arvdoul://user/:id
     const deepLinkMatch = text.match(/arvdoul:\/\/user\/([^?&#/]+)/);
-    if (deepLinkMatch && deepLinkMatch[1]) return decodeURIComponent(deepLinkMatch[1]);
+    if (deepLinkMatch && deepLinkMatch[1]) {
+      return deepLinkMatch[1];
+    }
 
-    // 5. Global ARV identifier: ARV-XYZ123
+    // 4. Global ARV identifier: ARV-XYZ123
     const arvMatch = text.match(/^ARV-([a-zA-Z0-9_-]+)/i);
-    if (arvMatch && arvMatch[1]) return arvMatch[1];
+    if (arvMatch && arvMatch[1]) {
+      return arvMatch[1];
+    }
 
-    // 6. Handle starting with @
-    if (text.startsWith('@')) return text.slice(1);
+    // 5. Handle starting with @
+    if (text.startsWith('@')) {
+      return text.slice(1);
+    }
 
-    // 7. Direct alphanumeric username/uid
-    if (/^[a-zA-Z0-9_.-]{3,64}$/.test(text)) return text;
+    // 6. Direct alphanumeric username/uid
+    if (/^[a-zA-Z0-9_.-]{3,64}$/.test(text)) {
+      return text;
+    }
 
     return null;
   }, []);

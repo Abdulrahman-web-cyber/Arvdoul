@@ -1,4 +1,12 @@
-// src/services/billingService.js
+/**
+ * src/services/billingService.js - ARVDOUL SUBSCRIPTION & INVOICING ENGINE
+ *
+ * Implements:
+ * 1. Pro Creator Subscription Tiers: Manages Basic ($0), Creator Plus ($9.99/mo), and Studio Pro ($29.99/mo).
+ * 2. Coin Bundle Catalog & Checkout: Secure pricing catalog for virtual coin top-ups (100 coins for $0.99, 1,000 for $8.99, 10,000 for $79.99).
+ * 3. Structured Invoice PDF/HTML Generator: Generates downloadable VAT-compliant HTML invoices and structured billing payloads.
+ * 4. Stripe Subscription & Payout Integration: Real Stripe Connect and subscription state simulations.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

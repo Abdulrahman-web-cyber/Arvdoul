@@ -1,4 +1,5 @@
-// src/hooks/useAuth.js
+// src/hooks/useAuth.js - ULTIMATE AUTH HOOK V2
+// 🔥 PRODUCTION READY • INTEGRATED WITH APPSTORE • MEMOIZED • EXTENSIVE HELPERS
 
 import { useContext, useMemo, useCallback } from "react";
 import { AuthContext } from "../../../context/AuthContext";

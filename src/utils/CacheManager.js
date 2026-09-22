@@ -1,4 +1,13 @@
-// src/utils/CacheManager.js
+/**
+ * src/utils/CacheManager.js - ARVDOUL Central Cache Manager
+ *
+ * Single entry point for cache get/set/invalidate across the service layer.
+ * In-memory LRU with per-entry TTL, namespaces, pattern invalidation and
+ * user-scoped invalidation. Backing store is memory; a distributed cache
+ * (Redis via Functions) can replace the internals without changing callers.
+ *
+ * Zero dependencies.
+ */
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 

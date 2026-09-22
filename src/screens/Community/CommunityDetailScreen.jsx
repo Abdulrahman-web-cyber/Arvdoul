@@ -1,4 +1,7 @@
-// src/screens/Community/CommunityDetailScreen.jsx
+// src/screens/Community/CommunityDetailScreen.jsx - ARVDOUL COMMUNITY DETAIL
+// ✅ View community info, posts, members
+// ✅ Join/Leave community
+// ✅ Access to spaces and channels
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -464,7 +467,7 @@ const CommunityDetailScreen = () => {
                   </h2>
                   {isAdmin && (
                     <button
-                      onClick={() => navigate(`/community/${communityId}/settings`)}
+                      onClick={() => navigate(`/community/${communityId}/members`)}
                       className="text-sm text-indigo-600 hover:text-indigo-700"
                     >
                       View all
@@ -606,7 +609,7 @@ const CommunityDetailScreen = () => {
                         </div>
                       </div>
                       <button
-                        onClick={() => navigate(`/community/${communityId}/settings`)}
+                        onClick={() => navigate(`/community/${communityId}/bans`)}
                         className="text-sm text-indigo-600 hover:text-indigo-700"
                       >
                         Manage

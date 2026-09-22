@@ -180,17 +180,7 @@
     "deleteAccountDesc": "Konto und Daten dauerhaft löschen",
     "deleteWarning": "Dies löscht dauerhaft Ihr Konto, Ihre Beiträge und Daten. Dieser Vorgang kann nicht rückgängig gemacht werden.",
     "confirmDelete": "Mein Konto löschen",
-    "deleting": "Löschen...",
-    "aboutDesc": "Version, Richtlinien und Support",
-    "highlights": "Profil-Highlights",
-    "highlightsDesc": "Angeheftete Story-Highlights erstellen und organisieren",
-    "creatorStudio": "Creator-Studio & Analytics",
-    "creatorStudioDesc": "Impressionen, Retention und Performance-Einblicke",
-    "consentSection": "Einwilligung & Datennutzung",
-    "consentAnalytics": "Nutzungsanalysen",
-    "consentAds": "Personalisierte Werbung",
-    "consentAiTraining": "KI-Modelltraining",
-    "consentDesc": "Sie bestimmen, wie Ihre Daten verwendet werden. Die essenzielle Verarbeitung kann nicht deaktiviert werden."
+    "deleting": "Löschen..."
   },
   "level": {
     "title": "Level & Fortschritt",

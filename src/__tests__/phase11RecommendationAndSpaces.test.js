@@ -1,4 +1,9 @@
-// src/__tests__/phase11RecommendationAndSpaces.test.js
+/**
+ * src/__tests__/phase11RecommendationAndSpaces.test.js
+ * Verification test suite for Phase 11:
+ * - Algorithmic Feed Ranking & Recommendation Engine
+ * - Real-Time Collaborative Spaces Orchestration
+ */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

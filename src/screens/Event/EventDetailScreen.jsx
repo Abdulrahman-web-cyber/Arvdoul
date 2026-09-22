@@ -1,4 +1,7 @@
-// src/screens/Event/EventDetailScreen.jsx
+// src/screens/Event/EventDetailScreen.jsx - ARVDOUL EVENT DETAIL
+// ✅ View event info, schedule, attendees
+// ✅ Register/Unregister for event
+// ✅ Real-time updates
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';

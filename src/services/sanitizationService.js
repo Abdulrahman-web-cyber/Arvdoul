@@ -1,4 +1,11 @@
-// src/services/sanitizationService.js
+/**
+ * src/services/sanitizationService.js - ARVDOUL HTML SANITIZATION & XSS PREVENTION ENGINE
+ *
+ * Implements:
+ * 1. Safe HTML Sanitization: Cleans rich text and user-generated markdown without stripping harmless formatting.
+ * 2. Strict Entity Encoding: Encodes special characters (`<`, `>`, `&`, `"`, `'`) for safe direct DOM rendering.
+ * 3. Safe URL Parser: Validates URLs to prevent `javascript:`, `data:`, or `vbscript:` URI schemes.
+ */
 
 import DOMPurify from 'dompurify';
 

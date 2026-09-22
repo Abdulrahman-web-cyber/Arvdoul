@@ -4,7 +4,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
-import { getProfileUrl, shareProfile, copyToClipboard } from '../../utils/shareUtils';
 import {
   Share2, Link2, Ban, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag
 } from 'lucide-react';
@@ -31,6 +30,9 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
     }
     return () => { active = false; };
   }, [user?.uid, userId, isOwner]);
+  const profileUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/profile/${userId}`
+    : `https://arvdoul.app/profile/${userId}`;
 
   const isDark = theme === 'dark';
   const itemCls = cn(
@@ -39,20 +41,24 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
   );
 
   const handleShare = useCallback(async () => {
-    const result = await shareProfile(profile);
-    if (result.copied) toast.success('Profile link copied!');
-    onClose?.();
-  }, [profile, onClose]);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${profile?.displayName || 'Profile'} on Arvdoul`, url: profileUrl });
+      } else {
+        await navigator.clipboard.writeText(profileUrl);
+        toast.success('Profile link copied!');
+      }
+      onClose?.();
+    } catch (err) { /* user canceled */ }
+  }, [profileUrl, profile, onClose]);
 
   const handleCopy = useCallback(async () => {
     try {
-      await copyToClipboard(getProfileUrl(profile));
+      await navigator.clipboard.writeText(profileUrl);
       toast.success('Profile link copied!');
       onClose?.();
-    } catch (err) {
-      toast.error('Could not copy link.');
-    }
-  }, [profile, onClose]);
+    } catch (err) { toast.error('Could not copy link.'); }
+  }, [profileUrl, onClose]);
 
   const handleBlock = useCallback(async () => {
     if (!user?.uid || busy) return;

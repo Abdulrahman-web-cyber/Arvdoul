@@ -1,4 +1,11 @@
-// src/services/fraudDetectionService.js
+/**
+ * src/services/fraudDetectionService.js - ARVDOUL PAYMENT & COIN TRANSACTION FRAUD ENGINE v8.0
+ *
+ * Implements:
+ * 1. Card Velocity Checks: Flags multiple failed card purchase attempts within a 5-minute rolling window.
+ * 2. Coin Wash & Circular Transfer Detection: Identifies rapid circular coin transfers across connected burner accounts.
+ * 3. Chargeback Risk Scoring: Assigns transaction risk score and auto-freezes suspicious payouts.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

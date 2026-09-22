@@ -1,4 +1,12 @@
-// src/services/safeSearchService.js
+/**
+ * src/services/safeSearchService.js - ARVDOUL SAFE SEARCH FILTERING v8.0
+ *
+ * Implements:
+ * 1. Multi-Tier SafeSearch Levels: Strict, Moderate, Off (for age-verified adult mode).
+ * 2. Query Redaction & Obfuscation: Strips adult, violent, and hate terms from query tokens before database lookup.
+ * 3. Media Filtering: Filters out media flagged with sensitive / racy content tags when SafeSearch is active.
+ * 4. Multi-tab synchronization and LocalStorage persistence.
+ */
 
 import { textModerationService } from './textModerationService.js';
 import { logger } from '../utils/Logger.js';

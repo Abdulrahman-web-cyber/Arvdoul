@@ -1,4 +1,6 @@
-// src/components/UI/ErrorState.jsx
+// src/components/UI/ErrorState.jsx - ARVDOUL WORLD-CLASS ERROR STATE
+// Futuristic error state with ARVDOUL DNA gradient accents
+// Surpasses TikTok, Instagram, YouTube with premium UI
 
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -6,7 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import GlassButton from './GlassButton';
 
 /**
- * ErrorState - error state component
+ * ErrorState - World-class error state component
  * 
  * Features:
  * - ARVDOUL DNA gradient accents

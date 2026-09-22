@@ -1,4 +1,12 @@
-// src/components/profile/ProfileHeader.jsx
+/**
+ * src/components/profile/ProfileHeader.jsx - ARVDOUL Profile Header Component
+ * 
+ * Main profile header with avatar, level badge, and action buttons.
+ * Displays profile information with owner/viewer-specific actions.
+ * Features glassmorphism, floating shadows, and ARVDOUL DNA gradient.
+ * 
+ * @component
+ */
 
 /**
  * @typedef {Object} ProfileHeaderProps
@@ -43,7 +51,6 @@ import ProfileStats from './ProfileStats';
 import { useUser } from "../../context/UserContext";
 import ProfileOptionsMenu from './ProfileOptionsMenu';
 import ProfileTipModal from './ProfileTipModal';
-import { shareProfile } from '../../utils/shareUtils';
 import { getCitizenTier } from '../../services/levelSystemService';
 import { toast } from 'sonner';
 
@@ -90,8 +97,18 @@ const ProfileHeader = memo(({
       onSharePress();
       return;
     }
-    shareProfile(profile).catch(() => {});
-  }, [onSharePress, profile]);
+    
+    const userId = profile?.uid || profile?.id;
+    const shareUrl = `${window.location.origin}/profile/${userId}`;
+    if (navigator.share) {
+      navigator.share({
+        title: `${profile?.displayName}'s Profile`,
+        url: shareUrl,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+    }
+  }, [onSharePress, profile?.displayName, profile?.uid, profile?.id]);
   
   // Handle message
   const handleMessage = useCallback(() => {
@@ -104,7 +121,6 @@ const ProfileHeader = memo(({
   // More options menu state
   const [showOptions, setShowOptions] = useState(false);
   const [showTipModal, setShowTipModal] = useState(false);
-  const [tipDelta, setTipDelta] = useState(0);
 
   // User auth context for follow/unfollow
   const { userProfile: currentAuthUser, followUser, unfollowUser } = useUser();
@@ -243,7 +259,7 @@ const ProfileHeader = memo(({
                   title="View Coins & Wallet"
                 >
                   <Coins className="w-4 h-4 text-amber-500" />
-                  <span>{((profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0) + tipDelta).toLocaleString()}</span>
+                  <span>{(profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0).toLocaleString()}</span>
                 </button>
                 <button
                   onClick={onSettingsPress || (() => navigate('/profile/settings'))}
@@ -463,7 +479,9 @@ const ProfileHeader = memo(({
         recipient={profile}
         currentUser={currentAuthUser}
         onTipSuccess={(amt) => {
-          setTipDelta((prev) => prev + amt);
+          if (profile) {
+            profile.coins = (profile.coins || 0) + amt;
+          }
         }}
       />
     </article>

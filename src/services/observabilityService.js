@@ -1,4 +1,14 @@
-// src/services/observabilityService.js
+/**
+ * src/services/observabilityService.js - ARVDOUL ENTERPRISE OBSERVABILITY & MONITORING SUITE (100% PRODUCTION READY)
+ *
+ * Implements:
+ * - Distributed Tracing (Correlation ID extraction and span lifecycle tracking)
+ * - Metric Collection (Prometheus / Time-Series Database gauges, counters, and histograms)
+ * - Real-time Alerting (Spikes in error rates, latency thresholds, and GCP billing alerts)
+ * - SLO / Error Budget Management (SLI calculations and dynamic burn rate alarms)
+ * - Real User Monitoring (RUM) & Crash Reporting (Sentry / Core Web Vitals telemetry capture)
+ * - Cost Control & Query Auditing (Real-time Firestore cost aggregation tracking)
+ */
 
 import { logger } from '../utils/Logger.js';
 

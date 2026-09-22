@@ -1,4 +1,12 @@
-// src/services/engagementOptimizationService.js
+/**
+ * src/services/engagementOptimizationService.js - ARVDOUL FEED PERSONALIZATION & ENGAGEMENT ENGINE
+ *
+ * Implements:
+ * 1. Multi-Armed Bandit Exploration/Exploitation: Allocates 80% of feed to high-confidence affinity topics and 20% to exploration.
+ * 2. Dynamic Dwell-Time Weighting: Rewards creators whose videos achieve >80% completion and loop count > 1.
+ * 3. Freshness & Affinity Scoring: Computes per-user personalized feed score:
+ *    Score = (Affinity * 0.4) + (Velocity * 0.3) + (Freshness * 0.2) + (MediaQuality * 0.1)
+ */
 
 import { logger } from '../utils/Logger.js';
 

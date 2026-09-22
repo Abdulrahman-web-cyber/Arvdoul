@@ -1,4 +1,11 @@
-// src/services/CSRFService.js
+/**
+ * src/services/CSRFService.js - ARVDOUL ANTI-CSRF TOKEN SERVICE
+ *
+ * Implements:
+ * 1. Double-Submit Cryptographic Cookie / Token Pattern: Generates SHA-256 HMAC anti-CSRF tokens for all state-changing endpoints.
+ * 2. SameSite=Strict Enforcement: Ensures browser cookie boundaries are preserved.
+ * 3. Constant-Time Token Comparison: Eliminates timing attacks during token verification.
+ */
 
 import { logger } from '../utils/Logger.js';
 

@@ -1,4 +1,12 @@
-// src/services/sessionSecurityService.js
+/**
+ * src/services/sessionSecurityService.js - ARVDOUL SESSION SECURITY & IMPOSSIBLE TRAVEL ENGINE
+ *
+ * Implements:
+ * 1. Impossible Travel Calculation: Calculates Haversine geodesic distance between consecutive logins;
+ *    flags logins exceeding 900 km/h (commercial aircraft velocity) as impossible travel.
+ * 2. Session Anomaly Scoring: Flags unfamiliar device IDs, rapid IP address subnet switches, or odd login hours.
+ * 3. Account Takeover (ATO) Interception: Synchronously suspends active sessions and triggers step-up MFA challenge.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

@@ -1,4 +1,12 @@
-// src/components/profile/AvatarUploadModal.jsx
+/**
+ * src/components/profile/AvatarUploadModal.jsx - ARVDOUL Avatar Upload & Cropping Modal
+ * Features:
+ * - react-easy-crop 1:1 circular crop
+ * - Interactive zoom slider (1x - 3x)
+ * - Canvas compression (512x512 WebP)
+ * - Reset to default avatar option
+ * - Accessible keyboard & modal dialog UX
+ */
 
 import React, { memo, useState, useCallback, useRef } from 'react';
 import Cropper from 'react-easy-crop';

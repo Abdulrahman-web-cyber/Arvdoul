@@ -1,4 +1,6 @@
-// src/screens/AudioEditor/AudioEditorScreen.jsx
+// src/screens/AudioEditor/AudioEditorScreen.jsx - ARVDOUL AUDIO STUDIO V5 (FLAGSHIP)
+// 🎵 Professional Multitrack Digital Audio Workstation matching Image 1
+// Features: Multitrack Mixing Console, Parametric EQ, Live Spectrum, Transport Bar, Effects Chain
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';

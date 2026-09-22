@@ -1,4 +1,12 @@
-// src/services/searchIndexingService.js
+/**
+ * src/services/searchIndexingService.js - ARVDOUL SEARCH INDEXING & N-GRAM PIPELINE v8.0
+ *
+ * Implements:
+ * 1. Tokenization & Stemming: Normalizes text, removes stop words, generates edge n-grams for prefix autocompletion.
+ * 2. Real-Time Index Ingestion: Updates index docs on post, user, or sound creation.
+ * 3. Multi-Field Weighted Ranking: Combines exact username match (weight 1.0), bio match (weight 0.6), and post tags (weight 0.8).
+ * 4. Structured caching to speed up token generation.
+ */
 
 import { logger } from '../utils/Logger.js';
 

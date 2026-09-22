@@ -38,6 +38,8 @@ require('./moderation.js');
 // Server-authoritative admin actions (ban/suspend/verify, user directory,
 // report resolution). The client never writes privileged user fields directly.
 require('./admin.js');
+require('./auth.js');
+require('./pushQueue.js');
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {

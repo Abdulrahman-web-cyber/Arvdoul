@@ -1,4 +1,11 @@
-// src/hooks/useCreatorDashboard.js
+/**
+ * src/hooks/useCreatorDashboard.js - ARVDOUL Creator Dashboard Hook
+ * 
+ * Custom hook for creator dashboard management.
+ * Provides analytics loading, timeframe selection, and data export.
+ * 
+ * @module hooks/useCreatorDashboard
+ */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAnalyticsStore } from '../store/analyticsStore';

@@ -8,12 +8,66 @@ import { cn } from '../../lib/utils';
 import storyService from '../../services/storyService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
+// Sample featured creators with stories for rich community preview
+const DEFAULT_STORY_CREATORS = [
+  {
+    id: 'creator_1',
+    name: 'Elena Rostova',
+    username: 'elena_vibes',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    hasUnseen: true,
+    isLive: false,
+    preview: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=300&auto=format&fit=crop&q=80',
+    title: 'Studio sessions 🎧'
+  },
+  {
+    id: 'creator_2',
+    name: 'Marcus Chen',
+    username: 'marcus_tech',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    hasUnseen: true,
+    isLive: true,
+    preview: 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=300&auto=format&fit=crop&q=80',
+    title: 'Tokyo Night Walk 🌙'
+  },
+  {
+    id: 'creator_3',
+    name: 'Sophia Williams',
+    username: 'sophia_art',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    hasUnseen: true,
+    isLive: false,
+    preview: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=300&auto=format&fit=crop&q=80',
+    title: 'New Canvas 🎨'
+  },
+  {
+    id: 'creator_4',
+    name: 'Alex Rivera',
+    username: 'alex_beats',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    hasUnseen: false,
+    isLive: false,
+    preview: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80',
+    title: 'Acoustic jam 🎸'
+  },
+  {
+    id: 'creator_5',
+    name: 'Zara Thorne',
+    username: 'zara_wander',
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+    hasUnseen: true,
+    isLive: false,
+    preview: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=300&auto=format&fit=crop&q=80',
+    title: 'Alpine Sunrise 🏔️'
+  }
+];
+
 export const InFeedStoriesModule = memo(function InFeedStoriesModule() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [creators, setCreators] = useState([]);
+  const [creators, setCreators] = useState(DEFAULT_STORY_CREATORS);
 
   useEffect(() => {
     let isMounted = true;

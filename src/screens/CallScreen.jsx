@@ -1,4 +1,9 @@
-// src/screens/CallScreen.jsx
+// src/screens/CallScreen.jsx - ARVDOUL VIDEO CALL (REAL WebRTC)
+// 1:1 WebRTC video/audio call with Firestore signaling:
+//   - Local stream via getUserMedia
+//   - RTCPeerConnection with STUN
+//   - Offer/answer/ICE-candidate exchange through a `calls/{id}` doc
+// Works across tabs/devices on the same Firestore project.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';

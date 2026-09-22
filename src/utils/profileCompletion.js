@@ -1,4 +1,15 @@
-// src/utils/profileCompletion.js
+/**
+ * src/utils/profileCompletion.js
+ *
+ * Single source of truth for post-auth routing:
+ *   Splash + existing session  → /home
+ *   Splash + no session        → /intro
+ *   Login of an existing account → /home
+ *   Brand-new signup this session → /setup-profile (after verification)
+ *
+ * Returning users must NEVER be trapped on /setup-profile because a Firestore
+ * flag is missing, a snapshot raced, or an auto-generated username looks "empty".
+ */
 
 export const ONBOARDING_SESSION_KEY = 'arvdoul_onboarding';
 export const ONBOARDING_TTL_MS = 2 * 60 * 60 * 1000;

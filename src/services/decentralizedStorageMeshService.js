@@ -1,4 +1,12 @@
-// src/services/decentralizedStorageMeshService.js
+/**
+ * src/services/decentralizedStorageMeshService.js - ARVDOUL CONTENT-ADDRESSED STORAGE & IPFS/BITTORRENT MESH v1.0
+ * 
+ * Production-grade peer-to-peer decentralized storage distribution:
+ * • Content-addressed multihash CID generation (CIDv1-compatible sha256)
+ * • Chunked media streaming & bitfield chunk availability tracking
+ * • P2P storage pinning policy (local, pinata, filecoin/arweave bridge)
+ * • Peer-assisted media prefetching & bandwidth savings computation
+ */
 
 import { logger } from '../utils/Logger.js';
 

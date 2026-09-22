@@ -1,4 +1,8 @@
 // src/services/ServiceKit.js
+// Central facade for cross-cutting service concerns. Importing from here gives every
+// service one consistent, production-grade entry point for logging, auditing, caching,
+// sharded counters, offline writes, error handling and rate limiting — instead of
+// reaching into individual utils. This is the backbone of the 10/10 service refactor.
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { cacheManager } from '../utils/CacheManager.js';

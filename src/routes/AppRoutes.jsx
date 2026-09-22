@@ -5,9 +5,9 @@ import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
 import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
+import SplashScreen from "../screens/SplashScreen.jsx";
 
 // ==================== LAZY LOAD COMPONENTS ====================
-const SplashScreen = lazy(() => import("../screens/SplashScreen.jsx"));
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
 const BadgeScreen = lazy(() => import("../screens/BadgeScreen.jsx"));
@@ -195,9 +195,7 @@ export default function AppRoutes() {
       {/* ========== PUBLIC ROUTES (No Layout) ========== */}
       <Route path="/" element={
         <PublicRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <SplashScreen />
-          </Suspense>
+          <SplashScreen />
         </PublicRoute>
       } />
       

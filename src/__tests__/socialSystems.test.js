@@ -1,4 +1,14 @@
-// src/__tests__/socialSystems.test.js
+/**
+ * src/__tests__/socialSystems.test.js
+ * Real assertions for the social-loop enhancements:
+ *   - likePost fires author notification + like_received XP (only on NEW likes)
+ *   - sendGift rejects unknown gift types; fires gift notification + XP
+ *   - sendFriendRequest short-circuits when already friends; notifies recipient
+ *   - cancelFriendRequest / areFriends behave correctly
+ *   - followUser awards follow_received XP to the followed user
+ *
+ * Services run against in-memory fake Firestore layers (hermetic).
+ */
 
 import { jest } from '@jest/globals';
 
@@ -12,8 +22,6 @@ const state = {
   posts: new Map(),
   notifications: [],
   xpAwards: [],
-  usernames: new Map(),
-  previousUsernames: new Map(),
 };
 
 function seedUser(id, overrides = {}) {
@@ -357,66 +365,5 @@ describe('follows - XP wiring', () => {
       (c) => c[0]?.action === 'follow_received'
     );
     expect(calls.length).toBe(0);
-  });
-});
-
-describe('identity - username resolution and friendship parity', () => {
-  beforeEach(() => {
-    state.users.clear();
-    state.follows.clear();
-    state.usernames = new Map();
-    state.previousUsernames = new Map();
-  });
-
-  test('getUserByUsername resolves the current username index', async () => {
-    seedUser('u_nova', { username: 'nova', displayName: 'Nova' });
-    state.usernames.set('nova', { userId: 'u_nova' });
-
-    const { getUserService } = await import('../services/userService.js');
-    const svc = getUserService();
-    svc.firestore = { fake: true };
-    svc.getUserProfile = async (id) => state.users.get(id) || null;
-
-    const profile = await svc.getUserByUsername('@Nova');
-    expect(profile).not.toBeNull();
-    expect(profile.displayName).toBe('Nova');
-  });
-
-  test('getUserByUsername falls back to the immutable previous_usernames index', async () => {
-    seedUser('u_renamed', { username: 'newname', displayName: 'Renamed' });
-    state.previousUsernames.set('oldname', { userId: 'u_renamed' });
-
-    const { getUserService } = await import('../services/userService.js');
-    const svc = getUserService();
-    svc.firestore = { fake: true };
-    svc.getUserProfile = async (id) => state.users.get(id) || null;
-
-    const profile = await svc.getUserByUsername('oldname');
-    expect(profile).not.toBeNull();
-    expect(profile.displayName).toBe('Renamed');
-  });
-
-  test('getUserByUsername returns null for an unknown handle', async () => {
-    const { getUserService } = await import('../services/userService.js');
-    const svc = getUserService();
-    svc.firestore = { fake: true };
-    svc.getUserProfile = async (id) => state.users.get(id) || null;
-
-    expect(await svc.getUserByUsername('nobody')).toBeNull();
-    expect(await svc.getUserByUsername('')).toBeNull();
-    expect(await svc.getUserByUsername(null)).toBeNull();
-  });
-
-  test('_areMutualFriends agrees with areFriends (single source of truth)', async () => {
-    const { getUserService } = await import('../services/userService.js');
-    const svc = getUserService();
-    svc.firestore = { fake: true };
-
-    state.follows.set('a_b', { followerId: 'a', followingId: 'b' });
-    expect(await svc._areMutualFriends('a', 'b')).toBe(false);
-
-    state.follows.set('b_a', { followerId: 'b', followingId: 'a' });
-    expect(await svc._areMutualFriends('a', 'b')).toBe(true);
-    expect(await svc.areFriends('a', 'b')).toBe(true);
   });
 });

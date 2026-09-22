@@ -1,4 +1,12 @@
-// src/hooks/useFeatureFlag.js
+/**
+ * src/hooks/useFeatureFlag.js
+ * React hook for feature flags with runtime reactivity:
+ *
+ *   const { enabled, value, source } = useFeatureFlag('feed.ml_ranking');
+ *
+ * Re-renders when the flag changes (Remote Config activation or admin
+ * override). Fails closed for unregistered flags.
+ */
 
 import { useSyncExternalStore } from 'react';
 import { featureFlagService } from '../services/featureFlagService.js';

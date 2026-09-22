@@ -1,4 +1,22 @@
-// src/utils/CountersManager.js
+/**
+ * src/utils/CountersManager.js - ARVDOUL Sharded Counters Manager
+ *
+ * Replaces direct `increment()` on hot documents (likes, follows, views,
+ * saves, gifts) with sharded counters. Each logical counter is spread over
+ * N shard documents; writes hit a random shard (spreading write contention),
+ * reads sum all shards and cache the result for a short TTL.
+ *
+ * Backward compatibility:
+ * - If no shards exist for a counter, reads fall back to the legacy value
+ *   on the source document (e.g. `post.stats.likes`), so existing data and
+ *   callers keep working during migration.
+ * - `incrementInTransaction()` lets callers keep their existing Firestore
+ *   transaction while routing the counter write to a shard.
+ *
+ * New collection: `counter_shards` (migration plan in REFACTOR_PROGRESS.md).
+ *
+ * Zero new npm dependencies.
+ */
 
 import cacheManager from './CacheManager.js';
 import { Logger } from './Logger.js';

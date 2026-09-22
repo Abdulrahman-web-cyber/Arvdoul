@@ -1,4 +1,11 @@
-// src/services/selfHarmDetectionService.js
+/**
+ * src/services/selfHarmDetectionService.js - ARVDOUL CRISIS INTERVENTION & SELF-HARM DETECTOR v8.0
+ *
+ * Implements:
+ * 1. Suicide & Self-Harm Keyword Detection: Flags expressions of acute self-harm intent.
+ * 2. Emergency Hotline Response: Injects helpful suicide prevention helpline resource info.
+ * 3. Urgent Safety Triage Escalation: Fires high-priority alerts to secure support operations.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

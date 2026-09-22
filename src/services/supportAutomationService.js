@@ -1,4 +1,11 @@
-// src/services/supportAutomationService.js
+/**
+ * src/services/supportAutomationService.js - ARVDOUL AI-POWERED SUPPORT TRIAGE & AUTO-RESOLUTION
+ *
+ * Implements:
+ * 1. NLP Intent Classification: Categorizes incoming user support tickets (Account Recovery, Billing/Refund, Bug Report, Moderation Appeal, Harassment).
+ * 2. Automated Instant Resolution: Resolves common inquiries (password reset guide, 2FA recovery instructions, coin balance refresh) without human intervention.
+ * 3. Human Escalation: Routes complex billing or safety disputes directly to tier-2 human specialists.
+ */
 
 import { logger } from '../utils/Logger.js';
 

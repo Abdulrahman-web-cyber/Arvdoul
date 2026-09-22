@@ -1,4 +1,12 @@
-// src/services/samlService.js
+/**
+ * src/services/samlService.js - ARVDOUL ENTERPRISE SAML 2.0 / SSO SERVICE
+ *
+ * Implements:
+ * 1. Enterprise SSO Integration: Integrates with Okta, Azure AD, PingIdentity, and Google Workspace via SAML 2.0.
+ * 2. SAML Metadata XML Parsing: Parses Identity Provider (IdP) single sign-on URLs and X.509 signing certificates.
+ * 3. Just-In-Time (JIT) Provisioning: Auto-provisions corporate user profiles with assigned enterprise roles and domains.
+ * 4. Assertion Validation Simulation: Validates signatures, expiration bounds, and issuer domains.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';

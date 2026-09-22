@@ -1,4 +1,13 @@
-// src/services/scamDetectionService.js
+/**
+ * src/services/scamDetectionService.js - ARVDOUL FINANCIAL SCAM & FRAUD DETECTION v8.0
+ *
+ * Implements:
+ * 1. Cryptocurrency & Double-Your-Money Phishing Detection: Identifies BTC, ETH, SOL, XRP address solicitations,
+ *    Telegram/Discord pump-and-dump signals, fake giveaways, and high-yield investment programs (HYIP).
+ * 2. Advance-Fee & Wire Fraud Patterns: Flags impersonation of support personnel, lottery winners,
+ *    demanding gift cards, and phishing for seed phrases or secret passphrases.
+ * 3. Deep heuristic analysis, scoring matrix, and log triggers.
+ */
 
 import { logger } from '../utils/Logger.js';
 

@@ -1,295 +1,232 @@
 // src/screens/Admin/AdminAccessScreen.jsx
-//
-// Owner-facing admin access management. Two audiences share one screen:
-//
-//  * A signed-in platform owner (email listed in the functions OWNER_EMAILS
-//    env var, with a verified address) sees a Claim button. This is the only
-//    way the very first admin is created, because `admins/{uid}` is
-//    server-write-only.
-//  * An existing admin sees the current roster and can grant or revoke.
-//
-// Every action goes through a Cloud Function that re-checks the caller, so the
-// UI is a convenience over an enforced server contract, never the contract.
-
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { toast } from 'sonner';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../../context/AuthContext.jsx';
 import {
-  ArrowLeft,
-  ShieldCheck,
-  ShieldOff,
-  Crown,
-  Users,
-  Loader2,
-  RefreshCw,
-  Info,
-} from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { callFunction, fetchAdminStatus, FUNCTIONS, CallableError } from '../../services/callableService.js';
+  fetchAdminStatus,
+  bootstrapOwner,
+  grantAdmin,
+  revokeAdmin,
+  listAdmins
+} from '../../services/callableService.js';
+import { Shield, Key, UserCheck, UserX, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 
-const errorMessage = (error, fallback) =>
-  error instanceof CallableError ? error.message : fallback;
-
-const AdminAccessScreen = () => {
-  const navigate = useNavigate();
+export default function AdminAccessScreen() {
   const { user } = useAuth();
-
-  const [isAdmin, setIsAdmin] = useState(null);
-  const [admins, setAdmins] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(null);
-  const [grantUid, setGrantUid] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [adminsList, setAdminsList] = useState([]);
+  const [targetUid, setTargetUid] = useState('');
   const [grantReason, setGrantReason] = useState('');
+  const [submittingGrant, setSubmittingGrant] = useState(false);
 
-  const load = useCallback(async () => {
+  const loadStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const admin = await fetchAdminStatus();
-      setIsAdmin(admin);
-      if (admin) {
-        const data = await callFunction(FUNCTIONS.LIST_ADMINS);
-        setAdmins(data?.admins || []);
-      } else {
-        setAdmins([]);
+      const status = await fetchAdminStatus();
+      setIsAdmin(status);
+      if (status) {
+        try {
+          const res = await listAdmins();
+          if (res?.admins) {
+            setAdminsList(res.admins);
+          }
+        } catch {
+          // ignore if listAdmins not allowed
+        }
       }
-    } catch (error) {
-      setIsAdmin(false);
-      setAdmins([]);
-      // A failed status check is not fatal — the claim path may still apply.
-      if (!(error instanceof CallableError)) {
-        toast.error('Could not check admin status.');
-      }
+    } catch (err) {
+      console.warn('Failed to load admin status:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus]);
 
-  const handleClaim = async () => {
-    setBusy('claim');
+  const handleClaimOwnership = async () => {
+    setClaiming(true);
     try {
-      const result = await callFunction(FUNCTIONS.BOOTSTRAP_OWNER);
-      if (result?.created) {
-        toast.success('Ownership claimed. Admin tools are now unlocked.');
+      const res = await bootstrapOwner();
+      if (res?.success) {
+        toast.success(res.created ? 'Successfully claimed ownership and admin grant!' : 'Ownership already verified!');
+        setIsAdmin(true);
+        loadStatus();
       } else {
-        toast.info('This account already holds an admin grant.');
+        toast.error('Unable to claim ownership.');
       }
-      await load();
-    } catch (error) {
-      toast.error(errorMessage(error, 'Could not claim ownership.'));
+    } catch (err) {
+      toast.error(err?.message || 'Failed to claim ownership. Ensure your email is verified and in OWNER_EMAILS.');
     } finally {
-      setBusy(null);
+      setClaiming(false);
     }
   };
 
-  const handleGrant = async (event) => {
-    event.preventDefault();
-    const userId = grantUid.trim();
-    if (!userId) {
-      toast.error('Enter the user ID to grant admin access to.');
-      return;
-    }
-    setBusy('grant');
+  const handleGrant = async (e) => {
+    e.preventDefault();
+    if (!targetUid.trim()) return;
+    setSubmittingGrant(true);
     try {
-      const result = await callFunction(FUNCTIONS.GRANT_ADMIN, { userId, reason: grantReason.trim() });
-      toast.success(result?.created ? 'Admin access granted.' : 'That account is already an admin.');
-      setGrantUid('');
+      await grantAdmin(targetUid.trim(), grantReason.trim());
+      toast.success(`Admin access granted to ${targetUid}`);
+      setTargetUid('');
       setGrantReason('');
-      await load();
-    } catch (error) {
-      toast.error(errorMessage(error, 'Could not grant admin access.'));
+      loadStatus();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to grant admin access.');
     } finally {
-      setBusy(null);
+      setSubmittingGrant(false);
     }
   };
 
-  const handleRevoke = async (userId) => {
-    setBusy(userId);
+  const handleRevoke = async (uidToRevoke) => {
+    if (!window.confirm(`Are you sure you want to revoke admin access for ${uidToRevoke}?`)) return;
     try {
-      await callFunction(FUNCTIONS.REVOKE_ADMIN, { userId });
-      toast.success('Admin access revoked.');
-      await load();
-    } catch (error) {
-      toast.error(errorMessage(error, 'Could not revoke admin access.'));
-    } finally {
-      setBusy(null);
+      await revokeAdmin(uidToRevoke);
+      toast.success(`Admin access revoked for ${uidToRevoke}`);
+      loadStatus();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to revoke admin access.');
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-500" aria-label="Loading" />
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] pb-24">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded-full p-2 hover:bg-[var(--color-surface-hover)]"
-          aria-label="Go back"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-lg font-semibold">Admin access</h1>
-        <button
-          type="button"
-          onClick={load}
-          className="ml-auto rounded-full p-2 hover:bg-[var(--color-surface-hover)]"
-          aria-label="Refresh"
-        >
-          <RefreshCw className="w-5 h-5" />
-        </button>
-      </header>
+    <div className="min-h-screen bg-gray-50 dark:bg-[#03071B] text-gray-900 dark:text-white p-4 sm:p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-violet-500/10 text-violet-500">
+              <Shield className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Admin & Owner Access</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Manage platform administration and bootstrap ownership</p>
+            </div>
+          </div>
+          <button
+            onClick={loadStatus}
+            disabled={loading}
+            className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-gray-600 dark:text-gray-300"
+            title="Refresh status"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
 
-      <main className="mx-auto max-w-2xl space-y-6 p-4">
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <div className="flex items-start gap-3">
-            {isAdmin ? (
-              <ShieldCheck className="mt-0.5 w-6 h-6 shrink-0 text-emerald-500" aria-hidden />
-            ) : (
-              <ShieldOff className="mt-0.5 w-6 h-6 shrink-0 text-amber-500" aria-hidden />
-            )}
-            <div className="min-w-0">
-              <h2 className="font-semibold">
-                {isAdmin ? 'This account is an admin' : 'This account is not an admin'}
-              </h2>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                {isAdmin
-                  ? 'You can moderate users, content and reports, and manage who else holds admin access.'
-                  : 'Admin tools are gated server-side. If you are the platform owner, claim access below.'}
-              </p>
+        {/* Current status card */}
+        <div className="p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Your Status</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Account: {user?.email || user?.uid || 'Not signed in'}</p>
+            </div>
+            <div className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
+              isAdmin
+                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+            }`}>
+              {isAdmin ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+              {isAdmin ? 'Admin Active' : 'Non-Admin'}
             </div>
           </div>
 
           {!isAdmin && (
-            <button
-              type="button"
-              onClick={handleClaim}
-              disabled={busy === 'claim'}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 font-medium text-white transition hover:bg-violet-700 disabled:opacity-60"
-            >
-              {busy === 'claim' ? (
-                <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-              ) : (
-                <Crown className="w-4 h-4" aria-hidden />
-              )}
-              Claim ownership
-            </button>
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-800/60">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                If your email is configured in <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-xs">OWNER_EMAILS</code> and your email is verified, click below to claim platform ownership.
+              </p>
+              <button
+                onClick={handleClaimOwnership}
+                disabled={claiming}
+                className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium text-sm transition-all flex items-center gap-2 disabled:opacity-60"
+              >
+                <Key className="w-4 h-4" />
+                {claiming ? 'Claiming Ownership...' : 'Claim Ownership'}
+              </button>
+            </div>
           )}
+        </div>
 
-          {!isAdmin && (
-            <p className="mt-3 flex items-start gap-2 text-xs text-[var(--color-text-secondary)]">
-              <Info className="mt-0.5 w-3.5 h-3.5 shrink-0" aria-hidden />
-              Claiming requires this account&apos;s email to be verified and listed in the
-              platform&apos;s OWNER_EMAILS configuration.
-            </p>
-          )}
-        </section>
-
+        {/* Admin Management Section */}
         {isAdmin && (
           <>
-            <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-              <h2 className="flex items-center gap-2 font-semibold">
-                <Users className="w-5 h-5" aria-hidden />
-                Current admins
+            {/* Grant Admin Form */}
+            <div className="p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-4">
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-violet-500" />
+                Grant Admin Access
               </h2>
-              {admins.length === 0 ? (
-                <p className="mt-3 text-sm text-[var(--color-text-secondary)]">No admin grants found.</p>
-              ) : (
-                <ul className="mt-3 divide-y divide-[var(--color-border)]">
-                  {admins.map((admin) => {
-                    const isSelf = admin.uid === user?.uid;
-                    const isLast = admins.length <= 1;
-                    return (
-                      <li key={admin.uid} className="flex items-center gap-3 py-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-mono text-sm">{admin.uid}</p>
-                          {admin.reason ? (
-                            <p className="truncate text-xs text-[var(--color-text-secondary)]">{admin.reason}</p>
-                          ) : null}
-                        </div>
-                        {isSelf && (
-                          <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-500">
-                            You
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRevoke(admin.uid)}
-                          disabled={busy === admin.uid || isLast}
-                          title={isLast ? 'The last admin cannot be removed' : 'Revoke admin access'}
-                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm transition hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-                        >
-                          {busy === admin.uid ? (
-                            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
-                          ) : (
-                            'Revoke'
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <p className="mt-3 text-xs text-[var(--color-text-secondary)]">
-                The final admin cannot be revoked, so the platform always retains moderation access.
-              </p>
-            </section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
-            >
-              <h2 className="font-semibold">Grant admin access</h2>
-              <form onSubmit={handleGrant} className="mt-4 space-y-3">
+              <form onSubmit={handleGrant} className="space-y-3">
                 <div>
-                  <label htmlFor="grant-uid" className="block text-sm font-medium">
-                    User ID
-                  </label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">User UID</label>
                   <input
-                    id="grant-uid"
-                    value={grantUid}
-                    onChange={(event) => setGrantUid(event.target.value)}
-                    placeholder="Firebase Auth UID"
-                    autoComplete="off"
-                    className="mt-1 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm outline-none focus:border-violet-500"
+                    type="text"
+                    required
+                    value={targetUid}
+                    onChange={(e) => setTargetUid(e.target.value)}
+                    placeholder="e.g. 5xYk8..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-200 dark:border-gray-800 text-sm focus:outline-none focus:border-violet-500"
                   />
                 </div>
                 <div>
-                  <label htmlFor="grant-reason" className="block text-sm font-medium">
-                    Reason <span className="font-normal text-[var(--color-text-secondary)]">(optional)</span>
-                  </label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Reason (optional)</label>
                   <input
-                    id="grant-reason"
+                    type="text"
                     value={grantReason}
-                    onChange={(event) => setGrantReason(event.target.value)}
-                    placeholder="Why this account needs admin access"
-                    className="mt-1 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-sm outline-none focus:border-violet-500"
+                    onChange={(e) => setGrantReason(e.target.value)}
+                    placeholder="e.g. Senior moderator"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-200 dark:border-gray-800 text-sm focus:outline-none focus:border-violet-500"
                   />
                 </div>
                 <button
                   type="submit"
-                  disabled={busy === 'grant'}
-                  className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 font-medium text-white transition hover:bg-violet-700 disabled:opacity-60"
+                  disabled={submittingGrant}
+                  className="px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium text-sm transition-all disabled:opacity-60"
                 >
-                  {busy === 'grant' ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
-                  Grant access
+                  {submittingGrant ? 'Granting...' : 'Grant Admin'}
                 </button>
               </form>
-            </motion.section>
+            </div>
+
+            {/* Admin Roster */}
+            <div className="p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-4">
+              <h2 className="text-base font-semibold flex items-center gap-2">
+                <Shield className="w-4 h-4 text-violet-500" />
+                Active Admin Roster
+              </h2>
+              {adminsList.length === 0 ? (
+                <p className="text-sm text-gray-500">No other admins enumerated or access restricted.</p>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-gray-800/60">
+                  {adminsList.map((adm) => (
+                    <div key={adm.uid} className="py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-mono font-medium">{adm.uid}</div>
+                        {adm.reason && <div className="text-xs text-gray-500">{adm.reason}</div>}
+                      </div>
+                      {adm.uid !== user?.uid && (
+                        <button
+                          onClick={() => handleRevoke(adm.uid)}
+                          className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs font-medium flex items-center gap-1"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
-      </main>
+
+      </div>
     </div>
   );
-};
-
-export default AdminAccessScreen;
+}

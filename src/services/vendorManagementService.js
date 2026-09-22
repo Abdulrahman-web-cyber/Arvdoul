@@ -1,4 +1,11 @@
-// src/services/vendorManagementService.js
+/**
+ * src/services/vendorManagementService.js - ARVDOUL THIRD-PARTY VENDOR & API SLA MONITOR v8.0
+ *
+ * Implements:
+ * 1. Vendor Health & Latency Dashboard: Tracks uptime and p99 latency for Stripe, Cloudflare, Firebase, and SendGrid.
+ * 2. Circuit Breaker for Vendor Outages: Automatically falls back to secondary payment or push gateways when error rate > 5%.
+ * 3. Rate Limit Tracking: Avoids third-party quota exhaustion by throttling outbound requests.
+ */
 
 import { logger } from '../utils/Logger.js';
 

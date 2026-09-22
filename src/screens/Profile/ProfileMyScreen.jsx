@@ -1,4 +1,13 @@
-// src/screens/Profile/ProfileMyScreen.jsx
+/**
+ * src/screens/Profile/ProfileMyScreen.jsx - ARVDOUL My Profile Screen
+ * 
+ * Production-grade owner view of the authenticated user's profile.
+ * Rebuilt to perfectly match the uploaded design specifications across Light and Dark themes.
+ * Fully integrated with real system data, server-authoritative level & progression,
+ * real coin ledger balance, real analytics, highlights, and content management.
+ * 
+ * @component
+ */
 
 import React, { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +20,6 @@ import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import { shareProfile } from '../../utils/shareUtils';
 import { toast } from 'sonner';
 
 // Modular Profile Components
@@ -128,6 +136,25 @@ export default function ProfileMyScreen() {
     }
   }, [currentUserId, loadProfile, loadAnalytics, loadPosts, timeframe]);
 
+  // Handle Share
+  const handleShare = useCallback(async () => {
+    const profileUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/profile/${currentUserId}`
+      : `https://arvdoul.app/profile/${currentUserId}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${profile?.displayName || 'My Profile'} on Arvdoul`,
+          url: profileUrl,
+        });
+      } catch (err) {}
+    } else {
+      await navigator.clipboard.writeText(profileUrl);
+      toast.success('Profile link copied to clipboard!');
+    }
+  }, [currentUserId, profile]);
+
   // Fallback profile if Firestore is yet to populate
   const cleanUsername = useMemo(() => {
     const raw = profile?.username || currentUser?.username;
@@ -159,21 +186,6 @@ export default function ProfileMyScreen() {
     level: level || currentUser?.level || 1,
     location: currentUser?.location || '',
   };
-
-  // Share the canonical public link for the effective profile.
-  const handleShare = useCallback(async () => {
-    try {
-      const result = await shareProfile(effectiveProfile, {
-        title: `${effectiveProfile.displayName || 'My Profile'} on Arvdoul`,
-      });
-      if (result.cancelled) return;
-      if (result.shared) toast.success('Profile shared!');
-      else if (result.copied) toast.success('Profile link copied to clipboard!');
-      else toast.error('Could not share your profile.');
-    } catch (error) {
-      toast.error('Could not share your profile.');
-    }
-  }, [effectiveProfile]);
 
   const isDark = theme === 'dark';
 

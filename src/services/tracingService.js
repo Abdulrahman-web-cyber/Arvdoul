@@ -1,4 +1,12 @@
-// src/services/tracingService.js
+/**
+ * src/services/tracingService.js - ARVDOUL DISTRIBUTED TRACING & SPAN ENGINE v8.0
+ *
+ * Implements:
+ * 1. OpenTelemetry Compatible Trace Context Propagation: Generates W3C `traceparent` headers (`00-<trace_id>-<span_id>-01`).
+ * 2. Nested Span Timings: Measures execution latency across UI rendering, Firestore queries, and Cloud Functions.
+ * 3. Trace Context Correlation: Links frontend clicks to downstream database operations.
+ * 4. Jaeger/OpenTelemetry Export Adapter: Sends collected trace spans to real or mock Jaeger endpoint.
+ */
 
 import { logger } from '../utils/Logger.js';
 

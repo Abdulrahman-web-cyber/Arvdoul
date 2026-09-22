@@ -1,4 +1,10 @@
-// src/components/profile/ProfileAbout.jsx
+/**
+ * src/components/profile/ProfileAbout.jsx - ARVDOUL Profile About Component
+ * 
+ * Displays profile about/bio information.
+ * 
+ * @component
+ */
 
 import React, { memo } from 'react';
 import { cn } from '../../lib/utils';

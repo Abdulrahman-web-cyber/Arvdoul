@@ -390,15 +390,6 @@ export const ThemeProvider = memo(({ children }) => {
     
   }), [theme, systemTheme, resolvedTheme, isDark, toggleTheme, setTheme, currentTheme]);
 
-  // Don't render until mounted to avoid hydration mismatch
-  if (!mounted) {
-    return (
-      <div style={{ visibility: 'hidden' }} className="min-h-screen">
-        {children}
-      </div>
-    );
-  }
-
   return (
     <ThemeContext.Provider value={contextValue}>
       {children}

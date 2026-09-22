@@ -1,4 +1,6 @@
 // src/services/aiStudioService.js
+// 🌟 ARVDOUL AI CREATIVE CO-PILOT SERVICE - ULTRA PRODUCTION READY v8.0
+// Advanced creative assistant supporting prompt caching, request queuing, budget caps, and multi-model fallback.
 
 import { svcLogger } from './ServiceKit.js';
 import localforage from 'localforage';

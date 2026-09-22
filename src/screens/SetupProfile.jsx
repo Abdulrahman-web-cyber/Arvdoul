@@ -1,4 +1,8 @@
-// src/screens/SetupProfile.jsx
+// src/screens/SetupProfile.jsx – ARVDOUL SUPREMACY • FIXED FOR EXISTING USERS
+// ✅ Auto‑redirect if profile already complete
+// ✅ Forces profile refresh after creation
+// ✅ Username generation robust with retries
+// ✅ Non‑scrollable glass card, offline banner, glowing button
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -246,7 +250,7 @@ const PerfectAvatarUploader = React.memo(
 );
 PerfectAvatarUploader.displayName = "PerfectAvatarUploader";
 
-// ==================== USERNAME GENERATOR ====================
+// ==================== SMART USERNAME GENERATOR (WORLD CLASS) ====================
 const SmartUsernameGenerator = React.memo(
   ({ username, onChange, theme, loading = false, displayName = "", userId = null }) => {
     const [status, setStatus] = useState("idle");

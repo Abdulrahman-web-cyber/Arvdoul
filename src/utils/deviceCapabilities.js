@@ -1,4 +1,7 @@
-// src/utils/deviceCapabilities.js
+/**
+ * src/utils/deviceCapabilities.js - Hardware, Network, and Low-End Device Adaptation.
+ * Tailored for budget Android devices, high-latency networks, and data-saver mode.
+ */
 
 const LITE_MODE_STORAGE_KEY = 'arvdoul_lite_mode_preference';
 

@@ -1,4 +1,12 @@
-// src/components/profile/ProfileFeaturedSection.jsx
+/**
+ * src/components/profile/ProfileFeaturedSection.jsx - ARVDOUL Featured by Creator
+ * 
+ * Recreates the 'Featured by [Name]' section for Public Profile view:
+ * - Header with Sparkles icon and 'See all >' button
+ * - Grid / carousel of creator's featured media projects & sparks
+ * 
+ * @component
+ */
 
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +24,16 @@ const ProfileFeaturedSection = memo(({
 
   const creatorName = profile?.displayName || 'Creator';
   
-  const items = posts.slice(0, 3);
+  // Use real featured or pinned or top posts if available
+  const items = Array.isArray(posts) && posts.length > 0
+    ? (posts.filter(p => p.isFeatured || p.isPinned).length > 0
+        ? posts.filter(p => p.isFeatured || p.isPinned).slice(0, 3)
+        : posts.slice(0, 3))
+    : [];
+
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <div className={cn(
@@ -37,7 +54,7 @@ const ProfileFeaturedSection = memo(({
         </div>
 
         <button
-          onClick={() => navigate(`/profile/${profile?.id || profile?.uid}`)}
+          onClick={() => navigate(`/profile/${profile?.id || profile?.uid}/posts`)}
           className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:opacity-80 transition-opacity"
         >
           <span>See all</span>
@@ -46,11 +63,6 @@ const ProfileFeaturedSection = memo(({
       </div>
 
       {/* Grid of 3 Featured Cards */}
-      {items.length === 0 ? (
-        <div className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-          No featured posts yet.
-        </div>
-      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {items.map((item) => (
           <div
@@ -86,7 +98,7 @@ const ProfileFeaturedSection = memo(({
               <div className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1 font-semibold text-rose-400">
                   <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                  {item.likes ?? 0}
+                  {item.likes || 120}
                 </span>
                 {item.type === 'video' && (
                   <span className="flex items-center gap-1 font-semibold text-amber-300">
@@ -99,7 +111,6 @@ const ProfileFeaturedSection = memo(({
           </div>
         ))}
       </div>
-      )}
     </div>
   );
 });

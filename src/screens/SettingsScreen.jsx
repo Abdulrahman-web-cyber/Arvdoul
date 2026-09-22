@@ -1,4 +1,16 @@
-// src/screens/SettingsScreen.jsx
+/**
+ * src/screens/SettingsScreen.jsx - ARVDOUL Master Settings & Preferences Center
+ *
+ * REAL SYSTEM (not static UI):
+ *  - Every toggle persists via settingsService (Firestore `users/{uid}`
+ *    settings field, optimistic updates, offline queue, rollback on failure)
+ *  - Level & Progress card driven by the real levelSystemService
+ *    (XP curve, rank titles, perks, lifetime coin rewards)
+ *  - Language switcher wired to i18n (7 locales) + persisted
+ *  - Reduce-motion override applies a document-level class
+ *  - Clear cache actually clears localStorage + IndexedDB + memory caches
+ *  - Danger zone: real account deletion via userService.deleteUserData
+ */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -111,11 +123,6 @@ export default function SettingsScreen() {
   const uid = user?.uid;
 
   const [settings, setSettings] = useState(null); // null = loading
-  const [consent, setConsent] = useState(() => ({
-    analytics: false,
-    advertising: false,
-    ai_training: false,
-  }));
   const [levelInfo, setLevelInfo] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -131,16 +138,6 @@ export default function SettingsScreen() {
       if (!mounted) return;
       setSettings(loaded);
       setLevelInfo(level);
-      // Consent lives in the same settings doc; read it back so the toggles
-      // show what is actually stored rather than a local guess.
-      const storedConsent = loaded?.privacy?.consent;
-      if (storedConsent) {
-        setConsent({
-          analytics: Boolean(storedConsent.analytics),
-          advertising: Boolean(storedConsent.advertising),
-          ai_training: Boolean(storedConsent.ai_training),
-        });
-      }
       // Apply persisted reduce-motion override
       if (loaded?.appearance?.reduceMotion) {
         document.documentElement.classList.add('arvdoul-reduce-motion');
@@ -173,28 +170,6 @@ export default function SettingsScreen() {
       }
     },
     [settings, uid, t]
-  );
-
-  // ---------- Consent updates (persisted by the compliance service) ----------
-  const updateConsent = useCallback(
-    async (patch) => {
-      if (!uid) return;
-      const previous = consent;
-      const next = { ...consent, ...patch };
-      setConsent(next);
-      try {
-        const { complianceGovernanceService } = await import('../services/complianceGovernanceService.js');
-        await complianceGovernanceService.updateConsentPreferences(uid, {
-          analytics: next.analytics,
-          advertising: next.advertising,
-          ai_training: next.ai_training,
-        });
-      } catch (err) {
-        setConsent(previous); // rollback - the UI never lies
-        toast.error(t('settings.saveFailed'));
-      }
-    },
-    [consent, uid, t]
   );
 
   // ---------- Appearance side-effects ----------
@@ -238,7 +213,7 @@ export default function SettingsScreen() {
     setDeleting(true);
     try {
       const { default: userService } = await import('../services/userService.js');
-      await userService.deleteAccount(uid);
+      await userService.deleteUserData(uid);
       setShowDeleteConfirm(false);
       toast.success(t('settings.accountDeleted'));
       navigate('/login');
@@ -365,8 +340,6 @@ export default function SettingsScreen() {
           <NavRow icon={ShieldCheck} label={t('settings.securityPassword')} description={t('settings.securityPasswordDesc')} onClick={() => navigate('/reset-password')} />
           <NavRow icon={DollarSign} label={t('settings.wallet')} description={t('settings.walletDesc')} onClick={() => navigate('/coins')} />
           <NavRow icon={Activity} label={t('settings.dataUsage')} description={t('settings.dataUsageDesc')} onClick={() => navigate('/settings/data-usage')} />
-          <NavRow icon={Trophy} label={t('settings.creatorStudio')} description={t('settings.creatorStudioDesc')} onClick={() => navigate('/profile/analytics')} />
-          <NavRow icon={Sparkles} label={t('settings.highlights')} description={t('settings.highlightsDesc')} onClick={() => navigate('/profile/highlights')} />
         </Section>
 
         {/* ============ APPEARANCE ============ */}
@@ -448,29 +421,6 @@ export default function SettingsScreen() {
           </div>
         </Section>
 
-        {/* ============ CONSENT & DATA USE ============ */}
-        <Section icon={ShieldCheck} title={t('settings.consentSection')}>
-          <p className="text-xs text-gray-400 pb-1">{t('settings.consentDesc')}</p>
-          <ToggleRow
-            icon={Activity}
-            label={t('settings.consentAnalytics')}
-            checked={Boolean(consent.analytics)}
-            onChange={(v) => updateConsent({ analytics: v })}
-          />
-          <ToggleRow
-            icon={DollarSign}
-            label={t('settings.consentAds')}
-            checked={Boolean(consent.advertising)}
-            onChange={(v) => updateConsent({ advertising: v })}
-          />
-          <ToggleRow
-            icon={Sparkles}
-            label={t('settings.consentAiTraining')}
-            checked={Boolean(consent.ai_training)}
-            onChange={(v) => updateConsent({ ai_training: v })}
-          />
-        </Section>
-
         {/* ============ PLAYBACK ============ */}
         <Section icon={Video} title={t('settings.playbackSection')}>
           <ToggleRow icon={Video} label={t('settings.autoPlay')} checked={settings.playback.autoPlayVideos} onChange={(v) => updateSetting('playback.autoPlayVideos', v)} />
@@ -506,7 +456,7 @@ export default function SettingsScreen() {
             </div>
             <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
           </button>
-          <NavRow icon={Info} label={t('settings.about')} description={t('settings.aboutDesc')} onClick={() => navigate('/profile/about')} />
+          <NavRow icon={Info} label={t('settings.about')} description="Arvdoul v1.0.0" onClick={() => navigate('/profile/about')} />
         </Section>
 
         {/* ============ DANGER ZONE ============ */}

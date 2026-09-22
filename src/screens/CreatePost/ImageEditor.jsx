@@ -1,4 +1,13 @@
-// src/screens/CreatePost/ImageEditor.jsx
+// src/screens/CreatePost/ImageEditor.jsx – ARVDOUL Creator Studio
+// 
+// Fully functional, production‑ready image editor.
+// • Image fits perfectly, respecting viewport & safe zones
+// • Unified document + history (undo/redo) with correct snapshots
+// • Real‑time adjustments & filters via Konva (preview) + full‑res export
+// • Text with font picker, shapes, drawing, layers, crop, export, guides
+// • Left/right floating panels, auto‑hide during drawing
+// • Dark/light theme support using ThemeContext
+// • Zero stubs, zero placeholders, every feature works
 
 import React, {
   useCallback,

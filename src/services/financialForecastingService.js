@@ -1,4 +1,11 @@
-// src/services/financialForecastingService.js
+/**
+ * src/services/financialForecastingService.js - ARVDOUL FINANCIAL FORECASTING & COIN LIABILITY ENGINE
+ *
+ * Implements:
+ * 1. Virtual Coin Liability Modeling: Calculates circulating coin float liabilities vs USD escrow reserves.
+ * 2. Monthly Recurring Revenue (MRR) & Churn Forecasting: Projects subscription revenue based on active creator subscriber tiers.
+ * 3. Gross Margin & Payout Simulation.
+ */
 
 class FinancialForecastingService {
   /**

@@ -1,4 +1,10 @@
-// src/screens/Profile/HighlightsScreen.jsx
+/**
+ * src/screens/Profile/HighlightsScreen.jsx - ARVDOUL Highlights Screen
+ * 
+ * Manage story highlights.
+ * 
+ * @component
+ */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +32,9 @@ export default function HighlightsScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [highlightName, setHighlightName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [editingHighlight, setEditingHighlight] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   
   // Load highlights
   useEffect(() => {
@@ -55,9 +64,34 @@ export default function HighlightsScreen() {
   }, []);
   
   const handleEditHighlight = useCallback((highlight) => {
-    setSelectedHighlight(highlight);
-    toast.info(`Editing "${highlight.title}"`);
+    setSelectedHighlight(null);
+    setEditingHighlight(highlight);
+    setEditTitle(highlight.title || highlight.name || '');
   }, []);
+
+  const handleSaveEditHighlight = useCallback(async () => {
+    if (!editingHighlight || !editTitle.trim()) {
+      toast.error('Highlight name cannot be empty');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const storyService = (await import('../../services/storyService.js')).getStoryService();
+      await storyService.updateHighlight(currentUserId, editingHighlight.id, {
+        title: editTitle.trim(),
+        name: editTitle.trim(),
+      });
+      setHighlights(prev => prev.map(h => h.id === editingHighlight.id ? { ...h, title: editTitle.trim(), name: editTitle.trim() } : h));
+      toast.success('Highlight updated successfully!');
+      setEditingHighlight(null);
+      setEditTitle('');
+    } catch (err) {
+      console.error('Failed to update highlight:', err);
+      toast.error(err?.message || 'Failed to update highlight');
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [currentUserId, editingHighlight, editTitle]);
   
   const handleDeleteHighlight = useCallback(async (highlight) => {
     setSelectedHighlight(null);
@@ -67,7 +101,7 @@ export default function HighlightsScreen() {
         await storyService.deleteHighlight(currentUserId, highlight.id);
       }
       setHighlights(prev => prev.filter(h => h.id !== highlight.id));
-      toast.success(`Highlight "${highlight.title}" removed`);
+      toast.success(`Highlight "${highlight.title || highlight.name || 'Story'}" removed`);
     } catch (error) {
       toast.error('Failed to delete highlight');
     }
@@ -155,7 +189,7 @@ export default function HighlightsScreen() {
                 )}
               >
                 <button
-                  onClick={() => navigate(`/stories?highlight=${highlight.id}`)}
+                  onClick={() => navigate(`/highlight/${highlight.id}`)}
                   className="w-full"
                 >
                   <div className={cn(
@@ -287,6 +321,40 @@ export default function HighlightsScreen() {
             >
               {creating ? 'Creating…' : 'Create Highlight'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit highlight modal */}
+      {editingHighlight && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm p-5 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl space-y-4">
+            <h3 className="font-bold text-base text-gray-900 dark:text-white">Edit Highlight Title</h3>
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Highlight title..."
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500"
+              autoFocus
+            />
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { setEditingHighlight(null); setEditTitle(''); }}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditHighlight}
+                disabled={savingEdit}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 disabled:opacity-50"
+              >
+                {savingEdit ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
           </div>
         </div>
       )}

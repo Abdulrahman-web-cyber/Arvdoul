@@ -1,4 +1,12 @@
-// src/services/revenueSplitsService.js
+/**
+ * src/services/revenueSplitsService.js - ARVDOUL CREATOR REVENUE SPLITS & SYNDICATE ENGINE v1.0
+ * 
+ * Production-grade revenue distribution & collaborative splits:
+ * • Basis points precision (10,000 bps = 100.00%) for multi-creator collaborations
+ * • Zero-remainder exact routing: mathematical guarantee that sum(payouts) + fee === gross
+ * • Syndicate treasury allocations for shared creator collectives
+ * • Immutable event ledger and distribution receipts
+ */
 
 import { logger } from '../utils/Logger.js';
 

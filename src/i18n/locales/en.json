@@ -180,17 +180,7 @@
     "deleteAccountDesc": "Permanently delete your account and data",
     "deleteWarning": "This will permanently delete your account, posts, and data. This action cannot be undone.",
     "confirmDelete": "Delete my account",
-    "deleting": "Deleting...",
-    "aboutDesc": "Version, policies, and support",
-    "highlights": "Profile Highlights",
-    "highlightsDesc": "Create and organise pinned story highlights",
-    "creatorStudio": "Creator Studio & Analytics",
-    "creatorStudioDesc": "Impressions, retention, and performance insights",
-    "consentSection": "Consent & Data Use",
-    "consentAnalytics": "Usage analytics",
-    "consentAds": "Personalized ads",
-    "consentAiTraining": "AI model training",
-    "consentDesc": "You control how your data is used. Essential processing cannot be turned off."
+    "deleting": "Deleting..."
   },
   "level": {
     "title": "Level & Progress",

@@ -1,4 +1,23 @@
-// src/services/featureFlagService.js
+/**
+ * src/services/featureFlagService.js - ARVDOUL FEATURE FLAG SERVICE
+ *
+ * Production-grade feature flags with:
+ *  1. STATIC DEFAULTS - a typed, versioned baseline that works offline and
+ *     before Firebase Remote Config resolves (zero-latency reads).
+ *  2. FIREBASE REMOTE CONFIG - dynamic overlay when available; the service
+ *     degrades gracefully when Remote Config is unavailable (no Firebase
+ *     config, blocked network, test environment).
+ *  3. KILL SWITCHES - admin overrides persisted to localStorage that take
+ *     precedence over everything. This is the emergency rollback lever:
+ *     `featureFlagService.setOverride('new_feed_ranking', false)` disables a
+ *     flag instantly for this client without a deploy.
+ *  4. SUBSCRIPTIONS - React components can react to flag changes at runtime
+ *     (see src/hooks/useFeatureFlag.js).
+ *
+ * Naming convention: `scope.feature` (e.g. `feed.ml_ranking`, `messaging.e2ee`).
+ * Every flag MUST be registered in DEFAULT_FLAGS before use - unregistered
+ * names fail closed (return `false` / `null`) and log a warning.
+ */
 
 import { logger } from '../utils/Logger.js';
 

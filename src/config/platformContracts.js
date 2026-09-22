@@ -1,10 +1,6 @@
 // src/config/platformContracts.js - ARVDOUL PLATFORM ARCHITECTURE & EVENT CONTRACTS
 // Authoritative definitions for service contracts, idempotency keys, and conflict resolution strategies.
 
-// The ranked-feed algorithm identifier stamped on feed responses and analytics
-// metadata. Version it here once; no service hard-codes its own string.
-export const ALGORITHM_VERSION = 'feed-ranking-1';
-
 export const CONFLICT_RESOLUTION_STRATEGIES = {
   LWW: 'LAST_WRITE_WINS',
   APPEND_ONLY: 'APPEND_ONLY',

@@ -1,4 +1,12 @@
-// src/services/watchPartyService.js
+/**
+ * src/services/watchPartyService.js - ARVDOUL SYNCHRONIZED WATCH PARTY & CO-BROWSING v1.0
+ * 
+ * Production-grade synchronized media watching & co-presence:
+ * • Authoritative host timeline state machine with elapsed wall-clock interpolation
+ * • Sub-200ms drift detection and automated playback synchronization
+ * • Handover of host controls upon host departure
+ * • Ephemeral floating reactions and participant latency ping tracking
+ */
 
 import { logger } from '../utils/Logger.js';
 

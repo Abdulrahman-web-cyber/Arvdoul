@@ -1,4 +1,4 @@
-// src/services/searchService.js - ARVDOUL SEARCH ENGINE (ALGOLIA + REAL FIRESTORE OVERLAP INDEXING)
+// src/services/searchService.js - ARVDOUL SEARCH ENGINE v5.0 (ALGOLIA + REAL FIRESTORE OVERLAP INDEXING)
 // Fully optimized search routing, real Algolia index querying, and structured lexical token-overlap indexing fallback.
 
 import { getMonetizationService } from './monetizationService.js';
@@ -175,25 +175,6 @@ class LocalTTLCache {
   }
   async del(key) {
     this.store.delete(key);
-  }
-  /**
-   * Delete every entry whose key starts with `prefix`. Returns the count.
-   * With no prefix, clears the whole store.
-   */
-  delByPrefix(prefix) {
-    if (!prefix) {
-      const count = this.store.size;
-      this.store.clear();
-      return count;
-    }
-    let removed = 0;
-    for (const key of this.store.keys()) {
-      if (key.startsWith(prefix)) {
-        this.store.delete(key);
-        removed++;
-      }
-    }
-    return removed;
   }
 }
 
@@ -1008,14 +989,10 @@ class UltimateSearchService {
     this.userProfileCache.clear();
   }
 
-  /**
-   * Invalidate the local TTL cache. The TTL cache is per-instance and has no
-   * distributed backing, so this clears matching entries here; other clients
-   * expire them via TTL.
-   */
   async invalidateDistributedCache(prefix = null) {
-    if (!this.ttlCache) return 0;
-    return this.ttlCache.delByPrefix(prefix);
+    if (this.ttlCache) {
+      // not implemented distributed backing
+    }
   }
 
   getStats() {

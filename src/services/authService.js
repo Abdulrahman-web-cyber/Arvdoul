@@ -60,10 +60,13 @@ class ProductionAuthService {
       this.firebase = firebaseApp;
       this.initialized = true;
 
-      // Handle Google redirect auth result if page was reloaded after redirect
+      // Handle Google redirect auth result if page was reloaded after redirect (best-effort, non-blocking)
       try {
         const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
-        const redirectResult = await getRedirectResult(this.auth);
+        const redirectResult = await Promise.race([
+          getRedirectResult(this.auth),
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000))
+        ]).catch(() => null);
         if (redirectResult?.user) {
           logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
           const user = redirectResult.user;

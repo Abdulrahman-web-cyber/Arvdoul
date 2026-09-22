@@ -1,5 +1,5 @@
 // src/services/watermarkService.js
-// 🎬 VIDEO WATERMARK SERVICE
+// 🎬 ENTERPRISE VIDEO WATERMARK SERVICE v8.0
 
 class WatermarkService {
   static async addWatermarkToVideo(videoFile, watermarkText = 'Arvdoul', username = null) {

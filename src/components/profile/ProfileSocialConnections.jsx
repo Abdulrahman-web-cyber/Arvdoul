@@ -1,4 +1,13 @@
-// src/components/profile/ProfileSocialConnections.jsx
+/**
+ * src/components/profile/ProfileSocialConnections.jsx - ARVDOUL Social Connections Component
+ * 
+ * Recreates the 3-column Social Connections card for Public Profile view:
+ * 1. Mutual friends avatar stack & details
+ * 2. Shared communities & creative circles
+ * 3. Bidirectional relationship status (Follows you / Mutual connection)
+ * 
+ * @component
+ */
 
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -83,7 +92,7 @@ const ProfileSocialConnections = memo(({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-xs font-bold">
-              {communities.length > 0 ? `${communities.length} topics` : 'Creator Profile'}
+              {communities.length > 0 ? `${communities.length} shared topics` : 'Creator Profile'}
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
               {communities.length > 0 ? communities.slice(0, 3).join(', ') : 'Creative sharing & posts'}

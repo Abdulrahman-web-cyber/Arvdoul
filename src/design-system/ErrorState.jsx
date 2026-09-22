@@ -1,4 +1,11 @@
-// src/design-system/ErrorState.jsx
+/**
+ * src/design-system/ErrorState.jsx
+ * ARVDOUL DESIGN SYSTEM — ERROR STATE
+ *
+ * Guide contract: human-readable, actionable, empathetic, consistent.
+ * Renders role="alert" so screen readers announce the failure, and a retry
+ * action when provided.
+ */
 
 import React from 'react';
 import Button from './Button.jsx';

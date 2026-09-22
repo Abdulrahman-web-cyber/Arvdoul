@@ -1,4 +1,6 @@
-// src/config/profileContracts.js
+// src/config/profileContracts.js - ARVDOUL PROFILE SYSTEM DOMAIN CONTRACTS
+// Authoritative definitions for profile identity, visibility scopes, validation rules,
+// and privacy models adhering to Blueprint Specification Version 1.0.
 
 /**
  * Profile Classification Types
@@ -372,33 +374,9 @@ export function validateProfileUpdate(rawUpdates = {}) {
         break;
       }
 
-      // `photoURL` is the single stored field for the avatar on the user
-      // document; the legacy `profilePicture` alias is folded onto it so a
-      // caller using either name lands on the same value.
-      case 'photoURL':
-      case 'profilePicture': {
+      case 'photoURL': {
         if (typeof val === 'string') {
           sanitized.photoURL = val;
-        } else if (val === null) {
-          sanitized.photoURL = '';
-        }
-        break;
-      }
-
-      case 'coverPhoto': {
-        if (typeof val === 'string') {
-          sanitized.coverPhoto = val;
-        } else if (val === null) {
-          sanitized.coverPhoto = '';
-        }
-        break;
-      }
-
-      case 'nickname': {
-        if (typeof val === 'string') {
-          sanitized.nickname = val.trim().slice(0, PROFILE_CONSTRAINTS.NICKNAME?.MAX_LENGTH || 30);
-        } else if (val === null) {
-          sanitized.nickname = '';
         }
         break;
       }

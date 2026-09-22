@@ -1,4 +1,17 @@
-// src/screens/ConflictResolutionScreen.jsx
+/**
+ * src/screens/ConflictResolutionScreen.jsx - ARVDOUL SYNC CONFLICT RESOLUTION UI
+ *
+ * Honest implementation: shows REAL unsynced local changes from the offline
+ * queue (operations that have not been applied to the server yet). No
+ * fabricated example conflicts — when there is nothing pending, the screen
+ * says exactly that.
+ *
+ * Actions:
+ *  - Keep Local (Retry) — leaves the operation queued; the app's online drain
+ *    retries it automatically when connectivity returns.
+ *  - Discard Local Change — removes the queued operation (the server copy,
+ *    if any, wins).
+ */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, GitMerge, Check, ShieldAlert, RefreshCw, Trash2, Loader2 } from 'lucide-react';
@@ -180,7 +193,7 @@ export const ConflictResolutionScreen = () => {
         <div className="pt-4 flex justify-end">
           <button
             id="btn-complete-conflict-resolution"
-            onClick={() => navigate('/home')}
+            onClick={() => navigate('/app/feed')}
             className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-emerald-500 hover:opacity-90 text-white font-medium rounded-xl text-sm transition shadow-lg"
           >
             Done &amp; Return to Feed

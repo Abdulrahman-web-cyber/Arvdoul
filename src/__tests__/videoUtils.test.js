@@ -1,4 +1,10 @@
-// src/__tests__/videoUtils.test.js
+/**
+ * src/__tests__/videoUtils.test.js
+ * Real assertions for the enhanced video utilities:
+ *   - detectChapters: real duration-based chapter generation (no stub)
+ *   - validateVideoFile: real type/size validation + async duration checks
+ *   - getPrefetchStrategy: sane network-based strategy
+ */
 
 import { detectChapters, getPrefetchStrategy } from '../utils/videoUtils.js';
 

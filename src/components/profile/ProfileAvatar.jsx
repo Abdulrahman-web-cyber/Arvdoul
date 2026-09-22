@@ -1,4 +1,10 @@
-// src/components/profile/ProfileAvatar.jsx
+/**
+ * src/components/profile/ProfileAvatar.jsx - ARVDOUL Profile Avatar Component
+ * 
+ * Displays user avatar with ARVDOUL DNA gradient ring, level badge, and upload functionality.
+ * 
+ * @component
+ */
 
 /**
  * @typedef {Object} ProfileAvatarProps

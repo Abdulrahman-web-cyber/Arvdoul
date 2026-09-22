@@ -1,4 +1,5 @@
-// src/screens/SignupStep1Personal.jsx — signup step 1: personal details
+// This file must reflect: 'everything should be more extremely advanced, styled, ultra pro max professional creation and robust also production ready and working perfectly smooth'
+// src/screens/SignupStep1Personal.jsx – ARVDOUL TRANSFORMED ULTIMATE VERSION
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";

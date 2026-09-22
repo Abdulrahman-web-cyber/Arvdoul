@@ -1,4 +1,4 @@
-// src/services/videoEditorService.js - ARVDOUL VIDEO EDITOR SERVICE
+// src/services/videoEditorService.js - ARVDOUL VIDEO EDITOR SERVICE - PRODUCTION READY v5.0
 // 🎬 Professional Video Editor with Timeline Canvas Rendering, and Real MediaRecorder Video Export
 
 import { getStorageInstance } from '../firebase/firebase.js';

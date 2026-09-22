@@ -1,4 +1,28 @@
-// src/i18n/index.js
+/**
+ * src/i18n/index.js - ARVDOUL INTERNATIONALIZATION (i18n) BOOTSTRAP
+ *
+ * Initializes i18next with:
+ *  - SYNCHRONOUS, FAILURE-PROOF base init at module load: `initReactI18next`
+ *    is registered before any component renders, so `useTranslation()` can
+ *    NEVER throw (this was the root cause of the intro "Temporary Glitch":
+ *    when the async init was slow or failed - e.g. localStorage blocked in
+ *    sandboxed contexts - react-i18next had no instance and crashed).
+ *  - Browser language detection upgrade (navigator.language, persisted
+ *    choice) via initI18n() - best-effort, never throws.
+ *  - 7 bundled locales (en, es, fr, de, pt, hi, ar) with full key parity
+ *  - RTL support (Arabic sets dir="rtl" on <html>)
+ *  - `withLanguage` HOC for class components that must re-render on change
+ *
+ * Usage in function components:
+ *   import { useTranslation } from 'react-i18next';
+ *   const { t } = useTranslation();
+ *   <button aria-label={t('nav.home')}>{t('nav.home')}</button>
+ *
+ * Usage in class components:
+ *   import { withLanguage } from '../i18n';
+ *   class Foo extends React.Component { render() { const { t } = this.props; ... } }
+ *   export default withLanguage(Foo);
+ */
 
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';

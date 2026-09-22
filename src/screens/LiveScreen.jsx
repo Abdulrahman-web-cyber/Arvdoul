@@ -1,4 +1,6 @@
-// src/screens/LiveScreen.jsx
+// src/screens/LiveScreen.jsx - ARVDOUL LIVE (PRODUCTION)
+// Real live streaming backed by liveService: start/end streams, real
+// viewer counts (sharded), real comments, real gifts (monetization).
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';

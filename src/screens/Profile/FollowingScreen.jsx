@@ -1,22 +1,205 @@
-// src/screens/Profile/FollowingScreen.jsx
+/**
+ * src/screens/Profile/FollowingScreen.jsx - ARVDOUL Following Screen
+ * 
+ * Displays list of users being followed with unfollow functionality.
+ * 
+ * @component
+ */
 
-import React, { useCallback } from 'react';
-import UserListScreen from './UserListScreen';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTheme } from '../../context/ThemeContext';
+import { cn } from '../../lib/utils';
+import { ArrowLeft, Search, Loader2 } from 'lucide-react';
+import FollowButton from '../../components/profile/FollowButton';
+import { useProfileStore } from '../../store/profileStore';
+import { useAppStore } from '../../store/appStore';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
+/**
+ * FollowingScreen Component
+ */
 export default function FollowingScreen() {
-  const loadUsers = useCallback(async (userId) => {
-    const userService = (await import('../../services/userService.js')).getUserService();
-    const result = await userService.getFollowing(userId);
-    return result.following || result.friends || [];
-  }, []);
+  const { userId } = useParams();
+  const navigate = useNavigate();
+  const { theme } = useTheme();
+  const currentUser = useAppStore(state => state.currentUser);
+  const { follow, unfollow, followLoading } = useProfileStore();
+  
+  const [following, setFollowing] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const targetUserId = userId || currentUser?.uid;
 
+  // Load following
+  useEffect(() => {
+    let isMounted = true;
+    const loadFollowing = async () => {
+      setLoading(true);
+      try {
+        const userService = (await import('../../services/userService.js')).getUserService();
+        if (targetUserId) {
+          const result = await userService.getFollowing(targetUserId);
+          if (isMounted) setFollowing(result.following || result.friends || []);
+        } else {
+          if (isMounted) setFollowing([]);
+        }
+      } catch (error) {
+        console.error('Failed to load following:', error);
+        if (isMounted) setFollowing([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    
+    if (targetUserId) {
+      loadFollowing();
+    } else {
+      setLoading(false);
+    }
+    return () => { isMounted = false; };
+  }, [targetUserId]);
+  
+  const handleFollow = useCallback(async (followingId) => {
+    if (currentUser?.uid) {
+      setFollowing(prev => prev.map(u => u.id === followingId ? { ...u, isFollowing: true } : u));
+      await follow(currentUser.uid, followingId);
+    }
+  }, [currentUser?.uid, follow]);
+  
+  const handleUnfollow = useCallback(async (followingId) => {
+    if (currentUser?.uid) {
+      setFollowing(prev => prev.map(u => u.id === followingId ? { ...u, isFollowing: false } : u));
+      await unfollow(currentUser.uid, followingId);
+    }
+  }, [currentUser?.uid, unfollow]);
+  
+  const filteredFollowing = following.filter(f => 
+    f.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    f.username?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
   return (
-    <UserListScreen
-      title="Following"
-      searchPlaceholder="Search following..."
-      emptyText="Not following anyone yet"
-      loadUsers={loadUsers}
-      showFollowButton
-    />
+    <div className={cn(
+      'min-h-screen pb-20',
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+    )}>
+      {/* Header */}
+      <div className={cn(
+        'sticky top-0 z-20',
+        'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl',
+        'border-b border-gray-200/60 dark:border-gray-800/60'
+      )}>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={() => navigate(-1)}
+            className={cn(
+              'p-2 rounded-xl',
+              'hover:bg-gray-100 dark:hover:bg-gray-800',
+              'transition-colors'
+            )}
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </button>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Following
+          </h1>
+        </div>
+        
+        {/* Search */}
+        <div className="px-4 pb-3">
+          <div className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-xl',
+            'bg-gray-100 dark:bg-gray-800'
+          )}>
+            <Search className="w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search following..."
+              className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Content */}
+      <div className="max-w-2xl mx-auto px-4 py-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          </div>
+        ) : following.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-gray-500 dark:text-gray-400">
+              Not following anyone yet
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredFollowing.map((user) => (
+              <div
+                key={user.id}
+                className={cn(
+                  'group flex items-center gap-3 p-4 rounded-2xl',
+                  'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
+                  'border border-gray-200/60 dark:border-gray-800/60',
+                  'shadow-[0_8px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.35)]',
+                  'hover:shadow-[0_12px_40px_rgba(139,92,246,0.15)] hover:-translate-y-0.5 transition-all duration-300'
+                )}
+              >
+                <button
+                  onClick={() => navigate(`/profile/${user.id}`)}
+                  className="flex-shrink-0"
+                >
+                  <div className={cn(
+                    'w-12 h-12 rounded-full overflow-hidden ring-2 ring-offset-2',
+                    'ring-violet-500/40 ring-offset-transparent',
+                    'bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500'
+                  )}>
+                    <img
+                      src={getSafeAvatarUrl(user.photoURL, user.displayName, user.id)}
+                      alt={user.displayName || 'User'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = getSafeAvatarUrl(null, user.displayName, user.id);
+                      }}
+                    />
+                  </div>
+                </button>
+                
+                <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => navigate(`/profile/${user.id}`)}
+                    className="text-left"
+                  >
+                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                      {user.displayName}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                      @{user.username}
+                    </p>
+                  </button>
+                </div>
+                
+                <FollowButton
+                  isFollowing={user.isFollowing !== undefined ? user.isFollowing : true}
+                  loading={followLoading}
+                  onFollow={() => handleFollow(user.id)}
+                  onUnfollow={() => handleUnfollow(user.id)}
+                  theme={theme}
+                  size="sm"
+                  variant="outline"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

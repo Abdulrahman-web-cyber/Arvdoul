@@ -1,4 +1,17 @@
-// src/utils/AuditLogger.js
+/**
+ * src/utils/AuditLogger.js - ARVDOUL Audit Logger
+ *
+ * Persists security-sensitive events (login, logout, password change,
+ * permission change, data export, deletion, moderation actions) with
+ * userId, action, timestamp, correlationId and sanitized metadata.
+ *
+ * Storage: IndexedDB queue (idb) with an in-memory fallback. Events are
+ * never written to Firestore automatically - a Cloud Function / exporter
+ * may consume `getPending()` and flush to an audit collection (migration
+ * must be planned explicitly per the Engineering Constitution).
+ *
+ * Zero new npm dependencies (idb is already in package.json).
+ */
 
 import { openDB } from 'idb';
 import { Logger, getCorrelationId } from './Logger.js';

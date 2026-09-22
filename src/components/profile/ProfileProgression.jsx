@@ -1,4 +1,9 @@
-// src/components/profile/ProfileProgression.jsx
+/**
+ * src/components/profile/ProfileProgression.jsx - ARVDOUL Progression & Citizenship Component
+ * 
+ * Renders the full 100-level progression roadmap, server-authoritative active day streak ledger,
+ * digital citizenship governance standing, and unlocked platform perks.
+ */
 
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -155,7 +160,7 @@ const ProfileProgression = memo(({
                 Active Streak Ledger
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800/50">
-                Server-tracked
+                Verified On-Chain
               </span>
             </div>
 

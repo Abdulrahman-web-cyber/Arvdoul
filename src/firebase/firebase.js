@@ -146,8 +146,12 @@ class UltimateFirebaseManager {
       }
       this._auth.settings.appVerificationDisabledForTesting = false;
       
-      // Configure persistence
-      await setPersistence(this._auth, browserLocalPersistence);
+      // Configure persistence (safely handle restricted iframe/storage environments)
+      try {
+        await setPersistence(this._auth, browserLocalPersistence);
+      } catch (persistErr) {
+        console.warn('⚠️ Persistence unavailable, continuing with memory persistence:', persistErr?.message);
+      }
       
       // Set language
       this._auth.languageCode = navigator.language || 'en';
@@ -230,6 +234,19 @@ class UltimateFirebaseManager {
     }
   }
 
+  async getFunctions() {
+    if (!this._initialized) await this.initialize();
+    if (this._functions) return this._functions;
+    try {
+      const { getFunctions } = await import('firebase/functions');
+      this._functions = getFunctions(this._app);
+      return this._functions;
+    } catch (error) {
+      console.error('❌ Failed to load Functions service:', error);
+      throw error;
+    }
+  }
+
   // ==================== UTILITY METHODS ====================
   async awaitReady(timeout = 10000) {
     if (this._initialized) return true;
@@ -295,6 +312,11 @@ async function getMessagingInstance() {
   return manager.getMessaging();
 }
 
+async function getFunctionsInstance() {
+  const manager = getFirebaseManager();
+  return manager.getFunctions();
+}
+
 async function initializeFirebase() {
   const manager = getFirebaseManager();
   return manager.initialize();
@@ -316,6 +338,7 @@ export {
   getFirestoreInstance,
   getStorageInstance,
   getMessagingInstance,
+  getFunctionsInstance,
   initializeFirebase,
   awaitFirebaseReady,
   isFirebaseInitialized,

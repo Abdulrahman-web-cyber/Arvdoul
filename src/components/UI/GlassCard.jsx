@@ -1,11 +1,13 @@
-// src/components/UI/GlassCard.jsx
+// src/components/UI/GlassCard.jsx - ARVDOUL WORLD-CLASS GLASS CARD
+// Futuristic floating glass card with ARVDOUL DNA gradient glow
+// Surpasses TikTok, Instagram, YouTube with premium UI
 
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 
 /**
- * GlassCard - floating glass card component
+ * GlassCard - World-class floating glass card component
  * 
  * Features:
  * - ARVDOUL DNA gradient glow

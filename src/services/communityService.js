@@ -1,4 +1,9 @@
-// src/services/communityService.js
+// src/services/communityService.js - ARVDOUL COMMUNITY SERVICE
+// ✅ Complete CRUD for communities
+// ✅ Membership management
+// ✅ Role-based permissions
+// ✅ Moderation features
+// Upgrades: Algorithmic recommendations and rule enforcement pipelines.
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
@@ -13,7 +18,6 @@ import {
   where,
   orderBy,
   limit,
-  startAfter,
   onSnapshot,
   serverTimestamp,
   arrayUnion,
@@ -22,8 +26,6 @@ import {
 } from 'firebase/firestore';
 
 const COMMUNITIES_PER_PAGE = 20;
-// Upper bound on rows scanned for a client-side text search.
-const SEARCH_SCAN_LIMIT = 200;
 
 class CommunityService {
   constructor() {
@@ -177,75 +179,61 @@ class CommunityService {
 
   // ========== LISTING & SEARCH ==========
 
-  /**
-   * Lists discoverable communities.
-   *
-   * Text search runs client-side, so a search fetches a bounded window rather
-   * than paging: filtering one page at a time would silently drop matches that
-   * live on later pages. Cursor paging applies to the unfiltered browse flow.
-   *
-   * @param {{sortBy?: string, filter?: string, searchQuery?: string,
-   *          cursor?: import('firebase/firestore').QueryDocumentSnapshot|null}} options
-   * @returns {Promise<{communities: Array, hasMore: boolean,
-   *                    nextCursor: object|null}>}
-   */
   async listCommunities(options = {}) {
     await this.initialize();
-
+    
     const {
+      page = 1,
       sortBy = 'popular',
       filter = 'all',
       searchQuery = '',
-      cursor = null
+      category = null
     } = options;
 
-    const q = collection(this.db, 'communities');
+    let q = collection(this.db, 'communities');
     const constraints = [
       where('isDeleted', '==', false),
       where('discoveryEnabled', '==', true)
     ];
 
-    if (filter && filter !== 'all') {
+    if (filter !== 'all') {
       constraints.push(where('privacy', '==', filter));
     }
 
-    const sortField = sortBy === 'newest'
-      ? 'createdAt'
-      : sortBy === 'active'
-        ? 'stats.activityScore'
-        : 'stats.memberCount';
-    constraints.push(orderBy(sortField, 'desc'));
-
-    const searching = Boolean(searchQuery && searchQuery.trim());
-    const pageSize = searching ? SEARCH_SCAN_LIMIT : COMMUNITIES_PER_PAGE;
-
-    if (cursor && !searching) {
-      constraints.push(startAfter(cursor));
+    if (sortBy === 'popular') {
+      constraints.push(orderBy('stats.memberCount', 'desc'));
+    } else if (sortBy === 'newest') {
+      constraints.push(orderBy('createdAt', 'desc'));
+    } else if (sortBy === 'active') {
+      constraints.push(orderBy('stats.activityScore', 'desc'));
     }
 
-    // Fetch one extra row to detect a further page without a second query.
-    constraints.push(limit(pageSize + 1));
+    constraints.push(limit(COMMUNITIES_PER_PAGE));
+
+    if (page > 1) {
+      const startAfter = (page - 1) * COMMUNITIES_PER_PAGE;
+      constraints.push(startAfter);
+    }
 
     const querySnapshot = await getDocs(query(q, ...constraints));
+    
+    let communities = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
-    const docs = querySnapshot.docs;
-    const hasMore = searching ? false : docs.length > pageSize;
-    const pageDocs = hasMore ? docs.slice(0, pageSize) : docs;
-
-    let communities = pageDocs.map(d => ({ id: d.id, ...d.data() }));
-
-    if (searching) {
-      const needle = searchQuery.trim().toLowerCase();
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
       communities = communities.filter(c =>
-        c.name?.toLowerCase().includes(needle) ||
-        c.description?.toLowerCase().includes(needle)
+        c.name.toLowerCase().includes(lowerQuery) ||
+        c.description?.toLowerCase().includes(lowerQuery)
       );
     }
 
     return {
       communities,
-      hasMore,
-      nextCursor: hasMore ? pageDocs[pageDocs.length - 1] : null
+      hasMore: communities.length === COMMUNITIES_PER_PAGE,
+      page
     };
   }
 
@@ -859,7 +847,7 @@ class CommunityService {
   }
 
   /**
-   * Generates a recommended communities list for users.
+   * Generates a recommended communities list for users (v8.0)
    */
   async getRecommendedCommunities(userId, limitNum = 5) {
     await this.initialize();

@@ -1,4 +1,10 @@
-// src/screens/Profile/AboutScreen.jsx
+/**
+ * src/screens/Profile/AboutScreen.jsx - ARVDOUL About Screen
+ * 
+ * Displays detailed profile information.
+ * 
+ * @component
+ */
 
 import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -17,7 +23,7 @@ export default function AboutScreen() {
   const { userId } = useParams();
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
-  const { profile, isOwner, loadProfile, loading } = useProfileStore();
+  const { profile, isOwner, loadProfile, isLoading } = useProfileStore();
 
   const currentUserId = authUser?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid');
   const targetId = userId || currentUserId;

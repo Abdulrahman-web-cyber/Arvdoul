@@ -1,4 +1,10 @@
-// src/components/profile/ProfileMediaGrid.jsx
+/**
+ * src/components/profile/ProfileMediaGrid.jsx - ARVDOUL Profile Media Grid Component
+ * 
+ * Grid display for profile media items with lazy loading.
+ * 
+ * @component
+ */
 
 /**
  * @typedef {Object} ProfileMediaGridProps

@@ -1,4 +1,12 @@
-// src/services/decentralizedBountyMarketService.js
+/**
+ * src/services/decentralizedBountyMarketService.js - ARVDOUL OPEN CREATOR BOUNTY & FREELANCE MARKETPLACE v1.0
+ * 
+ * Production-grade creator collaboration, commissions & open bounties:
+ * • Bounty creation with multi-currency escrow lock
+ * • Milestone-based submission, review & auto-approval timer
+ * • Automated stake collateral slashing on malicious submissions
+ * • Reputation-weighted worker allocation & community review panel
+ */
 
 import { logger } from '../utils/Logger.js';
 

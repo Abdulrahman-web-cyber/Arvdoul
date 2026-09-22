@@ -1,4 +1,11 @@
-// src/services/videoModerationService.js
+/**
+ * src/services/videoModerationService.js - ARVDOUL VIDEO KEYFRAME MODERATION PIPELINE v8.0
+ *
+ * Implements:
+ * 1. HTML5 Canvas Keyframe Extraction: Samples video frames every 1.5 seconds across full video duration.
+ * 2. Visual Safety Inspection on Keyframes: Analyzes extracted keyframes with image moderation engine.
+ * 3. Violations Timeline Mapping: Flags exact timestamps where inappropriate content occurred.
+ */
 
 import { imageModerationService } from './imageModerationService.js';
 import { logger } from '../utils/Logger.js';

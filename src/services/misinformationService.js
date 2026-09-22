@@ -1,4 +1,12 @@
-// src/services/misinformationService.js
+/**
+ * src/services/misinformationService.js - ARVDOUL MISINFORMATION & FACT-CHECKING ENGINE
+ *
+ * Implements:
+ * 1. Disputed Claims Registry: Checks viral posts against database of debunked civic, election, and health claims.
+ * 2. Fact-Check Attribution Labels: Injects neutral contextual fact-checking badges with authoritative source references.
+ * 3. Viral Misinformation Throttling: Reduces algorithmic reach score for posts marked with verified fact-check notices.
+ * 4. Google Fact Check Search API: Connects to public fact-checking APIs when configured, with robust fallbacks.
+ */
 
 import { logger } from '../utils/Logger.js';
 import { feedService } from './feedService.js';

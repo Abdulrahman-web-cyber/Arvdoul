@@ -1,4 +1,6 @@
-// src/store/videoStore.js
+// src/store/videoStore.js - ARVDOUL VIDEO STATE MANAGEMENT
+// Zustand store for video feed, playback, and user preferences
+// Optimized for TikTok-style vertical scrolling
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';

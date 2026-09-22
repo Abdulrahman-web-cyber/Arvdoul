@@ -1,4 +1,5 @@
-// src/screens/ForgotPassword.jsx
+// src/screens/ForgotPasswordScreen.jsx – PRODUCTION READY
+// ✅ Real Firebase email sending • Offline banner • Glass card • Shake on error
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";

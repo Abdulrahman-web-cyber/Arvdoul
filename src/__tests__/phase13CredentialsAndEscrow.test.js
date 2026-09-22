@@ -1,4 +1,9 @@
-// src/__tests__/phase13CredentialsAndEscrow.test.js
+/**
+ * src/__tests__/phase13CredentialsAndEscrow.test.js
+ * Verification test suite for Phase 13:
+ * - Verifiable Credentials & Creator Attestation Engine
+ * - Digital Goods Escrow & Milestone Payment Contracts
+ */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {

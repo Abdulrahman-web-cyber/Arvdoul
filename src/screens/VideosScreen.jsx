@@ -29,7 +29,7 @@ import ErrorState from '../components/UI/ErrorState';
 import { RouteProgressBar } from '../components/Navigation/RouteProgressBar';
 
 /**
- * VideosScreen - video feed and discovery grid
+ * VideosScreen - World-Class video feed & discovery grid
  */
 const VideosScreen = () => {
   const navigate = useNavigate();

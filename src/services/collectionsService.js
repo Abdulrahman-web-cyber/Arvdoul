@@ -1,4 +1,7 @@
-// src/services/collectionsService.js
+// src/services/collectionsService.js - ARVDOUL COLLECTIONS (REAL CRUD)
+// User-curated collections of saved posts. Cursor-paginated, owner-scoped,
+// with cache invalidation via the central CacheManager.
+// Upgrades: Collection sharing, collaboration, and tokenized query searches.
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';

@@ -1,4 +1,7 @@
-// src/components/Shared/GIFPicker.jsx
+// src/components/Shared/GIFPicker.jsx - ARVDOUL DUAL-MODE GIF PICKER
+// Supports live Giphy API searches when VITE_GIPHY_API_KEY is configured,
+// and features a rich curated set of categorized animated reaction GIFs
+// so users can always pick and insert GIFs without any setup.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Loader2, X, Sparkles, Flame, Heart, Smile, ThumbsUp, PartyPopper } from 'lucide-react';
 import { cn } from '../../lib/utils';

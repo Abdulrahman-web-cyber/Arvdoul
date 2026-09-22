@@ -1,4 +1,4 @@
-// src/components/Videos/VideoCard.jsx - ARVDOUL VIDEO CARD
+// src/components/Videos/VideoCard.jsx - ARVDOUL ULTIMATE VIDEO CARD
 // Immersive full-screen vertical player with interactive action rail, creator overlay, and playback controls
 
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
@@ -571,7 +571,7 @@ const VideoCard = memo(({
                 initial={{ opacity: 0, scale: 0.9, x: 20 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                className="absolute right-14 bottom-0 backdrop-blur-2xl bg-[#0b1020]/95 border border-white/15 rounded-3xl p-3 flex flex-col gap-1.5 w-52 max-w-[calc(100vw-5rem)] shadow-2xl z-50 text-white"
+                className="absolute right-14 bottom-0 backdrop-blur-2xl bg-[#0b1020]/95 border border-white/15 rounded-3xl p-3 flex flex-col gap-1.5 min-w-[200px] shadow-2xl z-50 text-white"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Quality */}
@@ -641,7 +641,7 @@ const VideoCard = memo(({
                 initial={{ opacity: 0, scale: 0.9, x: 20 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                className="absolute right-14 sm:right-64 bottom-0 backdrop-blur-2xl bg-[#0b1020]/95 border border-white/15 rounded-2xl p-2 flex flex-col gap-1 w-32 max-w-[calc(100vw-5rem)] shadow-2xl z-[60] text-white"
+                className="absolute right-64 bottom-0 backdrop-blur-2xl bg-[#0b1020]/95 border border-white/15 rounded-2xl p-2 flex flex-col gap-1 min-w-[130px] shadow-2xl z-50 text-white"
                 onClick={(e) => e.stopPropagation()}
               >
                 {['auto', '4K UHD', '1080p', '720p', '480p'].map((q) => (
@@ -669,7 +669,7 @@ const VideoCard = memo(({
                 initial={{ opacity: 0, scale: 0.9, x: 20 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                className="absolute right-14 sm:right-64 bottom-0 backdrop-blur-2xl bg-[#0b1020]/95 border border-white/15 rounded-2xl p-2 flex flex-col gap-1 w-28 max-w-[calc(100vw-5rem)] shadow-2xl z-[60] text-white"
+                className="absolute right-64 bottom-0 backdrop-blur-2xl bg-[#0b1020]/95 border border-white/15 rounded-2xl p-2 flex flex-col gap-1 min-w-[110px] shadow-2xl z-50 text-white"
                 onClick={(e) => e.stopPropagation()}
               >
                 {[0.5, 0.75, 1, 1.25, 1.5, 2].map((s) => (
@@ -694,7 +694,7 @@ const VideoCard = memo(({
 
       {/* Floating Left Creator Card (Image 2) */}
       <div
-        className="absolute bottom-22 sm:bottom-24 left-3 sm:left-6 max-w-[min(340px,calc(100vw-1.5rem))] sm:max-w-md z-20 pointer-events-auto bg-black/50 backdrop-blur-2xl border border-white/20 rounded-3xl p-3.5 sm:p-4 shadow-2xl flex flex-col gap-2.5 text-left"
+        className="absolute bottom-22 sm:bottom-24 left-3 sm:left-6 max-w-[340px] sm:max-w-md z-20 pointer-events-auto bg-black/50 backdrop-blur-2xl border border-white/20 rounded-3xl p-3.5 sm:p-4 shadow-2xl flex flex-col gap-2.5 text-left"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top row: Avatar, Name, Handle, Follow button */}

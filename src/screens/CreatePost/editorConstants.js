@@ -1,5 +1,5 @@
 // src/screens/CreatePost/editorConstants.js - ARVDOUL Image Editor Design Tokens & Constants
-// design system following ARVDOUL Design DNA
+// World-class design system following ARVDOUL Design DNA
 
 // ==================== ARVDOUL DNA GRADIENT ====================
 export const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';

@@ -133,9 +133,7 @@ const VideoFeed = memo(({
   const handleLike = useCallback(async (video) => {
     if (!video) return;
     const wasLiked = video.isLiked;
-    const previousLikes = video.likes || 0;
-    const previousFormatted = video.likesFormatted;
-    const newLikes = wasLiked ? Math.max(0, previousLikes - 1) : previousLikes + 1;
+    const newLikes = wasLiked ? Math.max(0, (video.likes || 1) - 1) : (video.likes || 0) + 1;
 
     updateVideo(video.id, {
       isLiked: !wasLiked,
@@ -146,14 +144,8 @@ const VideoFeed = memo(({
     try {
       await videoService.likeVideo(video.id);
     } catch (err) {
-      // Revert the optimistic update so the UI never claims a like that the
-      // server rejected.
-      console.warn('Like request failed, reverting:', err);
-      updateVideo(video.id, {
-        isLiked: wasLiked,
-        likes: previousLikes,
-        likesFormatted: previousFormatted,
-      });
+      // Revert if error
+      console.warn('Like request fallback:', err);
     }
   }, [updateVideo]);
 

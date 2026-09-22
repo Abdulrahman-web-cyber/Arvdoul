@@ -1,4 +1,6 @@
-// src/store/appStore.js
+// src/store/appStore.js - ENTERPRISE PRO MAX v3 (FIXED PERSISTENCE)
+// ✅ SMART COINS • NOTIFICATIONS • USER PROFILE • PRODUCTION READY
+// 🔧 FIX: coins & transactions no longer persisted – now live‑synced from Firestore
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';

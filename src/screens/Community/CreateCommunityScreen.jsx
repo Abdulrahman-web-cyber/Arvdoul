@@ -1,4 +1,7 @@
-// src/screens/Community/CreateCommunityScreen.jsx
+// src/screens/Community/CreateCommunityScreen.jsx - ARVDOUL CREATE COMMUNITY
+// ✅ Create new community with all settings
+// ✅ Avatar and cover upload
+// ✅ Privacy and moderation settings
 
 import React, { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';

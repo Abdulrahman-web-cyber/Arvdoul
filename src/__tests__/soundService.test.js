@@ -1,4 +1,11 @@
-// src/__tests__/soundService.test.js
+/**
+ * src/__tests__/soundService.test.js
+ * Deterministic unit tests for soundService with a fully mocked Firestore layer.
+ *
+ * The previous test hit the real Firestore SDK with no emulator and timed out.
+ * Here, both `firebase/firestore` (dynamic imports inside the service) and the
+ * Firebase singleton are mocked, so the suite is fast and hermetic.
+ */
 
 import { jest } from '@jest/globals';
 

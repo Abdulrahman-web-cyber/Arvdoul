@@ -1,162 +1,194 @@
-// src/screens/PostAnalyticsScreen.jsx
-
-import React, { useState, useEffect, useCallback } from 'react';
+// src/screens/PostAnalyticsScreen.jsx - Post-level performance metrics & insights
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3
+  ArrowLeft,
+  Eye,
+  Heart,
+  MessageCircle,
+  Share2,
+  TrendingUp,
+  Clock,
+  Users,
+  BarChart3,
+  Bookmark,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
-import { getAnalyticsService } from '../services/analyticsService';
-import { getPostService } from '../services/postService';
 import { useAuth } from '../context/AuthContext';
-import { formatViewCount, ARVDOUL_GRADIENT } from '../utils/videoUtils';
-import { Skeleton } from '../components/ui/Skeleton.jsx';
-
-const StatCard = ({ label, value, icon: Icon, gradient }) => (
-  <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4">
-    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center mb-3`}>
-      <Icon className="w-5 h-5 text-white" aria-hidden="true" />
-    </div>
-    <p className="text-white/50 text-sm">{label}</p>
-    <p className="text-white text-2xl font-bold mt-1">{value}</p>
-  </div>
-);
+import { toast } from 'sonner';
 
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [post, setPost] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
+  const [metrics, setMetrics] = useState({
+    views: 0,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    saves: 0,
+    engagementRate: 0,
+  });
 
-  const load = useCallback(async () => {
-    if (!postId || !user?.uid) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const postService = getPostService();
-      const postData = await postService.getPost(postId);
-      if (!postData) {
-        setError('Post not found.');
-        return;
+  useEffect(() => {
+    let active = true;
+    const fetchPostData = async () => {
+      if (!postId) return;
+      setLoading(true);
+      try {
+        const { default: postService } = await import('../services/postService.js');
+        const postDoc = await postService.getPost(postId);
+        if (!active) return;
+        if (postDoc) {
+          setPost(postDoc);
+          const views = postDoc.viewsCount || postDoc.views || 0;
+          const likes = postDoc.likesCount || postDoc.likes?.length || 0;
+          const comments = postDoc.commentsCount || postDoc.comments || 0;
+          const shares = postDoc.sharesCount || postDoc.shares || 0;
+          const saves = postDoc.savesCount || 0;
+          const totalEngagements = likes + comments + shares + saves;
+          const engagementRate = views > 0 ? ((totalEngagements / views) * 100).toFixed(1) : 0;
+
+          setMetrics({
+            views,
+            likes,
+            comments,
+            shares,
+            saves,
+            engagementRate,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load post analytics:', err);
+      } finally {
+        if (active) setLoading(false);
       }
-      if (postData.authorId !== user.uid && postData.userId !== user.uid) {
-        setError('You can only view analytics for your own posts.');
-        return;
-      }
-      setPost(postData);
-      const analyticsData = await getAnalyticsService().getPostAnalytics(postId);
-      setAnalytics(analyticsData);
-    } catch (err) {
-      setError(err?.message || 'Failed to load analytics.');
-    } finally {
-      setLoading(false);
-    }
-  }, [postId, user?.uid]);
+    };
 
-  useEffect(() => { load(); }, [load]);
-
-  const dailyStats = analytics?.dailyStats || [];
-  const maxViews = Math.max(1, ...dailyStats.map((d) => d.views || 0));
+    fetchPostData();
+    return () => {
+      active = false;
+    };
+  }, [postId]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white pb-20">
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/70 border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className="p-2 rounded-full hover:bg-white/10"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold truncate">Post Analytics</h1>
-            {post?.caption && <p className="text-xs text-white/50 truncate">{post.caption}</p>}
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto p-4 space-y-6">
-        {loading && (
-          <div className="space-y-4">
-            <Skeleton className="h-28 w-full rounded-2xl" />
-            <Skeleton className="h-56 w-full rounded-2xl" />
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="text-center py-16">
-            <p className="text-white/60">{error}</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-[#03071B] text-gray-900 dark:text-white p-4 sm:p-8">
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* Navigation & Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="mt-4 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm font-semibold"
+              className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-gray-600 dark:text-gray-300"
             >
-              Go back
+              <ArrowLeft className="w-5 h-5" />
             </button>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Post Analytics</h1>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                Performance insights for post <span className="font-mono text-violet-500">{postId}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Post Preview Summary */}
+        {post && (
+          <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm flex items-start gap-4">
+            {post.mediaUrl && (
+              <img
+                src={post.mediaUrl}
+                alt="Post media"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover flex-shrink-0"
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm line-clamp-2 text-gray-800 dark:text-gray-200">
+                {post.content || post.text || post.caption || 'No text content'}
+              </p>
+              <div className="mt-2 text-xs text-gray-500 flex items-center gap-4">
+                <span>Created: {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : 'Recent'}</span>
+              </div>
+            </div>
           </div>
         )}
 
-        {!loading && !error && analytics && (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <StatCard label="Views" value={formatViewCount(analytics.totalViews)} icon={Eye} gradient="from-blue-500 to-cyan-500" />
-              <StatCard label="Likes" value={formatViewCount(analytics.totalLikes)} icon={Heart} gradient="from-red-500 to-pink-500" />
-              <StatCard label="Comments" value={formatViewCount(analytics.totalComments)} icon={MessageCircle} gradient="from-purple-500 to-violet-500" />
-              <StatCard label="Shares" value={formatViewCount(analytics.totalShares)} icon={Share2} gradient="from-green-500 to-emerald-500" />
+        {/* High-level KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
+            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase tracking-wider">Views</span>
+              <Eye className="w-4 h-4 text-violet-500" />
             </div>
+            <div className="text-2xl font-bold">{metrics.views.toLocaleString()}</div>
+          </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 flex items-center gap-3">
-              <TrendingUp className="w-5 h-5 text-indigo-400" aria-hidden="true" />
-              <div>
-                <p className="text-white/50 text-sm">Engagement rate</p>
-                <p className="text-white text-xl font-bold">{analytics.engagementRate}%</p>
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
+            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase tracking-wider">Likes</span>
+              <Heart className="w-4 h-4 text-rose-500" />
+            </div>
+            <div className="text-2xl font-bold">{metrics.likes.toLocaleString()}</div>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
+            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase tracking-wider">Comments</span>
+              <MessageCircle className="w-4 h-4 text-blue-500" />
+            </div>
+            <div className="text-2xl font-bold">{metrics.comments.toLocaleString()}</div>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-2">
+            <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+              <span className="text-xs font-medium uppercase tracking-wider">Engagement</span>
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+            </div>
+            <div className="text-2xl font-bold">{metrics.engagementRate}%</div>
+          </div>
+        </div>
+
+        {/* Detailed Breakdown */}
+        <div className="p-6 rounded-2xl bg-white dark:bg-[#080F2E] border border-gray-200/80 dark:border-gray-800 shadow-sm space-y-4">
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-violet-500" />
+            Audience Interaction Breakdown
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Share2 className="w-4 h-4 text-cyan-500" />
+                <span className="text-sm font-medium">Shares</span>
               </div>
+              <span className="font-bold text-sm">{metrics.shares.toLocaleString()}</span>
             </div>
 
-            <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
-              <h2 className="text-base font-bold mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-400" aria-hidden="true" />
-                Views over time
-              </h2>
-              {dailyStats.length === 0 ? (
-                <p className="text-white/40 text-sm h-40 flex items-center justify-center">
-                  No daily views recorded yet.
-                </p>
-              ) : (
-                <>
-                  <div className="h-40 flex items-end gap-1 sm:gap-2">
-                    {dailyStats.map((day, i) => (
-                      <motion.div
-                        key={day.date}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${Math.max(2, ((day.views || 0) / maxViews) * 100)}%` }}
-                        transition={{ delay: i * 0.02 }}
-                        className="flex-1 rounded-t-lg min-w-[2px]"
-                        style={{ background: ARVDOUL_GRADIENT, opacity: 0.6 + (i / Math.max(1, dailyStats.length)) * 0.4 }}
-                        title={`${day.date}: ${formatViewCount(day.views || 0)} views`}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex justify-between mt-2 text-white/40 text-xs">
-                    <span>{dailyStats[0]?.date}</span>
-                    <span>{dailyStats[dailyStats.length - 1]?.date}</span>
-                  </div>
-                </>
-              )}
-            </section>
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Bookmark className="w-4 h-4 text-amber-500" />
+                <span className="text-sm font-medium">Saves / Bookmarks</span>
+              </div>
+              <span className="font-bold text-sm">{metrics.saves.toLocaleString()}</span>
+            </div>
 
-            {analytics.lastUpdated && (
-              <p className="text-white/30 text-xs text-center">
-                Last updated {new Date(analytics.lastUpdated).toLocaleString()}
-              </p>
-            )}
-          </>
-        )}
-      </main>
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#04081D] border border-gray-100 dark:border-gray-800/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-4 h-4 text-purple-500" />
+                <span className="text-sm font-medium">Virality Score</span>
+              </div>
+              <span className="font-bold text-sm">
+                {metrics.views > 1000 ? 'High' : metrics.views > 100 ? 'Medium' : 'Normal'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

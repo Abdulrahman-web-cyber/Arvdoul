@@ -1,4 +1,10 @@
-// src/components/profile/ProfileStats.jsx
+/**
+ * src/components/profile/ProfileStats.jsx - ARVDOUL Profile Stats Component
+ * 
+ * Displays profile statistics with clickable stats and floating cards.
+ * 
+ * @component
+ */
 
 /**
  * @typedef {Object} ProfileStatsProps
@@ -13,6 +19,7 @@
  */
 
 import React, { memo, useCallback } from 'react';
+import { useUser } from "../../context/UserContext";
 import { cn } from '../../lib/utils';
 
 /**

@@ -1,4 +1,6 @@
 // src/screens/Polls/PollsScreen.jsx
+// 📊 ARVDOUL POLLS & PREDICTION MARKETS
+// Real-time community voting, coin prediction wagers, percentage animations, and creator opinion analytics
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

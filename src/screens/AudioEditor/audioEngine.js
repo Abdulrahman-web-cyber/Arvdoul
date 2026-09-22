@@ -1,4 +1,6 @@
 // src/screens/AudioEditor/audioEngine.js
+// High-performance Web Audio API engine for Arvdoul Audio Studio
+// Supports multi-track playback, dynamic synth accompaniment, master metering & EQ
 
 class AudioStudioEngine {
   constructor() {

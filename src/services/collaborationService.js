@@ -1,4 +1,8 @@
-// src/services/collaborationService.js
+// src/services/collaborationService.js – ARVDOUL COLLABORATION SERVICE V1
+// 🤝 Content Collaboration with Roles, Permissions, Review Workflow
+// ✅ Invite System • Role Management • Permission Evaluation • Review Workflow
+// ✅ Added: Last-Write-Wins (LWW) conflict resolution and version logs (v8.0)
+// ✅ Added: Content locks prevention
 
 import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';

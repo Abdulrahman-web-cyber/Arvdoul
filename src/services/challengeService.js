@@ -1,4 +1,12 @@
-// src/services/challengeService.js
+/**
+ * src/services/challengeService.js - ARVDOUL HUMAN VERIFICATION & CHALLENGE ORCHESTRATOR
+ *
+ * Implements:
+ * 1. Multi-Modal Bot Challenge Verification: Seamlessly switches between invisible reCAPTCHA Enterprise,
+ *    Cloudflare Turnstile, and interactive biometric challenges based on risk level.
+ * 2. Proof-of-Work (PoW) Cryptographic Puzzle: Computes client-side SHA-256 difficulty challenges when upstream CAPTCHA fails.
+ * 3. Anti-Bypass Validation: Verifies cryptographically signed tokens with expiration timestamps.
+ */
 
 import { logger } from '../utils/Logger.js';
 

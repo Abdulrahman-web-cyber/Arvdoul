@@ -180,17 +180,7 @@
     "deleteAccountDesc": "Excluir permanentemente sua conta e dados",
     "deleteWarning": "Isso excluirá permanentemente sua conta, publicações e dados. Esta ação não pode ser desfeita.",
     "confirmDelete": "Excluir minha conta",
-    "deleting": "Excluindo...",
-    "aboutDesc": "Versão, políticas e suporte",
-    "highlights": "Destaques do perfil",
-    "highlightsDesc": "Crie e organize stories fixados em destaque",
-    "creatorStudio": "Estúdio de criador e análises",
-    "creatorStudioDesc": "Impressões, retenção e métricas de desempenho",
-    "consentSection": "Consentimento e uso de dados",
-    "consentAnalytics": "Análises de uso",
-    "consentAds": "Anúncios personalizados",
-    "consentAiTraining": "Treinamento de modelos de IA",
-    "consentDesc": "Você controla como seus dados são usados. O processamento essencial não pode ser desativado."
+    "deleting": "Excluindo..."
   },
   "level": {
     "title": "Nível e progresso",

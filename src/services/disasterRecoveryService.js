@@ -1,4 +1,10 @@
-// src/services/disasterRecoveryService.js
+/**
+ * src/services/disasterRecoveryService.js - ARVDOUL SYSTEM-WIDE DISASTER RECOVERY SERVICE
+ *
+ * Implements business continuity workflows, active-active regional routing simulations,
+ * scheduled data archiving procedures, and Point-In-Time (PITR) transaction backup rollbacks.
+ * Saves backup metadata securely in localForage to coordinate recovery.
+ */
 
 import { logger } from '../utils/Logger.js';
 import localforage from 'localforage';

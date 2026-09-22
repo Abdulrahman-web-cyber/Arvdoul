@@ -1,4 +1,16 @@
-// src/hooks/useScreenView.js
+/**
+ * src/hooks/useScreenView.js
+ * ARVDOUL SCREEN VIEW ANALYTICS
+ *
+ * Fires on every route change:
+ *   - metricsService: `screen_view_total` counter + `screen_view_${name}` gauge
+ *   - rumService: start/end route timing (per the RUM pipeline)
+ *   - performance.mark/measure for LCP-adjacent telemetry
+ *
+ * Wired once in MainLayout so every routed screen is covered without each
+ * screen adding its own tracking code (guide Part XII: never add analytics
+ * code directly in screens).
+ */
 
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';

@@ -1,4 +1,14 @@
-// src/utils/ErrorHandler.js
+/**
+ * src/utils/ErrorHandler.js - ARVDOUL Error Handler
+ *
+ * Consistent error taxonomy and enhancement across the service layer.
+ * Error code ranges (per refactoring program):
+ *   1000-1999 validation, 2000-2999 auth, 3000-3999 permission,
+ *   4000-4999 not found, 5000-5999 rate limit, 6000-6999 internal.
+ *
+ * Every surfaced error carries a correlationId so it can be traced.
+ * Zero dependencies.
+ */
 
 import { getCorrelationId, Logger } from './Logger.js';
 

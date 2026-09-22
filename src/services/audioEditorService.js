@@ -1,4 +1,4 @@
-// src/services/audioEditorService.js - ARVDOUL AUDIO EDITOR SERVICE
+// src/services/audioEditorService.js - ARVDOUL AUDIO EDITOR SERVICE - PRODUCTION READY v5.0
 // 🎵 Professional Audio Editor with Real Waveform Rendering, Audio Effects via Web Audio API, and MediaRecorder Export
 
 import { getStorageInstance } from '../firebase/firebase.js';

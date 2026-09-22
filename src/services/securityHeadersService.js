@@ -1,4 +1,10 @@
-// src/services/securityHeadersService.js
+/**
+ * src/services/securityHeadersService.js - ARVDOUL SYSTEM-WIDE SECURITY HEADERS SERVICE
+ *
+ * Configures robust application-security constraints. Offers pre-computed header mappings
+ * representing CSP (Content Security Policy), CSRF (Anti-CSRF Tokens), HSTS, and XSS protectors
+ * to guarantee extreme security for all gateway routers.
+ */
 
 export class SecurityHeadersService {
   /**

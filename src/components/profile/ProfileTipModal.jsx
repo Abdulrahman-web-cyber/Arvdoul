@@ -1,4 +1,9 @@
-// src/components/profile/ProfileTipModal.jsx
+/**
+ * src/components/profile/ProfileTipModal.jsx - ARVDOUL Creator Tipping Modal
+ * 
+ * Elegant modal allowing users to send coin tips to creators directly from their profile.
+ * Supports quick preset amounts, custom coin input, personal notes, and real-time coin ledger balance updates.
+ */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

@@ -1,4 +1,12 @@
-// src/services/policyAuthoringService.js
+/**
+ * src/services/policyAuthoringService.js - ARVDOUL COMMUNITY GUIDELINES & POLICY ENGINE
+ *
+ * Implements:
+ * 1. Policy Versioning & Changelog Registry: Tracks revisions of terms of service, safety policies, and copyright rules.
+ * 2. Mandatory User Acceptance Gate: Forces re-acceptance on major policy updates (e.g. Terms v2.0).
+ * 3. Policy Policy Rules Manifest.
+ * 4. User Acceptance Timestamps verification.
+ */
 
 import { logger } from '../utils/Logger.js';
 
