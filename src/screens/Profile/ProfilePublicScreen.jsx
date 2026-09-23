@@ -37,10 +37,10 @@ import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileTipModal from '../../components/profile/ProfileTipModal';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
 import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
+import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 // Modals
 const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
-const ProfileSkeleton = lazy(() => import('../../components/profile/ProfileSkeleton'));
 
 export default function ProfilePublicScreen() {
   const { userId } = useParams();
@@ -339,9 +339,7 @@ export default function ProfilePublicScreen() {
         isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
       )}>
         <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
-        <Suspense fallback={null}>
-          <ProfileSkeleton theme={theme} />
-        </Suspense>
+        <ProfileSkeleton theme={theme} />
       </div>
     );
   }

@@ -37,9 +37,9 @@ import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
 import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
+import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 // Modals & Extras
-const ProfileSkeleton = lazy(() => import('../../components/profile/ProfileSkeleton'));
 const AvatarUploadModal = lazy(() => import('../../components/profile/AvatarUploadModal'));
 const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
 
@@ -223,9 +223,7 @@ export default function ProfileMyScreen() {
         isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
       )}>
         <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
-        <Suspense fallback={null}>
-          <ProfileSkeleton theme={theme} />
-        </Suspense>
+        <ProfileSkeleton theme={theme} />
       </div>
     );
   }

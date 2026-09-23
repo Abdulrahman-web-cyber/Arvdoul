@@ -19,6 +19,43 @@ function stripConsolePlugin() {
 }
 
 /**
+ * Transforms source CommonJS (.cjs) modules into ES modules with named and default exports.
+ * Essential for shared configuration files consumed by both Vite client and Node Cloud Functions.
+ */
+function cjsToEsmPlugin() {
+  return {
+    name: 'arvdoul-cjs-to-esm',
+    apply: 'serve',
+    transform(code, id) {
+      if (id.includes('.cjs')) {
+        const exportMatch = code.match(/module\.exports\s*=\s*\{([\s\S]*?)\};?/);
+        if (exportMatch) {
+          const exportBody = exportMatch[1];
+          const exportKeys = exportBody
+            .split(',')
+            .map((k) => k.trim())
+            .filter((k) => k && !k.startsWith('//') && !k.startsWith('/*'))
+            .map((k) => k.split(':')[0].trim())
+            .filter((k) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k));
+
+          const transformed = code.replace(
+            exportMatch[0],
+            `const __cjs_exports = {${exportBody}};\n` +
+            `export { ${exportKeys.join(', ')} };\n` +
+            `export default __cjs_exports;\n`
+          );
+          return {
+            code: transformed,
+            map: null,
+          };
+        }
+      }
+      return null;
+    },
+  };
+}
+
+/**
  * Dev-only Prometheus scrape endpoint.
  *
  * Serves the metricsService Prometheus text exposition at GET /metrics so a
@@ -54,6 +91,7 @@ function metricsEndpointPlugin() {
 
 export default defineConfig({
   plugins: [
+    cjsToEsmPlugin(),
     react(),
     process.env.NODE_ENV === 'production' ? stripConsolePlugin() : null,
     metricsEndpointPlugin(),
