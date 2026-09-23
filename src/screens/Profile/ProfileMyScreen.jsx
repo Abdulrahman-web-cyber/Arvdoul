@@ -83,64 +83,7 @@ export default function ProfileMyScreen() {
   const ranking = useAnalyticsStore((state) => state.ranking);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
-  // Load user data on mount without thrashing or clearing cache
-  useEffect(() => {
-    if (!currentUserId) return;
-
-    const profileStore = useProfileStore.getState();
-    const analyticsStore = useAnalyticsStore.getState();
-
-    profileStore.loadProfile(currentUserId, currentUserId);
-    profileStore.loadHighlights(currentUserId);
-    profileStore.loadLevel(currentUserId);
-    profileStore.loadBalance(currentUserId);
-    profileStore.loadPosition(currentUserId);
-    profileStore.loadPosts(currentUserId);
-
-    analyticsStore.loadAnalytics(currentUserId, timeframe);
-  }, [currentUserId, timeframe]);
-
-  // Tab change handler
-  const handleTabChange = useCallback((tab) => {
-    setActiveTab(tab);
-    if (tab === 'saved' && (!savedPosts || savedPosts.length === 0) && currentUserId) {
-      useProfileStore.getState().loadSavedPosts(currentUserId);
-    }
-  }, [currentUserId, savedPosts]);
-
-  // Pull to refresh
-  const handleRefresh = useCallback(async () => {
-    if (!currentUserId) return;
-    setIsRefreshing(true);
-    try {
-      const profileStore = useProfileStore.getState();
-      const analyticsStore = useAnalyticsStore.getState();
-      await Promise.allSettled([
-        profileStore.loadProfile(currentUserId, currentUserId),
-        analyticsStore.loadAnalytics(currentUserId, timeframe),
-        profileStore.loadPosts(currentUserId),
-      ]);
-      toast.success('Profile refreshed');
-    } catch (e) {
-      console.warn('Refresh note:', e);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [currentUserId, timeframe]);
-
-  // Handle Share
-  const handleShare = useCallback(async () => {
-    try {
-      const result = await shareProfile(effectiveProfile || { id: currentUserId, ...profile });
-      if (result.copied) {
-        toast.success('Profile link copied to clipboard!');
-      }
-    } catch (err) {
-      toast.error('Could not share profile');
-    }
-  }, [currentUserId, profile, effectiveProfile]);
-
-  // Fallback profile if Firestore is yet to populate
+  // Fallback username if Firestore is yet to populate
   const cleanUsername = useMemo(() => {
     try {
       const raw = profile?.username || currentUser?.username;
@@ -161,6 +104,7 @@ export default function ProfileMyScreen() {
     }
   }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
 
+  // Server-authoritative composite profile
   const effectiveProfile = useMemo(() => {
     const rawDisplayName = currentUser?.displayName || currentUser?.name || profile?.displayName || profile?.name;
     const safeDisplayName = (typeof rawDisplayName === 'string' && rawDisplayName.trim())
@@ -211,6 +155,64 @@ export default function ProfileMyScreen() {
       website: safeWebsite,
     };
   }, [profile, cleanUsername, currentUser, currentUserId, posts?.length, balance, level]);
+
+  // Load user data on mount without thrashing or clearing cache
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const profileStore = useProfileStore.getState();
+    const analyticsStore = useAnalyticsStore.getState();
+
+    profileStore.loadProfile(currentUserId, currentUserId);
+    profileStore.loadHighlights(currentUserId);
+    profileStore.loadLevel(currentUserId);
+    profileStore.loadBalance(currentUserId);
+    profileStore.loadPosition(currentUserId);
+    profileStore.loadPosts(currentUserId);
+
+    analyticsStore.loadAnalytics(currentUserId, timeframe);
+  }, [currentUserId, timeframe]);
+
+  // Tab change handler
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    if (tab === 'saved' && (!savedPosts || savedPosts.length === 0) && currentUserId) {
+      useProfileStore.getState().loadSavedPosts(currentUserId);
+    }
+  }, [currentUserId, savedPosts]);
+
+  // Pull to refresh
+  const handleRefresh = useCallback(async () => {
+    if (!currentUserId) return;
+    setIsRefreshing(true);
+    try {
+      const profileStore = useProfileStore.getState();
+      const analyticsStore = useAnalyticsStore.getState();
+      await Promise.allSettled([
+        profileStore.loadProfile(currentUserId, currentUserId),
+        analyticsStore.loadAnalytics(currentUserId, timeframe),
+        profileStore.loadPosts(currentUserId),
+      ]);
+      toast.success('Profile refreshed');
+    } catch (e) {
+      console.warn('Refresh note:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentUserId, timeframe]);
+
+  // Handle Share
+  const handleShare = useCallback(async () => {
+    try {
+      const target = effectiveProfile || { id: currentUserId, uid: currentUserId, username: cleanUsername };
+      const result = await shareProfile(target);
+      if (result.copied) {
+        toast.success('Profile link copied to clipboard!');
+      }
+    } catch (err) {
+      toast.error('Could not share profile');
+    }
+  }, [effectiveProfile, currentUserId, cleanUsername]);
 
   const isDark = theme === 'dark';
 
