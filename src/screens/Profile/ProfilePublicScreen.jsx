@@ -18,6 +18,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { getStoredUid } from '../../utils/security';
+import { LEVEL_GATES } from '../../services/levelSystemService';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -44,6 +46,7 @@ export default function ProfilePublicScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const currentUserId = currentUser?.uid || getStoredUid();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -83,7 +86,7 @@ export default function ProfilePublicScreen() {
         const userService = userServiceModule.getUserService();
 
         // 1. Fetch user profile
-        const fetched = await userService.getUserProfile(cleanUserId, currentUser?.uid);
+        const fetched = await userService.getUserProfile(cleanUserId, currentUserId);
         const targetUid = fetched?.id || fetched?.uid || cleanUserId;
         
         // 2. Fetch posts
@@ -262,31 +265,55 @@ export default function ProfilePublicScreen() {
     }
   }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
 
+  // Clean public username resolution
+  const cleanPublicUsername = useMemo(() => {
+    try {
+      const u = profileData?.username;
+      if (typeof u === 'string' && u.trim() && !u.startsWith('user_') && u !== 'creator') return u.trim();
+      const h = profileData?.handle;
+      if (typeof h === 'string' && h.trim() && !h.startsWith('user_')) return h.trim();
+      const d = typeof profileData?.displayName === 'string' ? profileData.displayName : '';
+      if (d) {
+        const fromD = d.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        if (fromD && fromD !== 'user') return fromD;
+      }
+      const e = typeof profileData?.email === 'string' ? profileData.email : '';
+      if (e) {
+        const fromE = e.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        if (fromE && fromE !== 'user') return fromE;
+      }
+      return 'creator';
+    } catch {
+      return 'creator';
+    }
+  }, [profileData?.username, profileData?.handle, profileData?.displayName, profileData?.email]);
+
   // Real profile data without mock fallbacks
   const effectiveProfile = useMemo(() => {
     if (!profileData) return null;
+    const safeDisplayName = typeof profileData.displayName === 'string' && profileData.displayName.trim() && profileData.displayName !== 'User' && profileData.displayName !== 'Creator'
+      ? profileData.displayName.trim()
+      : typeof profileData.name === 'string' && profileData.name.trim() && profileData.name !== 'User' && profileData.name !== 'Creator'
+        ? profileData.name.trim()
+        : 'Creator';
+
+    const safeLevel = Number(profileData.level) || 1;
+
     return {
       ...profileData,
       id: profileData.id || profileData.uid || userId,
-      username: (profileData.username && !profileData.username.startsWith('user_') && profileData.username !== 'creator')
-        ? profileData.username
-        : (profileData.handle && !profileData.handle.startsWith('user_'))
-          ? profileData.handle
-          : (profileData.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || profileData.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (profileData.username && !profileData.username.startsWith('user_') ? profileData.username : 'creator')),
-      displayName: (profileData.displayName && profileData.displayName !== 'User' && profileData.displayName !== 'Creator')
-        ? profileData.displayName
-        : (profileData.name && profileData.name !== 'User' && profileData.name !== 'Creator')
-          ? profileData.name
-          : (profileData.username || 'Creator'),
-      bio: profileData.bio || '',
-      photoURL: getSafeAvatarUrl(profileData.photoURL, profileData.displayName || 'Creator', userId),
+      uid: profileData.uid || profileData.id || userId,
+      username: cleanPublicUsername,
+      displayName: safeDisplayName,
+      bio: typeof profileData.bio === 'string' ? profileData.bio : '',
+      photoURL: getSafeAvatarUrl(profileData.photoURL, safeDisplayName, userId),
       followerCount: Number(profileData.followerCount ?? profileData.followersCount ?? 0),
       followingCount: Number(profileData.followingCount ?? 0),
-      postCount: posts?.length ?? profileData.postCount ?? 0,
+      postCount: Number(posts?.length ?? profileData.postCount ?? 0),
       likesReceived: Number(profileData.likesReceived ?? profileData.likesCount ?? 0),
       coins: Number(profileData.coins ?? profileData.coinBalance ?? 0),
-      isVerified: Boolean(profileData.isVerified),
-      isCreator: Boolean(profileData.isCreator),
+      isVerified: Boolean(profileData.isVerified || profileData.verified),
+      isCreator: Boolean(profileData.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
       canViewActivity: profileData.canViewActivity !== false,
@@ -295,15 +322,15 @@ export default function ProfilePublicScreen() {
       canViewFollowersList: profileData.canViewFollowersList !== false,
       canViewFollowingList: profileData.canViewFollowingList !== false,
       links: Array.isArray(profileData.links) ? profileData.links : [],
-      pronouns: profileData.pronouns || '',
-      profession: profileData.profession || '',
-      education: profileData.education || '',
+      pronouns: typeof profileData.pronouns === 'string' ? profileData.pronouns : '',
+      profession: typeof profileData.profession === 'string' ? profileData.profession : '',
+      education: typeof profileData.education === 'string' ? profileData.education : '',
       presence: profileData.presence || { isOnline: false, status: 'offline', lastActive: null },
-      level: profileData.level || 1,
-      location: profileData.location || profileData.city || '',
-      website: profileData.website || profileData.link || '',
+      level: safeLevel,
+      location: typeof profileData.location === 'string' ? profileData.location : (typeof profileData.city === 'string' ? profileData.city : ''),
+      website: typeof profileData.website === 'string' ? profileData.website : (typeof profileData.link === 'string' ? profileData.link : ''),
     };
-  }, [profileData, userId, posts?.length]);
+  }, [profileData, userId, posts?.length, cleanPublicUsername]);
 
   if (loading && !profileData) {
     return (

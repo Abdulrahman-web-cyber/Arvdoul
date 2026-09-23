@@ -9,10 +9,11 @@
  * @component
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
+import { getStoredUid } from '../../utils/security';
 import ProfileMyScreen from './ProfileMyScreen';
 import ProfilePublicScreen from './ProfilePublicScreen';
 
@@ -21,10 +22,12 @@ export default function ProfileScreen() {
   const { user: authContextUser } = useAuth();
   const authStoreUser = useAppStore(state => state.currentUser);
   const authUser = authStoreUser || authContextUser;
-  const currentUserId = authUser?.uid || authContextUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || JSON.parse(localStorage.getItem('user') || '{}')?.uid) : null);
+  const currentUserId = authUser?.uid || authContextUser?.uid || getStoredUid();
 
   const cleanUserId = userId ? String(userId).replace(/^@/, '').toLowerCase().trim() : null;
-  const currentUsername = (authUser?.username || authUser?.email?.split('@')[0] || '').toLowerCase().trim();
+  const rawEmail = typeof authUser?.email === 'string' ? authUser.email : '';
+  const rawUsername = typeof authUser?.username === 'string' ? authUser.username : '';
+  const currentUsername = (rawUsername || rawEmail.split('@')[0] || '').toLowerCase().trim();
 
   const isOwner = !cleanUserId || 
     cleanUserId === currentUserId || 

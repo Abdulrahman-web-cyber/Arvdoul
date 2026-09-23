@@ -19,6 +19,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
+import { getStoredUser, getStoredUid } from '../utils/security.js';
 
 // ==================== INITIAL STATE ====================
 const initialState = {
@@ -150,13 +151,15 @@ export const useProfileStore = create(
         }
         
         // Resolve profile with safe fallback guarantee & real auth user linkage
-        const appCurrentUser = useAppStore.getState().currentUser;
+        const appCurrentUser = useAppStore.getState().currentUser || getStoredUser();
+        const storedUid = getStoredUid();
+        const effectiveUid = currentUserId || storedUid;
         const fallbackDisplayName = isOwner
-          ? (appCurrentUser?.displayName || appCurrentUser?.name || appCurrentUser?.email?.split('@')[0] || 'Member')
+          ? (typeof appCurrentUser?.displayName === 'string' && appCurrentUser.displayName ? appCurrentUser.displayName : (typeof appCurrentUser?.name === 'string' && appCurrentUser.name ? appCurrentUser.name : (typeof appCurrentUser?.email === 'string' ? appCurrentUser.email.split('@')[0] : 'Member')))
           : 'Creator';
         const fallbackUsername = isOwner
-          ? (appCurrentUser?.username || appCurrentUser?.email?.split('@')[0] || (currentUserId ? `user_${currentUserId.slice(0, 6)}` : 'user'))
-          : (userId.startsWith('user_') ? userId : `user_${userId.slice(0, 7)}`);
+          ? (typeof appCurrentUser?.username === 'string' && appCurrentUser.username ? appCurrentUser.username : (typeof appCurrentUser?.email === 'string' ? appCurrentUser.email.split('@')[0] : (effectiveUid ? `user_${effectiveUid.slice(0, 6)}` : 'creator')))
+          : (typeof userId === 'string' && userId.startsWith('user_') ? userId : `user_${(typeof userId === 'string' ? userId : 'creator').slice(0, 7)}`);
 
         const resolvedProfile = profile ? {
           ...profile,
@@ -167,19 +170,19 @@ export const useProfileStore = create(
             ? profile.username
             : fallbackUsername,
         } : {
-          id: userId,
-          uid: userId,
+          id: userId || effectiveUid || 'creator',
+          uid: userId || effectiveUid || 'creator',
           username: fallbackUsername,
           displayName: fallbackDisplayName,
-          bio: appCurrentUser?.bio || '',
+          bio: typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
           photoURL: appCurrentUser?.photoURL || null,
-          followerCount: appCurrentUser?.followerCount || 0,
-          followingCount: appCurrentUser?.followingCount || 0,
+          followerCount: Number(appCurrentUser?.followerCount || appCurrentUser?.followersCount || 0),
+          followingCount: Number(appCurrentUser?.followingCount || 0),
           postCount: 0,
           likesReceived: 0,
           friendCount: 0,
-          coins: isOwner ? (balance || appCurrentUser?.coins || 100) : 0,
-          level: level || appCurrentUser?.level || 1,
+          coins: isOwner ? (balance || Number(appCurrentUser?.coins) || 100) : 0,
+          level: level || Number(appCurrentUser?.level) || 1,
           reputation: 100,
           isVerified: Boolean(appCurrentUser?.isVerified),
           isCreator: Boolean(appCurrentUser?.isCreator),
@@ -208,23 +211,29 @@ export const useProfileStore = create(
         }
       } catch (error) {
         console.warn('Load profile handled gracefully with fallback:', error?.message);
-        const isOwner = !userId || userId === currentUserId;
-        let localAuth = {};
-        try {
-          localAuth = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
-        } catch {}
+        const storedUid = getStoredUid();
+        const effectiveUid = currentUserId || storedUid;
+        const isOwner = !userId || userId === effectiveUid;
+        const localAuth = getStoredUser() || {};
+
+        const rawDisplayName = localAuth.displayName || localAuth.name;
+        const rawEmail = typeof localAuth.email === 'string' ? localAuth.email : '';
+        const fallbackDisplayName = isOwner
+          ? (typeof rawDisplayName === 'string' && rawDisplayName ? rawDisplayName : (rawEmail ? rawEmail.split('@')[0] : 'Member'))
+          : 'Creator';
+        const fallbackUsername = isOwner
+          ? (typeof localAuth.username === 'string' && localAuth.username ? localAuth.username : (rawEmail ? rawEmail.split('@')[0] : (effectiveUid ? `user_${effectiveUid.slice(0, 6)}` : 'creator')))
+          : (typeof userId === 'string' && userId.startsWith('user_') ? userId : `user_${(typeof userId === 'string' ? userId : 'creator').slice(0, 7)}`);
 
         const fallbackProfile = {
-          id: userId || currentUserId || 'creator',
-          uid: userId || currentUserId || 'creator',
-          username: isOwner
-            ? (localAuth.username || localAuth.email?.split('@')[0] || (currentUserId ? `user_${currentUserId.slice(0, 6)}` : 'user'))
-            : (userId?.startsWith('user_') ? userId : `user_${(userId || 'creator').slice(0, 7)}`),
-          displayName: isOwner ? (localAuth.displayName || localAuth.name || 'User') : 'Creator',
-          bio: isOwner ? (localAuth.bio || '') : '',
-          photoURL: isOwner ? (localAuth.photoURL || null) : null,
-          followerCount: 0,
-          followingCount: 0,
+          id: userId || effectiveUid || 'creator',
+          uid: userId || effectiveUid || 'creator',
+          username: fallbackUsername,
+          displayName: fallbackDisplayName,
+          bio: typeof localAuth.bio === 'string' ? localAuth.bio : '',
+          photoURL: localAuth.photoURL || null,
+          followerCount: Number(localAuth.followerCount) || 0,
+          followingCount: Number(localAuth.followingCount) || 0,
           postCount: 0,
           likesReceived: 0,
           friendCount: 0,

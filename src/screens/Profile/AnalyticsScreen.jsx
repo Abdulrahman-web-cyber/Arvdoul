@@ -6,6 +6,7 @@ import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
 import analyticsService from '../../services/analyticsService';
+import { getStoredUid } from '../../utils/security';
 import { 
   TrendingUp, TrendingDown, Users, Eye, Heart, MessageCircle, 
   Share2, MoreVertical, Calendar, Loader2
@@ -27,7 +28,7 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const effectiveUid = user?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}')?.uid : null) || 'creator';
+  const effectiveUid = user?.uid || getStoredUid() || 'creator';
 
   useEffect(() => {
     const loadAnalytics = async () => {

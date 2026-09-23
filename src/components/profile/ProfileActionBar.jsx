@@ -28,6 +28,7 @@ import {
   Users
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LEVEL_GATES } from '../../services/levelSystemService';
 
 const ProfileActionBar = memo(({
   isOwner = false,
@@ -53,10 +54,10 @@ const ProfileActionBar = memo(({
 
   const coinsValue = Number(profile?.coins ?? profile?.coinBalance ?? coinsBalance ?? 0);
 
-  // Level gating: users must reach Level 3 or have creator/verified status to have public followers.
+  // Level gating: users must reach LEVEL_GATES.publicFollowers or have creator/verified status to have public followers.
   // Otherwise, they participate in the mutual Friend Request system.
   const targetLevel = Number(profile?.level) || 1;
-  const canBeFollowed = targetLevel >= 3 || Boolean(profile?.isCreator || profile?.isVerified);
+  const canBeFollowed = targetLevel >= LEVEL_GATES.publicFollowers || Boolean(profile?.isCreator || profile?.isVerified);
 
   if (isOwner) {
     return (

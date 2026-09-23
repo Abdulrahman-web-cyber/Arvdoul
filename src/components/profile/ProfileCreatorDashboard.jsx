@@ -27,6 +27,7 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { LEVEL_GATES } from '../../services/levelSystemService';
 
 // Clean SVG Sparklines
 const Sparkline = ({ color = '#a855f7', data = [0, 0] }) => {
@@ -72,12 +73,12 @@ const ProfileCreatorDashboard = memo(({
   const isDark = theme === 'dark';
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
-  // Gating check: User must be Level 5+ or have creator status
+  // Gating check: User must be Level 5+ (LEVEL_GATES.creatorProfile) or have creator status
   const effectiveLevel = Number(userLevel) || 1;
-  const isEligibleCreator = isCreator || effectiveLevel >= 5;
+  const isEligibleCreator = isCreator || effectiveLevel >= LEVEL_GATES.creatorProfile;
 
   if (!isEligibleCreator) {
-    const requiredLevel = 5;
+    const requiredLevel = LEVEL_GATES.creatorProfile;
     const progressPercent = Math.min(100, Math.max(10, Math.round((effectiveLevel / requiredLevel) * 100)));
 
     return (
@@ -95,7 +96,7 @@ const ProfileCreatorDashboard = memo(({
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5" />
-                <span>Level 5 Creator Milestone</span>
+                <span>Level {LEVEL_GATES.creatorProfile} Creator Milestone</span>
               </span>
               <span className="text-xs font-semibold text-slate-400">
                 Locked
@@ -107,14 +108,14 @@ const ProfileCreatorDashboard = memo(({
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              Reach <strong className="text-purple-500">Level 5</strong> to unlock real-time audience analytics, monetization tools, creator coin tips, and top ranking perks.
+              Reach <strong className="text-purple-500">Level {LEVEL_GATES.creatorProfile}</strong> to unlock real-time audience analytics, monetization tools, creator coin tips, and top ranking perks.
             </p>
 
             {/* Level Progress Bar */}
             <div className="pt-2 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-500 dark:text-slate-400">Current Standing</span>
-                <span className="text-purple-600 dark:text-purple-400">Level {effectiveLevel} of 5</span>
+                <span className="text-purple-600 dark:text-purple-400">Level {effectiveLevel} of {LEVEL_GATES.creatorProfile}</span>
               </div>
 
               <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden p-0.5">
@@ -126,7 +127,7 @@ const ProfileCreatorDashboard = memo(({
 
               <div className="flex items-center justify-between text-[11px] text-slate-400">
                 <span>🌱 Citizen Status</span>
-                <span>⭐ {5 - effectiveLevel} more {5 - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
+                <span>⭐ {Math.max(0, LEVEL_GATES.creatorProfile - effectiveLevel)} more {LEVEL_GATES.creatorProfile - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
               </div>
             </div>
           </div>

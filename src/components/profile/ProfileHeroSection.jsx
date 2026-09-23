@@ -32,7 +32,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { getLevelInfo, getRankTitle, getCitizenTier } from '../../services/levelSystemService';
+import { getLevelInfo, getRankTitle, getCitizenTier, LEVELS, LEVEL_GATES } from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 const ProfileHeroSection = memo(({
@@ -54,49 +54,89 @@ const ProfileHeroSection = memo(({
   const isDark = theme === 'dark';
 
   // Compute real level & progression from levelSystemService
-  const userExperience = profile?.experience ?? profile?.xp ?? (profile?.level ? 50 * profile.level * (profile.level - 1) : 0);
+  const userExperience = useMemo(() => {
+    if (profile?.experience !== undefined && profile?.experience !== null) {
+      return Number(profile.experience) || 0;
+    }
+    if (profile?.xp !== undefined && profile?.xp !== null) {
+      return Number(profile.xp) || 0;
+    }
+    if (profile?.level && Array.isArray(LEVELS)) {
+      const idx = Math.max(0, Math.min(Number(profile.level) - 1, LEVELS.length - 1));
+      return LEVELS[idx]?.minXp || 0;
+    }
+    return 0;
+  }, [profile?.experience, profile?.xp, profile?.level]);
+
   const levelInfo = useMemo(() => {
-    return getLevelInfo(userExperience);
+    try {
+      return getLevelInfo(userExperience);
+    } catch {
+      return { level: 1, title: 'Citizen', progress: 0, currentLevelXp: 0, nextLevelXp: 100 };
+    }
   }, [userExperience]);
 
-  const effectiveLevel = level || profile?.level || levelInfo.level || 1;
-  const rankTitle = useMemo(() => getRankTitle(effectiveLevel), [effectiveLevel]);
-  const citizenStanding = useMemo(() => getCitizenTier(effectiveLevel, profile?.activeDaysCount || 1), [effectiveLevel, profile?.activeDaysCount]);
+  const effectiveLevel = Number(level || profile?.level || levelInfo.level) || 1;
+  const rankTitle = useMemo(() => {
+    try {
+      return getRankTitle(effectiveLevel);
+    } catch {
+      return 'Citizen';
+    }
+  }, [effectiveLevel]);
+
+  const citizenStanding = useMemo(() => {
+    try {
+      return getCitizenTier(effectiveLevel, Number(profile?.activeDaysCount) || 1);
+    } catch {
+      return { tier: 'Citizen' };
+    }
+  }, [effectiveLevel, profile?.activeDaysCount]);
 
   // Safe avatar and display strings with actual identity resolution
-  const displayName = (profile?.displayName && profile?.displayName !== 'User' && profile?.displayName !== 'Creator')
-    ? profile.displayName
-    : (profile?.name && profile?.name !== 'User' && profile?.name !== 'Creator')
-      ? profile.name
-      : (isOwner ? 'Member' : 'Creator');
+  const displayName = useMemo(() => {
+    const raw = profile?.displayName || profile?.name;
+    if (typeof raw === 'string' && raw.trim() && raw.trim() !== 'User' && raw.trim() !== 'Creator') {
+      return raw.trim();
+    }
+    return isOwner ? 'Member' : 'Creator';
+  }, [profile?.displayName, profile?.name, isOwner]);
 
   // Derive genuine unique username without showing raw uid or placeholder 'user'
   const username = useMemo(() => {
-    const rawUser = profile?.username;
-    if (rawUser && !rawUser.startsWith('user_') && rawUser !== 'user' && rawUser !== 'creator') {
-      return rawUser;
+    try {
+      const rawUser = profile?.username;
+      if (typeof rawUser === 'string' && rawUser.trim() && !rawUser.startsWith('user_') && rawUser !== 'user' && rawUser !== 'creator') {
+        return rawUser.trim();
+      }
+      const rawEmail = typeof profile?.email === 'string' ? profile.email : '';
+      const rawName = typeof profile?.displayName === 'string' ? profile.displayName : (typeof profile?.name === 'string' ? profile.name : '');
+      const base = (rawName || rawEmail.split('@')[0] || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '')
+        .slice(0, 16);
+      if (base && base !== 'user' && base !== 'creator') {
+        return base;
+      }
+      return (typeof rawUser === 'string' && !rawUser.startsWith('user_')) ? rawUser : (isOwner ? 'arvdoul_member' : 'creator');
+    } catch {
+      return isOwner ? 'arvdoul_member' : 'creator';
     }
-    const base = (profile?.displayName || profile?.name || profile?.email?.split('@')[0] || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '')
-      .slice(0, 16);
-    if (base && base !== 'user' && base !== 'creator') {
-      return base;
-    }
-    return (rawUser && !rawUser.startsWith('user_')) ? rawUser : (isOwner ? 'arvdoul_member' : 'creator');
   }, [profile?.username, profile?.displayName, profile?.name, profile?.email, isOwner]);
 
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
-  const bio = profile?.bio?.trim() || '';
-  const location = profile?.location || profile?.city || '';
-  const website = profile?.website || profile?.link || '';
+  const bio = typeof profile?.bio === 'string' ? profile.bio.trim() : '';
+  const location = typeof profile?.location === 'string' ? profile.location : (typeof profile?.city === 'string' ? profile.city : '');
+  const website = typeof profile?.website === 'string' ? profile.website : (typeof profile?.link === 'string' ? profile.link : '');
   
   // Format joined date
   const joinedDate = useMemo(() => {
     if (profile?.createdAt) {
       try {
         const date = profile.createdAt?.toDate ? profile.createdAt.toDate() : new Date(profile.createdAt);
-        return `Joined ${date.toLocaleString('en-US', { month: 'short', year: 'numeric' })}`;
+        if (date && !isNaN(date.getTime())) {
+          return `Joined ${date.toLocaleString('en-US', { month: 'short', year: 'numeric' })}`;
+        }
       } catch (e) {
         return '';
       }
@@ -122,7 +162,7 @@ const ProfileHeroSection = memo(({
               title="Account Settings"
             >
               <div className="w-5 h-5 rounded-full overflow-hidden bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400">
-                {displayName.charAt(0).toUpperCase()}
+                {(displayName && typeof displayName === 'string' ? displayName.charAt(0) : 'U').toUpperCase()}
               </div>
               <span className="truncate max-w-[120px]">@{username}</span>
             </button>
@@ -314,15 +354,15 @@ const ProfileHeroSection = memo(({
                   </span>
                 )}
 
-                {(profile?.isCreator || effectiveLevel >= 5) ? (
+                {(profile?.isCreator || effectiveLevel >= LEVEL_GATES.creatorProfile) ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                     <Star className="w-3 h-3 fill-amber-500/30" />
-                    <span>{effectiveLevel >= 15 ? 'Top Creator' : 'Creator'}</span>
+                    <span>{effectiveLevel >= LEVEL_GATES.verifiedPriority ? 'Top Creator' : 'Creator'}</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     <Award className="w-3 h-3" />
-                    <span>{effectiveLevel >= 3 ? 'Citizen' : 'Resident'}</span>
+                    <span>{effectiveLevel >= LEVEL_GATES.publicFollowers ? 'Citizen' : 'Resident'}</span>
                   </span>
                 )}
 
@@ -442,7 +482,7 @@ const ProfileHeroSection = memo(({
               <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/10">
                 <div 
                   className="h-full rounded-full bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-400 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(5, Math.round((levelInfo?.progress || 0.35) * 100)))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(3, Math.round(Number(levelInfo?.progress) || 0)))}%` }}
                 />
               </div>
             </div>
