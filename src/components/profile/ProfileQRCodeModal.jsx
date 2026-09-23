@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
+import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
 
 const ProfileQRCodeModal = memo(({
@@ -32,17 +33,15 @@ const ProfileQRCodeModal = memo(({
   const displayName = profile?.displayName || profile?.name || 'Creator';
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
 
-  // 100% Unique Global Identifier supporting billions of global users
-  const globalId = profile?.id || profile?.uid || 'user';
-  const globalUniqueCode = `ARV-${globalId.toUpperCase()}`;
+  // Deterministic global identity code from canonical helper
+  const globalUniqueCode = useMemo(() => {
+    return getGlobalIdentityCode(profile) || `ARV-${String(profile?.id || profile?.uid || 'USER').toUpperCase()}`;
+  }, [profile]);
 
-  // Canonical globally-unique URL format
+  // Canonical globally-unique URL format via shareUtils
   const profileUrl = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}/profile/${globalId}?u=${encodeURIComponent(username)}&gid=${globalUniqueCode}&v=3`;
-    }
-    return `https://arvdoul.app/profile/${globalId}?gid=${globalUniqueCode}`;
-  }, [globalId, username, globalUniqueCode]);
+    return getProfileUrl(profile);
+  }, [profile]);
 
   // Generate unique scannable QR code
   useEffect(() => {
@@ -100,17 +99,17 @@ const ProfileQRCodeModal = memo(({
   };
 
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${displayName} on Arvdoul`,
-          text: `Connect with ${displayName} on Arvdoul! (${globalUniqueCode})`,
-          url: profileUrl,
-        });
-      } catch (err) {
-        // User cancelled or aborted share
+    try {
+      const res = await shareProfile(profile, {
+        title: `${displayName} on Arvdoul`,
+        text: `Connect with ${displayName} on Arvdoul! (${globalUniqueCode})`,
+      });
+      if (res.copied) {
+        setCopied(true);
+        toast.success('Profile URL copied to clipboard!');
+        setTimeout(() => setCopied(false), 2000);
       }
-    } else {
+    } catch (err) {
       handleCopy();
     }
   };

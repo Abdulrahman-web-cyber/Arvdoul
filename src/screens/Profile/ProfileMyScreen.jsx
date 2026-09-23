@@ -20,6 +20,7 @@ import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { shareProfile } from '../../utils/shareUtils';
 import { toast } from 'sonner';
 
 // Modular Profile Components
@@ -127,22 +128,15 @@ export default function ProfileMyScreen() {
 
   // Handle Share
   const handleShare = useCallback(async () => {
-    const profileUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/profile/${currentUserId}`
-      : `https://arvdoul.app/profile/${currentUserId}`;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${profile?.displayName || 'My Profile'} on Arvdoul`,
-          url: profileUrl,
-        });
-      } catch (err) {}
-    } else {
-      await navigator.clipboard.writeText(profileUrl);
-      toast.success('Profile link copied to clipboard!');
+    try {
+      const result = await shareProfile(effectiveProfile || { id: currentUserId, ...profile });
+      if (result.copied) {
+        toast.success('Profile link copied to clipboard!');
+      }
+    } catch (err) {
+      toast.error('Could not share profile');
     }
-  }, [currentUserId, profile]);
+  }, [currentUserId, profile, effectiveProfile]);
 
   // Fallback profile if Firestore is yet to populate
   const cleanUsername = useMemo(() => {
