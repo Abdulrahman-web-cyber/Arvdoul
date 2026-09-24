@@ -100,6 +100,14 @@ const ThumbnailDesignerScreen = lazy(() => import("../screens/ThumbnailDesigner/
 const RankingsScreen = lazy(() => import("../screens/Rankings/RankingsScreen.jsx"));
 const ReputationScreen = lazy(() => import("../screens/Rankings/ReputationScreen.jsx"));
 
+// Part 2: Progression, Achievements, Titles, Citizenship, Creator Onboarding, Wallet
+const ProgressScreen = lazy(() => import("../screens/Progression/ProgressScreen.jsx"));
+const AchievementsScreen = lazy(() => import("../screens/Achievements/AchievementsScreen.jsx"));
+const TitlesScreen = lazy(() => import("../screens/Titles/TitlesScreen.jsx"));
+const PassportScreen = lazy(() => import("../screens/Citizenship/PassportScreen.jsx"));
+const CreatorOnboardingScreen = lazy(() => import("../screens/Creator/CreatorOnboardingScreen.jsx"));
+const WalletScreen = lazy(() => import("../screens/Economy/WalletScreen.jsx"));
+
 // Collaboration Screen
 const CollaborationScreen = lazy(() => import("../screens/Collaboration/CollaborationScreen.jsx"));
 
@@ -933,10 +941,83 @@ export default function AppRoutes() {
       <Route path="/badges" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
-            <BadgeScreen />
+            <AchievementsScreen />
           </Suspense>
         </ProtectedRoute>
       } />
+
+      {/* Part 2: Progression & Level Detail */}
+      <Route path="/progress" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ProgressScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/progress" element={<Navigate to="/progress" replace />} />
+
+      {/* Part 2: Achievements Gallery */}
+      <Route path="/achievements" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <AchievementsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/achievements" element={<Navigate to="/achievements" replace />} />
+
+      {/* Part 2: Titles & Civic Provenance */}
+      <Route path="/titles" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <TitlesScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/titles" element={<Navigate to="/titles" replace />} />
+
+      {/* Part 2: Arvdoul Digital Passport & Citizenship */}
+      <Route path="/passport" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PassportScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/passport/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PassportScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/passport" element={<Navigate to="/passport" replace />} />
+
+      {/* Part 2: Creator Workspace & Onboarding */}
+      <Route path="/creator/onboarding" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreatorOnboardingScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/creator/dashboard" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <CreatorDashboardScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Part 2: Sovereign Wallet & Economic Ledger */}
+      <Route path="/wallet" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <WalletScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/wallet" element={<Navigate to="/wallet" replace />} />
 
       <Route path="/reputation/:userId" element={
         <ProtectedRoute>

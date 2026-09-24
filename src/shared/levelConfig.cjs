@@ -337,6 +337,504 @@ function getLevelBandColor(level) {
   return 'from-gray-400 via-gray-500 to-gray-600';
 }
 
+/**
+ * Part 2: Categorized Canonical Achievements Catalog.
+ * Server-validated, versioned, auditable, and idempotent.
+ */
+const ACHIEVEMENTS_CATALOG = Object.freeze([
+  // Progression
+  {
+    id: 'arrival_complete',
+    category: 'progression',
+    title: 'Arrival Complete',
+    description: 'Advance from Arrival to Resident standing (Level 5).',
+    icon: '🌱',
+    points: 50,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { minLevel: 5 },
+  },
+  {
+    id: 'established_citizen',
+    category: 'progression',
+    title: 'Established Citizen',
+    description: 'Reach Level 10 and unlock creator withdrawals.',
+    icon: '🏛️',
+    points: 100,
+    rarity: 'Uncommon',
+    criteriaVersion: 1,
+    criteria: { minLevel: 10 },
+  },
+  {
+    id: 'builder_rank',
+    category: 'progression',
+    title: 'Master Builder',
+    description: 'Reach Level 20 and unlock community creation.',
+    icon: '🏗️',
+    points: 250,
+    rarity: 'Rare',
+    criteriaVersion: 1,
+    criteria: { minLevel: 20 },
+  },
+  {
+    id: 'century_ascendant',
+    category: 'progression',
+    title: 'Ascendant Century',
+    description: 'Reach the pinnacle Level 100 and attain Ascendant citizenship.',
+    icon: '⭐',
+    points: 1000,
+    rarity: 'Mythic',
+    criteriaVersion: 1,
+    criteria: { minLevel: 100 },
+  },
+  {
+    id: 'active_week',
+    category: 'progression',
+    title: 'Weekly Dedication',
+    description: 'Maintain a verified 7-day active participation streak.',
+    icon: '🔥',
+    points: 75,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { minStreak: 7 },
+  },
+  {
+    id: 'active_month',
+    category: 'progression',
+    title: 'Monthly Constancy',
+    description: 'Maintain a verified 30-day active participation streak.',
+    icon: '⚡',
+    points: 300,
+    rarity: 'Rare',
+    criteriaVersion: 1,
+    criteria: { minStreak: 30 },
+  },
+  {
+    id: 'century_streak',
+    category: 'progression',
+    title: 'Centurion Streak',
+    description: 'Reach 100 consecutive active calendar days in Arvdoul.',
+    icon: '👑',
+    points: 1000,
+    rarity: 'Legendary',
+    criteriaVersion: 1,
+    criteria: { minStreak: 100 },
+  },
+
+  // Creation
+  {
+    id: 'first_broadcast',
+    category: 'creation',
+    title: 'First Signal',
+    description: 'Publish your first verified post or spark to the nation.',
+    icon: '📡',
+    points: 25,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { minPosts: 1 },
+  },
+  {
+    id: 'prolific_creator',
+    category: 'creation',
+    title: 'Prolific Voice',
+    description: 'Publish 50 original creations across posts, sparks, and stories.',
+    icon: '📜',
+    points: 200,
+    rarity: 'Uncommon',
+    criteriaVersion: 1,
+    criteria: { minPosts: 50 },
+  },
+  {
+    id: 'viral_moment',
+    category: 'creation',
+    title: 'National Resonance',
+    description: 'Achieve 1,000 genuine likes across your creations.',
+    icon: '💫',
+    points: 350,
+    rarity: 'Rare',
+    criteriaVersion: 1,
+    criteria: { minLikes: 1000 },
+  },
+
+  // Creator
+  {
+    id: 'creator_status',
+    category: 'creator',
+    title: 'Accredited Creator',
+    description: 'Complete creator onboarding and obtain verified Creator status.',
+    icon: '🎨',
+    points: 150,
+    rarity: 'Uncommon',
+    criteriaVersion: 1,
+    criteria: { isCreator: true },
+  },
+  {
+    id: 'first_live_stream',
+    category: 'creator',
+    title: 'Live Broadcaster',
+    description: 'Host your first live broadcast session.',
+    icon: '🔴',
+    points: 100,
+    rarity: 'Uncommon',
+    criteriaVersion: 1,
+    criteria: { hostedLive: true },
+  },
+
+  // Community
+  {
+    id: 'civic_voter',
+    category: 'community',
+    title: 'Civic Participant',
+    description: 'Participate and cast votes in 5 community proposals or polls.',
+    icon: '🗳️',
+    points: 100,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { pollVotes: 5 },
+  },
+  {
+    id: 'helpful_citizen',
+    category: 'community',
+    title: 'Guardian of Peace',
+    description: 'Provide 25 constructive and verified community comments.',
+    icon: '🤝',
+    points: 150,
+    rarity: 'Uncommon',
+    criteriaVersion: 1,
+    criteria: { commentsCount: 25 },
+  },
+
+  // Exploration & Social
+  {
+    id: 'nation_explorer',
+    category: 'exploration',
+    title: 'Nation Explorer',
+    description: 'Discover and inspect 20 distinct citizen profiles.',
+    icon: '🧭',
+    points: 50,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { profilesVisited: 20 },
+  },
+  {
+    id: 'social_architect',
+    category: 'social',
+    title: 'Social Architect',
+    description: 'Establish 20 mutual connections in the social graph.',
+    icon: '🌐',
+    points: 200,
+    rarity: 'Rare',
+    criteriaVersion: 1,
+    criteria: { friendsCount: 20 },
+  },
+
+  // Economy
+  {
+    id: 'first_patron',
+    category: 'economy',
+    title: 'Generous Patron',
+    description: 'Support a creator by sending your first coin gift.',
+    icon: '🎁',
+    points: 50,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { giftsSent: 1 },
+  },
+  {
+    id: 'coin_magnate',
+    category: 'economy',
+    title: 'Sovereign Reserve',
+    description: 'Accumulate a verified total of 2,500 coins earned through creation.',
+    icon: '🪙',
+    points: 500,
+    rarity: 'Rare',
+    criteriaVersion: 1,
+    criteria: { lifetimeCoinsEarned: 2500 },
+  },
+
+  // Citizenship & Historical
+  {
+    id: 'passport_holder',
+    category: 'citizenship',
+    title: 'Passport Holder',
+    description: 'Establish your official Arvdoul Digital Passport.',
+    icon: '📘',
+    points: 100,
+    rarity: 'Common',
+    criteriaVersion: 1,
+    criteria: { hasPassport: true },
+  },
+  {
+    id: 'state_noble',
+    category: 'citizenship',
+    title: 'Crown Recognized',
+    description: 'Qualify for and attain the civic rank of Duke or King/Queen.',
+    icon: '👑',
+    points: 1000,
+    rarity: 'Mythic',
+    criteriaVersion: 1,
+    criteria: { isRoyal: true },
+  },
+  {
+    id: 'founding_pioneer',
+    category: 'historical',
+    title: 'Pioneer Citizen',
+    description: 'One of the founding members of the Arvdoul Digital Nation.',
+    icon: '🛡️',
+    points: 250,
+    rarity: 'Legendary',
+    criteriaVersion: 1,
+    criteria: { isPioneer: true },
+  },
+]);
+
+/**
+ * Part 2: Standardized Titles Catalog by Domain.
+ * Represents recognized civic, creator, community, economic, and historical standing.
+ * Strictly non-purchasable with zero pay-to-legitimacy.
+ */
+const TITLES_CATALOG = Object.freeze({
+  // Creation Domain
+  creator: {
+    id: 'creator',
+    domain: 'creation',
+    name: 'Creator',
+    icon: '🎨',
+    description: 'Recognized creator producing original works in Arvdoul.',
+    minLevel: 5,
+    criteria: { isCreator: true },
+  },
+  visionary: {
+    id: 'visionary',
+    domain: 'creation',
+    name: 'Visionary',
+    icon: '🔮',
+    description: 'Forward-thinking creator shaping cultural movements.',
+    minLevel: 30,
+    criteria: { minLevel: 30, minCreations: 50 },
+  },
+  builder: {
+    id: 'builder',
+    domain: 'creation',
+    name: 'Builder',
+    icon: '🏗️',
+    description: 'Active platform contributor building tools and communities.',
+    minLevel: 20,
+    criteria: { minLevel: 20 },
+  },
+
+  // Community Domain
+  helper: {
+    id: 'helper',
+    domain: 'community',
+    name: 'Helper',
+    icon: '🤝',
+    description: 'Trusted citizen supporting newcomers and answering questions.',
+    minLevel: 5,
+    criteria: { minContribution: 20 },
+  },
+  mentor: {
+    id: 'mentor',
+    domain: 'community',
+    name: 'Mentor',
+    icon: '📜',
+    description: 'Guiding light providing educational and community leadership.',
+    minLevel: 25,
+    criteria: { minContribution: 60, minReputation: 60 },
+  },
+  community_leader: {
+    id: 'community_leader',
+    domain: 'community',
+    name: 'Community Leader',
+    icon: '🏛️',
+    description: 'Elected or recognized head of an active Arvdoul community.',
+    minLevel: 35,
+    criteria: { minContribution: 80, minInfluence: 60 },
+  },
+
+  // Civic / Ceremonial Domain (strictly governed by multidimensional criteria)
+  resident: {
+    id: 'resident',
+    domain: 'civic',
+    name: 'Resident',
+    icon: '🌱',
+    description: 'Registered platform resident of Arvdoul.',
+    minLevel: 1,
+    criteria: { minLevel: 1 },
+  },
+  citizen: {
+    id: 'citizen',
+    domain: 'civic',
+    name: 'Citizen',
+    icon: '🏛️',
+    description: 'Full voting citizen of the digital nation.',
+    minLevel: 5,
+    criteria: { minLevel: 5, minActiveDays: 7 },
+  },
+  statesperson: {
+    id: 'statesperson',
+    domain: 'civic',
+    name: 'Statesperson',
+    icon: '📜',
+    description: 'Established civic pillar and trusted community contributor.',
+    minLevel: 15,
+    criteria: { minLevel: 15, minActiveDays: 30 },
+  },
+  senator: {
+    id: 'senator',
+    domain: 'civic',
+    name: 'Senator',
+    icon: '⚖️',
+    description: 'Platform legislative voter and constitutional policy proposer.',
+    minLevel: 30,
+    criteria: { minLevel: 30, minActiveDays: 90 },
+  },
+  chancellor: {
+    id: 'chancellor',
+    domain: 'civic',
+    name: 'Chancellor',
+    icon: '👑',
+    description: 'High governing council member of the nation.',
+    minLevel: 60,
+    criteria: { minLevel: 60, minActiveDays: 180 },
+  },
+  duke: {
+    id: 'duke',
+    domain: 'civic',
+    name: 'Duke',
+    icon: '⚜️',
+    description: 'Noble rank requiring proven reputation, high contribution, and sustained active days.',
+    minLevel: 70,
+    criteria: ROYAL_ELIGIBILITY.duke,
+  },
+  king: {
+    id: 'king',
+    domain: 'civic',
+    name: 'King / Queen',
+    icon: '👑',
+    description: 'Highest ceremonial sovereign rank. Demands apex trust, exceptional civic contribution, and years of standing.',
+    minLevel: 90,
+    criteria: ROYAL_ELIGIBILITY.king,
+  },
+
+  // Historical Domain
+  founder: {
+    id: 'founder',
+    domain: 'historical',
+    name: 'Founding Citizen',
+    icon: '⭐',
+    description: 'Pioneer citizen present during Arvdoul genesis.',
+    minLevel: 1,
+    criteria: { isFounder: true },
+  },
+  pioneer: {
+    id: 'pioneer',
+    domain: 'historical',
+    name: 'Pioneer',
+    icon: '🛡️',
+    description: 'Early adopter who shaped the early network.',
+    minLevel: 1,
+    criteria: { isPioneer: true },
+  },
+});
+
+/**
+ * Public Reputation Standing Bands.
+ * Measures trust, integrity, conduct, and reliability.
+ * Internal security and risk formulas remain unexposed.
+ */
+const REPUTATION_BANDS = Object.freeze([
+  { minScore: 90, label: 'Exceptional', color: 'emerald', description: 'Impeccable conduct, verified authenticity, trusted community pillar.' },
+  { minScore: 75, label: 'Highly Trusted', color: 'blue', description: 'Consistently positive track record and high integrity.' },
+  { minScore: 60, label: 'Trusted', color: 'cyan', description: 'Established positive platform history and good standing.' },
+  { minScore: 40, label: 'Established', color: 'indigo', description: 'Active citizen with verified account integrity.' },
+  { minScore: 20, label: 'Developing', color: 'amber', description: 'Building trust and community participation.' },
+  { minScore: 0,  label: 'Unestablished', color: 'slate', description: 'New account or unverified conduct record.' },
+]);
+
+function getReputationBand(score = 0) {
+  const num = Math.max(0, Math.min(100, Number(score) || 0));
+  for (const band of REPUTATION_BANDS) {
+    if (num >= band.minScore) return band;
+  }
+  return REPUTATION_BANDS[REPUTATION_BANDS.length - 1];
+}
+
+/**
+ * Influence Bands: Genuine reach and impact (not raw followers).
+ */
+const INFLUENCE_BANDS = Object.freeze([
+  { minScore: 85, label: 'National Reach', color: 'fuchsia' },
+  { minScore: 70, label: 'Community Beacon', color: 'purple' },
+  { minScore: 50, label: 'Resonant Voice', color: 'blue' },
+  { minScore: 25, label: 'Growing Presence', color: 'cyan' },
+  { minScore: 0,  label: 'Emerging', color: 'slate' },
+]);
+
+function getInfluenceBand(score = 0) {
+  const num = Math.max(0, Math.min(100, Number(score) || 0));
+  for (const band of INFLUENCE_BANDS) {
+    if (num >= band.minScore) return band;
+  }
+  return INFLUENCE_BANDS[INFLUENCE_BANDS.length - 1];
+}
+
+/**
+ * Contribution Bands: Ecosystem value (not money spent).
+ */
+const CONTRIBUTION_BANDS = Object.freeze([
+  { minScore: 85, label: 'Pillar of Arvdoul', color: 'emerald' },
+  { minScore: 70, label: 'Distinguished Contributor', color: 'teal' },
+  { minScore: 50, label: 'Active Helper', color: 'green' },
+  { minScore: 25, label: 'Community Contributor', color: 'cyan' },
+  { minScore: 0,  label: 'Participant', color: 'slate' },
+]);
+
+function getContributionBand(score = 0) {
+  const num = Math.max(0, Math.min(100, Number(score) || 0));
+  for (const band of CONTRIBUTION_BANDS) {
+    if (num >= band.minScore) return band;
+  }
+  return CONTRIBUTION_BANDS[CONTRIBUTION_BANDS.length - 1];
+}
+
+/**
+ * Creator Tiers & Classification.
+ */
+const CREATOR_TIERS = Object.freeze({
+  standard: { id: 'standard', name: 'Standard Citizen', commissionRate: 0.15 },
+  creator: { id: 'creator', name: 'Accredited Creator', commissionRate: 0.12 },
+  advanced: { id: 'advanced', name: 'Advanced Creator', commissionRate: 0.10 },
+  professional: { id: 'professional', name: 'Professional Creator', commissionRate: 0.08 },
+  elite: { id: 'elite', name: 'Elite Creator', commissionRate: 0.06 },
+  partner: { id: 'partner', name: 'Partner Creator', commissionRate: 0.05 },
+});
+
+/**
+ * Financial Ledger Transaction States (Blueprint §39).
+ */
+const TRANSACTION_STATES = Object.freeze({
+  INITIATED: 'INITIATED',
+  PENDING: 'PENDING',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  REFUNDED: 'REFUNDED',
+  DISPUTED: 'DISPUTED',
+  HELD: 'HELD',
+});
+
+/**
+ * Prestige info beyond Level 100.
+ */
+function getPrestigeInfo(level = 1) {
+  const lvl = Math.max(1, Number(level) || 1);
+  if (lvl <= 100) return { isPrestige: false, prestigeRank: 0, prestigeRoman: null };
+  const prestigeRank = Math.floor((lvl - 100) / 10) + 1;
+  const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][prestigeRank - 1] || `${prestigeRank}`;
+  return { isPrestige: true, prestigeRank, prestigeRoman: roman };
+}
+
 module.exports = {
   LEVELS,
   RANK_TITLES,
@@ -346,6 +844,13 @@ module.exports = {
   LEVEL_GATES,
   ROYAL_ELIGIBILITY,
   MAX_LEVEL,
+  ACHIEVEMENTS_CATALOG,
+  TITLES_CATALOG,
+  REPUTATION_BANDS,
+  INFLUENCE_BANDS,
+  CONTRIBUTION_BANDS,
+  CREATOR_TIERS,
+  TRANSACTION_STATES,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,
@@ -357,4 +862,8 @@ module.exports = {
   getRoyalEligibility,
   getIdentityBadge,
   getLevelBandColor,
+  getReputationBand,
+  getInfluenceBand,
+  getContributionBand,
+  getPrestigeInfo,
 };

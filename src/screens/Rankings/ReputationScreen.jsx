@@ -1,104 +1,38 @@
-// src/screens/Rankings/ReputationScreen.jsx – ARVDOUL REPUTATION SCREEN V1
-// ⭐ User Reputation Profile with Scores, Badges, History
-// ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
+// src/screens/Rankings/ReputationScreen.jsx — ARVDOUL REPUTATION & CIVIC TRUST (Part 2)
+// Multidimensional: Trust Standing, Genuine Influence, Civic Contribution.
+// WCAG 2.1 AA Compliant, Zero-Pill discipline.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  FaChevronLeft, FaShieldAlt, FaStar, FaCheck, FaClock,
-  FaTrophy, FaMedal, FaArrowUp, FaArrowDown, FaFire
-} from 'react-icons/fa';
-import { RANKING_CONFIG } from '../../services/rankingService.js';
-import rankingService from '../../services/rankingService.js';
+  ArrowLeft,
+  ShieldCheck,
+  Award,
+  Zap,
+  CheckCircle2,
+  TrendingUp,
+  Share2,
+} from 'lucide-react';
+import reputationService from '../../services/reputationService.js';
+import { toast } from 'sonner';
 
-// ==================== UTILITY COMPONENTS ====================
-const StatCard = ({ icon: Icon, label, value, color = 'indigo' }) => (
-  <div className="bg-gray-800 rounded-xl p-4 text-center">
-    <div className={`text-${color}-400 mb-2`}>
-      <Icon className="text-2xl mx-auto" />
-    </div>
-    <div className="text-2xl font-bold text-white mb-1">{value}</div>
-    <div className="text-gray-400 text-sm">{label}</div>
-  </div>
-);
-
-const ProgressBar = ({ value, max, label, color = 'indigo' }) => {
-  const percentage = Math.min((value / max) * 100, 100);
-  
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-sm">
-        <span className="text-gray-400">{label}</span>
-        <span className="text-white font-medium">{value}</span>
-      </div>
-      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className={`h-full bg-${color}-500 transition-all duration-500`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-    </div>
-  );
-};
-
-const BadgeCard = ({ badge, earned }) => (
-  <div className={`
-    relative p-4 rounded-xl text-center transition-all
-    ${earned ? 'bg-gray-800' : 'bg-gray-800/50 opacity-50'}
-  `}>
-    <div className="text-4xl mb-2">{badge.icon}</div>
-    <h4 className="text-white font-medium text-sm">{badge.name}</h4>
-    <p className="text-gray-500 text-xs mt-1">{badge.description}</p>
-    {earned && (
-      <div className="absolute top-2 right-2">
-        <FaCheck className="text-green-500" />
-      </div>
-    )}
-  </div>
-);
-
-const TierDisplay = ({ tier }) => (
-  <div className="flex items-center gap-4 p-4 rounded-xl" style={{ backgroundColor: `${tier.color}20` }}>
-    <div
-      className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
-      style={{ backgroundColor: tier.color, color: '#000' }}
-    >
-      {tier.name.charAt(0)}
-    </div>
-    <div>
-      <h3 className="text-lg font-bold" style={{ color: tier.color }}>{tier.name} Tier</h3>
-      <p className="text-gray-400 text-sm">Current reputation tier</p>
-    </div>
-  </div>
-);
-
-// ==================== MAIN REPUTATION SCREEN ====================
 export default function ReputationScreen() {
   const { theme, isDark } = useTheme();
   const navigate = useNavigate();
   const { userId } = useParams();
-  const [reputation, setReputation] = useState(null);
-  const [badges, setBadges] = useState([]);
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [profile, setProfile] = useState(null);
 
   const fetchReputation = useCallback(async () => {
     if (!userId) return;
-    
-    setLoading(true);
-    setError(null);
-
+    setLoading(false);
     try {
-      const [repData, badgeData] = await Promise.all([
-        rankingService.getUserReputation(userId),
-        rankingService.getUserBadges(userId),
-      ]);
-
-      setReputation(repData);
-      setBadges(badgeData);
+      const data = await reputationService.getReputationProfile(userId);
+      setProfile(data);
     } catch (err) {
-      setError(err.message);
+      toast.error('Failed to load reputation profile');
     } finally {
       setLoading(false);
     }
@@ -110,179 +44,155 @@ export default function ReputationScreen() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'}`}>
-        <div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full" />
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-black text-gray-400' : 'bg-gray-50 text-gray-600'}`}>
+        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'}`}>
-        <div className="text-center">
-          <p className="text-red-400 mb-4">{error}</p>
-          <button
-            onClick={fetchReputation}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const tier = RANKING_CONFIG.TIERS.find(t => t.id === reputation?.tier) || RANKING_CONFIG.TIERS[0];
-  const earnedBadgeIds = badges.map(b => b.id);
+  const rep = profile?.reputation || { score: 50, band: 'Neutral', min: 40, max: 59, nextBand: 'Established', nextThreshold: 60 };
+  const inf = profile?.influence || { score: 20, band: 'Minimal', nextBand: 'Emerging', nextThreshold: 20 };
+  const con = profile?.contribution || { score: 25, band: 'Contributor', nextBand: 'Builder', nextThreshold: 40 };
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
+    <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-4">
-        <div className="max-w-2xl mx-auto flex items-center gap-4">
+      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
+        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
+      }`}>
+        <div className="flex items-center space-x-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-gray-700 rounded-lg"
             aria-label="Go back"
+            className={`p-2 rounded-lg transition-colors ${
+              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
+            }`}
           >
-            <FaChevronLeft />
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <FaShieldAlt className="text-indigo-400" />
-            Reputation
-          </h1>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">Trust & Standing</h1>
+            <p className="text-xs text-gray-500">Multidimensional Civic Standing</p>
+          </div>
         </div>
+
+        <button
+          onClick={() => navigate(`/passport/${userId}`)}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+        >
+          View Passport
+        </button>
       </header>
 
-      {/* Content */}
-      <main className="max-w-2xl mx-auto p-4 space-y-6">
-        {/* Tier Display */}
-        <TierDisplay tier={tier} />
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4">
-          <StatCard
-            icon={FaShieldAlt}
-            label="Trust Score"
-            value={reputation?.trust || 0}
-            color="green"
-          />
-          <StatCard
-            icon={FaStar}
-            label="Contributions"
-            value={reputation?.contributions || 0}
-            color="yellow"
-          />
-          <StatCard
-            icon={FaTrophy}
-            label="Moderation"
-            value={reputation?.moderation || 0}
-            color="purple"
-          />
-          <StatCard
-            icon={FaCheck}
-            label="Reliability"
-            value={reputation?.reliability || 0}
-            color="blue"
-          />
-        </div>
-
-        {/* Progress Bars */}
-        <div className="bg-gray-800 rounded-xl p-6 space-y-6">
-          <h3 className="text-lg font-semibold">Score Breakdown</h3>
-          
-          <ProgressBar
-            label="Trust"
-            value={reputation?.trust || 0}
-            max={100}
-            color="green"
-          />
-          
-          <ProgressBar
-            label="Contributions"
-            value={reputation?.contributions || 0}
-            max={1000}
-            color="yellow"
-          />
-          
-          <ProgressBar
-            label="Moderation"
-            value={reputation?.moderation || 0}
-            max={100}
-            color="purple"
-          />
-          
-          <ProgressBar
-            label="Reliability"
-            value={reputation?.reliability || 0}
-            max={100}
-            color="blue"
-          />
-
-          {/* Total Score */}
-          <div className="pt-4 border-t border-gray-700">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Total Score</span>
-              <span className="text-2xl font-bold text-indigo-400">
-                {reputation?.totalScore || 0}
-              </span>
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Dimension 1: Trust Standing (Reputation) */}
+        <section
+          aria-labelledby="trust-heading"
+          className={`p-6 rounded-2xl border ${
+            isDark ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-xl bg-emerald-950/40 text-emerald-400">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-500">
+                  Trust Dimension
+                </span>
+                <h2 id="trust-heading" className="text-xl font-bold mt-0.5">
+                  {rep.band} Standing
+                </h2>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-black text-emerald-400">{rep.score}</span>
+              <span className="text-xs text-gray-500 block">/ 100</span>
             </div>
           </div>
-        </div>
 
-        {/* Badges Section */}
-        <div className="bg-gray-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <FaMedal className="text-yellow-400" />
-            Badges ({badges.length}/{RANKING_CONFIG.BADGES.length})
-          </h3>
-          
-          <div className="grid grid-cols-3 gap-4">
-            {RANKING_CONFIG.BADGES.map((badge) => (
-              <BadgeCard
-                key={badge.id}
-                badge={badge}
-                earned={earnedBadgeIds.includes(badge.id)}
+          <div className="mt-5 space-y-2">
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>Current Range: {rep.min}–{rep.max}</span>
+              <span>Next: {rep.nextBand || 'Maximum Trust'}</span>
+            </div>
+            <div className={`h-2.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(5, rep.score))}%` }}
               />
-            ))}
-          </div>
-        </div>
-
-        {/* History Section */}
-        {reputation?.history && reputation.history.length > 0 && (
-          <div className="bg-gray-800 rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FaClock className="text-gray-400" />
-              Recent Activity
-            </h3>
-            
-            <div className="space-y-3">
-              {reputation.history.map((event, index) => (
-                <div key={index} className="flex items-center gap-4 p-3 bg-gray-700/50 rounded-lg">
-                  <div className={`
-                    w-8 h-8 rounded-full flex items-center justify-center
-                    ${event.type === 'increase' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
-                  `}>
-                    {event.type === 'increase' ? <FaArrowUp /> : <FaArrowDown />}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-white">{event.description}</p>
-                    <p className="text-gray-500 text-sm">{event.date}</p>
-                  </div>
-                  <span className={`
-                    font-bold
-                    ${event.type === 'increase' ? 'text-green-400' : 'text-red-400'}
-                  `}>
-                    {event.type === 'increase' ? '+' : ''}{event.change}
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
-        )}
+          <p className="text-xs text-gray-500 mt-3">
+            Grounded in civility, verified authenticity, zero community safety violations, and peer endorsements.
+          </p>
+        </section>
+
+        {/* Dimension 2: Ecosystem Reach (Influence) */}
+        <section
+          aria-labelledby="influence-heading"
+          className={`p-6 rounded-2xl border ${
+            isDark ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-xl bg-purple-950/40 text-purple-400">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-purple-400">
+                  Reach & Authority
+                </span>
+                <h2 id="influence-heading" className="text-xl font-bold mt-0.5">
+                  {inf.band} Influence
+                </h2>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-black text-purple-400">{inf.score}</span>
+              <span className="text-xs text-gray-500 block">Score</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-3">
+            Measures constructive reach, engagement depth, and authentic discussion propagation across the network.
+          </p>
+        </section>
+
+        {/* Dimension 3: Ecosystem Contribution */}
+        <section
+          aria-labelledby="contribution-heading"
+          className={`p-6 rounded-2xl border ${
+            isDark ? 'bg-gray-900/60 border-gray-800' : 'bg-white border-gray-200 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 rounded-xl bg-teal-950/40 text-teal-400">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-teal-400">
+                  Civic Building
+                </span>
+                <h2 id="contribution-heading" className="text-xl font-bold mt-0.5">
+                  {con.band} Tier
+                </h2>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-2xl font-black text-teal-400">{con.score}</span>
+              <span className="text-xs text-gray-500 block">Contribution</span>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-3">
+            Synthesizes publication velocity, community moderation participation, and patronage within Arvdoul.
+          </p>
+        </section>
       </main>
     </div>
   );
 }
-
-export { RANKING_CONFIG };

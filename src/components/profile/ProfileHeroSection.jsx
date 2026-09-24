@@ -340,37 +340,63 @@ const ProfileHeroSection = memo(({
                 )}
               </div>
 
-              {/* Username */}
-              <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
-                @{username}
-              </p>
+              {/* Username & Civic Standing */}
+              <div className="flex items-center gap-1.5 flex-wrap text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
+                <span>@{username}</span>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={() => navigate(isOwner ? '/titles' : `/passport/${profile?.id || profile?.uid}`)}
+                  className="text-purple-600 dark:text-purple-400 font-semibold hover:underline inline-flex items-center gap-1"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>{profile?.primaryTitle || profile?.activeTitle?.name || citizenStanding.tier}</span>
+                </button>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={() => navigate(isOwner ? '/passport' : `/passport/${profile?.id || profile?.uid}`)}
+                  className="text-indigo-500 dark:text-indigo-400 font-medium hover:underline inline-flex items-center gap-0.5"
+                >
+                  <span>Passport</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
 
-              {/* Badges Chips */}
-              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+              {/* Unboxed Metadata (Zero-Pill Discipline) */}
+              <div className="flex items-center gap-2 flex-wrap pt-0.5 text-xs text-slate-500 dark:text-slate-400">
                 {Boolean(profile?.isVerified || profile?.verified) && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                    <ShieldCheck className="w-3 h-3" />
-                    <span>Verified</span>
+                  <span className="inline-flex items-center gap-1 text-blue-500 font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Verified Citizen</span>
                   </span>
                 )}
+                {Boolean(profile?.isVerified || profile?.verified) && <span>·</span>}
 
                 {(profile?.isCreator || effectiveLevel >= LEVEL_GATES.creatorProfile) ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                    <Star className="w-3 h-3 fill-amber-500/30" />
-                    <span>{effectiveLevel >= LEVEL_GATES.verifiedPriority ? 'Top Creator' : 'Creator'}</span>
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/creator/dashboard')}
+                    className="inline-flex items-center gap-1 text-amber-500 font-medium hover:underline"
+                  >
+                    <Star className="w-3.5 h-3.5 fill-amber-500/30" />
+                    <span>{effectiveLevel >= LEVEL_GATES.verifiedPriority ? 'Top Creator' : 'Accredited Creator'}</span>
+                  </button>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <Award className="w-3 h-3" />
-                    <span>{effectiveLevel >= LEVEL_GATES.publicFollowers ? 'Citizen' : 'Resident'}</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-500 font-medium">
+                    <Award className="w-3.5 h-3.5" />
+                    <span>{citizenStanding.tier}</span>
                   </span>
                 )}
 
                 {Boolean(profile?.isPremium || profile?.vip) && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                    <Crown className="w-3 h-3" />
-                    <span>Premium</span>
-                  </span>
+                  <>
+                    <span>·</span>
+                    <span className="inline-flex items-center gap-1 text-purple-400 font-medium">
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>Sovereign Patron</span>
+                    </span>
+                  </>
                 )}
               </div>
 
@@ -443,20 +469,27 @@ const ProfileHeroSection = memo(({
           </div>
 
           {/* 3. Level & Experience Card */}
-          <div className={cn(
-            "w-full lg:w-72 p-4 rounded-2xl border transition-all shrink-0",
-            isDark
-              ? "bg-[#131b2e]/90 border-white/10"
-              : "bg-slate-50/90 border-slate-200/80"
-          )}>
+          <div
+            onClick={() => navigate('/progress')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigate('/progress')}
+            className={cn(
+              "w-full lg:w-72 p-4 rounded-2xl border transition-all shrink-0 cursor-pointer hover:border-purple-500/50 group",
+              isDark
+                ? "bg-[#131b2e]/90 border-white/10 hover:bg-[#162038]"
+                : "bg-slate-50/90 border-slate-200/80 hover:bg-slate-100"
+            )}
+            title="View Full Progression & Unlock Gates"
+          >
             <div className="flex items-center justify-between mb-2.5">
               {/* Hexagonal Level Badge */}
               <div className="flex items-center gap-2">
-                <div className="relative w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-purple-500/20">
+                <div className="relative w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform">
                   {effectiveLevel}
                 </div>
                 <div>
-                  <div className="text-xs font-bold leading-tight">
+                  <div className="text-xs font-bold leading-tight group-hover:text-purple-500 transition-colors">
                     Level {effectiveLevel}
                   </div>
                   <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">

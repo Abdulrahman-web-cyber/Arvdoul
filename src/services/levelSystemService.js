@@ -20,6 +20,17 @@ import {
   getRoyalEligibility,
   getIdentityBadge,
   getLevelBandColor,
+  ACHIEVEMENTS_CATALOG,
+  TITLES_CATALOG,
+  REPUTATION_BANDS,
+  INFLUENCE_BANDS,
+  CONTRIBUTION_BANDS,
+  CREATOR_TIERS,
+  TRANSACTION_STATES,
+  getReputationBand,
+  getInfluenceBand,
+  getContributionBand,
+  getPrestigeInfo,
 } from '../shared/levelConfig.cjs';
 
 // The curve, reward tables, XP rules and gating thresholds live in ONE place:
@@ -34,6 +45,13 @@ export {
   XP_RULES,
   LEVEL_GATES,
   ROYAL_ELIGIBILITY,
+  ACHIEVEMENTS_CATALOG,
+  TITLES_CATALOG,
+  REPUTATION_BANDS,
+  INFLUENCE_BANDS,
+  CONTRIBUTION_BANDS,
+  CREATOR_TIERS,
+  TRANSACTION_STATES,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,
@@ -45,6 +63,10 @@ export {
   getRoyalEligibility,
   getIdentityBadge,
   getLevelBandColor,
+  getReputationBand,
+  getInfluenceBand,
+  getContributionBand,
+  getPrestigeInfo,
 };
 
 class LevelSystemService {

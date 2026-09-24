@@ -13,6 +13,12 @@ export const FUNCTIONS = {
   APPLY_USER_ADMIN_ACTION: 'applyUserAdminAction',
   RESOLVE_USER_REPORT: 'resolveUserReport',
   DELETE_USER_DATA: 'deleteUserData',
+  AWARD_EXPERIENCE: 'awardExperience',
+  RECORD_ACTIVE_DAY: 'recordActiveDay',
+  EVALUATE_ACHIEVEMENTS: 'evaluateAchievements',
+  CLAIM_TITLE: 'claimTitle',
+  SET_ACTIVE_TITLE: 'setActiveTitle',
+  APPLY_FOR_CREATOR: 'applyForCreator',
 };
 
 /**
