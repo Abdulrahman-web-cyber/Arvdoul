@@ -687,7 +687,6 @@ export const UserProvider = ({ children }) => {
         username: firebaseUser.email?.split("@")[0] || `user_${userId.slice(0, 8)}`,
         bio: "",
         profilePicture: firebaseUser.photoURL || "/assets/default-profile.png",
-        coverPhoto: "",
         privacy: "public",
         verified: false,
         badges: ["new_user"],
@@ -956,27 +955,24 @@ export const UserProvider = ({ children }) => {
         throw new Error("Invalid file type. Please use JPEG, PNG, WEBP, or GIF.");
       }
 
-      const maxSize = type === "profile"
-        ? USER_CONFIG.MAX_PROFILE_IMAGE_SIZE
-        : USER_CONFIG.MAX_COVER_IMAGE_SIZE;
+      const maxSize = USER_CONFIG.MAX_PROFILE_IMAGE_SIZE;
 
       if (file.size > maxSize) {
         throw new Error(`File too large. Maximum size is ${maxSize / (1024 * 1024)}MB.`);
       }
 
       // Upload to storage
-      const storagePath = `${type}_images/${userProfile.uid}/${Date.now()}_${file.name}`;
+      const storagePath = `avatar_images/${userProfile.uid}/${Date.now()}_${file.name}`;
       const imageRef = storageRef(storage, storagePath);
 
       await uploadBytes(imageRef, file);
       const downloadURL = await getDownloadURL(imageRef);
 
-      // Update profile
-      const updateField = type === "profile" ? "profilePicture" : "coverPhoto";
-      await updateProfile({ [updateField]: downloadURL });
+      // Update profile avatar (photoURL is the single source of truth)
+      await updateProfile({ photoURL: downloadURL, profilePicture: downloadURL });
 
       // Track activity
-      await ActivityTracker.track(userProfile.uid, `${type}_image_upload`, {
+      await ActivityTracker.track(userProfile.uid, 'avatar_image_upload', {
         fileSize: file.size,
         fileType: file.type
       });
@@ -991,38 +987,32 @@ export const UserProvider = ({ children }) => {
     }
   }, [userProfile, updateProfile]);
 
-  const deleteProfileImage = useCallback(async (type = "profile") => {
+  const deleteProfileImage = useCallback(async () => {
     if (!userProfile?.uid) {
       throw new Error("No user logged in");
     }
 
     try {
-      const imageUrl = type === "profile"
-        ? userProfile.profilePicture
-        : userProfile.coverPhoto;
+      const imageUrl = userProfile.photoURL || userProfile.profilePicture;
 
       if (!imageUrl || imageUrl.includes("default")) {
-        throw new Error(`No ${type} image to delete`);
+        throw new Error("No profile image to delete");
       }
 
       // Extract storage path from URL — best-effort for Firebase Storage
       const parts = imageUrl.split("/o/");
-      if (parts.length < 2) throw new Error("Unsupported image URL format");
-      const storagePath = decodeURIComponent(parts[1].split("?")[0]);
-
-      // Delete from storage
-      const imageRef = storageRef(storage, storagePath);
-      await deleteObject(imageRef);
+      if (parts.length >= 2) {
+        const storagePath = decodeURIComponent(parts[1].split("?")[0]);
+        // Delete from storage
+        const imageRef = storageRef(storage, storagePath);
+        await deleteObject(imageRef).catch(() => {});
+      }
 
       // Update profile
-      const updateField = type === "profile" ? "profilePicture" : "coverPhoto";
-      const defaultValue = type === "profile"
-        ? "/assets/default-profile.png"
-        : "";
+      const defaultValue = "/assets/default-profile.png";
+      await updateProfile({ photoURL: defaultValue, profilePicture: defaultValue });
 
-      await updateProfile({ [updateField]: defaultValue });
-
-      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} image deleted`);
+      toast.success("Profile image deleted");
 
     } catch (error) {
       console.error("Image deletion failed:", error);

@@ -1041,8 +1041,8 @@ export const SignupProvider = ({ children }) => {
         blockedUsers: [],
         
         // Media
-        profilePicture: profileData.profilePicture || "/assets/default-profile.png",
-        coverPhoto: profileData.coverPhoto || "",
+        photoURL: profileData.photoURL || profileData.profilePicture || "/assets/default-profile.png",
+        profilePicture: profileData.photoURL || profileData.profilePicture || "/assets/default-profile.png",
         
         // Metadata
         createdAt: serverTimestamp(),

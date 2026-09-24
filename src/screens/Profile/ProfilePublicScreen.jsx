@@ -12,7 +12,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Lock, UserPlus } from 'lucide-react';
+import { Lock, UserPlus, UserX, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,6 +20,7 @@ import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { getStoredUid } from '../../utils/security';
 import { LEVEL_GATES } from '../../services/levelSystemService';
+import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -61,6 +62,7 @@ export default function ProfilePublicScreen() {
   const [pendingRequestId, setPendingRequestId] = useState(null);
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
+  const [relationship, setRelationship] = useState(null);
   
   // Modals
   const [showTipModal, setShowTipModal] = useState(false);
@@ -101,11 +103,14 @@ export default function ProfilePublicScreen() {
           console.warn('Posts fetch note:', postErr);
         }
 
-        // 3. Fetch follow status
+        // 3. Fetch relationship & follow status
         if (currentUser?.uid && targetUid !== currentUser.uid) {
           try {
-            const status = await userService.checkFollowStatus(currentUser.uid, targetUid);
-            if (isMounted) setIsFollowing(Boolean(status?.isFollowing || fetched?.isFollowing));
+            const rel = await userService.getRelationshipState(currentUser.uid, targetUid);
+            if (isMounted) {
+              setRelationship(rel);
+              setIsFollowing(Boolean(rel?.isFollowing || fetched?.isFollowing));
+            }
           } catch (followErr) {
             if (isMounted && fetched?.isFollowing !== undefined) {
               setIsFollowing(Boolean(fetched.isFollowing));
@@ -332,6 +337,32 @@ export default function ProfilePublicScreen() {
     };
   }, [profileData, userId, posts?.length, cleanPublicUsername]);
 
+  const capabilities = useMemo(() => {
+    return resolveCapabilities({
+      viewer: currentUser,
+      target: effectiveProfile,
+      relationship: relationship || {
+        isFollowing,
+        friendshipStatus
+      }
+    });
+  }, [currentUser, effectiveProfile, relationship, isFollowing, friendshipStatus]);
+
+  const handleUnblock = useCallback(async () => {
+    const targetUid = effectiveProfile?.id || effectiveProfile?.uid || userId;
+    if (!currentUser?.uid || !targetUid) return;
+    try {
+      const userServiceModule = await import('../../services/userService.js');
+      const svc = userServiceModule.getUserService();
+      await svc.unblockUser(currentUser.uid, targetUid);
+      toast.success('User unblocked');
+      const updatedRel = await svc.getRelationshipState(currentUser.uid, targetUid);
+      setRelationship(updatedRel);
+    } catch {
+      toast.error('Could not unblock user');
+    }
+  }, [currentUser?.uid, effectiveProfile?.id, effectiveProfile?.uid, userId]);
+
   if (loading && !profileData) {
     return (
       <div className={cn(
@@ -340,6 +371,72 @@ export default function ProfilePublicScreen() {
       )}>
         <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
         <ProfileSkeleton theme={theme} />
+      </div>
+    );
+  }
+
+  if (capabilities?.isBlocking) {
+    return (
+      <div className={cn(
+        "min-h-screen flex items-center justify-center p-4",
+        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
+            <UserX className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black">You have blocked this profile</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            You cannot view content or interact with @{effectiveProfile?.username || 'this user'} while they are blocked.
+          </p>
+          <div className="pt-2 flex justify-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="px-5 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={handleUnblock}
+              className="px-5 py-2.5 rounded-full font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity"
+            >
+              Unblock Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (capabilities?.isBlockedBy || (!loading && capabilities?.canViewProfile === false)) {
+    return (
+      <div className={cn(
+        "min-h-screen flex items-center justify-center p-4",
+        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+      )}>
+        <div className={cn(
+          "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
+          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black">Profile Unavailable</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            This account is currently unavailable or restricted.
+          </p>
+          <div className="pt-2 flex justify-center">
+            <button
+              onClick={() => navigate('/')}
+              className="px-5 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -420,6 +517,7 @@ export default function ProfilePublicScreen() {
             onOpenTipModal={() => setShowTipModal(true)}
             onOpenOptionsMenu={() => setShowOptionsMenu(true)}
             onCallPress={() => toast.info('Starting secure audio call...')}
+            capabilities={capabilities}
           />
 
           {/* 3. 3-Column Social Connections Card */}
@@ -445,6 +543,7 @@ export default function ProfilePublicScreen() {
             theme={theme}
             profile={effectiveProfile}
             analytics={analytics}
+            capabilities={capabilities}
             onMetricPress={(key) => {
               if (key === 'followers') navigate(`/profile/${userId}/followers`);
               else if (key === 'following') navigate(`/profile/${userId}/following`);
@@ -452,7 +551,7 @@ export default function ProfilePublicScreen() {
             }}
           />
 
-          {effectiveProfile.isRestricted ? (
+          {!capabilities.canViewContent ? (
             /* Restricted / Private Account Access Gate */
             <div className={cn(
               "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-6",
@@ -569,6 +668,7 @@ export default function ProfilePublicScreen() {
                   profile={effectiveProfile}
                   isOwner={false}
                   theme={theme}
+                  capabilities={capabilities}
                   onClose={() => setShowOptionsMenu(false)}
                 />
               </Suspense>

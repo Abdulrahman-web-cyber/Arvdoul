@@ -37,6 +37,7 @@ const ProfileMetricsGrid = memo(({
   profile,
   analytics,
   onMetricPress,
+  capabilities,
 }) => {
   const isDark = theme === 'dark';
 
@@ -55,6 +56,10 @@ const ProfileMetricsGrid = memo(({
   const viewsTrend = analytics?.changes?.views && Number(analytics.changes.views) !== 0
     ? `${Number(analytics.changes.views) > 0 ? '+' : ''}${Number(analytics.changes.views).toFixed(1)}%`
     : null;
+
+  const canShowFollowers = capabilities?.canViewFollowers ?? true;
+  const canShowFollowing = capabilities?.canViewFollowing ?? true;
+  const canShowCoins = isOwner || (capabilities?.canViewEconomicStatus ?? false);
 
   const cards = isOwner
     ? [
@@ -125,7 +130,7 @@ const ProfileMetricsGrid = memo(({
         {
           key: 'followers',
           label: 'Followers',
-          value: formatNumber(followersCount),
+          value: canShowFollowers ? formatNumber(followersCount) : '—',
           icon: UserCheck,
           color: 'text-indigo-500',
           bgColor: 'bg-indigo-500/10'
@@ -133,7 +138,7 @@ const ProfileMetricsGrid = memo(({
         {
           key: 'following',
           label: 'Following',
-          value: formatNumber(followingCount),
+          value: canShowFollowing ? formatNumber(followingCount) : '—',
           icon: UserPlus,
           color: 'text-sky-500',
           bgColor: 'bg-sky-500/10'
@@ -141,7 +146,7 @@ const ProfileMetricsGrid = memo(({
         {
           key: 'friends',
           label: 'Friends',
-          value: formatNumber(friendsCount),
+          value: canShowFollowers ? formatNumber(friendsCount) : '—',
           icon: Users,
           color: 'text-blue-500',
           bgColor: 'bg-blue-500/10'
@@ -157,7 +162,7 @@ const ProfileMetricsGrid = memo(({
         {
           key: 'coins',
           label: 'Coins',
-          value: formatNumber(coinsCount),
+          value: canShowCoins ? formatNumber(coinsCount) : '—',
           icon: Coins,
           color: 'text-amber-500',
           bgColor: 'bg-amber-500/10'

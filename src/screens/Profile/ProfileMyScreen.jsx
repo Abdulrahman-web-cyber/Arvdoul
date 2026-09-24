@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, ShieldCheck, X, Lock } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
@@ -23,6 +24,7 @@ import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { LEVEL_GATES } from '../../services/levelSystemService';
+import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { toast } from 'sonner';
 
 // Modular Profile Components
@@ -55,12 +57,21 @@ export default function ProfileMyScreen() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
+  const [viewAs, setViewAs] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
 
   // Authenticated user
   const { user: authContextUser } = useAuth();
   const authStoreUser = useAppStore((state) => state.currentUser);
   const currentUser = authStoreUser || authContextUser;
   const currentUserId = currentUser?.uid || authContextUser?.uid || getStoredUid();
+
+  const handleViewAsChange = useCallback((mode) => {
+    setViewAs(mode);
+    if (!currentUserId) return;
+    useProfileStore.getState().loadProfile(currentUserId, currentUserId, {
+      viewAs: mode === 'owner' ? null : mode
+    });
+  }, [currentUserId]);
 
   // Profile store - reactive state selectors
   const profile = useProfileStore((state) => state.profile);
@@ -155,6 +166,21 @@ export default function ProfileMyScreen() {
       website: safeWebsite,
     };
   }, [profile, cleanUsername, currentUser, currentUserId, posts?.length, balance, level]);
+
+  // Centrally resolved Action Capabilities
+  const capabilities = useMemo(() => {
+    return resolveCapabilities({
+      viewer: currentUser,
+      target: effectiveProfile,
+      relationship: {
+        isOwner: true,
+        isFollowing: viewAs === 'follower' || viewAs === 'connection',
+        isFollower: true,
+        isMutualFriend: viewAs === 'connection'
+      },
+      viewAs: viewAs === 'owner' ? null : viewAs
+    });
+  }, [currentUser, effectiveProfile, viewAs]);
 
   // Load user data on mount without thrashing or clearing cache
   useEffect(() => {
@@ -252,6 +278,53 @@ export default function ProfileMyScreen() {
         {/* Outer responsive frame matching design images */}
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-5">
           
+          {/* View As Mode Control */}
+          <div className={cn(
+            "rounded-2xl p-3 border flex flex-col sm:flex-row items-center justify-between gap-3 transition-all shadow-sm",
+            isDark ? "bg-[#0d1424] border-purple-500/20" : "bg-white border-purple-100"
+          )}>
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500">
+                <Eye className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <span>View As Perspective</span>
+                  {viewAs !== 'owner' && (
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                      Simulating {viewAs}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Preview how visitors, followers, and connections experience your identity & privacy.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-xl w-full sm:w-auto justify-center">
+              {[
+                { id: 'owner', label: 'Owner' },
+                { id: 'public', label: 'Public' },
+                { id: 'follower', label: 'Follower' },
+                { id: 'connection', label: 'Connection' }
+              ].map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => handleViewAsChange(item.id)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                    viewAs === item.id
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 1. Hero Identity & Level Section */}
           <ProfileHeroSection
             profile={effectiveProfile}
@@ -280,10 +353,11 @@ export default function ProfileMyScreen() {
 
           {/* 3. 6-Cards Key Metric Grid */}
           <ProfileMetricsGrid
-            isOwner={true}
+            isOwner={capabilities.isOwner}
             theme={theme}
             profile={effectiveProfile}
             analytics={analytics}
+            capabilities={capabilities}
             onMetricPress={(key) => {
               if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
               else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
@@ -294,57 +368,76 @@ export default function ProfileMyScreen() {
           />
 
           {/* 4. Story Highlights / Vibes Carousel */}
-          <ProfileHighlightsSection
-            highlights={highlights}
-            userId={currentUserId}
-            isOwner={true}
-            theme={theme}
-            onAddHighlight={() => navigate('/create-story')}
-          />
+          {viewAs !== 'owner' && !capabilities.canViewContent ? (
+            <div className={cn(
+              "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
+              isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+            )}>
+              <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private to {viewAs === 'public' ? 'Public Visitors' : viewAs}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                Because your profile visibility is set to Private, visitors in {viewAs} perspective cannot view your highlights, pinned posts, or media gallery.
+              </p>
+            </div>
+          ) : (
+            <>
+              <ProfileHighlightsSection
+                highlights={highlights}
+                userId={currentUserId}
+                isOwner={viewAs === 'owner'}
+                theme={theme}
+                onAddHighlight={() => navigate('/create-story')}
+              />
 
-          {/* 5. Creator Dashboard Analytics (with Level Gating) */}
-          <ProfileCreatorDashboard
-            analytics={analytics}
-            ranking={ranking}
-            userLevel={level || effectiveProfile?.level || 1}
-            userXp={effectiveProfile?.experience || 0}
-            isCreator={effectiveProfile?.isCreator}
-            theme={theme}
-            timeframe={timeframe}
-            onTimeframeChange={setTimeframe}
-          />
+              {/* 5. Creator Dashboard Analytics (with Level Gating) */}
+              {viewAs === 'owner' && (
+                <ProfileCreatorDashboard
+                  analytics={analytics}
+                  ranking={ranking}
+                  userLevel={level || effectiveProfile?.level || 1}
+                  userXp={effectiveProfile?.experience || 0}
+                  isCreator={effectiveProfile?.isCreator}
+                  theme={theme}
+                  timeframe={timeframe}
+                  onTimeframeChange={setTimeframe}
+                />
+              )}
 
-          {/* 6. Pinned Posts Section */}
-          <ProfilePinnedPosts
-            posts={posts}
-            theme={theme}
-            onPostClick={(post) => navigate(`/post/${post.id}`)}
-          />
+              {/* 6. Pinned Posts Section */}
+              <ProfilePinnedPosts
+                posts={posts}
+                theme={theme}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
 
-          {/* 7. Multi-Tab Navigation Bar */}
-          <div className="sticky top-2 z-30 pt-1">
-            <ProfileTabsBar
-              activeTab={activeTab}
-              onTabChange={handleTabChange}
-              isOwner={true}
-              theme={theme}
-              counts={{
-                posts: posts?.length,
-                saved: savedPosts?.length,
-              }}
-            />
-          </div>
+              {/* 7. Multi-Tab Navigation Bar */}
+              <div className="sticky top-2 z-30 pt-1">
+                <ProfileTabsBar
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
+                  isOwner={viewAs === 'owner'}
+                  theme={theme}
+                  counts={{
+                    posts: posts?.length,
+                    saved: savedPosts?.length,
+                  }}
+                />
+              </div>
 
-          {/* 8. Media Posts & Creations Grid */}
-          <ProfileFeedGrid
-            posts={posts}
-            savedPosts={savedPosts}
-            activeTab={activeTab}
-            loading={postsLoading || savedLoading}
-            theme={theme}
-            profile={effectiveProfile}
-            onPostClick={(post) => navigate(`/post/${post.id}`)}
-          />
+              {/* 8. Media Posts & Creations Grid */}
+              <ProfileFeedGrid
+                posts={posts}
+                savedPosts={savedPosts}
+                activeTab={activeTab}
+                loading={postsLoading || savedLoading}
+                theme={theme}
+                profile={effectiveProfile}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
+            </>
+          )}
 
         </div>
 

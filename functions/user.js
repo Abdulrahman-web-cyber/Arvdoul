@@ -10,6 +10,7 @@
 //
 // Auth required. Idempotent, audited, and GDPR-compliant. Cursor-based
 // offloading with safety caps so no orphan records are left behind.
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
 

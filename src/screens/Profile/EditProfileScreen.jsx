@@ -115,7 +115,7 @@ export default function EditProfileScreen() {
       });
       setAvatarPreview(userProfile.photoURL);
     }
-  }, [userProfile]);
+  }, [userProfile?.uid]);
 
   // Live username availability check with debounce
   useEffect(() => {

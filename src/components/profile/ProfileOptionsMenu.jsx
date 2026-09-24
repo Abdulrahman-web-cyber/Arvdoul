@@ -5,13 +5,16 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
-  Share2, Link2, Ban, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag
+  Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus
 } from 'lucide-react';
+import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
 
-const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light' }) => {
+const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light', capabilities }) => {
   const { user } = useAuth();
   const [busy, setBusy] = useState(null);
-  const [blocked, setBlocked] = useState(Boolean(profile?.isBlocked || profile?.isBlockedByViewer));
+  const [blocked, setBlocked] = useState(Boolean(capabilities?.isBlocking || profile?.isBlocked || profile?.isBlockedByViewer));
+  const [muted, setMuted] = useState(Boolean(capabilities?.isMuted || profile?.isMuted));
+  const [restricted, setRestricted] = useState(Boolean(capabilities?.isRestricted || profile?.isRestricted));
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [reportReason, setReportReason] = useState('');
 
@@ -21,18 +24,23 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
     let active = true;
     if (user?.uid && userId && !isOwner) {
       import('../../services/userService.js').then(({ getUserService }) => {
-        getUserService().isBlocked(user.uid, userId).then((res) => {
-          if (active && res?.blocked !== undefined) {
-            setBlocked(Boolean(res.blocked));
-          }
-        }).catch(() => {});
+        const svc = getUserService();
+        Promise.all([
+          svc.isBlocked(user.uid, userId).catch(() => null),
+          svc.isMuted(user.uid, userId).catch(() => null),
+          svc.isRestricted(user.uid, userId).catch(() => null)
+        ]).then(([bRes, mRes, rRes]) => {
+          if (!active) return;
+          if (bRes?.blocked !== undefined) setBlocked(Boolean(bRes.blocked));
+          if (mRes?.muted !== undefined) setMuted(Boolean(mRes.muted));
+          if (rRes?.restricted !== undefined) setRestricted(Boolean(rRes.restricted));
+        });
       });
     }
     return () => { active = false; };
   }, [user?.uid, userId, isOwner]);
-  const profileUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/profile/${userId}`
-    : `https://arvdoul.app/profile/${userId}`;
+
+  const profileUrl = getProfileUrl(profile || { uid: userId });
 
   const isDark = theme === 'dark';
   const itemCls = cn(
@@ -42,20 +50,22 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
 
   const handleShare = useCallback(async () => {
     try {
-      if (navigator.share) {
-        await navigator.share({ title: `${profile?.displayName || 'Profile'} on Arvdoul`, url: profileUrl });
-      } else {
-        await navigator.clipboard.writeText(profileUrl);
+      const res = await shareProfile(profile || { uid: userId });
+      if (res.copied) {
         toast.success('Profile link copied!');
       }
       onClose?.();
     } catch (err) { /* user canceled */ }
-  }, [profileUrl, profile, onClose]);
+  }, [profile, userId, onClose]);
 
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(profileUrl);
-      toast.success('Profile link copied!');
+      const copied = await copyToClipboard(profileUrl);
+      if (copied) {
+        toast.success('Profile link copied!');
+      } else {
+        toast.error('Could not copy link.');
+      }
       onClose?.();
     } catch (err) { toast.error('Could not copy link.'); }
   }, [profileUrl, onClose]);
@@ -82,6 +92,52 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
       setBusy(null);
     }
   }, [user?.uid, userId, blocked, busy, onClose]);
+
+  const handleMute = useCallback(async () => {
+    if (!user?.uid || busy) return;
+    setBusy('mute');
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      const svc = getUserService();
+      if (muted) {
+        await svc.unmuteUser(user.uid, userId);
+        setMuted(false);
+        toast.success('User unmuted.');
+      } else {
+        await svc.muteUser(user.uid, userId);
+        setMuted(true);
+        toast.success('User muted.');
+      }
+      onClose?.();
+    } catch (err) {
+      toast.error('Action failed.');
+    } finally {
+      setBusy(null);
+    }
+  }, [user?.uid, userId, muted, busy, onClose]);
+
+  const handleRestrict = useCallback(async () => {
+    if (!user?.uid || busy) return;
+    setBusy('restrict');
+    try {
+      const { getUserService } = await import('../../services/userService.js');
+      const svc = getUserService();
+      if (restricted) {
+        await svc.unrestrictUser(user.uid, userId);
+        setRestricted(false);
+        toast.success('Restriction removed.');
+      } else {
+        await svc.restrictUser(user.uid, userId);
+        setRestricted(true);
+        toast.success('User restricted.');
+      }
+      onClose?.();
+    } catch (err) {
+      toast.error('Action failed.');
+    } finally {
+      setBusy(null);
+    }
+  }, [user?.uid, userId, restricted, busy, onClose]);
 
   const handleSubmitReport = useCallback(async (e) => {
     e?.preventDefault();
@@ -132,9 +188,19 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
         {!isOwner && (
           <>
             <div className={cn("mx-4 my-1 h-px", isDark ? "bg-gray-700" : "bg-gray-100")} />
+            <button className={itemCls} onClick={handleMute}>
+              {busy === 'mute' ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" /> : muted
+                ? <Volume2 className="w-4 h-4 text-emerald-500" /> : <VolumeX className="w-4 h-4 text-purple-500" />}
+              {muted ? 'Unmute Profile' : 'Mute Profile'}
+            </button>
+            <button className={itemCls} onClick={handleRestrict}>
+              {busy === 'restrict' ? <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> : restricted
+                ? <BadgeCheck className="w-4 h-4 text-emerald-500" /> : <ShieldMinus className="w-4 h-4 text-amber-500" />}
+              {restricted ? 'Unrestrict Profile' : 'Restrict Profile'}
+            </button>
             <button className={itemCls} onClick={handleBlock}>
               {busy === 'block' ? <Loader2 className="w-4 h-4 animate-spin text-red-500" /> : blocked
-                ? <BadgeCheck className="w-4 h-4 text-green-500" /> : <UserX className="w-4 h-4 text-red-500" />}
+                ? <BadgeCheck className="w-4 h-4 text-emerald-500" /> : <UserX className="w-4 h-4 text-red-500" />}
               {blocked ? 'Unblock User' : 'Block User'}
             </button>
             <button className={itemCls} onClick={() => setShowReportDialog(true)}>

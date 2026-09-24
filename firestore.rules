@@ -76,6 +76,7 @@ service cloud.firestore {
       // Owners may edit their own profile but never a server-authoritative
       // field (level, XP, coins, verification, status, roles, ...). Account
       // deletion goes through the deleteUserData callable.
+      // Reference: allow update, delete: if isOwner(userId) || isAdmin();
       allow update: if isOwner(userId) && !touchesServerAuthoritativeFields();
       allow delete: if false;
     }
@@ -241,6 +242,16 @@ service cloud.firestore {
       // incoming payload; on delete it must match the stored owner.
       allow create: if isSignedIn() && request.resource.data.blockerId == uid();
       allow delete: if isSignedIn() && resource.data.blockerId == uid();
+    }
+    match /mutes/{muteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.muterId == uid();
+      allow delete: if isSignedIn() && resource.data.muterId == uid();
+    }
+    match /restricts/{restrictId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.restricterId == uid();
+      allow delete: if isSignedIn() && resource.data.restricterId == uid();
     }
     match /friend_requests/{requestId} {
       allow read: if isSignedIn() &&

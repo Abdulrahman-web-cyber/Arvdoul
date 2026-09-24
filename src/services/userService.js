@@ -1032,11 +1032,13 @@ class ProfessionalUserService {
       };
     }
 
-    const [fAtoB, fBtoA, bAtoB, bBtoA] = await Promise.all([
+    const [fAtoB, fBtoA, bAtoB, bBtoA, mAtoB, rAtoB] = await Promise.all([
       this.getFollowStatus(userA, userB),
       this.getFollowStatus(userB, userA),
       this.isBlocked(userA, userB),
-      this.isBlocked(userB, userA)
+      this.isBlocked(userB, userA),
+      this.isMuted(userA, userB),
+      this.isRestricted(userA, userB)
     ]);
 
     const isFollowing = Boolean(fAtoB?.isFollowing);
@@ -1045,6 +1047,8 @@ class ProfessionalUserService {
     const isBlocking = Boolean(bAtoB?.blocked);
     const isBlockedBy = Boolean(bBtoA?.blocked);
     const isBlocked = isBlocking || isBlockedBy;
+    const isMuted = Boolean(mAtoB?.muted);
+    const isRestricted = Boolean(rAtoB?.restricted);
 
     return {
       isOwner: false,
@@ -1054,7 +1058,9 @@ class ProfessionalUserService {
       isBlocking,
       isBlockedBy,
       isBlocked,
-      canMessage: !isBlocked,
+      isMuted,
+      isRestricted,
+      canMessage: !isBlocked && !isRestricted,
       canViewPrivate: !isBlocked && (isMutualFriend || isFollowing)
     };
   }
@@ -1460,6 +1466,108 @@ class ProfessionalUserService {
     return { success: true, blockedUsers: profiles.filter(Boolean) };
   }
 
+  // ==================== MUTING ====================
+  async muteUser(muterId, mutedId) {
+    if (muterId === mutedId) throw new Error('Cannot mute yourself');
+    await this._ensureInitialized();
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    const ref = doc(this.firestore, 'mutes', `${muterId}_${mutedId}`);
+    await setDoc(ref, { muterId, mutedId, createdAt: serverTimestamp() });
+    const cacheKey = `mute_${muterId}_${mutedId}`;
+    this.cache.set(cacheKey, { data: { success: true, muted: true }, timestamp: Date.now() });
+    return { success: true };
+  }
+
+  async unmuteUser(muterId, mutedId) {
+    await this._ensureInitialized();
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    const ref = doc(this.firestore, 'mutes', `${muterId}_${mutedId}`);
+    await deleteDoc(ref);
+    const cacheKey = `mute_${muterId}_${mutedId}`;
+    this.cache.set(cacheKey, { data: { success: true, muted: false }, timestamp: Date.now() });
+    return { success: true };
+  }
+
+  async isMuted(muterId, mutedId) {
+    if (!muterId || !mutedId || muterId === mutedId) return { success: true, muted: false };
+    const cacheKey = `mute_${muterId}_${mutedId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 60000) {
+      return cached.data;
+    }
+    try {
+      await this._ensureInitialized();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(this.firestore, 'mutes', `${muterId}_${mutedId}`));
+      const result = { success: true, muted: snap.exists() };
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } catch {
+      return { success: false, muted: false };
+    }
+  }
+
+  async getMutedUsers(userId) {
+    await this._ensureInitialized();
+    const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
+    const q = query(collection(this.firestore, 'mutes'), where('muterId', '==', userId), limit(100));
+    const snap = await getDocs(q);
+    const ids = snap.docs.map(d => d.data().mutedId);
+    const profiles = await Promise.all(ids.map(id => this.getUserProfile(id).catch(() => null)));
+    return { success: true, mutedUsers: profiles.filter(Boolean) };
+  }
+
+  // ==================== RESTRICTION ====================
+  async restrictUser(restricterId, restrictedId) {
+    if (restricterId === restrictedId) throw new Error('Cannot restrict yourself');
+    await this._ensureInitialized();
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    const ref = doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`);
+    await setDoc(ref, { restricterId, restrictedId, createdAt: serverTimestamp() });
+    const cacheKey = `restrict_${restricterId}_${restrictedId}`;
+    this.cache.set(cacheKey, { data: { success: true, restricted: true }, timestamp: Date.now() });
+    return { success: true };
+  }
+
+  async unrestrictUser(restricterId, restrictedId) {
+    await this._ensureInitialized();
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    const ref = doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`);
+    await deleteDoc(ref);
+    const cacheKey = `restrict_${restricterId}_${restrictedId}`;
+    this.cache.set(cacheKey, { data: { success: true, restricted: false }, timestamp: Date.now() });
+    return { success: true };
+  }
+
+  async isRestricted(restricterId, restrictedId) {
+    if (!restricterId || !restrictedId || restricterId === restrictedId) return { success: true, restricted: false };
+    const cacheKey = `restrict_${restricterId}_${restrictedId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 60000) {
+      return cached.data;
+    }
+    try {
+      await this._ensureInitialized();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`));
+      const result = { success: true, restricted: snap.exists() };
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } catch {
+      return { success: false, restricted: false };
+    }
+  }
+
+  async getRestrictedUsers(userId) {
+    await this._ensureInitialized();
+    const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
+    const q = query(collection(this.firestore, 'restricts'), where('restricterId', '==', userId), limit(100));
+    const snap = await getDocs(q);
+    const ids = snap.docs.map(d => d.data().restrictedId);
+    const profiles = await Promise.all(ids.map(id => this.getUserProfile(id).catch(() => null)));
+    return { success: true, restrictedUsers: profiles.filter(Boolean) };
+  }
+
   // ==================== REPORTING ====================
   // Routed through the reportContent callable so rate limiting, de-duplication
   // and the report record shape match every other report type.
@@ -1660,6 +1768,14 @@ export const blockUser = (bid, bd) => getUserService().blockUser(bid, bd);
 export const unblockUser = (bid, bd) => getUserService().unblockUser(bid, bd);
 export const isBlocked = (bid, bd) => getUserService().isBlocked(bid, bd);
 export const getBlockedUsers = (uid) => getUserService().getBlockedUsers(uid);
+export const muteUser = (mid, md) => getUserService().muteUser(mid, md);
+export const unmuteUser = (mid, md) => getUserService().unmuteUser(mid, md);
+export const isMuted = (mid, md) => getUserService().isMuted(mid, md);
+export const getMutedUsers = (uid) => getUserService().getMutedUsers(uid);
+export const restrictUser = (rid, rd) => getUserService().restrictUser(rid, rd);
+export const unrestrictUser = (rid, rd) => getUserService().unrestrictUser(rid, rd);
+export const isRestricted = (rid, rd) => getUserService().isRestricted(rid, rd);
+export const getRestrictedUsers = (uid) => getUserService().getRestrictedUsers(uid);
 
 // Reporting
 export const reportUser = (rid, reportedId, reason, details) => getUserService().reportUser(rid, reportedId, reason, details);
@@ -1716,6 +1832,14 @@ const userServiceExport = Object.assign(getUserService, {
   unblockUser,
   isBlocked,
   getBlockedUsers,
+  muteUser,
+  unmuteUser,
+  isMuted,
+  getMutedUsers,
+  restrictUser,
+  unrestrictUser,
+  isRestricted,
+  getRestrictedUsers,
   reportUser,
   deleteAccount,
   searchUsers,

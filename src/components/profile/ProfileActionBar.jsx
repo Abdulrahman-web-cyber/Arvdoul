@@ -47,6 +47,7 @@ const ProfileActionBar = memo(({
   onSharePress,
   onInsightsPress,
   onCallPress,
+  capabilities = null,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -58,6 +59,11 @@ const ProfileActionBar = memo(({
   // Otherwise, they participate in the mutual Friend Request system.
   const targetLevel = Number(profile?.level) || 1;
   const canBeFollowed = targetLevel >= LEVEL_GATES.publicFollowers || Boolean(profile?.isCreator || profile?.isVerified);
+
+  const canMessage = capabilities ? capabilities.canMessage : true;
+  const canCall = capabilities ? capabilities.canCall : true;
+  const canTip = capabilities ? capabilities.canTip : true;
+  const canFollow = capabilities ? capabilities.canFollow : true;
 
   if (isOwner) {
     return (
@@ -243,49 +249,55 @@ const ProfileActionBar = memo(({
         )}
 
         {/* 2. Message */}
-        <button
-          onClick={() => navigate(`/messages/new?to=${profile?.id || profile?.uid}`)}
-          className={cn(
-            "flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
-            isDark
-              ? "bg-white/5 border-white/10 text-white hover:bg-white/10 shadow-sm"
-              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm"
-          )}
-          title="Send Direct Message"
-        >
-          <MessageCircle className="w-4 h-4 text-purple-500" />
-          <span>Message</span>
-        </button>
+        {canMessage && (
+          <button
+            onClick={() => navigate(`/messages/new?to=${profile?.id || profile?.uid}`)}
+            className={cn(
+              "flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
+              isDark
+                ? "bg-white/5 border-white/10 text-white hover:bg-white/10 shadow-sm"
+                : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm"
+            )}
+            title="Send Direct Message"
+          >
+            <MessageCircle className="w-4 h-4 text-purple-500" />
+            <span>Message</span>
+          </button>
+        )}
 
         {/* 3. Call */}
-        <button
-          onClick={onCallPress}
-          className={cn(
-            "flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
-            isDark
-              ? "bg-white/5 border-white/10 text-white hover:bg-white/10 shadow-sm"
-              : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm"
-          )}
-          title="Audio/Video Call"
-        >
-          <Phone className="w-4 h-4 text-blue-500" />
-          <span>Call</span>
-        </button>
+        {canCall && (
+          <button
+            onClick={onCallPress}
+            className={cn(
+              "flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
+              isDark
+                ? "bg-white/5 border-white/10 text-white hover:bg-white/10 shadow-sm"
+                : "bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-sm"
+            )}
+            title="Audio/Video Call"
+          >
+            <Phone className="w-4 h-4 text-blue-500" />
+            <span>Call</span>
+          </button>
+        )}
 
         {/* 4. Gift / Tip */}
-        <button
-          onClick={onOpenTipModal}
-          className={cn(
-            "flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
-            isDark
-              ? "bg-amber-500/10 border-amber-500/25 text-amber-300 hover:bg-amber-500/20"
-              : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 shadow-sm"
-          )}
-          title="Gift Coins to Creator"
-        >
-          <Gift className="w-4 h-4 text-amber-500" />
-          <span>Gift</span>
-        </button>
+        {canTip && (
+          <button
+            onClick={onOpenTipModal}
+            className={cn(
+              "flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl font-bold text-xs border transition-all hover:scale-[1.02] active:scale-[0.98]",
+              isDark
+                ? "bg-amber-500/10 border-amber-500/25 text-amber-300 hover:bg-amber-500/20"
+                : "bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 shadow-sm"
+            )}
+            title="Gift Coins to Creator"
+          >
+            <Gift className="w-4 h-4 text-amber-500" />
+            <span>Gift</span>
+          </button>
+        )}
 
         {/* 5. More Options */}
         <button
