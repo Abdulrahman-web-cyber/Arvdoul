@@ -11,7 +11,9 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
-import { ProfileHeader, ProfileSkeleton } from '../../components/profile';
+import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
+import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
+import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 /**
  * ProfilePreviewScreen Component
@@ -101,11 +103,18 @@ export default function ProfilePreviewScreen({
       </div>
       
       {/* Preview Content */}
-      <div className="max-w-2xl mx-auto px-4 pt-4">
-        <ProfileHeader
+      <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+        <ProfileHeroSection
           profile={profile}
           isOwner={true}
+          level={profile?.level || 1}
           theme={theme}
+          onBack={handleBack}
+        />
+        <ProfileMetricsGrid
+          isOwner={true}
+          theme={theme}
+          profile={profile}
         />
       </div>
     </div>

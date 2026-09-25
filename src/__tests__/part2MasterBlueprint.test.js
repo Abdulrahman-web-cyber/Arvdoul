@@ -24,10 +24,11 @@ import passportService from '../services/passportService.js';
 describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () => {
   describe('Achievements Catalog Integrity', () => {
     test('ACHIEVEMENTS_CATALOG has all required fields for every item', () => {
-      expect(Object.keys(ACHIEVEMENTS_CATALOG).length).toBeGreaterThanOrEqual(15);
+      expect(ACHIEVEMENTS_CATALOG.length).toBeGreaterThanOrEqual(15);
 
-      Object.entries(ACHIEVEMENTS_CATALOG).forEach(([id, ach]) => {
-        expect(ach.id).toBe(id);
+      ACHIEVEMENTS_CATALOG.forEach((ach) => {
+        expect(typeof ach.id).toBe('string');
+        expect(ach.id.length).toBeGreaterThan(0);
         expect(typeof ach.title).toBe('string');
         expect(typeof ach.description).toBe('string');
         expect(typeof ach.category).toBe('string');
@@ -52,19 +53,19 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
       const enriched = achievementService.enrichAchievements([], mockMetrics);
       expect(Array.isArray(enriched)).toBe(true);
 
-      const lvl10Ach = enriched.find((a) => a.id === 'reach_level_10');
+      const lvl10Ach = enriched.find((a) => a.id === 'established_citizen');
       expect(lvl10Ach).toBeDefined();
       expect(lvl10Ach.unlocked).toBe(true);
       expect(lvl10Ach.progress).toBe(100);
 
-      const streak30Ach = enriched.find((a) => a.id === 'streak_30_days');
+      const streak30Ach = enriched.find((a) => a.id === 'active_month');
       expect(streak30Ach).toBeDefined();
       expect(streak30Ach.unlocked).toBe(true);
 
-      const lvl50Ach = enriched.find((a) => a.id === 'reach_level_50');
-      expect(lvl50Ach).toBeDefined();
-      expect(lvl50Ach.unlocked).toBe(false);
-      expect(lvl50Ach.progress).toBeLessThan(100);
+      const ascendantAch = enriched.find((a) => a.id === 'century_ascendant');
+      expect(ascendantAch).toBeDefined();
+      expect(ascendantAch.unlocked).toBe(false);
+      expect(ascendantAch.progress).toBeLessThan(100);
     });
   });
 
@@ -80,11 +81,11 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
     test('Enforces Zero Pay-to-Legitimacy: Royal and High Civic titles require multidimensional standing', () => {
       const kingTitle = TITLES_CATALOG['king'];
       expect(kingTitle).toBeDefined();
-      expect(kingTitle.criteria.minLevel).toBe(75);
-      expect(kingTitle.criteria.minReputation).toBe(90);
-      expect(kingTitle.criteria.minActiveDays).toBe(180);
+      expect(kingTitle.criteria.minLevel).toBe(90);
+      expect(kingTitle.criteria.minReputation).toBe(95);
+      expect(kingTitle.criteria.minActiveDays).toBe(365);
 
-      // Ineligible profile
+      // Ineligible profile (insufficient reputation, days, and level)
       const ineligible = titleService.checkEligibility('king', {
         level: 75,
         reputationScore: 50, // Low trust score
@@ -96,10 +97,13 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
 
       // Fully qualified profile
       const qualified = titleService.checkEligibility('king', {
-        level: 80,
-        reputationScore: 95,
-        activeDaysCount: 200,
-        contributionScore: 90,
+        level: 95,
+        reputationScore: 98,
+        activeDaysCount: 400,
+        contributionScore: 95,
+        influenceScore: 95,
+        achievementsCount: 30,
+        policyStanding: 'good',
       });
       expect(qualified.eligible).toBe(true);
       expect(qualified.reasons.length).toBe(0);
@@ -108,28 +112,28 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
 
   describe('Reputation, Influence, and Contribution Bands', () => {
     test('getReputationBand correctly maps scores to trust bands', () => {
-      expect(getReputationBand(10).label).toBe('Untrusted');
-      expect(getReputationBand(50).label).toBe('Neutral');
-      expect(getReputationBand(65).label).toBe('Established');
-      expect(getReputationBand(75).label).toBe('Trusted');
-      expect(getReputationBand(88).label).toBe('Highly Trusted');
-      expect(getReputationBand(98).label).toBe('Exceptional');
+      expect(getReputationBand(10).label).toBe('Unestablished');
+      expect(getReputationBand(25).label).toBe('Developing');
+      expect(getReputationBand(50).label).toBe('Established');
+      expect(getReputationBand(65).label).toBe('Trusted');
+      expect(getReputationBand(80).label).toBe('Highly Trusted');
+      expect(getReputationBand(95).label).toBe('Exceptional');
     });
 
     test('getInfluenceBand correctly maps scores', () => {
-      expect(getInfluenceBand(5).label).toBe('Minimal');
-      expect(getInfluenceBand(25).label).toBe('Emerging');
-      expect(getInfluenceBand(50).label).toBe('Notable');
-      expect(getInfluenceBand(75).label).toBe('Prominent');
-      expect(getInfluenceBand(95).label).toBe('Sovereign');
+      expect(getInfluenceBand(10).label).toBe('Emerging');
+      expect(getInfluenceBand(30).label).toBe('Growing Presence');
+      expect(getInfluenceBand(55).label).toBe('Resonant Voice');
+      expect(getInfluenceBand(75).label).toBe('Community Beacon');
+      expect(getInfluenceBand(90).label).toBe('National Reach');
     });
 
     test('getContributionBand correctly maps scores', () => {
-      expect(getContributionBand(5).label).toBe('Observer');
-      expect(getContributionBand(30).label).toBe('Contributor');
-      expect(getContributionBand(55).label).toBe('Builder');
-      expect(getContributionBand(75).label).toBe('Pillar');
-      expect(getContributionBand(95).label).toBe('Keystone');
+      expect(getContributionBand(10).label).toBe('Participant');
+      expect(getContributionBand(30).label).toBe('Community Contributor');
+      expect(getContributionBand(55).label).toBe('Active Helper');
+      expect(getContributionBand(75).label).toBe('Distinguished Contributor');
+      expect(getContributionBand(90).label).toBe('Pillar of Arvdoul');
     });
 
     test('getCitizenTier reflects level and active days', () => {
@@ -157,14 +161,14 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
     });
 
     test('getCreatorCapabilities unlocks capabilities progressively by tier', () => {
-      const noneTier = getCreatorCapabilities({ creatorTier: 'NONE' });
+      const noneTier = getCreatorCapabilities({ creatorTier: 'NONE', level: 1 });
       expect(noneTier.canMonetize).toBe(false);
-      expect(noneTier.payoutCommissionRate).toBe(0.30);
+      expect(noneTier.payoutCommissionRate).toBe(0.15);
 
-      const partnerTier = getCreatorCapabilities({ creatorTier: 'PARTNER' });
+      const partnerTier = getCreatorCapabilities({ creatorTier: 'partner', level: 10 });
       expect(partnerTier.canMonetize).toBe(true);
       expect(partnerTier.hasPrioritySupport).toBe(true);
-      expect(partnerTier.payoutCommissionRate).toBe(0.15);
+      expect(partnerTier.payoutCommissionRate).toBe(0.05);
     });
   });
 
@@ -181,6 +185,8 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
         influenceScore: 65,
         contributionScore: 70,
         isVerified: true,
+        achievements: [],
+        titles: [],
       };
 
       const passport = await passportService.getPassport('user_abcdef123456', 'user_abcdef123456', mockProfile);
@@ -189,10 +195,10 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
       expect(passport.displayName).toBe('Aria Vance');
       expect(passport.username).toBe('ariavance');
       expect(passport.level).toBe(15);
-      expect(passport.reputation.band).toBe('Trusted');
-      expect(passport.influence.band).toBe('Notable');
-      expect(passport.contribution.band).toBe('Builder');
-      expect(passport.citizenTier.tier).toBe('Citizen');
+      expect(passport.reputation.band).toBe('Highly Trusted');
+      expect(passport.influence.band).toBe('Resonant Voice');
+      expect(passport.contribution.band).toBe('Distinguished Contributor');
+      expect(passport.citizenTier.tier).toBe('Statesperson');
     });
   });
 });

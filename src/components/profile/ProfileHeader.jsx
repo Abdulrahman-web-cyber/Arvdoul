@@ -16,7 +16,6 @@
  * @property {Object} [position=null] - User position/ranking
  * @property {string} [theme='light'] - Current theme (light/dark)
  * @property {Function} [onAvatarPress] - Avatar click handler
- * @property {Function} [onCoverPress] - Cover photo click handler
  * @property {Function} [onEditPress] - Edit profile handler
  * @property {Function} [onSharePress] - Share profile handler
  * @property {Function} [onSettingsPress] - Settings handler
@@ -65,7 +64,6 @@ const ProfileHeader = memo(({
   position = null,
   theme = 'light',
   onAvatarPress,
-  onCoverPress,
   onEditPress,
   onSharePress,
   onSettingsPress,

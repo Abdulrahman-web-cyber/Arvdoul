@@ -48,7 +48,18 @@ class TitleService {
 
     if (titleId === 'duke' || titleId === 'king') {
       const res = getRoyalEligibility(titleId, stats);
-      return { eligible: res.eligible, reasons: res.missing };
+      const rule = ROYAL_ELIGIBILITY[titleId];
+      const reasons = res.missing.map((m) => {
+        if (m === 'reputation') return `Requires Minimum ${rule.minReputation} Reputation`;
+        if (m === 'contribution') return `Requires Minimum ${rule.minContribution} Contribution`;
+        if (m === 'influence') return `Requires Minimum ${rule.minInfluence} Influence`;
+        if (m === 'level') return `Requires Level ${rule.minLevel}`;
+        if (m === 'activeDays') return `Requires ${rule.minActiveDays} Active Days`;
+        if (m === 'achievements') return `Requires ${rule.minAchievements} Achievements`;
+        if (m === 'policyStanding') return 'Account must be in good policy standing';
+        return `Requires ${m}`;
+      });
+      return { eligible: res.eligible, reasons };
     }
 
     const c = title.criteria || {};

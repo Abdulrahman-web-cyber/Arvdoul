@@ -65,20 +65,28 @@ class PassportService {
     const contributionBand = getContributionBand(conScore);
 
     // Load achievements if viewer is permitted
-    let verifiedAchievements = [];
-    if (capabilities.canViewAchievements || isOwner) {
+    let verifiedAchievements = Array.isArray(profile.achievements) ? profile.achievements : null;
+    if (verifiedAchievements === null && (capabilities.canViewAchievements || isOwner)) {
       try {
         verifiedAchievements = await achievementService.getUserAchievements(targetUserId);
       } catch (e) {
         verifiedAchievements = [];
       }
     }
+    if (!Array.isArray(verifiedAchievements)) {
+      verifiedAchievements = [];
+    }
 
     // Load titles if permitted
-    let earnedTitles = [];
-    try {
-      earnedTitles = await titleService.getUserTitles(targetUserId);
-    } catch (e) {
+    let earnedTitles = Array.isArray(profile.titles) ? profile.titles : null;
+    if (earnedTitles === null) {
+      try {
+        earnedTitles = await titleService.getUserTitles(targetUserId);
+      } catch (e) {
+        earnedTitles = [];
+      }
+    }
+    if (!Array.isArray(earnedTitles)) {
       earnedTitles = [];
     }
 

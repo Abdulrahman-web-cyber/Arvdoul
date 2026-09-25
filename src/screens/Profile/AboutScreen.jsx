@@ -23,10 +23,11 @@ export default function AboutScreen() {
   const { userId } = useParams();
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
-  const { profile, isOwner, loadProfile, isLoading } = useProfileStore();
+  const { profile, loadProfile, isLoading } = useProfileStore();
 
   const currentUserId = authUser?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid');
   const targetId = userId || currentUserId;
+  const isActualOwner = Boolean(currentUserId && targetId && currentUserId === targetId);
 
   useEffect(() => {
     if (targetId && (!profile || (profile.id !== targetId && profile.uid !== targetId))) {
@@ -72,7 +73,7 @@ export default function AboutScreen() {
       <div className="max-w-2xl mx-auto px-4 py-4">
         <ProfileAbout
           profile={profile || {}}
-          isOwner={isOwner}
+          isOwner={isActualOwner}
           onEdit={handleEdit}
           theme={theme}
         />

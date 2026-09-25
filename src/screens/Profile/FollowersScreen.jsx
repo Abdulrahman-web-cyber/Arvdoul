@@ -10,11 +10,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Search, UserPlus, UserMinus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Search, UserPlus, UserMinus, Loader2, Lock } from 'lucide-react';
 import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 
 /**
  * FollowersScreen Component
@@ -28,6 +29,7 @@ export default function FollowersScreen() {
   
   const [followers, setFollowers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   const targetUserId = userId || currentUser?.uid;
@@ -37,9 +39,30 @@ export default function FollowersScreen() {
     let isMounted = true;
     const loadFollowers = async () => {
       setLoading(true);
+      setPermissionDenied(false);
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
         if (targetUserId) {
+          if (currentUser?.uid && targetUserId !== currentUser.uid) {
+            const [targetProfile, rel] = await Promise.all([
+              userService.getUserProfile(targetUserId, currentUser.uid).catch(() => null),
+              userService.getRelationshipState(currentUser.uid, targetUserId).catch(() => null)
+            ]);
+            const caps = resolveCapabilities({
+              viewer: currentUser,
+              target: targetProfile,
+              relationship: rel || {}
+            });
+            if (caps && caps.canViewFollowers === false) {
+              if (isMounted) {
+                setPermissionDenied(true);
+                setFollowers([]);
+                setLoading(false);
+              }
+              return;
+            }
+          }
+
           const result = await userService.getFollowers(targetUserId);
           if (isMounted) setFollowers(result.followers || []);
         } else {
@@ -59,7 +82,7 @@ export default function FollowersScreen() {
       setLoading(false);
     }
     return () => { isMounted = false; };
-  }, [targetUserId]);
+  }, [targetUserId, currentUser]);
   
   const handleFollow = useCallback(async (followerId) => {
     if (currentUser?.uid) {
@@ -132,6 +155,26 @@ export default function FollowersScreen() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          </div>
+        ) : permissionDenied ? (
+          <div className="rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-8 bg-white/80 dark:bg-[#0d1424]/80 border-slate-200 dark:border-white/10 backdrop-blur-xl">
+            <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <Lock className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Followers List is Private</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                This citizen has chosen to restrict visibility of their followers in accordance with their privacy settings.
+              </p>
+            </div>
+            <div className="pt-2 flex justify-center">
+              <button
+                onClick={() => navigate(-1)}
+                className="px-6 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              >
+                Go Back
+              </button>
+            </div>
           </div>
         ) : followers.length === 0 ? (
           <div className="text-center py-20">

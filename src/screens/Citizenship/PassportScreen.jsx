@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import passportService from '../../services/passportService';
 import { shareProfile, getProfileUrl } from '../../utils/shareUtils';
+import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -35,6 +36,7 @@ export default function PassportScreen() {
   const [loading, setLoading] = useState(true);
   const [passport, setPassport] = useState(null);
   const [showQR, setShowQR] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
 
   const loadPassport = useCallback(async () => {
     if (!targetUserId) return;
@@ -51,6 +53,18 @@ export default function PassportScreen() {
   useEffect(() => {
     loadPassport();
   }, [loadPassport]);
+
+  useEffect(() => {
+    if (passport?.passportUrl) {
+      generateQrDataUrl(passport.passportUrl, {
+        width: 320,
+        margin: 2,
+        color: { dark: '#070b14', light: '#ffffff' }
+      })
+        .then(setQrDataUrl)
+        .catch(() => {});
+    }
+  }, [passport?.passportUrl]);
 
   const handleShare = async () => {
     if (!passport) return;
@@ -309,13 +323,20 @@ export default function PassportScreen() {
             </p>
 
             <div className="my-6 p-4 bg-white rounded-2xl inline-block shadow-lg">
-              {/* Fallback SVG QR pattern representing the unique citizen URL */}
-              <div className="w-48 h-48 flex items-center justify-center border-4 border-indigo-600 rounded-xl bg-gray-50 p-2">
-                <div className="text-center text-xs text-gray-800 font-mono break-all p-2">
-                  <QrCode className="w-20 h-20 mx-auto text-indigo-900 mb-2" />
-                  <span>{passport.citizenId}</span>
+              {qrDataUrl ? (
+                <img
+                  src={qrDataUrl}
+                  alt={`Arvdoul Citizen QR for ${passport.displayName}`}
+                  className="w-48 h-48 rounded-xl object-contain"
+                />
+              ) : (
+                <div className="w-48 h-48 flex items-center justify-center border-4 border-indigo-600 rounded-xl bg-gray-50 p-2">
+                  <div className="text-center text-xs text-gray-800 font-mono break-all p-2">
+                    <QrCode className="w-20 h-20 mx-auto text-indigo-900 mb-2" />
+                    <span>{passport.citizenId}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="space-y-2">

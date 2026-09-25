@@ -154,11 +154,15 @@ function getRoyalEligibility(titleName, stats = {}) {
   if (!rule) return { eligible: false, title: titleName, missing: ['unknown title'] };
 
   const level = Number(stats.level) || 0;
-  const activeDays = Number(stats.activeDaysCount) || 0;
-  const reputation = Number(stats.reputation) || 0;
-  const contribution = Number(stats.contribution) || 0;
-  const influence = Number(stats.influence) || 0;
-  const achievements = Number(stats.achievementsCount) || 0;
+  const activeDays = Number(stats.activeDaysCount !== undefined ? stats.activeDaysCount : stats.activeDays) || 0;
+  const reputation = Number(stats.reputationScore !== undefined ? stats.reputationScore : stats.reputation) || 0;
+  const contribution = Number(stats.contributionScore !== undefined ? stats.contributionScore : stats.contribution) || 0;
+  const influence = Number(stats.influenceScore !== undefined ? stats.influenceScore : stats.influence) || 0;
+  const achievements = Number(
+    stats.achievementsCount !== undefined
+      ? stats.achievementsCount
+      : (Array.isArray(stats.achievements) ? stats.achievements.length : stats.achievements)
+  ) || 0;
   const standing = stats.policyStanding || stats.accountStanding;
 
   const missing = [];
@@ -272,25 +276,37 @@ function getCreatorCapabilities(profile) {
       canWithdraw: false,
       canCreateShop: false,
       canSellMerch: false,
+      hasPrioritySupport: false,
+      payoutCommissionRate: 0.15,
     };
   }
 
-  const isCreator = Boolean(profile.isCreator || profile.creatorTier || profile.creatorStatus === 'approved');
-  const level = profile.level || 1;
-  const followers = profile.followerCount || 0;
+  const rawTier = (profile.creatorTier || '').toLowerCase();
+  const isNoneOrStandard = !rawTier || rawTier === 'none' || rawTier === 'standard';
+  const isCreator = Boolean(
+    profile.isCreator ||
+    (!isNoneOrStandard) ||
+    profile.creatorStatus === 'approved'
+  );
+  const tier = isCreator ? (rawTier || 'creator') : 'standard';
+  const tierMeta = CREATOR_TIERS[tier] || CREATOR_TIERS.standard;
+  const level = Number(profile.level) || 1;
+  const followers = Number(profile.followerCount) || 0;
   const isVerified = Boolean(profile.isVerified || profile.verified || profile.verificationBadge);
-  const tier = profile.creatorTier || (isCreator ? 'creator' : 'standard');
+  const isPartnerOrElite = tier === 'partner' || tier === 'elite';
 
   return {
     isCreator,
     creatorTier: tier,
     canStream: isCreator || level >= LEVEL_GATES.liveStreaming,
     canStreamLive: isCreator || level >= LEVEL_GATES.liveStreaming,
-    canMonetize: isCreator || tier === 'creator' || tier === 'partner' || level >= LEVEL_GATES.liveStreaming,
+    canMonetize: (isCreator && tier !== 'standard') || level >= LEVEL_GATES.withdrawals,
     canReceiveTips: isCreator || followers >= 10 || level >= 3,
     canCreateShop: isCreator || level >= 3,
     canSellMerch: isCreator || level >= 3,
-    canWithdraw: isVerified || tier === 'partner' || tier === 'elite' || level >= LEVEL_GATES.withdrawals,
+    canWithdraw: isVerified || isPartnerOrElite || level >= LEVEL_GATES.withdrawals,
+    hasPrioritySupport: isPartnerOrElite || isVerified,
+    payoutCommissionRate: tierMeta ? tierMeta.commissionRate : 0.15,
   };
 }
 

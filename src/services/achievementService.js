@@ -66,12 +66,13 @@ class AchievementService {
   }
 
   /**
-   * Merge the catalog with user's earned items to produce complete gallery state
-   * (unlocked vs locked with criteria and progress).
+   * Pure evaluation helper: blends user earned items or metrics with catalog to return enriched achievements.
+   * @param {Array<Object>} earned
+   * @param {Object} userStats
+   * @returns {Array<Object>}
    */
-  async getEnrichedAchievements(userId, userStats = {}) {
-    const earned = await this.getUserAchievements(userId);
-    const earnedMap = new Map(earned.map((e) => [e.id, e]));
+  enrichAchievements(earned = [], userStats = {}) {
+    const earnedMap = new Map((earned || []).map((e) => [e.id, e]));
 
     return ACHIEVEMENTS_CATALOG.map((ach) => {
       const isEarned = earnedMap.has(ach.id);
@@ -96,13 +97,24 @@ class AchievementService {
         }
       }
 
+      const unlocked = isEarned || progress >= 100;
+
       return {
         ...ach,
-        unlocked: isEarned,
+        unlocked,
         earnedAt: userEarnedData?.earnedAt || null,
         progress,
       };
     });
+  }
+
+  /**
+   * Merge the catalog with user's earned items to produce complete gallery state
+   * (unlocked vs locked with criteria and progress).
+   */
+  async getEnrichedAchievements(userId, userStats = {}) {
+    const earned = await this.getUserAchievements(userId);
+    return this.enrichAchievements(earned, userStats);
   }
 
   /**
