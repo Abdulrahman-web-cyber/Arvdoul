@@ -19,10 +19,10 @@ const ProfilePinnedPosts = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-xl transition-all shadow-sm",
+      "w-full rounded-2xl p-5 sm:p-6 border transition-all shadow-sm",
       isDark
-        ? "bg-[#0d1424]/70 border-white/10 text-white"
-        : "bg-white/95 border-slate-200/90 text-slate-900"
+        ? "bg-[#0B0F19] border-slate-800 text-white"
+        : "bg-white border-slate-200 text-slate-900"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">

@@ -576,6 +576,11 @@ export function AuthProvider({ children }) {
           
           if (firebaseUser) {
             isLoggingOutRef.current = false;
+            try {
+              localStorage.setItem('arvdoul_has_session', 'true');
+              localStorage.setItem('arvdoul_uid', firebaseUser.uid);
+              localStorage.setItem('uid', firebaseUser.uid);
+            } catch (e) {}
 
             if (!initialProfileLoaded.current) {
               setLoading(true);
@@ -598,12 +603,19 @@ export function AuthProvider({ children }) {
             };
             
             setUser(userData);
+            setAuthInitialized(true);
             setAuthState(AuthState.BOOTING);
             
             await setupRealtimeProfile(firebaseUser.uid, firebaseUser);
             
           } else {
             isLoggingOutRef.current = true;
+            try {
+              localStorage.removeItem('arvdoul_has_session');
+              localStorage.removeItem('arvdoul_uid');
+              localStorage.removeItem('uid');
+              localStorage.removeItem('user');
+            } catch (e) {}
             initialProfileLoaded.current = false;
             setUser(null);
             setUserProfile(null);
@@ -615,9 +627,9 @@ export function AuthProvider({ children }) {
             setAuthState(AuthState.UNAUTHENTICATED);
             setLoading(false);
             setProfileResolved(true);
+            setAuthInitialized(true);
             console.log('👤 User logged out');
           }
-          setAuthInitialized(true);
           navigationLock.current = false;
         });
         
@@ -1023,6 +1035,12 @@ export function AuthProvider({ children }) {
         setIsSignupInProgress(false);
       }
       clearUserDataRef.current();
+      try {
+        localStorage.removeItem('arvdoul_has_session');
+        localStorage.removeItem('arvdoul_uid');
+        localStorage.removeItem('uid');
+        localStorage.removeItem('user');
+      } catch (e) {}
       AuthStorageManager.clearAll();
       clearOnboardingRequired();
       broadcastRef.current?.postMessage({ type: 'signOut' });

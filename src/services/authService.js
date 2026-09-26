@@ -44,62 +44,56 @@ class ProductionAuthService {
     logger.info('Initializing auth service');
     try {
       const firebaseApp = await import('../firebase/firebase.js');
-      const { getAuthInstance } = firebaseApp;
-      this.auth = await getAuthInstance();
+      const authInstance = firebaseApp.auth || (await firebaseApp.getAuthInstance?.());
+      this.auth = authInstance;
       
       // 🔧 CRITICAL FIX: Ensure auth.settings object exists.
-      // The RecaptchaVerifier constructor internally accesses
-      // auth.settings.appVerificationDisabledForTesting, so settings
-      // must be defined before any phone auth operation.
       if (!this.auth.settings) {
-//         logger.warn('auth.settings missing – forcing creation to avoid RecaptchaVerifier crash');
-        // Initialize as an empty object; the SDK will add its own properties as needed.
         this.auth.settings = {};
       }
 
       this.firebase = firebaseApp;
       this.initialized = true;
 
-      // Handle Google redirect auth result if page was reloaded after redirect (best-effort, non-blocking)
-      try {
-        const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
-        const redirectResult = await Promise.race([
-          getRedirectResult(this.auth),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1000))
-        ]).catch(() => null);
-        if (redirectResult?.user) {
-          logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
-          const user = redirectResult.user;
-          const additionalInfo = getAdditionalUserInfo(redirectResult);
-          const isNewUser = additionalInfo?.isNewUser || false;
-          if (isNewUser && additionalInfo?.profile) {
-            await updateProfile(user, {
-              displayName: additionalInfo.profile.name || user.displayName,
-              photoURL: additionalInfo.profile.picture || user.photoURL
-            });
-            const { createUserProfile } = await import('./userService.js');
-            try {
-              await createUserProfile(user.uid, {
-                displayName: user.displayName,
-                email: user.email,
-                photoURL: user.photoURL,
-                authProvider: 'google',
-                emailVerified: user.emailVerified,
+      // Handle Google redirect auth result in background without blocking startup
+      (async () => {
+        try {
+          const { getRedirectResult, getAdditionalUserInfo, updateProfile } = await import('firebase/auth');
+          const redirectResult = await getRedirectResult(this.auth).catch(() => null);
+          if (redirectResult?.user) {
+            logger.warn('// Google redirect sign-in successful:', redirectResult.user.uid);
+            const user = redirectResult.user;
+            const additionalInfo = getAdditionalUserInfo(redirectResult);
+            const isNewUser = additionalInfo?.isNewUser || false;
+            if (isNewUser && additionalInfo?.profile) {
+              await updateProfile(user, {
+                displayName: additionalInfo.profile.name || user.displayName,
+                photoURL: additionalInfo.profile.picture || user.photoURL
               });
-            } catch (pErr) {
-              this._storePendingProfile(user.uid, {
-                displayName: user.displayName,
-                email: user.email,
-                photoURL: user.photoURL,
-                authProvider: 'google',
-                emailVerified: user.emailVerified
-              });
+              const { createUserProfile } = await import('./userService.js');
+              try {
+                await createUserProfile(user.uid, {
+                  displayName: user.displayName,
+                  email: user.email,
+                  photoURL: user.photoURL,
+                  authProvider: 'google',
+                  emailVerified: user.emailVerified,
+                });
+              } catch (pErr) {
+                this._storePendingProfile(user.uid, {
+                  displayName: user.displayName,
+                  email: user.email,
+                  photoURL: user.photoURL,
+                  authProvider: 'google',
+                  emailVerified: user.emailVerified
+                });
+              }
             }
           }
+        } catch (redirectError) {
+          logger.error('Google redirect sign-in error:', redirectError);
         }
-      } catch (redirectError) {
-        logger.error('Google redirect sign-in error:', redirectError);
-      }
+      })();
 
       logger.warn('// Auth service ready');
       return this.auth;

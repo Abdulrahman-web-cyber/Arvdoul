@@ -29,7 +29,6 @@ import { toast } from 'sonner';
 
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
-import ProfileActionBar from '../../components/profile/ProfileActionBar';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
@@ -338,20 +337,12 @@ export default function ProfileMyScreen() {
             onOpenNotifications={() => navigate('/notifications')}
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowAvatarModal(true)}
-          />
-
-          {/* 2. Action Buttons Bar */}
-          <ProfileActionBar
-            isOwner={true}
-            theme={theme}
-            profile={effectiveProfile}
-            coinsBalance={balance}
-            onOpenQrCode={() => setShowQrModal(true)}
-            onSharePress={handleShare}
+            onShare={handleShare}
+            onEditProfile={() => navigate('/profile/edit')}
             onInsightsPress={() => navigate('/profile/analytics')}
           />
 
-          {/* 3. 6-Cards Key Metric Grid */}
+          {/* 2. Key Metric Grid */}
           <ProfileMetricsGrid
             isOwner={capabilities.isOwner}
             theme={theme}

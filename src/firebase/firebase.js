@@ -34,6 +34,10 @@ export const db = _fbGetFirestore(_fbApp, FIRESTORE_DATABASE_ID);
 export const auth = _fbGetAuth(_fbApp);
 export const storage = _fbGetStorage(_fbApp);
 
+if (typeof window !== 'undefined') {
+  window._arvdoul_auth = auth;
+}
+
 // Mirror the manager's auth hardening so phone/SMS auth keeps working.
 try {
   if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'test') {

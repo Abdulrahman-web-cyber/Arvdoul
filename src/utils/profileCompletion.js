@@ -11,6 +11,8 @@
  * flag is missing, a snapshot raced, or an auto-generated username looks "empty".
  */
 
+import { hasStoredAuthSession } from './security.js';
+
 export const ONBOARDING_SESSION_KEY = 'arvdoul_onboarding';
 export const ONBOARDING_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -247,6 +249,10 @@ export function resolvePostAuthDestination({
 
   if (!authInitialized || authLoading) {
     if (isGuestRoute(pathname) && !isAuthenticated) {
+      // If a stored session exists, do NOT allow guest route to render; wait for auth to finish restoring!
+      if (hasStoredAuthSession()) {
+        return { wait: true, destination: null, allow: false };
+      }
       return { wait: false, destination: null, allow: true };
     }
     return { wait: true, destination: null, allow: false };
@@ -261,6 +267,9 @@ export function resolvePostAuthDestination({
   const setup = isSetupRoute(pathname);
 
   if (!isAuthenticated) {
+    if (hasStoredAuthSession()) {
+      return { wait: true, destination: null, allow: false };
+    }
     if (guest || verify) return { wait: false, destination: null, allow: true };
     if (setup) return { wait: false, destination: '/login', allow: false };
     return { wait: false, destination: '/intro', allow: false };
@@ -283,8 +292,11 @@ export function resolvePostAuthDestination({
   return { wait: false, destination: null, allow: true };
 }
 
-export function resolveSplashDestination({ isAuthenticated, needsOnboarding: onboarding }) {
-  if (!isAuthenticated) return '/intro';
-  if (onboarding) return '/setup-profile';
-  return '/home';
+export function resolveSplashDestination({ isAuthenticated, needsOnboarding: onboarding, hasStoredSession = false }) {
+  const activeSession = isAuthenticated || hasStoredSession || hasStoredAuthSession();
+  if (activeSession) {
+    if (onboarding) return '/setup-profile';
+    return '/home';
+  }
+  return '/intro';
 }

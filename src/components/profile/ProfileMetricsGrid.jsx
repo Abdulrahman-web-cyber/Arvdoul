@@ -1,27 +1,15 @@
 /**
- * src/components/profile/ProfileMetricsGrid.jsx - ARVDOUL Profile Metrics Grid
+ * src/components/profile/ProfileMetricsGrid.jsx - ARVDOUL Unified Metrics Strip
  * 
- * Recreates the 6 key metric cards grid from the uploaded designs:
- * Owner: Posts, Friends, Followers (+ trend), Following, Profile Views (+ trend), Coins
- * Public: Posts, Followers, Following, Friends, Likes, Coins
- * 
- * Responsive across mobile (2-3 cols), tablet (3-6 cols), desktop (6 cols).
+ * Replaces noisy floating glass boxes with an authoritative, high-contrast metric strip.
+ * Features crisp typography, accessible touch targets, and zero blurry visual pollution.
  * 
  * @component
  */
 
 import React, { memo } from 'react';
-import { 
-  Grid3x3, 
-  Users, 
-  UserCheck, 
-  UserPlus, 
-  Eye, 
-  Coins, 
-  Heart,
-  TrendingUp
-} from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getReputationBand } from '../../shared/levelConfig.cjs';
 
 const formatNumber = (num) => {
   if (num === undefined || num === null) return '0';
@@ -45,166 +33,103 @@ const ProfileMetricsGrid = memo(({
   const followersCount = profile?.followerCount ?? profile?.followersCount ?? 0;
   const followingCount = profile?.followingCount ?? 0;
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? 0;
-  const likesCount = profile?.likesReceived ?? profile?.likesCount ?? 0;
   const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
-  const profileViews = analytics?.totalViews ?? profile?.viewsCount ?? profile?.profileViews ?? 0;
-
-  const followersTrend = analytics?.changes?.reach && Number(analytics.changes.reach) !== 0
-    ? `${Number(analytics.changes.reach) > 0 ? '+' : ''}${Number(analytics.changes.reach).toFixed(1)}%`
-    : null;
-
-  const viewsTrend = analytics?.changes?.views && Number(analytics.changes.views) !== 0
-    ? `${Number(analytics.changes.views) > 0 ? '+' : ''}${Number(analytics.changes.views).toFixed(1)}%`
-    : null;
+  const reputationScore = Number(profile?.reputationScore ?? profile?.reputation ?? 75);
+  const repBand = getReputationBand(reputationScore);
 
   const canShowFollowers = capabilities?.canViewFollowers ?? true;
   const canShowFollowing = capabilities?.canViewFollowing ?? true;
-  const canShowCoins = isOwner || (capabilities?.canViewEconomicStatus ?? false);
 
-  const cards = isOwner
-    ? [
-        {
-          key: 'posts',
-          label: 'Posts',
-          value: formatNumber(postsCount),
-          icon: Grid3x3,
-          color: 'text-purple-500',
-          bgColor: 'bg-purple-500/10',
-          trend: null
-        },
-        {
-          key: 'friends',
-          label: 'Friends',
-          value: formatNumber(friendsCount),
-          icon: Users,
-          color: 'text-blue-500',
-          bgColor: 'bg-blue-500/10',
-          trend: null
-        },
-        {
-          key: 'followers',
-          label: 'Followers',
-          value: formatNumber(followersCount),
-          icon: UserCheck,
-          color: 'text-indigo-500',
-          bgColor: 'bg-indigo-500/10',
-          trend: followersTrend
-        },
-        {
-          key: 'following',
-          label: 'Following',
-          value: formatNumber(followingCount),
-          icon: UserPlus,
-          color: 'text-sky-500',
-          bgColor: 'bg-sky-500/10',
-          trend: null
-        },
-        {
-          key: 'views',
-          label: 'Profile Views',
-          value: formatNumber(profileViews),
-          icon: Eye,
-          color: 'text-cyan-500',
-          bgColor: 'bg-cyan-500/10',
-          trend: viewsTrend
-        },
-        {
-          key: 'coins',
-          label: 'Coins',
-          value: formatNumber(coinsCount),
-          icon: Coins,
-          color: 'text-amber-500',
-          bgColor: 'bg-amber-500/10',
-          trend: null
-        }
-      ]
-    : [
-        {
-          key: 'posts',
-          label: 'Posts',
-          value: formatNumber(postsCount),
-          icon: Grid3x3,
-          color: 'text-purple-500',
-          bgColor: 'bg-purple-500/10'
-        },
-        {
-          key: 'followers',
-          label: 'Followers',
-          value: canShowFollowers ? formatNumber(followersCount) : '—',
-          icon: UserCheck,
-          color: 'text-indigo-500',
-          bgColor: 'bg-indigo-500/10'
-        },
-        {
-          key: 'following',
-          label: 'Following',
-          value: canShowFollowing ? formatNumber(followingCount) : '—',
-          icon: UserPlus,
-          color: 'text-sky-500',
-          bgColor: 'bg-sky-500/10'
-        },
-        {
-          key: 'friends',
-          label: 'Friends',
-          value: canShowFollowers ? formatNumber(friendsCount) : '—',
-          icon: Users,
-          color: 'text-blue-500',
-          bgColor: 'bg-blue-500/10'
-        },
-        {
-          key: 'likes',
-          label: 'Likes',
-          value: formatNumber(likesCount),
-          icon: Heart,
-          color: 'text-rose-500',
-          bgColor: 'bg-rose-500/10'
-        },
-        {
-          key: 'coins',
-          label: 'Coins',
-          value: canShowCoins ? formatNumber(coinsCount) : '—',
-          icon: Coins,
-          color: 'text-amber-500',
-          bgColor: 'bg-amber-500/10'
-        }
-      ];
+  const metrics = [
+    {
+      key: 'posts',
+      label: 'Posts',
+      value: formatNumber(postsCount),
+      clickable: false,
+    },
+    {
+      key: 'followers',
+      label: 'Followers',
+      value: canShowFollowers ? formatNumber(followersCount) : '—',
+      clickable: canShowFollowers && Boolean(onMetricPress),
+      subtext: canShowFollowers ? null : 'Private',
+    },
+    {
+      key: 'following',
+      label: 'Following',
+      value: canShowFollowing ? formatNumber(followingCount) : '—',
+      clickable: canShowFollowing && Boolean(onMetricPress),
+      subtext: canShowFollowing ? null : 'Private',
+    },
+    {
+      key: 'friends',
+      label: 'Friends',
+      value: formatNumber(friendsCount),
+      clickable: Boolean(onMetricPress),
+    },
+    {
+      key: 'reputation',
+      label: 'Trust Standing',
+      value: `${reputationScore}`,
+      subtext: repBand.label,
+      clickable: false,
+    },
+    ...(isOwner ? [{
+      key: 'coins',
+      label: 'Coins Balance',
+      value: formatNumber(coinsCount),
+      clickable: Boolean(onMetricPress),
+    }] : [])
+  ];
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
-        {cards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div
-              key={card.key}
-              onClick={() => onMetricPress?.(card.key)}
-              className={cn(
-                "p-3.5 sm:p-4 rounded-2xl border backdrop-blur-xl transition-all hover:scale-[1.02] cursor-pointer shadow-sm group",
-                isDark
-                  ? "bg-[#0d1424]/70 border-white/10 hover:border-purple-500/30 text-white"
-                  : "bg-white/95 border-slate-200/90 hover:border-purple-500/30 text-slate-900"
+    <div className={cn(
+      "w-full rounded-2xl p-4 sm:p-5 border transition-all shadow-sm",
+      isDark
+        ? "bg-[#0B0F19] border-slate-800/90 text-white"
+        : "bg-white border-slate-200/90 text-slate-900"
+    )}>
+      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800/70">
+        {metrics.map((item, idx) => {
+          const content = (
+            <div className={cn(
+              "flex flex-col items-center justify-center text-center px-2 py-1.5 transition-colors",
+              item.clickable && "cursor-pointer group hover:opacity-85"
+            )}>
+              <span className={cn(
+                "text-lg sm:text-xl font-extrabold tracking-tight",
+                item.clickable && "group-hover:text-indigo-400 transition-colors",
+                isDark ? "text-white" : "text-slate-900"
+              )}>
+                {item.value}
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-0.5">
+                {item.label}
+              </span>
+              {item.subtext && (
+                <span className="text-[10px] font-medium text-emerald-500 mt-0.5">
+                  {item.subtext}
+                </span>
               )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className={cn("p-2 rounded-xl shrink-0", card.bgColor)}>
-                  <Icon className={cn("w-4 h-4", card.color)} />
-                </div>
-                {card.trend && (
-                  <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
-                    <TrendingUp className="w-2.5 h-2.5" />
-                    {card.trend}
-                  </span>
-                )}
-              </div>
+            </div>
+          );
 
-              <div className="space-y-0.5">
-                <div className="text-base sm:text-lg font-black tracking-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                  {card.value}
-                </div>
-                <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  {card.label}
-                </div>
-              </div>
+          if (item.clickable) {
+            return (
+              <button
+                type="button"
+                key={item.key || idx}
+                onClick={() => onMetricPress?.(item.key)}
+                className="w-full text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-lg"
+              >
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <div key={item.key || idx} className="w-full">
+              {content}
             </div>
           );
         })}

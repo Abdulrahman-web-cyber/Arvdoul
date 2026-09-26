@@ -86,72 +86,58 @@ export default function ProfileSkeleton({ theme = 'light' }) {
         </div>
       </div>
 
-      {/* 3. Action Bar (6 items) */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Skeleton key={i} className="h-10 w-full rounded-2xl" />
-        ))}
-      </div>
-
-      {/* 4. Metrics Grid (6 cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className={cn(
-            "p-3.5 rounded-2xl border space-y-2",
-            isDark ? "bg-[#0d1424]/40 border-white/5" : "bg-white border-slate-100"
-          )}>
-            <Skeleton className="w-7 h-7 rounded-xl" />
-            <Skeleton className="h-5 w-14 rounded-md" />
-            <Skeleton className="h-2.5 w-20 rounded-md" />
-          </div>
-        ))}
-      </div>
-
-      {/* 5. Vibes & Stories Carousel (Rectangular Cards) */}
+      {/* 3. Unified Metric Strip Skeleton */}
       <div className={cn(
-        "rounded-3xl p-5 border space-y-4",
-        isDark ? "bg-[#0d1424]/60 border-white/10" : "bg-white border-slate-200"
+        "rounded-2xl p-4 sm:p-5 border transition-all shadow-sm",
+        isDark ? "bg-[#0B0F19] border-slate-800" : "bg-white border-slate-200"
       )}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Skeleton className="w-7 h-7 rounded-xl" />
-            <Skeleton className="h-4 w-32 rounded-lg" />
-          </div>
-          <Skeleton className="h-3 w-16 rounded-md" />
-        </div>
-
-        {/* Rectangular Cards Carousel */}
-        <div className="flex gap-3.5 overflow-x-hidden pt-1">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="w-28 sm:w-36 h-48 sm:h-56 rounded-2xl bg-slate-200 dark:bg-white/10 shrink-0 relative overflow-hidden"
-            >
-              <div className="absolute top-3 left-3">
-                <Skeleton className="h-4 w-14 rounded-full" />
-              </div>
-              <div className="absolute bottom-3 inset-x-3 space-y-1.5">
-                <Skeleton className="h-3.5 w-20 rounded" />
-                <Skeleton className="h-2.5 w-12 rounded" />
-              </div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800/70">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="flex flex-col items-center justify-center p-2 space-y-1.5">
+              <Skeleton className="h-6 w-12 rounded-md" />
+              <Skeleton className="h-3 w-16 rounded" />
             </div>
           ))}
         </div>
       </div>
 
-      {/* 6. Tabs Bar */}
-      <div className="flex gap-2 overflow-x-hidden py-1">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Skeleton key={i} className="h-9 w-24 rounded-2xl shrink-0" />
+      {/* 4. Vibes & Stories Carousel */}
+      <div className={cn(
+        "rounded-2xl p-4 sm:p-5 border space-y-3",
+        isDark ? "bg-[#0B0F19] border-slate-800" : "bg-white border-slate-200"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Skeleton className="w-6 h-6 rounded-lg" />
+            <Skeleton className="h-4 w-28 rounded-lg" />
+          </div>
+          <Skeleton className="h-3 w-16 rounded-md" />
+        </div>
+
+        {/* Clean Story Cards Carousel */}
+        <div className="flex gap-3 overflow-x-hidden pt-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="w-24 sm:w-28 h-36 sm:h-40 rounded-xl bg-slate-200 dark:bg-white/10 shrink-0"
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 5. Tabs Bar */}
+      <div className="flex gap-4 overflow-x-hidden py-2 border-b border-slate-200 dark:border-slate-800">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-6 w-20 rounded shrink-0" />
         ))}
       </div>
 
-      {/* 7. Feed Media Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {/* 6. Feed Media Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
           <div
             key={i}
-            className="aspect-[4/5] rounded-2xl bg-slate-200 dark:bg-white/10"
+            className="aspect-square rounded-2xl bg-slate-200 dark:bg-white/10"
           />
         ))}
       </div>

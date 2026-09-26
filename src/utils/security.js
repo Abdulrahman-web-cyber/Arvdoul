@@ -44,6 +44,31 @@ export function getStoredUid() {
 }
 
 /**
+ * Checks whether an active authentication session exists in storage.
+ * Used during app launch to guarantee returning users go directly to Home
+ * without any temporary flash of the Intro screen.
+ * @returns {boolean}
+ */
+export function hasStoredAuthSession() {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window._arvdoul_auth?.currentUser) return true;
+    if (localStorage.getItem('arvdoul_has_session') === 'true') return true;
+    if (getStoredUid()) return true;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('firebase:authUser:') || key.startsWith('firebase:authUser') || key === 'arvdoul_uid' || key === 'uid' || key === 'user')) {
+        const val = localStorage.getItem(key);
+        if (val && val !== 'null' && val !== 'undefined' && val !== '') return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Sanitizes an input string to protect against basic XSS attacks.
  * @param {string} input
  * @returns {string}

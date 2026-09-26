@@ -70,9 +70,14 @@ export default function AppStateGuard({ children }) {
     }
   }, [decision, navigate, user]);
 
-  // When auth state is resolving during cold-start, allow rendering seamlessly without blocking screens
+  // When auth state is resolving during cold-start:
+  // If on splash, allow splash to render.
+  // If on a guest route with stored session, hold render (null) to prevent Intro flash before Home redirect.
   if (decision.wait) {
-    return children;
+    if (location.pathname === "/") {
+      return children;
+    }
+    return null;
   }
 
   // If redirecting, return null seamlessly without flashing

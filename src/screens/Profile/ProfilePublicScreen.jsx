@@ -18,6 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
@@ -26,8 +27,6 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
-import ProfileActionBar from '../../components/profile/ProfileActionBar';
-import ProfileSocialConnections from '../../components/profile/ProfileSocialConnections';
 import ProfileMutualFriends from '../../components/profile/ProfileMutualFriends';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
@@ -363,6 +362,19 @@ export default function ProfilePublicScreen() {
     }
   }, [currentUser?.uid, effectiveProfile?.id, effectiveProfile?.uid, userId]);
 
+  // Handle profile sharing
+  const handleShare = useCallback(async () => {
+    try {
+      const target = effectiveProfile || { id: userId, uid: userId, username: profileData?.username };
+      const result = await shareProfile(target);
+      if (result.copied) {
+        toast.success('Profile link copied to clipboard!');
+      }
+    } catch {
+      toast.error('Could not share profile');
+    }
+  }, [effectiveProfile, userId, profileData?.username]);
+
   if (loading && !profileData) {
     return (
       <div className={cn(
@@ -501,43 +513,17 @@ export default function ProfilePublicScreen() {
             onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowQrModal(true)}
-          />
-
-          {/* 2. Public Action Bar: Follow / Add Friend, Message, Call, Gift, Options */}
-          <ProfileActionBar
-            isOwner={false}
-            theme={theme}
-            profile={effectiveProfile}
+            onShare={handleShare}
+            onFollowToggle={handleFollowToggle}
             isFollowing={isFollowing}
             followLoading={followLoading}
             friendshipStatus={friendshipStatus}
             friendRequestLoading={friendRequestLoading}
-            onFollowToggle={handleFollowToggle}
             onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
-            onOpenOptionsMenu={() => setShowOptionsMenu(true)}
-            onCallPress={() => toast.info('Starting secure audio call...')}
-            capabilities={capabilities}
           />
 
-          {/* 3. 3-Column Social Connections Card */}
-          <ProfileSocialConnections
-            mutualFriends={mutualFriends}
-            profile={effectiveProfile}
-            theme={theme}
-            onMutualClick={() => navigate(`/profile/${userId}/mutual-friends`)}
-          />
-
-          {/* 3b. Mutual Friends Line */}
-          {mutualFriends && mutualFriends.length > 0 && (
-            <ProfileMutualFriends
-              mutualFriends={mutualFriends}
-              theme={theme}
-              onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
-            />
-          )}
-
-          {/* 4. 6-Cards Key Metrics Grid */}
+          {/* 2. Key Metrics Strip */}
           <ProfileMetricsGrid
             isOwner={false}
             theme={theme}
@@ -550,6 +536,15 @@ export default function ProfilePublicScreen() {
               else if (key === 'friends') navigate(`/profile/${userId}/friends`);
             }}
           />
+
+          {/* 2b. Mutual Friends Line */}
+          {mutualFriends && mutualFriends.length > 0 && (
+            <ProfileMutualFriends
+              mutualFriends={mutualFriends}
+              theme={theme}
+              onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+            />
+          )}
 
           {!capabilities.canViewContent ? (
             /* Restricted / Private Account Access Gate */

@@ -33,11 +33,11 @@ const ProfileFeedGrid = memo(({
 
   // Handle 'about' tab
   if (activeTab === 'about') {
-    const perks = getPerksForLevel(profile?.level || 1);
+    const perks = (typeof getPerksForLevel === 'function' ? getPerksForLevel(profile?.level || 1) : []) || [];
     return (
       <div className={cn(
-        "w-full rounded-3xl p-6 border backdrop-blur-xl transition-all shadow-sm space-y-6",
-        isDark ? "bg-[#0d1424]/70 border-white/10 text-white" : "bg-white/95 border-slate-200/90 text-slate-900"
+        "w-full rounded-2xl p-5 sm:p-6 border transition-all shadow-sm space-y-6",
+        isDark ? "bg-[#0B0F19] border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
       )}>
         <div>
           <h3 className="text-base font-bold mb-2">About Creator</h3>

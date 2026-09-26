@@ -98,21 +98,21 @@ const ProfileHighlightsSection = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-xl transition-all shadow-sm",
+      "w-full rounded-2xl p-4 sm:p-5 border transition-all shadow-sm",
       isDark
-        ? "bg-[#0d1424]/80 border-white/10 text-white shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_8px_24px_rgba(0,0,0,0.04)]"
+        ? "bg-[#0B0F19] border-slate-800 text-white"
+        : "bg-white border-slate-200 text-slate-900"
     )}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 font-bold text-sm sm:text-base">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-white shadow-md shadow-rose-500/20">
-            <Zap className="w-4 h-4 fill-white" />
+      <div className="flex items-center justify-between mb-3.5">
+        <div className="flex items-center gap-2 font-bold text-sm">
+          <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+            <Zap className="w-3.5 h-3.5 fill-indigo-500" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <span>Vibes & Stories</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-500 border border-rose-500/20">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
                 {items.length}
               </span>
             </div>
@@ -121,55 +121,53 @@ const ProfileHighlightsSection = memo(({
 
         <button
           onClick={() => navigate(isOwner ? '/profile/highlights' : '/vibes')}
-          className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-1 text-xs font-semibold text-indigo-500 hover:opacity-80 transition-opacity"
         >
           <span>{isOwner ? 'Manage Vibes' : 'Explore all'}</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* Horizontal Carousel with Rectangular Cards */}
-      <div className="flex items-center gap-3.5 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth">
+      {/* Horizontal Carousel with Clean Cards */}
+      <div className="flex items-center gap-3 overflow-x-auto pb-1 pt-0.5 scrollbar-none scroll-smooth">
         {items.length === 0 && !isOwner && (
-          <div className="w-full py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-            No vibes yet.
+          <div className="w-full py-6 text-center text-xs text-slate-400">
+            No vibes shared yet.
           </div>
         )}
-        {/* Rectangular '+ Create Vibe' Card for Owner */}
+        {/* '+ Create Vibe' Card for Owner */}
         {isOwner && (
           <button
             onClick={onAddHighlight || (() => navigate('/create-story'))}
             className={cn(
-              "w-28 sm:w-36 h-48 sm:h-56 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-3 text-center transition-all group shrink-0 hover:scale-[1.02] active:scale-[0.98] shadow-sm",
+              "w-24 sm:w-28 h-36 sm:h-40 rounded-xl border border-dashed flex flex-col items-center justify-center p-2.5 text-center transition-all group shrink-0 hover:scale-[1.02] active:scale-[0.98]",
               isDark
-                ? "border-purple-500/30 bg-purple-500/5 hover:border-purple-400 hover:bg-purple-500/10 text-gray-300"
-                : "border-purple-300 bg-purple-50/60 hover:border-purple-500 hover:bg-purple-100/60 text-slate-700"
+                ? "border-indigo-500/30 bg-indigo-500/5 hover:border-indigo-400 hover:bg-indigo-500/10 text-slate-300"
+                : "border-indigo-300 bg-indigo-50/60 hover:border-indigo-500 hover:bg-indigo-100/60 text-slate-700"
             )}
             title="Create a new Vibe"
           >
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-purple-500/30 group-hover:scale-110 transition-transform mb-3">
-              <Plus className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform mb-2">
+              <Plus className="w-5 h-5" />
             </div>
-            <span className="text-xs font-bold text-slate-800 dark:text-white group-hover:text-purple-500 transition-colors">
+            <span className="text-[11px] font-bold text-slate-800 dark:text-white group-hover:text-indigo-400 transition-colors">
               New Vibe
             </span>
-            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+            <span className="text-[9px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
               Share moment
             </span>
           </button>
         )}
 
-        {/* Rectangular Vibes Cards */}
+        {/* Clean Vibes Cards */}
         {items.map((item) => (
           <div
             key={item.id}
             onClick={() => {
-              // Only one navigation path may run: calling the optional handler
-              // and then navigating too would open two viewers.
               if (onHighlightPress) onHighlightPress(item);
               else navigate(`/stories?vibe=${item.id}`);
             }}
-            className="relative w-28 sm:w-36 h-48 sm:h-56 rounded-2xl overflow-hidden shrink-0 group cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all duration-300 border border-black/10 dark:border-white/10"
+            className="relative w-24 sm:w-28 h-36 sm:h-40 rounded-xl overflow-hidden shrink-0 group cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all border border-slate-200 dark:border-slate-800 bg-slate-900"
           >
             {/* Background Media Thumbnail or Fallback Gradient */}
             {item.cover ? (

@@ -16,6 +16,8 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@context/ThemeContext";
+import { useAuth } from "../context/AuthContext.jsx";
+import { hasStoredAuthSession } from "../utils/security.js";
 import { useTranslation } from "react-i18next";
 import ThemeToggle from "@components/Shared/ThemeToggle";
 import { motion, AnimatePresence } from "framer-motion";
@@ -277,6 +279,21 @@ function IntroScreen() {
   const themeCtx = useTheme?.() || { theme: "light" };
   const { theme } = themeCtx;
   const { t } = useTranslation();
+  let auth = null;
+  try {
+    auth = useAuth();
+  } catch {
+    auth = null;
+  }
+  const isAuthenticated = auth?.isAuthenticated;
+  const authInitialized = auth?.authInitialized;
+
+  // Immediate redirect for authenticated users who land on Intro
+  useEffect(() => {
+    if (isAuthenticated || (hasStoredAuthSession() && authInitialized)) {
+      navigate("/home", { replace: true });
+    }
+  }, [isAuthenticated, authInitialized, navigate]);
 
   const resolvedTheme = useMemo(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
@@ -311,6 +328,10 @@ function IntroScreen() {
     ],
     [t]
   );
+
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <div

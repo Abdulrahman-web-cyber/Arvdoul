@@ -6,6 +6,7 @@ import { useTheme } from "@context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
 import LoadingSpinner from "@components/Shared/LoadingSpinner";
 import { resolveSplashDestination } from "../utils/profileCompletion.js";
+import { hasStoredAuthSession } from "../utils/security.js";
 
 export default function SplashScreen() {
   const navigate = useNavigate();
@@ -152,6 +153,8 @@ export default function SplashScreen() {
     let completeTimer;
     let navTimer;
 
+    const hasStored = hasStoredAuthSession();
+
     const proceed = () => {
       if (!mountedRef.current) return;
       setProgress(100);
@@ -160,7 +163,11 @@ export default function SplashScreen() {
 
       navTimer = setTimeout(() => {
         if (!mountedRef.current) return;
-        const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
+        const target = resolveSplashDestination({
+          isAuthenticated,
+          needsOnboarding,
+          hasStoredSession: hasStored
+        });
         navigate(target, { 
           replace: true,
           state: { fromSplash: true }
@@ -169,10 +176,13 @@ export default function SplashScreen() {
     };
 
     if (authInitialized) {
-      completeTimer = setTimeout(proceed, 800);
+      // Auth is resolved: finish progress bar and navigate to destination immediately
+      completeTimer = setTimeout(proceed, 450);
     } else {
-      // Safety fallback: never leave user waiting longer than 2.4s total
-      completeTimer = setTimeout(proceed, 2400);
+      // User may be logged in on device: NEVER navigate to /intro before auth initializes!
+      // Keep splash active while auth resolves session. Max 7s safety net for offline/error.
+      setStatus("Connecting Services");
+      completeTimer = setTimeout(proceed, 7000);
     }
 
     return () => {
@@ -183,7 +193,11 @@ export default function SplashScreen() {
 
   // Quick skip on tap / click
   const handleSkip = useCallback(() => {
-    const target = resolveSplashDestination({ isAuthenticated, needsOnboarding });
+    const target = resolveSplashDestination({
+      isAuthenticated,
+      needsOnboarding,
+      hasStoredSession: hasStoredAuthSession()
+    });
     navigate(target, { replace: true, state: { fromSplash: true } });
   }, [isAuthenticated, needsOnboarding, navigate]);
 
