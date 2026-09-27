@@ -45,7 +45,7 @@ export default function MainLayout({ children }) {
           {children}
         </main>
       ) : isFullHeightFeed ? (
-        <main className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col pb-20">
+        <main className="flex-1 w-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
       ) : (

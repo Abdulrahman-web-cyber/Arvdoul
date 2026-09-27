@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import PropTypes from "prop-types";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Bell, Home, MessageCircle, PlayCircle, UserPlus } from "lucide-react";
 import { useTheme } from "@context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
@@ -1097,62 +1097,64 @@ function BottomNav() {
      Render
      ------------------------------------------------------------------------ */
 
+  const isNavVisible = visible && !quickAccessOpen;
+
   return (
     <>
       <motion.nav
         aria-label="Primary navigation"
         initial={false}
-        animate={{ y: -keyboardOffset }}
-        transition={reducedMotion ? { duration: 0 } : MOTION.keyboard}
-        className="
-          pointer-events-none fixed inset-x-0 bottom-0 z-[100] px-2 sm:px-3
-        "
+        animate={{
+          y: isNavVisible ? -keyboardOffset : 130,
+          opacity: isNavVisible ? 1 : 0,
+        }}
+        transition={reducedMotion ? { duration: 0 } : MOTION.membrane}
+        onFocusCapture={() => {
+          if (!visible) setVisible(true);
+        }}
+        className={`fixed inset-x-0 bottom-0 z-[100] px-2 sm:px-3 ${
+          isNavVisible ? "pointer-events-auto" : "pointer-events-none"
+        }`}
         style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
       >
         <div className="relative mx-auto h-[82px] w-full" style={{ maxWidth: MAX_WIDTH }}>
           <NavigationHandle
             dark={dark}
             reducedMotion={Boolean(reducedMotion)}
-            navigationVisible={visible && !quickAccessOpen}
+            navigationVisible={isNavVisible}
             onToggleNavigation={toggleNavigation}
             onOpenQuickAccess={openQuickAccess}
           />
 
-          <AnimatePresence initial={false}>
-            {visible && !quickAccessOpen && (
-              <motion.div
-                key="arvdoul-bottom-navigation"
-                id="arvdoul-bottom-navigation"
-                initial={reducedMotion ? false : { y: 96, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={reducedMotion ? { opacity: 0 } : { y: 96, opacity: 0 }}
-                transition={reducedMotion ? { duration: 0 } : MOTION.membrane}
-                className="
-                  pointer-events-auto absolute inset-x-0 bottom-0 h-[82px] overflow-hidden
-                  rounded-[30px]
-                "
-                style={{
-                  isolation: "isolate",
-                  background: dark
-                    ? [
-                        "linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.02) 34%,rgba(255,255,255,.01) 100%)",
-                        "linear-gradient(108deg,rgba(200,43,255,.02) 0%,transparent 27%,rgba(68,49,247,.02) 55%,rgba(5,91,251,.018) 100%)",
-                        "rgba(3,7,27,.65)",
-                      ].join(",")
-                    : [
-                        "linear-gradient(180deg,rgba(255,255,255,.65) 0%,rgba(255,255,255,.45) 38%,rgba(255,255,255,.35) 100%)",
-                        "linear-gradient(108deg,rgba(200,43,255,.02) 0%,transparent 27%,rgba(68,49,247,.02) 55%,rgba(5,91,251,.015) 100%)",
-                      ].join(","),
-                  border: dark
-                    ? "1px solid rgba(255,255,255,.1)"
-                    : "1px solid rgba(255,255,255,.8)",
-                  boxShadow: dark
-                    ? "0 24px 58px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 rgba(0,0,0,.15)"
-                    : "0 22px 52px rgba(17,24,39,.1),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(0,0,0,.03)",
-                  backdropFilter: "blur(35px) saturate(180%)",
-                  WebkitBackdropFilter: "blur(35px) saturate(180%)",
-                }}
-              >
+          <div
+            key="arvdoul-bottom-navigation"
+            id="arvdoul-bottom-navigation"
+            className="
+              pointer-events-auto absolute inset-x-0 bottom-0 h-[82px] overflow-hidden
+              rounded-[30px]
+            "
+            style={{
+              isolation: "isolate",
+              background: dark
+                ? [
+                    "linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.02) 34%,rgba(255,255,255,.01) 100%)",
+                    "linear-gradient(108deg,rgba(200,43,255,.02) 0%,transparent 27%,rgba(68,49,247,.02) 55%,rgba(5,91,251,.018) 100%)",
+                    "rgba(3,7,27,.65)",
+                  ].join(",")
+                : [
+                    "linear-gradient(180deg,rgba(255,255,255,.65) 0%,rgba(255,255,255,.45) 38%,rgba(255,255,255,.35) 100%)",
+                    "linear-gradient(108deg,rgba(200,43,255,.02) 0%,transparent 27%,rgba(68,49,247,.02) 55%,rgba(5,91,251,.015) 100%)",
+                  ].join(","),
+              border: dark
+                ? "1px solid rgba(255,255,255,.1)"
+                : "1px solid rgba(255,255,255,.8)",
+              boxShadow: dark
+                ? "0 24px 58px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1),inset 0 -1px 0 rgba(0,0,0,.15)"
+                : "0 22px 52px rgba(17,24,39,.1),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(0,0,0,.03)",
+              backdropFilter: "blur(35px) saturate(180%)",
+              WebkitBackdropFilter: "blur(35px) saturate(180%)",
+            }}
+          >
                 {/* Layer 1: Inner rim */}
                 <span
                   aria-hidden="true"
@@ -1315,9 +1317,7 @@ function BottomNav() {
                     onNavigate={navigateTo}
                   />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
         </div>
       </motion.nav>
 
