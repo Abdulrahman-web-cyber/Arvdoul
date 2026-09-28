@@ -166,7 +166,6 @@ export default function SplashScreen() {
         const target = resolveSplashDestination({
           isAuthenticated,
           needsOnboarding,
-          hasStoredSession: hasStored
         });
         navigate(target, { 
           replace: true,
@@ -196,7 +195,6 @@ export default function SplashScreen() {
     const target = resolveSplashDestination({
       isAuthenticated,
       needsOnboarding,
-      hasStoredSession: hasStoredAuthSession()
     });
     navigate(target, { replace: true, state: { fromSplash: true } });
   }, [isAuthenticated, needsOnboarding, navigate]);

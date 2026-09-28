@@ -285,10 +285,10 @@ function IntroScreen() {
 
   // Immediate redirect for authenticated users who land on Intro
   useEffect(() => {
-    if (isAuthenticated || (hasStoredAuthSession() && authInitialized)) {
+    if (isAuthenticated) {
       navigate("/home", { replace: true });
     }
-  }, [isAuthenticated, authInitialized, navigate]);
+  }, [isAuthenticated, navigate]);
 
   const resolvedTheme = useMemo(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";

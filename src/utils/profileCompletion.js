@@ -267,9 +267,6 @@ export function resolvePostAuthDestination({
   const setup = isSetupRoute(pathname);
 
   if (!isAuthenticated) {
-    if (hasStoredAuthSession()) {
-      return { wait: true, destination: null, allow: false };
-    }
     if (guest || verify) return { wait: false, destination: null, allow: true };
     if (setup) return { wait: false, destination: '/login', allow: false };
     return { wait: false, destination: '/intro', allow: false };
@@ -292,9 +289,8 @@ export function resolvePostAuthDestination({
   return { wait: false, destination: null, allow: true };
 }
 
-export function resolveSplashDestination({ isAuthenticated, needsOnboarding: onboarding, hasStoredSession = false }) {
-  const activeSession = isAuthenticated || hasStoredSession || hasStoredAuthSession();
-  if (activeSession) {
+export function resolveSplashDestination({ isAuthenticated, needsOnboarding: onboarding }) {
+  if (isAuthenticated) {
     if (onboarding) return '/setup-profile';
     return '/home';
   }
