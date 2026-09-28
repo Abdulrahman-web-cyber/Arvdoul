@@ -47,7 +47,8 @@ import ProfileAvatar from './ProfileAvatar';
 import ProfileLevel from './ProfileLevel';
 import ProfileBadges from './ProfileBadges';
 import ProfileStats from './ProfileStats';
-import { useUser } from "../../context/UserContext";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { userService } from "../../services/userService.js";
 import ProfileOptionsMenu from './ProfileOptionsMenu';
 import ProfileTipModal from './ProfileTipModal';
 import { getCitizenTier } from '../../services/levelSystemService';
@@ -121,7 +122,7 @@ const ProfileHeader = memo(({
   const [showTipModal, setShowTipModal] = useState(false);
 
   // User auth context for follow/unfollow
-  const { userProfile: currentAuthUser, followUser, unfollowUser } = useUser();
+  const { userProfile: currentAuthUser } = useAuth();
   const currentUserId = currentAuthUser?.uid || currentAuthUser?.id;
   const targetUserId = profile?.uid || profile?.id;
 
@@ -154,10 +155,10 @@ const ProfileHeader = memo(({
 
     try {
       if (previousState) {
-        if (unfollowUser) await unfollowUser(targetUserId);
+        await userService.unfollowUser(currentUserId, targetUserId);
         toast.success(`Unfollowed @${profile?.username || 'user'}`);
       } else {
-        if (followUser) await followUser(targetUserId);
+        await userService.followUser(currentUserId, targetUserId);
         toast.success(`Following @${profile?.username || 'user'}`);
       }
     } catch (err) {
@@ -167,7 +168,7 @@ const ProfileHeader = memo(({
     } finally {
       setFollowLoading(false);
     }
-  }, [currentUserId, targetUserId, isFollowing, followUser, unfollowUser, profile?.username]);
+  }, [currentUserId, targetUserId, isFollowing, profile?.username]);
 
   // Handle more options
   const handleMoreOptions = useCallback(() => {

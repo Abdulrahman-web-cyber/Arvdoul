@@ -8,7 +8,6 @@ import { HelmetProvider } from 'react-helmet-async';
 import { MotionConfig } from 'framer-motion';
 import { ThemeProvider } from '../context/ThemeContext.jsx';
 import { AuthProvider } from '../context/AuthContext.jsx';
-import { UserProvider } from '../context/UserContext.jsx';
 import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
@@ -109,6 +108,7 @@ const SystemInitializer = ({ onReady }) => {
                     break;
                   case 'live_gift':
                   case 'live.gift':
+                  case 'sendLiveGift':
                     await import('../services/liveService.js').then(m =>
                       m.getLiveService().sendLiveGift(
                         op.payload.streamId,
@@ -167,6 +167,17 @@ const SystemInitializer = ({ onReady }) => {
                     await import('../services/monetizationService.js').then((m) =>
                       m.getMonetizationService().watchAd(op.payload.placement, op.payload.adId, op.payload.watchDurationSeconds, op.payload.deviceMetadata || {}));
                     break;
+                  case 'gift':
+                  case 'sendGift':
+                    await import('../services/monetizationService.js').then((m) =>
+                      m.getMonetizationService().sendGift(
+                        op.payload.senderId,
+                        op.payload.recipientId,
+                        op.payload.giftType,
+                        op.payload.context || {}
+                      )
+                    );
+                    break;
                   default:
                     return true; // unknown ops are dropped (not retried forever)
                 }
@@ -221,39 +232,37 @@ export default function AppBootstrap() {
           {/* Main application renders immediately without blocking screens */}
           <BrowserRouter>
             <AuthProvider>
-              <UserProvider>
-                {/* Global motion policy: every Framer Motion animation respects
-                    prefers-reduced-motion (WCAG 2.2 2.3.3). */}
-                <MotionConfig reducedMotion="user">
-                  <Suspense fallback={null}>
-                    <AppRoutes />
-                  </Suspense>
-                </MotionConfig>
-                
-                {/* Global offline sync indicator */}
-                <OfflineIndicator />
-                
-                {/* PWA Install and Update Banners */}
-                <PWAInstallBanner />
-                <SWUpdateBanner />
-                
-                {/* Toast notifications */}
-                <Toaster 
-                  position="top-right"
-                  toastOptions={{
-                    className: 'font-sans backdrop-blur-sm',
-                    duration: 4000,
-                    style: {
-                      background: 'rgba(255, 255, 255, 0.95)',
-                      backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(0, 0, 0, 0.1)',
-                    }
-                  }}
-                  richColors
-                  closeButton
-                  expand
-                />
-              </UserProvider>
+              {/* Global motion policy: every Framer Motion animation respects
+                  prefers-reduced-motion (WCAG 2.2 2.3.3). */}
+              <MotionConfig reducedMotion="user">
+                <Suspense fallback={null}>
+                  <AppRoutes />
+                </Suspense>
+              </MotionConfig>
+              
+              {/* Global offline sync indicator */}
+              <OfflineIndicator />
+              
+              {/* PWA Install and Update Banners */}
+              <PWAInstallBanner />
+              <SWUpdateBanner />
+              
+              {/* Toast notifications */}
+              <Toaster 
+                position="top-right"
+                toastOptions={{
+                  className: 'font-sans backdrop-blur-sm',
+                  duration: 4000,
+                  style: {
+                    background: 'rgba(255, 255, 255, 0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(0, 0, 0, 0.1)',
+                  }
+                }}
+                richColors
+                closeButton
+                expand
+              />
             </AuthProvider>
           </BrowserRouter>
         </GlobalErrorBoundary>
