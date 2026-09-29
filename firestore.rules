@@ -42,7 +42,10 @@ service cloud.firestore {
         'achievements', 'creatorStatus', 'creatorTier', 'isCreator',
         'monetizationEligible', 'coins', 'coinBalance', 'earnings',
         'totalEarned', 'isVerified', 'accountStatus', 'roles', 'role',
-        'policyStanding'
+        'policyStanding',
+        // PII lives in users/{uid}/private/pii. A client update must never
+        // (re)introduce it onto the world-readable profile document.
+        'email', 'phoneNumber'
       ]);
     }
 
@@ -56,7 +59,8 @@ service cloud.firestore {
     function userModifiesAllowedProfileFields() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'xp', 'experience', 'experienceToNextLevel', 'level', 'levelBand',
-        'activeDays', 'activeStreak', 'longestStreak', 'lastActiveDate',
+        'activeDays', 'activeDaysCount', 'activeStreak', 'longestStreak',
+        'lastActiveDate', 'lastActiveDay',
         'reputation', 'reputationScore', 'reputationTier',
         'influence', 'influenceScore', 'contribution', 'contributionScore',
         'titles', 'activeTitle', 'achievements',
@@ -79,6 +83,13 @@ service cloud.firestore {
       // Reference: allow update, delete: if isOwner(userId) || isAdmin();
       allow update: if isOwner(userId) && !touchesServerAuthoritativeFields();
       allow delete: if false;
+
+      // Private PII (email/phone). Read/write is owner-only, so a modified
+      // client cannot read another citizen's contact details regardless of the
+      // permissive projection on the parent profile document.
+      match /private/{docId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // ==================== ACTIVE DAYS LEDGER ====================

@@ -1,17 +1,19 @@
 /**
  * src/screens/Profile/ProfileMyScreen.jsx - ARVDOUL My Profile Screen
- * 
- * Production-grade owner view of the authenticated user's profile.
- * Rebuilt to perfectly match the uploaded design specifications across Light and Dark themes.
- * Fully integrated with real system data, server-authoritative level & progression,
- * real coin ledger balance, real analytics, highlights, and content management.
- * 
+ *
+ * Owner-facing digital-nation identity surface.
+ *
+ * Data truth flows exclusively through the canonical `useProfile` hook
+ * (profileStore -> userService / profileCapabilityEngine / domain services).
+ * No domain value is computed or defaulted in this screen: unavailable metrics
+ * render as honest placeholders rather than invented numbers.
+ *
  * @component
  */
 
 import React, { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, ShieldCheck, X, Lock } from 'lucide-react';
+import { Eye, Lock } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
@@ -22,19 +24,24 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { shareProfile } from '../../utils/shareUtils';
-import { getStoredUid } from '../../utils/security';
-import { LEVEL_GATES } from '../../services/levelSystemService';
-import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { useProfile } from '../../hooks/useProfile';
+import { useOfflineSync } from '../../hooks/useOfflineSync';
 import { toast } from 'sonner';
 
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
+import ProfileNationStanding from '../../components/profile/ProfileNationStanding';
+import ProfileProgression from '../../components/profile/ProfileProgression';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
+import ProfileDeepNavigation from '../../components/profile/ProfileDeepNavigation';
+import ProfileAchievements from '../../components/profile/ProfileAchievements';
+import ProfilePassportCard from '../../components/profile/ProfilePassportCard';
+import ProfileEconomyCard from '../../components/profile/ProfileEconomyCard';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
 import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
@@ -44,11 +51,12 @@ import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 const AvatarUploadModal = lazy(() => import('../../components/profile/AvatarUploadModal'));
 const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
 
+
 export default function ProfileMyScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const scrollRef = useRef(null);
-  
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -58,195 +66,130 @@ export default function ProfileMyScreen() {
   const [activeTab, setActiveTab] = useState('posts');
   const [viewAs, setViewAs] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
 
-  // Authenticated user
+  // Authenticated user - canonical identity chain (appStore mirror, AuthContext fallback).
   const { user: authContextUser } = useAuth();
   const authStoreUser = useAppStore((state) => state.currentUser);
   const currentUser = authStoreUser || authContextUser;
-  const currentUserId = currentUser?.uid || authContextUser?.uid || getStoredUid();
+  const currentUserId = currentUser?.uid || authContextUser?.uid;
 
-  const handleViewAsChange = useCallback((mode) => {
-    setViewAs(mode);
-    if (!currentUserId) return;
-    useProfileStore.getState().loadProfile(currentUserId, currentUserId, {
-      viewAs: mode === 'owner' ? null : mode
-    });
-  }, [currentUserId]);
+  // Canonical profile data pipeline (identity, relationship, capabilities, content,
+  // and all digital-nation summaries). viewAs drives the owner preview simulation.
+  const {
+    profile,
+    capabilities,
+    loading,
+    posts,
+    postsLoading,
+    postsError,
+    postsHasMore,
+    loadMorePosts,
+    highlights,
+    stories,
+    highlightsLoading,
+    highlightsError,
+    loadHighlights,
+    videos,
+    videosLoading,
+    videosError,
+    loadVideos,
+    level,
+    balance,
+    position,
+    reputation,
+    rank,
+    achievements,
+    titles,
+    badges,
+    creatorProfile,
+    passport,
+    wallet,
+    refresh,
+  } = useProfile(currentUserId, { viewAs: viewAs === 'owner' ? null : viewAs });
 
-  // Profile store - reactive state selectors
-  const profile = useProfileStore((state) => state.profile);
-  const loading = useProfileStore((state) => state.loading);
-  const error = useProfileStore((state) => state.error);
-  const posts = useProfileStore((state) => state.posts);
-  const postsLoading = useProfileStore((state) => state.postsLoading);
-  const postsHasMore = useProfileStore((state) => state.postsHasMore);
+  // Owner-only saved content stays on the store surface (loaded on demand).
   const savedPosts = useProfileStore((state) => state.savedPosts);
   const savedLoading = useProfileStore((state) => state.savedLoading);
-  const highlights = useProfileStore((state) => state.highlights);
-  const level = useProfileStore((state) => state.level);
-  const balance = useProfileStore((state) => state.balance);
-  const position = useProfileStore((state) => state.position);
 
-  // Analytics store - reactive state selectors
+  const activeTitle = useMemo(
+    () => titles?.find?.((t) => t?.isActive || t?.status === 'active') || null,
+    [titles]
+  );
+
+  // Analytics store - reactive state selectors.
   const analytics = useAnalyticsStore((state) => state.analytics);
   const analyticsLoading = useAnalyticsStore((state) => state.loading);
+  const analyticsError = useAnalyticsStore((state) => state.error);
   const timeframe = useAnalyticsStore((state) => state.timeframe);
   const ranking = useAnalyticsStore((state) => state.ranking);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
-  // Fallback username if Firestore is yet to populate
-  const cleanUsername = useMemo(() => {
-    try {
-      const raw = profile?.username || currentUser?.username;
-      if (raw && typeof raw === 'string' && !raw.startsWith('user_') && raw !== 'user' && raw !== 'creator') {
-        return raw;
-      }
-      const rawEmail = typeof currentUser?.email === 'string' ? currentUser.email : (typeof profile?.email === 'string' ? profile.email : '');
-      const fromEmail = rawEmail.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
-      if (fromEmail && fromEmail !== 'user') return fromEmail;
-
-      const rawName = typeof currentUser?.displayName === 'string' ? currentUser.displayName : (typeof profile?.displayName === 'string' ? profile.displayName : '');
-      const fromName = rawName.toLowerCase().replace(/[^a-z0-9_]/g, '');
-      if (fromName && fromName !== 'user') return fromName;
-
-      return 'creator';
-    } catch {
-      return 'creator';
-    }
-  }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
-
-  // Server-authoritative composite profile
+  // Honest display projection: only shapes real fields for rendering. Counts and
+  // domain status are never defaulted here - they surface as unavailable instead.
   const effectiveProfile = useMemo(() => {
-    const rawDisplayName = currentUser?.displayName || currentUser?.name || profile?.displayName || profile?.name;
-    const safeDisplayName = (typeof rawDisplayName === 'string' && rawDisplayName.trim())
-      ? rawDisplayName.trim()
-      : (typeof currentUser?.email === 'string' && currentUser.email ? currentUser.email.split('@')[0] : 'Creator');
-
-    const safeBio = (typeof profile?.bio === 'string' ? profile.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
-    const safeLocation = typeof profile?.location === 'string' ? profile.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
-    const safeWebsite = typeof profile?.website === 'string' ? profile.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
-    const safeLevel = Number(level || profile?.level || currentUser?.level) || 1;
-
-    if (profile && typeof profile === 'object') {
-      return {
-        ...profile,
-        id: profile.id || profile.uid || currentUserId || 'creator',
-        uid: profile.uid || profile.id || currentUserId || 'creator',
-        username: cleanUsername,
-        displayName: safeDisplayName,
-        bio: safeBio,
-        location: safeLocation,
-        website: safeWebsite,
-        level: safeLevel,
-        photoURL: getSafeAvatarUrl(profile.photoURL || currentUser?.photoURL, safeDisplayName, currentUserId),
-        followerCount: Number(profile.followerCount ?? profile.followersCount ?? currentUser?.followerCount ?? 0) || 0,
-        followingCount: Number(profile.followingCount ?? currentUser?.followingCount ?? 0) || 0,
-        postCount: Number(profile.postCount ?? posts?.length ?? 0) || 0,
-        coins: Number(profile.coins ?? profile.coinBalance ?? balance ?? currentUser?.coins ?? 0) || 0,
-        isVerified: Boolean(profile.isVerified || profile.verified || currentUser?.isVerified),
-        isCreator: Boolean(profile.isCreator || currentUser?.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
-      };
-    }
-
+    if (!profile) return null;
     return {
-      id: currentUserId || 'creator',
-      uid: currentUserId || 'creator',
-      username: cleanUsername,
-      displayName: safeDisplayName,
-      bio: safeBio,
-      photoURL: getSafeAvatarUrl(currentUser?.photoURL, safeDisplayName, currentUserId),
-      followerCount: Number(currentUser?.followerCount || currentUser?.followersCount) || 0,
-      followingCount: Number(currentUser?.followingCount) || 0,
-      postCount: posts?.length || 0,
-      coins: Number(currentUser?.coins) || balance || 0,
-      isVerified: Boolean(currentUser?.isVerified),
-      isCreator: Boolean(currentUser?.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
-      level: safeLevel,
-      location: safeLocation,
-      website: safeWebsite,
+      ...profile,
+      id: profile.id || profile.uid || currentUserId,
+      uid: profile.uid || profile.id || currentUserId,
+      photoURL: getSafeAvatarUrl(profile.photoURL, profile.displayName || profile.username, currentUserId),
+      bio: typeof profile.bio === 'string' ? profile.bio : '',
+      location: typeof profile.location === 'string' ? profile.location : '',
+      website: typeof profile.website === 'string' ? profile.website : '',
+      activeTitle: activeTitle || profile.activeTitle || null,
     };
-  }, [profile, cleanUsername, currentUser, currentUserId, posts?.length, balance, level]);
+  }, [profile, currentUserId, activeTitle]);
 
-  // Centrally resolved Action Capabilities
-  const capabilities = useMemo(() => {
-    return resolveCapabilities({
-      viewer: currentUser,
-      target: effectiveProfile,
-      relationship: {
-        isOwner: true,
-        isFollowing: viewAs === 'follower' || viewAs === 'connection',
-        isFollower: true,
-        isMutualFriend: viewAs === 'connection'
-      },
-      viewAs: viewAs === 'owner' ? null : viewAs
-    });
-  }, [currentUser, effectiveProfile, viewAs]);
-
-  // Load user data on mount without thrashing or clearing cache
+  // Analytics reload only when the identity or selected timeframe changes.
   useEffect(() => {
     if (!currentUserId) return;
-
-    const profileStore = useProfileStore.getState();
-    const analyticsStore = useAnalyticsStore.getState();
-
-    profileStore.loadProfile(currentUserId, currentUserId);
-    profileStore.loadHighlights(currentUserId);
-    profileStore.loadLevel(currentUserId);
-    profileStore.loadBalance(currentUserId);
-    profileStore.loadPosition(currentUserId);
-    profileStore.loadPosts(currentUserId);
-
-    analyticsStore.loadAnalytics(currentUserId, timeframe);
+    useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe);
   }, [currentUserId, timeframe]);
 
-  // Tab change handler
+  // Tab change handler.
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
     if (tab === 'saved' && (!savedPosts || savedPosts.length === 0) && currentUserId) {
       useProfileStore.getState().loadSavedPosts(currentUserId);
     }
-  }, [currentUserId, savedPosts]);
+    if (tab === 'sparks' && videos.length === 0) {
+      loadVideos();
+    }
+  }, [currentUserId, savedPosts, videos.length, loadVideos]);
 
-  // Pull to refresh
+  // Pull to refresh.
   const handleRefresh = useCallback(async () => {
     if (!currentUserId) return;
     setIsRefreshing(true);
     try {
-      const profileStore = useProfileStore.getState();
-      const analyticsStore = useAnalyticsStore.getState();
       await Promise.allSettled([
-        profileStore.loadProfile(currentUserId, currentUserId),
-        analyticsStore.loadAnalytics(currentUserId, timeframe),
-        profileStore.loadPosts(currentUserId),
+        refresh(),
+        useAnalyticsStore.getState().loadAnalytics(currentUserId, timeframe),
       ]);
       toast.success('Profile refreshed');
-    } catch (e) {
-      console.warn('Refresh note:', e);
     } finally {
       setIsRefreshing(false);
     }
-  }, [currentUserId, timeframe]);
+  }, [currentUserId, timeframe, refresh]);
 
-  // Handle Share
+  // Handle Share.
   const handleShare = useCallback(async () => {
     try {
-      const target = effectiveProfile || { id: currentUserId, uid: currentUserId, username: cleanUsername };
+      const target = effectiveProfile || { id: currentUserId, uid: currentUserId };
       const result = await shareProfile(target);
       if (result.copied) {
         toast.success('Profile link copied to clipboard!');
       }
-    } catch (err) {
+    } catch {
       toast.error('Could not share profile');
     }
-  }, [effectiveProfile, currentUserId, cleanUsername]);
+  }, [effectiveProfile, currentUserId]);
 
   const isDark = theme === 'dark';
+  const { isOnline } = useOfflineSync();
 
   if (loading && !profile && !currentUser) {
     return (
-      <div className={cn(
-        'min-h-screen pb-20',
-        isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
-      )}>
+      <div className={cn('min-h-screen pb-20', isDark ? 'bg-arvdoul-bg' : 'bg-arvdoul-bg-light')}>
         <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
         <ProfileSkeleton theme={theme} />
       </div>
@@ -260,30 +203,28 @@ export default function ProfileMyScreen() {
         className={cn(
           "min-h-screen pb-24 transition-colors duration-200",
           isDark
-            ? "bg-[#060816] text-white selection:bg-purple-500/30"
-            : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
+            ? "bg-arvdoul-bg text-white selection:bg-arvdoul-purple/30"
+            : "bg-arvdoul-bg-light text-slate-900 selection:bg-arvdoul-purple/20"
         )}
       >
         {loading && !profile && (
           <TopAppLoadingBanner isAnimating={true} label="Syncing profile..." />
         )}
-        {/* Top Refreshing Pill */}
         {isRefreshing && (
-          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg animate-pulse">
+          <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full bg-arvdoul-purple text-white text-xs font-bold shadow-lg animate-pulse">
             Refreshing Profile...
           </div>
         )}
 
-        {/* Outer responsive frame matching design images */}
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-5">
-          
+
           {/* View As Mode Control */}
           <div className={cn(
             "rounded-2xl p-3 border flex flex-col sm:flex-row items-center justify-between gap-3 transition-all shadow-sm",
-            isDark ? "bg-[#0d1424] border-purple-500/20" : "bg-white border-purple-100"
+            isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200"
           )}>
             <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500">
+              <div className="p-1.5 rounded-lg bg-arvdoul-purple/10 text-arvdoul-purple">
                 <Eye className="w-4 h-4" />
               </div>
               <div>
@@ -296,7 +237,7 @@ export default function ProfileMyScreen() {
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Preview how visitors, followers, and connections experience your identity & privacy.
+                  Preview how visitors, followers, and connections experience your identity &amp; privacy.
                 </p>
               </div>
             </div>
@@ -310,11 +251,12 @@ export default function ProfileMyScreen() {
               ].map(item => (
                 <button
                   key={item.id}
-                  onClick={() => handleViewAsChange(item.id)}
+                  onClick={() => setViewAs(item.id)}
+                  aria-pressed={viewAs === item.id}
                   className={cn(
                     "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
                     viewAs === item.id
-                      ? "bg-purple-600 text-white shadow-sm"
+                      ? "bg-arvdoul-gradient text-white shadow-sm"
                       : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
                   )}
                 >
@@ -326,11 +268,13 @@ export default function ProfileMyScreen() {
 
           {/* 1. Hero Identity & Level Section */}
           <ProfileHeroSection
-            profile={effectiveProfile}
+            profile={effectiveProfile || { id: currentUserId, uid: currentUserId }}
             isOwner={true}
-            level={level || effectiveProfile.level}
+            level={level ?? effectiveProfile?.level ?? null}
             position={position}
             theme={theme}
+            reputation={reputation}
+            creatorProfile={creatorProfile}
             onOpenQrCode={() => setShowQrModal(true)}
             onOpenQrScanner={() => setShowScannerModal(true)}
             onOpenLocationSetup={() => setShowLocationModal(true)}
@@ -342,29 +286,70 @@ export default function ProfileMyScreen() {
             onInsightsPress={() => navigate('/profile/analytics')}
           />
 
+          {/* 1b. Digital-Nation standing rail (reputation, rank, badges, title) */}
+          <ProfileNationStanding
+            level={level ?? effectiveProfile?.level ?? null}
+            reputation={reputation}
+            rank={rank}
+            badges={badges}
+            activeTitle={activeTitle}
+            theme={theme}
+          />
+
           {/* 2. Key Metric Grid */}
           <ProfileMetricsGrid
-            isOwner={capabilities.isOwner}
+            isOwner={capabilities?.isOwner === true}
             theme={theme}
             profile={effectiveProfile}
-            analytics={analytics}
+            reputation={reputation}
+            balance={balance}
             capabilities={capabilities}
             onMetricPress={(key) => {
               if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
               else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
               else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
               else if (key === 'coins') navigate('/coins');
-              else if (key === 'views') navigate('/profile/analytics');
             }}
           />
 
+          {/* 3. Progression, streak ledger & digital-citizenship standing */}
+          <ProfileProgression
+            profile={effectiveProfile}
+            isOwner={capabilities?.isOwner === true}
+            canViewProgression={capabilities?.canViewProgression === true}
+            theme={theme}
+          />
+
+          {/* 3b. Institutional Passport artifact (owner's authorized projection) */}
+          <ProfilePassportCard
+            passport={passport}
+            isOwner={capabilities?.isOwner === true}
+            canView={capabilities?.canViewIdentity === true}
+            theme={theme}
+          />
+
+          {/* 3c. Owner-only economy summary (ledger-backed, fail-closed) */}
+          <ProfileEconomyCard
+            wallet={wallet}
+            balance={balance}
+            position={position}
+            isOwner={capabilities?.isOwner === true}
+            canView={capabilities?.canViewEconomicStatus === true}
+            theme={theme}
+          />
+
+          {/* 3d. Achievements summary (canonical achievementService) */}
+          {achievements.length > 0 && (
+            <ProfileAchievements achievements={achievements} theme={theme} />
+          )}
+
           {/* 4. Story Highlights / Vibes Carousel */}
-          {viewAs !== 'owner' && !capabilities.canViewContent ? (
+          {viewAs !== 'owner' && !capabilities?.canViewContent ? (
             <div className={cn(
               "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
-              isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+              isDark ? "bg-arvdoul-surface border-arvdoul-border" : "bg-white border-slate-200"
             )}>
-              <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <div className="w-14 h-14 mx-auto rounded-full bg-arvdoul-purple/10 text-arvdoul-purple flex items-center justify-center">
                 <Lock className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private to {viewAs === 'public' ? 'Public Visitors' : viewAs}</h3>
@@ -376,20 +361,26 @@ export default function ProfileMyScreen() {
             <>
               <ProfileHighlightsSection
                 highlights={highlights}
+                stories={stories}
                 userId={currentUserId}
                 isOwner={viewAs === 'owner'}
                 theme={theme}
+                loading={highlightsLoading}
+                error={highlightsError}
+                onRetry={() => loadHighlights(currentUserId)}
                 onAddHighlight={() => navigate('/create-story')}
               />
 
-              {/* 5. Creator Dashboard Analytics (with Level Gating) */}
-              {viewAs === 'owner' && (
+              {/* 5. Creator Dashboard Analytics (owner-only, creator-eligible) */}
+              {viewAs === 'owner' && Boolean(creatorProfile) && (
                 <ProfileCreatorDashboard
                   analytics={analytics}
+                  analyticsLoading={analyticsLoading}
+                  analyticsError={analyticsError}
                   ranking={ranking}
-                  userLevel={level || effectiveProfile?.level || 1}
-                  userXp={effectiveProfile?.experience || 0}
-                  isCreator={effectiveProfile?.isCreator}
+                  userLevel={level ?? null}
+                  userXp={profile?.experience ?? profile?.xp ?? null}
+                  isCreator={true}
                   theme={theme}
                   timeframe={timeframe}
                   onTimeframeChange={setTimeframe}
@@ -422,17 +413,31 @@ export default function ProfileMyScreen() {
                 posts={posts}
                 savedPosts={savedPosts}
                 activeTab={activeTab}
-                loading={postsLoading || savedLoading}
+                loading={postsLoading || savedLoading || (activeTab === 'sparks' && videosLoading)}
+                error={activeTab === 'sparks' ? videosError : postsError}
+                isOnline={isOnline}
+                onRetry={() => (activeTab === 'sparks' ? loadVideos() : refresh())}
+                hasMore={activeTab === 'posts' && postsHasMore}
+                onLoadMore={loadMorePosts}
+                videos={videos}
                 theme={theme}
                 profile={effectiveProfile}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
+                onVideoClick={(video) => navigate(`/video/${video.id}`)}
+              />
+
+              {/* 9. Deep-navigation layer into the canonical identity systems */}
+              <ProfileDeepNavigation
+                profile={effectiveProfile}
+                isOwner={capabilities?.isOwner === true}
+                capabilities={capabilities}
+                theme={theme}
               />
             </>
           )}
 
         </div>
 
-        {/* QR Code Modal */}
         <ProfileQRCodeModal
           isOpen={showQrModal}
           onClose={() => setShowQrModal(false)}
@@ -440,7 +445,6 @@ export default function ProfileMyScreen() {
           theme={theme}
         />
 
-        {/* QR Scanner Modal */}
         {showScannerModal && (
           <ProfileQRScannerModal
             isOpen={showScannerModal}
@@ -449,7 +453,6 @@ export default function ProfileMyScreen() {
           />
         )}
 
-        {/* Location Setup Modal */}
         {showLocationModal && (
           <ProfileLocationModal
             isOpen={showLocationModal}
@@ -457,13 +460,12 @@ export default function ProfileMyScreen() {
             currentLocation={effectiveProfile?.location}
             userId={currentUserId}
             theme={theme}
-            onLocationUpdated={(newLoc) => {
-              useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+            onLocationUpdated={() => {
+              refresh();
             }}
           />
         )}
 
-        {/* Options Menu Dialog */}
         {showOptionsMenu && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl">
@@ -479,16 +481,15 @@ export default function ProfileMyScreen() {
           </div>
         )}
 
-        {/* Avatar Upload Modal */}
         {showAvatarModal && (
           <Suspense fallback={null}>
             <AvatarUploadModal
               isOpen={showAvatarModal}
               onClose={() => setShowAvatarModal(false)}
-              onUpload={(newUrl) => {
+              onUpload={() => {
                 setShowAvatarModal(false);
                 toast.success('Avatar updated successfully!');
-                useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+                refresh();
               }}
               currentAvatar={effectiveProfile?.photoURL}
               userId={currentUserId}

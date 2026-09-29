@@ -52,6 +52,51 @@ jest.mock('../services/userService.js', () => ({
   },
 }));
 
+jest.mock('../services/reputationService.js', () => ({
+  __esModule: true,
+  default: { getReputationProfile: jest.fn(async () => null) },
+}));
+jest.mock('../services/achievementService.js', () => ({
+  __esModule: true,
+  default: { getUserAchievements: jest.fn(async () => []) },
+}));
+jest.mock('../services/titleService.js', () => ({
+  __esModule: true,
+  default: { getUserTitles: jest.fn(async () => []) },
+}));
+jest.mock('../services/creatorService.js', () => ({
+  __esModule: true,
+  default: { getCreatorProfile: jest.fn(async () => null) },
+}));
+jest.mock('../services/passportService.js', () => ({
+  __esModule: true,
+  default: { getPassport: jest.fn(async () => null) },
+}));
+jest.mock('../services/walletService.js', () => ({
+  __esModule: true,
+  default: { getWalletOverview: jest.fn(async () => null) },
+}));
+jest.mock('../services/rankingService.js', () => ({
+  __esModule: true,
+  default: { getUserBadges: jest.fn(async () => null), getCreatorRank: jest.fn(async () => null) },
+  getRankingService: () => ({
+    getUserBadges: jest.fn(async () => null),
+    getCreatorRank: jest.fn(async () => null),
+  }),
+}));
+jest.mock('../firebase/firebase.js', () => ({
+  __esModule: true,
+  getFirestoreInstance: jest.fn(async () => ({})),
+  getAuthInstance: jest.fn(async () => ({})),
+  getStorageInstance: jest.fn(async () => ({})),
+  getFunctionsInstance: jest.fn(async () => ({})),
+  getFirebaseManager: () => ({}),
+  db: {},
+  auth: {},
+  storage: {},
+  default: {},
+}));
+
 jest.mock('../services/firestoreService.js', () => ({
   __esModule: true,
   getFirestoreService: () => ({
@@ -80,6 +125,80 @@ jest.mock('../services/levelSystemService.js', () => ({
   levelSystemService: {
     getLevelInfo: jest.fn(async () => ({ level: 1 })),
   },
+}));
+
+// The profile store loads services through dynamic import(), which jest.mock
+// cannot intercept under the ESM runtime. Register them with unstable_mockModule
+// (static context/logger mocks above still use jest.mock).
+jest.unstable_mockModule('../services/userService.js', () => {
+  const userMock = {
+    getUserProfile: jest.fn(async () => ({ uid: 'u1', username: 'testuser', displayName: 'Test User' })),
+    getRelationshipState: jest.fn(async () => ({ isFollowing: false })),
+    getMutualFriends: jest.fn(async () => []),
+    areFriends: jest.fn(async () => false),
+  };
+  return { __esModule: true, getUserService: () => userMock, default: userMock };
+});
+jest.unstable_mockModule('../services/firestoreService.js', () => {
+  const fsMock = { getPostsByUser: jest.fn(async () => ({ posts: [] })) };
+  return { __esModule: true, getFirestoreService: () => fsMock, firestoreService: fsMock };
+});
+jest.unstable_mockModule('../services/storyService.js', () => {
+  const storyMock = { getUserStories: jest.fn(async () => []), getHighlights: jest.fn(async () => []) };
+  return { __esModule: true, getStoryService: () => storyMock, default: storyMock };
+});
+jest.unstable_mockModule('../services/analyticsService.js', () => {
+  const a = {
+    getUserAnalytics: jest.fn(async () => ({})),
+    trackProfileView: jest.fn(async () => {}),
+    getCreatorRanking: jest.fn(async () => null),
+  };
+  return { __esModule: true, getAnalyticsService: () => a, default: a };
+});
+jest.unstable_mockModule('../services/monetizationService.js', () => ({
+  __esModule: true,
+  getMonetizationService: () => ({
+    sendTip: jest.fn(async () => ({ success: true })),
+    getBalance: jest.fn(async () => null),
+    getUserPosition: jest.fn(async () => null),
+  }),
+}));
+jest.unstable_mockModule('../services/reputationService.js', () => ({
+  __esModule: true,
+  default: { getReputationProfile: jest.fn(async () => null) },
+}));
+jest.unstable_mockModule('../services/achievementService.js', () => ({
+  __esModule: true,
+  default: { getUserAchievements: jest.fn(async () => []) },
+}));
+jest.unstable_mockModule('../services/titleService.js', () => ({
+  __esModule: true,
+  default: { getUserTitles: jest.fn(async () => []) },
+}));
+jest.unstable_mockModule('../services/creatorService.js', () => ({
+  __esModule: true,
+  default: { getCreatorProfile: jest.fn(async () => null) },
+}));
+jest.unstable_mockModule('../services/passportService.js', () => ({
+  __esModule: true,
+  default: { getPassport: jest.fn(async () => null) },
+}));
+jest.unstable_mockModule('../services/walletService.js', () => ({
+  __esModule: true,
+  default: { getWalletOverview: jest.fn(async () => null) },
+}));
+jest.unstable_mockModule('../services/rankingService.js', () => {
+  const r = { getUserBadges: jest.fn(async () => null), getCreatorRank: jest.fn(async () => null) };
+  return { __esModule: true, getRankingService: () => r, default: r };
+});
+jest.unstable_mockModule('../firebase/firebase.js', () => ({
+  __esModule: true,
+  getFirestoreInstance: jest.fn(async () => ({})),
+  getAuthInstance: jest.fn(async () => ({})),
+  getStorageInstance: jest.fn(async () => ({})),
+  getFunctionsInstance: jest.fn(async () => ({})),
+  getFirebaseManager: () => ({}),
+  db: {}, auth: {}, storage: {}, default: {},
 }));
 
 import ProfileMyScreen from '../screens/Profile/ProfileMyScreen';

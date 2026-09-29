@@ -16,6 +16,18 @@ import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
 
 /**
+ * Real story count for a highlight. Accepts the canonical `storyCount`, an
+ * id list, or an embedded story array; returns '—' when the source carries no
+ * count rather than showing a fabricated 0.
+ */
+const highlightCount = (highlight) => {
+  if (Number.isFinite(Number(highlight?.storyCount))) return Number(highlight.storyCount);
+  if (Array.isArray(highlight?.storyIds)) return highlight.storyIds.length;
+  if (Array.isArray(highlight?.stories)) return highlight.stories.length;
+  return '—';
+};
+
+/**
  * HighlightsScreen Component
  */
 export default function HighlightsScreen() {
@@ -217,7 +229,7 @@ export default function HighlightsScreen() {
                     {highlight.title}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    {highlight.storyCount || 0} stories
+                    {highlightCount(highlight)} stories
                   </p>
                 </button>
                 

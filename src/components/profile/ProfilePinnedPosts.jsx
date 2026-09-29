@@ -21,7 +21,7 @@ const ProfilePinnedPosts = memo(({
     <div className={cn(
       "w-full rounded-2xl p-5 sm:p-6 border transition-all shadow-sm",
       isDark
-        ? "bg-[#0B0F19] border-slate-800 text-white"
+        ? "bg-arvdoul-bg-elevated border-slate-800 text-white"
         : "bg-white border-slate-200 text-slate-900"
     )}>
       {/* Header */}
@@ -92,12 +92,12 @@ const ProfilePinnedPosts = memo(({
               <div className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1 font-semibold text-rose-400">
                   <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                  {item.likes || item.likesCount || 0}
+                  {item.likes ?? item.likesCount ?? '—'}
                 </span>
-                {item.type === 'video' && (
+                {item.type === 'video' && item.duration && (
                   <span className="flex items-center gap-1 font-semibold text-cyan-300">
                     <Play className="w-3 h-3 fill-cyan-300" />
-                    <span>0:45</span>
+                    <span>{item.duration}</span>
                   </span>
                 )}
               </div>

@@ -1,16 +1,18 @@
 /**
  * src/screens/Profile/ProfilePublicScreen.jsx - ARVDOUL Public Profile Screen
- * 
- * Production-grade public profile viewing screen for other creators & users.
- * Rebuilt to perfectly match the uploaded design specifications across Light and Dark themes.
- * Fully integrated with real system data, server-authoritative level & progression,
- * optimistic follow/unfollow, direct messaging, coin tipping modal, mutual friends,
- * social connections, featured creations, and responsive layout.
- * 
+ *
+ * Visitor-facing digital-nation identity surface.
+ *
+ * Data truth comes exclusively from the canonical `useProfile` hook (which drives
+ * `profileStore` -> userService / profileCapabilityEngine / domain services).
+ * No direct userService / firestoreService / analyticsService fetching happens in
+ * this screen for identity, content, or analytics. Only the friend-request domain
+ * (a distinct canonical service) is called directly for its mutations.
+ *
  * @component
  */
 
-import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, UserPlus, UserX, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,9 +21,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { shareProfile } from '../../utils/shareUtils';
-import { getStoredUid } from '../../utils/security';
-import { LEVEL_GATES } from '../../services/levelSystemService';
-import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { useProfile } from '../../hooks/useProfile';
+import { useOfflineSync } from '../../hooks/useOfflineSync';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -29,6 +30,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileMutualFriends from '../../components/profile/ProfileMutualFriends';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
+import ProfileNationStanding from '../../components/profile/ProfileNationStanding';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileFeaturedSection from '../../components/profile/ProfileFeaturedSection';
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
@@ -38,6 +40,10 @@ import ProfileTipModal from '../../components/profile/ProfileTipModal';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
 import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
+import ProfileProgression from '../../components/profile/ProfileProgression';
+import ProfileDeepNavigation from '../../components/profile/ProfileDeepNavigation';
+import ProfileAchievements from '../../components/profile/ProfileAchievements';
+import ProfilePassportCard from '../../components/profile/ProfilePassportCard';
 
 // Modals
 const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
@@ -46,341 +52,166 @@ export default function ProfilePublicScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const currentUserId = currentUser?.uid || getStoredUid();
+  const currentUserId = currentUser?.uid;
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { isOnline } = useOfflineSync();
 
-  const [profileData, setProfileData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState(null);
-  const [posts, setPosts] = useState([]);
-  const [mutualFriends, setMutualFriends] = useState([]);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
-  const [friendshipStatus, setFriendshipStatus] = useState('none'); // 'none' | 'pending' | 'received' | 'friends'
-  const [pendingRequestId, setPendingRequestId] = useState(null);
-  const [friendRequestLoading, setFriendRequestLoading] = useState(false);
+  const {
+    profile: profileData,
+    relationship,
+    capabilities,
+    loading,
+    error,
+    resolvedTargetId,
+    followStatus,
+    followLoading,
+    friendRequestStatus,
+    friendRequestLoading,
+    mutualFriends,
+    posts,
+    postsLoading,
+    postsError,
+    postsHasMore,
+    loadMorePosts,
+    highlights,
+    stories,
+    highlightsLoading,
+    highlightsError,
+    loadHighlights,
+    videos,
+    videosLoading,
+    videosError,
+    loadVideos,
+    level,
+    reputation,
+    rank,
+    achievements,
+    titles,
+    badges,
+    creatorProfile,
+    passport,
+    follow,
+    unfollow,
+    sendFriendRequest,
+    acceptFriendRequest,
+    unblockUser,
+    refresh,
+  } = useProfile(userId);
+
   const [activeTab, setActiveTab] = useState('posts');
-  const [relationship, setRelationship] = useState(null);
-  
+
+  // Active title follows the canonical Titles domain ownership flag; the
+  // profile document is only a fallback mirror.
+  const activeTitle = useMemo(
+    () => titles?.find?.((t) => t?.isActive || t?.status === 'active') || null,
+    [titles]
+  );
+
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    if (tab === 'sparks' && videos.length === 0) loadVideos();
+  }, [videos.length, loadVideos]);
+
   // Modals
   const [showTipModal, setShowTipModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
-  // Load profile and related data
-  useEffect(() => {
-    let isMounted = true;
-    const cleanUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
+  const targetUid = resolvedTargetId || userId;
+  // Relationship truth only; null (unresolved) is never coerced to `false`.
+  const isFollowing = followStatus?.isFollowing ?? relationship?.isFollowing ?? null;
+  // `null` means the friend-request domain has not resolved (or is not
+  // applicable yet). Treating it as 'none' would offer "Add Friend" on a
+  // relationship we have not actually verified, so the toggle stays hidden
+  // until a real status is known.
+  const friendshipStatus = friendRequestStatus ?? null;
 
-    const loadPublicProfile = async () => {
-      if (!cleanUserId) return;
-      setLoading(true);
-
-      const safetyTimer = setTimeout(() => {
-        if (isMounted) setLoading(false);
-      }, 6000);
-
-      try {
-        const userServiceModule = await import('../../services/userService.js');
-        const userService = userServiceModule.getUserService();
-
-        // 1. Fetch user profile
-        const fetched = await userService.getUserProfile(cleanUserId, currentUserId);
-        const targetUid = fetched?.id || fetched?.uid || cleanUserId;
-        
-        // 2. Fetch posts
-        let userPosts = [];
-        try {
-          const { getFirestoreService } = await import('../../services/firestoreService.js');
-          const postsRes = await getFirestoreService().getPostsByUser(targetUid, { limit: 30 });
-          if (postsRes?.posts && Array.isArray(postsRes.posts)) {
-            userPosts = postsRes.posts;
-          }
-        } catch (postErr) {
-          console.warn('Posts fetch note:', postErr);
-        }
-
-        // 3. Fetch relationship & follow status
-        if (currentUser?.uid && targetUid !== currentUser.uid) {
-          try {
-            const rel = await userService.getRelationshipState(currentUser.uid, targetUid);
-            if (isMounted) {
-              setRelationship(rel);
-              setIsFollowing(Boolean(rel?.isFollowing || fetched?.isFollowing));
-            }
-          } catch (followErr) {
-            if (isMounted && fetched?.isFollowing !== undefined) {
-              setIsFollowing(Boolean(fetched.isFollowing));
-            }
-          }
-        }
-
-        // 4. Fetch mutual friends and friend request status
-        if (currentUser?.uid && targetUid !== currentUser.uid) {
-          try {
-            const mutual = await userService.getMutualFriends(currentUser.uid, targetUid);
-            const friendsList = Array.isArray(mutual) ? mutual : (mutual?.mutualFriends || []);
-            if (isMounted) {
-              setMutualFriends(friendsList);
-            }
-
-            // Check if mutual friends directly using canonical areFriends
-            const areFriends = await userService.areFriends(currentUser.uid, targetUid).catch(() => false);
-            if (areFriends) {
-              if (isMounted) setFriendshipStatus('friends');
-            } else {
-              // Check sent friend requests
-              const sent = await userService.getFriendRequests(currentUser.uid, 'sent').catch(() => ({ requests: [] }));
-              const sentReq = sent.requests?.find(r => r.toUserId === targetUid);
-              if (sentReq) {
-                if (isMounted) {
-                  setFriendshipStatus('pending');
-                  setPendingRequestId(sentReq.id);
-                }
-              } else {
-                // Check received friend requests
-                const received = await userService.getFriendRequests(currentUser.uid, 'received').catch(() => ({ requests: [] }));
-                const recReq = received.requests?.find(r => r.fromUserId === targetUid);
-                if (recReq) {
-                  if (isMounted) {
-                    setFriendshipStatus('received');
-                    setPendingRequestId(recReq.id);
-                  }
-                } else {
-                  if (isMounted) setFriendshipStatus('none');
-                }
-              }
-            }
-          } catch (mutualErr) {
-            console.warn('Mutual friends and request note:', mutualErr);
-          }
-        }
-
-        // 5. Track profile view in analytics & fetch analytics
-        try {
-          const analyticsService = (await import('../../services/analyticsService.js')).default;
-          if (currentUser?.uid && targetUid !== currentUser.uid) {
-            analyticsService.trackProfileView(currentUser.uid, targetUid).catch(() => {});
-          }
-          const userAnalytics = await analyticsService.getUserAnalytics(targetUid, '30d');
-          if (isMounted && userAnalytics) {
-            setAnalytics(userAnalytics);
-          }
-        } catch (analyticsErr) {
-          console.warn('Analytics note:', analyticsErr);
-        }
-
-        if (isMounted && fetched) {
-          setProfileData(fetched);
-          setPosts(userPosts.length > 0 ? userPosts : (fetched.posts || []));
-        }
-      } catch (err) {
-        console.warn('Public profile fetch error:', err);
-      } finally {
-        clearTimeout(safetyTimer);
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    loadPublicProfile();
-    return () => { isMounted = false; };
-  }, [userId, currentUser?.uid]);
-
-  // Optimistic Follow / Unfollow
-  const handleFollowToggle = useCallback(async () => {
-    if (!currentUser?.uid) {
+  const handleFollowToggle = useCallback(() => {
+    if (!currentUserId) {
       toast.error('Please sign in to follow this creator');
       navigate('/login');
       return;
     }
+    if (isFollowing) unfollow();
+    else follow();
+  }, [currentUserId, isFollowing, follow, unfollow, navigate]);
 
-    const nextState = !isFollowing;
-    setIsFollowing(nextState);
-    setFollowLoading(true);
-
-    try {
-      const userServiceModule = await import('../../services/userService.js');
-      const userService = userServiceModule.getUserService();
-
-      if (nextState) {
-        await userService.followUser(currentUser.uid, userId);
-        toast.success(`Following @${profileData?.username || 'creator'}`);
-        setProfileData(prev => prev ? ({
-          ...prev,
-          followerCount: (Number(prev.followerCount || prev.followersCount) || 0) + 1
-        }) : prev);
-      } else {
-        await userService.unfollowUser(currentUser.uid, userId);
-        toast.info(`Unfollowed @${profileData?.username || 'creator'}`);
-        setProfileData(prev => prev ? ({
-          ...prev,
-          followerCount: Math.max(0, (Number(prev.followerCount || prev.followersCount) || 1) - 1)
-        }) : prev);
-      }
-    } catch (e) {
-      // Revert on failure
-      setIsFollowing(!nextState);
-      toast.error('Could not update follow status');
-    } finally {
-      setFollowLoading(false);
-    }
-  }, [currentUser?.uid, isFollowing, userId, profileData?.username, profileData?.followerCount, profileData?.followersCount, navigate]);
-
-  // Handle Friend Request Toggle (For Newcomer level 1-2 profiles)
   const handleFriendRequestToggle = useCallback(async () => {
-    if (!currentUser?.uid) {
+    if (!currentUserId) {
       toast.error('Please sign in to send a friend request');
       navigate('/login');
       return;
     }
-
+    if (!friendshipStatus) {
+      toast.info('Friend status is still loading. Please try again in a moment.');
+      return;
+    }
     if (friendshipStatus === 'friends') {
       toast.info(`You and @${profileData?.username || 'user'} are already friends!`);
       return;
     }
-
     if (friendshipStatus === 'pending') {
       toast.info('Friend request already sent. Waiting for acceptance.');
       return;
     }
-
-    setFriendRequestLoading(true);
     try {
-      const userServiceModule = await import('../../services/userService.js');
-      const userService = userServiceModule.getUserService();
-
-      if (friendshipStatus === 'received' && pendingRequestId) {
-        await userService.acceptFriendRequest(pendingRequestId, currentUser.uid);
-        setFriendshipStatus('friends');
+      if (friendshipStatus === 'received') {
+        await acceptFriendRequest();
         toast.success(`You and @${profileData?.username || 'user'} are now friends!`);
       } else if (friendshipStatus === 'none') {
-        const res = await userService.sendFriendRequest(currentUser.uid, userId);
-        setFriendshipStatus('pending');
-        if (res?.requestId) setPendingRequestId(res.requestId);
-        toast.success(`Friend request sent to @${profileData?.username || 'user'}`);
+        const res = await sendFriendRequest();
+        // `alreadyFriends` is authoritative server truth.
+        toast.success(
+          res?.alreadyFriends
+            ? `You and @${profileData?.username || 'user'} are already friends!`
+            : `Friend request sent to @${profileData?.username || 'user'}`
+        );
       }
     } catch (e) {
-      console.error('Friend request error:', e);
       toast.error(e?.message || 'Could not process friend request');
-    } finally {
-      setFriendRequestLoading(false);
     }
-  }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
-
-  // Clean public username resolution
-  const cleanPublicUsername = useMemo(() => {
-    try {
-      const u = profileData?.username;
-      if (typeof u === 'string' && u.trim() && !u.startsWith('user_') && u !== 'creator') return u.trim();
-      const h = profileData?.handle;
-      if (typeof h === 'string' && h.trim() && !h.startsWith('user_')) return h.trim();
-      const d = typeof profileData?.displayName === 'string' ? profileData.displayName : '';
-      if (d) {
-        const fromD = d.toLowerCase().replace(/[^a-z0-9_]/g, '');
-        if (fromD && fromD !== 'user') return fromD;
-      }
-      const e = typeof profileData?.email === 'string' ? profileData.email : '';
-      if (e) {
-        const fromE = e.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
-        if (fromE && fromE !== 'user') return fromE;
-      }
-      return 'creator';
-    } catch {
-      return 'creator';
-    }
-  }, [profileData?.username, profileData?.handle, profileData?.displayName, profileData?.email]);
-
-  // Real profile data without mock fallbacks
-  const effectiveProfile = useMemo(() => {
-    if (!profileData) return null;
-    const safeDisplayName = typeof profileData.displayName === 'string' && profileData.displayName.trim() && profileData.displayName !== 'User' && profileData.displayName !== 'Creator'
-      ? profileData.displayName.trim()
-      : typeof profileData.name === 'string' && profileData.name.trim() && profileData.name !== 'User' && profileData.name !== 'Creator'
-        ? profileData.name.trim()
-        : 'Creator';
-
-    const safeLevel = Number(profileData.level) || 1;
-
-    return {
-      ...profileData,
-      id: profileData.id || profileData.uid || userId,
-      uid: profileData.uid || profileData.id || userId,
-      username: cleanPublicUsername,
-      displayName: safeDisplayName,
-      bio: typeof profileData.bio === 'string' ? profileData.bio : '',
-      photoURL: getSafeAvatarUrl(profileData.photoURL, safeDisplayName, userId),
-      followerCount: Number(profileData.followerCount ?? profileData.followersCount ?? 0),
-      followingCount: Number(profileData.followingCount ?? 0),
-      postCount: Number(posts?.length ?? profileData.postCount ?? 0),
-      likesReceived: Number(profileData.likesReceived ?? profileData.likesCount ?? 0),
-      coins: Number(profileData.coins ?? profileData.coinBalance ?? 0),
-      isVerified: Boolean(profileData.isVerified || profileData.verified),
-      isCreator: Boolean(profileData.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
-      isPrivate: Boolean(profileData.isPrivate),
-      isRestricted: Boolean(profileData.isRestricted),
-      canViewActivity: profileData.canViewActivity !== false,
-      canViewAchievements: profileData.canViewAchievements !== false,
-      canViewTitles: profileData.canViewTitles !== false,
-      canViewFollowersList: profileData.canViewFollowersList !== false,
-      canViewFollowingList: profileData.canViewFollowingList !== false,
-      links: Array.isArray(profileData.links) ? profileData.links : [],
-      pronouns: typeof profileData.pronouns === 'string' ? profileData.pronouns : '',
-      profession: typeof profileData.profession === 'string' ? profileData.profession : '',
-      education: typeof profileData.education === 'string' ? profileData.education : '',
-      presence: profileData.presence || { isOnline: false, status: 'offline', lastActive: null },
-      level: safeLevel,
-      location: typeof profileData.location === 'string' ? profileData.location : (typeof profileData.city === 'string' ? profileData.city : ''),
-      website: typeof profileData.website === 'string' ? profileData.website : (typeof profileData.link === 'string' ? profileData.link : ''),
-    };
-  }, [profileData, userId, posts?.length, cleanPublicUsername]);
-
-  const capabilities = useMemo(() => {
-    return resolveCapabilities({
-      viewer: currentUser,
-      target: effectiveProfile,
-      relationship: relationship || {
-        isFollowing,
-        friendshipStatus
-      }
-    });
-  }, [currentUser, effectiveProfile, relationship, isFollowing, friendshipStatus]);
+  }, [currentUserId, friendshipStatus, profileData?.username, navigate, sendFriendRequest, acceptFriendRequest]);
 
   const handleUnblock = useCallback(async () => {
-    const targetUid = effectiveProfile?.id || effectiveProfile?.uid || userId;
-    if (!currentUser?.uid || !targetUid) return;
+    if (!currentUserId || !targetUid) return;
     try {
-      const userServiceModule = await import('../../services/userService.js');
-      const svc = userServiceModule.getUserService();
-      await svc.unblockUser(currentUser.uid, targetUid);
+      await unblockUser();
       toast.success('User unblocked');
-      const updatedRel = await svc.getRelationshipState(currentUser.uid, targetUid);
-      setRelationship(updatedRel);
     } catch {
       toast.error('Could not unblock user');
     }
-  }, [currentUser?.uid, effectiveProfile?.id, effectiveProfile?.uid, userId]);
+  }, [currentUserId, targetUid, unblockUser]);
 
-  // Handle profile sharing
   const handleShare = useCallback(async () => {
     try {
-      const target = effectiveProfile || { id: userId, uid: userId, username: profileData?.username };
+      const target = profileData || { id: targetUid, uid: targetUid, username: profileData?.username };
       const result = await shareProfile(target);
-      if (result.copied) {
-        toast.success('Profile link copied to clipboard!');
-      }
+      if (result.copied) toast.success('Profile link copied to clipboard!');
     } catch {
       toast.error('Could not share profile');
     }
-  }, [effectiveProfile, userId, profileData?.username]);
+  }, [profileData, targetUid]);
+
+  // Honest identity projection: normalize display fields without inventing values.
+  const effectiveProfile = profileData
+    ? {
+        ...profileData,
+        id: profileData.id || profileData.uid || targetUid,
+        uid: profileData.uid || profileData.id || targetUid,
+        photoURL: getSafeAvatarUrl(profileData.photoURL, profileData.displayName || 'Creator', targetUid),
+        bio: typeof profileData.bio === 'string' ? profileData.bio : '',
+        links: Array.isArray(profileData.links) ? profileData.links : [],
+        presence: profileData.presence || null,
+        location: typeof profileData.location === 'string' ? profileData.location : '',
+        website: typeof profileData.website === 'string' ? profileData.website : '',
+      }
+    : null;
 
   if (loading && !profileData) {
     return (
-      <div className={cn(
-        'min-h-screen pb-20',
-        isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
-      )}>
+      <div className={cn('min-h-screen pb-20', isDark ? 'bg-arvdoul-bg' : 'bg-arvdoul-bg-light')}>
         <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
         <ProfileSkeleton theme={theme} />
       </div>
@@ -391,11 +222,11 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        isDark ? "bg-arvdoul-bg text-white" : "bg-arvdoul-bg-light text-slate-900"
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          isDark ? "bg-arvdoul-bg-elevated border-white/10" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 text-red-500 flex items-center justify-center">
             <UserX className="w-8 h-8" />
@@ -427,11 +258,11 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        isDark ? "bg-arvdoul-bg text-white" : "bg-arvdoul-bg-light text-slate-900"
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          isDark ? "bg-arvdoul-bg-elevated border-white/10" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-slate-500/10 text-slate-500 flex items-center justify-center">
             <ShieldAlert className="w-8 h-8" />
@@ -457,18 +288,22 @@ export default function ProfilePublicScreen() {
     return (
       <div className={cn(
         "min-h-screen flex items-center justify-center p-4",
-        isDark ? "bg-[#060816] text-white" : "bg-[#f0f4fa] text-slate-900"
+        isDark ? "bg-arvdoul-bg text-white" : "bg-arvdoul-bg-light text-slate-900"
       )}>
         <div className={cn(
           "max-w-md w-full p-8 rounded-3xl border text-center space-y-4 shadow-xl",
-          isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+          isDark ? "bg-arvdoul-bg-elevated border-white/10" : "bg-white border-slate-200"
         )}>
           <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center text-2xl font-bold">
             ?
           </div>
-          <h2 className="text-xl font-black">Creator Profile Not Found</h2>
+          <h2 className="text-xl font-black">
+            {error ? 'Could Not Load Profile' : 'Creator Profile Not Found'}
+          </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            This account may have been renamed, removed, or is not yet available on Arvdoul.
+            {error
+              ? 'Something went wrong while loading this profile. Please retry.'
+              : 'This account may have been renamed, removed, or is not yet available on Arvdoul.'}
           </p>
           <div className="pt-2 flex justify-center gap-3">
             <button
@@ -478,10 +313,10 @@ export default function ProfilePublicScreen() {
               Go Back
             </button>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => refresh()}
               className="px-5 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity"
             >
-              Discover Creators
+              Retry
             </button>
           </div>
         </div>
@@ -494,23 +329,25 @@ export default function ProfilePublicScreen() {
       <div className={cn(
         "min-h-screen pb-24 transition-colors duration-200",
         isDark
-          ? "bg-[#060816] text-white selection:bg-purple-500/30"
-          : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
+          ? "bg-arvdoul-bg text-white selection:bg-purple-500/30"
+          : "bg-arvdoul-bg-light text-slate-900 selection:bg-purple-500/20"
       )}>
-        {/* Outer responsive frame matching design images */}
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-5">
-          
-          {/* 1. Hero Section with Top Back/Action Sub-bar */}
+
+          {/* 1. Hero Section */}
           <ProfileHeroSection
             profile={effectiveProfile}
             isOwner={false}
-            level={effectiveProfile.level || 1}
+            level={level || effectiveProfile.level}
             theme={theme}
+            reputation={reputation}
+            creatorProfile={creatorProfile}
+            relationship={relationship}
             onBack={() => navigate(-1)}
             onOpenQrCode={() => setShowQrModal(true)}
             onOpenQrScanner={() => setShowScannerModal(true)}
             onOpenNotifications={() => navigate('/notifications')}
-            onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
+            onOpenMessages={() => navigate(`/messages/new?to=${targetUid}`)}
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowQrModal(true)}
             onShare={handleShare}
@@ -523,17 +360,27 @@ export default function ProfilePublicScreen() {
             onOpenTipModal={() => setShowTipModal(true)}
           />
 
+          {/* 1b. Digital-Nation standing rail (reputation, rank, badges, title) */}
+          <ProfileNationStanding
+            level={level ?? effectiveProfile?.level ?? null}
+            reputation={reputation}
+            rank={rank}
+            badges={badges}
+            activeTitle={activeTitle || profileData?.activeTitle || profileData?.primaryTitle || null}
+            theme={theme}
+          />
+
           {/* 2. Key Metrics Strip */}
           <ProfileMetricsGrid
             isOwner={false}
             theme={theme}
             profile={effectiveProfile}
-            analytics={analytics}
+            reputation={reputation}
             capabilities={capabilities}
             onMetricPress={(key) => {
-              if (key === 'followers') navigate(`/profile/${userId}/followers`);
-              else if (key === 'following') navigate(`/profile/${userId}/following`);
-              else if (key === 'friends') navigate(`/profile/${userId}/friends`);
+              if (key === 'followers') navigate(`/profile/${targetUid}/followers`);
+              else if (key === 'following') navigate(`/profile/${targetUid}/following`);
+              else if (key === 'friends') navigate(`/profile/${targetUid}/friends`);
             }}
           />
 
@@ -546,11 +393,10 @@ export default function ProfilePublicScreen() {
             />
           )}
 
-          {!capabilities.canViewContent ? (
-            /* Restricted / Private Account Access Gate */
+          {!capabilities?.canViewContent ? (
             <div className={cn(
               "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-6",
-              isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
+              isDark ? "bg-arvdoul-bg-elevated/80 border-white/10" : "bg-white border-slate-200"
             )}>
               <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
                 <Lock className="w-8 h-8" />
@@ -558,7 +404,7 @@ export default function ProfilePublicScreen() {
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                  Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
+                  Follow @{effectiveProfile?.username} to view their media gallery, highlights, and activity feed.
                 </p>
               </div>
               <div className="pt-2 flex justify-center">
@@ -573,15 +419,19 @@ export default function ProfilePublicScreen() {
             </div>
           ) : (
             <>
-              {/* 5. Highlights / Vibes Carousel */}
+              {/* 3. Highlights / Vibes Carousel */}
               <ProfileHighlightsSection
-                highlights={effectiveProfile?.highlights || []}
-                userId={userId}
+                highlights={highlights}
+                stories={stories}
+                userId={targetUid}
                 isOwner={false}
+                loading={highlightsLoading}
+                error={highlightsError}
+                onRetry={() => loadHighlights(targetUid)}
                 theme={theme}
               />
 
-              {/* 6. Featured by Creator Section */}
+              {/* 4. Featured by Creator */}
               <ProfileFeaturedSection
                 profile={effectiveProfile}
                 posts={posts}
@@ -589,34 +439,67 @@ export default function ProfilePublicScreen() {
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
               />
 
-              {/* 7. Multi-Tab Navigation Bar */}
+              {/* 5. Digital-nation standing: progression + achievements summaries */}
+              <ProfileProgression
+                profile={effectiveProfile}
+                isOwner={false}
+                canViewProgression={capabilities?.canViewProgression === true}
+                theme={theme}
+              />
+
+              {/* 5b. Institutional Passport artifact (authorized projection) */}
+              <ProfilePassportCard
+                passport={passport}
+                isOwner={false}
+                canView={capabilities?.canViewIdentity === true}
+                theme={theme}
+              />
+
+              {capabilities?.canViewAchievements === true && achievements.length > 0 && (
+                <ProfileAchievements achievements={achievements} isOwner={false} showLink={false} theme={theme} />
+              )}
+
+              {/* 6. Tabs */}
               <div className="sticky top-2 z-30 pt-1">
                 <ProfileTabsBar
                   activeTab={activeTab}
-                  onTabChange={setActiveTab}
+                  onTabChange={handleTabChange}
                   isOwner={false}
                   theme={theme}
-                  counts={{
-                    posts: posts?.length || 0,
-                  }}
+                  counts={{ posts: posts?.length || 0 }}
                 />
               </div>
 
-              {/* 8. Pinned Posts Section */}
+              {/* 7. Pinned Posts */}
               <ProfilePinnedPosts
                 posts={posts}
                 theme={theme}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
               />
 
-              {/* 9. Media Feed Grid */}
+              {/* 8. Media Feed Grid */}
               <ProfileFeedGrid
                 posts={posts}
                 activeTab={activeTab}
-                loading={loading}
+                loading={loading || postsLoading || (activeTab === 'sparks' && videosLoading)}
+                error={activeTab === 'sparks' ? videosError : postsError}
+                isOnline={isOnline}
+                onRetry={() => (activeTab === 'sparks' ? loadVideos() : refresh())}
+                hasMore={activeTab === 'posts' && postsHasMore}
+                onLoadMore={loadMorePosts}
+                videos={videos}
                 theme={theme}
                 profile={effectiveProfile}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
+                onVideoClick={(video) => navigate(`/video/${video.id}`)}
+              />
+
+              {/* 9. Deep-navigation layer into the canonical identity systems */}
+              <ProfileDeepNavigation
+                profile={effectiveProfile}
+                isOwner={false}
+                capabilities={capabilities}
+                theme={theme}
               />
             </>
           )}
@@ -631,7 +514,7 @@ export default function ProfilePublicScreen() {
             recipient={effectiveProfile}
             currentUser={currentUser}
             onTipSuccess={(amount) => {
-              toast.success(`Successfully gifted ${amount} coins to ${effectiveProfile.displayName}!`);
+              toast.success(`Successfully gifted ${amount} coins to ${effectiveProfile?.displayName}!`);
               setShowTipModal(false);
             }}
           />

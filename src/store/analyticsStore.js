@@ -81,27 +81,14 @@ export const useAnalyticsStore = create(
           state.activeDays = analytics.activeDays || 0;
         });
       } catch (error) {
-        console.warn('❌ Load analytics fallback used:', error);
-        const fallbackAnalytics = {
-          userId,
-          timeframe: selectedTimeframe,
-          totalViews: 0,
-          totalReach: 0,
-          totalEngagement: 0,
-          coinsEarned: 0,
-          dailyStats: [],
-          topPosts: [],
-          ranking: null,
-          demographics: null,
-          growthRate: 0,
-          activeDays: 0,
-          changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
-          lastUpdated: new Date().toISOString(),
-        };
+        // Honest failure: never substitute a zeroed analytics object that would
+        // render as real "0 views / 0 reach" data. Preserve the error so screens
+        // can show an unavailable/retry state.
+        console.error('❌ Failed to load analytics:', error);
         set((state) => {
-          state.analytics = fallbackAnalytics;
+          state.analytics = null;
           state.loading = false;
-          state.error = null;
+          state.error = error?.message || 'Failed to load analytics';
           state.dailyStats = [];
           state.topPosts = [];
           state.ranking = null;

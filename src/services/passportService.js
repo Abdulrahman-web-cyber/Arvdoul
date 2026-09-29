@@ -50,19 +50,40 @@ class PassportService {
       },
     });
 
-    const level = Number(profile.level) || 1;
-    const activeDaysCount = Number(profile.activeDaysCount) || 1;
-    const activeStreak = Number(profile.activeStreak) || 1;
+    // Authoritative numeric projection. Every dimension is server-optional; an
+    // absent score is reported as unknown (null) and its band omitted, never
+    // replaced by a plausible default (no pay-to-legitimacy, no fabricated trust).
+    // 0-100 dimensions are clamped to the band scale; a non-finite value is
+    // unknown, not zero.
+    const toScore = (raw) => {
+      if (raw === null || raw === undefined || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
+    };
 
-    const citizenTier = getCitizenTier(level, activeDaysCount);
-    const rankTitle = getRankTitle(level);
-    const repScore = Number(profile.reputationScore || profile.reputation || 50);
-    const infScore = Number(profile.influenceScore || profile.influence || 20);
-    const conScore = Number(profile.contributionScore || profile.contribution || 25);
+    // Level and streak counters are not 0-100 bands: accept any finite
+    // non-negative server value as-is (clamping would fabricate a different
+    // number), otherwise report unknown.
+    const toCount = (raw) => {
+      if (raw === null || raw === undefined || raw === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
 
-    const reputationBand = getReputationBand(repScore);
-    const influenceBand = getInfluenceBand(infScore);
-    const contributionBand = getContributionBand(conScore);
+    const level = toCount(profile.level);
+    const activeDaysCount = toCount(profile.activeDaysCount);
+    const activeStreak = toCount(profile.activeStreak);
+
+    const citizenTier = level === null ? null : getCitizenTier(level, activeDaysCount);
+    const rankTitle = level === null ? null : getRankTitle(level);
+
+    const repScore = toScore(profile.reputationScore ?? profile.reputation);
+    const infScore = toScore(profile.influenceScore ?? profile.influence);
+    const conScore = toScore(profile.contributionScore ?? profile.contribution);
+
+    const reputationBand = repScore === null ? null : getReputationBand(repScore);
+    const influenceBand = infScore === null ? null : getInfluenceBand(infScore);
+    const contributionBand = conScore === null ? null : getContributionBand(conScore);
 
     // Load achievements if viewer is permitted
     let verifiedAchievements = Array.isArray(profile.achievements) ? profile.achievements : null;
@@ -77,9 +98,10 @@ class PassportService {
       verifiedAchievements = [];
     }
 
-    // Load titles if permitted
+    // Load titles only when the capability engine authorizes the titles
+    // surface (fail-closed). An unauthorized viewer must not cause a title read.
     let earnedTitles = Array.isArray(profile.titles) ? profile.titles : null;
-    if (earnedTitles === null) {
+    if (earnedTitles === null && (capabilities.canViewTitles || isOwner)) {
       try {
         earnedTitles = await titleService.getUserTitles(targetUserId);
       } catch (e) {
@@ -93,37 +115,33 @@ class PassportService {
     const citizenId = `ARV-${targetUserId.slice(0, 8).toUpperCase()}`;
     const issueDate = profile.createdAt?.toDate?.()
       ? profile.createdAt.toDate().toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
-      : 'Genesis Era';
+      : null;
 
     return {
       userId: targetUserId,
       citizenId,
       issueDate,
-      displayName: profile.displayName || profile.name || 'Citizen of Arvdoul',
-      username: profile.username || 'citizen',
+      // Identity is reported verbatim; a missing name is unknown, not a
+      // plausible placeholder.
+      displayName: profile.displayName || profile.name || null,
+      username: profile.username || null,
       photoURL: profile.photoURL || null,
-      primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier.tier,
+      primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier?.tier || null,
       activeTitle: profile.activeTitle || null,
       rankTitle,
       citizenTier,
       level,
       activeDaysCount,
       activeStreak,
-      reputation: {
-        score: repScore,
-        band: reputationBand.label,
-        color: reputationBand.color,
-      },
-      influence: {
-        score: infScore,
-        band: influenceBand.label,
-        color: influenceBand.color,
-      },
-      contribution: {
-        score: conScore,
-        band: contributionBand.label,
-        color: contributionBand.color,
-      },
+      reputation: reputationBand
+        ? { score: repScore, band: reputationBand.label, color: reputationBand.color }
+        : null,
+      influence: influenceBand
+        ? { score: infScore, band: influenceBand.label, color: influenceBand.color }
+        : null,
+      contribution: contributionBand
+        ? { score: conScore, band: contributionBand.label, color: contributionBand.color }
+        : null,
       achievements: verifiedAchievements,
       titles: earnedTitles,
       passportUrl: getProfileUrl(targetUserId),

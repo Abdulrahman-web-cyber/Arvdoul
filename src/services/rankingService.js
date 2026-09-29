@@ -444,17 +444,11 @@ class RankingService {
         return snap.data();
       }
       
-      // Return default reputation
-      return {
-        trust: 50,
-        contributions: 0,
-        moderation: 0,
-        reliability: 50,
-        totalScore: 50,
-        tier: 'bronze',
-        badges: [],
-        history: [],
-      };
+      // No reputation record exists for this citizen. Reputation is a
+      // server-authoritative domain; an absent record is unknown, not an
+      // invented 50/bronze profile. The canonical reputation surface is
+      // reputationService.getReputationProfile, which likewise returns null.
+      return null;
     } catch (error) {
       logger.error('[RankingService] Failed to get user reputation:', error);
       return null;

@@ -6,6 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import achievementService from '../../services/achievementService';
+import levelSystemService from '../../services/levelSystemService';
+import { Dialog } from '../../components/ui/Dialog';
+import { copyToClipboard } from '../../utils/shareUtils';
 import {
   ArrowLeft,
   Award,
@@ -50,14 +53,18 @@ export default function AchievementsScreen() {
   const loadAchievements = useCallback(async () => {
     if (!user?.uid) return;
     try {
+      // Active-day standing is read from the canonical service; a counter that
+      // was never recorded stays null instead of being assumed to be 1, which
+      // would fabricate streak/active-day progress.
+      const activeDay = await levelSystemService.getActiveDayInfo(user.uid);
       const items = await achievementService.getEnrichedAchievements(user.uid, {
-        level: user.level || 1,
-        activeStreak: user.activeStreak || 1,
-        activeDaysCount: user.activeDaysCount || 1,
-        postsCount: user.postsCount || user.postCount || 0,
-        likesCount: user.likesCount || 0,
-        commentsCount: user.commentsCount || 0,
-        friendsCount: user.friendsCount || 0,
+        level: Number.isFinite(Number(user.level)) && Number(user.level) > 0 ? Number(user.level) : null,
+        activeStreak: activeDay.activeStreak,
+        activeDaysCount: activeDay.activeDaysCount,
+        postsCount: user.postsCount ?? user.postCount ?? 0,
+        likesCount: user.likesCount ?? 0,
+        commentsCount: user.commentsCount ?? 0,
+        friendsCount: user.friendsCount ?? 0,
       });
       setAchievements(items);
     } catch (err) {
@@ -70,6 +77,16 @@ export default function AchievementsScreen() {
   useEffect(() => {
     loadAchievements();
   }, [loadAchievements]);
+
+  // Copy a real, resolvable proof link for an earned achievement.
+  const handleShareProof = async () => {
+    if (!inspectingItem) return;
+    const url = `${window.location.origin}/profile/${user?.uid || ''}#achievement-${inspectingItem.id}`;
+    const ok = await copyToClipboard(url);
+    if (ok) toast.success('Achievement link copied to clipboard');
+    else toast.error('Could not copy the link');
+    setInspectingItem(null);
+  };
 
   // Trigger server-side evaluation
   const handleEvaluate = async () => {
@@ -307,6 +324,8 @@ export default function AchievementsScreen() {
                   <span>{item.rarity} · {item.points} pts</span>
                   {item.unlocked ? (
                     <span className="text-emerald-500">Unlocked</span>
+                  ) : item.progress === null ? (
+                    <span className="text-gray-500">Progress unavailable</span>
                   ) : (
                     <span>{item.progress}% progress</span>
                   )}
@@ -323,46 +342,40 @@ export default function AchievementsScreen() {
         </section>
       </main>
 
-      {/* Detail Inspection Modal */}
-      {inspectingItem && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-        >
-          <div
-            className={`max-w-md w-full p-6 rounded-2xl border ${
-              isDark ? 'bg-gray-900 border-gray-800 text-gray-100' : 'bg-white border-gray-200 text-gray-900'
-            }`}
-          >
+      {/* Detail Inspection Modal — canonical accessible primitives */}
+      <Dialog
+        isOpen={Boolean(inspectingItem)}
+        onClose={() => setInspectingItem(null)}
+        title={inspectingItem ? inspectingItem.title : 'Achievement details'}
+        size="md"
+      >
+        {inspectingItem && (
+          <div>
             <div className="flex items-start justify-between">
-              <div className="text-4xl">{inspectingItem.icon}</div>
-              <button
-                onClick={() => setInspectingItem(null)}
-                aria-label="Close dialog"
-                className="p-1 rounded-lg text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="text-4xl" aria-hidden="true">{inspectingItem.icon}</div>
             </div>
 
             <div className="mt-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
                 {inspectingItem.category} · {inspectingItem.rarity}
               </span>
               <h3 className="text-xl font-bold mt-1">{inspectingItem.title}</h3>
-              <p className="text-sm text-gray-400 mt-2">{inspectingItem.description}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{inspectingItem.description}</p>
             </div>
 
-            <div className="mt-5 p-4 rounded-xl bg-black/20 dark:bg-black/40 border border-gray-800/60 space-y-2 text-xs">
+            <div className="mt-5 p-4 rounded-xl bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">Honor Points</span>
-                <span className="font-semibold text-indigo-400">{inspectingItem.points} pts</span>
+                <span className="font-semibold text-indigo-500 dark:text-indigo-400">{inspectingItem.points} pts</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Audit Status</span>
-                <span className={inspectingItem.unlocked ? 'text-emerald-400 font-medium' : 'text-gray-400'}>
-                  {inspectingItem.unlocked ? 'Verified & Granted' : 'In Progress'}
+                <span className={inspectingItem.unlocked ? 'text-emerald-500 font-medium' : 'text-gray-500'}>
+                  {inspectingItem.unlocked
+                    ? 'Verified & Granted'
+                    : inspectingItem.progress === null
+                      ? 'Not yet evaluated'
+                      : `In Progress · ${inspectingItem.progress}%`}
                 </span>
               </div>
               {inspectingItem.earnedAt && (
@@ -375,27 +388,22 @@ export default function AchievementsScreen() {
 
             <div className="mt-6 flex space-x-3">
               <button
-                onClick={() => {
-                  toast.success('Achievement link copied to clipboard');
-                  setInspectingItem(null);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5"
+                onClick={handleShareProof}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5 min-h-[44px]"
               >
-                <Share2 className="w-3.5 h-3.5" />
+                <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Share Proof</span>
               </button>
               <button
                 onClick={() => setInspectingItem(null)}
-                className={`px-4 py-2.5 rounded-xl border text-xs font-semibold transition-colors ${
-                  isDark ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-100'
-                }`}
+                className="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-semibold transition-colors min-h-[44px]"
               >
                 Close
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Dialog>
     </div>
   );
 }

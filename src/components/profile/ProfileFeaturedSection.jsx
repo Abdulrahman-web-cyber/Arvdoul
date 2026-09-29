@@ -39,7 +39,7 @@ const ProfileFeaturedSection = memo(({
     <div className={cn(
       "w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-xl transition-all shadow-sm",
       isDark
-        ? "bg-[#0d1424]/70 border-white/10 text-white"
+        ? "bg-arvdoul-bg-elevated/70 border-white/10 text-white"
         : "bg-white/95 border-slate-200/90 text-slate-900"
     )}>
       {/* Header */}
@@ -98,7 +98,7 @@ const ProfileFeaturedSection = memo(({
               <div className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1 font-semibold text-rose-400">
                   <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                  {item.likes || 120}
+                  {item.likes ?? item.likesCount ?? '—'}
                 </span>
                 {item.type === 'video' && (
                   <span className="flex items-center gap-1 font-semibold text-amber-300">
