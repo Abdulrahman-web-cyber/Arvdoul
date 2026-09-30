@@ -2,7 +2,7 @@
 // 🎯 Create new conversation screen (Web version - React Router)
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import messagingService from '../services/messagesService';
@@ -15,7 +15,6 @@ import { X, Search, UserPlus, Loader2, ArrowLeft } from 'lucide-react';
 
 const NewConversationScreen = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { loadConversations } = useMessagingStore();
@@ -49,34 +48,6 @@ const NewConversationScreen = () => {
     };
     loadFriends();
   }, [user]);
-
-  // A Profile "Message" action deep-links here with ?to=<uid>; resolve that
-  // citizen through the canonical userService and pre-select them so the
-  // action is not a dead end.
-  const preselectedUid = searchParams.get('to');
-  React.useEffect(() => {
-    if (!preselectedUid || !user) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const resolved = await userService.getUserProfile(preselectedUid, user.uid);
-        const uid = resolved?.uid || resolved?.id || preselectedUid;
-        if (cancelled || !uid) return;
-        setSelectedUsers((prev) => (
-          prev.some((u) => u.uid === uid)
-            ? prev
-            : [...prev, {
-                uid,
-                displayName: resolved?.displayName || resolved?.username || 'Citizen',
-                photoURL: resolved?.photoURL || null,
-              }]
-        ));
-      } catch (error) {
-        console.error('Failed to resolve message recipient:', error);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [preselectedUid, user]);
 
   // Search users
   React.useEffect(() => {

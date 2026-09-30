@@ -18,7 +18,6 @@
  */
 
 import React, { memo, useCallback, useState, useMemo } from 'react';
-import { VISUAL } from '../../design-system/visual';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
 
@@ -45,8 +44,8 @@ const ProfileAvatar = memo(({
     return getSafeAvatarUrl(src, name, userId);
   }, [src, imageError, userId, name, size]);
   
-  // ARVDOUL DNA Gradient ring (colors resolved from design tokens)
-  const gradientRing = `conic-gradient(from 45deg, ${VISUAL.brandCyan}, ${VISUAL.brandViolet}, ${VISUAL.brandPink}, ${VISUAL.brandCyan})`;
+  // ARVDOUL DNA Gradient ring
+  const gradientRing = 'conic-gradient(from 45deg, #00D4FF, #7A2BFA, #FF44CC, #00D4FF)';
   
   // Handle image error
   const handleImageError = useCallback(() => {
@@ -150,7 +149,7 @@ const ProfileAvatar = memo(({
           style={{ 
             width: levelBadgeSize, 
             height: levelBadgeSize,
-            background: VISUAL.sequentialGradient,
+            background: 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)',
             fontSize: levelBadgeSize * 0.4
           }}
           aria-label={`Level ${level}`}

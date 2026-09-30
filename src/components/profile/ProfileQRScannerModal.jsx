@@ -333,7 +333,7 @@ const ProfileQRScannerModal = memo(({
         className={cn(
           "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all overflow-hidden",
           isDark 
-            ? "bg-arvdoul-bg-deep border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
+            ? "bg-[#0c1222] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
             : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
         )}
       >
@@ -368,7 +368,7 @@ const ProfileQRScannerModal = memo(({
             className={cn(
               "flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all",
               activeMode === 'camera'
-                ? "bg-white dark:bg-arvdoul-bg-elevated text-purple-600 dark:text-purple-400 shadow-sm"
+                ? "bg-white dark:bg-[#1a233a] text-purple-600 dark:text-purple-400 shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
             )}
           >
@@ -386,7 +386,7 @@ const ProfileQRScannerModal = memo(({
             className={cn(
               "flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all",
               activeMode === 'upload'
-                ? "bg-white dark:bg-arvdoul-bg-elevated text-purple-600 dark:text-purple-400 shadow-sm"
+                ? "bg-white dark:bg-[#1a233a] text-purple-600 dark:text-purple-400 shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
             )}
           >
@@ -403,7 +403,7 @@ const ProfileQRScannerModal = memo(({
             className={cn(
               "flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all",
               activeMode === 'manual'
-                ? "bg-white dark:bg-arvdoul-bg-elevated text-purple-600 dark:text-purple-400 shadow-sm"
+                ? "bg-white dark:bg-[#1a233a] text-purple-600 dark:text-purple-400 shadow-sm"
                 : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
             )}
           >
@@ -446,7 +446,7 @@ const ProfileQRScannerModal = memo(({
                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-purple-500 rounded-br-xl" />
 
                   {/* Animated Laser Sweep */}
-                  <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-arvdoul-glow-cyan to-transparent shadow-arvdoul-button animate-[bounce_2.5s_ease-in-out_infinite]" />
+                  <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_12px_#38bdf8] animate-[bounce_2.5s_ease-in-out_infinite]" />
                 </div>
 
                 <div className="absolute bottom-2 inset-x-0 text-center pointer-events-none">

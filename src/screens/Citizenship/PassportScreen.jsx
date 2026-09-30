@@ -167,7 +167,7 @@ export default function PassportScreen() {
                 CITIZEN DOCUMENT · {passport.citizenId}
               </span>
             </div>
-            <div className="text-2xl">{passport.citizenTier?.icon || '🏛️'}</div>
+            <div className="text-2xl">{passport.citizenTier.icon}</div>
           </div>
 
           {/* Citizen Identity Section */}
@@ -176,12 +176,12 @@ export default function PassportScreen() {
               {passport.photoURL ? (
                 <img
                   src={passport.photoURL}
-                  alt={passport.displayName || passport.citizenId}
+                  alt={passport.displayName}
                   className="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-500/40"
                 />
               ) : (
                 <div className="w-20 h-20 rounded-2xl bg-indigo-950 flex items-center justify-center text-xl font-bold text-indigo-300 border-2 border-indigo-500/40">
-                  {(passport.displayName || passport.citizenId).slice(0, 2).toUpperCase()}
+                  {passport.displayName.slice(0, 2).toUpperCase()}
                 </div>
               )}
               {passport.isVerified && (
@@ -193,19 +193,17 @@ export default function PassportScreen() {
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center space-x-1.5">
-                <h2 className="text-xl font-extrabold truncate">{passport.displayName || 'Unnamed Citizen'}</h2>
+                <h2 className="text-xl font-extrabold truncate">{passport.displayName}</h2>
               </div>
-              <p className="text-xs text-gray-400 font-mono">{passport.username ? `@${passport.username}` : passport.citizenId}</p>
+              <p className="text-xs text-gray-400 font-mono">@{passport.username}</p>
 
               {/* Zero-pill metadata */}
-              {(passport.primaryTitle || passport.citizenTier?.tier) && (
-                <div className="mt-2 text-xs text-indigo-400 font-medium flex items-center space-x-1.5">
-                  <Crown className="w-3.5 h-3.5" />
-                  {passport.primaryTitle && <span>{passport.primaryTitle}</span>}
-                  {passport.primaryTitle && passport.citizenTier?.tier && <span className="text-gray-500">·</span>}
-                  {passport.citizenTier?.tier && <span className="text-gray-400">{passport.citizenTier.tier}</span>}
-                </div>
-              )}
+              <div className="mt-2 text-xs text-indigo-400 font-medium flex items-center space-x-1.5">
+                <Crown className="w-3.5 h-3.5" />
+                <span>{passport.primaryTitle}</span>
+                <span className="text-gray-500">·</span>
+                <span className="text-gray-400">{passport.citizenTier.tier}</span>
+              </div>
             </div>
           </div>
 
@@ -213,19 +211,17 @@ export default function PassportScreen() {
           <div className="mt-6 grid grid-cols-3 gap-2.5 p-4 rounded-2xl bg-black/20 dark:bg-black/40 border border-indigo-900/20 text-center">
             <div>
               <span className="text-xs text-gray-500 block">Level</span>
-              <span className="text-lg font-bold text-indigo-400">{passport.level ?? '—'}</span>
-              <span className="text-[10px] text-gray-500 block truncate">{passport.rankTitle || 'Unranked'}</span>
+              <span className="text-lg font-bold text-indigo-400">{passport.level}</span>
+              <span className="text-[10px] text-gray-500 block truncate">{passport.rankTitle}</span>
             </div>
             <div>
               <span className="text-xs text-gray-500 block">Active Days</span>
-              <span className="text-lg font-bold text-emerald-400">{passport.activeDaysCount ?? '—'}</span>
-              <span className="text-[10px] text-gray-500 block">
-                {passport.activeStreak === null ? 'no streak record' : `${passport.activeStreak} streak`}
-              </span>
+              <span className="text-lg font-bold text-emerald-400">{passport.activeDaysCount}</span>
+              <span className="text-[10px] text-gray-500 block">{passport.activeStreak} streak</span>
             </div>
             <div>
               <span className="text-xs text-gray-500 block">Issued</span>
-              <span className="text-sm font-semibold mt-1 block">{passport.issueDate || 'Unrecorded'}</span>
+              <span className="text-sm font-semibold mt-1 block">{passport.issueDate}</span>
               <span className="text-[10px] text-gray-500 block">National Era</span>
             </div>
           </div>
@@ -235,23 +231,21 @@ export default function PassportScreen() {
             <div className="flex items-center justify-between p-3 rounded-xl bg-black/10 dark:bg-black/30 border border-gray-800/40">
               <span className="text-gray-400">Trust Standing</span>
               <span className="font-semibold text-emerald-400">
-                {passport.reputation
-                  ? `${passport.reputation.band} (${passport.reputation.score}/100)`
-                  : 'Not yet established'}
+                {passport.reputation.band} ({passport.reputation.score}/100)
               </span>
             </div>
 
             <div className="flex items-center justify-between p-3 rounded-xl bg-black/10 dark:bg-black/30 border border-gray-800/40">
               <span className="text-gray-400">Ecosystem Reach</span>
               <span className="font-semibold text-purple-400">
-                {passport.influence ? passport.influence.band : 'Not yet established'}
+                {passport.influence.band}
               </span>
             </div>
 
             <div className="flex items-center justify-between p-3 rounded-xl bg-black/10 dark:bg-black/30 border border-gray-800/40">
               <span className="text-gray-400">Civic Contribution</span>
               <span className="font-semibold text-teal-400">
-                {passport.contribution ? passport.contribution.band : 'Not yet established'}
+                {passport.contribution.band}
               </span>
             </div>
           </div>
@@ -332,7 +326,7 @@ export default function PassportScreen() {
               {qrDataUrl ? (
                 <img
                   src={qrDataUrl}
-                  alt={`Arvdoul Citizen QR for ${passport.displayName || passport.citizenId}`}
+                  alt={`Arvdoul Citizen QR for ${passport.displayName}`}
                   className="w-48 h-48 rounded-xl object-contain"
                 />
               ) : (

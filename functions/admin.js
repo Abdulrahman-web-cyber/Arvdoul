@@ -144,21 +144,9 @@ exports.listUsers = functions.https.onCall(async (data, context) => {
     .limit(limitCount)
     .get();
 
-  // PII is not on the profile document. Admins may see contact details, so
-  // fetch the owner-only private docs in one batched round-trip.
-  const piiRefs = snap.docs.map((d) => db.collection('users').doc(d.id).collection('private').doc('pii'));
-  const piiSnaps = piiRefs.length ? await db.getAll(...piiRefs) : [];
-  const piiById = new Map();
-  piiSnaps.forEach((s) => {
-    if (s.exists) piiById.set(s.id, s.data());
-  });
-
   return {
     success: true,
-    users: snap.docs.map((d) => {
-      const { email, phoneNumber } = piiById.get(d.id) || {};
-      return { id: d.id, ...d.data(), email: email || null, phoneNumber: phoneNumber || null };
-    }),
+    users: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
   };
 });
 

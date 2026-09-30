@@ -9,36 +9,51 @@ import { cn } from '../lib/utils';
 import rankingService from '../services/rankingService';
 import { Trophy, Star, Zap, Heart, MessageCircle, Users, Video, Crown, Shield, Flame, Lock, Loader2 } from 'lucide-react';
 
-// Badge catalog is canonical (src/config/badgeCatalog.js); this screen only
-// maps icon keys to lucide components for rendering.
-import { BADGE_CATEGORIES as BADGE_CATALOG } from '../config/badgeCatalog';
-
-const BADGE_ICONS = {
-  heart: Heart,
-  message: MessageCircle,
-  users: Users,
-  star: Star,
-  video: Video,
-  crown: Crown,
-  zap: Zap,
-  shield: Shield,
-  trophy: Trophy,
-  flame: Flame,
+// All available badges (from service)
+const BADGE_CATEGORIES = {
+  engagement: {
+    title: 'Engagement',
+    icon: Heart,
+    badges: [
+      { id: 'first_like', name: 'First Like', description: 'Received your first like', icon: Heart },
+      { id: 'like_master', name: 'Like Master', description: 'Received 1,000 likes', icon: Heart },
+      { id: 'first_comment', name: 'First Comment', description: 'Received your first comment', icon: MessageCircle },
+      { id: 'commentator', name: 'Commentator', description: 'Left 500 comments', icon: MessageCircle },
+      { id: 'viral_post', name: 'Viral Post', description: 'Post reached 10,000 views', icon: Flame },
+      { id: 'trendsetter', name: 'Trendsetter', description: '5 posts reached trending', icon: Zap },
+    ],
+  },
+  community: {
+    title: 'Community',
+    icon: Users,
+    badges: [
+      { id: 'first_follower', name: 'First Follower', description: 'Got your first follower', icon: Users },
+      { id: 'influencer', name: 'Influencer', description: 'Reached 10,000 followers', icon: Star },
+      { id: 'supporter', name: 'Supporter', description: 'Followed 100 creators', icon: Heart },
+      { id: 'conversation_starter', name: 'Conversation Starter', description: 'Started 50 discussions', icon: MessageCircle },
+    ],
+  },
+  content: {
+    title: 'Content',
+    icon: Video,
+    badges: [
+      { id: 'first_post', name: 'First Post', description: 'Created your first post', icon: Video },
+      { id: 'prolific_creator', name: 'Prolific Creator', description: 'Created 100 posts', icon: Crown },
+      { id: 'spark_master', name: 'Spark Master', description: 'Posted 50 sparks', icon: Zap },
+      { id: 'storyteller', name: 'Storyteller', description: 'Posted 100 stories', icon: Video },
+    ],
+  },
+  special: {
+    title: 'Special',
+    icon: Trophy,
+    badges: [
+      { id: 'verified', name: 'Verified', description: 'Account verified', icon: Shield },
+      { id: 'founder', name: 'Founder', description: 'One of the first 1000 users', icon: Star },
+      { id: 'premium', name: 'Premium Member', description: 'Active premium subscriber', icon: Crown },
+      { id: 'year_one', name: 'Year One', description: 'Member for 1 year', icon: Trophy },
+    ],
+  },
 };
-
-const BADGE_CATEGORIES = Object.fromEntries(
-  Object.entries(BADGE_CATALOG).map(([key, category]) => [
-    key,
-    {
-      ...category,
-      icon: BADGE_ICONS[category.icon] || Trophy,
-      badges: category.badges.map((badge) => ({
-        ...badge,
-        icon: BADGE_ICONS[badge.icon] || Trophy,
-      })),
-    },
-  ]),
-);
 
 export default function BadgeScreen() {
   const navigate = useNavigate();

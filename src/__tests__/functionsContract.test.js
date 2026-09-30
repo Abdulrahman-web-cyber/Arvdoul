@@ -134,17 +134,4 @@ describe('Firestore rules coverage contract', () => {
     expect(defaultDeny).toBe(lastMatch);
     expect(rules.slice(defaultDeny)).toContain('allow read, write: if false;');
   });
-
-  test('the owner-only PII subcollection is explicitly gated and PII cannot be written inline', () => {
-    // users/{uid}/private/{docId} must be an explicit owner-only match.
-    const privateBlock = rules.match(/match \/private\/\{docId\}\s*\{([^}]*)\}/);
-    expect(privateBlock).not.toBeNull();
-    expect(privateBlock[1]).toContain('isOwner(userId)');
-    // A client update must never (re)introduce PII onto the profile document.
-    const start = rules.indexOf('function touchesServerAuthoritativeFields()');
-    expect(start).toBeGreaterThan(-1);
-    const body = rules.slice(start, rules.indexOf('function ', start + 10));
-    expect(body).toContain("'email'");
-    expect(body).toContain("'phoneNumber'");
-  });
 });

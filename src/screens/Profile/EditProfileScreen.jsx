@@ -40,7 +40,6 @@ import { useAuth } from '../../context/AuthContext';
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../../config/profileContracts.js';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
-import ProfilePreviewScreen from './ProfilePreviewScreen';
 
 /**
  * EditProfileScreen Component
@@ -61,7 +60,7 @@ export default function EditProfileScreen() {
     gender: '',
     profession: '',
     education: '',
-    language: '',
+    language: 'English',
     isPrivate: false,
     links: [],
     privacy: {
@@ -75,7 +74,6 @@ export default function EditProfileScreen() {
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -104,7 +102,7 @@ export default function EditProfileScreen() {
         gender: userProfile.gender || '',
         profession: userProfile.profession || '',
         education: userProfile.education || '',
-        language: typeof userProfile.language === 'string' ? userProfile.language : '',
+        language: userProfile.language || 'English',
         isPrivate: Boolean(userProfile.isPrivate),
         links: Array.isArray(userProfile.links) ? userProfile.links : [],
         privacy: {
@@ -335,26 +333,12 @@ export default function EditProfileScreen() {
     </div>
   );
   
-  // Owner preview of the in-progress edit, rendered from real form state.
-  // It is a local render mode - not a route - so it never leaks unsaved data
-  // and always shows the signed-in citizen's own identity.
-  if (showPreview) {
-    return (
-      <ProfilePreviewScreen
-        profile={{ ...(userProfile || {}), ...formData, photoURL: avatarPreview || userProfile?.photoURL }}
-        loading={loading}
-        onBack={() => setShowPreview(false)}
-        onSave={handleSave}
-      />
-    );
-  }
-
   return (
     <div className={cn(
       'min-h-screen pb-20',
       theme === 'dark'
-          ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
-          : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Header */}
       <div className={cn(
@@ -378,20 +362,6 @@ export default function EditProfileScreen() {
             Edit Profile
           </h1>
           
-          <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowPreview(true)}
-            className={cn(
-              'px-3 py-2 rounded-xl font-medium text-sm',
-              'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
-              'hover:opacity-90 transition-opacity',
-              'flex items-center gap-2'
-            )}
-          >
-            <Eye className="w-4 h-4" />
-            Preview
-          </button>
           <button
             onClick={handleSave}
             disabled={saving}
@@ -410,14 +380,13 @@ export default function EditProfileScreen() {
             )}
             Save
           </button>
-          </div>
         </div>
       </div>
       
       {/* Form */}
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* 1. Avatar Photo Card */}
-        <div className="bg-white dark:bg-arvdoul-bg-elevated/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
@@ -431,7 +400,7 @@ export default function EditProfileScreen() {
 
           <div className="flex flex-col sm:flex-row items-center gap-5 pt-2">
             <div className="relative group cursor-pointer" onClick={() => setShowAvatarModal(true)}>
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-arvdoul-purple via-arvdoul-indigo to-arvdoul-blue shadow-lg">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-[#B416DB] via-[#4B6BFF] to-[#0EA3E6] shadow-lg">
                 <div className="w-full h-full rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
                   {avatarPreview ? (
                     <img
@@ -480,7 +449,7 @@ export default function EditProfileScreen() {
         </div>
         
         {/* 2. Basic Information Card */}
-        <div className="bg-white dark:bg-arvdoul-bg-elevated/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
               Basic Information
@@ -608,7 +577,7 @@ export default function EditProfileScreen() {
         </div>
 
         {/* 3. Links Manager Card */}
-        <div className="bg-white dark:bg-arvdoul-bg-elevated/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -704,7 +673,7 @@ export default function EditProfileScreen() {
         </div>
         
         {/* 4. Personal Information Card */}
-        <div className="bg-white dark:bg-arvdoul-bg-elevated/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
               Personal Information
@@ -782,7 +751,7 @@ export default function EditProfileScreen() {
         </div>
         
         {/* 5. Professional Information Card */}
-        <div className="bg-white dark:bg-arvdoul-bg-elevated/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
               Professional Information
@@ -810,7 +779,7 @@ export default function EditProfileScreen() {
         </div>
         
         {/* 6. Privacy & Permissions Card */}
-        <div className="bg-white dark:bg-arvdoul-bg-elevated/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
+        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
           <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
             <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Lock className="w-4 h-4 text-purple-400" />

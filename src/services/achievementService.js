@@ -54,8 +54,7 @@ class AchievementService {
       const items = snap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
-        // A missing grant timestamp stays unknown; never stamp "now".
-        earnedAt: d.data().earnedAt?.toDate?.() || null,
+        earnedAt: d.data().earnedAt?.toDate?.() || new Date(),
       }));
 
       this._cache.set(userId, { items, timestamp: Date.now() });
@@ -67,42 +66,6 @@ class AchievementService {
   }
 
   /**
-   * Resolves the canonical metric for an achievement's criteria from known
-   * user stats. Returns `{ current: null }` whenever the metric is unknown so
-   * callers fail closed rather than fabricating a zero.
-   */
-  getCriteriaMetric(ach, userStats = {}) {
-    const c = ach?.criteria;
-    const pick = (keys) => {
-      for (const k of keys) {
-        if (userStats[k] !== undefined && userStats[k] !== null) return userStats[k];
-      }
-      return null;
-    };
-    if (!c) return { current: null, target: null };
-    if (c.minLevel) return { current: pick(['level']), target: c.minLevel };
-    if (c.minStreak) return { current: pick(['activeStreak', 'longestStreak']), target: c.minStreak };
-    if (c.minPosts) return { current: pick(['postsCount', 'postCount']), target: c.minPosts };
-    if (c.minLikes) return { current: pick(['likesCount']), target: c.minLikes };
-    if (c.commentsCount) return { current: pick(['commentsCount']), target: c.commentsCount };
-    if (c.friendsCount) return { current: pick(['friendsCount']), target: c.friendsCount };
-    return { current: null, target: null };
-  }
-
-  /**
-   * Threshold satisfaction from known metrics only. An unknown metric can
-   * never satisfy a requirement.
-   */
-  isSatisfied(ach, userStats = {}) {
-    const { current, target } = this.getCriteriaMetric(ach, userStats);
-    if (current === null || target === null || target <= 0) return false;
-    const c = Number(current);
-    const t = Number(target);
-    if (!Number.isFinite(c) || !Number.isFinite(t) || t <= 0) return false;
-    return c >= t;
-  }
-
-  /**
    * Pure evaluation helper: blends user earned items or metrics with catalog to return enriched achievements.
    * @param {Array<Object>} earned
    * @param {Object} userStats
@@ -111,33 +74,30 @@ class AchievementService {
   enrichAchievements(earned = [], userStats = {}) {
     const earnedMap = new Map((earned || []).map((e) => [e.id, e]));
 
-    // Null-safe progress. A metric that is unknown (null/undefined) yields a
-    // null progress rather than a fabricated 0 or a ratio built from an assumed
-    // default. Only known values produce a real percentage.
-    const ratio = (current, target) => {
-      if (target === null || target === undefined || target <= 0) return null;
-      if (current === null || current === undefined) return null;
-      const c = Number(current);
-      const t = Number(target);
-      if (!Number.isFinite(c) || !Number.isFinite(t) || t <= 0) return null;
-      return Math.min(100, Math.round((c / t) * 100));
-    };
-
     return ACHIEVEMENTS_CATALOG.map((ach) => {
       const isEarned = earnedMap.has(ach.id);
       const userEarnedData = isEarned ? earnedMap.get(ach.id) : null;
 
       // Calculate progress percentage where applicable
-      let progress = isEarned ? 100 : null;
-      if (!isEarned) {
-        const { current, target } = this.getCriteriaMetric(ach, userStats);
-        progress = ratio(current, target);
+      let progress = isEarned ? 100 : 0;
+      if (!isEarned && ach.criteria) {
+        const c = ach.criteria;
+        if (c.minLevel) {
+          progress = Math.min(100, Math.round(((userStats.level || 1) / c.minLevel) * 100));
+        } else if (c.minStreak) {
+          progress = Math.min(100, Math.round(((userStats.activeStreak || 0) / c.minStreak) * 100));
+        } else if (c.minPosts) {
+          progress = Math.min(100, Math.round(((userStats.postsCount || userStats.postCount || 0) / c.minPosts) * 100));
+        } else if (c.minLikes) {
+          progress = Math.min(100, Math.round(((userStats.likesCount || 0) / c.minLikes) * 100));
+        } else if (c.commentsCount) {
+          progress = Math.min(100, Math.round(((userStats.commentsCount || 0) / c.commentsCount) * 100));
+        } else if (c.friendsCount) {
+          progress = Math.min(100, Math.round(((userStats.friendsCount || 0) / c.friendsCount) * 100));
+        }
       }
 
-      // Unlocked when the server granted the achievement, or when a known
-      // metric has crossed the threshold. An unknown metric (null progress)
-      // can never satisfy the threshold, so it stays locked.
-      const unlocked = isEarned || (progress !== null && progress >= 100);
+      const unlocked = isEarned || progress >= 100;
 
       return {
         ...ach,

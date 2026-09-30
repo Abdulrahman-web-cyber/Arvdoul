@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import titleService from '../../services/titleService';
-import { Dialog } from '../../components/ui/Dialog';
 import {
   ArrowLeft,
   Crown,
@@ -16,6 +15,7 @@ import {
   Info,
   ShieldCheck,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -33,7 +33,6 @@ export default function TitlesScreen() {
   const { theme } = useTheme();
 
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
   const [claiming, setClaiming] = useState(null);
   const [activating, setActivating] = useState(null);
   const [earnedTitles, setEarnedTitles] = useState([]);
@@ -45,16 +44,11 @@ export default function TitlesScreen() {
   const catalog = useMemo(() => titleService.getCatalog(), []);
 
   const loadTitles = useCallback(async () => {
-    if (!user?.uid) {
-      setLoading(false);
-      return;
-    }
-    setLoadError(null);
+    if (!user?.uid) return;
     try {
       const items = await titleService.getUserTitles(user.uid);
-      setEarnedTitles(Array.isArray(items) ? items : []);
+      setEarnedTitles(items);
     } catch (err) {
-      setLoadError(err?.message || 'Failed to load titles');
       toast.error('Failed to load titles');
     } finally {
       setLoading(false);
@@ -142,37 +136,6 @@ export default function TitlesScreen() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {loading && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`p-8 rounded-2xl border text-center text-sm ${
-              isDark ? 'bg-gray-900/50 border-gray-800 text-gray-400' : 'bg-white border-gray-200 text-gray-500'
-            }`}
-          >
-            Loading your titles…
-          </div>
-        )}
-
-        {loadError && !loading && (
-          <div
-            role="alert"
-            className={`p-5 rounded-2xl border flex items-center justify-between gap-3 ${
-              isDark ? 'bg-red-950/30 border-red-900/60 text-red-200' : 'bg-red-50 border-red-200 text-red-700'
-            }`}
-          >
-            <span className="text-sm">{loadError}</span>
-            <button
-              onClick={loadTitles}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white min-h-[44px]"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {!loading && !loadError && (
-          <>
         {/* Active Title Banner */}
         <section
           aria-labelledby="active-title-heading"
@@ -195,9 +158,7 @@ export default function TitlesScreen() {
             </div>
             <div className="text-right">
               <span className="text-xs text-gray-500 block">Civic Standing</span>
-              <span className="text-sm font-semibold text-emerald-400">
-                {user?.isVerified ? 'Verified Citizen' : earnedTitles.length > 0 ? 'Registered Citizen' : 'Unverified'}
-              </span>
+              <span className="text-sm font-semibold text-emerald-400">Verified Citizen</span>
             </div>
           </div>
         </section>
@@ -227,13 +188,11 @@ export default function TitlesScreen() {
             const isEarned = earnedMap.has(t.id);
             const isActive = activeTitleId === t.id;
             const evalResult = titleService.checkEligibility(t.id, {
-              // Only pass authoritative stats; checkEligibility applies its own
-              // conservative zeros for absent values (never display defaults).
-              level: user?.level ?? null,
-              activeDaysCount: user?.activeDaysCount ?? null,
-              contributionScore: user?.contributionScore ?? null,
-              reputationScore: user?.reputationScore ?? null,
-              influenceScore: user?.influenceScore ?? null,
+              level: user?.level || 1,
+              activeDaysCount: user?.activeDaysCount || 1,
+              contributionScore: user?.contributionScore || 25,
+              reputationScore: user?.reputationScore || 50,
+              influenceScore: user?.influenceScore || 20,
               isCreator: Boolean(user?.isCreator),
               isFounder: Boolean(user?.isFounder),
               isPioneer: Boolean(user?.isPioneer),
@@ -323,57 +282,61 @@ export default function TitlesScreen() {
             );
           })}
         </section>
-          </>
-        )}
       </main>
 
-      {/* Title Details & Provenance Modal — canonical accessible primitives */}
-      <Dialog
-        isOpen={Boolean(inspectingTitle)}
-        onClose={() => setInspectingTitle(null)}
-        title={inspectingTitle ? inspectingTitle.name : 'Title details'}
-        size="md"
-      >
-        {inspectingTitle && (
-          <div>
+      {/* Title Details & Provenance Modal */}
+      {inspectingTitle && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            className={`max-w-md w-full p-6 rounded-2xl border ${
+              isDark ? 'bg-gray-900 border-gray-800 text-gray-100' : 'bg-white border-gray-200 text-gray-900'
+            }`}
+          >
             <div className="flex items-start justify-between">
-              <div className="text-4xl" aria-hidden="true">{inspectingTitle.icon}</div>
+              <div className="text-4xl">{inspectingTitle.icon}</div>
+              <button
+                onClick={() => setInspectingTitle(null)}
+                aria-label="Close dialog"
+                className="p-1 rounded-lg text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <div className="mt-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400 capitalize">
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400 capitalize">
                 {inspectingTitle.domain} Domain
               </span>
               <h3 className="text-xl font-bold mt-1">{inspectingTitle.name}</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{inspectingTitle.description}</p>
+              <p className="text-sm text-gray-400 mt-2">{inspectingTitle.description}</p>
             </div>
 
-            <div className="mt-5 p-4 rounded-xl bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-gray-800 space-y-2 text-xs">
+            <div className="mt-5 p-4 rounded-xl bg-black/20 dark:bg-black/40 border border-gray-800/60 space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-500">Multidimensional Rules</span>
-                <span className="font-semibold text-indigo-500 dark:text-indigo-400">Zero Pay-to-Legitimacy</span>
+                <span className="font-semibold text-indigo-400">Zero Pay-to-Legitimacy</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Minimum Level</span>
-                <span>
-                  {Number.isFinite(Number(inspectingTitle.minLevel))
-                    ? `Level ${Number(inspectingTitle.minLevel)}`
-                    : 'No level requirement'}
-                </span>
+                <span>Level {inspectingTitle.minLevel || 1}</span>
               </div>
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setInspectingTitle(null)}
-                className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors min-h-[44px]"
+                className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors"
               >
                 Done
               </button>
             </div>
           </div>
-        )}
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }

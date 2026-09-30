@@ -422,10 +422,7 @@ export function validateProfileUpdate(rawUpdates = {}) {
 export function canViewProfileSection(section, profilePrivacy = {}, viewerRelation = 'PUBLIC') {
   if (viewerRelation === 'OWNER') return true;
 
-  // Explicit stored scope wins; otherwise use the platform default for the
-  // section. An unknown section has no contract and must fail closed rather
-  // than silently becoming public.
-  const scope = profilePrivacy?.[section] ?? DEFAULT_PROFILE_PRIVACY[section] ?? VISIBILITY_SCOPES.ONLY_ME;
+  const scope = profilePrivacy[section] || DEFAULT_PROFILE_PRIVACY[section] || VISIBILITY_SCOPES.EVERYONE;
 
   switch (scope) {
     case VISIBILITY_SCOPES.EVERYONE:
@@ -437,8 +434,7 @@ export function canViewProfileSection(section, profilePrivacy = {}, viewerRelati
     case VISIBILITY_SCOPES.ONLY_ME:
       return false;
     default:
-      // Unrecognized scope value: deny rather than leak the section.
-      return false;
+      return true;
   }
 }
 

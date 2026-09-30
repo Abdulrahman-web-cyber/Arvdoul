@@ -33,14 +33,11 @@ import {
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
-import ProfileIdentityBadges from './ProfileIdentityBadges';
-import ProfileSocialStatus from './ProfileSocialStatus';
 
-// Canonical level helpers. If the module is unavailable we return null and the
-// UI omits the standing rather than fabricating a level/title.
-const getLevelInfo = LevelModule.getLevelInfo || LevelModule.levelSystemService?.getLevelInfo || (() => null);
-const getRankTitle = LevelModule.getRankTitle || (() => null);
-const getCitizenTier = LevelModule.getCitizenTier || (() => null);
+const getLevelInfo = LevelModule.getLevelInfo || LevelModule.levelSystemService?.getLevelInfo || (() => ({ level: 1, title: 'Citizen', progress: 0 }));
+const getRankTitle = LevelModule.getRankTitle || (() => 'Citizen');
+const getCitizenTier = LevelModule.getCitizenTier || (() => ({ tier: 'Citizen' }));
+const LEVELS = LevelModule.LEVELS || [];
 
 const ProfileHeroSection = memo(({
   profile,
@@ -51,6 +48,7 @@ const ProfileHeroSection = memo(({
   onBack,
   onOpenQrCode,
   onOpenQrScanner,
+  onOpenLocationSetup,
   onOpenOptions,
   onAvatarClick,
   onShare,
@@ -64,67 +62,52 @@ const ProfileHeroSection = memo(({
   onOpenTipModal,
   onOpenMessages,
   onInsightsPress,
-  reputation = null,
-  creatorProfile = null,
-  relationship = null,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
 
-  // Compute real level & progression from levelSystemService. Experience is
-  // taken only from a real, finite value on the profile document; when it is
-  // absent we derive no experience rather than assuming zero.
+  // Compute real level & progression from levelSystemService
   const userExperience = useMemo(() => {
-    const raw = profile?.experience ?? profile?.xp ?? null;
-    const num = Number(raw);
-    if (raw === null || raw === undefined || raw === '' || !Number.isFinite(num)) {
-      return null;
+    if (profile?.experience !== undefined && profile?.experience !== null) {
+      return Number(profile.experience) || 0;
     }
-    return num;
-  }, [profile?.experience, profile?.xp]);
+    if (profile?.xp !== undefined && profile?.xp !== null) {
+      return Number(profile.xp) || 0;
+    }
+    if (profile?.level && Array.isArray(LEVELS)) {
+      const idx = Math.max(0, Math.min(Number(profile.level) - 1, LEVELS.length - 1));
+      return LEVELS[idx]?.minXp || 0;
+    }
+    return 0;
+  }, [profile?.experience, profile?.xp, profile?.level]);
 
   const levelInfo = useMemo(() => {
-    if (userExperience === null) return null;
     try {
       const res = getLevelInfo(userExperience);
-      // Guard against mock returning a Promise in tests.
-      if (res && typeof res.then === 'function') return null;
-      return res || null;
+      // Guard against mock returning Promise in tests
+      if (res && typeof res.then === 'function') {
+        return { level: 1, title: 'Citizen', progress: 0 };
+      }
+      return res || { level: 1, title: 'Citizen', progress: 0 };
     } catch {
-      return null;
+      return { level: 1, title: 'Citizen', progress: 0 };
     }
   }, [userExperience]);
 
-  // Effective level: an explicit `level` prop (e.g. supplied by the store) wins,
-  // otherwise the level derived from canonical experience. Unknown stays null -
-  // never a fabricated level 1.
-  const effectiveLevel = useMemo(() => {
-    const explicit = Number(level ?? profile?.level);
-    if (Number.isFinite(explicit) && explicit > 0) return explicit;
-    return levelInfo?.level ?? null;
-  }, [level, profile?.level, levelInfo]);
-
-  // Canonical civic rank title. Derived only from a known level.
+  const effectiveLevel = Number(level || profile?.level || levelInfo?.level) || 1;
   const rankTitle = useMemo(() => {
-    if (effectiveLevel === null) return null;
     try {
       return getRankTitle(effectiveLevel);
     } catch {
-      return null;
+      return 'Citizen';
     }
   }, [effectiveLevel]);
 
-  // Citizen standing needs BOTH level and verified active days; unknown active
-  // days means no standing chip rather than an assumed one.
   const citizenStanding = useMemo(() => {
-    if (effectiveLevel === null) return null;
-    const rawDays = profile?.activeDaysCount ?? null;
-    const days = Number(rawDays);
-    if (rawDays === null || rawDays === undefined || !Number.isFinite(days)) return null;
     try {
-      return getCitizenTier(effectiveLevel, days);
+      return getCitizenTier(effectiveLevel, Number(profile?.activeDaysCount) || 1);
     } catch {
-      return null;
+      return { tier: 'Citizen' };
     }
   }, [effectiveLevel, profile?.activeDaysCount]);
 
@@ -163,16 +146,6 @@ const ProfileHeroSection = memo(({
   const bio = typeof profile?.bio === 'string' ? profile.bio.trim() : '';
   const location = typeof profile?.location === 'string' ? profile.location : (typeof profile?.city === 'string' ? profile.city : '');
   const website = typeof profile?.website === 'string' ? profile.website : (typeof profile?.link === 'string' ? profile.link : '');
-
-  // Active title is an identity attribute: canonical profile value wins, otherwise
-  // the title carried by the passport summary. Never invented.
-  const activeTitle = useMemo(() => {
-    const named = profile?.activeTitle?.name || profile?.primaryTitle;
-    if (typeof named === 'string' && named.trim()) return { name: named.trim() };
-    const passportTitle = profile?.passport?.activeTitle?.name;
-    if (typeof passportTitle === 'string' && passportTitle.trim()) return { name: passportTitle.trim() };
-    return null;
-  }, [profile?.activeTitle, profile?.primaryTitle, profile?.passport]);
   
   // Format joined date
   const joinedDate = useMemo(() => {
@@ -190,10 +163,6 @@ const ProfileHeroSection = memo(({
   }, [profile?.createdAt]);
 
   const profileUid = profile?.id || profile?.uid;
-  // Presence is server-derived (`userService` only marks online for activity
-  // within 5 minutes and privacy-gates the field); the indicator is shown only
-  // when presence is actually true.
-  const isOnline = profile?.presence?.isOnline === true;
 
   return (
     <div className="w-full space-y-3">
@@ -206,7 +175,7 @@ const ProfileHeroSection = memo(({
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold cursor-pointer",
               isDark
-                ? "bg-arvdoul-bg-elevated border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
+                ? "bg-[#0B0F19] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
                 : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
             )}
             aria-label="Go Back"
@@ -233,7 +202,7 @@ const ProfileHeroSection = memo(({
               className={cn(
                 "p-2 rounded-xl border transition-all cursor-pointer",
                 isDark
-                  ? "bg-arvdoul-bg-elevated border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-[#0B0F19] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
               )}
               title="Identity QR Code"
@@ -249,7 +218,7 @@ const ProfileHeroSection = memo(({
               className={cn(
                 "p-2 rounded-xl border transition-all cursor-pointer",
                 isDark
-                  ? "bg-arvdoul-bg-elevated border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-[#0B0F19] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
               )}
               title="Share Profile"
@@ -265,7 +234,7 @@ const ProfileHeroSection = memo(({
               className={cn(
                 "p-2 rounded-xl border transition-all cursor-pointer",
                 isDark
-                  ? "bg-arvdoul-bg-elevated border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-[#0B0F19] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
                   : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
               )}
               title="Account Settings"
@@ -280,7 +249,7 @@ const ProfileHeroSection = memo(({
                 className={cn(
                   "p-2 rounded-xl border transition-all cursor-pointer",
                   isDark
-                    ? "bg-arvdoul-bg-elevated border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    ? "bg-[#0B0F19] border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white"
                     : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm"
                 )}
                 title="More Options"
@@ -297,7 +266,7 @@ const ProfileHeroSection = memo(({
       <div className={cn(
         "rounded-2xl p-5 sm:p-7 border transition-all shadow-sm",
         isDark
-          ? "bg-arvdoul-bg-elevated border-slate-800 text-white"
+          ? "bg-[#0B0F19] border-slate-800 text-white"
           : "bg-white border-slate-200 text-slate-900"
       )}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 sm:gap-6">
@@ -313,7 +282,7 @@ const ProfileHeroSection = memo(({
                 className="relative block w-20 h-20 sm:w-24 sm:h-24 rounded-full p-[2.5px] bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform cursor-pointer"
                 title={isOwner ? "Change profile photo" : "View avatar"}
               >
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-arvdoul-bg-elevated">
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0B0F19]">
                   <img
                     src={avatarUrl}
                     alt={displayName}
@@ -323,15 +292,11 @@ const ProfileHeroSection = memo(({
                 </div>
               </button>
 
-              {/* Presence indicator - only when the canonical presence state is online */}
-              {isOnline && (
-                <span
-                  className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-arvdoul-bg-elevated"
-                  title="Online now"
-                  aria-label="Online now"
-                  role="status"
-                />
-              )}
+              {/* Clean Online Indicator */}
+              <div 
+                className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#0B0F19]" 
+                title="Active" 
+              />
             </div>
 
             {/* Typography & Identity */}
@@ -349,42 +314,20 @@ const ProfileHeroSection = memo(({
               {/* Handle & Civic Rank (Unboxed Clean Typography with Separators) */}
               <div className="flex items-center gap-1.5 flex-wrap text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                 <span className="font-mono">@{username}</span>
-                {(activeTitle?.name || profile?.primaryTitle || rankTitle || citizenStanding?.tier) && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <button
-                      type="button"
-                      onClick={() => navigate(isOwner ? '/titles' : `/passport/${profileUid}`)}
-                      className="text-purple-600 dark:text-purple-400 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
-                    >
-                      <Crown className="w-3.5 h-3.5" />
-                      <span>{activeTitle?.name || profile?.primaryTitle || rankTitle || citizenStanding?.tier}</span>
-                    </button>
-                  </>
-                )}
-                {effectiveLevel !== null && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">
-                      Level {effectiveLevel}
-                    </span>
-                  </>
-                )}
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  onClick={() => navigate(isOwner ? '/titles' : `/passport/${profileUid}`)}
+                  className="text-purple-600 dark:text-purple-400 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>{profile?.primaryTitle || profile?.activeTitle?.name || rankTitle || citizenStanding.tier}</span>
+                </button>
+                <span aria-hidden="true">·</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                  Level {effectiveLevel}
+                </span>
               </div>
-
-              {/* Identity status chips (verified / creator / citizen tier / privacy) */}
-              <ProfileIdentityBadges
-                profile={profile}
-                reputation={reputation}
-                creatorProfile={creatorProfile}
-                level={effectiveLevel}
-                theme={theme}
-              />
-
-              {/* Bidirectional relationship status (Follows you / mutual) */}
-              {!isOwner && relationship && (
-                <ProfileSocialStatus followStatus={relationship} theme={theme} />
-              )}
 
               {/* Bio */}
               {bio && (
@@ -395,12 +338,29 @@ const ProfileHeroSection = memo(({
 
               {/* Metadata row: Location, Website, Joined Date */}
               <div className="flex items-center gap-3 flex-wrap pt-1 text-xs text-slate-500 dark:text-slate-400">
-                {location && (
-                  <span className="inline-flex items-center gap-1">
+                {location ? (
+                  <button
+                    type="button"
+                    onClick={isOwner && onOpenLocationSetup ? onOpenLocationSetup : undefined}
+                    className={cn(
+                      "inline-flex items-center gap-1",
+                      isOwner && onOpenLocationSetup && "cursor-pointer hover:underline text-indigo-600 dark:text-indigo-400"
+                    )}
+                    title={isOwner ? "Update profile location" : undefined}
+                  >
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>{location}</span>
-                  </span>
-                )}
+                  </button>
+                ) : isOwner && onOpenLocationSetup ? (
+                  <button
+                    type="button"
+                    onClick={onOpenLocationSetup}
+                    className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span>Add Location</span>
+                  </button>
+                ) : null}
                 {website && (
                   <a
                     href={website.startsWith('http') ? website : `https://${website}`}
@@ -433,6 +393,21 @@ const ProfileHeroSection = memo(({
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                   <span>Edit Profile</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/passport')}
+                  className={cn(
+                    "flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all cursor-pointer",
+                    isDark
+                      ? "bg-slate-900 border-slate-700 text-indigo-400 hover:bg-slate-800"
+                      : "bg-white border-slate-200 text-indigo-600 hover:bg-slate-50 shadow-sm"
+                  )}
+                  title="View Official Digital Passport"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>Passport</span>
                 </button>
 
                 <button

@@ -14,10 +14,8 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
-import { VISUAL } from '../../design-system/visual';
 import { getProfileUrl, getGlobalIdentityCode, shareProfile } from '../../utils/shareUtils';
 import ProfileQRScannerModal from './ProfileQRScannerModal';
-import { Dialog } from '../ui/Dialog';
 
 const ProfileQRCodeModal = memo(({
   isOpen,
@@ -31,16 +29,14 @@ const ProfileQRCodeModal = memo(({
   const [showScanner, setShowScanner] = useState(false);
 
   const isDark = theme === 'dark';
-  // Display fields come straight from the profile document; absent values are
-  // omitted rather than invented (no 'user'/'Creator'/'USER' fallbacks).
-  const username = typeof profile?.username === 'string' ? profile.username : '';
-  const displayName = profile?.displayName || profile?.name || '';
-  const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName || username, profile?.id || profile?.uid);
+  const username = profile?.username || 'user';
+  const displayName = profile?.displayName || profile?.name || 'Creator';
+  const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
 
-  // Deterministic global identity code from the canonical helper. Empty when
-  // there is no immutable id, so the UI shows an honest unknown instead of a
-  // fabricated code.
-  const globalUniqueCode = useMemo(() => getGlobalIdentityCode(profile), [profile]);
+  // Deterministic global identity code from canonical helper
+  const globalUniqueCode = useMemo(() => {
+    return getGlobalIdentityCode(profile) || `ARV-${String(profile?.id || profile?.uid || 'USER').toUpperCase()}`;
+  }, [profile]);
 
   // Canonical globally-unique URL format via shareUtils
   const profileUrl = useMemo(() => {
@@ -57,8 +53,8 @@ const ProfileQRCodeModal = memo(({
       width: 440,
       margin: 2,
       color: {
-        dark: VISUAL.bgDark,
-        light: VISUAL.bgLightElevated
+        dark: '#070b14',
+        light: '#ffffff'
       }
     })
       .then((url) => {
@@ -96,7 +92,7 @@ const ProfileQRCodeModal = memo(({
       return;
     }
     const link = document.createElement('a');
-    link.download = `${username || 'arvdoul-profile'}-qrcode.png`;
+    link.download = `${username}-arvdoul-qrcode.png`;
     link.href = qrDataUrl;
     link.click();
     toast.success('QR code saved to your device!');
@@ -104,15 +100,10 @@ const ProfileQRCodeModal = memo(({
 
   const handleShare = async () => {
     try {
-      // Only build share copy from real identity fields; otherwise let
-      // shareProfile apply its own canonical defaults.
-      const shareOptions = displayName
-        ? {
-            title: `${displayName} on Arvdoul`,
-            text: `Connect with ${displayName} on Arvdoul!${globalUniqueCode ? ` (${globalUniqueCode})` : ''}`,
-          }
-        : {};
-      const res = await shareProfile(profile, shareOptions);
+      const res = await shareProfile(profile, {
+        title: `${displayName} on Arvdoul`,
+        text: `Connect with ${displayName} on Arvdoul! (${globalUniqueCode})`,
+      });
       if (res.copied) {
         setCopied(true);
         toast.success('Profile URL copied to clipboard!');
@@ -125,16 +116,11 @@ const ProfileQRCodeModal = memo(({
 
   return (
     <>
-      <Dialog
-        isOpen={isOpen}
-        onClose={onClose}
-        title="Universal Profile QR"
-        showHeader={false}
-        size="sm"
-        className={cn(
-          "max-w-sm rounded-3xl p-6 border shadow-2xl max-h-[95vh]",
-          isDark
-            ? "bg-arvdoul-bg-deep border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+        <div className={cn(
+          "relative w-full max-w-sm rounded-3xl p-6 border shadow-2xl transition-all max-h-[95vh] overflow-y-auto",
+          isDark 
+            ? "bg-[#0c1222] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
             : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
         )}>
           {/* Close Button */}
@@ -168,19 +154,15 @@ const ProfileQRCodeModal = memo(({
                 <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="text-left">
-                {displayName && (
-                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                    <span>{displayName}</span>
-                    {profile?.isVerified && (
-                      <Sparkles className="w-3 h-3 text-purple-600 fill-purple-600" />
-                    )}
-                  </div>
-                )}
-                {username && (
-                  <div className="text-[11px] font-medium text-slate-500">
-                    @{username}
-                  </div>
-                )}
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                  <span>{displayName}</span>
+                  {profile?.isVerified && (
+                    <Sparkles className="w-3 h-3 text-purple-600 fill-purple-600" />
+                  )}
+                </div>
+                <div className="text-[11px] font-medium text-slate-500">
+                  @{username}
+                </div>
               </div>
             </div>
 
@@ -195,7 +177,7 @@ const ProfileQRCodeModal = memo(({
                 <div className="relative w-full h-full flex items-center justify-center">
                   <img
                     src={qrDataUrl}
-                    alt={displayName ? `QR Code for ${displayName}` : 'Profile QR code'}
+                    alt={`QR Code for ${displayName}`}
                     className="w-full h-full object-contain rounded-lg"
                   />
                   {/* Embedded Center Logo Badge */}
@@ -212,13 +194,11 @@ const ProfileQRCodeModal = memo(({
               )}
             </div>
 
-            {/* Global Identity Stamp - only when the immutable id is known. */}
-            {globalUniqueCode && (
-              <div className="mt-2.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-600 flex items-center gap-1.5">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span className="font-mono tracking-wider">{globalUniqueCode}</span>
-              </div>
-            )}
+            {/* Global Identity Stamp */}
+            <div className="mt-2.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-600 flex items-center gap-1.5">
+              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+              <span className="font-mono tracking-wider">{globalUniqueCode}</span>
+            </div>
 
             {/* Branding footer */}
             <div className="text-[9px] font-bold tracking-wider text-purple-600 uppercase mt-2">
@@ -275,7 +255,8 @@ const ProfileQRCodeModal = memo(({
               <span>Scan Another User's QR Code</span>
             </button>
           </div>
-      </Dialog>
+        </div>
+      </div>
 
       {/* QR Scanner Modal */}
       {showScanner && (

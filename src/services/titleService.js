@@ -63,26 +63,18 @@ class TitleService {
     }
 
     const c = title.criteria || {};
-    // Explicit null handling: an unknown metric is not coerced to a default.
-    // A missing metric simply cannot satisfy its criterion (fail-closed), and
-    // the requirement text states the requirement rather than the user's value.
-    const toNum = (raw) => {
-      if (raw === null || raw === undefined || raw === '') return null;
-      const n = Number(raw);
-      return Number.isFinite(n) ? n : null;
-    };
-    const level = toNum(stats.level);
-    const activeDays = toNum(stats.activeDaysCount);
-    const contribution = toNum(stats.contributionScore ?? stats.contribution);
-    const reputation = toNum(stats.reputationScore ?? stats.reputation);
-    const influence = toNum(stats.influenceScore ?? stats.influence);
+    const level = Number(stats.level) || 1;
+    const activeDays = Number(stats.activeDaysCount) || 0;
+    const contribution = Number(stats.contributionScore || stats.contribution) || 0;
+    const reputation = Number(stats.reputationScore || stats.reputation) || 0;
+    const influence = Number(stats.influenceScore || stats.influence) || 0;
 
     const reasons = [];
-    if (c.minLevel && !(level !== null && level >= c.minLevel)) reasons.push(`Requires Level ${c.minLevel}`);
-    if (c.minActiveDays && !(activeDays !== null && activeDays >= c.minActiveDays)) reasons.push(`Requires ${c.minActiveDays} Active Days`);
-    if (c.minContribution && !(contribution !== null && contribution >= c.minContribution)) reasons.push(`Requires ${c.minContribution} Contribution`);
-    if (c.minReputation && !(reputation !== null && reputation >= c.minReputation)) reasons.push(`Requires ${c.minReputation} Reputation`);
-    if (c.minInfluence && !(influence !== null && influence >= c.minInfluence)) reasons.push(`Requires ${c.minInfluence} Influence`);
+    if (c.minLevel && level < c.minLevel) reasons.push(`Requires Level ${c.minLevel}`);
+    if (c.minActiveDays && activeDays < c.minActiveDays) reasons.push(`Requires ${c.minActiveDays} Active Days`);
+    if (c.minContribution && contribution < c.minContribution) reasons.push(`Requires ${c.minContribution} Contribution`);
+    if (c.minReputation && reputation < c.minReputation) reasons.push(`Requires ${c.minReputation} Reputation`);
+    if (c.minInfluence && influence < c.minInfluence) reasons.push(`Requires ${c.minInfluence} Influence`);
     if (c.isCreator && !stats.isCreator) reasons.push('Requires Creator status');
     if (c.isFounder && !stats.isFounder) reasons.push('Requires Founder status');
     if (c.isPioneer && !stats.isPioneer) reasons.push('Requires Pioneer status');

@@ -8,8 +8,7 @@
  *   2. Reach (with sparkline curve)
  *   3. Engagement (with sparkline curve)
  *   4. Coins Earned (with sparkline curve)
- *   5. Creator Standing (real percentile/rank from rankingService, or a
- *      truthful unavailable state - never an invented "Top 1%")
+ *   5. Top Creator Ranking ("Top 1% Among Creators" with Crown icon)
  * 
  * @component
  */
@@ -29,10 +28,9 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
-import { VISUAL } from '../../design-system/visual';
 
 // Clean SVG Sparklines
-const Sparkline = ({ color = VISUAL.chart.views, data = [0, 0] }) => {
+const Sparkline = ({ color = '#a855f7', data = [0, 0] }) => {
   const safeData = Array.isArray(data) && data.length > 0 ? data : [0, 0];
   const min = Math.min(...safeData);
   const max = Math.max(...safeData);
@@ -63,11 +61,9 @@ const Sparkline = ({ color = VISUAL.chart.views, data = [0, 0] }) => {
 
 const ProfileCreatorDashboard = memo(({
   analytics,
-  analyticsLoading = false,
-  analyticsError = null,
   ranking,
-  userLevel = null,
-  userXp = null,
+  userLevel = 1,
+  userXp = 0,
   isCreator = false,
   theme = 'light',
   timeframe = '7d',
@@ -77,23 +73,19 @@ const ProfileCreatorDashboard = memo(({
   const isDark = theme === 'dark';
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
-  // Gating check: creator status from the canonical creator domain, or the
-  // canonical level gate. `userLevel` may be unknown (null) - never assumed.
-  const effectiveLevel = Number.isFinite(Number(userLevel)) ? Number(userLevel) : null;
-  const meetsLevelGate = effectiveLevel !== null && effectiveLevel >= LEVEL_GATES.creatorProfile;
-  const isEligibleCreator = isCreator || meetsLevelGate;
+  // Gating check: User must be Level 5+ (LEVEL_GATES.creatorProfile) or have creator status
+  const effectiveLevel = Number(userLevel) || 1;
+  const isEligibleCreator = isCreator || effectiveLevel >= LEVEL_GATES.creatorProfile;
 
   if (!isEligibleCreator) {
     const requiredLevel = LEVEL_GATES.creatorProfile;
-    const progressPercent = effectiveLevel === null
-      ? 0
-      : Math.min(100, Math.max(0, Math.round((effectiveLevel / requiredLevel) * 100)));
+    const progressPercent = Math.min(100, Math.max(10, Math.round((effectiveLevel / requiredLevel) * 100)));
 
     return (
       <div className={cn(
         "w-full rounded-3xl p-6 sm:p-7 border backdrop-blur-xl transition-all shadow-sm relative overflow-hidden",
         isDark
-          ? "bg-arvdoul-bg-elevated/80 border-white/10 text-white shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+          ? "bg-[#0d1424]/80 border-white/10 text-white shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
           : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_8px_24px_rgba(0,0,0,0.04)]"
       )}>
         {/* Subtle Background Glow */}
@@ -123,11 +115,7 @@ const ProfileCreatorDashboard = memo(({
             <div className="pt-2 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-500 dark:text-slate-400">Current Standing</span>
-                <span className="text-purple-600 dark:text-purple-400">
-                  {effectiveLevel === null
-                    ? 'Level unavailable'
-                    : `Level ${effectiveLevel} of ${LEVEL_GATES.creatorProfile}`}
-                </span>
+                <span className="text-purple-600 dark:text-purple-400">Level {effectiveLevel} of {LEVEL_GATES.creatorProfile}</span>
               </div>
 
               <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden p-0.5">
@@ -139,11 +127,7 @@ const ProfileCreatorDashboard = memo(({
 
               <div className="flex items-center justify-between text-[11px] text-slate-400">
                 <span>🌱 Citizen Status</span>
-                {effectiveLevel === null ? (
-                  <span>Creator dashboard unlocks at level {LEVEL_GATES.creatorProfile}</span>
-                ) : (
-                  <span>⭐ {Math.max(0, LEVEL_GATES.creatorProfile - effectiveLevel)} more {LEVEL_GATES.creatorProfile - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
-                )}
+                <span>⭐ {Math.max(0, LEVEL_GATES.creatorProfile - effectiveLevel)} more {LEVEL_GATES.creatorProfile - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
               </div>
             </div>
           </div>
@@ -151,15 +135,15 @@ const ProfileCreatorDashboard = memo(({
           {/* Action CTA */}
           <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 w-full md:w-auto shrink-0">
             <button
-              onClick={() => navigate('/progress')}
+              onClick={() => navigate('/challenges')}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-purple-500/25 transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
             >
-              <span>Open Progression</span>
+              <span>Earn XP & Level Up</span>
               <ArrowUpRight className="w-4 h-4" />
             </button>
 
             <button
-              onClick={() => navigate('/rankings')}
+              onClick={() => navigate('/rewards')}
               className={cn(
                 "px-5 py-2.5 rounded-2xl font-bold text-xs border transition-all text-center",
                 isDark ? "bg-white/5 hover:bg-white/10 border-white/10 text-white" : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
@@ -179,36 +163,18 @@ const ProfileCreatorDashboard = memo(({
     onTimeframeChange?.(val);
   };
 
-  // Canonical analytics values. When analytics is unavailable (error or not yet
-  // loaded) metrics render an honest state, never a zeroed object.
-  const hasAnalytics = Boolean(analytics);
-  const toCount = (v) => (v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
-  const views = hasAnalytics ? toCount(analytics?.totalViews) : null;
-  const reach = hasAnalytics ? toCount(analytics?.totalReach) : null;
-  const engagement = hasAnalytics ? toCount(analytics?.totalEngagement) : null;
-  const coins = hasAnalytics ? toCount(analytics?.coinsEarned) : null;
+  const views = Number(analytics?.totalViews ?? 0);
+  const reach = Number(analytics?.totalReach ?? 0);
+  const engagement = Number(analytics?.totalEngagement ?? 0);
+  const coins = Number(analytics?.coinsEarned ?? 0);
 
   const changes = analytics?.changes || {};
   const dailyStats = Array.isArray(analytics?.dailyStats) ? analytics.dailyStats : [];
 
-  // A sparkline is only drawn when every day in the window carries a real,
-  // finite value; a gap is not silently plotted as zero.
-  const seriesFor = (key) => {
-    if (dailyStats.length <= 1) return null;
-    const values = dailyStats.map((s) => s?.[key]);
-    if (values.some((v) => v === null || v === undefined || !Number.isFinite(Number(v)))) return null;
-    return values.map(Number);
-  };
-  const viewsSeries = seriesFor('views');
-  const reachSeries = seriesFor('reach');
-  const engagementSeries = seriesFor('engagement');
-  const coinsSeries = seriesFor('coins');
-
-  const renderMetricValue = (value) => (
-    value === null
-      ? <span className="text-sm font-semibold text-slate-400">Unavailable</span>
-      : value.toLocaleString()
-  );
+  const viewsSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.views) || 0) : [0, views];
+  const reachSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.reach) || 0) : [0, reach];
+  const engagementSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.engagement) || 0) : [0, engagement];
+  const coinsSeries = dailyStats.length > 1 ? dailyStats.map(s => Number(s.coins) || 0) : [0, coins];
 
   const renderTrendBadge = (changeVal) => {
     if (changeVal === undefined || changeVal === null || isNaN(changeVal)) {
@@ -234,17 +200,14 @@ const ProfileCreatorDashboard = memo(({
   };
 
   // Rank info
-  const standingPercentile = ranking?.percentile ? `Top ${ranking.percentile}%` : null;
-  // No invented 'Creator' label when a ranking exists but carries no rank/tier.
-  const standingLabel = ranking?.rank
-    ? `Rank #${ranking.rank} Global`
-    : (ranking?.tier || 'Ranking unavailable');
+  const standingPercentile = ranking?.percentile ? `Top ${ranking.percentile}%` : 'Active';
+  const standingLabel = ranking?.rank ? `Rank #${ranking.rank} Global` : (ranking?.tier || 'Creator');
 
   return (
     <div className={cn(
       "w-full rounded-3xl p-5 sm:p-6 border backdrop-blur-xl transition-all shadow-sm",
       isDark
-        ? "bg-arvdoul-bg-elevated/70 border-white/10 text-white"
+        ? "bg-[#0d1424]/70 border-white/10 text-white"
         : "bg-white/95 border-slate-200/90 text-slate-900"
     )}>
       {/* Header with Timeframe Dropdown */}
@@ -292,18 +255,6 @@ const ProfileCreatorDashboard = memo(({
         </div>
       </div>
 
-      {analyticsError && (
-        <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-600 dark:text-rose-300">
-          <span>Analytics unavailable right now - figures are not shown rather than estimated.</span>
-        </div>
-      )}
-
-      {analyticsLoading && !analytics && (
-        <div className="mb-4 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 px-4 py-6 text-center text-xs font-semibold text-slate-400">
-          Loading analytics...
-        </div>
-      )}
-
       {/* 5 Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* 1. Views */}
@@ -318,9 +269,9 @@ const ProfileCreatorDashboard = memo(({
             {renderTrendBadge(changes.views)}
           </div>
           <div className="text-lg font-black tracking-tight mb-2">
-            {renderMetricValue(views)}
+            {Number(views).toLocaleString()}
           </div>
-          {viewsSeries && <Sparkline color={VISUAL.chart.views} data={viewsSeries} />}
+          <Sparkline color="#8b5cf6" data={viewsSeries} />
         </div>
 
         {/* 2. Reach */}
@@ -335,9 +286,9 @@ const ProfileCreatorDashboard = memo(({
             {renderTrendBadge(changes.reach)}
           </div>
           <div className="text-lg font-black tracking-tight mb-2">
-            {renderMetricValue(reach)}
+            {Number(reach).toLocaleString()}
           </div>
-          {reachSeries && <Sparkline color={VISUAL.chart.reach} data={reachSeries} />}
+          <Sparkline color="#06b6d4" data={reachSeries} />
         </div>
 
         {/* 3. Engagement */}
@@ -352,9 +303,9 @@ const ProfileCreatorDashboard = memo(({
             {renderTrendBadge(changes.engagement)}
           </div>
           <div className="text-lg font-black tracking-tight mb-2">
-            {renderMetricValue(engagement)}
+            {Number(engagement).toLocaleString()}
           </div>
-          {engagementSeries && <Sparkline color={VISUAL.chart.engagement} data={engagementSeries} />}
+          <Sparkline color="#ec4899" data={engagementSeries} />
         </div>
 
         {/* 4. Coins Earned */}
@@ -369,9 +320,9 @@ const ProfileCreatorDashboard = memo(({
             {renderTrendBadge(changes.coins)}
           </div>
           <div className="text-lg font-black tracking-tight text-amber-500 mb-2">
-            🪙 {renderMetricValue(coins)}
+            🪙 {Number(coins).toLocaleString()}
           </div>
-          {coinsSeries && <Sparkline color={VISUAL.chart.coins} data={coinsSeries} />}
+          <Sparkline color="#f59e0b" data={coinsSeries} />
         </div>
 
         {/* 5. Standing */}
@@ -389,7 +340,7 @@ const ProfileCreatorDashboard = memo(({
           </div>
           <div>
             <div className="text-lg font-black tracking-tight text-purple-700 dark:text-purple-300">
-              {standingPercentile || '—'}
+              {standingPercentile}
             </div>
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
               Among Creators

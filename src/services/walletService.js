@@ -17,14 +17,11 @@ class WalletService {
     try {
       const db = await getFirestoreInstance();
       const userSnap = await getDoc(doc(db, 'users', userId));
-      // An unknown account has no wallet. Returning a zero-filled wallet would
-      // fabricate a balance for a user who does not exist.
-      if (!userSnap.exists()) return null;
-      const userData = userSnap.data() || {};
+      const userData = userSnap.exists() ? userSnap.data() : {};
 
-      const coins = Number(userData.coins ?? userData.coinBalance ?? 0);
-      const totalEarned = Number(userData.totalEarned ?? userData.lifetimeCoinsEarned ?? 0);
-      const totalSpent = Number(userData.totalSpent ?? 0);
+      const coins = Number(userData.coins || userData.coinBalance || 0);
+      const totalEarned = Number(userData.totalEarned || userData.lifetimeCoinsEarned || 0);
+      const totalSpent = Number(userData.totalSpent || 0);
 
       // Fetch pending withdrawals to compute held balance
       let pendingWithdrawals = 0;
@@ -79,8 +76,7 @@ class WalletService {
           id: d.id,
           ...item,
           status: item.status || TRANSACTION_STATES.COMPLETED,
-          // Never stamp a missing timestamp as "now"; unknown stays null.
-          createdAt: item.createdAt?.toDate?.() || null,
+          createdAt: item.createdAt?.toDate?.() || new Date(),
         };
       });
     } catch (err) {

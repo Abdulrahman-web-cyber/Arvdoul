@@ -9,8 +9,10 @@
 import React, { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
+import { getStoredUid } from '../../utils/security';
 import { cn } from '../../lib/utils';
 import { 
   ArrowLeft, 
@@ -30,15 +32,12 @@ import {
 } from 'lucide-react';
 
 /**
- * Format number with K, M suffix. Unknown values render as an em dash rather
- * than a fabricated zero.
+ * Format number with K, M suffix
  */
 const formatNumber = (num) => {
-  const n = Number(num);
-  if (num === null || num === undefined || num === '' || Number.isNaN(n)) return '—';
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return n.toLocaleString();
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return num?.toString() || '0';
 };
 
 /**
@@ -47,7 +46,10 @@ const formatNumber = (num) => {
 export default function CreatorDashboardScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const currentUser = useAppStore(state => state.currentUser);
+  const { user: authUser } = useAuth();
+  const storeUser = useAppStore(state => state.currentUser);
+  const currentUser = storeUser || authUser;
+  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
   
   const {
     analytics,
@@ -64,14 +66,14 @@ export default function CreatorDashboardScreen() {
   
   // Load analytics
   useEffect(() => {
-    if (currentUser?.uid) {
-      loadAnalytics(currentUser.uid, timeframe);
+    if (currentUserId) {
+      loadAnalytics(currentUserId, timeframe);
     }
-  }, [currentUser?.uid, timeframe]);
+  }, [currentUserId, timeframe]);
   
   const handleRefresh = useCallback(() => {
-    refresh(currentUser?.uid);
-  }, [currentUser?.uid, refresh]);
+    if (currentUserId) refresh(currentUserId);
+  }, [currentUserId, refresh]);
   
   const handleTimeframeChange = useCallback((tf) => {
     setTimeframe(tf);
@@ -89,13 +91,12 @@ export default function CreatorDashboardScreen() {
     linkElement.click();
   }, [analytics, timeframe]);
   
-  // Metrics cards. Values are passed through as-is; an absent metric stays
-  // unknown (rendered as '—') instead of being coerced to 0.
+  // Metrics cards
   const metrics = [
-    { key: 'views', label: 'Total Views', value: analytics?.totalViews ?? null, icon: Eye, color: 'text-blue-500' },
-    { key: 'reach', label: 'Total Reach', value: analytics?.totalReach ?? null, icon: Users, color: 'text-purple-500' },
-    { key: 'engagement', label: 'Engagement', value: analytics?.totalEngagement ?? null, icon: Heart, color: 'text-pink-500' },
-    { key: 'coins', label: 'Coins Earned', value: analytics?.coinsEarned ?? null, icon: Coins, color: 'text-yellow-500' },
+    { key: 'views', label: 'Total Views', value: analytics?.totalViews || 0, icon: Eye, color: 'text-blue-500' },
+    { key: 'reach', label: 'Total Reach', value: analytics?.totalReach || 0, icon: Users, color: 'text-purple-500' },
+    { key: 'engagement', label: 'Engagement', value: analytics?.totalEngagement || 0, icon: Heart, color: 'text-pink-500' },
+    { key: 'coins', label: 'Coins Earned', value: analytics?.coinsEarned || 0, icon: Coins, color: 'text-yellow-500' },
   ];
   
   // Changes
@@ -210,11 +211,9 @@ export default function CreatorDashboardScreen() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Your Ranking</p>
-                    {ranking.label && (
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {ranking.label}
-                      </p>
-                    )}
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {ranking.label || 'New Creator'}
+                    </p>
                   </div>
                   {ranking.position && (
                     <div className="text-right">
@@ -233,8 +232,7 @@ export default function CreatorDashboardScreen() {
               {metrics.map((metric) => {
                 const Icon = metric.icon;
                 const change = changes[metric.key];
-                const changeKnown = typeof change === 'number' && Number.isFinite(change);
-                const isPositive = changeKnown ? change >= 0 : null;
+                const isPositive = (change || 0) >= 0;
                 
                 return (
                   <div
@@ -247,7 +245,7 @@ export default function CreatorDashboardScreen() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <Icon className={cn('w-5 h-5', metric.color)} />
-                      {changeKnown && (
+                      {change !== undefined && (
                         <span className={cn(
                           'flex items-center gap-0.5 text-xs font-medium',
                           isPositive ? 'text-green-600' : 'text-red-600'
@@ -283,34 +281,22 @@ export default function CreatorDashboardScreen() {
               </h3>
               {dailyStats.length > 0 ? (
                 <div className="space-y-3">
-                  {(() => {
-                    const peakViews = Math.max(
-                      ...dailyStats.map((s) => (typeof s.views === 'number' && Number.isFinite(s.views) ? s.views : 0)),
-                      0,
-                    );
-                    return dailyStats.slice(-7).reverse().map((stat, index) => {
-                      const views = typeof stat.views === 'number' && Number.isFinite(stat.views) ? stat.views : null;
-                      const width = views !== null && peakViews > 0
-                        ? Math.min((views / peakViews) * 100, 100)
-                        : 0;
-                      return (
-                        <div key={stat.date || index} className="flex items-center gap-3">
-                          <div className="w-16 text-xs text-gray-500 dark:text-gray-400">
-                            {stat.date ? new Date(stat.date).toLocaleDateString('en-US', { weekday: 'short' }) : '—'}
-                          </div>
-                          <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
-                              style={{ width: `${width}%` }}
-                            />
-                          </div>
-                          <div className="w-16 text-xs text-right text-gray-500 dark:text-gray-400">
-                            {formatNumber(views)}
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
+                  {dailyStats.slice(-7).reverse().map((stat, index) => (
+                    <div key={stat.date || index} className="flex items-center gap-3">
+                      <div className="w-16 text-xs text-gray-500 dark:text-gray-400">
+                        {new Date(stat.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                      </div>
+                      <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                          style={{ width: `${Math.min((stat.views / Math.max(...dailyStats.map(s => s.views || 1))) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <div className="w-16 text-xs text-right text-gray-500 dark:text-gray-400">
+                        {formatNumber(stat.views || 0)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <p className="text-gray-500 dark:text-gray-400 text-center py-8">

@@ -125,7 +125,6 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
       canViewContent: false,
       canViewFollowers: false,
       canViewFollowing: false,
-      canViewProgression: false,
       canViewEconomicStatus: false,
       canFollow: false,
       canUnfollow: false,
@@ -167,14 +166,12 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
   const canViewFollowers = canViewProfileSection('followersList', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewFollowing = canViewProfileSection('followingList', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewActivity = canViewProfileSection('activity', targetPrivacy, effectiveRelation) && canViewContent;
-  // Progression/level standing is identity-adjacent activity; gated with activity.
-  const canViewProgression = canViewActivity;
   const canViewAchievements = canViewProfileSection('achievements', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewTitles = canViewProfileSection('titles', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewCommunities = canViewProfileSection('communities', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewCollections = canViewProfileSection('collections', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation) && canViewContent;
+  const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation);
+  const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation);
   const canViewEconomicStatus = isSimulatedOwner || canViewProfileSection('economicStatus', targetPrivacy, effectiveRelation);
 
   // Follow / Unfollow actions
@@ -204,7 +201,6 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
     canViewFollowers,
     canViewFollowing,
     canViewActivity,
-    canViewProgression,
     canViewAchievements,
     canViewTitles,
     canViewCommunities,

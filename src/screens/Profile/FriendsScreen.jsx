@@ -9,10 +9,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Search, Users, Loader2, UserCheck, MessageCircle, Lock } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 
 /**
@@ -22,15 +24,18 @@ export default function FriendsScreen() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const currentUser = useAppStore(state => state.currentUser);
+  const { user: authUser } = useAuth();
+  const storeUser = useAppStore(state => state.currentUser);
+  const currentUser = storeUser || authUser;
+  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
   
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const targetId = userId || currentUser?.uid;
-  const isMutualCheck = userId && currentUser?.uid && userId !== currentUser.uid;
+  const targetId = userId || currentUserId;
+  const isMutualCheck = Boolean(userId && currentUserId && userId !== currentUserId);
 
   // Load friends (mutual friends between current user and viewed user, or target user's friends)
   useEffect(() => {
@@ -89,8 +94,8 @@ export default function FriendsScreen() {
     <div className={cn(
       'min-h-screen pb-20',
       theme === 'dark'
-        ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
-        : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
+        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
       {/* Header */}
       <div className={cn(
@@ -141,7 +146,7 @@ export default function FriendsScreen() {
             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
           </div>
         ) : permissionDenied ? (
-          <div className="rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-8 bg-white/80 dark:bg-arvdoul-bg-elevated/80 border-slate-200 dark:border-white/10 backdrop-blur-xl">
+          <div className="rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-8 bg-white/80 dark:bg-[#0d1424]/80 border-slate-200 dark:border-white/10 backdrop-blur-xl">
             <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
               <Lock className="w-8 h-8" />
             </div>

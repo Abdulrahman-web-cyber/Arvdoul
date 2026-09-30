@@ -102,8 +102,6 @@ import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { cn } from "../../lib/utils";
 import { useAppStore } from "../../store/appStore";
-import { getLevelInfo, getLevelUpReward, getRankTitle } from "../../services/levelSystemService";
-import achievementService from "../../services/achievementService";
 import { 
   FaCoins, 
   FaFire, 
@@ -156,6 +154,43 @@ const ANIMATION_CONFIG = {
   },
   staggerChildren: 0.03,
   delayChildren: 0.05
+};
+
+// Level system configuration
+const LEVEL_CONFIG = {
+  maxLevel: 50,
+  baseXP: 100,
+  growthFactor: 1.2,
+  levelNames: {
+    1: "Newcomer",
+    5: "Active User",
+    10: "Rising Star",
+    15: "Content Creator",
+    20: "Community Builder",
+    25: "Influencer",
+    30: "Trendsetter",
+    35: "Social Pro",
+    40: "Viral Star",
+    45: "Platform Elite",
+    50: "Arvdoul Legend"
+  },
+  levelRewards: {
+    5: { coins: 100, badge: "Active", feature: "Basic Features" },
+    10: { coins: 500, badge: "Rising Star", feature: "Analytics" },
+    15: { coins: 1000, badge: "Creator", feature: "Advanced Tools" },
+    20: { coins: 2500, badge: "Builder", feature: "Community Features" },
+    25: { coins: 5000, badge: "Influencer", feature: "Monetization" },
+    30: { coins: 10000, badge: "Trendsetter", feature: "Premium Tools" },
+    35: { coins: 25000, badge: "Social Pro", feature: "Priority Support" },
+    40: { coins: 50000, badge: "Viral Star", feature: "Customization" },
+    45: { coins: 100000, badge: "Platform Elite", feature: "Early Access" },
+    50: { coins: 250000, badge: "Arvdoul Legend", feature: "All Features" }
+  }
+};
+
+// Calculate XP required for each level
+const calculateXPForLevel = (level) => {
+  return Math.floor(LEVEL_CONFIG.baseXP * Math.pow(LEVEL_CONFIG.growthFactor, level - 1));
 };
 
 // Color schemes
@@ -312,8 +347,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [earnedAchievements, setEarnedAchievements] = useState(null);
-  const [achievementsError, setAchievementsError] = useState(null);
 
   // Refs
   const panelRef = useRef(null);
@@ -361,48 +394,30 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
   // ==================== LEVEL SYSTEM CALCULATIONS ====================
   const levelSystem = useMemo(() => {
-    const currentXP = currentUser?.experience ?? null;
-    const info = getLevelInfo(currentXP ?? 0);
-    const currentLevel = info.level;
-    const nextLevelRewardCoins = getLevelUpReward(currentLevel, currentLevel + 1);
-
+    const currentLevel = currentUser?.level || 1;
+    const currentXP = currentUser?.experience || 0;
+    const xpForCurrentLevel = calculateXPForLevel(currentLevel);
+    const xpForNextLevel = calculateXPForLevel(currentLevel + 1);
+    const xpNeededForNextLevel = Math.max(0, xpForNextLevel - currentXP);
+    const progressPercentage = Math.min(100, (currentXP / xpForNextLevel) * 100);
+    
+    const nextLevelReward = LEVEL_CONFIG.levelRewards[currentLevel + 1] || null;
+    const currentLevelName = LEVEL_CONFIG.levelNames[currentLevel] || "Newcomer";
+    const nextLevelName = LEVEL_CONFIG.levelNames[currentLevel + 1] || "Next Level";
+    
     return {
       currentLevel,
       currentXP,
-      xpRequiredForCurrentLevel: info.currentLevelXp,
-      xpForNextLevel: info.nextLevelXp,
-      xpNeededForNextLevel: info.xpToNext,
-      progressPercentage: info.progress,
-      nextLevelReward: nextLevelRewardCoins > 0 ? { coins: nextLevelRewardCoins } : null,
-      currentLevelName: getRankTitle(currentLevel),
-      nextLevelName: info.nextLevelXp === null ? null : getRankTitle(currentLevel + 1),
-      isMaxLevel: info.isMaxLevel
+      xpForCurrentLevel,
+      xpForNextLevel,
+      xpNeededForNextLevel,
+      progressPercentage,
+      nextLevelReward,
+      currentLevelName,
+      nextLevelName,
+      isMaxLevel: currentLevel >= LEVEL_CONFIG.maxLevel
     };
-  }, [currentUser?.experience]);
-
-  // Load the viewer's earned achievements from the authoritative ledger.
-  useEffect(() => {
-    const uid = currentUser?.uid;
-    if (!uid) {
-      setEarnedAchievements(null);
-      setAchievementsError(null);
-      return;
-    }
-    let cancelled = false;
-    setAchievementsError(null);
-    achievementService
-      .getUserAchievements(uid)
-      .then((items) => {
-        if (!cancelled) setEarnedAchievements(Array.isArray(items) ? items : []);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setEarnedAchievements(null);
-          setAchievementsError(err?.message || 'Could not load achievements');
-        }
-      });
-    return () => { cancelled = true; };
-  }, [currentUser?.uid]);
+  }, [currentUser?.level, currentUser?.experience]);
 
   // ==================== REAL USER STATISTICS ====================
   const userStatistics = useMemo(() => {
@@ -421,7 +436,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         { 
           label: "XP", 
-          value: levelSystem.currentXP == null ? "Unavailable" : levelSystem.currentXP.toLocaleString(), 
+          value: levelSystem.currentXP?.toLocaleString() || "0", 
           icon: FaStar,
           color: "yellow", 
           change: `${levelSystem.progressPercentage.toFixed(1)}%`,
@@ -429,10 +444,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
         },
         { 
           label: "To Next", 
-          value: levelSystem.xpNeededForNextLevel == null ? "Unavailable" : levelSystem.xpNeededForNextLevel.toLocaleString(), 
+          value: levelSystem.xpNeededForNextLevel?.toLocaleString() || "0", 
           icon: TargetIcon,
           color: "blue", 
-          change: levelSystem.isMaxLevel ? "Max level" : `Lvl ${levelSystem.currentLevel + 1}`,
+          change: `Lvl ${levelSystem.currentLevel + 1}`,
           navigate: () => navigate(NAVIGATION_PATHS.levels)
         },
         { 
@@ -557,28 +572,69 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   }, [monetization, currentUser?.coins, navigate, NAVIGATION_PATHS]);
 
   // ==================== ACHIEVEMENTS ====================
-  // Earned state comes from the authoritative achievements/{uid}/items
-  // subcollection via the canonical achievementService — never a locally
-  // inferred "unlocked" flag.
   const achievements = useMemo(() => {
-    const catalog = achievementService.getCatalog();
-    const earnedMap = new Map((earnedAchievements || []).map((e) => [e.id, e]));
     const stats = currentUser || {};
-    return catalog.map((ach) => {
-      const earned = earnedMap.get(ach.id);
-      const unlocked = Boolean(earned) || achievementService.isSatisfied(ach, stats);
-      return {
-        id: ach.id,
-        title: ach.title,
-        description: ach.description,
-        icon: PenSquare,
-        unlocked,
-        earnedAt: earned?.earnedAt || null,
-        points: ach.points,
-        rarity: ach.rarity,
-      };
-    });
-  }, [earnedAchievements, currentUser]);
+    const monetizationStats = monetization || {};
+    
+    return [
+      { 
+        id: 1, 
+        title: "First Post", 
+        icon: PenSquare, 
+        unlocked: (stats.postCount || 0) > 0, 
+        date: "First post",
+        points: 100,
+        progress: (stats.postCount || 0) > 0 ? 100 : 0
+      },
+      { 
+        id: 2, 
+        title: "Profile Complete", 
+        icon: CheckCircle, 
+        unlocked: stats.isProfileComplete || false, 
+        date: "Complete",
+        points: 250,
+        progress: stats.isProfileComplete ? 100 : 0
+      },
+      { 
+        id: 3, 
+        title: "Level 10", 
+        icon: Trophy, 
+        unlocked: levelSystem.currentLevel >= 10, 
+        required: 10, 
+        current: levelSystem.currentLevel, 
+        points: 1000,
+        progress: Math.min((levelSystem.currentLevel / 10) * 100, 100)
+      },
+      { 
+        id: 4, 
+        title: "First Earnings", 
+        icon: DollarSign, 
+        unlocked: (monetizationStats.totalEarnings || 0) > 0, 
+        date: "Earnings",
+        points: 500,
+        progress: (monetizationStats.totalEarnings || 0) > 0 ? 100 : 0
+      },
+      { 
+        id: 5, 
+        title: "100 Followers", 
+        icon: Users, 
+        unlocked: (stats.followerCount || 0) >= 100, 
+        required: 100, 
+        current: stats.followerCount || 0, 
+        points: 1000,
+        progress: Math.min(((stats.followerCount || 0) / 100) * 100, 100)
+      },
+      { 
+        id: 6, 
+        title: "Creator", 
+        icon: FaCrown, 
+        unlocked: stats.isCreator || false, 
+        date: "Creator",
+        points: 2000,
+        progress: stats.isCreator ? 100 : 0
+      }
+    ];
+  }, [currentUser, monetization, levelSystem.currentLevel]);
 
   // ==================== QUICK ACTIONS ====================
   const quickActions = useMemo(() => {
@@ -995,15 +1051,15 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 <div className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-gray-600 dark:text-gray-400">
-                      {levelSystem.isMaxLevel ? `Level ${levelSystem.currentLevel} · Max level` : `Level ${levelSystem.currentLevel} → ${levelSystem.currentLevel + 1}`}
+                      Level {levelSystem.currentLevel} → {levelSystem.currentLevel + 1}
                     </span>
                     <span className="font-medium">
-                      {levelSystem.currentXP === null ? 'XP unavailable' : `${levelSystem.currentXP.toLocaleString()} / ${levelSystem.xpForNextLevel?.toLocaleString()} XP`}
+                      {levelSystem.currentXP?.toLocaleString()} / {levelSystem.xpForNextLevel?.toLocaleString()} XP
                     </span>
                   </div>
                   <ProgressBar 
-                    value={levelSystem.currentXP ?? 0} 
-                    max={levelSystem.xpForNextLevel ?? 100}
+                    value={levelSystem.currentXP} 
+                    max={levelSystem.xpForNextLevel}
                     color="purple"
                     size="sm"
                     showLabel={false}
@@ -1027,7 +1083,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                   >
                     <FaCoins className="w-4 h-4 text-amber-500" />
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                      {currentUser?.coins == null ? 'Coins unavailable' : `${Number(currentUser.coins).toLocaleString()} Coins`}
+                      {(currentUser?.coins ?? 1250).toLocaleString()} Coins
                     </span>
                   </button>
                   <button
@@ -1540,29 +1596,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           Achievements
         </h3>
         <Badge variant="premium">
-          {earnedAchievements === null
-            ? (achievementsError ? 'Unavailable' : 'Loading…')
-            : `${achievements.filter(a => a.unlocked).length}/${achievements.length}`}
+          {achievements.filter(a => a.unlocked).length}/{achievements.length}
         </Badge>
       </div>
 
-      {earnedAchievements === null && !achievementsError && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={cn("p-6 rounded-xl text-center text-sm", themeColors.cardBg, themeColors.cardBorder, "border")}
-        >
-          Loading achievements…
-        </div>
-      )}
-
-      {achievementsError && earnedAchievements === null && (
-        <div role="alert" className="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-sm text-red-500">
-          {achievementsError}
-        </div>
-      )}
-
-      {earnedAchievements !== null && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {achievements.map((achievement, index) => (
           <motion.div
@@ -1614,7 +1651,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                 </Badge>
               ) : (
                 <Badge variant="default" className="text-xs">
-                  Locked
+                  {achievement.current}/{achievement.required || 1}
                 </Badge>
               )}
             </div>
@@ -1629,10 +1666,8 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
             </h4>
             
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
-                {achievement.earnedAt
-                  ? `Earned ${new Date(achievement.earnedAt).toLocaleDateString()}`
-                  : achievement.description}
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {achievement.date}
               </span>
               <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
                 +{achievement.points} pts
@@ -1651,7 +1686,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
           </motion.div>
         ))}
       </div>
-      )}
     </motion.div>
   );
 

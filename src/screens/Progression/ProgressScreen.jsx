@@ -37,33 +37,22 @@ export default function ProgressScreen() {
   const { theme } = useTheme();
 
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [levelInfo, setLevelInfo] = useState(null);
-  // Server-authoritative active-day standing. null = unknown (never recorded),
-  // which is honest: a fresh citizen has no verified active day yet.
-  const [activeStreak, setActiveStreak] = useState(null);
-  const [activeDaysCount, setActiveDaysCount] = useState(null);
+  const [activeStreak, setActiveStreak] = useState(1);
+  const [activeDaysCount, setActiveDaysCount] = useState(1);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
 
   const isDark = theme === 'dark' || theme === 'midnight';
 
   const loadProgression = useCallback(async () => {
-    if (!user?.uid) {
-      setLoading(false);
-      return;
-    }
-    setLoadError(null);
+    if (!user?.uid) return;
     try {
-      const [info, activeDay] = await Promise.all([
-        levelSystemService.getLevelInfo(user.uid),
-        levelSystemService.getActiveDayInfo(user.uid),
-      ]);
+      const info = await levelSystemService.getLevelInfo(user.uid);
       setLevelInfo(info);
-      setActiveStreak(activeDay.activeStreak);
-      setActiveDaysCount(activeDay.activeDaysCount);
+      setActiveStreak(Number(user.activeStreak) || 1);
+      setActiveDaysCount(Number(user.activeDaysCount) || 1);
     } catch (err) {
-      setLoadError(err?.message || 'Failed to load progression');
       toast.error('Failed to load live progression data');
     } finally {
       setLoading(false);
@@ -81,19 +70,14 @@ export default function ProgressScreen() {
     await loadProgression();
   };
 
-  // Level resolves from the canonical experience curve; the profile document is
-  // only a fallback when the curve is unavailable. Never assume level 1.
-  const level = levelInfo?.level ?? (Number.isFinite(Number(user?.level)) && Number(user?.level) > 0 ? Number(user.level) : null);
-  const citizenTier = useMemo(
-    () => (level === null || activeDaysCount === null ? null : getCitizenTier(level, activeDaysCount)),
-    [level, activeDaysCount]
-  );
-  const prestige = useMemo(() => (level === null ? null : getPrestigeInfo(level)), [level]);
+  const level = levelInfo?.level || user?.level || 1;
+  const citizenTier = useMemo(() => getCitizenTier(level, activeDaysCount), [level, activeDaysCount]);
+  const prestige = useMemo(() => getPrestigeInfo(level), [level]);
 
   // Perks unlocked vs upcoming
-  const unlockedPerks = useMemo(() => (level === null ? [] : getPerksForLevel(level)), [level]);
+  const unlockedPerks = useMemo(() => getPerksForLevel(level), [level]);
   const upcomingPerks = useMemo(
-    () => (level === null ? [] : LEVEL_PERKS.filter((p) => p.minLevel > level).slice(0, 4)),
+    () => LEVEL_PERKS.filter((p) => p.minLevel > level).slice(0, 4),
     [level]
   );
 
@@ -116,11 +100,7 @@ export default function ProgressScreen() {
           <div>
             <h1 className="text-lg font-bold tracking-tight">Citizen Progression</h1>
             <p className="text-xs text-gray-500">
-              {[
-                citizenTier?.tier || null,
-                level === null ? null : `Level ${level}`,
-                prestige?.isPrestige ? `Prestige ${prestige.prestigeRoman}` : null,
-              ].filter(Boolean).join(' · ') || 'Standing unavailable'}
+              {citizenTier.tier} · Level {level} {prestige.isPrestige ? `· Prestige ${prestige.prestigeRoman}` : ''}
             </p>
           </div>
         </div>
@@ -146,37 +126,6 @@ export default function ProgressScreen() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {loading && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={`p-8 rounded-2xl border text-center text-sm ${
-              isDark ? 'bg-gray-900/50 border-gray-800 text-gray-400' : 'bg-white border-gray-200 text-gray-500'
-            }`}
-          >
-            Loading your progression…
-          </div>
-        )}
-
-        {loadError && !loading && (
-          <div
-            role="alert"
-            className={`p-5 rounded-2xl border flex items-center justify-between gap-3 ${
-              isDark ? 'bg-red-950/30 border-red-900/60 text-red-200' : 'bg-red-50 border-red-200 text-red-700'
-            }`}
-          >
-            <span className="text-sm">{loadError}</span>
-            <button
-              onClick={handleRefresh}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white min-h-[44px]"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {!loading && !loadError && (
-          <>
         {/* Section 1: Where am I? & Why am I here? (Primary Progress Card) */}
         <section
           aria-labelledby="progress-overview-heading"
@@ -192,32 +141,24 @@ export default function ProgressScreen() {
                 Current Standing
               </span>
               <h2 id="progress-overview-heading" className="text-3xl font-extrabold tracking-tight mt-1">
-                {level === null ? 'Standing unavailable' : `Level ${level}`}
-                {(levelInfo?.title || citizenTier?.tier) && (
-                  <span className="text-lg font-medium text-gray-500 ml-2">
-                    {levelInfo?.title || citizenTier?.tier}
-                  </span>
-                )}
+                Level {level}
+                <span className="text-lg font-medium text-gray-500 ml-2">
+                  {levelInfo?.title || citizenTier.tier}
+                </span>
               </h2>
             </div>
-            {citizenTier && (
-              <div className="text-right">
-                <span className="text-2xl">{citizenTier.icon}</span>
-                <p className="text-xs text-gray-500 mt-1">{citizenTier.tier} Tier</p>
-              </div>
-            )}
+            <div className="text-right">
+              <span className="text-2xl">{citizenTier.icon}</span>
+              <p className="text-xs text-gray-500 mt-1">{citizenTier.tier} Tier</p>
+            </div>
           </div>
 
           {/* Progress Bar */}
           <div className="mt-6 space-y-2">
             <div className="flex justify-between text-xs text-gray-400">
-              <span>{levelInfo ? `${levelInfo.xpIntoLevel || 0} XP earned this level` : 'XP data unavailable'}</span>
+              <span>{levelInfo?.xpIntoLevel || 0} XP earned this level</span>
               <span>
-                {!levelInfo
-                  ? '—'
-                  : levelInfo.isMaxLevel
-                    ? 'Ascendant'
-                    : `${levelInfo.xpToNext || 0} XP to Level ${(level ?? 0) + 1}`}
+                {levelInfo?.isMaxLevel ? 'Ascendant' : `${levelInfo?.xpToNext || 0} XP to Level ${level + 1}`}
               </span>
             </div>
             <div
@@ -225,25 +166,18 @@ export default function ProgressScreen() {
                 isDark ? 'bg-gray-800' : 'bg-gray-200'
               }`}
             >
-              {levelInfo && Number.isFinite(Number(levelInfo.progress)) && (
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-700 rounded-full"
-                  style={{ width: `${levelInfo.progress}%` }}
-                  role="progressbar"
-                  aria-label="Progress to next level"
-                  aria-valuenow={levelInfo.progress}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                />
-              )}
+              <div
+                className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-700 rounded-full"
+                style={{ width: `${levelInfo?.progress || 0}%` }}
+                role="progressbar"
+                aria-valuenow={levelInfo?.progress || 0}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
             </div>
             <div className="flex justify-between items-center text-xs text-gray-500 pt-1">
-              <span>Stage Progress: {levelInfo && Number.isFinite(Number(levelInfo.progress)) ? `${levelInfo.progress}%` : '—'}</span>
-              <span>
-                Total XP: {Number.isFinite(Number(user?.experience))
-                  ? Number(user.experience).toLocaleString()
-                  : 'unknown'}
-              </span>
+              <span>Stage Progress: {levelInfo?.progress || 0}%</span>
+              <span>Total XP: {(user?.experience || 0).toLocaleString()}</span>
             </div>
           </div>
 
@@ -252,7 +186,7 @@ export default function ProgressScreen() {
             <div className="text-center">
               <div className="flex items-center justify-center space-x-1 text-amber-500">
                 <Flame className="w-4 h-4" />
-                <span className="text-lg font-bold">{activeStreak === null ? '—' : activeStreak}</span>
+                <span className="text-lg font-bold">{activeStreak}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">Day Streak</p>
             </div>
@@ -260,7 +194,7 @@ export default function ProgressScreen() {
             <div className="text-center">
               <div className="flex items-center justify-center space-x-1 text-emerald-500">
                 <ShieldCheck className="w-4 h-4" />
-                <span className="text-lg font-bold">{activeDaysCount === null ? '—' : activeDaysCount}</span>
+                <span className="text-lg font-bold">{activeDaysCount}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">Active Days</p>
             </div>
@@ -268,9 +202,7 @@ export default function ProgressScreen() {
             <div className="text-center">
               <div className="flex items-center justify-center space-x-1 text-purple-400">
                 <Coins className="w-4 h-4" />
-                <span className="text-lg font-bold">
-                  {Number.isFinite(Number(user?.coins)) ? Number(user.coins).toLocaleString() : '—'}
-                </span>
+                <span className="text-lg font-bold">{user?.coins || 0}</span>
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">Coins Balance</p>
             </div>
@@ -384,8 +316,6 @@ export default function ProgressScreen() {
             </div>
           </div>
         </section>
-          </>
-        )}
       </main>
     </div>
   );

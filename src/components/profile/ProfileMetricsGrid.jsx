@@ -1,26 +1,19 @@
 /**
  * src/components/profile/ProfileMetricsGrid.jsx - ARVDOUL Unified Metrics Strip
- *
- * Authoritative metric strip for a Profile. Every value is supplied by the
- * canonical domain owner; nothing is fabricated here.
- *
- * - follower/following/friends/posts counts come from `userService` (via the
- *   profile store), gated by `profileCapabilityEngine` capabilities.
- * - reputation comes from `reputationService` (via the profile store).
- * - coins come from `monetizationService` (owner only, gated).
- * When a value is not available it is shown honestly (`—` / omitted), never
- * replaced by an invented number.
- *
+ * 
+ * Replaces noisy floating glass boxes with an authoritative, high-contrast metric strip.
+ * Features crisp typography, accessible touch targets, and zero blurry visual pollution.
+ * 
  * @component
  */
 
 import React, { memo } from 'react';
 import { cn } from '../../lib/utils';
+import { getReputationBand } from '../../shared/levelConfig.cjs';
 
 const formatNumber = (num) => {
-  if (num === undefined || num === null) return null;
+  if (num === undefined || num === null) return '0';
   const n = Number(num);
-  if (Number.isNaN(n)) return null;
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return n.toLocaleString();
@@ -30,70 +23,61 @@ const ProfileMetricsGrid = memo(({
   isOwner = false,
   theme = 'light',
   profile,
-  reputation,     // canonical reputation profile from reputationService
-  balance,        // canonical coin balance from monetizationService (owner only)
+  analytics,
   onMetricPress,
   capabilities,
 }) => {
   const isDark = theme === 'dark';
 
-  const postsCount = profile?.postCount ?? profile?.postsCount ?? null;
-  const followersCount = profile?.followerCount ?? profile?.followersCount ?? null;
-  const followingCount = profile?.followingCount ?? null;
-  const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? null;
+  const postsCount = profile?.postCount ?? profile?.postsCount ?? profile?.posts?.length ?? 0;
+  const followersCount = profile?.followerCount ?? profile?.followersCount ?? 0;
+  const followingCount = profile?.followingCount ?? 0;
+  const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? 0;
+  const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
+  const reputationScore = Number(profile?.reputationScore ?? profile?.reputation ?? 75);
+  const repBand = getReputationBand(reputationScore);
 
-  // Fail-closed: only explicit `true` capabilities allow these surfaces.
-  const canShowFollowers = capabilities?.canViewFollowers === true;
-  const canShowFollowing = capabilities?.canViewFollowing === true;
-  // Post volume is content-adjacent; hidden when the viewer cannot see content.
-  const canShowPosts = isOwner || capabilities?.canViewContent === true;
-  const canShowEconomic = isOwner && capabilities?.canViewEconomicStatus === true;
-
-  // Canonical reputation band. No fabricated numeric default.
-  const reputationScore = reputation?.reputation?.score ?? null;
-  const reputationBand = reputation?.reputation?.band ?? null;
-
-  const coinsValue = balance === null || balance === undefined ? null : formatNumber(balance);
+  const canShowFollowers = capabilities?.canViewFollowers ?? true;
+  const canShowFollowing = capabilities?.canViewFollowing ?? true;
 
   const metrics = [
     {
       key: 'posts',
       label: 'Posts',
-      value: canShowPosts ? (formatNumber(postsCount) ?? '—') : '—',
+      value: formatNumber(postsCount),
       clickable: false,
-      subtext: canShowPosts ? null : 'Private',
     },
     {
       key: 'followers',
       label: 'Followers',
-      value: canShowFollowers ? (formatNumber(followersCount) ?? '—') : '—',
+      value: canShowFollowers ? formatNumber(followersCount) : '—',
       clickable: canShowFollowers && Boolean(onMetricPress),
       subtext: canShowFollowers ? null : 'Private',
     },
     {
       key: 'following',
       label: 'Following',
-      value: canShowFollowing ? (formatNumber(followingCount) ?? '—') : '—',
+      value: canShowFollowing ? formatNumber(followingCount) : '—',
       clickable: canShowFollowing && Boolean(onMetricPress),
       subtext: canShowFollowing ? null : 'Private',
     },
     {
       key: 'friends',
       label: 'Friends',
-      value: formatNumber(friendsCount) ?? '—',
+      value: formatNumber(friendsCount),
       clickable: Boolean(onMetricPress),
     },
     {
       key: 'reputation',
       label: 'Trust Standing',
-      value: reputationScore !== null ? String(reputationScore) : '—',
-      subtext: reputationBand,
+      value: `${reputationScore}`,
+      subtext: repBand.label,
       clickable: false,
     },
-    ...(canShowEconomic ? [{
+    ...(isOwner ? [{
       key: 'coins',
       label: 'Coins Balance',
-      value: coinsValue ?? '—',
+      value: formatNumber(coinsCount),
       clickable: Boolean(onMetricPress),
     }] : [])
   ];
@@ -102,7 +86,7 @@ const ProfileMetricsGrid = memo(({
     <div className={cn(
       "w-full rounded-2xl p-4 sm:p-5 border transition-all shadow-sm",
       isDark
-        ? "bg-arvdoul-bg-elevated border-slate-800/90 text-white"
+        ? "bg-[#0B0F19] border-slate-800/90 text-white"
         : "bg-white border-slate-200/90 text-slate-900"
     )}>
       <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 sm:gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800/70">

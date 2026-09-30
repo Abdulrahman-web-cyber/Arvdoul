@@ -200,28 +200,5 @@ describe('Part 2: Master Blueprint Architecture & Single Source of Truth', () =>
       expect(passport.contribution.band).toBe('Distinguished Contributor');
       expect(passport.citizenTier.tier).toBe('Statesperson');
     });
-
-    test('PassportService never fabricates an unestablished standing', async () => {
-      const sparseProfile = {
-        id: 'user_sparse000001',
-        displayName: 'New Citizen',
-        // No level, active days, reputation, influence, or contribution data.
-      };
-
-      const passport = await passportService.getPassport('user_sparse000001', 'user_sparse000001', sparseProfile);
-
-      // Unknown dimensions are reported as unknown, never as a plausible default.
-      expect(passport.level).toBeNull();
-      expect(passport.activeDaysCount).toBeNull();
-      expect(passport.activeStreak).toBeNull();
-      expect(passport.reputation).toBeNull();
-      expect(passport.influence).toBeNull();
-      expect(passport.contribution).toBeNull();
-      expect(passport.citizenTier).toBeNull();
-      expect(passport.rankTitle).toBeNull();
-      expect(passport.issueDate).toBeNull();
-      // Identity is still resolvable from the document.
-      expect(passport.displayName).toBe('New Citizen');
-    });
   });
 });

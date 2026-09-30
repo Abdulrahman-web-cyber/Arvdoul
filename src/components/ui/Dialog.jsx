@@ -43,7 +43,6 @@ export const Dialog = ({
   size = 'md',
   showCloseButton = true,
   closeOnOverlayClick = true,
-  showHeader = true,
   children,
   className = '',
 }) => {
@@ -125,8 +124,6 @@ export const Dialog = ({
   if (!isOpen) return null;
   if (typeof document === 'undefined') return null;
 
-  const labelledBy = title ? 'arv-dialog-title' : undefined;
-
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Overlay */}
@@ -141,8 +138,7 @@ export const Dialog = ({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={labelledBy ? undefined : (typeof title === 'string' ? title : undefined)}
-        aria-labelledby={labelledBy}
+        aria-labelledby={`${title ? 'arv-dialog-title' : undefined}`}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         className={cn(
@@ -156,29 +152,27 @@ export const Dialog = ({
         )}
       >
         {/* Header */}
-        {showHeader && (
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 pt-4 pb-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
-            <h2
-              id="arv-dialog-title"
-              className="text-base font-bold text-gray-900 dark:text-gray-100 truncate"
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 pt-4 pb-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
+          <h2
+            id="arv-dialog-title"
+            className="text-base font-bold text-gray-900 dark:text-gray-100 truncate"
+          >
+            {title}
+          </h2>
+          {showCloseButton && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
-              {title}
-            </h2>
-            {showCloseButton && (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close dialog"
-                className="p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              >
-                <X className="w-5 h-5" aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        )}
+              <X className="w-5 h-5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
         {/* Body */}
-        <div className={showHeader ? 'p-5' : 'p-0'}>{children}</div>
+        <div className="p-5">{children}</div>
       </div>
     </div>,
     document.body

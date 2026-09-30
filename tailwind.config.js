@@ -8,12 +8,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Mirrors src/design-system/tokens.js (color.bg / color.brand / semantic).
         'arvdoul-bg': '#03071B',
-        'arvdoul-bg-deep': '#020412',
-        'arvdoul-bg-elevated': '#080F2E',
-        'arvdoul-bg-light': '#F6F8FC',
-        'arvdoul-bg-light-deep': '#EEF2F8',
         'arvdoul-surface': 'rgba(3, 7, 27, 0.85)',
         'arvdoul-purple': '#8B1EF3',
         'arvdoul-indigo': '#4431F7',
@@ -24,9 +19,6 @@ export default {
         'arvdoul-border': 'rgba(255, 255, 255, 0.08)',
         'arvdoul-text-primary': '#FFFFFF',
         'arvdoul-text-secondary': '#94A3B8',
-        'arvdoul-success': '#10B981',
-        'arvdoul-warning': '#F59E0B',
-        'arvdoul-error': '#EF4444',
       },
       backgroundImage: {
         'arvdoul-gradient': 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)',

@@ -7,31 +7,22 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
 
-/**
- * Real story count for a highlight. Accepts the canonical `storyCount`, an
- * id list, or an embedded story array; returns '—' when the source carries no
- * count rather than showing a fabricated 0.
- */
-const highlightCount = (highlight) => {
-  if (Number.isFinite(Number(highlight?.storyCount))) return Number(highlight.storyCount);
-  if (Array.isArray(highlight?.storyIds)) return highlight.storyIds.length;
-  if (Array.isArray(highlight?.stories)) return highlight.stories.length;
-  return '—';
-};
+const EMOJI_OPTIONS = ['✨', '🔥', '💖', '🎵', '✈️', '📸', '⚡', '🏆', '🌴', '🎨', '🚀', '🌟'];
 
 /**
  * HighlightsScreen Component
  */
 export default function HighlightsScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
@@ -41,8 +32,9 @@ export default function HighlightsScreen() {
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedHighlight, setSelectedHighlight] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(() => searchParams.get('create') === 'true');
   const [highlightName, setHighlightName] = useState('');
+  const [selectedEmoji, setSelectedEmoji] = useState('✨');
   const [creating, setCreating] = useState(false);
   const [editingHighlight, setEditingHighlight] = useState(null);
   const [editTitle, setEditTitle] = useState('');
@@ -229,7 +221,7 @@ export default function HighlightsScreen() {
                     {highlight.title}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    {highlightCount(highlight)} stories
+                    {highlight.storyCount || 0} stories
                   </p>
                 </button>
                 
@@ -291,48 +283,103 @@ export default function HighlightsScreen() {
           </div>
         )}
       </div>
-      {/* Create highlight */}
+      {/* Create highlight modal */}
       {showCreate && (
-        <div className="mt-6 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 space-y-3">
-          <h3 className="font-semibold text-gray-900 dark:text-white">New Highlight</h3>
-          <input
-            value={highlightName}
-            onChange={(e) => setHighlightName(e.target.value)}
-            placeholder="Highlight name (e.g. Travel, Food, Vlog)"
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm outline-none"
-          />
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowCreate(false)}
-              className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-semibold"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={async () => {
-                if (!highlightName.trim()) { toast.error('Give your highlight a name.'); return; }
-                setCreating(true);
-                try {
-                  const { getStoryService } = await import('../../services/storyService.js');
-                  await getStoryService().createHighlight(currentUserId, highlightName.trim().slice(0, 30), []);
-                  toast.success('Highlight created! Add stories to it from your profile.');
-                  setShowCreate(false); setHighlightName('');
-                  // reload highlights
-                  const { getStoryService: s2 } = await import('../../services/storyService.js');
-                  const res = await s2().getHighlights(currentUserId);
-                  const updated = Array.isArray(res) ? res : (res?.highlights || []);
-                  setHighlights(updated);
-                } catch (err) {
-                  toast.error(err?.message || 'Could not create highlight.');
-                } finally {
-                  setCreating(false);
-                }
-              }}
-              disabled={creating}
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 text-white text-sm font-semibold disabled:opacity-50"
-            >
-              {creating ? 'Creating…' : 'Create Highlight'}
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="w-full max-w-sm p-6 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-base text-gray-900 dark:text-white">New Highlight</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Emoji / Icon Selector */}
+            <div>
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block">
+                Choose Cover Icon
+              </label>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {EMOJI_OPTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setSelectedEmoji(emoji)}
+                    className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-transform shrink-0",
+                      selectedEmoji === emoji
+                        ? "bg-purple-600 text-white scale-110 shadow-md ring-2 ring-purple-400"
+                        : "bg-gray-100 dark:bg-gray-800 hover:scale-105"
+                    )}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block">
+                Highlight Name
+              </label>
+              <input
+                type="text"
+                value={highlightName}
+                onChange={(e) => setHighlightName(e.target.value)}
+                placeholder="e.g. Travel, Moments, Projects"
+                maxLength={30}
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCreate(false)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!highlightName.trim()) { toast.error('Give your highlight a name.'); return; }
+                  setCreating(true);
+                  try {
+                    const { getStoryService } = await import('../../services/storyService.js');
+                    await getStoryService().createHighlight(currentUserId, highlightName.trim().slice(0, 30), [], {
+                      emoji: selectedEmoji,
+                    });
+                    toast.success('Highlight created! Add stories to it from your profile.');
+                    setShowCreate(false); 
+                    setHighlightName('');
+                    // reload highlights
+                    const { getStoryService: s2 } = await import('../../services/storyService.js');
+                    const res = await s2().getHighlights(currentUserId);
+                    const updated = Array.isArray(res) ? res : (res?.highlights || []);
+                    setHighlights(updated);
+                  } catch (err) {
+                    toast.error(err?.message || 'Could not create highlight.');
+                  } finally {
+                    setCreating(false);
+                  }
+                }}
+                disabled={creating}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+              >
+                {creating ? 'Creating…' : 'Create'}
+              </button>
+            </div>
           </div>
         </div>
       )}

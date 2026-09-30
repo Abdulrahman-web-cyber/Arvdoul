@@ -86,27 +86,23 @@ registerSyncHandler('post.unlike', async (payload) => {
 });
 
 registerSyncHandler('user.follow', async (payload) => {
-  // Canonical offline payload is { followerId, followingId } (see
-  // userService.followUser); older payloads used targetUserId.
-  const target = payload.followingId || payload.targetUserId;
-  const { followUser } = await import('../services/userService');
-  return followUser(payload.followerId, target);
+  const { followService } = await import('../services/followService');
+  return followService.followUser(payload.followerId, payload.targetUserId);
 });
 
 registerSyncHandler('user.unfollow', async (payload) => {
-  const target = payload.followingId || payload.targetUserId;
-  const { unfollowUser } = await import('../services/userService');
-  return unfollowUser(payload.followerId, target);
+  const { followService } = await import('../services/followService');
+  return followService.unfollowUser(payload.followerId, payload.targetUserId);
 });
 
 registerSyncHandler('message.send', async (payload) => {
-  const { messagesService } = await import('../services/messagesService');
-  return messagesService.sendMessage(payload.conversationId, payload.message);
+  const { messageService } = await import('../services/messageService');
+  return messageService.sendMessage(payload.conversationId, payload.message);
 });
 
 registerSyncHandler('notification.markRead', async (payload) => {
   const { notificationsService } = await import('../services/notificationsService');
-  return notificationsService.markNotificationAsRead(payload.notificationId, payload.userId);
+  return notificationsService.markAsRead(payload.notificationId);
 });
 
 /**

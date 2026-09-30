@@ -160,43 +160,6 @@ class LevelSystemService {
   }
 
   /**
-   * Read-only active-day standing for a user. Server-authoritative counters;
-   * a counter that was never recorded is reported as unknown (null), never
-   * coerced to 0 or 1. This is the single read path for active-day consumers
-   * (Progression, Achievements, Titles) so none of them infer their own value.
-   *
-   * @param {string} userId
-   * @returns {Promise<{activeStreak: number|null, activeDaysCount: number|null, lastActiveDay: string|null}>}
-   */
-  async getActiveDayInfo(userId) {
-    const unknown = { activeStreak: null, activeDaysCount: null, lastActiveDay: null };
-    if (!userId) return unknown;
-
-    const toCount = (raw) => {
-      if (raw === null || raw === undefined || raw === '') return null;
-      const n = Number(raw);
-      return Number.isFinite(n) && n >= 0 ? n : null;
-    };
-
-    try {
-      const { getFirestoreInstance } = await import('../firebase/firebase.js');
-      const fstore = await import('firebase/firestore');
-      const db = await getFirestoreInstance();
-      const snap = await fstore.getDoc(fstore.doc(db, 'users', userId));
-      if (!snap.exists()) return unknown;
-      const data = snap.data() || {};
-      return {
-        activeStreak: toCount(data.activeStreak),
-        activeDaysCount: toCount(data.activeDaysCount),
-        lastActiveDay: typeof data.lastActiveDay === 'string' ? data.lastActiveDay : null,
-      };
-    } catch (err) {
-      logger.warn('[LevelSystem] Active-day info unavailable:', { error: err.message });
-      return unknown;
-    }
-  }
-
-  /**
    * Records today's activity and advances the streak. Delegates entirely to the
    * `recordActiveDay` Cloud Function: the streak counters and the
    * active_days_ledger audit entry are server-authoritative, so there is no

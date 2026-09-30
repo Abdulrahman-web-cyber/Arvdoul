@@ -355,43 +355,6 @@ class ProfessionalUserService {
     return null;
   }
 
-  /**
-   * Reads the owner-only PII document (email/phone). Only ever called for the
-   * account holder; rules deny every other viewer.
-   */
-  async _readPrivatePii(userId) {
-    try {
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'users', userId, 'private', 'pii'));
-      return snap && snap.exists() ? { exists: true, ...snap.data() } : { exists: false };
-    } catch {
-      return { exists: false };
-    }
-  }
-
-  /**
-   * One-time, best-effort migration of legacy inline PII on the profile
-   * document into the private subcollection. Guarded by isOwner in rules and
-   * only ever invoked while the owner is reading their own document.
-   */
-  async _migrateLegacyPii(userId, email, phoneNumber) {
-    try {
-      const { doc, setDoc, deleteField, serverTimestamp } = await import('firebase/firestore');
-      await setDoc(doc(this.firestore, 'users', userId, 'private', 'pii'), {
-        email: email || '',
-        phoneNumber: phoneNumber || '',
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      await setDoc(doc(this.firestore, 'users', userId), {
-        email: deleteField(),
-        phoneNumber: deleteField(),
-      }, { merge: true });
-    } catch {
-      // Migration is best-effort; a rules or offline failure must never break
-      // the read, and the source document is already projected for the viewer.
-    }
-  }
-
   async getUserProfile(userId, requesterId = null, options = {}) {
     if (!userId) return null;
     await this._ensureInitialized();
@@ -471,21 +434,6 @@ class ProfessionalUserService {
     } catch {}
 
     const isSelfUser = Boolean((authUser?.uid === userId) || (requesterId === userId));
-
-    // PII (email/phone) is stored in an owner-only subcollection
-    // (users/{uid}/private/pii), never on the world-readable profile document.
-    // Overlay it for the account holder only; a legacy document that still
-    // carries the fields is migrated once (self-healing).
-    if (isSelfUser) {
-      const pii = await this._readPrivatePii(userId);
-      if (pii?.exists) {
-        full.email = pii.email ?? null;
-        full.phoneNumber = pii.phoneNumber ?? null;
-      } else if (full.email || full.phoneNumber) {
-        this._migrateLegacyPii(userId, full.email || '', full.phoneNumber || '');
-      }
-    }
-
     full.displayName = (full.displayName && full.displayName !== 'User')
       ? full.displayName
       : (full.name && full.name !== 'User')
@@ -611,10 +559,6 @@ class ProfessionalUserService {
       }
 
       // Granular section-level masking
-      // PII is never exposed to a viewer who is not the account holder,
-      // regardless of privacy scope. Email/phone are not profile content.
-      delete full.email;
-      delete full.phoneNumber;
       if (!canViewProfileSection('links', userPrivacy, viewerRelation)) {
         full.links = [];
       }
@@ -641,10 +585,12 @@ class ProfessionalUserService {
     }
 
     full._cachedAt = Date.now();
-    // Authoritative path: L1 memory only. The persisted offline copy is owned
-    // by CacheManager (used by profileStore), so privacy-masked projections are
-    // never written to localStorage.
     this.cache.set(cacheKey, { data: full, timestamp: Date.now() });
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`arvdoul_prof_${userId}`, JSON.stringify(full));
+      }
+    } catch {}
     return full;
   }
 
@@ -693,9 +639,11 @@ class ProfessionalUserService {
     const profile = {
       uid: userId,
       username,
+      email: profileData.email || '',
       displayName: sanitise(profileData.displayName || ''),
       firstName: sanitise(profileData.firstName || ''),
       lastName: sanitise(profileData.lastName || ''),
+      phoneNumber: profileData.phoneNumber || '',
       photoURL: profileData.photoURL || defaultAvatar,
       bio: sanitise(profileData.bio || ''),
       website: sanitise(profileData.website || ''),
@@ -737,7 +685,6 @@ class ProfessionalUserService {
     };
 
     const userDoc = doc(this.firestore, 'users', userId);
-    const piiDoc = doc(this.firestore, 'users', userId, 'private', 'pii');
     const usernameDoc = doc(this.firestore, 'usernames', username);
 
     await runTransaction(this.firestore, async (transaction) => {
@@ -746,11 +693,6 @@ class ProfessionalUserService {
         throw new Error(`Username "${username}" is already taken. Please choose another one.`);
       }
       transaction.set(userDoc, profile, { merge: true });
-      transaction.set(piiDoc, {
-        email: profileData.email || '',
-        phoneNumber: profileData.phoneNumber || '',
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
       transaction.set(usernameDoc, {
         userId,
         username,
@@ -1205,16 +1147,7 @@ class ProfessionalUserService {
    * @returns {Object} { success, following, hasMore, nextCursor, total }
    */
   async getFollowing(userId, options = {}) {
-    // The follow graph is a superset of the friend graph; the query is shared
-    // but the response shape must speak "following", not "friends".
-    const result = await this.getFriends(userId, options);
-    return {
-      success: result.success,
-      following: result.friends,
-      hasMore: result.hasMore,
-      nextCursor: result.nextCursor,
-      total: result.total,
-    };
+    return this.getFriends(userId, options);
   }
 
   async getMutualFriends(userId, otherUserId) {

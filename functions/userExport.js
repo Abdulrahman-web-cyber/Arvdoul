@@ -45,9 +45,6 @@ exports.exportUserData = functions
     try {
       const userSnap = await db.collection('users').doc(uid).get().catch(() => null);
       const settingsSnap = await db.collection('user_settings').doc(uid).get().catch(() => null);
-      // PII is stored owner-only; include it in the self data export (GDPR).
-      const piiSnap = await db.collection('users').doc(uid).collection('private').doc('pii').get().catch(() => null);
-      const pii = piiSnap && piiSnap.exists ? piiSnap.data() : {};
 
       const [
         posts, videos, comments, stories, highlights, reels,
@@ -71,9 +68,7 @@ exports.exportUserData = functions
         userId: uid,
         exportedAt: new Date().toISOString(),
         data: {
-          profile: userSnap && userSnap.exists
-            ? { id: uid, ...userSnap.data(), email: pii.email || null, phoneNumber: pii.phoneNumber || null }
-            : null,
+          profile: userSnap && userSnap.exists ? { id: uid, ...userSnap.data() } : null,
           settings: settingsSnap && settingsSnap.exists ? settingsSnap.data() : null,
           posts,
           videos,

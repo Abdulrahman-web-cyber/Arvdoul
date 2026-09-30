@@ -6,11 +6,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Heart, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getMonetizationService } from '../../services/monetizationService.js';
-import { Dialog } from '../ui/Dialog';
 import { toast } from 'sonner';
 
 const PRESET_AMOUNTS = [10, 50, 100, 250, 500, 1000];
@@ -25,10 +24,7 @@ export default function ProfileTipModal({
   const [amount, setAmount] = useState(50);
   const [customAmount, setCustomAmount] = useState('');
   const [note, setNote] = useState('');
-  // Balance is only known once monetizationService reports it; `null` means
-  // unknown (render an honest state, never a fabricated 0).
-  const [userBalance, setUserBalance] = useState(null);
-  const [balanceError, setBalanceError] = useState(false);
+  const [userBalance, setUserBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -42,23 +38,16 @@ export default function ProfileTipModal({
 
     let isMounted = true;
     setLoadingBalance(true);
-    setBalanceError(false);
     setSuccess(false);
 
     getMonetizationService().getBalance(currentUserId)
       .then((res) => {
-        if (!isMounted) return;
-        // getBalance resolves to a number; accept { coins } defensively but
-        // never coerce a missing value to 0.
-        const raw = typeof res === 'number' ? res : res?.coins;
-        const num = Number(raw);
-        setUserBalance(Number.isFinite(num) ? num : null);
+        if (isMounted) {
+          setUserBalance(res?.coins || 0);
+        }
       })
       .catch(() => {
-        if (isMounted) {
-          setUserBalance(null);
-          setBalanceError(true);
-        }
+        if (isMounted) setUserBalance(0);
       })
       .finally(() => {
         if (isMounted) setLoadingBalance(false);
@@ -67,10 +56,8 @@ export default function ProfileTipModal({
     return () => { isMounted = false; };
   }, [isOpen, currentUserId]);
 
-  const parsedCustom = parseInt(customAmount, 10);
-  const effectiveAmount = customAmount ? (Number.isFinite(parsedCustom) ? parsedCustom : 0) : amount;
-  const balanceKnown = typeof userBalance === 'number';
-  const hasInsufficientBalance = balanceKnown && userBalance < effectiveAmount;
+  const effectiveAmount = customAmount ? parseInt(customAmount, 10) || 0 : amount;
+  const hasInsufficientBalance = userBalance < effectiveAmount;
 
   const handleSelectPreset = (val) => {
     setAmount(val);
@@ -95,10 +82,6 @@ export default function ProfileTipModal({
       toast.error('Please select or enter a valid tip amount');
       return;
     }
-    if (!balanceKnown) {
-      toast.error('Your coin balance could not be loaded. Please try again.');
-      return;
-    }
     if (hasInsufficientBalance) {
       toast.error('Insufficient coin balance to send this tip');
       return;
@@ -116,15 +99,14 @@ export default function ProfileTipModal({
         'creator_tip',
         {
           note: note.trim() || undefined,
-          // Names are optional ledger metadata; omit rather than invent one.
-          recipientName: recipient.displayName || recipient.username || undefined,
-          senderName: currentUser.displayName || currentUser.username || undefined,
+          recipientName: recipient.displayName || recipient.username || 'Creator',
+          senderName: currentUser.displayName || currentUser.username || 'Supporter',
         },
         idempotencyKey
       );
 
       setSuccess(true);
-      setUserBalance((prev) => (typeof prev === 'number' ? Math.max(0, prev - effectiveAmount) : prev));
+      setUserBalance((prev) => Math.max(0, prev - effectiveAmount));
       toast.success(`Sent ${effectiveAmount} coins to ${recipient.displayName || 'creator'}! 🎉`);
       
       if (onTipSuccess) {
@@ -147,19 +129,14 @@ export default function ProfileTipModal({
   if (!isOpen) return null;
 
   return (
-    <Dialog
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Send Coins"
-      showHeader={false}
-      size="md"
-      className="max-w-md rounded-2xl border border-gray-200 dark:border-gray-800 p-6"
-    >
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="relative"
+          className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xl p-6"
         >
           {/* Close button */}
           <button
@@ -186,7 +163,7 @@ export default function ProfileTipModal({
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-                Tip {recipient?.displayName || recipient?.username || 'citizen'}
+                Tip {recipient?.displayName || recipient?.username || 'Creator'}
                 <Sparkles className="w-4 h-4 text-amber-500" />
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -281,20 +258,9 @@ export default function ProfileTipModal({
                 <span className="text-gray-500 dark:text-gray-400">Your Coin Balance:</span>
                 <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-1">
                   <Coins className="w-3.5 h-3.5 text-amber-400" />
-                  {loadingBalance
-                    ? '...'
-                    : balanceKnown
-                      ? `${userBalance.toLocaleString()} coins`
-                      : 'Unavailable'}
+                  {loadingBalance ? '...' : userBalance.toLocaleString()} coins
                 </span>
               </div>
-
-              {balanceError && (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 text-xs">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>We could not load your coin balance. Tipping is disabled until it loads.</span>
-                </div>
-              )}
 
               {hasInsufficientBalance && (
                 <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-xs">
@@ -340,6 +306,7 @@ export default function ProfileTipModal({
             </div>
           )}
         </motion.div>
-    </Dialog>
+      </div>
+    </AnimatePresence>
   );
 }

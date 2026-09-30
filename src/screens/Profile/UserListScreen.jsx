@@ -8,11 +8,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Search, Loader2 } from 'lucide-react';
 import FollowButton from '../../components/profile/FollowButton';
 import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { getStoredUid } from '../../utils/security';
 
 /**
  * @param {Object} props
@@ -32,7 +34,10 @@ export default function UserListScreen({
   const { userId } = useParams();
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const currentUser = useAppStore((state) => state.currentUser);
+  const { user: authUser } = useAuth();
+  const storeUser = useAppStore((state) => state.currentUser);
+  const currentUser = storeUser || authUser;
+  const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,8 +45,8 @@ export default function UserListScreen({
   const [busyIds, setBusyIds] = useState(() => new Set());
   const mountedRef = useRef(true);
 
-  const targetUserId = userId || currentUser?.uid;
-  const viewerId = currentUser?.uid;
+  const targetUserId = userId || currentUserId;
+  const viewerId = currentUserId;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -156,8 +161,8 @@ export default function UserListScreen({
       className={cn(
         'min-h-screen pb-20',
         theme === 'dark'
-          ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
-          : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
+          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
+          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
       )}
     >
       <div className="sticky top-0 z-20 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-800/60">

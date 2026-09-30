@@ -17,7 +17,6 @@ import {
   isReturningAuthUser,
 } from "../utils/profileCompletion.js";
 import { getSafeAvatarUrl } from "../utils/avatarUtils.js";
-import { useProfileStore } from "../store/profileStore.js";
 
 const AuthContext = createContext(null);
 
@@ -281,9 +280,6 @@ export function AuthProvider({ children }) {
   
   // Guard to prevent loading flicker after initial profile load
   const initialProfileLoaded = useRef(false);
-  // Tracks the uid whose profile state is currently held by the profile store,
-  // so an account switch can purge the previous account's projections.
-  const lastAuthUidRef = useRef(null);
   
   // ========== MULTI‑TAB BROADCAST ==========
   useEffect(() => {
@@ -580,12 +576,6 @@ export function AuthProvider({ children }) {
           
           if (firebaseUser) {
             isLoggingOutRef.current = false;
-            // Account switching: purge any profile state resolved for a prior
-            // account so no previous user's identity/private projections remain.
-            if (lastAuthUidRef.current && lastAuthUidRef.current !== firebaseUser.uid) {
-              useProfileStore.getState().clear();
-            }
-            lastAuthUidRef.current = firebaseUser.uid;
             try {
               localStorage.setItem('arvdoul_has_session', 'true');
               localStorage.setItem('arvdoul_uid', firebaseUser.uid);
@@ -630,12 +620,8 @@ export function AuthProvider({ children }) {
             setUser(null);
             setUserProfile(null);
             prevProfileRef.current = null;
-            lastAuthUidRef.current = null;
             if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
             clearUserDataRef.current();
-            // Purge the profile store so no previous user's private projections
-            // (passport, wallet, reputation) survive the sign-out.
-            useProfileStore.getState().clear();
             AuthStorageManager.clearAll();
             clearOnboardingRequired();
             setAuthState(AuthState.UNAUTHENTICATED);

@@ -24,15 +24,17 @@ export default function ProfileScreen() {
   const authUser = authStoreUser || authContextUser;
   const currentUserId = authUser?.uid || authContextUser?.uid || getStoredUid();
 
-  const cleanUserId = userId ? String(userId).replace(/^@/, '').toLowerCase().trim() : null;
+  const rawUserId = userId ? String(userId).replace(/^@/, '').trim() : null;
+  const lowerUserId = rawUserId ? rawUserId.toLowerCase() : null;
   const rawEmail = typeof authUser?.email === 'string' ? authUser.email : '';
   const rawUsername = typeof authUser?.username === 'string' ? authUser.username : '';
   const currentUsername = (rawUsername || rawEmail.split('@')[0] || '').toLowerCase().trim();
 
-  const isOwner = !cleanUserId || 
-    cleanUserId === currentUserId || 
-    cleanUserId === 'me' || 
-    (currentUsername && cleanUserId === currentUsername);
+  const isOwner = !rawUserId || 
+    rawUserId === currentUserId || 
+    (lowerUserId && currentUserId && lowerUserId === currentUserId.toLowerCase()) || 
+    lowerUserId === 'me' || 
+    (currentUsername && lowerUserId === currentUsername);
 
   if (isOwner) {
     return <ProfileMyScreen />;
