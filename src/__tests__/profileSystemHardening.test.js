@@ -149,6 +149,16 @@ describe('Profile System Hardening & Validation Contracts', () => {
       expect(canViewProfileSection('activity', privacy, 'CONNECTION')).toBe(true);
       expect(canViewProfileSection('economicStatus', privacy, 'CONNECTION')).toBe(false);
     });
+
+    test('fails closed for unknown sections and unrecognized scopes', () => {
+      // A section with no contract is denied rather than defaulted to public.
+      expect(canViewProfileSection('someFutureSection', privacy, 'PUBLIC')).toBe(false);
+      expect(canViewProfileSection('someFutureSection', {}, 'CONNECTION')).toBe(false);
+      // A corrupt/unknown scope value must deny, never leak.
+      expect(canViewProfileSection('activity', { activity: 'garbage-scope' }, 'FOLLOWER')).toBe(false);
+      // The platform default still applies to known sections when unstored.
+      expect(canViewProfileSection('profileInfo', {}, 'PUBLIC')).toBe(true);
+    });
   });
 
   describe('useProfileStore State Machine', () => {
@@ -163,7 +173,11 @@ describe('Profile System Hardening & Validation Contracts', () => {
       expect(state.isOwner).toBe(false);
       expect(state.activeTab).toBe('posts');
       expect(state.posts).toEqual([]);
-      expect(state.balance).toBe(0);
+      // Balance is unknown until the canonical monetization service answers;
+      // it must never be pre-seeded with a fabricated number.
+      expect(state.balance).toBeNull();
+      expect(state.capabilities).toBeNull();
+      expect(state.resolvedTargetId).toBeNull();
     });
 
     test('setActiveTab updates tab properly', () => {
@@ -202,7 +216,23 @@ describe('Profile System Hardening & Validation Contracts', () => {
       const state = useProfileStore.getState();
       expect(state.profile).toBeNull();
       expect(state.activeTab).toBe('posts');
-      expect(state.balance).toBe(0);
+      expect(state.balance).toBeNull();
+    });
+
+    test('clear invalidates outstanding requests so a pre-purge response cannot repopulate', () => {
+      useProfileStore.setState({ profile: { id: 'u1' }, _activeTargetId: 'u1' });
+      const before = useProfileStore.getState()._activeRequestId;
+
+      useProfileStore.getState().clear();
+
+      const after = useProfileStore.getState();
+      // The accepted-request high-water mark must advance past any in-flight load.
+      expect(after._activeRequestId).toBeGreaterThan(before);
+      expect(after.profile).toBeNull();
+      expect(after._activeTargetId).toBeNull();
+      expect(after.passport).toBeNull();
+      expect(after.wallet).toBeNull();
+      expect(after.reputation).toBeNull();
     });
   });
 });

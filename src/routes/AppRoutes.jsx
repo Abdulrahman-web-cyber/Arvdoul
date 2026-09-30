@@ -46,7 +46,6 @@ const FollowingScreen = lazy(() => import("../screens/Profile/FollowingScreen.js
 const FriendsScreen = lazy(() => import("../screens/Profile/FriendsScreen.jsx"));
 const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.jsx"));
 const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
-const ProfilePreviewScreen = lazy(() => import("../screens/Profile/ProfilePreviewScreen.jsx"));
 // Legacy screens
 const PostDetails = lazy(() => import("../screens/PostDetails.jsx"));
 const SettingsScreen = lazy(() => import("../screens/SettingsScreen.jsx"));
@@ -598,15 +597,6 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <AboutScreen />
-          </Suspense>
-        </ProtectedRoute>
-      } />
-      
-      {/* Profile preview */}
-      <Route path="/profile/preview" element={
-        <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <ProfilePreviewScreen />
           </Suspense>
         </ProtectedRoute>
       } />

@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
+import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
@@ -49,8 +50,8 @@ export default function ProfilePreviewScreen({
       <div className={cn(
         'min-h-screen pb-20',
         theme === 'dark'
-          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+          ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
+          : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
       )}>
         <ProfileSkeleton theme={theme} />
       </div>
@@ -61,8 +62,8 @@ export default function ProfilePreviewScreen({
     <div className={cn(
       'min-h-screen pb-20',
       theme === 'dark'
-          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+          ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
+          : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
     )}>
       {/* Header */}
       <div className={cn(
@@ -104,18 +105,30 @@ export default function ProfilePreviewScreen({
       
       {/* Preview Content */}
       <div className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
-        <ProfileHeroSection
-          profile={profile}
-          isOwner={true}
-          level={profile?.level || 1}
-          theme={theme}
-          onBack={handleBack}
-        />
-        <ProfileMetricsGrid
-          isOwner={true}
-          theme={theme}
-          profile={profile}
-        />
+        {(() => {
+          const previewCaps = resolveCapabilities({
+            viewer: { uid: profile?.uid || profile?.id || null },
+            target: profile || null,
+            relationship: {},
+          });
+          return (
+            <>
+              <ProfileHeroSection
+                profile={profile}
+                isOwner={true}
+                level={profile?.level ?? null}
+                theme={theme}
+                onBack={handleBack}
+              />
+              <ProfileMetricsGrid
+                isOwner={true}
+                theme={theme}
+                profile={profile}
+                capabilities={previewCaps}
+              />
+            </>
+          );
+        })()}
       </div>
     </div>
   );

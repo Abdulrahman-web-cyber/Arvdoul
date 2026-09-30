@@ -21,7 +21,7 @@ export default function ProfileSkeleton({ theme = 'light' }) {
       {/* 2. Hero Card */}
       <div className={cn(
         "rounded-3xl p-5 sm:p-6 lg:p-7 border transition-all",
-        isDark ? "bg-[#0d1424]/60 border-white/10" : "bg-white border-slate-200"
+        isDark ? "bg-arvdoul-bg-elevated/60 border-white/10" : "bg-white border-slate-200"
       )}>
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           {/* Identity Left */}
@@ -62,7 +62,7 @@ export default function ProfileSkeleton({ theme = 'light' }) {
           {/* Level & Progression Card */}
           <div className={cn(
             "w-full lg:w-72 p-4 rounded-2xl border shrink-0 space-y-3",
-            isDark ? "bg-[#131b2e]/60 border-white/10" : "bg-slate-50 border-slate-200"
+            isDark ? "bg-arvdoul-bg-elevated/60 border-white/10" : "bg-slate-50 border-slate-200"
           )}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -89,7 +89,7 @@ export default function ProfileSkeleton({ theme = 'light' }) {
       {/* 3. Unified Metric Strip Skeleton */}
       <div className={cn(
         "rounded-2xl p-4 sm:p-5 border transition-all shadow-sm",
-        isDark ? "bg-[#0B0F19] border-slate-800" : "bg-white border-slate-200"
+        isDark ? "bg-arvdoul-bg-elevated border-slate-800" : "bg-white border-slate-200"
       )}>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-200 dark:divide-slate-800/70">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -104,7 +104,7 @@ export default function ProfileSkeleton({ theme = 'light' }) {
       {/* 4. Vibes & Stories Carousel */}
       <div className={cn(
         "rounded-2xl p-4 sm:p-5 border space-y-3",
-        isDark ? "bg-[#0B0F19] border-slate-800" : "bg-white border-slate-200"
+        isDark ? "bg-arvdoul-bg-elevated border-slate-800" : "bg-white border-slate-200"
       )}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

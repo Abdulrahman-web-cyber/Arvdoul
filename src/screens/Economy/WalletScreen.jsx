@@ -39,6 +39,7 @@ export default function WalletScreen() {
   const isDark = theme === 'dark' || theme === 'midnight';
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // all | in | out
@@ -47,15 +48,20 @@ export default function WalletScreen() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
 
   const loadWallet = useCallback(async () => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setLoading(false);
+      return;
+    }
+    setLoadError(null);
     try {
       const [wData, txData] = await Promise.all([
         walletService.getWalletOverview(user.uid),
         walletService.getTransactions(user.uid, 50),
       ]);
       setWallet(wData);
-      setTransactions(txData);
+      setTransactions(Array.isArray(txData) ? txData : []);
     } catch (err) {
+      setLoadError(err?.message || 'Failed to load wallet data');
       toast.error('Failed to load wallet data');
     } finally {
       setLoading(false);
@@ -73,7 +79,7 @@ export default function WalletScreen() {
       toast.error('Minimum withdrawal amount is 5,000 coins ($50.00 USD).');
       return;
     }
-    if (amount > (wallet?.availableCoins || 0)) {
+    if (amount > Number(wallet?.availableCoins ?? 0)) {
       toast.error('Insufficient available coin balance.');
       return;
     }
@@ -133,6 +139,48 @@ export default function WalletScreen() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        {loading && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`p-8 rounded-2xl border text-center text-sm ${
+              isDark ? 'bg-gray-900/50 border-gray-800 text-gray-400' : 'bg-white border-gray-200 text-gray-500'
+            }`}
+          >
+            Loading your wallet…
+          </div>
+        )}
+
+        {loadError && !loading && (
+          <div
+            role="alert"
+            className={`p-5 rounded-2xl border flex items-center justify-between gap-3 ${
+              isDark ? 'bg-red-950/30 border-red-900/60 text-red-200' : 'bg-red-50 border-red-200 text-red-700'
+            }`}
+          >
+            <span className="text-sm">{loadError}</span>
+            <button
+              onClick={loadWallet}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white min-h-[44px]"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !loadError && !wallet && (
+          <div
+            role="status"
+            className={`p-8 rounded-2xl border text-center text-sm ${
+              isDark ? 'bg-gray-900/50 border-gray-800 text-gray-400' : 'bg-white border-gray-200 text-gray-500'
+            }`}
+          >
+            No wallet is available for this account yet.
+          </div>
+        )}
+
+        {!loading && !loadError && wallet && (
+          <>
         {/* Sovereign Balance Card */}
         <section
           aria-labelledby="balance-heading"
@@ -150,7 +198,11 @@ export default function WalletScreen() {
               <div className="flex items-baseline space-x-2 mt-1">
                 <Coins className="w-6 h-6 text-amber-400 self-center" />
                 <h2 id="balance-heading" className="text-4xl font-extrabold tracking-tight">
-                  {(wallet?.availableCoins || user?.coins || 0).toLocaleString()}
+                  {Number.isFinite(Number(wallet?.availableCoins))
+                    ? Number(wallet.availableCoins).toLocaleString()
+                    : Number.isFinite(Number(user?.coins))
+                      ? Number(user.coins).toLocaleString()
+                      : '—'}
                 </h2>
                 <span className="text-sm font-semibold text-gray-500">Coins</span>
               </div>
@@ -289,7 +341,9 @@ export default function WalletScreen() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-gray-200">{tx.description || tx.type || 'Transaction'}</h4>
-                    <p className="text-[11px] text-gray-500">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                    <p className="text-[11px] text-gray-500">
+                      {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : 'Date unavailable'}
+                    </p>
                   </div>
                 </div>
 
@@ -311,6 +365,8 @@ export default function WalletScreen() {
             )}
           </div>
         </section>
+          </>
+        )}
       </main>
 
       {/* Payment Modal */}

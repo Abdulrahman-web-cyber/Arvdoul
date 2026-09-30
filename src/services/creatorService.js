@@ -35,11 +35,17 @@ class CreatorService {
    */
   isEligibleToApply(userProfile) {
     if (!userProfile) return { eligible: false, reasons: ['Sign in required'] };
-    const level = Number(userProfile.level) || 1;
+    // An unknown level cannot satisfy the gate. Report the requirement without
+    // inventing the citizen's current level.
+    const level = Number.isFinite(Number(userProfile.level)) ? Number(userProfile.level) : null;
     const reasons = [];
 
-    if (level < LEVEL_GATES.creatorProfile) {
-      reasons.push(`Requires Level ${LEVEL_GATES.creatorProfile} (Current: ${level})`);
+    if (level === null || level < LEVEL_GATES.creatorProfile) {
+      reasons.push(
+        level === null
+          ? `Requires Level ${LEVEL_GATES.creatorProfile} (level not yet available)`
+          : `Requires Level ${LEVEL_GATES.creatorProfile} (Current: ${level})`,
+      );
     }
     if (userProfile.policyStanding && userProfile.policyStanding !== 'good') {
       reasons.push('Account must be in good policy standing');

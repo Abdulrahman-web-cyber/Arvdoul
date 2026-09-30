@@ -43,8 +43,8 @@ export default function AboutScreen() {
     <div className={cn(
       'min-h-screen pb-20',
       theme === 'dark'
-          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+          ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
+          : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
     )}>
       {/* Header */}
       <div className={cn(

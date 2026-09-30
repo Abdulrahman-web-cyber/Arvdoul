@@ -317,6 +317,8 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
     // Core profile documents
     await db.collection('user_settings').doc(userId).delete().catch(() => {});
     await db.collection('user_preferences').doc(userId).delete().catch(() => {});
+    // Private PII subcollection (owner-only) — purge before the parent doc.
+    await db.collection('users').doc(userId).collection('private').doc('pii').delete().catch(() => {});
     await userDocRef.delete();
 
     // Remove from user recommendations (collection group)

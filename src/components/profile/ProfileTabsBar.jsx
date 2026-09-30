@@ -37,7 +37,7 @@ const ProfileTabsBar = memo(({
   return (
     <div className={cn(
       "w-full border-b transition-colors",
-      isDark ? "border-slate-800 bg-[#060816]/95" : "border-slate-200 bg-white/95"
+      isDark ? "border-slate-800 bg-arvdoul-bg/95" : "border-slate-200 bg-white/95"
     )}>
       <div className="flex items-center gap-1 sm:gap-4 overflow-x-auto scrollbar-none px-2">
         {tabs.map((tab) => {

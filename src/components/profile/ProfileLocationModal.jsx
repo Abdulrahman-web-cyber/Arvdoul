@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';
 import { useAppStore } from '../../store/appStore';
+import { Dialog } from '../ui/Dialog';
 import { useProfileStore } from '../../store/profileStore';
 
 // Popular curated global cities for 1-tap selection
@@ -190,15 +191,6 @@ const ProfileLocationModal = memo(({
         }
       });
 
-      // Update in localStorage
-      try {
-        const localAuth = JSON.parse(localStorage.getItem('user') || '{}');
-        if (localAuth && localAuth.uid === userId) {
-          localAuth.location = finalLocation;
-          localStorage.setItem('user', JSON.stringify(localAuth));
-        }
-      } catch {}
-
       toast.success(finalLocation ? `Location updated to "${finalLocation}"!` : 'Location set to private');
       if (onLocationUpdated) onLocationUpdated(finalLocation);
       onClose();
@@ -216,15 +208,19 @@ const ProfileLocationModal = memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-      <div 
-        className={cn(
-          "relative w-full max-w-md rounded-3xl p-6 border shadow-2xl transition-all max-h-[90vh] overflow-y-auto",
-          isDark 
-            ? "bg-[#0c1222] border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]" 
-            : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
-        )}
-      >
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Set Location"
+      showHeader={false}
+      size="md"
+      className={cn(
+        "max-w-md rounded-3xl p-6 border shadow-2xl max-h-[90vh]",
+        isDark
+          ? "bg-arvdoul-bg-deep border-white/10 text-white shadow-[0_16px_50px_rgba(0,0,0,0.6)]"
+          : "bg-white border-slate-200 text-slate-900 shadow-[0_16px_50px_rgba(0,0,0,0.12)]"
+      )}
+    >
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -428,8 +424,7 @@ const ProfileLocationModal = memo(({
             )}
           </button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 });
 

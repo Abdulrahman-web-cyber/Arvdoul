@@ -89,8 +89,8 @@ export default function FriendsScreen() {
     <div className={cn(
       'min-h-screen pb-20',
       theme === 'dark'
-        ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-        : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+        ? 'bg-gradient-to-br from-arvdoul-bg via-arvdoul-bg-elevated to-arvdoul-bg-deep'
+        : 'bg-gradient-to-br from-arvdoul-bg-light via-white to-arvdoul-bg-light-deep'
     )}>
       {/* Header */}
       <div className={cn(
@@ -141,7 +141,7 @@ export default function FriendsScreen() {
             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
           </div>
         ) : permissionDenied ? (
-          <div className="rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-8 bg-white/80 dark:bg-[#0d1424]/80 border-slate-200 dark:border-white/10 backdrop-blur-xl">
+          <div className="rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-8 bg-white/80 dark:bg-arvdoul-bg-elevated/80 border-slate-200 dark:border-white/10 backdrop-blur-xl">
             <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
               <Lock className="w-8 h-8" />
             </div>
