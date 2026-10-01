@@ -35,74 +35,8 @@ const AdminSupportTicketsScreen = () => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyMessage, setReplyMessage] = useState('');
 
-  // Baseline support tickets
-  const [tickets, setTickets] = useState([
-    {
-      id: 'tkt-701',
-      userId: 'usr_sarah_craft',
-      userEmail: 'sarah.jenkins@example.com',
-      userName: 'Sarah Jenkins',
-      subject: 'Coins not showing in wallet after Stripe checkout',
-      category: 'billing_coins',
-      priority: 'high',
-      autoResolved: false,
-      aiTriageCategory: 'billing_coins',
-      status: 'open',
-      createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-      messages: [
-        {
-          sender: 'user',
-          text: 'Hi, I purchased 2,500 coins about 20 minutes ago. Stripe gave me receipt #ch_89231 but my wallet balance is still 0. Please help!',
-          timestamp: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-        },
-      ],
-    },
-    {
-      id: 'tkt-702',
-      userId: 'usr_marcus_dev',
-      userEmail: 'marcus.brody@example.com',
-      userName: 'Marcus Brody',
-      subject: 'How do I obtain the creator blue badge?',
-      category: 'creator_verification',
-      priority: 'normal',
-      autoResolved: true,
-      aiTriageCategory: 'creator_verification',
-      status: 'resolved',
-      createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      messages: [
-        {
-          sender: 'user',
-          text: 'I reached Senator rank and have over 5,000 followers. What are the requirements for blue badge verification?',
-          timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-        },
-        {
-          sender: 'ai_bot',
-          text: 'Creator verification requires: 1) Verified phone and email, 2) At least 1,000 followers, 3) 0 community strikes in the last 90 days. Apply in Settings > Creator Verification.',
-          timestamp: new Date(Date.now() - 3600000 * 4 + 1000).toISOString(),
-        },
-      ],
-    },
-    {
-      id: 'tkt-703',
-      userId: 'usr_clara_w',
-      userEmail: 'clara.w@example.com',
-      userName: 'Clara Waters',
-      subject: 'Unable to login via Google OAuth on secondary device',
-      category: 'auth_recovery',
-      priority: 'high',
-      autoResolved: false,
-      aiTriageCategory: 'auth_recovery',
-      status: 'in_progress',
-      createdAt: new Date(Date.now() - 3600000 * 14).toISOString(),
-      messages: [
-        {
-          sender: 'user',
-          text: 'Keep seeing popup blocked on my tablet when signing in with Google. Is there an alternate passkey sign-in?',
-          timestamp: new Date(Date.now() - 3600000 * 14).toISOString(),
-        },
-      ],
-    },
-  ]);
+  // Live tickets only; the collection is the source of truth.
+  const [tickets, setTickets] = useState([]);
 
   // Load live tickets if collection exists
   useEffect(() => {
@@ -135,7 +69,6 @@ const AdminSupportTicketsScreen = () => {
       sender: 'agent',
       text: replyMessage.trim(),
       timestamp: new Date().toISOString(),
-      agentEmail: user?.email || 'admin@arvdoul.platform',
     };
 
     const updated = {
@@ -148,10 +81,11 @@ const AdminSupportTicketsScreen = () => {
     setSelectedTicket(updated);
     setReplyMessage('');
 
-    await auditLogger.log(user?.uid || 'admin', 'SUPPORT_TICKET_RESOLVED', {
-      ticketId: selectedTicket.id,
-      userEmail: selectedTicket.userEmail,
-      agentEmail: user?.email,
+    await auditLogger.log('SUPPORT_TICKET_RESOLVED', {
+      userId: user?.uid || 'admin',
+      meta: {
+        ticketId: selectedTicket.id,
+      },
     });
 
     toast.success('Reply dispatched. Ticket marked as resolved.');
@@ -345,7 +279,7 @@ const AdminSupportTicketsScreen = () => {
                     ) : msg.sender === 'agent' ? (
                       <>
                         <User className="w-3.5 h-3.5" />
-                        <span>Support Specialist ({msg.agentEmail})</span>
+                        <span>Support Specialist</span>
                       </>
                     ) : (
                       <span>{selectedTicket.userName}</span>

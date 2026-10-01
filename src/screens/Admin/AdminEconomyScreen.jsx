@@ -229,13 +229,15 @@ const AdminEconomyScreen = () => {
       );
 
       // Log to audit logger
-      await auditLogger.log(user?.uid || 'system_admin', 'PAYOUT_APPROVED', {
-        payoutId,
-        creatorId: payout.userId,
-        amountCoins: payout.coins,
-        amountUsd: payout.amountUsd,
-        paymentMethod: payout.method,
-        actorEmail: user?.email,
+      await auditLogger.log('PAYOUT_APPROVED', {
+        userId: user?.uid || 'system_admin',
+        meta: {
+          payoutId,
+          creatorId: payout.userId,
+          amountCoins: payout.coins,
+          amountUsd: payout.amountUsd,
+          paymentMethod: payout.method,
+        },
       });
 
       // Update Firestore if record exists
@@ -269,11 +271,13 @@ const AdminEconomyScreen = () => {
         prev.map(p => (p.id === payoutId ? { ...p, status: 'rejected', rejectionReason: reason } : p))
       );
 
-      await auditLogger.log(user?.uid || 'system_admin', 'PAYOUT_REJECTED', {
-        payoutId,
-        creatorId: payout?.userId,
-        reason,
-        actorEmail: user?.email,
+      await auditLogger.log('PAYOUT_REJECTED', {
+        userId: user?.uid || 'system_admin',
+        meta: {
+          payoutId,
+          creatorId: payout?.userId,
+          reason,
+        },
       });
 
       toast.info(`Payout request rejected: ${reason}`);

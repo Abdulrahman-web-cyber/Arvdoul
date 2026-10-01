@@ -143,11 +143,13 @@ const AdminVerificationScreen = () => {
       );
 
       // Audit log entry
-      await auditLogger.log(user?.uid || 'admin', 'CREATOR_VERIFICATION_APPROVED', {
-        applicantId: applicant.id,
-        applicantUserId: applicant.userId,
-        actorEmail: user?.email,
-        timestamp: Date.now(),
+      await auditLogger.log('CREATOR_VERIFICATION_APPROVED', {
+        userId: user?.uid || 'admin',
+        meta: {
+          applicantId: applicant.id,
+          applicantUserId: applicant.userId,
+          timestamp: Date.now(),
+        },
       });
 
       // Update user doc in Firestore
@@ -191,11 +193,13 @@ const AdminVerificationScreen = () => {
         )
       );
 
-      await auditLogger.log(user?.uid || 'admin', 'CREATOR_VERIFICATION_REJECTED', {
-        applicantId: applicant.id,
-        applicantUserId: applicant.userId,
-        reason,
-        actorEmail: user?.email,
+      await auditLogger.log('CREATOR_VERIFICATION_REJECTED', {
+        userId: user?.uid || 'admin',
+        meta: {
+          applicantId: applicant.id,
+          applicantUserId: applicant.userId,
+          reason,
+        },
       });
 
       try {

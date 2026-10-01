@@ -115,11 +115,13 @@ const AdminCommunityManagementScreen = () => {
       prev.map(c => (c.id === comm.id ? { ...c, isVerified: newStatus } : c))
     );
 
-    await auditLogger.log(user?.uid || 'admin', 'COMMUNITY_VERIFICATION_TOGGLED', {
-      communityId: comm.id,
-      communityName: comm.name,
-      newVerifiedStatus: newStatus,
-      actorEmail: user?.email,
+    await auditLogger.log('COMMUNITY_VERIFICATION_TOGGLED', {
+      userId: user?.uid || 'admin',
+      meta: {
+        communityId: comm.id,
+        communityName: comm.name,
+        newVerifiedStatus: newStatus,
+      },
     });
 
     toast.success(`Community "${comm.name}" marked as ${newStatus ? 'VERIFIED' : 'UNVERIFIED'}`);
@@ -134,11 +136,13 @@ const AdminCommunityManagementScreen = () => {
       prev.map(c => (c.id === comm.id ? { ...c, strikesCount: (c.strikesCount || 0) + 1 } : c))
     );
 
-    await auditLogger.log(user?.uid || 'admin', 'COMMUNITY_STRIKE_ISSUED', {
-      communityId: comm.id,
-      communityName: comm.name,
-      reason,
-      actorEmail: user?.email,
+    await auditLogger.log('COMMUNITY_STRIKE_ISSUED', {
+      userId: user?.uid || 'admin',
+      meta: {
+        communityId: comm.id,
+        communityName: comm.name,
+        reason,
+      },
     });
 
     toast.warning(`Strike issued to "${comm.name}". Owner notified.`);

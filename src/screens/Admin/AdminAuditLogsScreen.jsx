@@ -33,82 +33,6 @@ const AdminAuditLogsScreen = () => {
   const [selectedAction, setSelectedAction] = useState('all');
   const [expandedLogId, setExpandedLogId] = useState(null);
 
-  // Baseline seed logs
-  const fallbackLogs = [
-    {
-      id: 'log-501',
-      actor: 'admin_security_service',
-      actorEmail: 'admin@arvdoul.platform',
-      action: 'FEATURE_FLAG_OVERRIDDEN',
-      category: 'System',
-      severity: 'warning',
-      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-      metadata: {
-        flag: 'feed.ml_ranking',
-        previousValue: false,
-        newValue: true,
-        clientIp: '192.0.2.1',
-      },
-    },
-    {
-      id: 'log-502',
-      actor: 'system_payout_engine',
-      actorEmail: 'treasury@arvdoul.platform',
-      action: 'PAYOUT_APPROVED',
-      category: 'Economy',
-      severity: 'info',
-      timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-      metadata: {
-        payoutId: 'payout-101',
-        creatorId: 'usr_sarah_craft',
-        amountUsd: 250.0,
-        amountCoins: 25000,
-      },
-    },
-    {
-      id: 'log-503',
-      actor: 'admin_moderator_01',
-      actorEmail: 'moderation@arvdoul.platform',
-      action: 'USER_SUSPENDED',
-      category: 'Moderation',
-      severity: 'critical',
-      timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-      metadata: {
-        targetUserId: 'usr_spam_bot_9',
-        reason: 'Automated DM phishing violation',
-        durationDays: 7,
-      },
-    },
-    {
-      id: 'log-504',
-      actor: 'admin_trust_lead',
-      actorEmail: 'trust@arvdoul.platform',
-      action: 'CREATOR_VERIFICATION_APPROVED',
-      category: 'Governance',
-      severity: 'info',
-      timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-      metadata: {
-        applicantId: 'verif-204',
-        applicantUserId: 'usr_elena_sound',
-        badge: 'Verified Creator',
-      },
-    },
-    {
-      id: 'log-505',
-      actor: 'auth_security_guard',
-      actorEmail: 'system',
-      action: 'RATE_LIMIT_TRIGGERED',
-      category: 'Security',
-      severity: 'warning',
-      timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
-      metadata: {
-        endpoint: '/api/v1/auth/login',
-        ip: '203.0.113.195',
-        threshold: '5 requests / 60s',
-      },
-    },
-  ];
-
   // Fetch audit logs from Firestore
   const fetchLogs = useCallback(async () => {
     try {
@@ -124,10 +48,10 @@ const AdminAuditLogsScreen = () => {
       if (!snap.empty) {
         setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } else {
-        setLogs(fallbackLogs);
+        setLogs([]);
       }
     } catch (e) {
-      setLogs(fallbackLogs);
+      setLogs([]);
     } finally {
       setLoading(false);
     }

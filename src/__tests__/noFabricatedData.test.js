@@ -1115,3 +1115,38 @@ describe('Offline sync - single canonical queue instance (N014)', () => {
     expect(src).toContain("from '../utils/OfflineQueue'");
   });
 });
+
+describe('Audit logging - real action + metadata (not a swapped signature)', () => {
+  test('every auditLogger.log call passes the action string first', () => {
+    const walk = (dir) => {
+      let out = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) out = out.concat(walk(full));
+        else if (/\.(js|jsx)$/.test(entry.name)) out.push(full);
+      }
+      return out;
+    };
+    const offenders = [];
+    for (const file of walk(path.join(root, 'src'))) {
+      const src = fs.readFileSync(file, 'utf8');
+      const re = /auditLogger\.log\(\s*([^\n]*)/g;
+      let m;
+      while ((m = re.exec(src))) {
+        const firstArg = m[1].trim();
+        if (!/^['"]/.test(firstArg)) {
+          offenders.push(`${path.relative(root, file)}: ${firstArg.slice(0, 40)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('admin screens no longer pass an actor email into audit metadata', () => {
+    const adminDir = path.join(root, 'src/screens/Admin');
+    for (const file of fs.readdirSync(adminDir)) {
+      const src = fs.readFileSync(path.join(adminDir, file), 'utf8');
+      expect(src).not.toMatch(/actorEmail:/);
+    }
+  });
+});

@@ -51,11 +51,13 @@ const AdminFeatureFlagsScreen = () => {
     featureFlagService.setOverride(flagName, newVal);
     setFlags(featureFlagService.getAll());
 
-    await auditLogger.log(user?.uid || 'admin', 'FEATURE_FLAG_OVERRIDDEN', {
-      flag: flagName,
-      previousValue: currentVal,
-      newValue: newVal,
-      actorEmail: user?.email,
+    await auditLogger.log('FEATURE_FLAG_OVERRIDDEN', {
+      userId: user?.uid || 'admin',
+      meta: {
+        flag: flagName,
+        previousValue: currentVal,
+        newValue: newVal,
+      },
     });
 
     toast.success(`Flag "${flagName}" set to ${newVal ? 'ENABLED' : 'DISABLED'}`);
@@ -66,9 +68,11 @@ const AdminFeatureFlagsScreen = () => {
     featureFlagService.clearOverride(flagName);
     setFlags(featureFlagService.getAll());
 
-    await auditLogger.log(user?.uid || 'admin', 'FEATURE_FLAG_REVERTED', {
-      flag: flagName,
-      actorEmail: user?.email,
+    await auditLogger.log('FEATURE_FLAG_REVERTED', {
+      userId: user?.uid || 'admin',
+      meta: {
+        flag: flagName,
+      },
     });
 
     toast.info(`Cleared override for "${flagName}". Reverted to baseline.`);
@@ -83,8 +87,11 @@ const AdminFeatureFlagsScreen = () => {
     featureFlagService.resetOverrides();
     setFlags(featureFlagService.getAll());
 
-    await auditLogger.log(user?.uid || 'admin', 'FEATURE_FLAGS_RESET_ALL', {
-      actorEmail: user?.email,
+    await auditLogger.log('FEATURE_FLAGS_RESET_ALL', {
+      userId: user?.uid || 'admin',
+      meta: {
+
+      },
     });
 
     toast.warning('All feature flag overrides reset to static baseline.');
