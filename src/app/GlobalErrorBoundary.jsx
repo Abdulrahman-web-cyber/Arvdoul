@@ -58,6 +58,19 @@ class GlobalErrorBoundaryBase extends Component {
     } catch {}
 
     console.error("💥 ARVDOUL CRASH:", error, errorInfo);
+
+    // React render errors do not reach the window 'error' listener, so forward
+    // them to the crash reporter explicitly. It is dynamically imported to keep
+    // the service out of the initial chunk; captureException is a safe no-op if
+    // the import fails.
+    try {
+      import('../services/crashReportingService.js').then(({ crashReportingService }) => {
+        crashReportingService.captureException(error, {
+          source: 'GlobalErrorBoundary',
+          componentStack: errorInfo?.componentStack,
+        });
+      }).catch(() => {});
+    } catch {}
   }
 
   // A failed dynamic import() — "Failed to fetch dynamically imported module",

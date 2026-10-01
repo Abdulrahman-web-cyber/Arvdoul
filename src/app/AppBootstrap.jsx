@@ -37,7 +37,12 @@ const SystemInitializer = ({ onReady }) => {
         await Promise.allSettled([
           import('../services/authService.js'),
           import('../services/userService.js'),
-          import('../services/storageService.js')
+          import('../services/storageService.js'),
+          // Importing this module constructs the singleton, which attaches the
+          // window 'error' / 'unhandledrejection' listeners. Without it, errors
+          // thrown outside React's render path (event handlers, async work)
+          // were never captured anywhere.
+          import('../services/crashReportingService.js')
         ]);
         
         // Stage 2: Load Firebase in background (non-critical)
