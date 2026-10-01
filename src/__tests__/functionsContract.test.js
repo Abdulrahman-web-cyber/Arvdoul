@@ -160,6 +160,15 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     expect(monetization).not.toContain("console.log(`Granting ${coinAmount} coins");
   });
 
+  test('subscription docs are keyed by uid everywhere', () => {
+    // The client and the callables read `subscriptions/{uid}`. Keying the
+    // webhook by the Stripe subscription id would write a phantom doc, leave
+    // the real one stale, and make every renewal grant 0 coins.
+    expect(monetization).toContain("const subRef = db.collection('subscriptions').doc(userId);");
+    expect(monetization).not.toContain("db.collection('subscriptions').doc(subscriptionId)");
+    expect(monetization).not.toContain("db.collection('subscriptions').doc(subscription.id).update");
+  });
+
   test('requestWithdrawal locks coins and records idempotency in one transaction', () => {
     const body = monetization.slice(monetization.indexOf('exports.requestWithdrawal'));
     const txStart = body.indexOf('const resultData = await createFirestoreTransaction');

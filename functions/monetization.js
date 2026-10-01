@@ -973,8 +973,17 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
       if (!userQuery.empty) {
         const userId = userQuery.docs[0].id;
         const subscriptionId = invoice.subscription;
-        const subRef = db.collection('subscriptions').doc(subscriptionId);
-        // Update subscription status
+        // `subscriptions` is keyed by uid (that is what the client and the
+        // callables read). Keying it by the Stripe subscription id here would
+        // create a phantom doc and leave the real one stale, so renewals would
+        // never find the tier and would silently grant 0 coins.
+        const subRef = db.collection('subscriptions').doc(userId);
+        const subSnap = await subRef.get();
+        const subData = subSnap.exists ? subSnap.data() : {};
+        // Ignore an invoice for a superseded Stripe subscription.
+        if (subData.stripeSubscriptionId && subscriptionId && subData.stripeSubscriptionId !== subscriptionId) {
+          break;
+        }
         await subRef.set({
           status: 'active',
           latestInvoice: invoice.id,
@@ -983,8 +992,6 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
         // The tier + monthly grant live on the subscription doc (written at
         // subscribe time). Never read them from a `config/monetization` doc
         // that nothing writes — that silently granted 0 coins.
-        const subSnap = await subRef.get();
-        const subData = subSnap.data() || {};
         const tier = subData.tier;
         const coinAmount = SUBSCRIPTION_TIERS[tier]?.coinsPerMonth || subData.coinsPerMonth || 0;
         if (coinAmount > 0) {
@@ -1016,10 +1023,16 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
     case 'customer.subscription.deleted':
       const subscription = event.data.object;
-      await db.collection('subscriptions').doc(subscription.id).update({
-        status: 'canceled',
-        endedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      // Resolve the uid-keyed doc (see the invoice case above).
+      const delQuery = await db.collection('users_private')
+        .where('stripeCustomerId', '==', subscription.customer).get();
+      if (!delQuery.empty) {
+        await db.collection('subscriptions').doc(delQuery.docs[0].id).set({
+          status: 'canceled',
+          endedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
       break;
 
     default:
