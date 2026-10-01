@@ -465,7 +465,6 @@ class UltimateStoryService {
     this._notifyCrossTab('clearFeedCache', currentUser.uid);
 
     if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
-    if (storyData.isSponsored) this._logSponsoredStory(storyId, currentUser.uid);
     this.metrics.storiesCreated++;
     auditLogger.log('story.created', { userId: currentUser.uid, meta: { storyId, type: storyData.type || null } });
     return { success: true, storyId, story };
@@ -1631,12 +1630,15 @@ class UltimateStoryService {
       storyIdx++;
       if (storyIdx % STORY_CONFIG.FEED.AD_INTERVAL === 0 && adIdx < targetedAds.length) {
         const ad = targetedAds[adIdx % targetedAds.length];
-        result.push({ ...ad, isAd: true, _impressionId: `ad_${Date.now()}_${Math.random()}` });
+        result.push({ ...ad, isAd: true });
         adIdx++;
         this.metrics.sponsoredImpressions++;
         localStorage.setItem(lastAdKey, Date.now().toString());
-        this.fs.updateDoc(this.fs.doc(this.firestore, 'users', userId), { lastAdImpression: serverTimestamp() }).catch(()=>{});
-        // AD IMPRESSION LOGGING MOVED OUT OF FEED GENERATION (called only once per actual impression)
+        // Impressions are recorded server-side by the canonical
+        // recordAdImpression callable (ad_impressions is server-write-only).
+        // A direct addDoc here was always denied by the rules, and the
+        // `users/{uid}.lastAdImpression` write was likewise denied, so both
+        // were silent no-ops dressed up as success.
         await this._trackAdImpression(ad.id, userId);
       }
     }
@@ -1644,9 +1646,10 @@ class UltimateStoryService {
   }
 
   async _trackAdImpression(adId, userId) {
-    await this.fs.addDoc(this.fs.collection(this.firestore, 'ad_impressions'), {
-      adId, userId, timestamp: serverTimestamp(), type: 'impression',
-    });
+    // ad_impressions is server-write-only. The only honest path is the
+    // recordAdImpression callable, which the monetization service owns.
+    const { getMonetizationService } = await import('./monetizationService.js');
+    await getMonetizationService().recordAdImpression(adId, 'stories', { userId });
   }
 
   _moderateContent(data) {
@@ -1750,12 +1753,6 @@ class UltimateStoryService {
     } catch (err) {
       // Tag notification error
     }
-  }
-
-  async _logSponsoredStory(storyId, userId) {
-    await this.fs.addDoc(this.fs.collection(this.firestore, 'ad_impressions'), {
-      storyId, userId, type: 'sponsored_story_creation', timestamp: serverTimestamp(),
-    });
   }
 
   async _logStoryReply(storyId, fromUserId, toUserId) {

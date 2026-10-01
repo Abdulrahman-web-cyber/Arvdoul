@@ -62,7 +62,6 @@ function generateIdempotencyKey() {
 // ---------- DEFAULT CONFIG (all amounts in COINS or CENTS) ----------
 const DEFAULT_CONFIG = {
   LEVELS: CANONICAL_LEVELS,
-  WITHDRAWAL_MIN_LEVEL: LEVEL_GATES.withdrawals,
   GIFTS: GIFT_CATALOG.map((g) => ({ type: g.type, value: g.coins })),
   BOOST_COST_PER_DAY: 10,
   AD_PLACEMENTS: ['home', 'videos', 'stories', 'messages', 'notifications', 'profile', 'feed', 'conversation_list', 'search'],
@@ -86,16 +85,6 @@ const DEFAULT_CONFIG = {
     SUPERSTAR: 100000,
     STAR: 50000,
     RISING: 10000,
-  },
-  SUBSCRIPTION_TIERS: {
-    PREMIUM: { priceCents: 999, coinsPerMonth: 1000, features: ['no_ads', 'exclusive_stickers'] },
-    CREATOR: { priceCents: 1999, coinsPerMonth: 5000, features: ['no_ads', 'exclusive_stickers', 'payouts', 'analytics'] },
-    ENTERPRISE: { priceCents: 9999, coinsPerMonth: 25000, features: ['all_creator_features', 'priority_support', 'verified_badge'] }
-  },
-  AD_REWARD_COINS: {
-    SHORT: 1,
-    MEDIUM: 2,
-    LONG: 5,
   },
   REMOTE_CONFIG_MIN_FETCH_INTERVAL_MS: 3600000,
 };
@@ -130,12 +119,10 @@ async function getMonetizationConfig(forceRefresh = false) {
       const levelsStr = getValue(remoteConfig, 'monetization_levels').asString();
       const positionsStr = getValue(remoteConfig, 'position_thresholds').asString();
       const popularityStr = getValue(remoteConfig, 'popularity_thresholds').asString();
-      const subsStr = getValue(remoteConfig, 'subscription_tiers').asString();
 
       const levels = safeJsonParse(levelsStr, null);
       const positionThresholds = safeJsonParse(positionsStr, null);
       const popularityThresholds = safeJsonParse(popularityStr, null);
-      const subscriptionTiers = safeJsonParse(subsStr, null);
 
       const db = await getFirestoreInstance();
       const configDoc = await getDoc(doc(db, 'config', 'monetization'));
@@ -146,7 +133,10 @@ async function getMonetizationConfig(forceRefresh = false) {
       if (levels) finalConfig.LEVELS = levels;
       if (positionThresholds) finalConfig.POSITION_THRESHOLDS = positionThresholds;
       if (popularityThresholds) finalConfig.POPULARITY_THRESHOLDS = popularityThresholds;
-      if (subscriptionTiers) finalConfig.SUBSCRIPTION_TIERS = subscriptionTiers;
+      // Subscription tiers and ad rewards are NOT overlaid here: they are
+      // single-sourced from src/shared/levelConfig.cjs, which the server also
+      // reads. A remote-config override would let the client show prices/grants
+      // that disagree with what the server actually charges and credits.
       cachedConfig = finalConfig;
       return finalConfig;
     } catch (e) {

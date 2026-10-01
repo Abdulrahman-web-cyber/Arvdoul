@@ -63,8 +63,6 @@ const MESSAGING_CONFIG = {
   MONETIZATION: {
     ADS_ENABLED: true,
     CONVERSATION_LIST_AD_INTERVAL: 5,
-    AD_REWARD_COINS: 2,
-    AD_TYPES: ['native', 'banner', 'sponsored_conversation'],
   },
   PRIVACY: {
     MESSAGE_PERMISSIONS: {
@@ -3129,13 +3127,13 @@ class UltimateMessagingService {
     const interval = MESSAGING_CONFIG.MONETIZATION.CONVERSATION_LIST_AD_INTERVAL;
 
     const result = [];
-    let convIndex = 0, adIndex = 0;
+    let convIndex = 0;
     for (let i = 0; i < conversations.length; i++) {
       result.push(conversations[i]);
       convIndex++;
       if (convIndex % interval === 0) {
-        const ad = await this._fetchConversationListAd(monetization, userId, adIndex);
-        if (ad) { result.push(ad); adIndex++; }
+        const ad = await this._fetchConversationListAd(monetization, userId, result.length);
+        if (ad) result.push(ad);
       }
     }
     return result;
@@ -3151,7 +3149,7 @@ class UltimateMessagingService {
         type: 'ad',
         adType: ad.type || 'sponsored',
         name: ad.title || adName,
-        photoURL: ad.imageUrl || ad.image || ad.mediaUrl || ad.media?.url || '/assets/sponsored-default.png',
+        photoURL: ad.media?.url || ad.imageUrl || ad.image || ad.mediaUrl || '/assets/sponsored-default.png',
         lastMessage: {
           text: ad.description || ad.content || ad.title || '',
           senderId: 'system',
@@ -3166,7 +3164,6 @@ class UltimateMessagingService {
         _adData: {
           adId: ad.id,
           placement: 'conversation_list',
-          impressionId: `imp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         },
         createdAt: new Date().toISOString(),
         lastActivity: new Date().toISOString(),

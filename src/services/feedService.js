@@ -1302,15 +1302,17 @@ class UltimateFeedService {
       const mon = await _getMonetization();
       const ad = await mon.getAd(FEED_CONFIG.MONETISATION.AD_PLACEMENT, userId, { feedPosition: adIndex });
       if (!ad) return null;
+      const mediaUrl = ad.media?.url || ad.imageUrl || ad.image || ad.mediaUrl || null;
+      const link = ad.link || ad.targetUrl || ad.url || null;
       return {
         id: ad.id || `ad_${userId}_${adIndex}`,
         type: 'ad',
         adType: ad.type || 'display',
-        title: ad.title || 'Sponsored',
+        title: ad.title || null,
         content: ad.description || ad.content || ad.title || '',
-        imageUrl: ad.imageUrl || ad.image || ad.mediaUrl || ad.media?.url || '/assets/ad-fallback.png',
-        link: ad.targetUrl || ad.link || ad.url || null,
-        advertiser: ad.advertiser || ad.advertiserId || 'Sponsored',
+        imageUrl: mediaUrl || '/assets/ad-fallback.png',
+        link,
+        advertiser: ad.advertiser || ad.advertiserId || null,
         cta: ad.cta || 'Learn More',
         isAd: true,
         _source: 'monetisation',

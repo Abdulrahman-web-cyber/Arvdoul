@@ -1604,5 +1604,42 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
     expect(s).toContain('adMediaUrl');
     expect(s).toContain('adClickUrl');
   });
+
+  test('sponsored stories claim no coin reward and track a real impression', () => {
+    const s = read('src/screens/StoriesScreen.jsx');
+    // There is no server story-reward path, so the UI must not promise coins
+    // nor call a monetization method that does not exist.
+    expect(s).not.toContain('rewardCoins');
+    expect(s).not.toContain('recordAdClick');
+    expect(s).not.toContain('ARVDOUL Coins credited');
+    expect(s).toContain("recordAdImpression(currentStory.id, 'stories_click')");
+  });
+
+  test('story ad impressions go through the server-authoritative callable', () => {
+    const s = read('src/services/storyService.js');
+    expect(s).toContain("getMonetizationService().recordAdImpression(adId, 'stories'");
+    // ad_impressions is server-write-only: no direct client addDoc/updateDoc.
+    expect(s).not.toContain("collection(this.firestore, 'ad_impressions')");
+    expect(s).not.toContain('_logSponsoredStory');
+    expect(s).not.toContain('lastAdImpression: serverTimestamp()');
+  });
+
+  test('feed/conversation ads use the real creative shape and no random ids', () => {
+    const feed = read('src/services/feedService.js');
+    expect(feed).toContain("ad.media?.url");
+    expect(feed).not.toContain("ad.title || 'Sponsored'");
+    const msgs = read('src/services/messagesService.js');
+    expect(msgs).toContain('ad.title || adName');
+    expect(msgs).not.toContain('impressionId: `imp_');
+    expect(msgs).not.toContain('AD_REWARD_COINS: 2');
+  });
+
+  test('monetizationService defines no shadow subscription/ad reward tables', () => {
+    const s = read('src/services/monetizationService.js');
+    // The canonical tiers live in shared/levelConfig.cjs; a second table here
+    // (PREMIUM/CREATOR/ENTERPRISE) contradicted the shared config.
+    expect(s).not.toContain('SUBSCRIPTION_TIERS: {');
+    expect(s).not.toContain('AD_REWARD_COINS: {');
+  });
 });
 

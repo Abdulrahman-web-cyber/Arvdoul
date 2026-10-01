@@ -273,7 +273,7 @@ class UltimateAnalyticsService {
         dailyStats: [],
         topPosts: [],
         growthRate: 0,
-        activeDays: 1,
+        activeDays: 0,
         demographics: { ageGroups: {}, gender: {}, locations: {}, interests: {} },
         ranking: { rank: null, totalCreators: 0, percentile: null },
         changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
