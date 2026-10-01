@@ -10,6 +10,7 @@ import {
   Loader2, Share2, Info, ArrowUp, ArrowDown, Heart, FastForward
 } from 'lucide-react';
 import { FaHeart } from 'react-icons/fa6';
+import levelSystemService from '../../services/levelSystemService';
 
 // ------------------------------------------------------------------
 // 1. GLOBAL FEED SCHEDULER (event‑driven, no polling, with cleanup)
@@ -343,7 +344,7 @@ const VideoCard = React.memo(({
   nextVideoUrls = [],
   prevVideoUrl = null,
   onAnalytics,
-  onXpEarned,
+  currentUser,
   index = 0,
 }) => {
   // DOM refs
@@ -584,26 +585,29 @@ const VideoCard = React.memo(({
     }
     const dur = videoRef.current.duration;
     if (dur && isFinite(dur)) setDuration(dur);
-    // milestones (XP only once per milestone)
+    // watch milestones — fire once per milestone per session
     const progress = (videoRef.current.currentTime / dur) * 100;
     if (progress >= 25 && lastWatchMilestone.current < 25) {
       lastWatchMilestone.current = 25;
-      onXpEarned?.({ postId, reason: 'watch_25', xp: 2 });
       pushAnalytics('micro_reaction', { postId, type: 'quarter' });
     } else if (progress >= 50 && lastWatchMilestone.current < 50) {
       lastWatchMilestone.current = 50;
-      onXpEarned?.({ postId, reason: 'watch_50', xp: 3 });
       pushAnalytics('micro_reaction', { postId, type: 'half' });
     } else if (progress >= 75 && lastWatchMilestone.current < 75) {
       lastWatchMilestone.current = 75;
-      onXpEarned?.({ postId, reason: 'watch_75', xp: 5 });
       pushAnalytics('micro_reaction', { postId, type: 'three_quarters' });
     } else if (progress >= 100 && lastWatchMilestone.current < 100) {
       lastWatchMilestone.current = 100;
-      onXpEarned?.({ postId, reason: 'watch_100', xp: 10 });
       pushAnalytics('micro_reaction', { postId, type: 'complete' });
+      // XP is server-authoritative. The postId is the idempotency source, so a
+      // rewatch cannot farm XP and the award amount comes from the shared
+      // XP_RULES table on the server, never from this component.
+      if (currentUser?.uid && postId) {
+        levelSystemService.awardExperience({ userId: currentUser.uid, action: 'video_watched', source: postId })
+          .catch((err) => console.warn('[VideoCard] XP award deferred:', err?.message));
+      }
     }
-  }, [postId, pushAnalytics, onXpEarned]);
+  }, [postId, pushAnalytics, currentUser]);
   const lastTimeUpdate = useRef(0);
 
   const handleWaiting = () => {

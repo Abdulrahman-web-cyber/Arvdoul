@@ -90,6 +90,7 @@ const XP_RULES = Object.freeze({
   daily_login: { xp: 20, dailyCap: 20 },
   gift_received: { xp: 2, dailyCap: 100 },
   live_minute: { xp: 1, dailyCap: 60 },
+  video_watched: { xp: 1, dailyCap: 50 },
 });
 
 /**

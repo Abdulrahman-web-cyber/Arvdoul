@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { XP_RULES } from '../shared/levelConfig.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
@@ -1541,6 +1542,29 @@ describe('Action wiring - buttons call the real service signature', () => {
     const s = read('src/screens/Profile/EditProfileScreen.jsx');
     expect(s).toContain('userService.generateUniqueUsername(cleanBase, userProfile?.uid)');
     expect(s).not.toContain('Username generation is unavailable right now.');
+  });
+});
+
+
+describe('Watch XP - the milestone award is real and server-authoritative', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('VideoCard awards through the level service, not an unpassed callback', () => {
+    const s = read('src/screens/PostCard/VideoCard.jsx');
+    // The component used to call onXpEarned?.() with hardcoded xp values, but
+    // PostCard never passed the prop, so watching a video awarded nothing.
+    expect(s).not.toContain('onXpEarned');
+    expect(s).toContain("action: 'video_watched'");
+    expect(s).toContain('levelSystemService.awardExperience({ userId: currentUser.uid');
+    // No hardcoded XP amounts may remain in the card.
+    expect(s).not.toMatch(/reason: 'watch_\d+', xp: \d+/);
+  });
+
+  test('video_watched resolves to a shared XP rule, never a component literal', () => {
+    const rule = XP_RULES.video_watched;
+    expect(rule).toBeDefined();
+    expect(rule.xp).toBeGreaterThan(0);
+    expect(rule.dailyCap).toBeGreaterThanOrEqual(rule.xp);
   });
 });
 
