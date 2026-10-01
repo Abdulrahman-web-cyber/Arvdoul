@@ -31,7 +31,8 @@ import {
 import { Virtuoso } from 'react-virtuoso';
 import feedService from '../services/feedService';
 import userService from '../services/userService';
-import { getBalance, watchAd } from '../services/monetizationService.js';
+import { getBalance, watchAd, getAd } from '../services/monetizationService.js';
+import { AD_REWARD_COINS } from '../shared/levelConfig.cjs';
 import PostCard from './PostCard';
 import CommentsDrawer from './CommentsDrawer';
 import PostOptionsDrawer from './PostOptionsDrawer';
@@ -727,6 +728,8 @@ export default function HomeScreen() {
   const [isRewardAdOpen, setIsRewardAdOpen] = useState(false);
   const [adWatchSeconds, setAdWatchSeconds] = useState(0);
   const [isClaimingCoins, setIsClaimingCoins] = useState(false);
+  const [rewardAd, setRewardAd] = useState(null);
+  const [rewardAdLoading, setRewardAdLoading] = useState(false);
 
   const FEED_CATEGORIES = useMemo(() => [
     { id: 'foryou', label: '✨ For You', desc: 'Recommended posts tailored to you' },
@@ -767,9 +770,22 @@ export default function HomeScreen() {
     return () => { isMounted = false; };
   }, [user?.uid]);
 
-  const handleOpenRewardAd = useCallback(() => {
+  const handleOpenRewardAd = useCallback(async () => {
+    if (!user?.uid) return;
     setIsRewardAdOpen(true);
+    setRewardAdLoading(true);
     setAdWatchSeconds(AD_WATCH_SECONDS);
+    // Resolve a real campaign before counting down; a rewarded ad that the
+    // server cannot match must not be watchable, since the claim would fail.
+    try {
+      const ad = await getAd('home', user.uid, {});
+      setRewardAd(ad || null);
+      if (!ad) toast.info('No sponsored ads available right now.');
+    } catch {
+      setRewardAd(null);
+    } finally {
+      setRewardAdLoading(false);
+    }
     const interval = setInterval(() => {
       setAdWatchSeconds((prev) => {
         if (prev <= 1) {
@@ -779,7 +795,7 @@ export default function HomeScreen() {
         return prev - 1;
       });
     }, 1000);
-  }, []);
+  }, [user?.uid]);
 
   const handleClaimReward = useCallback(async () => {
     if (isClaimingCoins || adWatchSeconds > 0) return;
@@ -788,8 +804,11 @@ export default function HomeScreen() {
       if (!user?.uid) {
         throw new Error('Sign in to claim ad rewards');
       }
+      if (!rewardAd?.id) {
+        throw new Error('No ad available to credit');
+      }
       // Server-verified reward: the client never credits coins locally.
-      const result = await watchAd('feed_reward', 'rewarded_ad', AD_WATCH_SECONDS, {});
+      const result = await watchAd('home', rewardAd.id, AD_WATCH_SECONDS, {});
       if (typeof result?.newBalance === 'number') {
         setUserCoins(result.newBalance);
         try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch {}
@@ -797,6 +816,7 @@ export default function HomeScreen() {
       triggerHaptic('success');
       toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
       setIsRewardAdOpen(false);
+      setRewardAd(null);
     } catch (err) {
       toast.error('Could not credit the reward. Please try again.');
       console.warn('[HomeScreen] ad reward failed:', err?.message);
@@ -1475,7 +1495,7 @@ export default function HomeScreen() {
                               title="Watch Sponsored Ad for Free Coins"
                             >
                               <Gift className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">+15</span>
+                              <span className="hidden sm:inline">+{AD_REWARD_COINS}</span>
                             </button>
                           </div>
                         </div>
@@ -1594,20 +1614,26 @@ export default function HomeScreen() {
                   <Coins className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sponsored Partner Ad</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">{rewardAd?.title || 'Sponsored Partner Ad'}</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Watch this quick sponsor showcase to earn <span className="font-bold text-amber-500">+15 Free Coins</span> for tips and post boosts!
+                    {rewardAdLoading
+                      ? 'Loading sponsor…'
+                      : rewardAd
+                        ? <>Watch this sponsor to earn <span className="font-bold text-amber-500">+{AD_REWARD_COINS} Coins</span> for tips and post boosts!</>
+                        : 'No sponsored ads are available right now. Please check back soon.'}
                   </p>
                 </div>
-                <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-left space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-purple-700 dark:text-purple-300">Arvdoul Creator Rewards</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 font-bold">SPONSORED</span>
+                {rewardAd && (
+                  <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-left space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-purple-700 dark:text-purple-300">{rewardAd.advertiserId || rewardAd.title || 'Arvdoul Sponsor'}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 font-bold">SPONSORED</span>
+                    </div>
+                    {rewardAd.description && (
+                      <p className="text-xs text-gray-600 dark:text-gray-300">{rewardAd.description}</p>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-300">
-                    Empowering creators globally with zero-commission tipping and instant revenue sharing.
-                  </p>
-                </div>
+                )}
                 <div className="pt-2 flex items-center justify-center gap-3">
                   {adWatchSeconds > 0 ? (
                     <div className="w-full py-2.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 font-bold text-xs flex items-center justify-center gap-2">
@@ -1617,8 +1643,8 @@ export default function HomeScreen() {
                   ) : (
                     <button
                       onClick={handleClaimReward}
-                      disabled={isClaimingCoins}
-                      className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2"
+                      disabled={isClaimingCoins || !rewardAd}
+                      className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Gift className="w-4 h-4" />
                       {isClaimingCoins ? 'Crediting Coins...' : 'Claim Coins Now 🎉'}

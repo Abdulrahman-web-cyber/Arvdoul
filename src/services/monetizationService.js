@@ -547,11 +547,17 @@ class MonetizationService {
     if (!this.config.AD_PLACEMENTS.includes(placement)) {
       placement = 'interstitial';
     }
+
+    const cacheKey = `${placement}_${userId || 'anon'}_${context.category || 'any'}_${context.adId || 'any'}`;
+    const cached = this.adCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+      return cached.ad;
+    }
+
     try {
       const result = await retryOperation(() => this.cfGetAd({ placement, userId, context }));
       const ad = result.data.ad;
-      if (ad && result.data.cacheTTL) {
-        const cacheKey = `${placement}_${userId}_${context.category || 'any'}`;
+      if (result.data.cacheTTL) {
         this.adCache.set(cacheKey, {
           ad,
           expires: Date.now() + result.data.cacheTTL * 1000,
@@ -559,10 +565,16 @@ class MonetizationService {
       }
       return ad;
     } catch (err) {
-      // Direct Firestore ad query fallback
+      // Direct Firestore ad query fallback, filtered to the requested
+      // placement. A placement with no matching inventory returns null.
       try {
         const adsRef = collection(this.db, 'ads');
-        const q = query(adsRef, where('active', '==', true), firestoreLimit(1));
+        const q = query(
+          adsRef,
+          where('active', '==', true),
+          where('placements', 'array-contains', placement),
+          firestoreLimit(1)
+        );
         const snap = await getDocs(q);
         if (!snap.empty) {
           return { id: snap.docs[0].id, ...snap.docs[0].data() };
@@ -570,15 +582,9 @@ class MonetizationService {
       } catch (adErr) {
         log.error('Ad query fallback failed:', adErr);
       }
-      return {
-        id: `ad_${placement}_default`,
-        title: 'Discover Arvdoul Premium',
-        description: 'Upgrade your experience and support top creators on Arvdoul.',
-        cta: 'Learn More',
-        rewardCoins: this.config.AD_REWARD_COINS?.MEDIUM || 2,
-        durationSeconds: 15,
-        placement
-      };
+      // No inventory means no ad. Never invent a sponsor or a coin reward:
+      // rewarded ads are credited by the server only for a real campaign.
+      return null;
     }
   }
 

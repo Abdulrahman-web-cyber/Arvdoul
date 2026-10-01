@@ -13,6 +13,27 @@ import { cn } from '../../lib/utils';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMonetizationService } from '../../services/monetizationService';
+import { AD_REWARD_COINS } from '../../shared/levelConfig.cjs';
+
+// The server (getAd callable) returns a creative as
+// `{ id, type, media, link, title, cta, advertiserId }`. The helpers below
+// accept the documented aliases so a campaign's real fields are used and
+// nothing is invented when a field is absent.
+const adMediaUrl = (ad) => ad?.mediaUrl || ad?.media?.url || ad?.imageUrl || null;
+const adClickUrl = (ad) => ad?.clickUrl || ad?.link || ad?.url || null;
+const adBrandName = (ad) => ad?.brandName || ad?.advertiserName || ad?.title || 'Sponsored';
+const adBrandAvatar = (ad) => ad?.brandAvatar || ad?.advertiserAvatar || ad?.logoUrl || '/assets/ad-fallback.png';
+const adCtaText = (ad) => ad?.ctaText || ad?.cta || 'Learn More';
+
+// Fold the server creative shape onto the fields this card renders.
+const normalizeAd = (ad) => (ad ? {
+  ...ad,
+  brandName: adBrandName(ad),
+  brandAvatar: adBrandAvatar(ad),
+  mediaUrl: adMediaUrl(ad),
+  clickUrl: adClickUrl(ad),
+  ctaText: adCtaText(ad),
+} : ad);
 
 export default function SponsoredPostCard({
   adData = null,
@@ -42,7 +63,7 @@ export default function SponsoredPostCard({
   // a fabricated sponsor and a fake reward.
   useEffect(() => {
     if (adData) {
-      setAd(adData);
+      setAd(normalizeAd(adData));
       setAdState('ready');
       return undefined;
     }
@@ -52,8 +73,8 @@ export default function SponsoredPostCard({
       try {
         const fetchedAd = await getMonetizationService().getAd(placement, user?.uid);
         if (!isMounted) return;
-        if (fetchedAd && fetchedAd.mediaUrl) {
-          setAd(fetchedAd);
+        if (fetchedAd && adMediaUrl(fetchedAd)) {
+          setAd(normalizeAd(fetchedAd));
           setAdState('ready');
         } else {
           setAd(null);
@@ -98,8 +119,8 @@ export default function SponsoredPostCard({
     try {
       getMonetizationService().recordAdImpression(ad.id, `${placement}_click`);
     } catch {}
-    if (ad.clickUrl) {
-      window.open(ad.clickUrl, '_blank', 'noopener,noreferrer');
+    if (adClickUrl(ad)) {
+      window.open(adClickUrl(ad), '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -129,7 +150,7 @@ export default function SponsoredPostCard({
     try {
       const svc = getMonetizationService();
       const rewardResult = await svc.watchAd(placement, ad.id, 15);
-      const coins = rewardResult?.coinsAwarded || ad.rewardCoins || 5;
+      const coins = rewardResult?.coinsAdded ?? AD_REWARD_COINS;
       toast.success(`🎉 You earned +${coins} Arvdoul Coins!`, {
         description: 'Coins have been deposited directly into your balance.',
       });
@@ -212,7 +233,7 @@ export default function SponsoredPostCard({
               title="Watch full ad to earn coins"
             >
               <Gift className="w-3 h-3 text-amber-400" />
-              <span>+{ad.rewardCoins || 5} Coins</span>
+              <span>+{AD_REWARD_COINS} Coins</span>
             </button>
 
             {/* Options Menu */}
@@ -382,7 +403,7 @@ export default function SponsoredPostCard({
                   )}
                 >
                   <Gift className="w-4 h-4" />
-                  <span>{isClaiming ? "Crediting..." : `Claim +${ad.rewardCoins || 5} Coins`}</span>
+                  <span>{isClaiming ? "Crediting..." : `Claim +${AD_REWARD_COINS} Coins`}</span>
                 </button>
               </div>
             </motion.div>

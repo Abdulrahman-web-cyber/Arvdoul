@@ -1568,3 +1568,41 @@ describe('Watch XP - the milestone award is real and server-authoritative', () =
   });
 });
 
+describe('Rewarded ads - real inventory only, no invented sponsor or reward', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('monetizationService.getAd never fabricates a default campaign', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).not.toContain('Discover Arvdoul Premium');
+    expect(s).not.toContain("ad_${placement}_default");
+    // No inventory means null, and the fallback query is placement-scoped.
+    expect(s).toContain('return null;');
+    expect(s).toContain("where('placements', 'array-contains', placement)");
+  });
+
+  test('watchAd credits a reward only for a real, active campaign', () => {
+    const s = read('functions/monetization.js');
+    expect(s).toContain("collection('ads').doc(adId).get()");
+    expect(s).toContain("ad.active !== true");
+    expect(s).toContain('MAX_AD_WATCH_SECONDS');
+    expect(s).toContain('Math.min(Number(watchDurationSeconds), MAX_AD_WATCH_SECONDS)');
+  });
+
+  test('HomeScreen resolves a real ad and never claims a hardcoded ad id', () => {
+    const s = read('src/screens/HomeScreen.jsx');
+    expect(s).not.toContain("watchAd('feed_reward', 'rewarded_ad'");
+    expect(s).toContain("watchAd('home', rewardAd.id");
+    expect(s).toContain('+{AD_REWARD_COINS}');
+    expect(s).not.toContain('+15 Free Coins');
+    expect(s).not.toContain('Arvdoul Creator Rewards');
+  });
+
+  test('SponsoredPostCard renders real creative fields and the shared reward', () => {
+    const s = read('src/components/Ads/SponsoredPostCard.jsx');
+    expect(s).not.toContain('ad.rewardCoins || 5');
+    expect(s).toContain('AD_REWARD_COINS');
+    expect(s).toContain('adMediaUrl');
+    expect(s).toContain('adClickUrl');
+  });
+});
+

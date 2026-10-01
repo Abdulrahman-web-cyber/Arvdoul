@@ -1465,7 +1465,23 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
     }
     await checkRateLimit(uid, 'watchAd', 20, 60000);
 
-    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchDurationSeconds / 30) * AD_REWARD_PER_30S);
+    // Rewarded ads must map to a real, active campaign. Without this check a
+    // client could mint coins by inventing an adId, since the reward below is
+    // granted unconditionally.
+    const adSnap = await admin.firestore().collection('ads').doc(adId).get();
+    const ad = adSnap.exists ? adSnap.data() : null;
+    const now = new Date();
+    const started = !ad?.startDate?.toDate || ad.startDate.toDate() <= now;
+    const notEnded = !ad?.endDate?.toDate || ad.endDate.toDate() >= now;
+    if (!ad || ad.active !== true || !started || !notEnded) {
+      throw new functions.https.HttpsError('not-found', 'Ad campaign not found or inactive.');
+    }
+
+    // Clamp the client-supplied watch time so a forged duration cannot inflate
+    // the reward beyond a real rewarded-ad session.
+    const MAX_AD_WATCH_SECONDS = 120;
+    const watchedSeconds = Math.min(Number(watchDurationSeconds), MAX_AD_WATCH_SECONDS);
+    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchedSeconds / 30) * AD_REWARD_PER_30S);
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 

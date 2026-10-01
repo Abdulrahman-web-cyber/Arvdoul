@@ -192,8 +192,8 @@ export default function CoinsScreen() {
     try {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const result = await svc.getAd('feed', user.uid, {});
-      setAd(result?.ad || null);
-      if (!result?.ad) toast.info('No ads available right now — check back soon.');
+      setAd(result || null);
+      if (!result) toast.info('No ads available right now — check back soon.');
     } catch (err) {
       setAd(null);
     } finally {
