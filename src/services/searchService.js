@@ -176,6 +176,17 @@ class LocalTTLCache {
   async del(key) {
     this.store.delete(key);
   }
+  /** Delete every entry whose key starts with `prefix`; returns the count. */
+  delByPrefix(prefix) {
+    let removed = 0;
+    for (const key of [...this.store.keys()]) {
+      if (key.startsWith(prefix)) {
+        this.store.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
 }
 
 // ==================== Fast deterministic hash ====================
@@ -989,10 +1000,17 @@ class UltimateSearchService {
     this.userProfileCache.clear();
   }
 
+  /**
+   * Invalidate cached search results. `prefix` scopes the invalidation to the
+   * result-cache namespace; without it every cached entry is dropped. Returns
+   * the number of entries removed so callers can log/verify the effect.
+   */
   async invalidateDistributedCache(prefix = null) {
-    if (this.ttlCache) {
-      // not implemented distributed backing
-    }
+    const scope = prefix || SEARCH_CONFIG.LOCAL_TTL_CACHE.PREFIX;
+    const removed = this.ttlCache ? this.ttlCache.delByPrefix(scope) : 0;
+    this.localCache.clear();
+    this.userProfileCache.clear();
+    return removed;
   }
 
   getStats() {

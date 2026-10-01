@@ -1140,7 +1140,7 @@ function CreatePostProvider({ children }) {
         }
 
         let downloadURL = null;
-        if (storageService && typeof storageService.uploadFileWithProgress === 'function' && item.file) {
+        if (storageService && item.file) {
           try {
             const uid = userRef.current?.uid || 'anonymous';
             const uploadPromise = storageService.uploadFileWithProgress(

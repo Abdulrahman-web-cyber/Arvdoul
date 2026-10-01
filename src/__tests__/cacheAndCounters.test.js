@@ -207,3 +207,38 @@ describe('global cacheManager singleton', () => {
     cacheManager.clear();
   });
 });
+
+describe('searchService cache invalidation', () => {
+  test('invalidateDistributedCache really clears cached results and reports the count', async () => {
+    const { getSearchService } = await import('../services/searchService.js');
+    const svc = getSearchService();
+    expect(svc.ttlCache).not.toBeNull();
+
+    const prefix = 'arvdoul_search:';
+    await svc.ttlCache.set(`${prefix}a`, { stale: 1 }, 300);
+    await svc.ttlCache.set(`${prefix}b`, { stale: 2 }, 300);
+    await svc.ttlCache.set('other:key', { keep: true }, 300);
+
+    const removed = await svc.invalidateDistributedCache();
+
+    expect(removed).toBe(2);
+    expect(await svc.ttlCache.get(`${prefix}a`)).toBeNull();
+    expect(await svc.ttlCache.get(`${prefix}b`)).toBeNull();
+    // A different namespace is left untouched.
+    expect(await svc.ttlCache.get('other:key')).toEqual({ keep: true });
+  });
+
+  test('invalidateDistributedCache honours a custom prefix scope', async () => {
+    const { getSearchService } = await import('../services/searchService.js');
+    const svc = getSearchService();
+    await svc.ttlCache.set('scopeA:1', 'x', 300);
+    await svc.ttlCache.set('scopeB:1', 'y', 300);
+
+    const removed = await svc.invalidateDistributedCache('scopeA:');
+
+    expect(removed).toBe(1);
+    expect(await svc.ttlCache.get('scopeA:1')).toBeNull();
+    expect(await svc.ttlCache.get('scopeB:1')).toBe('y');
+  });
+});
+

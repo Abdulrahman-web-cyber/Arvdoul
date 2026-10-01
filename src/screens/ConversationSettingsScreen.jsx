@@ -72,14 +72,9 @@ export default function ConversationSettingsScreen() {
     if (!window.confirm('Leave this conversation?')) return;
     setActing(true);
     try {
-      const mod = await import('../services/messagesService.js');
-      const service = mod.getMessagingService ? mod.getMessagingService() : mod.default?.getMessagingService?.() || mod;
-      if (typeof service.leaveGroup === 'function') {
-        await service.leaveGroup(conversationId, user.uid);
-        toast.success('You left the conversation.');
-      } else {
-        toast.success('Conversation updated.');
-      }
+      const { getMessagingService } = await import('../services/messagesService.js');
+      await getMessagingService().leaveGroup(conversationId, user.uid);
+      toast.success('You left the conversation.');
       navigate('/messages');
     } catch (err) {
       toast.error('Could not leave conversation.');
