@@ -180,4 +180,20 @@ describe('shared config single source of truth', () => {
     expect(fs.readFileSync(path.join(root, 'src/screens/CoinsScreen.jsx'), 'utf8'))
       .toContain('SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL');
   });
+
+  test('coin -> USD conversion goes through the shared helper', () => {
+    const screens = [
+      'src/screens/CoinsScreen.jsx',
+      'src/screens/Economy/WalletScreen.jsx',
+      'src/screens/CreatorPayoutScreen.jsx',
+      'src/screens/VideoAnalyticsScreen.jsx',
+      'src/screens/Admin/AdminEconomyScreen.jsx',
+    ];
+    for (const rel of screens) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      // No surface may re-derive the rate or hand-roll the rounding.
+      expect(src).not.toMatch(/\/\s*COINS_PER_DOLLAR/);
+      expect(src).not.toMatch(/1\s*\/\s*COINS_PER_DOLLAR/);
+    }
+  });
 });

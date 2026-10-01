@@ -27,7 +27,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { formatViewCount, formatDuration, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
-import { COINS_PER_DOLLAR } from '../shared/levelConfig.cjs';
+import { formatCoinsAsUsd } from '../shared/levelConfig.cjs';
 import { toast } from 'sonner';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import GlassCard from '../components/UI/GlassCard';
@@ -561,7 +561,7 @@ const RevenueTab = ({ revenue }) => {
     return () => { cancelled = true; };
   }, [user?.uid]);
 
-  const formatUsd = (coins) => (coins == null ? '—' : `$${(Number(coins) / COINS_PER_DOLLAR).toFixed(2)}`);
+  const formatUsd = formatCoinsAsUsd;
 
   const accountStatus = payout.settings?.accountStatus || 'unconfigured';
   const accountConnected = ['verified', 'active', 'enabled'].includes(accountStatus);

@@ -144,6 +144,10 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   `createSubscription`), `functions/index.js` (`verifyPurchase`) and the store
   screens (`CoinsScreen`, `Economy/WalletScreen`) all read these tables. Never
   re-declare a package id, price or coin amount in a screen or a function.
+- Coin -> USD is display-only: use `coinsToUsd` / `formatCoinsAsUsd` from the
+  shared config. Dividing by `COINS_PER_DOLLAR` by hand (or deriving a
+  `1 / COINS_PER_DOLLAR` rate) in a screen is a bug — it re-implements the
+  rounding policy and drifts from the payout server.
 - Rank bands, perks and royal eligibility follow the Profile System blueprint
   (sections 21-22 and 31-32); `getRoyalEligibility` requires every dimension, so
   level alone can never grant a royal title.

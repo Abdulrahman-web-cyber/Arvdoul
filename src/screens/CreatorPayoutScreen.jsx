@@ -13,11 +13,11 @@ import {
 } from 'lucide-react';
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
-import { COINS_PER_DOLLAR, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
+import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
 
 // Single-sourced with the payout server (functions/monetization.js) so the
 // estimate shown here can never diverge from what Stripe actually pays.
-const COIN_TO_USD_RATE = 1 / COINS_PER_DOLLAR;
+const COIN_TO_USD_RATE = coinsToUsd(1);
 
 export default function CreatorPayoutScreen() {
   const navigate = useNavigate();
@@ -116,7 +116,7 @@ export default function CreatorPayoutScreen() {
     e.preventDefault();
     const amount = Number(withdrawAmount);
     if (!amount || amount < MIN_WITHDRAWAL_COINS) {
-      toast.error(`Minimum payout is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins ($${(MIN_WITHDRAWAL_COINS * COIN_TO_USD_RATE).toFixed(2)})`);
+      toast.error(`Minimum payout is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${formatCoinsAsUsd(MIN_WITHDRAWAL_COINS)})`);
       return;
     }
     if (amount > balance) {
@@ -152,7 +152,7 @@ export default function CreatorPayoutScreen() {
     }
   };
 
-  const estimatedUsd = (balance * COIN_TO_USD_RATE).toFixed(2);
+  const estimatedUsd = coinsToUsd(balance).toFixed(2);
   const eligibleForPayout = balance >= MIN_WITHDRAWAL_COINS;
   const progressPercent = Math.min(100, Math.round((balance / MIN_WITHDRAWAL_COINS) * 100));
 
@@ -452,7 +452,7 @@ export default function CreatorPayoutScreen() {
                   />
                   {withdrawAmount && (
                     <p className="text-[11px] text-emerald-400 mt-1">
-                      Estimated payout: ${(Number(withdrawAmount) * COIN_TO_USD_RATE).toFixed(2)} USD
+                      Estimated payout: ${coinsToUsd(withdrawAmount).toFixed(2)} USD
                     </p>
                   )}
                 </div>

@@ -23,7 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { COINS_PER_DOLLAR, MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL } from '../../shared/levelConfig.cjs';
+import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL } from '../../shared/levelConfig.cjs';
 
 // Package amounts/prices come from the shared COIN_PACKAGES (the same table the
 // server prices from). The server credits `coins` exactly, so no bonus is
@@ -35,7 +35,7 @@ const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg, i) => ({
   price: `$${(pkg.priceUsdCents / 100).toFixed(2)}`,
 }));
 
-const MIN_WITHDRAWAL_USD = (MIN_WITHDRAWAL_COINS / COINS_PER_DOLLAR).toFixed(2);
+const MIN_WITHDRAWAL_USD = coinsToUsd(MIN_WITHDRAWAL_COINS).toFixed(2);
 
 export default function WalletScreen() {
   const navigate = useNavigate();
@@ -210,7 +210,7 @@ export default function WalletScreen() {
                 {(wallet?.totalEarned || 0).toLocaleString()} Coins
               </span>
               <span className="text-[10px] text-gray-500 block">
-                ${((wallet?.totalEarned || 0) / COINS_PER_DOLLAR).toFixed(2)} USD
+                ${formatCoinsAsUsd(wallet?.totalEarned || 0)} USD
               </span>
             </div>
             <div>

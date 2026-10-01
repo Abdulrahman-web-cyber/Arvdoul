@@ -1015,9 +1015,9 @@ describe('Wallet - real purchase + canonical economics', () => {
     expect(src).not.toContain('onSuccess={() => {');
   });
 
-  test('WalletScreen withdrawal threshold derives from COINS_PER_DOLLAR', () => {
+  test('WalletScreen withdrawal threshold derives from the shared coin->USD helper', () => {
     const src = fs.readFileSync(path.join(root, 'src/screens/Economy/WalletScreen.jsx'), 'utf8');
-    expect(src).toContain('const MIN_WITHDRAWAL_USD = (MIN_WITHDRAWAL_COINS / COINS_PER_DOLLAR).toFixed(2);');
+    expect(src).toContain('const MIN_WITHDRAWAL_USD = coinsToUsd(MIN_WITHDRAWAL_COINS).toFixed(2);');
     expect(src).not.toContain('placeholder="Coins to withdraw (min 5,000)"');
   });
 });

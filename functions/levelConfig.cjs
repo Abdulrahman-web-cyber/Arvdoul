@@ -916,6 +916,17 @@ const SUBSCRIPTION_TIERS = Object.freeze({
 const AD_REWARD_COINS = 2;
 
 /**
+ * Coin -> USD conversion. Integer coins are the only unit that is ever stored or
+ * transferred; USD is a display-only projection, so every surface must use this
+ * single rounding policy instead of dividing by COINS_PER_DOLLAR by hand.
+ */
+const coinsToUsd = (coins) => Number(coins) / COINS_PER_DOLLAR;
+
+/** Format an integer coin amount as USD, e.g. 1000 -> "$5.00". */
+const formatCoinsAsUsd = (coins, { placeholder = '—' } = {}) =>
+  coins == null ? placeholder : `$${coinsToUsd(coins).toFixed(2)}`;
+
+/**
  * Initial economy/status values for a brand-new account — SINGLE SOURCE OF TRUTH.
  *
  * The client writes these once when it creates users/{uid}; firestore.rules pins
@@ -971,6 +982,8 @@ module.exports = {
   COIN_PACKAGES_BY_ID,
   SUBSCRIPTION_TIERS,
   AD_REWARD_COINS,
+  coinsToUsd,
+  formatCoinsAsUsd,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,

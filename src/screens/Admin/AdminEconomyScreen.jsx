@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { COINS_PER_DOLLAR, getRankTitle } from '../../services/levelSystemService.js';
+import { formatCoinsAsUsd } from '../../shared/levelConfig.cjs';
 
 const AdminEconomyScreen = () => {
   const navigate = useNavigate();
@@ -453,7 +454,7 @@ const AdminEconomyScreen = () => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="font-bold text-gray-900 dark:text-white">
-                            ${(Number(payout.amount || 0) / COINS_PER_DOLLAR).toFixed(2)}
+                            ${formatCoinsAsUsd(payout.amount || 0)}
                           </div>
                           <div className="text-xs text-amber-600 font-medium">{Number(payout.amount || 0).toLocaleString()} coins</div>
                         </td>
@@ -580,7 +581,7 @@ const AdminEconomyScreen = () => {
                         {Number(tx.amount || 0).toLocaleString()} Coins
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        ${(Number(tx.amount || 0) / COINS_PER_DOLLAR).toFixed(2)} USD
+                        ${formatCoinsAsUsd(tx.amount || 0)} USD
                       </div>
                     </div>
                   </div>
