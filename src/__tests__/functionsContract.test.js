@@ -137,3 +137,41 @@ describe('Firestore rules coverage contract', () => {
     expect(rules.slice(defaultDeny)).toContain('allow read, write: if false;');
   });
 });
+
+describe('Monetization server invariants (ledger + idempotency)', () => {
+  const monetization = fs.readFileSync(
+    path.join(root, 'functions', 'monetization.js'), 'utf8'
+  );
+
+  test('subscription grants share one double-entry credit path', () => {
+    // createSubscription and the renewal webhook must not hand-roll two
+    // different ledger shapes for the same monthly grant.
+    expect(monetization).toContain('async function creditSubscriptionCoins(');
+    expect(monetization).toContain('await creditSubscriptionCoins(t, {');
+    expect(monetization.match(/creditSubscriptionCoins\(/g).length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('the renewal webhook credits real coins, idempotent on the Stripe event', () => {
+    // It used to read tiers from an unwritten config doc (granting 0) and only
+    // sent a push. It must now write the ledger, keyed on the event id.
+    expect(monetization).toContain('const coinAmount = SUBSCRIPTION_TIERS[tier]?.coinsPerMonth || subData.coinsPerMonth || 0;');
+    expect(monetization).toContain('idempotency_ledger\').doc(`webhook_${event.id}`)');
+    expect(monetization).not.toContain("configDoc.data()?.SUBSCRIPTION_TIERS");
+    expect(monetization).not.toContain("console.log(`Granting ${coinAmount} coins");
+  });
+
+  test('requestWithdrawal locks coins and records idempotency in one transaction', () => {
+    const body = monetization.slice(monetization.indexOf('exports.requestWithdrawal'));
+    const txStart = body.indexOf('const resultData = await createFirestoreTransaction');
+    const txEnd = body.indexOf('await admin.firestore().collection(\'admin_notifications\')');
+    expect(txStart).toBeGreaterThan(-1);
+    expect(txEnd).toBeGreaterThan(txStart);
+    const tx = body.slice(txStart, txEnd);
+    expect(tx).toContain('lockedCoins: admin.firestore.FieldValue.increment(amount)');
+    expect(tx).toContain('t.set(ledgerRef, {');
+    expect(tx).toContain("t.set(lockTxRef, {");
+    // No pre-transaction ledger read that would let a retry double-lock.
+    expect(body).not.toContain('const ledgerSnap = await ledgerRef.get();');
+  });
+});
+

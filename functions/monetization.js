@@ -699,12 +699,16 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     const requiresReview = amount > MANUAL_REVIEW_THRESHOLD;
     const key = generateIdempotencyKey(idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
-    const ledgerSnap = await ledgerRef.get();
-    if (ledgerSnap.exists) return ledgerSnap.data().result;
-
     const withdrawalRef = admin.firestore().collection('withdrawal_requests').doc();
 
-    await createFirestoreTransaction(async (t) => {
+    // Lock the coins, write the request, the lock transaction and the
+    // idempotency record in ONE transaction. Previously the ledger was read
+    // before the lock and written after it, so a retried request re-locked the
+    // same coins (double lock, and a second withdrawal row for one intent).
+    const resultData = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) return ledgerSnap.data().result;
+
       const freshSnap = await t.get(userRef);
       const freshData = freshSnap.data();
       const freshAvailable = getAvailableBalance(freshData);
@@ -715,27 +719,28 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
         userId: uid, amount, paymentMethod, paymentDetails,
         status: requiresReview ? 'pending_review' : 'pending',
         idempotencyKey: key,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTS(),
       });
-    });
 
-    const lockTxRef = admin.firestore().collection('coin_transactions').doc();
-    await lockTxRef.set({
-      userId: uid, type: 'withdrawal_lock', amount, reason: 'withdrawal_request',
-      metadata: { withdrawalId: withdrawalRef.id },
-      idempotencyKey: key,
-      balanceAfter: userData.coins || 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-    });
+      const lockTxRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(lockTxRef, {
+        userId: uid, type: 'withdrawal_lock', amount, reason: 'withdrawal_request',
+        metadata: { withdrawalId: withdrawalRef.id },
+        idempotencyKey: key,
+        balanceAfter: freshData.coins || 0,
+        createdAt: serverTS(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
 
-    const resultData = { success: true, withdrawalId: withdrawalRef.id, requiresReview };
-    await ledgerRef.set({
-      function: 'requestWithdrawal',
-      userId: uid,
-      result: resultData,
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      const res = { success: true, withdrawalId: withdrawalRef.id, requiresReview };
+      t.set(ledgerRef, {
+        function: 'requestWithdrawal',
+        userId: uid,
+        result: res,
+        processedAt: serverTS(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      return res;
     });
 
     await admin.firestore().collection('admin_notifications').add({
@@ -968,26 +973,43 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
       if (!userQuery.empty) {
         const userId = userQuery.docs[0].id;
         const subscriptionId = invoice.subscription;
+        const subRef = db.collection('subscriptions').doc(subscriptionId);
         // Update subscription status
-        await db.collection('subscriptions').doc(subscriptionId).set({
+        await subRef.set({
           status: 'active',
           latestInvoice: invoice.id,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
-        // Grant coins based on tier (read from config)
-        const subDoc = await db.collection('subscriptions').doc(subscriptionId).get();
-        const tier = subDoc.data().tier;
-        const configDoc = await db.collection('config').doc('monetization').get();
-        const coinAmount = configDoc.data()?.SUBSCRIPTION_TIERS?.[tier]?.coinsPerMonth || 0;
+        // The tier + monthly grant live on the subscription doc (written at
+        // subscribe time). Never read them from a `config/monetization` doc
+        // that nothing writes — that silently granted 0 coins.
+        const subSnap = await subRef.get();
+        const subData = subSnap.data() || {};
+        const tier = subData.tier;
+        const coinAmount = SUBSCRIPTION_TIERS[tier]?.coinsPerMonth || subData.coinsPerMonth || 0;
         if (coinAmount > 0) {
-          // Call internal addCoins logic (or schedule a cloud task)
-          console.log(`Granting ${coinAmount} coins to ${userId} for subscription renewal`);
-          // Fire off a Cloud Function or queue a task to add coins idempotently
-          await enqueuePush(userId, {
-            title: 'Subscription renewed',
-            body: `You received ${coinAmount} coins!`,
-            type: 'subscription_renewal',
+          // Grant idempotently, keyed on the Stripe invoice id so redelivered
+          // webhook events can never double-credit.
+          const ledgerRef = db.collection('idempotency_ledger').doc(`webhook_${event.id}`);
+          const granted = await createFirestoreTransaction(async (t) => {
+            const ledgerSnap = await t.get(ledgerRef);
+            if (ledgerSnap.exists) return false;
+            await creditSubscriptionCoins(t, {
+              userId, tier, coinsPerMonth: coinAmount, idempotencyKey: `webhook_${event.id}`,
+            });
+            t.set(ledgerRef, {
+              function: 'stripeWebhook', userId, result: { success: true, coins: coinAmount },
+              processedAt: serverTS(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            });
+            return true;
           });
+          if (granted) {
+            await enqueuePush(userId, {
+              title: 'Subscription renewed',
+              body: `You received ${coinAmount} coins!`,
+              type: 'subscription_renewal',
+            });
+          }
         }
       }
       break;
@@ -1069,6 +1091,36 @@ const SUBSCRIPTION_TIERS = require('./levelConfig.cjs').SUBSCRIPTION_TIERS;
 
 const AD_REWARD_PER_30S = require('./levelConfig.cjs').AD_REWARD_COINS;
 const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
+
+/**
+ * Credit a monthly subscription grant as a real double-entry transaction.
+ * Shared by createSubscription (first month) and the invoice.payment_succeeded
+ * webhook (renewals) so the ledger shape can never diverge between them.
+ * Must run inside a Firestore transaction; idempotencyKey makes retries safe.
+ */
+async function creditSubscriptionCoins(t, { userId, tier, coinsPerMonth, idempotencyKey }) {
+  if (!coinsPerMonth || coinsPerMonth <= 0) return null;
+  const userRef = admin.firestore().collection('users').doc(userId);
+  const userSnap = await t.get(userRef);
+  if (!userSnap.exists) return null;
+  const oldBalance = userSnap.data().coins || 0;
+  const newBalance = oldBalance + coinsPerMonth;
+  t.update(userRef, { coins: newBalance });
+
+  const txRef = admin.firestore().collection('coin_transactions').doc();
+  t.set(txRef, {
+    userId, type: 'credit', amount: coinsPerMonth, reason: 'subscription',
+    metadata: { tier }, idempotencyKey,
+    balanceAfter: newBalance, createdAt: serverTS(),
+    expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+  });
+  createLedgerEntry(t, 'system:coin_supply', `users:${userId}`, coinsPerMonth, {
+    reason: 'subscription', transactionId: txRef.id,
+  });
+  const supplyRef = admin.firestore().collection('system').doc('coin_supply');
+  t.set(supplyRef, { totalCoins: admin.firestore.FieldValue.increment(coinsPerMonth) }, { merge: true });
+  return newBalance;
+}
 
 async function getOrCreateStripeCustomer(uid) {
   const userRef = admin.firestore().collection('users').doc(uid);
@@ -1231,19 +1283,9 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
       });
 
       // Credit first month coins (same double-entry path as purchases).
-      const userRef = admin.firestore().collection('users').doc(uid);
-      const userSnap = await t.get(userRef);
-      if (userSnap.exists) {
-        const oldBalance = userSnap.data().coins || 0;
-        const newBalance = oldBalance + tierCfg.coinsPerMonth;
-        t.update(userRef, { coins: newBalance });
-        const txRef = admin.firestore().collection('coin_transactions').doc();
-        t.set(txRef, {
-          userId: uid, type: 'credit', amount: tierCfg.coinsPerMonth, reason: 'subscription',
-          metadata: { tier }, idempotencyKey: `${key}_first`, balanceAfter: newBalance,
-          createdAt: serverTS(), expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-      }
+      await creditSubscriptionCoins(t, {
+        userId: uid, tier, coinsPerMonth: tierCfg.coinsPerMonth, idempotencyKey: `${key}_first`,
+      });
 
       const resultData = { success: true, tier, stripeSubscriptionId };
       t.set(ledgerRef, {
