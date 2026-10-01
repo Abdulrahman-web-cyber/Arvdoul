@@ -19,6 +19,7 @@ import {
   isReturningAuthUser,
 } from "../utils/profileCompletion.js";
 import { getSafeAvatarUrl } from "../utils/avatarUtils.js";
+import { cacheManager } from "../utils/CacheManager.js";
 import { PRIVATE_PROFILE_FIELDS } from "../config/profileContracts.js";
 
 const AuthContext = createContext(null);
@@ -295,6 +296,14 @@ export function AuthProvider({ children }) {
     useProfileStore.getState().clear();
     useAnalyticsStore.getState().clear();
     clearUserDataRef.current();
+    // Drop the in-memory service cache too. Firestore/feed/video/counter reads
+    // are cached by uid; without this a signed-out session (or the next account
+    // on a shared device) could be served the previous user's cached documents.
+    try {
+      cacheManager.clear();
+    } catch (cacheError) {
+      console.warn('Cache clear on session reset failed:', cacheError?.message);
+    }
   }, []);
   const unsubscribeAuthRef = useRef(null);
   const unsubscribeIdTokenRef = useRef(null);
@@ -633,6 +642,13 @@ export function AuthProvider({ children }) {
             if (lastProfileUidRef.current && lastProfileUidRef.current !== firebaseUser.uid) {
               useProfileStore.getState().clear();
               useAnalyticsStore.getState().clear();
+              // The in-memory service cache is keyed by uid; a leftover entry
+              // from the departing account would be served to the new one.
+              try {
+                cacheManager.clear();
+              } catch (cacheError) {
+                console.warn('Cache clear on account switch failed:', cacheError?.message);
+              }
               // Drop the departing account's queued offline writes so they
               // cannot drain into this session (audit N014).
               import('../offline/syncEngine.js')

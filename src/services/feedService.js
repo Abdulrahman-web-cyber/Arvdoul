@@ -1,5 +1,5 @@
 // src/services/feedService.js – ARVDOUL ULTRA FEED ENGINE v24.2 (Complete, Fixed, Production‑Ready)
-// ✅ All methods present, including _startEngagementTracker
+// ✅ Smart feed, pagination, realtime re-ranking and ad injection
 // ✅ Immediate initialisation with timeout fallback – never hangs
 // ✅ Graceful fallback – always returns a valid feed result
 // ✅ Fixed diversity loop O(n) instead of O(n²)
@@ -73,11 +73,6 @@ const FEED_CONFIG = {
       RELEVANCE_WEIGHT: 0.3,
       CREATOR_TRUST: 0.15,
       FRESHNESS: 0.15
-    },
-    FRAUD: {
-      MIN_TRUST_SCORE_FOR_REWARD: 0.4,
-      MAX_VIEWS_PER_SESSION_PER_POST: 3,
-      COOLDOWN_MINUTES: 30
     }
   },
   RANDOMNESS: {
@@ -95,8 +90,6 @@ const FEED_CONFIG = {
     AD_PREFETCH_DELAY: 2000,
     SPONSORED_AUCTION_ENABLED: true,
     SPONSORED_BID_FACTOR: 0.001,
-    COIN_AWARD_DWELL_MS: 5000,
-    MAX_COINS_PER_SESSION: 50
   },
   PERFORMANCE: {
     REQUEST_TIMEOUT: 8000,
@@ -108,7 +101,6 @@ const FEED_CONFIG = {
     BEHAVIOR_CACHE_TTL: 20 * 60 * 1000,
     MAX_CACHE_SIZE: 100,
     SESSION_SAVE_DEBOUNCE: 2000,
-    PENDING_AWARDS_TTL: 24 * 60 * 60 * 1000,
     FANOUT_BATCH_SIZE: 400,
     FOLLOW_COUNT_CACHE_TTL: 5 * 60 * 1000,
     PRELOAD_COUNT: 5,
@@ -195,10 +187,8 @@ class UltimateFeedService {
     this.configCache = { weights: null, timestamp: 0 };
     this.sponsoredCache = { posts: [], timestamp: 0 };
     this.adCache = new Map();
-    this.engagementTracker = new Map();
     this.feedHistory = new Map();
     this.sessionWriteDebounce = new Map();
-    this.pendingAwards = new Map();
     this.sessionBoosts = new Map();
     this.lastBoostTimes = new Map();
     this.boostCounters = new Map();
@@ -209,15 +199,12 @@ class UltimateFeedService {
     this.notInterestedPosts = new Map();
     this.diversityMetrics = new Map();
     this.interestVectorCache = new Map();
-    this.coinLedger = new Map();
     this.activeUsers = new Set();
     this.algorithmVersion = 'v24.2';
     this.mlCache = new Map();
     this.healthMetrics = { avgLatency: 0, lastLatency: 0 };
 
     this._readyPromise = this._initWithTimeout();
-    this._startEngagementTracker();
-    this._loadPendingAwards();
     this._scheduleHealthMetrics();
   }
 
@@ -1359,58 +1346,6 @@ class UltimateFeedService {
     return { success: true };
   }
 
-  // ==================== COIN LEDGER (FRAUD‑PROOF) ====================
-  async awardCoinsForView(userId, postId, dwellTimeMs, metadata = {}) {
-    const { eventId, trustScore = 1 } = metadata;
-    if (!eventId) return { awarded: false, reason: 'missing_event_id' };
-
-    if (this.coinLedger.has(eventId)) return { awarded: false, reason: 'duplicate_event' };
-    if (trustScore < FEED_CONFIG.ALGORITHM.FRAUD.MIN_TRUST_SCORE_FOR_REWARD) {
-      return { awarded: false, reason: 'low_trust' };
-    }
-
-    const sessionKey = `coin_session_${userId}`;
-    const sessionCoins = this.engagementTracker.get(sessionKey) || 0;
-    if (sessionCoins >= FEED_CONFIG.MONETISATION.MAX_COINS_PER_SESSION) {
-      return { awarded: false, reason: 'session_limit' };
-    }
-
-    const coins = dwellTimeMs >= 10000 ? 3 : dwellTimeMs >= 5000 ? 2 : 1;
-    this.coinLedger.set(eventId, true);
-    this.engagementTracker.set(sessionKey, sessionCoins + coins);
-
-    if (!this.offlineMode) {
-      try {
-        await this._ensureInitialized();
-        const { doc, setDoc, serverTimestamp } = this.firestoreMethods;
-        await setDoc(doc(this.firestore, 'coin_events', eventId), {
-          userId,
-          postId,
-          dwellTime: dwellTimeMs,
-          trustScore,
-          coins,
-          createdAt: serverTimestamp()
-        });
-      } catch (e) {}
-    }
-
-    return { awarded: true, coins, eventId };
-  }
-
-  async logViewEvent(userId, postId, eventData) {
-    if (this.offlineMode) return;
-    try {
-      await this._ensureInitialized();
-      const { addDoc, serverTimestamp } = this.firestoreMethods;
-      await addDoc(this.firestoreMethods.collection(this.firestore, 'view_events'), {
-        userId,
-        postId,
-        ...eventData,
-        timestamp: serverTimestamp()
-      });
-    } catch (e) {}
-  }
-
   invalidateBlockCache(userId) {
     this.blockCache.delete(`blocked_${userId}`);
   }
@@ -1688,7 +1623,6 @@ class UltimateFeedService {
         timestamp: this.firestoreMethods.serverTimestamp(),
         cacheSize: this.cache.size,
         activeUsers: this.activeUsers.size,
-        pendingAwards: this.pendingAwards.size,
         subscriptions: this.realtimeSubscriptions.size,
         avgLatency: this.healthMetrics.avgLatency || 0,
       };
@@ -1768,12 +1702,10 @@ class UltimateFeedService {
   getStats() {
     return {
       cacheSize: this.cache.size,
-      pendingAwards: this.pendingAwards.size,
       subscriptions: this.realtimeSubscriptions.size,
       algorithmVersion: this.algorithmVersion,
       initialized: this.initialized,
       mlCacheSize: this.mlCache.size,
-      coinLedgerSize: this.coinLedger.size,
     };
   }
 
@@ -1805,7 +1737,6 @@ class UltimateFeedService {
     this.boostCounters.clear();
     this.mlCache.clear();
     this.interestVectorCache.clear();
-    this.coinLedger.clear();
   }
 
   destroy() {
@@ -1818,88 +1749,10 @@ class UltimateFeedService {
     this.firestore = null;
   }
 
-  _startEngagementTracker() {
-    setInterval(() => {
-      const now = Date.now();
-      for (const [key, data] of this.engagementTracker.entries()) if (now - data.awardedAt > 24 * 60 * 60 * 1000) this.engagementTracker.delete(key);
-      for (const [userId, boosts] of this.sessionBoosts.entries()) {
-        for (const [key, { expiresAt }] of boosts.entries()) if (expiresAt <= now) boosts.delete(key);
-        if (boosts.size === 0) this.sessionBoosts.delete(userId);
-      }
-      for (const [userId, counter] of this.boostCounters.entries()) if (now - counter.windowStart > 60000) this.boostCounters.delete(userId);
-      this._processAllPendingAwards();
-      this.healthMetrics.avgLatency = (this.healthMetrics.avgLatency || 0) * 0.9 + (Date.now() - (this.healthMetrics.lastLatency || Date.now())) * 0.1;
-      this.healthMetrics.lastLatency = Date.now();
-    }, 2 * 60 * 60 * 1000);
-  }
-
   _enhanceError(error) {
     const err = new Error(error.message || 'Feed service error');
     err.code = error.code || 'unknown';
     return err;
-  }
-
-  async _openAwardsDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open('FeedAwardsDB', 1);
-      request.onerror = () => reject(request.error);
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains('awards')) {
-          db.createObjectStore('awards', { keyPath: 'key' });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-    });
-  }
-
-  async _saveAwardToDB(key, award) {
-    const db = await this._openAwardsDB();
-    const tx = db.transaction('awards', 'readwrite');
-    const store = tx.objectStore('awards');
-    store.put({ key, ...award });
-  }
-
-  async _deleteAwardFromDB(key) {
-    const db = await this._openAwardsDB();
-    const tx = db.transaction('awards', 'readwrite');
-    const store = tx.objectStore('awards');
-    store.delete(key);
-  }
-
-  async _loadPendingAwards() {
-    try {
-      const db = await this._openAwardsDB();
-      const tx = db.transaction('awards', 'readonly');
-      const store = tx.objectStore('awards');
-      const all = await store.getAll();
-      for (const award of all) {
-        if (Date.now() - award.timestamp < FEED_CONFIG.PERFORMANCE.PENDING_AWARDS_TTL) {
-          this.pendingAwards.set(award.key, award);
-        } else {
-          await this._deleteAwardFromDB(award.key);
-        }
-      }
-      this._processAllPendingAwards();
-    } catch (e) {}
-  }
-
-  async _processAllPendingAwards() {
-    if (this._processingAwards) return;
-    this._processingAwards = true;
-    const promises = [];
-    for (const [key, award] of this.pendingAwards.entries()) {
-      promises.push((async () => {
-        try {
-          const userSvc = await _getUserService();
-          await userSvc.addCoins(award.userId, award.coins, 'feed_view', { postId: award.postId, viewDuration: award.viewDuration });
-          this.pendingAwards.delete(key);
-          await this._deleteAwardFromDB(key);
-        } catch (err) {}
-      })());
-    }
-    await Promise.allSettled(promises);
-    this._processingAwards = false;
   }
 
   async boostSimilarContent(userId, postId, action = 'like', topics = null, watchTimeSeconds = 0) {
@@ -2030,8 +1883,6 @@ const feedService = {
   getSmartFeed: (userId, options) => getFeedService().getSmartFeed(userId, options),
   subscribeToFeedUpdates: (userId, callback, options) => getFeedService().subscribeToFeedUpdates(userId, callback, options),
   unsubscribeFromFeed: (subId) => getFeedService().unsubscribeFromFeed(subId),
-  awardCoinsForView: (userId, postId, duration, meta) => getFeedService().awardCoinsForView(userId, postId, duration, meta),
-  logViewEvent: (userId, postId, eventData) => getFeedService().logViewEvent(userId, postId, eventData),
   preloadNextFeed: (userId, cursor) => getFeedService().preloadNextFeed(userId, cursor),
   triggerRealTimeReRanking: (userId, interactionType, postId) => getFeedService().triggerRealTimeReRanking(userId, interactionType, postId),
   getUserInterestVector: (userId) => getFeedService().getUserInterestVector(userId),
