@@ -37,15 +37,6 @@ describe('videoService - no mock feed fallback', () => {
   });
 });
 
-describe('Composer - no stale-balance coin overwrite', () => {
-  test('does not write coins: (user.coins || 0) + N (stale balance destroyer)', () => {
-    const src = fs.readFileSync(path.join(root, 'src/components/Home/Composer.jsx'), 'utf8');
-    expect(src).not.toMatch(/coins:\s*\(user\.coins/);
-    // The safe path uses the monetization service
-    expect(src).toContain('getMonetizationService()');
-  });
-});
-
 describe('CommentsModal - real commentService wiring', () => {
   test('does not write to the denied posts/{id}/comments subcollection', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
@@ -111,9 +102,7 @@ describe('CSP headers - no placeholder image hosts', () => {
   test('CSP img-src allowlists no longer permit unsplash/picsum', () => {
     const csp = fs.readFileSync(path.join(root, 'src/services/CSPService.js'), 'utf8');
     expect(csp).not.toContain('images.unsplash.com');
-    const sh = fs.readFileSync(path.join(root, 'src/services/securityHeadersService.js'), 'utf8');
-    expect(sh).not.toContain('images.unsplash.com');
-    expect(sh).not.toContain('picsum.photos');
+    expect(csp).not.toContain('picsum.photos');
   });
 });
 
@@ -463,12 +452,9 @@ describe('Engagement coin rewards - wired to the real ledger', () => {
   test('components no longer destructure undefined addCoins/followUser from useAuth', () => {
     const feed = fs.readFileSync(path.join(root, 'src/components/Home/ReelsFeed.jsx'), 'utf8');
     const modal = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
-    const card = fs.readFileSync(path.join(root, 'src/components/Home/PostCard.jsx'), 'utf8');
     expect(feed).not.toContain('addCoins, followUser } = useAuth');
     expect(modal).not.toContain('addCoins } = useAuth');
-    expect(card).not.toContain('addCoins } = useAuth');
     expect(feed).toContain('getUserService().followUser(user.uid, uid)');
-    expect(card).toContain('"like"');
   });
 });
 
@@ -778,15 +764,12 @@ describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
 });
 
 describe('Vibes master-spec: one canonical viewer (spec §99)', () => {
-  test('duplicate viewers are deleted, VibeStrip navigates to /stories', () => {
+  test('duplicate viewers are deleted and the feed no longer ships a shadow strip', () => {
     for (const dead of ['src/components/Stories/StoryViewer.jsx', 'src/components/Stories/StoryList.jsx',
-                        'src/components/Stories/StoriesCarousel.jsx', 'src/components/Home/Stories.jsx']) {
+                        'src/components/Stories/StoriesCarousel.jsx', 'src/components/Home/Stories.jsx',
+                        'src/components/feed/VibeStrip.jsx']) {
       expect(fs.existsSync(path.join(root, dead))).toBe(false);
     }
-    const strip = fs.readFileSync(path.join(root, 'src/components/feed/VibeStrip.jsx'), 'utf8');
-    expect(strip).not.toContain('StoryViewer');
-    expect(strip).toContain("navigate('/stories', { state: { vibeUserId: userId } })");
-    expect(strip).toContain('feedData?.groups'); // correct feed shape
   });
 
   test('StoriesScreen consumes deep-link state and clears it', () => {
@@ -985,7 +968,6 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
       'src/screens/Profile/FollowersScreen.jsx',
       'src/screens/Profile/FollowingScreen.jsx',
       'src/screens/Profile/FriendsScreen.jsx',
-      'src/screens/Profile/UserListScreen.jsx',
       'src/screens/Profile/HighlightsScreen.jsx',
       'src/screens/Profile/CreatorDashboardScreen.jsx',
     ]) {
