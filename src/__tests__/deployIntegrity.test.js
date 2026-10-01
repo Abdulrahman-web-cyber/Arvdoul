@@ -108,3 +108,30 @@ describe('Cloud Functions deploy integrity', () => {
     }
   });
 });
+
+describe('Cloud Functions runtime dependencies', () => {
+  test('every external require is declared in functions/package.json', () => {
+    // `npm ci` installs only declared dependencies, so a module that requires
+    // an undeclared package (or a package the root package.json happens to
+    // hoist) fails the whole functions deploy with MODULE_NOT_FOUND. search.js
+    // required algoliasearch while it was undeclared and absent from
+    // functions/node_modules.
+    const builtins = new Set(['fs', 'path', 'os', 'crypto', 'util', 'child_process', 'http', 'https', 'url', 'stream', 'zlib', 'events', 'buffer']);
+    const pkg = JSON.parse(fs.readFileSync(path.join(functionsDir, 'package.json'), 'utf8'));
+    const declared = new Set(Object.keys(pkg.dependencies || {}));
+
+    const offenders = [];
+    for (const file of fs.readdirSync(functionsDir)) {
+      if (!file.endsWith('.js')) continue;
+      const src = fs.readFileSync(path.join(functionsDir, file), 'utf8');
+      for (const m of src.matchAll(/require\(['"]([^'".][^'"]*)['"]\)/g)) {
+        const spec = m[1];
+        if (builtins.has(spec) || spec.startsWith('node:')) continue;
+        // Package root: @scope/name or name (strip subpaths).
+        const root = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
+        if (!declared.has(root)) offenders.push(`${file}: ${root}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
