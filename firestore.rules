@@ -890,24 +890,19 @@ service cloud.firestore {
 
     // ==================== LEVEL SYSTEM (XP + coin rewards + active day ledger) ====================
     match /coin_ledger/{entryId} {
-      // Level-up rewards are credited by the client level system inside an
-      // atomic transaction with the user doc (coins increment + ledger entry).
-      // Entry ids are `${userId}_levelup_*`; read is owner-scoped, entries are
-      // append-only (no update/delete from clients).
+      // Legacy level-up reward ledger. Level-up coins are now credited by the
+      // server awardExperience function into `coin_transactions`, so this
+      // collection is server-only: an unauthenticated create here would let a
+      // client mint a "level_up_reward" entry.
       allow read: if isSignedIn() && resource.data.userId == uid();
-      allow create: if isSignedIn() &&
-        (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid()) &&
-        request.resource.data.type == 'level_up_reward';
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /active_days_ledger/{entryId} {
-      // Server-authoritative daily active day audit ledger
-      // Doc id: `${userId}_${YYYY-MM-DD}`
+      // Server-authoritative daily active-day ledger, written only by the
+      // recordActiveDay function. Doc id: `${userId}_${YYYY-MM-DD}`.
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
-      allow create: if isSignedIn() &&
-        (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid());
-      allow update, delete: if false; // Append-only immutable ledger
+      allow create, update, delete: if false; // server-write-only
     }
 
     // ==================== SAVED SOUNDS ====================

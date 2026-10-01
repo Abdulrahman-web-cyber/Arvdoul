@@ -194,5 +194,33 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     expect(settlement).toContain('coinsToUsd(withdrawalData.amount)');
     expect(settlement).not.toMatch(/coinsPerDollar\s*\)\s*:\s*200\b/);
   });
+
+  test('level-up coin rewards land in the wallet ledger and supply counter', () => {
+    const levelSystem = fs.readFileSync(
+      path.join(root, 'functions', 'levelSystem.js'), 'utf8'
+    );
+    // Rewards used to go to a coin_ledger collection nothing reads and skipped
+    // the supply counter, so the wallet never showed them and the ledger and
+    // supply totals disagreed.
+    expect(levelSystem).toContain("db.collection('coin_transactions').doc()");
+    expect(levelSystem).toContain("reason: 'level_up_reward'");
+    expect(levelSystem).toContain("doc('coin_supply')");
+    expect(levelSystem).not.toContain('coin_ledger/${uid}_levelup');
+  });
+
+  test('the level ledgers are server-write-only in the rules', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    for (const collection of ['coin_ledger', 'active_days_ledger']) {
+      const start = rules.indexOf(`match /${collection}/`);
+      expect(start).toBeGreaterThan(-1);
+      // Slice to the next match block (a naive indexOf('}') would stop at the
+      // `{entryId}` wildcard brace).
+      const next = rules.indexOf('match /', start + 1);
+      const block = rules.slice(start, next === -1 ? undefined : next);
+      // A client create rule would let a user mint their own reward/streak entry.
+      expect(block).toContain('allow create, update, delete: if false;');
+      expect(block).not.toMatch(/allow create: if isSignedIn/);
+    }
+  });
 });
 
