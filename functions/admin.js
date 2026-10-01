@@ -208,6 +208,65 @@ exports.resolveUserReport = functions.https.onCall(async (data, context) => {
 });
 
 // ----------------------------------------------------------------------
+//  Support desk — the queue and the reply are server-authoritative
+//
+//  A support ticket is user-owned, but an *agent reply* and the resulting
+//  status change are administrative acts. They run here so the actor is
+//  re-verified and the change is audited, rather than trusting a client write
+//  to `support_tickets` that could just as easily be forged.
+// ----------------------------------------------------------------------
+exports.adminListSupportTickets = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminListSupportTickets', 60, 60000);
+
+  const limitCount = Math.min(Math.max(Number(data?.limit) || 50, 1), 100);
+  const snap = await db.collection('support_tickets')
+    .orderBy('createdAt', 'desc')
+    .limit(limitCount)
+    .get();
+
+  return {
+    success: true,
+    tickets: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+  };
+});
+
+exports.adminResolveSupportTicket = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminResolveSupportTicket', 60, 60000);
+
+  const { ticketId, reply, status = 'resolved' } = data || {};
+  if (!ticketId) {
+    throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+  }
+  if (!['open', 'in_progress', 'resolved'].includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Unknown ticket status.');
+  }
+  const replyText = String(reply || '').slice(0, 4000).trim();
+
+  const ref = db.doc(`support_tickets/${ticketId}`);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Ticket not found.');
+  }
+
+  const messages = Array.isArray(snap.data().messages) ? snap.data().messages : [];
+  if (replyText) {
+    messages.push({ sender: 'agent', text: replyText, timestamp: new Date().toISOString() });
+  }
+
+  await ref.update({
+    status,
+    messages,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    resolvedBy: status === 'resolved' ? actorUid : null,
+  });
+  await writeAudit(actorUid, 'support_ticket_updated', ticketId, { status, replied: Boolean(replyText) });
+
+  return { success: true, ticketId, status };
+});
+
+// ----------------------------------------------------------------------
 //  Admin roster management
 //
 //  `admins/{uid}` is written by the server only (see firestore.rules), which

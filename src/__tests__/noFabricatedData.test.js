@@ -1262,10 +1262,15 @@ describe('Admin creator verification - live queue, server-authoritative', () => 
 describe('Admin support tickets - persisted replies only', () => {
   const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminSupportTicketsScreen.jsx'), 'utf8');
 
-  test('agent replies are persisted before being shown as resolved', () => {
+  test('agent replies go through the admin callable, not a client write', () => {
     const s = src();
-    expect(s).toMatch(/updateDoc\(\s*doc\([^)]*'support_tickets'/);
-    expect(s).toContain('toast.error');
+    expect(s).toContain('FUNCTIONS.ADMIN_RESOLVE_SUPPORT_TICKET');
+    expect(s).toContain('FUNCTIONS.ADMIN_LIST_SUPPORT_TICKETS');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'support_tickets'/);
+    expect(s).not.toContain("utils/AuditLogger.js");
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('adminResolveSupportTicket');
+    expect(admin).toContain("writeAudit(actorUid, 'support_ticket_updated'");
   });
 });
 

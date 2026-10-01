@@ -22,13 +22,11 @@ import {
   X,
   Mail,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { supportAutomationService } from '../../services/supportAutomationService.js';
-import { auditLogger } from '../../utils/AuditLogger.js';
+import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 
 const AdminSupportTicketsScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('open'); // 'all' | 'open' | 'in_progress' | 'resolved'
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,18 +36,13 @@ const AdminSupportTicketsScreen = () => {
   // Live tickets only; the collection is the source of truth.
   const [tickets, setTickets] = useState([]);
 
-  // Load live tickets if collection exists
+  // The queue is read through the admin callable: support_tickets is
+  // user-owned, so a plain client query cannot see every customer's ticket.
   useEffect(() => {
     const loadTickets = async () => {
       try {
-        const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        const snap = await getDocs(
-          query(collection(firestore, 'support_tickets'), orderBy('createdAt', 'desc'), limit(50))
-        );
-        setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const res = await callFunction(FUNCTIONS.ADMIN_LIST_SUPPORT_TICKETS, { limit: 50 });
+        setTickets(Array.isArray(res?.tickets) ? res.tickets : []);
       } catch {
         toast.error('Could not load the support queue.');
         setTickets([]);
@@ -60,39 +53,27 @@ const AdminSupportTicketsScreen = () => {
     loadTickets();
   }, []);
 
-  // Send agent reply — persisted to support_tickets (admins may update the
-  // document per firestore.rules), then audited.
+  // Send agent reply — the callable re-verifies admin, appends the message and
+  // records the status change in moderation_logs. No client-side privileged write.
   const handleSendReply = async () => {
     if (!replyMessage.trim() || !selectedTicket) return;
 
-    const newMsg = {
-      sender: 'agent',
-      text: replyMessage.trim(),
-      timestamp: new Date().toISOString(),
-    };
-    const messages = [...(selectedTicket.messages || []), newMsg];
-
+    const reply = replyMessage.trim();
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-
-      await updateDoc(doc(firestore, 'support_tickets', selectedTicket.id), {
+      await callFunction(FUNCTIONS.ADMIN_RESOLVE_SUPPORT_TICKET, {
+        ticketId: selectedTicket.id,
+        reply,
         status: 'resolved',
-        messages,
-        updatedAt: serverTimestamp(),
-        resolvedBy: user?.uid || null,
       });
 
+      const messages = [
+        ...(selectedTicket.messages || []),
+        { sender: 'agent', text: reply, timestamp: new Date().toISOString() },
+      ];
       const updated = { ...selectedTicket, status: 'resolved', messages };
       setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updated : t)));
       setSelectedTicket(updated);
       setReplyMessage('');
-
-      await auditLogger.log('SUPPORT_TICKET_RESOLVED', {
-        userId: user?.uid || null,
-        meta: { ticketId: selectedTicket.id },
-      });
 
       toast.success('Reply dispatched. Ticket marked as resolved.');
     } catch {

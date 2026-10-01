@@ -21,14 +21,11 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { auditLogger } from '../../utils/AuditLogger.js';
 import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { COINS_PER_DOLLAR, getRankTitle } from '../../services/levelSystemService.js';
 
 const AdminEconomyScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'payouts' | 'transactions'
@@ -119,11 +116,6 @@ const AdminEconomyScreen = () => {
       });
       if (!result?.success) throw new Error(result?.error || 'Settlement failed');
 
-      await auditLogger.log('PAYOUT_APPROVED', {
-        userId: user?.uid,
-        meta: { withdrawalId: payoutId, amountCoins: result.amount, usdAmount: result.usdAmount, payoutId: result.payoutId },
-      });
-
       setPayouts(prev => prev.map(p => (
         p.id === payoutId ? { ...p, status: 'completed', stripePayoutId: result.payoutId } : p
       )));
@@ -146,11 +138,6 @@ const AdminEconomyScreen = () => {
         reason,
       });
       if (!result?.success) throw new Error(result?.error || 'Settlement failed');
-
-      await auditLogger.log('PAYOUT_REJECTED', {
-        userId: user?.uid,
-        meta: { withdrawalId: payoutId, reason },
-      });
 
       setPayouts(prev => prev.map(p => (
         p.id === payoutId ? { ...p, status: 'rejected', rejectionReason: reason } : p
