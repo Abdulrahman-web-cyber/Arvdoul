@@ -851,6 +851,15 @@ const TRANSACTION_STATES = Object.freeze({
 const COINS_PER_DOLLAR = 200;
 
 /**
+ * Minimum coin amount a withdrawal request may specify — SINGLE SOURCE OF TRUTH.
+ *
+ * The payout server (functions/monetization.js requestWithdrawal) rejects any
+ * request below this, and the wallet UIs read it for their min/validation so the
+ * client can never advertise a lower threshold than the server enforces.
+ */
+const MIN_WITHDRAWAL_COINS = 5000;
+
+/**
  * Prestige info beyond Level 100.
  */
 function getPrestigeInfo(level = 1) {
@@ -878,6 +887,7 @@ module.exports = {
   CREATOR_TIERS,
   TRANSACTION_STATES,
   COINS_PER_DOLLAR,
+  MIN_WITHDRAWAL_COINS,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,

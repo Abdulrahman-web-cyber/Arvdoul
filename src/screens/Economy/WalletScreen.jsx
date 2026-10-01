@@ -23,7 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { COINS_PER_DOLLAR } from '../../shared/levelConfig.cjs';
+import { COINS_PER_DOLLAR, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
 
 // Package ids and amounts must match the Cloud Function COIN_PACKAGES contract
 // (functions/monetization.js). The server credits `coins` exactly, so no bonus
@@ -35,7 +35,6 @@ const COIN_PACKAGES = [
   { id: 'coins_2500', coins: 2500, price: '$19.99' },
 ];
 
-const MIN_WITHDRAWAL_COINS = 5000;
 const MIN_WITHDRAWAL_USD = (MIN_WITHDRAWAL_COINS / COINS_PER_DOLLAR).toFixed(2);
 
 export default function WalletScreen() {

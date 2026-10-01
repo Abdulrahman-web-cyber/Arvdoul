@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import { MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
 
 import {
   Coins, CreditCard, Wallet, Crown, Zap, Rocket, Star,
@@ -31,7 +32,6 @@ const COIN_PACKAGES = [
   { id: 'coins_5000', coins: 5000, priceUsdCents: 3999, icon: Zap,     color: 'from-green-500 to-emerald-500' },
 ].map((pkg) => ({ ...pkg, price: `$${(pkg.priceUsdCents / 100).toFixed(2)}` }));
 
-const WITHDRAWAL_MIN_COINS = 5000;
 const AD_REWARD_COINS = 2; // coins per 30s (matches functions/monetization.js AD_REWARD_PER_30S)
 
 export default function CoinsScreen() {
@@ -233,8 +233,8 @@ export default function CoinsScreen() {
   const handleWithdraw = async () => {
     if (!user?.uid || withdrawing) return;
     const amount = Number(withdrawAmount);
-    if (!amount || amount < WITHDRAWAL_MIN_COINS) {
-      toast.error(`Minimum withdrawal is ${WITHDRAWAL_MIN_COINS.toLocaleString()} coins.`);
+    if (!amount || amount < MIN_WITHDRAWAL_COINS) {
+      toast.error(`Minimum withdrawal is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins.`);
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail)) {
@@ -329,7 +329,7 @@ export default function CoinsScreen() {
                 <div className={cn("text-sm", colors.secondary)}>Coins per ad</div>
               </div>
               <div className={cn("p-4 rounded-xl text-center", colors.card, colors.border, "border")}>
-                <div className="text-2xl font-bold text-purple-500">{WITHDRAWAL_MIN_COINS.toLocaleString()}+</div>
+                <div className="text-2xl font-bold text-purple-500">{MIN_WITHDRAWAL_COINS.toLocaleString()}+</div>
                 <div className={cn("text-sm", colors.secondary)}>Withdrawal minimum</div>
               </div>
             </div>
@@ -498,14 +498,14 @@ export default function CoinsScreen() {
             <Banknote className="w-5 h-5 text-purple-500" /> Withdraw Earnings
           </h2>
           <p className={cn("text-sm mb-4", colors.secondary)}>
-            Request a payout (min {WITHDRAWAL_MIN_COINS.toLocaleString()} coins). Requests are reviewed and paid out via the
+            Request a payout (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins). Requests are reviewed and paid out via the
             secure payout pipeline.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <input
               type="number"
-              min={WITHDRAWAL_MIN_COINS}
-              placeholder={`Amount (min ${WITHDRAWAL_MIN_COINS.toLocaleString()})`}
+              min={MIN_WITHDRAWAL_COINS}
+              placeholder={`Amount (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               className={cn("px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500", colors.card, colors.border, colors.text)}

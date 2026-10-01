@@ -74,4 +74,34 @@ describe('shared config single source of truth', () => {
     const rootPkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     expect(rootPkg.scripts['sync:shared']).toContain('sync-shared-config');
   });
+
+  test('economy constants (rate + withdrawal minimum) are declared only in the shared module', () => {
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+          walk(full);
+        } else if (/\.(js|jsx)$/.test(entry.name)) {
+          const rel = path.relative(root, full);
+          if (rel.startsWith('src/shared/')) continue;
+          const src = fs.readFileSync(full, 'utf8');
+          // A component/service must never re-derive the payout rate or the
+          // minimum withdrawal amount; the server enforces both.
+          if (/COINS_PER_DOLLAR\s*=\s*\d/.test(src) || /WITHDRAWAL_COINS\s*=\s*\d/.test(src)) {
+            offenders.push(rel);
+          }
+        }
+      }
+    };
+    walk(path.join(root, 'src'));
+    expect(offenders).toEqual([]);
+  });
+
+  test('the payout server enforces the shared withdrawal minimum', () => {
+    const src = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+    expect(src).toContain("require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS");
+    expect(src).toContain('amount < MIN_WITHDRAWAL_COINS');
+  });
 });

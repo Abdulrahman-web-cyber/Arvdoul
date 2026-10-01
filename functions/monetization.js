@@ -32,6 +32,7 @@ const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_t
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
 const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || require('./levelConfig.cjs').COINS_PER_DOLLAR;
+const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
 // ----------------------------------------------------------------------
@@ -663,6 +664,9 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     const { amount, paymentMethod, paymentDetails, idempotencyKey } = data;
     if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION * 5) {
       throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION * 5}.`);
+    }
+    if (amount < MIN_WITHDRAWAL_COINS) {
+      throw new functions.https.HttpsError('invalid-argument', `Minimum withdrawal is ${MIN_WITHDRAWAL_COINS} coins.`);
     }
     if (!paymentMethod || !paymentDetails) throw new functions.https.HttpsError('invalid-argument', 'paymentMethod and paymentDetails required.');
 
