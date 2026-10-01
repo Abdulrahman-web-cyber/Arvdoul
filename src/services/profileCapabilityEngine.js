@@ -41,9 +41,21 @@ export const ACCOUNT_STATES = Object.freeze({
  * @returns {string} One of RELATIONSHIP_STATES
  */
 export function resolveRelationshipState(relationship = {}) {
-  if (relationship.isBlocking) return RELATIONSHIP_STATES.BLOCKED;
+  // Explicit, documented precedence (audit N017). Safety states win over
+  // social states; mute is a viewer preference that must survive a follow edge
+  // (previously muted+following reported FOLLOWING and lost the mute).
+  //   1. blocked (either direction, incl. the aggregate flag)
+  //   2. blocked-by
+  //   3. restricted
+  //   4. muted
+  //   5. pending / requested follow
+  //   6. mutual / following / followed-by
+  //   7. none
+  const isBlocking = Boolean(relationship.isBlocking || relationship.isBlocked);
+  if (isBlocking) return RELATIONSHIP_STATES.BLOCKED;
   if (relationship.isBlockedBy) return RELATIONSHIP_STATES.BLOCKED_BY;
   if (relationship.isRestricted) return RELATIONSHIP_STATES.RESTRICTED;
+  if (relationship.isMuted) return RELATIONSHIP_STATES.MUTED;
   if (relationship.requestStatus === 'pending') return RELATIONSHIP_STATES.PENDING;
   if (relationship.requestStatus === 'requested') return RELATIONSHIP_STATES.REQUESTED;
   if (relationship.isMutualFriend || (relationship.isFollowing && relationship.isFollower)) {
@@ -51,7 +63,6 @@ export function resolveRelationshipState(relationship = {}) {
   }
   if (relationship.isFollowing) return RELATIONSHIP_STATES.FOLLOWING;
   if (relationship.isFollower) return RELATIONSHIP_STATES.FOLLOWED_BY;
-  if (relationship.isMuted) return RELATIONSHIP_STATES.MUTED;
   return RELATIONSHIP_STATES.NONE;
 }
 
@@ -170,9 +181,11 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
   const canViewTitles = canViewProfileSection('titles', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewCommunities = canViewProfileSection('communities', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewCollections = canViewProfileSection('collections', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation);
-  const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation);
-  const canViewEconomicStatus = isSimulatedOwner || canViewProfileSection('economicStatus', targetPrivacy, effectiveRelation);
+  // All gated sections require canViewContent so the capability map can never
+  // report a section visible while content itself is restricted (audit N007).
+  const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation) && canViewContent;
+  const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation) && canViewContent;
+  const canViewEconomicStatus = isSimulatedOwner || (canViewProfileSection('economicStatus', targetPrivacy, effectiveRelation) && canViewContent);
 
   // Follow / Unfollow actions
   const isFollowing = Boolean(relationship.isFollowing);

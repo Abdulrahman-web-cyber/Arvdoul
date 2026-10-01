@@ -19,14 +19,17 @@ import CoinStackIcon from '../components/Shared/CoinStackIcon';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 // Package ids MUST match the Cloud Function COIN_PACKAGES contract
-// (functions/monetization.js). Prices are the USD cents charged server-side.
+// (functions/monetization.js). `priceUsdCents` and `coins` are the exact
+// server-side values; the price label is derived from them so the client can
+// never advertise a price or coin amount the server will not honour. The server
+// credits `coins` exactly — there is no bonus grant, so none is advertised.
 const COIN_PACKAGES = [
-  { id: 'coins_100',  coins: 100,  price: '$0.99',  bonus: 0,   popular: false, icon: Coins,   color: 'from-amber-500 to-yellow-500' },
-  { id: 'coins_500',  coins: 500,  price: '$4.99',  bonus: 50,  popular: true,  icon: Crown,   color: 'from-purple-500 to-pink-500' },
-  { id: 'coins_1200', coins: 1200, price: '$9.99',  bonus: 200, popular: false, icon: Star,    color: 'from-blue-500 to-cyan-500' },
-  { id: 'coins_2500', coins: 2500, price: '$19.99', bonus: 500, popular: false, icon: Rocket,  color: 'from-orange-500 to-red-500' },
-  { id: 'coins_5000', coins: 5000, price: '$39.99', bonus: 1500, popular: false, icon: Zap,    color: 'from-green-500 to-emerald-500' },
-];
+  { id: 'coins_100',  coins: 100,  priceUsdCents: 99,   icon: Coins,   color: 'from-amber-500 to-yellow-500' },
+  { id: 'coins_500',  coins: 500,  priceUsdCents: 499,  popular: true, icon: Crown,   color: 'from-purple-500 to-pink-500' },
+  { id: 'coins_1200', coins: 1200, priceUsdCents: 999,  icon: Star,    color: 'from-blue-500 to-cyan-500' },
+  { id: 'coins_2500', coins: 2500, priceUsdCents: 1999, icon: Rocket,  color: 'from-orange-500 to-red-500' },
+  { id: 'coins_5000', coins: 5000, priceUsdCents: 3999, icon: Zap,     color: 'from-green-500 to-emerald-500' },
+].map((pkg) => ({ ...pkg, price: `$${(pkg.priceUsdCents / 100).toFixed(2)}` }));
 
 const WITHDRAWAL_MIN_COINS = 5000;
 const AD_REWARD_COINS = 2; // coins per 30s (matches functions/monetization.js AD_REWARD_PER_30S)
@@ -124,7 +127,7 @@ export default function CoinsScreen() {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const res = await svc.purchaseCoins(paymentPkg.id, paymentMethodId);
       if (res?.success) {
-        toast.success(`+${paymentPkg.coins + paymentPkg.bonus} coins added to your account`);
+        toast.success(`+${res?.coinsAdded ?? paymentPkg.coins} coins added to your account`);
         await loadBalance();
         await loadTransactions();
       } else if (res?.offlineQueued) {
@@ -382,11 +385,6 @@ export default function CoinsScreen() {
                     </div>
                     <div className="text-3xl font-bold mb-1">{pkg.coins.toLocaleString()}</div>
                     <div className={cn("text-sm mb-2", colors.secondary)}>Coins</div>
-                    {pkg.bonus > 0 && (
-                      <div className="px-3 py-1 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-500 text-sm font-bold">
-                        +{pkg.bonus} Bonus
-                      </div>
-                    )}
                   </div>
 
                   <div className="text-center">

@@ -43,7 +43,7 @@ export default function AboutScreen() {
   }, [targetId, currentUserId, storeProfile, loadProfile]);
 
   const effectiveProfile = useMemo(() => {
-    const base = (isActualOwner ? (storeProfile || storeUser || authUser || getStoredUser()) : storeProfile) || {};
+    const base = (isActualOwner ? (storeProfile || authUser || storeUser || getStoredUser()) : storeProfile) || {};
     return {
       ...base,
       id: base.id || base.uid || targetId,

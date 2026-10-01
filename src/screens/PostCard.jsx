@@ -129,11 +129,13 @@ async function addToOfflineQueue(action, data) {
   const id = typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${data.postId}_${data.userId}_${action}_${Date.now()}_${Math.random().toString(36)}`;
-  const request = store.put({ id, action, data, timestamp: Date.now() });
+  // ownerUid partitions the queue by account so a later session cannot replay
+  // this user's pending writes (audit N014).
+  const request = store.put({ id, action, data, ownerUid: data.userId || null, timestamp: Date.now() });
   await idbRequestPromise(request);
 }
 
-async function replayOfflineQueue() {
+async function replayOfflineQueue(currentUid = null) {
   if (!navigator.onLine) return;
   const db = await openOfflineQueue();
   const tx = db.transaction('actions', 'readonly');
@@ -145,6 +147,8 @@ async function replayOfflineQueue() {
   const deleteStore = deleteTx.objectStore('actions');
   for (const item of items) {
     const { action, data } = item;
+    // Never replay another account's queued action (audit N014).
+    if (!currentUid || item.ownerUid !== currentUid || data.userId !== currentUid) continue;
     try {
       if (action === 'like') {
         await firestoreService.likePost?.(data.postId, data.userId);
@@ -591,12 +595,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // Pause subscriptions when card not visible
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
 
-  // Online listener for offline queue
+  // Online listener for offline queue. Keyed on uid so an account switch
+  // re-binds the handler to the current session (audit N014).
   useEffect(() => {
-    const onlineHandler = () => replayOfflineQueue();
+    const onlineHandler = () => replayOfflineQueue(currentUser?.uid || null);
     window.addEventListener('online', onlineHandler);
     return () => window.removeEventListener('online', onlineHandler);
-  }, []);
+  }, [currentUser?.uid]);
 
   // Cleanup timers
   useEffect(() => {
@@ -619,7 +624,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // HANDLERS with snapshot rollback, separate debounces, lock
   // ------------------------------------------------------------------
   const handleLikeClick = useCallback(() => {
-    const userId = currentUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : null);
+    // Identity comes from the live session only; a localStorage uid can belong
+    // to a previous account on a shared device (audit N002).
+    const userId = currentUser?.uid || null;
     if (!userId) {
       toast.error('Please sign in to like posts');
       return;
@@ -644,7 +651,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (debounceLikeRef.current) clearTimeout(debounceLikeRef.current);
     debounceLikeRef.current = setTimeout(async () => {
       try {
-        if (navigator.onLine && userId !== 'local_user') {
+        if (navigator.onLine) {
           if (newLiked) {
             await firestoreService.likePost?.(post.id, userId);
           } else {
@@ -666,7 +673,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [currentUser, post.id, post.authorId, takeSnapshot]);
 
   const handleReaction = useCallback((reaction) => {
-    const effectiveUserId = currentUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : 'local_user');
+    const effectiveUserId = currentUser?.uid || null;
+    if (!effectiveUserId) {
+      toast.error('Please sign in to react to posts');
+      return;
+    }
     const snapshot = takeSnapshot();
     const emoji = typeof reaction === 'string' ? reaction : reaction.emoji;
     const newReaction = snapshot.reaction === emoji ? null : emoji;
@@ -686,7 +697,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (debounceReactionRef.current) clearTimeout(debounceReactionRef.current);
     debounceReactionRef.current = setTimeout(async () => {
       try {
-        if (navigator.onLine && effectiveUserId !== 'local_user') {
+        if (navigator.onLine) {
           if (newReaction) {
             await firestoreService.addReaction?.(post.id, effectiveUserId, newReaction);
           } else {

@@ -9,7 +9,7 @@ import analyticsService from '../../services/analyticsService';
 import { getStoredUid } from '../../utils/security';
 import { 
   TrendingUp, TrendingDown, Users, Eye, Heart, MessageCircle, 
-  Share2, MoreVertical, Calendar, Loader2
+  Share2, MoreVertical, Calendar, Loader2, BarChart3
 } from 'lucide-react';
 
 const TIMEFRAME_OPTIONS = [
@@ -27,10 +27,17 @@ export default function AnalyticsScreen() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const effectiveUid = user?.uid || getStoredUid() || 'creator';
+  const effectiveUid = user?.uid || getStoredUid() || null;
 
   useEffect(() => {
+    if (!effectiveUid) {
+      setAnalytics(null);
+      setError('Sign in to view analytics.');
+      setLoading(false);
+      return;
+    }
     const loadAnalytics = async () => {
       try {
         setLoading(true);
@@ -38,27 +45,18 @@ export default function AnalyticsScreen() {
         setAnalytics(data);
         setError(null);
       } catch (err) {
-        console.warn('Failed to load analytics, using graceful defaults:', err);
-        setAnalytics({
-          totalViews: 0,
-          totalReach: 0,
-          totalEngagement: 0,
-          coinsEarned: 0,
-          dailyStats: [],
-          topPosts: [],
-          ranking: null,
-          demographics: null,
-          growthRate: 0,
-          activeDays: 0,
-          changes: { views: 0, reach: 0, engagement: 0, coins: 0 }
-        });
+        // Never substitute fabricated zero metrics for a failed load; surface
+        // the failure so the screen can show an honest unavailable state.
+        console.warn('Failed to load analytics:', err);
+        setAnalytics(null);
+        setError('Analytics are unavailable right now. Please try again.');
       } finally {
         setLoading(false);
       }
     };
 
     loadAnalytics();
-  }, [effectiveUid, timeframe]);
+  }, [effectiveUid, timeframe, reloadKey]);
 
   const backgroundStyle = useMemo(() => ({
     background: isDark
@@ -71,6 +69,27 @@ export default function AnalyticsScreen() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={backgroundStyle}>
         <Loader2 className="w-8 h-8 animate-spin text-arvdoul-purple" />
+      </div>
+    );
+  }
+
+  // Unavailable / signed-out state — never fabricate zero metrics.
+  if (error || !analytics) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={backgroundStyle}>
+        <BarChart3 className="w-12 h-12 text-arvdoul-purple/70 mb-4" />
+        <h2 className="text-lg font-semibold text-white mb-2">Analytics unavailable</h2>
+        <p className="text-sm text-gray-400 max-w-xs">
+          {error || 'Analytics are unavailable right now. Please try again.'}
+        </p>
+        {effectiveUid && (
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="mt-5 px-5 py-2.5 rounded-full bg-arvdoul-gradient text-white text-sm font-medium"
+          >
+            Retry
+          </button>
+        )}
       </div>
     );
   }

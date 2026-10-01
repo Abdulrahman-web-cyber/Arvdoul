@@ -411,7 +411,9 @@ async function flushOfflineQueue(postId, userId, onSuccess) {
   const db = await getOfflineDB();
   try {
     const all = await db.getAll('queue');
-    const items = all.filter(item => item.postId === postId);
+    // Scope the flush to the signed-in account so a queued comment authored by
+    // account A is never submitted under account B (audit N014).
+    const items = all.filter(item => item.postId === postId && item.userId === userId);
     for (const item of items) {
       try {
         let mediaUrl = null;
@@ -1251,12 +1253,13 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
 
   // ── Submit comment (optimistic) ─────────────────────
   const handleSubmitComment = useCallback(async (content, parentId = null, type = 'text', blob = null) => {
-    const activeUser = currentUser || {
-      uid: (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : 'local_user'),
-      displayName: 'You',
-      photoURL: null,
-      username: 'you'
-    };
+    // Identity must come from the live session only. Fabricating a 'local_user'
+    // fallback wrote comments under a phantom account (audit N002/N005).
+    if (!currentUser?.uid) {
+      toast.error('Please sign in to comment');
+      return;
+    }
+    const activeUser = currentUser;
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const optimistic = {
       id: tempId,
@@ -1281,7 +1284,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (parent) updateComment(postId, parentId, { repliesCount: (parent.repliesCount || 0) + 1 });
     }
 
-    if (!navigator.onLine || activeUser.uid === 'local_user') {
+    if (!navigator.onLine) {
       try {
         const key = `arvdoul_local_comments_${postId}`;
         const current = JSON.parse(localStorage.getItem(key) || '[]');

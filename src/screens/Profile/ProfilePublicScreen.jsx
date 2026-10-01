@@ -158,15 +158,20 @@ export default function ProfilePublicScreen() {
           }
         }
 
-        // 5. Track profile view in analytics & fetch analytics
+        // 5. Track profile view in analytics & fetch analytics. Analytics is
+        // owner-only data (rules: profile_analytics is owner/admin readable);
+        // only fetch it when the viewer is the profile owner, otherwise the
+        // read is denied and the strip must show real counters, not analytics.
         try {
           const analyticsService = (await import('../../services/analyticsService.js')).default;
           if (currentUser?.uid && targetUid !== currentUser.uid) {
             analyticsService.trackProfileView(currentUser.uid, targetUid).catch(() => {});
           }
-          const userAnalytics = await analyticsService.getUserAnalytics(targetUid, '30d');
-          if (isMounted && userAnalytics) {
-            setAnalytics(userAnalytics);
+          if (currentUser?.uid && targetUid === currentUser.uid) {
+            const userAnalytics = await analyticsService.getUserAnalytics(targetUid, '30d');
+            if (isMounted && userAnalytics) {
+              setAnalytics(userAnalytics);
+            }
           }
         } catch (analyticsErr) {
           console.warn('Analytics note:', analyticsErr);
@@ -292,8 +297,10 @@ export default function ProfilePublicScreen() {
     }
   }, [profileData?.username, profileData?.handle, profileData?.displayName, profileData?.email]);
 
-  // Real profile data without mock fallbacks
-  const effectiveProfile = useMemo(() => {
+  // Base profile: real data only, no mock fallbacks and no privacy decisions.
+  // Privacy is applied once, from the capability engine, in `effectiveProfile`
+  // below (audit N018: components must not re-derive fail-open privacy flags).
+  const baseProfile = useMemo(() => {
     if (!profileData) return null;
     const safeDisplayName = typeof profileData.displayName === 'string' && profileData.displayName.trim() && profileData.displayName !== 'User' && profileData.displayName !== 'Creator'
       ? profileData.displayName.trim()
@@ -320,11 +327,6 @@ export default function ProfilePublicScreen() {
       isCreator: Boolean(profileData.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
-      canViewActivity: profileData.canViewActivity !== false,
-      canViewAchievements: profileData.canViewAchievements !== false,
-      canViewTitles: profileData.canViewTitles !== false,
-      canViewFollowersList: profileData.canViewFollowersList !== false,
-      canViewFollowingList: profileData.canViewFollowingList !== false,
       links: Array.isArray(profileData.links) ? profileData.links : [],
       pronouns: typeof profileData.pronouns === 'string' ? profileData.pronouns : '',
       profession: typeof profileData.profession === 'string' ? profileData.profession : '',
@@ -339,13 +341,31 @@ export default function ProfilePublicScreen() {
   const capabilities = useMemo(() => {
     return resolveCapabilities({
       viewer: currentUser,
-      target: effectiveProfile,
+      target: baseProfile,
       relationship: relationship || {
         isFollowing,
         friendshipStatus
       }
     });
-  }, [currentUser, effectiveProfile, relationship, isFollowing, friendshipStatus]);
+  }, [currentUser, baseProfile, relationship, isFollowing, friendshipStatus]);
+
+  // The single projection handed to the view layer. Economic status and every
+  // gated section are masked here based on the capability engine's decision —
+  // never recomputed by a component (audit N018).
+  const effectiveProfile = useMemo(() => {
+    if (!baseProfile) return null;
+    return {
+      ...baseProfile,
+      coins: capabilities.canViewEconomicStatus ? baseProfile.coins : null,
+      canViewActivity: capabilities.canViewActivity,
+      canViewAchievements: capabilities.canViewAchievements,
+      canViewTitles: capabilities.canViewTitles,
+      canViewFollowersList: capabilities.canViewFollowers,
+      canViewFollowingList: capabilities.canViewFollowing,
+      links: capabilities.canViewLinks ? baseProfile.links : [],
+      presence: capabilities.canViewPresence ? baseProfile.presence : { isOnline: false, status: 'offline', lastActive: null },
+    };
+  }, [baseProfile, capabilities]);
 
   const handleUnblock = useCallback(async () => {
     const targetUid = effectiveProfile?.id || effectiveProfile?.uid || userId;

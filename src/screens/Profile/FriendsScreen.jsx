@@ -26,7 +26,7 @@ export default function FriendsScreen() {
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
-  const currentUser = storeUser || authUser;
+  const currentUser = authUser || storeUser;
   const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
   
   const [friends, setFriends] = useState([]);

@@ -98,16 +98,18 @@ async function addToOfflineQueue(action, data) {
     const oldestCursor = await db.transaction('queue', 'readwrite').store.index('timestamp').openCursor();
     if (oldestCursor) await oldestCursor.delete();
   }
-  await db.add('queue', { action, data, timestamp: Date.now(), retries: 0 });
+  // ownerUid partitions the queue by account so a later session cannot replay
+  // this user's pending writes (audit N014).
+  await db.add('queue', { action, data, ownerUid: data.userId || null, timestamp: Date.now(), retries: 0 });
 }
 
-async function replayOfflineQueue() {
+async function replayOfflineQueue(currentUid = null) {
   if (replayLock) return;
   if (!navigator.onLine) return;
   if (typeof navigator !== 'undefined' && navigator.locks) {
     await navigator.locks.request('arvdoul_offline_replay', { ifAvailable: true }, async () => {
       replayLock = true;
-      try { await doReplay(); } finally { replayLock = false; }
+      try { await doReplay(currentUid); } finally { replayLock = false; }
     });
   } else {
     replayLock = true;
@@ -115,10 +117,12 @@ async function replayOfflineQueue() {
   }
 }
 
-async function doReplay() {
+async function doReplay(currentUid = null) {
   const db = await getOfflineDB();
   const tx = db.transaction('queue', 'readonly');
-  const items = await tx.store.getAll();
+  const all = await tx.store.getAll();
+  // Only replay ops owned by the signed-in account (audit N014).
+  const items = currentUid ? all.filter((item) => item.ownerUid === currentUid) : [];
   if (!items.length) return;
   items.sort((a, b) => a.timestamp - b.timestamp);
   const BATCH_SIZE = 10;
@@ -367,14 +371,14 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     }
   }, [modal, currentUser]);
 
-  // Offline queue listener
+  // Offline queue listener (re-bound on account switch — audit N014)
   useEffect(() => {
     const handler = async () => {
-      await replayOfflineQueue();
+      await replayOfflineQueue(currentUser?.uid || null);
     };
     window.addEventListener('online', handler);
     return () => window.removeEventListener('online', handler);
-  }, []);
+  }, [currentUser?.uid]);
 
   // Scroll lock & focus trap
   useEffect(() => {

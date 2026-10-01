@@ -19,6 +19,7 @@ const functions = require('firebase-functions');
 const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
+const { getUserIdFromContext, getUserEmail } = require('./auth');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -29,19 +30,12 @@ const MAX_DAILY_WITHDRAWAL_REQUESTS = functions.config().monetization?.max_daily
 const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_threshold || 50000;
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
-const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || 1000;
+const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || require('./levelConfig.cjs').COINS_PER_DOLLAR;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
 // ----------------------------------------------------------------------
 // HELPERS
 // ----------------------------------------------------------------------
-const getUserIdFromContext = (context) => {
-  if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
-  }
-  return context.auth.uid;
-};
-
 const generateIdempotencyKey = (providedKey) =>
   (providedKey && typeof providedKey === 'string' && providedKey.length > 0) ? providedKey : uuidv4();
 
@@ -201,16 +195,21 @@ const DEFAULT_GIFT_TYPES = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
 // with per-reason daily caps. Everything else (purchases, ads, gifts, levels)
 // is minted through dedicated server-side functions; a generic client coin
 // faucet would be an exploit.
-const CLIENT_ADD_REASON_CAPS = {
-  post_created_bonus: 10,
-  reel_watch: 200,
-  reel_reaction: 50,
-  comment: 50,
-  like: 100,
-  watch_ad: 50,
-  feed_view: 200,
-  quiz_correct: 20,
-  profile_complete: 1,
+// Client-allowlisted reward reasons. Caps are expressed as BOTH a per-call
+// ceiling and a daily COIN-VOLUME ceiling — never as a transaction count.
+// Capping the number of calls while trusting a client-supplied `amount`
+// (bounded only by MAX_COIN_OPERATION) let a caller mint the maximum on every
+// call; the daily budget below is enforced on summed coin volume.
+const CLIENT_ADD_REASON_LIMITS = {
+  post_created_bonus: { perTx: 10, dailyCoins: 100 },
+  reel_watch: { perTx: 20, dailyCoins: 500 },
+  reel_reaction: { perTx: 5, dailyCoins: 200 },
+  comment: { perTx: 5, dailyCoins: 200 },
+  like: { perTx: 1, dailyCoins: 100 },
+  watch_ad: { perTx: 5, dailyCoins: 200 },
+  feed_view: { perTx: 5, dailyCoins: 500 },
+  quiz_correct: { perTx: 20, dailyCoins: 100 },
+  profile_complete: { perTx: 100, dailyCoins: 100 },
 };
 
 exports.addCoins = functions.https.onCall(async (data, context) => {
@@ -220,35 +219,44 @@ exports.addCoins = functions.https.onCall(async (data, context) => {
     if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION) {
       throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION}.`);
     }
-    const dailyCap = CLIENT_ADD_REASON_CAPS[reason];
-    if (!dailyCap) {
+    const dailyLimit = CLIENT_ADD_REASON_LIMITS[reason];
+    if (!dailyLimit) {
       throw new functions.https.HttpsError(
         'permission-denied',
         `Reason "${reason}" is not allowlisted for client addCoins. Use the dedicated server-side function for this credit.`
       );
     }
+    if (amount > dailyLimit.perTx) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        `Amount ${amount} exceeds the per-call ceiling of ${dailyLimit.perTx} for "${reason}".`
+      );
+    }
     await checkRateLimit(uid, 'addCoins', 10, 60000);
 
-    // Per-reason DAILY CAP: count today's credits for this reason.
+    // Per-reason DAILY COIN-VOLUME CAP: sum today's credited coins for this
+    // reason. Counting transactions (the previous behaviour) did not bound the
+    // value a caller could mint, because `amount` is client-supplied.
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     try {
-      const usedToday = await admin.firestore()
+      const todaysTx = await admin.firestore()
         .collection('coin_transactions')
         .where('userId', '==', uid)
         .where('reason', '==', reason)
         .where('createdAt', '>=', todayStart)
-        .count()
+        .select('amount')
         .get();
-      if (usedToday.data().count >= dailyCap) {
+      const creditedToday = todaysTx.docs.reduce((sum, d) => sum + (Number(d.data().amount) || 0), 0);
+      if (creditedToday + amount > dailyLimit.dailyCoins) {
         throw new functions.https.HttpsError(
           'resource-exhausted',
-          `Daily cap reached for "${reason}" rewards (${dailyCap}/day).`
+          `Daily coin budget reached for "${reason}" (${dailyLimit.dailyCoins} coins/day).`
         );
       }
     } catch (err) {
       if (err instanceof functions.https.HttpsError) throw err;
-      // Count query failed (index missing) — fail closed, never bypass the cap.
+      // Query failed (index missing) — fail closed, never bypass the cap.
       throw new functions.https.HttpsError('internal', 'Reward cap check failed: ' + err.message);
     }
 
@@ -1015,8 +1023,8 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     case 'invoice.payment_succeeded':
       const invoice = event.data.object;
       const customerId = invoice.customer;
-      // Find user by stripeCustomerId
-      const userQuery = await db.collection('users').where('stripeCustomerId', '==', customerId).get();
+      // Find user by stripeCustomerId (stored on the private doc)
+      const userQuery = await db.collection('users_private').where('stripeCustomerId', '==', customerId).get();
       if (!userQuery.empty) {
         const userId = userQuery.docs[0].id;
         const subscriptionId = invoice.subscription;
@@ -1122,10 +1130,13 @@ const COIN_PACKAGES = {
   coins_5000: { coins: 5000, priceUsdCents: 3999 },
 };
 
+// Subscription tiers are single-source: price (USD cents) + monthly coin grant.
+// The Stripe price is created from `priceUsdCents` at subscribe time; there is
+// no pre-baked `priceId` placeholder to drift out of sync.
 const SUBSCRIPTION_TIERS = {
-  basic: { priceId: null,  coinsPerMonth: 500 },
-  pro:   { priceId: null,  coinsPerMonth: 2000 },
-  premium: { priceId: null, coinsPerMonth: 5000 },
+  basic: { priceUsdCents: 499, coinsPerMonth: 500 },
+  pro: { priceUsdCents: 999, coinsPerMonth: 2000 },
+  premium: { priceUsdCents: 1999, coinsPerMonth: 5000 },
 };
 
 const AD_REWARD_PER_30S = 2; // coins per 30 seconds watched
@@ -1133,14 +1144,14 @@ const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
 
 async function getOrCreateStripeCustomer(uid) {
   const userRef = admin.firestore().collection('users').doc(uid);
-  const userSnap = await userRef.get();
+  const privateRef = admin.firestore().collection('users_private').doc(uid);
+  const [userSnap, privateSnap] = await Promise.all([userRef.get(), privateRef.get()]);
   if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
-  if (userSnap.data().stripeCustomerId) return { id: userSnap.data().stripeCustomerId };
-  const customer = await stripe.customers.create({
-    email: userSnap.data().email || undefined,
-    metadata: { userId: uid },
-  });
-  await userRef.update({ stripeCustomerId: customer.id });
+  if (privateSnap.data()?.stripeCustomerId) return { id: privateSnap.data().stripeCustomerId };
+  // PII lives on users_private; the helper falls back to the legacy public doc.
+  const email = await getUserEmail(uid);
+  const customer = await stripe.customers.create({ email, metadata: { userId: uid } });
+  await privateRef.set({ stripeCustomerId: customer.id }, { merge: true });
   return customer;
 }
 
@@ -1263,11 +1274,11 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
       const ledgerSnap = await t.get(ledgerRef);
       if (ledgerSnap.exists) return ledgerSnap.data().result;
 
-      // Real recurring subscription: create a monthly price per tier, attach the
-      // payment method, and set the default invoice to auto-charge it.
-      const tierPriceUsdCents = { basic: 499, pro: 999, premium: 1999 }[tier] || 999;
+      // Real recurring subscription: create a monthly price from the tier
+      // config, attach the payment method, and set the default invoice to
+      // auto-charge it.
       const price = await stripe.prices.create({
-        unit_amount: tierPriceUsdCents,
+        unit_amount: tierCfg.priceUsdCents,
         currency: 'usd',
         recurring: { interval: 'month' },
         product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
@@ -1377,7 +1388,7 @@ exports.createPayoutAccount = functions.https.onCall(async (data, context) => {
     const account = await stripe.accounts.create({
       type: 'express',
       country: countryCode,
-      email: userSnap.data().email || undefined,
+      email: await getUserEmail(uid),
       capabilities: { transfers: { requested: true } },
     });
     const refreshUrl = returnUrl || 'https://arvdoul.app/payouts';

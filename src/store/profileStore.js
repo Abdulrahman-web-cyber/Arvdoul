@@ -75,6 +75,10 @@ const initialState = {
   // UI state
   activeTab: 'posts',
   refreshKey: 0,
+  // Monotonic request token. Every loadProfile call takes a new value and any
+  // in-flight response whose token is stale is discarded, so a slow response
+  // for a previous account or route cannot overwrite current state (audit N013).
+  requestSeq: 0,
 };
 
 // ==================== STORE ====================
@@ -91,8 +95,10 @@ export const useProfileStore = create(
      */
     loadProfile: async (userId, currentUserId, options = {}) => {
       if (!userId) return;
-      
+
+      const requestId = get().requestSeq + 1;
       set((state) => {
+        state.requestSeq = requestId;
         state.loading = true;
         state.error = null;
       });
@@ -170,28 +176,26 @@ export const useProfileStore = create(
             ? profile.username
             : fallbackUsername,
         } : {
-          id: userId || effectiveUid || 'creator',
-          uid: userId || effectiveUid || 'creator',
+          // No profile document was returned. Never invent standing: omit
+          // coins/level/reputation and deny every viewer-gated section rather
+          // than rendering fabricated values as real.
+          id: userId || effectiveUid || null,
+          uid: userId || effectiveUid || null,
           username: fallbackUsername,
           displayName: fallbackDisplayName,
           bio: typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
           photoURL: appCurrentUser?.photoURL || null,
-          followerCount: Number(appCurrentUser?.followerCount || appCurrentUser?.followersCount || 0),
-          followingCount: Number(appCurrentUser?.followingCount || 0),
-          postCount: 0,
-          likesReceived: 0,
-          friendCount: 0,
-          coins: isOwner ? (balance || Number(appCurrentUser?.coins) || 100) : 0,
-          level: level || Number(appCurrentUser?.level) || 1,
-          reputation: 100,
-          isVerified: Boolean(appCurrentUser?.isVerified),
-          isCreator: Boolean(appCurrentUser?.isCreator),
-          canViewActivity: true,
-          canViewAchievements: true,
-          canViewTitles: true,
-          canViewFollowersList: true,
-          canViewFollowingList: true,
+          isVerified: false,
+          isCreator: false,
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false,
+          canViewFollowersList: false,
+          canViewFollowingList: false,
         };
+
+        // Drop a stale response (account switch / newer navigation) — N013.
+        if (get().requestSeq !== requestId) return;
 
         set((state) => {
           state.profile = resolvedProfile;
@@ -200,7 +204,7 @@ export const useProfileStore = create(
           state.isOwner = isOwner;
           state.followStatus = followStatus;
           state.mutualFriends = mutualFriends;
-          state.level = level || resolvedProfile.level || 1;
+          state.level = resolvedProfile.level ?? level ?? null;
           state.balance = balance;
           state.position = position;
         });
@@ -226,36 +230,32 @@ export const useProfileStore = create(
           : (typeof userId === 'string' && userId.startsWith('user_') ? userId : `user_${(typeof userId === 'string' ? userId : 'creator').slice(0, 7)}`);
 
         const fallbackProfile = {
-          id: userId || effectiveUid || 'creator',
-          uid: userId || effectiveUid || 'creator',
+          // Load failed: surface a not-found state instead of inventing
+          // coins/level/reputation or granting viewer-gated sections.
+          id: userId || effectiveUid || null,
+          uid: userId || effectiveUid || null,
           username: fallbackUsername,
           displayName: fallbackDisplayName,
           bio: typeof localAuth.bio === 'string' ? localAuth.bio : '',
           photoURL: localAuth.photoURL || null,
-          followerCount: Number(localAuth.followerCount) || 0,
-          followingCount: Number(localAuth.followingCount) || 0,
-          postCount: 0,
-          likesReceived: 0,
-          friendCount: 0,
-          coins: isOwner ? (Number(localAuth.coins) || 100) : 0,
-          isVerified: Boolean(isOwner && localAuth.isVerified),
-          isCreator: Boolean(isOwner && localAuth.isCreator),
-          level: isOwner ? (Number(localAuth.level) || 1) : 1,
-          balance: isOwner ? (Number(localAuth.coins) || 0) : 0,
-          canViewActivity: true,
-          canViewAchievements: true,
-          canViewTitles: true,
-          canViewFollowersList: true,
-          canViewFollowingList: true,
+          isVerified: false,
+          isCreator: false,
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false,
+          canViewFollowersList: false,
+          canViewFollowingList: false,
         };
+
+        if (get().requestSeq !== requestId) return;
 
         set((state) => {
           state.profile = fallbackProfile;
           state.loading = false;
-          state.error = null;
+          state.error = error?.message || 'Profile unavailable';
           state.isOwner = isOwner;
-          state.balance = fallbackProfile.coins;
-          state.level = fallbackProfile.level;
+          state.balance = null;
+          state.level = null;
         });
       }
     },
@@ -672,7 +672,12 @@ export const useProfileStore = create(
      */
     follow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
-      
+
+      // Snapshot before the optimistic write so rollback restores the
+      // real previous state instead of a hard-coded guess (audit N012).
+      const previousFollowStatus = get().followStatus;
+      const previousFollowerCount = get().profile?.followerCount || 0;
+
       // Optimistic update
       set((state) => {
         state.followLoading = true;
@@ -697,14 +702,12 @@ export const useProfileStore = create(
       } catch (error) {
         console.error('❌ Follow failed:', error);
         
-        // Rollback
+        // Rollback to the captured snapshot (audit N012).
         set((state) => {
           state.followLoading = false;
-          if (state.followStatus) {
-            state.followStatus.isFollowing = false;
-          }
+          state.followStatus = previousFollowStatus;
           if (state.profile) {
-            state.profile.followerCount = Math.max(0, (state.profile.followerCount || 1) - 1);
+            state.profile.followerCount = previousFollowerCount;
           }
         });
         
@@ -769,14 +772,17 @@ export const useProfileStore = create(
      */
     updateFollowStatus: (followerId, followingId, isFollowing) => {
       set((state) => {
+        // Idempotent: only adjust the counter on an actual transition,
+        // so repeated calls with the same state cannot double-count (N012).
+        const wasFollowing = state.followStatus?.isFollowing === true;
         state.followStatus = {
           ...state.followStatus,
           isFollowing,
         };
-        if (state.profile) {
+        if (state.profile && wasFollowing !== Boolean(isFollowing)) {
           state.profile.followerCount = isFollowing
             ? (state.profile.followerCount || 0) + 1
-            : Math.max(0, (state.profile.followerCount || 1) - 1);
+            : Math.max(0, (state.profile.followerCount || 0) - 1);
         }
       });
     },
@@ -798,7 +804,11 @@ export const useProfileStore = create(
      */
     clear: () => {
       set((state) => {
+        const nextSeq = (state.requestSeq || 0) + 1;
         Object.assign(state, initialState);
+        // Keep the bumped token so any in-flight load for the previous account
+        // is discarded when it resolves (audit N013).
+        state.requestSeq = nextSeq;
       });
     },
     

@@ -199,9 +199,13 @@ const ProfileCreatorDashboard = memo(({
     );
   };
 
-  // Rank info
-  const standingPercentile = ranking?.percentile ? `Top ${ranking.percentile}%` : 'Active';
-  const standingLabel = ranking?.rank ? `Rank #${ranking.rank} Global` : (ranking?.tier || 'Creator');
+  // Rank info. The ranking object comes from analyticsService.getCreatorRanking
+  // (position/percentile/label); `rank`/`tier` are accepted as aliases.
+  const standingRank = ranking?.position ?? ranking?.rank ?? null;
+  const standingPercentile = ranking?.percentile
+    ? `Top ${Math.round(ranking.percentile)}%`
+    : (ranking?.label || 'Unranked');
+  const standingLabel = standingRank ? `Rank #${standingRank} Global` : (ranking?.label || 'Creator');
 
   return (
     <div className={cn(

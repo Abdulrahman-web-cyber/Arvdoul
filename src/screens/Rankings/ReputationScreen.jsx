@@ -50,9 +50,14 @@ export default function ReputationScreen() {
     );
   }
 
-  const rep = profile?.reputation || { score: 50, band: 'Neutral', min: 40, max: 59, nextBand: 'Established', nextThreshold: 60 };
-  const inf = profile?.influence || { score: 20, band: 'Minimal', nextBand: 'Emerging', nextThreshold: 20 };
-  const con = profile?.contribution || { score: 25, band: 'Contributor', nextBand: 'Builder', nextThreshold: 40 };
+  // Real values only; when a dimension is not stored, show an explicit
+  // unavailable state instead of a fabricated baseline.
+  const rep = profile?.reputation || { score: null, band: null, available: false };
+  const inf = profile?.influence || { score: null, band: null, available: false };
+  const con = profile?.contribution || { score: null, band: null, available: false };
+  const repAvailable = rep.available !== false && rep.score !== null;
+  const infAvailable = inf.available !== false && inf.score !== null;
+  const conAvailable = con.available !== false && con.score !== null;
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
@@ -102,28 +107,40 @@ export default function ReputationScreen() {
                   Trust Dimension
                 </span>
                 <h2 id="trust-heading" className="text-xl font-bold mt-0.5">
-                  {rep.band} Standing
+                  {repAvailable ? `${rep.band} Standing` : 'Trust Standing unavailable'}
                 </h2>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-black text-emerald-400">{rep.score}</span>
-              <span className="text-xs text-gray-500 block">/ 100</span>
+              {repAvailable ? (
+                <>
+                  <span className="text-2xl font-black text-emerald-400">{rep.score}</span>
+                  <span className="text-xs text-gray-500 block">/ 100</span>
+                </>
+              ) : (
+                <span className="text-2xl font-black text-gray-500">—</span>
+              )}
             </div>
           </div>
 
-          <div className="mt-5 space-y-2">
-            <div className="flex justify-between text-xs text-gray-400">
-              <span>Current Range: {rep.min}–{rep.max}</span>
-              <span>Next: {rep.nextBand || 'Maximum Trust'}</span>
+          {repAvailable ? (
+            <div className="mt-5 space-y-2">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Current Range: {rep.min}–{rep.max}</span>
+                <span>Next: {rep.nextBand || 'Maximum Trust'}</span>
+              </div>
+              <div className={`h-2.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(5, rep.score))}%` }}
+                />
+              </div>
             </div>
-            <div className={`h-2.5 w-full rounded-full overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
-              <div
-                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.max(5, rep.score))}%` }}
-              />
-            </div>
-          </div>
+          ) : (
+            <p className="mt-5 text-sm text-gray-500">
+              No trust score is recorded for this account yet.
+            </p>
+          )}
           <p className="text-xs text-gray-500 mt-3">
             Grounded in civility, verified authenticity, zero community safety violations, and peer endorsements.
           </p>
@@ -146,13 +163,19 @@ export default function ReputationScreen() {
                   Reach & Authority
                 </span>
                 <h2 id="influence-heading" className="text-xl font-bold mt-0.5">
-                  {inf.band} Influence
+                  {infAvailable ? `${inf.band} Influence` : 'Influence unavailable'}
                 </h2>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-black text-purple-400">{inf.score}</span>
-              <span className="text-xs text-gray-500 block">Score</span>
+              {infAvailable ? (
+                <>
+                  <span className="text-2xl font-black text-purple-400">{inf.score}</span>
+                  <span className="text-xs text-gray-500 block">Score</span>
+                </>
+              ) : (
+                <span className="text-2xl font-black text-gray-500">—</span>
+              )}
             </div>
           </div>
 
@@ -178,13 +201,19 @@ export default function ReputationScreen() {
                   Civic Building
                 </span>
                 <h2 id="contribution-heading" className="text-xl font-bold mt-0.5">
-                  {con.band} Tier
+                  {conAvailable ? `${con.band} Tier` : 'Contribution unavailable'}
                 </h2>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-black text-teal-400">{con.score}</span>
-              <span className="text-xs text-gray-500 block">Contribution</span>
+              {conAvailable ? (
+                <>
+                  <span className="text-2xl font-black text-teal-400">{con.score}</span>
+                  <span className="text-xs text-gray-500 block">Contribution</span>
+                </>
+              ) : (
+                <span className="text-2xl font-black text-gray-500">—</span>
+              )}
             </div>
           </div>
 

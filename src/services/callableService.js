@@ -10,6 +10,7 @@ export const FUNCTIONS = {
   GRANT_ADMIN: 'grantAdmin',
   REVOKE_ADMIN: 'revokeAdmin',
   LIST_ADMINS: 'listAdmins',
+  LIST_USERS: 'listUsers',
   APPLY_USER_ADMIN_ACTION: 'applyUserAdminAction',
   RESOLVE_USER_REPORT: 'resolveUserReport',
   DELETE_USER_DATA: 'deleteUserData',
@@ -83,6 +84,21 @@ export async function listAdmins() {
   return callFunction(FUNCTIONS.LIST_ADMINS);
 }
 
+/**
+ * Admin directory: users with contact email merged from users_private.
+ */
+export async function listUsers(limit = 50) {
+  return callFunction(FUNCTIONS.LIST_USERS, { limit });
+}
+
+/**
+ * Admin moderation: ban / suspend / unban / restore / verify / unverify.
+ * Server-authoritative and audit-logged; never a direct Firestore write.
+ */
+export async function applyUserAdminAction(userId, action) {
+  return callFunction(FUNCTIONS.APPLY_USER_ADMIN_ACTION, { userId, action });
+}
+
 export default {
   FUNCTIONS,
   callFunction,
@@ -91,4 +107,6 @@ export default {
   grantAdmin,
   revokeAdmin,
   listAdmins,
+  listUsers,
+  applyUserAdminAction,
 };

@@ -6,6 +6,8 @@ import { jest } from '@jest/globals';
 import {
   enqueueAction,
   getQueueStatus,
+  offlineQueue,
+  purgeQueueForOwner,
   registerSyncHandler,
   syncQueue,
   subscribeSyncStatus,
@@ -66,5 +68,66 @@ describe('Phase 7 & 8: Deep Offline Synchronization Engine', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(received).toBeDefined();
     unsubscribe();
+  });
+
+  test('binds an unowned enqueue to the live session account (N014)', async () => {
+    const sessionHandler = jest.fn().mockResolvedValue({ success: true });
+    registerSyncHandler('session.action', sessionHandler);
+
+    window._arvdoul_auth = { currentUser: { uid: 'session-user' } };
+    try {
+      await offlineQueue.enqueue({
+        type: 'session.action',
+        payload: { note: 'implicit owner' },
+      });
+
+      // A different account must not drain it.
+      await syncQueue({ ownerUid: 'other-user' });
+      expect(sessionHandler).not.toHaveBeenCalled();
+
+      await syncQueue({ ownerUid: 'session-user' });
+      expect(sessionHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ note: 'implicit owner' })
+      );
+    } finally {
+      window._arvdoul_auth = undefined;
+    }
+  });
+
+  test('purges only the departing account\'s queued ops (N014)', async () => {
+    const handler = jest.fn().mockResolvedValue({ success: true });
+    registerSyncHandler('purge.action', handler);
+
+    await offlineQueue.enqueue({ type: 'purge.action', payload: { n: 1 }, ownerUid: 'departing' });
+    await offlineQueue.enqueue({ type: 'purge.action', payload: { n: 2 }, ownerUid: 'staying' });
+
+    const removed = await purgeQueueForOwner('departing');
+    expect(removed).toBeGreaterThanOrEqual(1);
+
+    await syncQueue({ ownerUid: 'staying' });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ n: 2 }));
+  });
+
+  test('never replays another account\'s queued ops (N014 account partitioning)', async () => {
+    const ownerA = jest.fn().mockResolvedValue({ success: true });
+    registerSyncHandler('partition.action', ownerA);
+
+    // Enqueue directly so no auto-drain fires for account A.
+    await offlineQueue.enqueue({
+      type: 'partition.action',
+      payload: { note: 'belongs to A' },
+      ownerUid: 'account-A',
+    });
+
+    // Draining as account B must skip A's op entirely.
+    await syncQueue({ ownerUid: 'account-B' });
+    expect(ownerA).not.toHaveBeenCalled();
+
+    // Draining as account A executes it.
+    await syncQueue({ ownerUid: 'account-A' });
+    expect(ownerA).toHaveBeenCalledWith(
+      expect.objectContaining({ note: 'belongs to A' })
+    );
   });
 });

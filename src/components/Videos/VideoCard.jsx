@@ -703,7 +703,7 @@ const VideoCard = memo(({
             <div className="relative">
               <img
                 src={video?.creator?.avatar || '/assets/default-profile.png'}
-                alt={video?.creator?.name || 'Abdulrahman'}
+                alt={video?.creator?.name || 'Creator'}
                 className="w-10 h-10 rounded-full ring-2 ring-purple-500/80 object-cover"
               />
               <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-cyan-400 flex items-center justify-center">

@@ -58,11 +58,13 @@ export default function ProfileMyScreen() {
   const [activeTab, setActiveTab] = useState('posts');
   const [viewAs, setViewAs] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
 
-  // Authenticated user
+  // Authenticated user. Live Firebase Auth identity wins over the persisted
+  // store: `arvdoul-app-store` survives sign-out, so preferring it could resolve
+  // a previous account's uid before the new session hydrates.
   const { user: authContextUser } = useAuth();
   const authStoreUser = useAppStore((state) => state.currentUser);
-  const currentUser = authStoreUser || authContextUser;
-  const currentUserId = currentUser?.uid || authContextUser?.uid || getStoredUid();
+  const currentUser = authContextUser || authStoreUser;
+  const currentUserId = authContextUser?.uid || authStoreUser?.uid || getStoredUid();
 
   const handleViewAsChange = useCallback((mode) => {
     setViewAs(mode);

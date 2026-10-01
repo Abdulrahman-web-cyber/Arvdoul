@@ -31,7 +31,7 @@ import {
 import { Virtuoso } from 'react-virtuoso';
 import feedService from '../services/feedService';
 import userService from '../services/userService';
-import { getBalance, addCoins } from '../services/monetizationService.js';
+import { getBalance, watchAd } from '../services/monetizationService.js';
 import PostCard from './PostCard';
 import CommentsDrawer from './CommentsDrawer';
 import PostOptionsDrawer from './PostOptionsDrawer';
@@ -57,6 +57,9 @@ const WARM_FEED_LIMIT = 500;
 const MAX_PENDING_NEW_POSTS = 50;
 const PENDING_POSTS_TTL_MS = 30000;
 const PREDICTIVE_PRELOAD_SCROLL_RATIO = 0.6;
+// Reward-ad watch duration. Must be >= 5 (server minimum) and a whole number of
+// 30s blocks so the server's AD_REWARD_PER_30S formula credits exactly one block.
+const AD_WATCH_SECONDS = 30;
 const DB_VERSION = 4;
 const CACHE_VERSION = 6;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -766,7 +769,7 @@ export default function HomeScreen() {
 
   const handleOpenRewardAd = useCallback(() => {
     setIsRewardAdOpen(true);
-    setAdWatchSeconds(5);
+    setAdWatchSeconds(AD_WATCH_SECONDS);
     const interval = setInterval(() => {
       setAdWatchSeconds((prev) => {
         if (prev <= 1) {
@@ -779,30 +782,28 @@ export default function HomeScreen() {
   }, []);
 
   const handleClaimReward = useCallback(async () => {
-    if (isClaimingCoins) return;
+    if (isClaimingCoins || adWatchSeconds > 0) return;
     setIsClaimingCoins(true);
     try {
-      const uid = user?.uid || 'local_creator';
-      if (user?.uid) {
-        await addCoins(uid, 15, 'reward_ad');
+      if (!user?.uid) {
+        throw new Error('Sign in to claim ad rewards');
       }
-      const newBal = userCoins + 15;
-      setUserCoins(newBal);
-      localStorage.setItem(`arvdoul_coins_${uid}`, String(newBal));
+      // Server-verified reward: the client never credits coins locally.
+      const result = await watchAd('feed_reward', 'rewarded_ad', AD_WATCH_SECONDS, {});
+      if (typeof result?.newBalance === 'number') {
+        setUserCoins(result.newBalance);
+        try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch {}
+      }
       triggerHaptic('success');
-      toast.success('🎉 Claimed +15 Coins from Sponsored Ad!');
+      toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
       setIsRewardAdOpen(false);
-    } catch {
-      const uid = user?.uid || 'local_creator';
-      const newBal = userCoins + 15;
-      setUserCoins(newBal);
-      localStorage.setItem(`arvdoul_coins_${uid}`, String(newBal));
-      toast.success('🎉 +15 Coins added to balance!');
-      setIsRewardAdOpen(false);
+    } catch (err) {
+      toast.error('Could not credit the reward. Please try again.');
+      console.warn('[HomeScreen] ad reward failed:', err?.message);
     } finally {
       setIsClaimingCoins(false);
     }
-  }, [user?.uid, userCoins, isClaimingCoins]);
+  }, [user?.uid, isClaimingCoins, adWatchSeconds]);
 
   const virtuosoRef = useRef(null);
   const scrollerRef = useRef(null);
@@ -1620,7 +1621,7 @@ export default function HomeScreen() {
                       className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2"
                     >
                       <Gift className="w-4 h-4" />
-                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim +15 Coins Now 🎉'}
+                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim Coins Now 🎉'}
                     </button>
                   )}
                 </div>

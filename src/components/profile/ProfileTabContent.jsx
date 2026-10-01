@@ -261,14 +261,18 @@ const ProfileTabContent = memo(({
       return renderLoading(true);
     }
     
-    // Fallback metrics populated with profile data so creators never see a broken tab
-    const effectiveAnalytics = analytics || {
-      totalViews: profile?.viewsCount || 1280,
-      totalReach: Math.max((profile?.followersCount || 1) * 8, 450),
-      engagementRate: 8.4,
-      coinsEarned: profile?.coins ?? 1250,
-      changes: { views: 12.5, reach: 9.2, engagement: 3.1, coins: 14.8 }
-    };
+    // No analytics document yet (or the fetch failed). Never invent metrics -
+    // fabricated views/reach/earnings are indistinguishable from real data and
+    // would mislead the creator. Show the honest empty state instead.
+    if (!analytics || analytics.hasData === false) {
+      return renderEmpty(
+        BarChart2,
+        'No analytics yet',
+        'Analytics appear once people start viewing your profile and posts.'
+      );
+    }
+
+    const effectiveAnalytics = analytics;
     
     // Analytics metrics
     const metrics = [
@@ -291,7 +295,11 @@ const ProfileTabContent = memo(({
       { 
         key: 'engagement', 
         label: 'Engagement', 
-        value: effectiveAnalytics.engagementRate?.toFixed(1) || '0.0', 
+        value: effectiveAnalytics.engagementRate != null
+          ? effectiveAnalytics.engagementRate.toFixed(1)
+          : (effectiveAnalytics.totalViews > 0
+              ? ((effectiveAnalytics.totalEngagement || 0) / effectiveAnalytics.totalViews * 100).toFixed(1)
+              : '0.0'),
         suffix: '%',
         icon: Heart, 
         color: 'from-pink-500 to-red-500',
@@ -299,7 +307,7 @@ const ProfileTabContent = memo(({
       },
       { 
         key: 'coins', 
-        label: 'Coins Balance', 
+        label: 'Coins Earned', 
         value: effectiveAnalytics.coinsEarned || 0, 
         icon: Coins, 
         color: 'from-yellow-500 to-orange-500',

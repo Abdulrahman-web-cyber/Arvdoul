@@ -53,7 +53,7 @@ export default function ProfilePreviewScreen({
   const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
 
   // Resolve active profile from props, location.state, store, or auth
-  const rawProfile = propProfile || location.state?.profile || storeProfile || storeUser || authUser || getStoredUser();
+  const rawProfile = propProfile || location.state?.profile || storeProfile || authUser || storeUser || getStoredUser();
 
   useEffect(() => {
     if (!rawProfile && currentUserId) {
@@ -100,6 +100,16 @@ export default function ProfilePreviewScreen({
       viewAs: isOwnerMode ? null : 'public',
     });
   }, [authUser, effectiveProfile, isOwnerMode]);
+
+  // Apply the capability decision once; the view layer never re-derives it
+  // (audit N018). In public simulation mode economic status is masked.
+  const projectedProfile = useMemo(() => {
+    if (!effectiveProfile) return effectiveProfile;
+    return {
+      ...effectiveProfile,
+      coins: capabilities.canViewEconomicStatus ? effectiveProfile.coins : null,
+    };
+  }, [effectiveProfile, capabilities]);
 
   const handleBack = () => {
     if (onBack) {
@@ -203,7 +213,7 @@ export default function ProfilePreviewScreen({
 
         {/* 1. Hero Identity Header */}
         <ProfileHeroSection
-          profile={effectiveProfile}
+          profile={projectedProfile}
           isOwner={isOwnerMode}
           level={effectiveProfile?.level || 1}
           theme={theme}
@@ -215,7 +225,7 @@ export default function ProfilePreviewScreen({
         <ProfileMetricsGrid
           isOwner={isOwnerMode}
           theme={theme}
-          profile={effectiveProfile}
+          profile={projectedProfile}
           capabilities={capabilities}
         />
 

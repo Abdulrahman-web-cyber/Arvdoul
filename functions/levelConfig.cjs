@@ -841,6 +841,16 @@ const TRANSACTION_STATES = Object.freeze({
 });
 
 /**
+ * Monetary exchange rate — SINGLE SOURCE OF TRUTH for coin <-> USD conversion.
+ *
+ * Coins are denominated in USD at a fixed platform rate. The payout server
+ * (functions/monetization.js) and the client payout/analytics screens must both
+ * read this value; hardcoding it in a component caused the client to show a
+ * different USD figure than the server actually paid out.
+ */
+const COINS_PER_DOLLAR = 200;
+
+/**
  * Prestige info beyond Level 100.
  */
 function getPrestigeInfo(level = 1) {
@@ -867,6 +877,7 @@ module.exports = {
   CONTRIBUTION_BANDS,
   CREATOR_TIERS,
   TRANSACTION_STATES,
+  COINS_PER_DOLLAR,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,

@@ -21,8 +21,6 @@ import {
   addDoc,
   setDoc,
   updateDoc,
-  increment,
-  runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -31,6 +29,10 @@ import { openDB } from 'idb';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { loadStripe } from '@stripe/stripe-js';
 import { svcLogger } from './ServiceKit.js';
+// Canonical level curve (single source of truth). The previous local copy had
+// already drifted from levelConfig.cjs (it stopped at level 15 with a
+// different curve), so progression here now reads the shared table.
+import { LEVELS as CANONICAL_LEVELS } from '../shared/levelConfig.cjs';
 
 const log = svcLogger('monetizationService');
 
@@ -59,23 +61,7 @@ function generateIdempotencyKey() {
 
 // ---------- DEFAULT CONFIG (all amounts in COINS or CENTS) ----------
 const DEFAULT_CONFIG = {
-  LEVELS: [
-    { level: 1, xpRequired: 0, coinReward: 0 },
-    { level: 2, xpRequired: 100, coinReward: 10 },
-    { level: 3, xpRequired: 300, coinReward: 20 },
-    { level: 4, xpRequired: 600, coinReward: 30 },
-    { level: 5, xpRequired: 1000, coinReward: 40 },
-    { level: 6, xpRequired: 1500, coinReward: 50 },
-    { level: 7, xpRequired: 2100, coinReward: 60 },
-    { level: 8, xpRequired: 2800, coinReward: 70 },
-    { level: 9, xpRequired: 3600, coinReward: 80 },
-    { level: 10, xpRequired: 4500, coinReward: 100 },
-    { level: 11, xpRequired: 5500, coinReward: 120 },
-    { level: 12, xpRequired: 6600, coinReward: 140 },
-    { level: 13, xpRequired: 7800, coinReward: 160 },
-    { level: 14, xpRequired: 9100, coinReward: 180 },
-    { level: 15, xpRequired: 10500, coinReward: 200 },
-  ],
+  LEVELS: CANONICAL_LEVELS,
   WITHDRAWAL_MIN_LEVEL: 10,
   GIFTS: [
     { type: 'rose', value: 5 },
@@ -613,13 +599,10 @@ class MonetizationService {
       );
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function watchAd failed, using direct Firestore reward fallback', err);
-      const uid = auth?.currentUser?.uid;
-      const coinsToAdd = this.config.AD_REWARD_COINS?.MEDIUM || 2;
-      if (uid) {
-        await this.addCoins(uid, coinsToAdd, 'watch_ad', { adId, placement });
-      }
-      return { success: true, coinsAwarded: coinsToAdd, message: 'Ad reward credited' };
+      // No client-side reward fallback: ad rewards are server-verified. If the
+      // callable fails, surface it rather than crediting coins locally.
+      log.warn('Cloud Function watchAd failed', err);
+      throw err;
     }
   }
 
@@ -743,20 +726,10 @@ class MonetizationService {
       const result = await retryOperation(() => this.cfCreateSubscription({ tier, paymentMethodId, deviceMetadata }));
       return result.data;
     } catch (err) {
-      const uid = auth?.currentUser?.uid;
-      if (!uid) throw new Error('User not authenticated');
-      const subData = {
-        userId: uid,
-        tier,
-        status: 'active',
-        active: true,
-        startDate: serverTimestamp(),
-        renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        paymentMethodId: paymentMethodId || 'default'
-      };
-      await setDoc(doc(this.db, 'subscriptions', uid), subData, { merge: true });
-      await updateDoc(doc(this.db, 'users', uid), { subscriptionTier: tier, isSubscriber: true });
-      return { success: true, subscription: subData };
+      // Entitlement state is server-owned (subscriptions is server-write-only).
+      // Never mint an "active" subscription client-side.
+      log.error('Create subscription callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -766,11 +739,9 @@ class MonetizationService {
       const result = await retryOperation(() => this.cfCancelSubscription());
       return result.data;
     } catch (err) {
-      const uid = auth?.currentUser?.uid;
-      if (!uid) throw new Error('User not authenticated');
-      await updateDoc(doc(this.db, 'subscriptions', uid), { status: 'cancelled', active: false });
-      await updateDoc(doc(this.db, 'users', uid), { subscriptionTier: null, isSubscriber: false });
-      return { success: true, message: 'Subscription cancelled' };
+      // Cancellation is server-owned; do not flip entitlement locally.
+      log.error('Cancel subscription callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -799,16 +770,10 @@ class MonetizationService {
       const result = await retryOperation(() => this.cfCreatePayoutAccount({ countryCode, returnUrl, deviceMetadata }));
       return result.data;
     } catch (err) {
-      const uid = auth?.currentUser?.uid;
-      if (!uid) throw new Error('User not authenticated');
-      const accountData = {
-        userId: uid,
-        countryCode,
-        status: 'verified',
-        createdAt: serverTimestamp()
-      };
-      await setDoc(doc(this.db, 'payout_settings', uid), accountData, { merge: true });
-      return { success: true, accountId: `acct_${uid.slice(0, 10)}`, status: 'verified' };
+      // A Stripe Connect account only exists once the server/Stripe creates it;
+      // a locally "verified" record would be fabricated financial state.
+      log.error('Create payout account callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -822,34 +787,12 @@ class MonetizationService {
       );
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function addCoins failed, using atomic Firestore transaction fallback', err);
-      return await runTransaction(this.db, async (tx) => {
-        const userRef = doc(this.db, 'users', userId);
-        const userSnap = await tx.get(userRef);
-        const currentCoins = userSnap.exists() ? (userSnap.data().coins || 0) : 0;
-        const currentExp = userSnap.exists() ? (userSnap.data().experience || 0) : 0;
-        const newCoins = currentCoins + Number(amount);
-        const newExp = currentExp + Number(amount);
-        
-        if (userSnap.exists()) {
-          tx.update(userRef, { coins: newCoins, experience: newExp, updatedAt: serverTimestamp() });
-        } else {
-          tx.set(userRef, { coins: newCoins, experience: newExp, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        }
-        
-        const txDocRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txDocRef, {
-          userId,
-          amount: Number(amount),
-          type: 'credit',
-          reason,
-          metadata,
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        return { success: true, newBalance: newCoins, coinsAdded: amount };
-      });
+      // Server-authoritative money path: there is deliberately NO
+      // client-side fallback. A local write could mint or move value
+      // without server validation, so a callable failure is surfaced
+      // to the caller instead of being papered over.
+      log.error('Monetary callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -862,31 +805,12 @@ class MonetizationService {
       );
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function spendCoins failed, using atomic Firestore transaction fallback', err);
-      return await runTransaction(this.db, async (tx) => {
-        const userRef = doc(this.db, 'users', userId);
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists()) throw new Error('User not found');
-        const currentCoins = userSnap.data().coins || 0;
-        if (currentCoins < Number(amount)) {
-          throw new Error('Insufficient coins balance');
-        }
-        const newCoins = currentCoins - Number(amount);
-        tx.update(userRef, { coins: newCoins, updatedAt: serverTimestamp() });
-        
-        const txDocRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txDocRef, {
-          userId,
-          amount: Number(amount),
-          type: 'debit',
-          reason,
-          metadata,
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        return { success: true, newBalance: newCoins, coinsDeducted: amount };
-      });
+      // Server-authoritative money path: there is deliberately NO
+      // client-side fallback. A local write could mint or move value
+      // without server validation, so a callable failure is surfaced
+      // to the caller instead of being papered over.
+      log.error('Monetary callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -899,52 +823,12 @@ class MonetizationService {
       );
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function transferCoins failed, using atomic Firestore transaction fallback', err);
-      return await runTransaction(this.db, async (tx) => {
-        const senderRef = doc(this.db, 'users', fromUserId);
-        const receiverRef = doc(this.db, 'users', toUserId);
-        const senderSnap = await tx.get(senderRef);
-        const receiverSnap = await tx.get(receiverRef);
-        
-        if (!senderSnap.exists()) throw new Error('Sender not found');
-        const senderCoins = senderSnap.data().coins || 0;
-        if (senderCoins < Number(amount)) throw new Error('Insufficient coins for transfer');
-        
-        const receiverCoins = receiverSnap.exists() ? (receiverSnap.data().coins || 0) : 0;
-        
-        tx.update(senderRef, { coins: senderCoins - Number(amount), updatedAt: serverTimestamp() });
-        if (receiverSnap.exists()) {
-          tx.update(receiverRef, { coins: receiverCoins + Number(amount), updatedAt: serverTimestamp() });
-        } else {
-          tx.set(receiverRef, { coins: Number(amount), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        }
-        
-        const txOutRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txOutRef, {
-          userId: fromUserId,
-          targetUserId: toUserId,
-          amount: Number(amount),
-          type: 'transfer_out',
-          reason,
-          metadata,
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        const txInRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txInRef, {
-          userId: toUserId,
-          fromUserId,
-          amount: Number(amount),
-          type: 'transfer_in',
-          reason,
-          metadata,
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        return { success: true, transferred: amount };
-      });
+      // Server-authoritative money path: there is deliberately NO
+      // client-side fallback. A local write could mint or move value
+      // without server validation, so a callable failure is surfaced
+      // to the caller instead of being papered over.
+      log.error('Monetary callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -969,56 +853,12 @@ class MonetizationService {
       this._afterGiftSent(senderId, postId, giftType, cost).catch(() => {});
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function sendGift failed, using atomic Firestore transaction fallback', err);
-      
-      return await runTransaction(this.db, async (tx) => {
-        const senderRef = doc(this.db, 'users', senderId);
-        const postRef = doc(this.db, 'posts', postId);
-        const senderSnap = await tx.get(senderRef);
-        const postSnap = await tx.get(postRef);
-        
-        if (!senderSnap.exists()) throw new Error('Sender not found');
-        const senderCoins = senderSnap.data().coins || 0;
-        if (senderCoins < cost) throw new Error('Insufficient coins to send gift');
-        
-        tx.update(senderRef, { coins: senderCoins - cost, updatedAt: serverTimestamp() });
-        
-        if (postSnap.exists()) {
-          const postData = postSnap.data();
-          const authorId = postData.authorId || postData.userId;
-          tx.update(postRef, {
-            giftCount: increment(1),
-            totalGiftsValue: increment(cost)
-          });
-          if (authorId && authorId !== senderId) {
-            const authorRef = doc(this.db, 'users', authorId);
-            tx.update(authorRef, { coins: increment(cost) });
-          }
-        }
-        
-        const giftDocRef = doc(collection(this.db, 'gifts'));
-        tx.set(giftDocRef, {
-          senderId,
-          postId,
-          giftType,
-          cost,
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        const txDocRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txDocRef, {
-          userId: senderId,
-          amount: cost,
-          type: 'gift_sent',
-          reason: `Sent ${giftType} gift`,
-          metadata: { postId, giftType },
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        return { success: true, giftType, cost };
-      });
+      // Server-authoritative money path: there is deliberately NO
+      // client-side fallback. A local write could mint or move value
+      // without server validation, so a callable failure is surfaced
+      // to the caller instead of being papered over.
+      log.error('Monetary callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -1053,35 +893,12 @@ class MonetizationService {
       );
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function boostPost failed, using atomic Firestore transaction fallback', err);
-      const costPerDay = this.config.BOOST_COST_PER_DAY || DEFAULT_CONFIG.BOOST_COST_PER_DAY || 10;
-      const totalCost = Number(days) * costPerDay;
-      
-      return await runTransaction(this.db, async (tx) => {
-        const userRef = doc(this.db, 'users', userId);
-        const postRef = doc(this.db, 'posts', postId);
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists()) throw new Error('User not found');
-        const userCoins = userSnap.data().coins || 0;
-        if (userCoins < totalCost) throw new Error('Insufficient coins to boost post');
-        
-        const boostExpiry = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-        tx.update(userRef, { coins: userCoins - totalCost, updatedAt: serverTimestamp() });
-        tx.update(postRef, { isBoosted: true, boostedUntil: boostExpiry });
-        
-        const txDocRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txDocRef, {
-          userId,
-          amount: totalCost,
-          type: 'post_boost',
-          reason: `Boosted post for ${days} days`,
-          metadata: { postId, days, boostExpiry },
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        return { success: true, postId, days, totalCost, boostedUntil: boostExpiry };
-      });
+      // Server-authoritative money path: there is deliberately NO
+      // client-side fallback. A local write could mint or move value
+      // without server validation, so a callable failure is surfaced
+      // to the caller instead of being papered over.
+      log.error('Monetary callable failed (no client fallback):', err);
+      throw err;
     }
   }
 
@@ -1094,40 +911,12 @@ class MonetizationService {
       );
       return result.data;
     } catch (err) {
-      log.warn('Cloud Function requestWithdrawal failed, using atomic Firestore transaction fallback', err);
-      return await runTransaction(this.db, async (tx) => {
-        const userRef = doc(this.db, 'users', userId);
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists()) throw new Error('User not found');
-        const userCoins = userSnap.data().coins || 0;
-        if (userCoins < Number(amount)) throw new Error('Insufficient coins for withdrawal');
-        
-        tx.update(userRef, { coins: userCoins - Number(amount), updatedAt: serverTimestamp() });
-        
-        const reqDocRef = doc(collection(this.db, 'withdrawal_requests'));
-        tx.set(reqDocRef, {
-          userId,
-          amount: Number(amount),
-          paymentMethod,
-          paymentDetails,
-          status: 'pending',
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        const txDocRef = doc(collection(this.db, 'coin_transactions'));
-        tx.set(txDocRef, {
-          userId,
-          amount: Number(amount),
-          type: 'withdrawal',
-          reason: `Withdrawal request via ${paymentMethod}`,
-          metadata: { paymentMethod, requestId: reqDocRef.id },
-          idempotencyKey: key,
-          createdAt: serverTimestamp()
-        });
-        
-        return { success: true, requestId: reqDocRef.id, amount, status: 'pending' };
-      });
+      // Server-authoritative money path: there is deliberately NO
+      // client-side fallback. A local write could mint or move value
+      // without server validation, so a callable failure is surfaced
+      // to the caller instead of being papered over.
+      log.error('Monetary callable failed (no client fallback):', err);
+      throw err;
     }
   }
 

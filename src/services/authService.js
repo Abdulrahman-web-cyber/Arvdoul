@@ -420,8 +420,8 @@ class ProductionAuthService {
         displayName: user.displayName,
         authProvider: 'email',
         ...(profile && {
-          coins: profile.coins || 0,
-          level: profile.level || 1,
+          coins: profile.coins,
+          level: profile.level,
           isProfileComplete: profile.isProfileComplete || false
         })
       };
@@ -669,8 +669,6 @@ class ProductionAuthService {
             phoneNumber: user.phoneNumber || '',
             authProvider: 'phone',
             isProfileComplete: true,
-            coins: 50,
-            level: 1,
             accountStatus: 'active'
           });
           logger.warn('// Profile created in Firestore for Phone user');
@@ -704,8 +702,8 @@ class ProductionAuthService {
         authProvider: 'phone',
         isProfileComplete: profile?.isProfileComplete ?? true,
         ...(profile && {
-          coins: profile.coins || 50,
-          level: profile.level || 1,
+          coins: profile.coins,
+          level: profile.level,
           username: profile.username
         })
       };
@@ -803,8 +801,6 @@ class ProductionAuthService {
             authProvider: 'google',
             emailVerified: true,
             isProfileComplete: true,
-            coins: 50,
-            level: 1,
             accountStatus: 'active'
           });
           profileCreated = true;
@@ -841,8 +837,8 @@ class ProductionAuthService {
           isNewUser,
           requiresProfileCompletion: false,
           authProvider: 'google',
-          coins: profile?.coins || 50,
-          level: profile?.level || 1,
+          coins: profile?.coins,
+          level: profile?.level,
           isProfileComplete: profile?.isProfileComplete ?? true
         },
         isNewUser

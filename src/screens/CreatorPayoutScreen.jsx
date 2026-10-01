@@ -13,9 +13,12 @@ import {
 } from 'lucide-react';
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
+import { COINS_PER_DOLLAR } from '../shared/levelConfig.cjs';
 
 const MIN_PAYOUT_COINS = 5000;
-const COIN_TO_USD_RATE = 0.005; // 5000 coins = $25.00
+// Single-sourced with the payout server (functions/monetization.js) so the
+// estimate shown here can never diverge from what Stripe actually pays.
+const COIN_TO_USD_RATE = 1 / COINS_PER_DOLLAR;
 
 export default function CreatorPayoutScreen() {
   const navigate = useNavigate();

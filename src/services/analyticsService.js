@@ -179,6 +179,7 @@ class UltimateAnalyticsService {
       let analytics = {
         userId,
         timeframe,
+        hasData: false,
         totalViews: 0,
         totalReach: 0,
         totalEngagement: 0,
@@ -218,6 +219,7 @@ class UltimateAnalyticsService {
 
         analytics = {
           ...analytics,
+          hasData: true,
           totalViews,
           totalReach,
           totalEngagement: data.totalEngagement || 0,
@@ -263,6 +265,7 @@ class UltimateAnalyticsService {
       const fallbackAnalytics = {
         userId,
         timeframe,
+        hasData: false,
         totalViews: 0,
         totalReach: 0,
         totalEngagement: 0,

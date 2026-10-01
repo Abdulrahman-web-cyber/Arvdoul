@@ -36,94 +36,109 @@ class PassportService {
       profile = snap.exists() ? { id: snap.id, ...snap.data() } : { id: targetUserId };
     }
 
-    // Resolve viewer capabilities using Part 1 canonical engine
+    // Resolve the REAL relationship (owner / follower / connection / blocked)
+    // from the follow + block graph instead of assuming an empty relationship.
+    // An empty relationship made every passport render as if it were the
+    // viewer's own, bypassing the privacy gates below.
     const isOwner = viewerUserId === targetUserId;
+    const relationship = await this._resolveRelationship(viewerUserId, targetUserId);
+
+    // Resolve viewer capabilities using Part 1 canonical engine
     const capabilities = resolveCapabilities({
       viewer: { uid: viewerUserId },
       target: profile,
-      relationship: {
-        isBlocked: false,
-        isRestricted: false,
-        isFollower: false,
-        isMutualFriend: false,
-        areFriends: false,
-      },
+      relationship,
     });
 
-    const level = Number(profile.level) || 1;
-    const activeDaysCount = Number(profile.activeDaysCount) || 1;
-    const activeStreak = Number(profile.activeStreak) || 1;
+    const hasLevel = profile.level !== undefined && profile.level !== null;
+    const level = hasLevel ? Number(profile.level) : null;
+    const hasActiveDays = profile.activeDaysCount !== undefined && profile.activeDaysCount !== null;
+    const activeDaysCount = hasActiveDays ? Number(profile.activeDaysCount) : null;
+    const activeStreak = profile.activeStreak !== undefined && profile.activeStreak !== null
+      ? Number(profile.activeStreak)
+      : null;
 
-    const citizenTier = getCitizenTier(level, activeDaysCount);
-    const rankTitle = getRankTitle(level);
-    const repScore = Number(profile.reputationScore || profile.reputation || 50);
-    const infScore = Number(profile.influenceScore || profile.influence || 20);
-    const conScore = Number(profile.contributionScore || profile.contribution || 25);
+    const citizenTier = level !== null ? getCitizenTier(level, activeDaysCount || 0) : null;
+    const rankTitle = level !== null ? getRankTitle(level) : null;
 
-    const reputationBand = getReputationBand(repScore);
-    const influenceBand = getInfluenceBand(infScore);
-    const contributionBand = getContributionBand(conScore);
+    const readScore = (...candidates) => {
+      for (const value of candidates) {
+        if (value !== undefined && value !== null && value !== '') {
+          const num = Number(value);
+          if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
+        }
+      }
+      return null;
+    };
 
-    // Load achievements if viewer is permitted
-    let verifiedAchievements = Array.isArray(profile.achievements) ? profile.achievements : null;
-    if (verifiedAchievements === null && (capabilities.canViewAchievements || isOwner)) {
-      try {
-        verifiedAchievements = await achievementService.getUserAchievements(targetUserId);
-      } catch (e) {
-        verifiedAchievements = [];
+    const dimension = (score, bandFn) => (
+      score === null
+        ? { score: null, band: null, color: null, available: false }
+        : { score, band: bandFn(score).label, color: bandFn(score).color, available: true }
+    );
+
+    // Standing dimensions are gated by the viewer's capabilities: a viewer who
+    // may not see achievements also may not read the (achievement-derived)
+    // standing scores. Absent data is reported unavailable, never defaulted.
+    const canSeeStanding = Boolean(capabilities.canViewAchievements || isOwner);
+    const reputation = canSeeStanding ? dimension(readScore(profile.reputationScore, profile.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
+    const influence = canSeeStanding ? dimension(readScore(profile.influenceScore, profile.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
+    const contribution = canSeeStanding ? dimension(readScore(profile.contributionScore, profile.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
+
+    // Achievements: only if the viewer is permitted.
+    let verifiedAchievements = [];
+    if (capabilities.canViewAchievements || isOwner) {
+      if (Array.isArray(profile.achievements)) {
+        verifiedAchievements = profile.achievements;
+      } else {
+        try {
+          verifiedAchievements = await achievementService.getUserAchievements(targetUserId);
+        } catch (e) {
+          verifiedAchievements = [];
+        }
       }
     }
-    if (!Array.isArray(verifiedAchievements)) {
-      verifiedAchievements = [];
-    }
+    if (!Array.isArray(verifiedAchievements)) verifiedAchievements = [];
 
-    // Load titles if permitted
-    let earnedTitles = Array.isArray(profile.titles) ? profile.titles : null;
-    if (earnedTitles === null) {
-      try {
-        earnedTitles = await titleService.getUserTitles(targetUserId);
-      } catch (e) {
-        earnedTitles = [];
+    // Titles: only if the viewer is permitted (previously loaded for everyone).
+    let earnedTitles = [];
+    if (capabilities.canViewTitles || isOwner) {
+      if (Array.isArray(profile.titles)) {
+        earnedTitles = profile.titles;
+      } else {
+        try {
+          earnedTitles = await titleService.getUserTitles(targetUserId);
+        } catch (e) {
+          earnedTitles = [];
+        }
       }
     }
-    if (!Array.isArray(earnedTitles)) {
-      earnedTitles = [];
-    }
+    if (!Array.isArray(earnedTitles)) earnedTitles = [];
 
     const citizenId = `ARV-${targetUserId.slice(0, 8).toUpperCase()}`;
     const issueDate = profile.createdAt?.toDate?.()
       ? profile.createdAt.toDate().toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
-      : 'Genesis Era';
+      : null;
 
     return {
       userId: targetUserId,
       citizenId,
       issueDate,
-      displayName: profile.displayName || profile.name || 'Citizen of Arvdoul',
-      username: profile.username || 'citizen',
+      // No invented holder name: when the profile has none, report absence
+      // (audit N005) rather than presenting a synthetic generic citizen name.
+      displayName: profile.displayName || profile.name || null,
+      username: profile.username || null,
       photoURL: profile.photoURL || null,
-      primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier.tier,
+      primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier?.tier || null,
       activeTitle: profile.activeTitle || null,
       rankTitle,
       citizenTier,
       level,
       activeDaysCount,
       activeStreak,
-      reputation: {
-        score: repScore,
-        band: reputationBand.label,
-        color: reputationBand.color,
-      },
-      influence: {
-        score: infScore,
-        band: influenceBand.label,
-        color: influenceBand.color,
-      },
-      contribution: {
-        score: conScore,
-        band: contributionBand.label,
-        color: contributionBand.color,
-      },
+      reputation,
+      influence,
+      contribution,
       achievements: verifiedAchievements,
       titles: earnedTitles,
       passportUrl: getProfileUrl(targetUserId),
@@ -133,6 +148,40 @@ class PassportService {
       isCreator: Boolean(profile.isCreator),
       creatorTier: profile.creatorTier || null,
     };
+  }
+
+  /**
+   * Resolve the relationship between viewer and target from the canonical
+   * follow + block graph. Used so passport privacy gates see the true
+   * relationship rather than an assumed empty one.
+   * @private
+   */
+  async _resolveRelationship(viewerUserId, targetUserId) {
+    if (!viewerUserId || viewerUserId === targetUserId) {
+      return { isFollower: false, isFollowing: false, isMutualFriend: false, isBlocked: false };
+    }
+    try {
+      const db = await getFirestoreInstance();
+      const [forward, reverse, blocked] = await Promise.all([
+        getDoc(doc(db, 'follows', `${viewerUserId}_${targetUserId}`)),
+        getDoc(doc(db, 'follows', `${targetUserId}_${viewerUserId}`)),
+        getDoc(doc(db, 'blocks', `${targetUserId}_${viewerUserId}`)),
+      ]);
+      const isFollowing = forward.exists();
+      const isFollower = reverse.exists();
+      return {
+        isFollowing,
+        isFollower,
+        isMutualFriend: isFollowing && isFollower,
+        isBlocked: blocked.exists(),
+      };
+    } catch (e) {
+      logger.warn('[PassportService] Relationship resolution failed; failing closed', {
+        viewerUserId, targetUserId, error: e?.message,
+      });
+      // Fail closed: assume blocked rather than granting access.
+      return { isFollower: false, isFollowing: false, isMutualFriend: false, isBlocked: true };
+    }
   }
 }
 

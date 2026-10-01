@@ -717,12 +717,14 @@ class UltimateVideoService {
         ...item,
         videoUrl,
         thumbnailUrl,
-        title: item.title || item.content?.slice(0, 50) || 'ARVDOUL Video',
+        title: item.title || item.content?.slice(0, 50) || '',
         description: item.description || item.content || '',
+        // Preserve whatever identity the source document actually has; never
+        // synthesize an author name/handle (audit N005).
         creator: item.creator || {
-          name: item.authorName || 'Arvdoul Creator',
-          username: item.authorUsername || 'creator',
-          avatar: getSafeAvatarUrl(item.authorPhoto, item.authorName || 'Arvdoul Creator', item.authorId || item.userId),
+          name: item.authorName || '',
+          username: item.authorUsername || '',
+          avatar: getSafeAvatarUrl(item.authorPhoto, item.authorName || '', item.authorId || item.userId),
           id: item.authorId || item.userId,
           isVerified: item.authorVerified || false,
         },

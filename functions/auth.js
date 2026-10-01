@@ -67,10 +67,33 @@ async function assertAdmin(context) {
   return uid;
 }
 
+/**
+ * Email for server-side flows that need it (Stripe onboarding, notifications).
+ * PII lives on users_private/{uid}; the public users/{uid} doc is only read as a
+ * fallback for accounts created before the split. Callers must already be
+ * authorised for the uid they pass in.
+ */
+async function getUserEmail(uid) {
+  if (!uid) return undefined;
+  try {
+    const snap = await db.doc(`users_private/${uid}`).get();
+    if (snap.exists && snap.data()?.email) return snap.data().email;
+  } catch {
+    // fall through to the legacy location
+  }
+  try {
+    const snap = await db.doc(`users/${uid}`).get();
+    return snap.exists ? snap.data()?.email || undefined : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 module.exports = {
   getUserIdFromContext,
   isAdmin,
   hasAdminClaim,
   checkIsAdmin,
   assertAdmin,
+  getUserEmail,
 };

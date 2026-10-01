@@ -444,17 +444,9 @@ class RankingService {
         return snap.data();
       }
       
-      // Return default reputation
-      return {
-        trust: 50,
-        contributions: 0,
-        moderation: 0,
-        reliability: 50,
-        totalScore: 50,
-        tier: 'bronze',
-        badges: [],
-        history: [],
-      };
+      // No reputation document exists: report absence rather than inventing a
+      // plausible-but-false trust score/tier.
+      return null;
     } catch (error) {
       logger.error('[RankingService] Failed to get user reputation:', error);
       return null;

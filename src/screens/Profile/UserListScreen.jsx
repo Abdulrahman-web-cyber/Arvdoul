@@ -36,7 +36,7 @@ export default function UserListScreen({
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
   const storeUser = useAppStore((state) => state.currentUser);
-  const currentUser = storeUser || authUser;
+  const currentUser = authUser || storeUser;
   const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
 
   const [users, setUsers] = useState([]);

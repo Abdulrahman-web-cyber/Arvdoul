@@ -51,25 +51,27 @@ service cloud.firestore {
       return request.resource.data[field] == uid();
     }
 
-    // Blueprint Section 91 & 60: Prevent client mutation of server-authoritative progression,
-    // reputation, economy, and verification fields.
-    function userModifiesAllowedProfileFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'xp', 'experience', 'experienceToNextLevel', 'level', 'levelBand',
-        'activeDays', 'activeStreak', 'longestStreak', 'lastActiveDate',
-        'reputation', 'reputationScore', 'reputationTier',
-        'influence', 'influenceScore', 'contribution', 'contributionScore',
-        'titles', 'activeTitle', 'achievements',
-        'creatorStatus', 'creatorTier', 'isCreator', 'monetizationEligible',
-        'coins', 'coinBalance', 'earnings', 'totalEarned',
-        'isVerified', 'accountStatus', 'roles', 'role', 'policyStanding'
+    // Fields that must never appear on the world-readable `users/{uid}` doc.
+    // They live in `users_private/{uid}` instead (owner/admin only). Mirrors
+    // PRIVATE_PROFILE_FIELDS in src/config/profileContracts.js.
+    function touchesPrivateProfileFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'email', 'phoneNumber', 'emailVerified', 'phoneVerified',
+        'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId'
       ]);
     }
 
     // ==================== USERS ====================
     match /users/{userId} {
-      allow read: if isSignedIn(); // app layer projects private profiles
-      allow create: if isOwner(userId);
+      // Public projection only: PII and Stripe identifiers live in
+      // users_private/{uid}. Field-level masking is impossible on a readable
+      // document, so the boundary is enforced by keeping those fields out.
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) &&
+        !request.resource.data.keys().hasAny([
+          'email', 'phoneNumber', 'emailVerified', 'phoneVerified',
+          'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId'
+        ]);
       // Admins (admins/{uid} doc) may moderate via the applyUserAdminAction
       // callable; a direct admin write from the client is refused so every
       // privileged change leaves a server-side audit entry.
@@ -77,7 +79,25 @@ service cloud.firestore {
       // field (level, XP, coins, verification, status, roles, ...). Account
       // deletion goes through the deleteUserData callable.
       // Reference: allow update, delete: if isOwner(userId) || isAdmin();
-      allow update: if isOwner(userId) && !touchesServerAuthoritativeFields();
+      allow update: if isOwner(userId) && !touchesServerAuthoritativeFields() && !touchesPrivateProfileFields();
+      allow delete: if false;
+    }
+
+    // ==================== USERS PRIVATE (PII / payment ids) ====================
+    // email, phone, verification flags and Stripe identifiers. Never publicly
+    // readable. The owner may only write the contact/verification fields; the
+    // Stripe identifiers are server-written (admin SDK bypasses rules) so a
+    // client cannot forge a payment id that a webhook would then trust.
+    match /users_private/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(
+          ['uid', 'email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
+        );
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
+        );
       allow delete: if false;
     }
 
@@ -628,9 +648,18 @@ service cloud.firestore {
       }
     }
     match /collaboration_invites/{inviteId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn();
+      // Invites carry the invitee's email address, so they are not a public
+      // feed: only the inviter and the invited address may read them.
+      allow read: if isSignedIn() && (
+        resource.data.invitedBy == uid() ||
+        (resource.data.email != null && resource.data.email == request.auth.token.email)
+      );
+      allow create: if isSignedIn() && request.resource.data.invitedBy == uid();
+      allow update, delete: if isSignedIn() && (
+        resource.data.invitedBy == uid() ||
+        (resource.data.email != null && resource.data.email == request.auth.token.email) ||
+        isAdmin()
+      );
     }
 
     // ==================== COLLECTIONS (saved posts) ====================
@@ -638,15 +667,25 @@ service cloud.firestore {
       allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       match /items/{itemId} {
-        allow read, write, delete: if isSignedIn();
+        // Items are bounded by the parent collection's ownership: only the
+        // collection owner (or an admin) may add/remove entries. The previous
+        // `if isSignedIn()` let any user write into anyone's collection.
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() &&
+          get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid();
+        allow update, delete: if isSignedIn() &&
+          (get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid() || isAdmin());
       }
     }
 
     // ==================== ANALYTICS ====================
+    // Profile analytics (daily views/reach/engagement/coins) are private to the
+    // profile owner and admins. A signed-in visitor must not be able to read a
+    // creator's traffic, reach or earnings figures.
     match /profile_analytics/{userId} {
-      allow read: if isSignedIn();
-      // Allow signed-in users to initialize or record dailyStats for profile views;
-      // owners have full update access for non-authoritative stats
+      allow read: if isOwner(userId) || isAdmin();
+      // A visitor records a view by creating/incrementing dailyStats; the write
+      // surface is limited to the non-authoritative stat fields.
       allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         isOwner(userId) ||
@@ -659,9 +698,11 @@ service cloud.firestore {
       // Aggregate post analytics are server-computed (sharded counters); never client-written.
       allow write: if false;
     }
+    // A profile view record is written by the viewer and read back only by the
+    // profile owner (who is the subject) or an admin. It is not a public feed.
     match /profile_views/{viewId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.profileOwnerId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.viewerId == uid();
     }
     // Sharded counters: rules defined once, above, under idempotency_ledger.
 
@@ -713,7 +754,10 @@ service cloud.firestore {
     // ==================== MISC (bounded write surfaces) ====================
     match /shares/{shareId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      // A share record is immutable and must name the sharer as its author;
+      // `if isSignedIn()` let anyone rewrite or delete another user's shares.
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
     }
     match /scheduled_messages/{messageId} {
       allow read, update, delete: if isSignedIn() && resource.data.userId == uid();

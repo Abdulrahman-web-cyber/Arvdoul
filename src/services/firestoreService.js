@@ -607,7 +607,7 @@ class EnterpriseFirestoreService {
     } catch {}
 
     // If local or offline post, succeed immediately
-    if (postId.startsWith('local_') || postId.startsWith('offline_') || postId.startsWith('demo_') || !navigator.onLine) {
+    if (postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine) {
       return { success: true, alreadyLiked: false, localOnly: true };
     }
 
@@ -698,7 +698,7 @@ class EnterpriseFirestoreService {
       localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
     } catch {}
 
-    if (postId.startsWith('local_') || postId.startsWith('offline_') || postId.startsWith('demo_') || !navigator.onLine) {
+    if (postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine) {
       return { success: true, localOnly: true };
     }
 

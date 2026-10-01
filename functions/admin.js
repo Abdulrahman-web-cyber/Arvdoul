@@ -144,9 +144,19 @@ exports.listUsers = functions.https.onCall(async (data, context) => {
     .limit(limitCount)
     .get();
 
+  // Contact email lives on users_private; admins need it for the directory
+  // search, so merge it here (the callable already asserted admin).
+  const privateSnaps = await Promise.all(
+    snap.docs.map((d) => db.collection('users_private').doc(d.id).get().catch(() => null))
+  );
+
   return {
     success: true,
-    users: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    users: snap.docs.map((d, i) => ({
+      id: d.id,
+      ...d.data(),
+      email: privateSnaps[i]?.data()?.email || d.data().email || '',
+    })),
   };
 });
 

@@ -180,7 +180,7 @@ describe('ConflictResolutionScreen - real queued operations only', () => {
 
   test('OfflineQueue exposes real getPending/remove for the conflict UI', () => {
     const src = fs.readFileSync(path.join(root, 'src/utils/OfflineQueue.js'), 'utf8');
-    expect(src).toContain('async getPending()');
+    expect(src).toContain('async getPending(');
     expect(src).toContain('async remove(id)');
   });
 });
@@ -403,12 +403,15 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
     expect(src).not.toContain("coins: admin.firestore.FieldValue.increment(1)");
   });
 
-  test('addCoins is allowlisted per reason with daily caps (no coin faucet)', () => {
+  test('addCoins is allowlisted per reason with daily COIN-VOLUME caps (no coin faucet)', () => {
     const src = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
-    expect(src).toContain('CLIENT_ADD_REASON_CAPS');
-    expect(src).toContain('post_created_bonus: 10');
+    expect(src).toContain('CLIENT_ADD_REASON_LIMITS');
+    // Caps must bound coin volume, not merely the number of calls.
+    expect(src).toContain('dailyCoins');
+    expect(src).toContain('perTx');
     expect(src).toContain("is not allowlisted for client addCoins");
-    expect(src).toContain('Daily cap reached');
+    expect(src).toContain('Daily coin budget reached');
+    expect(src).toContain("select('amount')");
   });
 
   test('video processing endpoints are onCall', () => {
@@ -961,3 +964,122 @@ describe('CreateStory honest offline state (spec §53)', () => {
     expect(src).toContain("visibility: 'public'");
   });
 });
+
+describe('Account isolation (audit N002) - persisted identity cannot bleed accounts', () => {
+  test('appStore never persists currentUser and migrates stale blobs', () => {
+    const src = fs.readFileSync(path.join(root, 'src/store/appStore.js'), 'utf8');
+    const persistBlock = src.slice(src.indexOf("name: 'arvdoul-app-store'"));
+    expect(persistBlock).not.toContain('currentUser: state.currentUser');
+    expect(persistBlock).toContain('version: 2');
+    expect(persistBlock).toContain('migrate:');
+  });
+
+  test('getStoredUser refuses a cached user blob from a different session uid', () => {
+    const src = fs.readFileSync(path.join(root, 'src/utils/security.js'), 'utf8');
+    expect(src).toContain("localStorage.getItem('arvdoul_uid')");
+    expect(src).toContain('parsed.uid !== sessionUid');
+  });
+
+  test('profile screens prefer the live auth user over the store mirror', () => {
+    for (const rel of [
+      'src/screens/Profile/FollowersScreen.jsx',
+      'src/screens/Profile/FollowingScreen.jsx',
+      'src/screens/Profile/FriendsScreen.jsx',
+      'src/screens/Profile/UserListScreen.jsx',
+      'src/screens/Profile/HighlightsScreen.jsx',
+      'src/screens/Profile/CreatorDashboardScreen.jsx',
+    ]) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).toContain('const currentUser = authUser || storeUser;');
+      expect(src).not.toContain('const currentUser = storeUser || authUser;');
+    }
+  });
+});
+
+describe('Compliance export - no fabricated personal data', () => {
+  test('exportUserData never invents an email/username/createdAt for the subject', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/complianceGovernanceService.js'), 'utf8');
+    expect(src).not.toContain("email: 'user@example.com'");
+    expect(src).not.toContain('timestamp - 86400000 * 30');
+    expect(src).toContain('async exportUserData(userId, dataSources = {})');
+  });
+});
+
+describe('Auth - signup never grants fabricated coins/levels', () => {
+  test('authService creates profiles without a hardcoded starting balance', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/authService.js'), 'utf8');
+    expect(src).not.toContain('coins: 50');
+    expect(src).not.toContain('coins: profile.coins || 50');
+    expect(src).not.toContain('coins: profile?.coins || 50');
+    expect(src).not.toContain('coins: profile.coins || 0');
+  });
+});
+
+describe('Monetization - canonical level curve (no duplicated drift)', () => {
+  test('monetizationService reads LEVELS from the shared levelConfig', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS } from '../shared/levelConfig.cjs';");
+    expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
+    expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
+  });
+});
+
+describe('Wallet - real purchase + canonical economics', () => {
+  test('WalletScreen wires the real PaymentModal contract and purchaseCoins', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Economy/WalletScreen.jsx'), 'utf8');
+    expect(src).toContain('monetizationService.purchaseCoins(paymentPkg.id, paymentMethodId)');
+    expect(src).toContain('onConfirm={confirmPurchase}');
+    expect(src).not.toContain('onSuccess={() => {');
+  });
+
+  test('WalletScreen withdrawal threshold derives from COINS_PER_DOLLAR', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Economy/WalletScreen.jsx'), 'utf8');
+    expect(src).toContain('const MIN_WITHDRAWAL_USD = (MIN_WITHDRAWAL_COINS / COINS_PER_DOLLAR).toFixed(2);');
+    expect(src).not.toContain('placeholder="Coins to withdraw (min 5,000)"');
+  });
+});
+
+describe('Video service - no synthetic creator identity', () => {
+  test('videoService never invents an author name/handle/title', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
+    expect(src).not.toContain("'Arvdoul Creator'");
+    expect(src).not.toContain("'ARVDOUL Video'");
+    expect(src).not.toContain("username: item.authorUsername || 'creator'");
+  });
+
+  test('VideoCard no longer hardcodes a person name as the avatar alt', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Videos/VideoCard.jsx'), 'utf8');
+    expect(src).not.toContain("'Abdulrahman'");
+  });
+});
+
+describe('Passport - no synthetic holder identity', () => {
+  test('passportService reports an absent displayName as null', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/passportService.js'), 'utf8');
+    expect(src).not.toContain("'Citizen of Arvdoul'");
+    expect(src).toContain('displayName: profile.displayName || profile.name || null');
+  });
+});
+
+describe('PostCard / CommentsDrawer - live-session identity only', () => {
+  test('no fabricated local_user identity is written from localStorage', () => {
+    const card = fs.readFileSync(path.join(root, 'src/screens/PostCard.jsx'), 'utf8');
+    expect(card).not.toContain("'local_user'");
+    expect(card).toContain('const userId = currentUser?.uid || null;');
+
+    const drawer = fs.readFileSync(path.join(root, 'src/screens/CommentsDrawer.jsx'), 'utf8');
+    expect(drawer).not.toContain("displayName: 'You'");
+    expect(drawer).toContain("toast.error('Please sign in to comment');");
+  });
+});
+
+describe('VideoAnalytics RevenueTab - real payout wiring', () => {
+  test('uses walletService for balances and monetizationService for payout settings', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/VideoAnalyticsScreen.jsx'), 'utf8');
+    expect(src).toContain("import('../services/walletService.js')");
+    expect(src).toContain("import('../services/monetizationService.js')");
+    expect(src).toContain('walletService.getWalletOverview(user.uid)');
+    expect(src).not.toContain('monSvc.getWalletOverview');
+  });
+});
+

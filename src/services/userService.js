@@ -18,7 +18,10 @@ import {
   isValidWebUrl,
   sanitizeProfileUrl,
   validateProfileUpdate,
-  canViewProfileSection
+  canViewProfileSection,
+  PRIVATE_PROFILE_FIELDS,
+  PRIVATE_PROFILE_COLLECTION,
+  splitProfileFields
 } from '../config/profileContracts.js';
 
 const USER_CONFIG = {
@@ -367,19 +370,11 @@ class ProfessionalUserService {
       return cached.data;
     }
 
-    // L2 LocalStorage cache
-    if (typeof window !== 'undefined' && !viewAs) {
-      try {
-        const rawSaved = localStorage.getItem(`arvdoul_prof_${userId}`);
-        if (rawSaved) {
-          const parsed = JSON.parse(rawSaved);
-          if (parsed && Date.now() - (parsed._cachedAt || 0) < USER_CONFIG.CACHE_EXPIRY) {
-            this.cache.set(cacheKey, { data: parsed, timestamp: Date.now() });
-            return parsed;
-          }
-        }
-      } catch {}
-    }
+    // L2 LocalStorage cache intentionally removed. It was keyed by target only
+    // (`arvdoul_prof_${userId}`) and ignored the requester, so an owner's own
+    // unmasked projection (coins, links, presence) could be served to a
+    // different viewer on the same browser. Viewer-scoped projections must not
+    // be persisted to a shared store.
 
     const { doc, getDoc } = await import('firebase/firestore');
     let snap = null;
@@ -423,6 +418,25 @@ class ProfessionalUserService {
     const rawData = snap.data();
     const full = { id: snap.id, uid: snap.id, ...rawData };
 
+    // PII lives in users_private/{uid} (owner/admin readable). Merge it only for
+    // the owner: the public doc is world-signed-in readable and PII-free, so a
+    // cross-viewer read must not even attempt the private fetch (rules deny it).
+    const isSelfUser = Boolean((requesterId && requesterId === userId) || options.forSelf === true);
+    if (isSelfUser) {
+      try {
+        const { doc: fsDoc, getDoc: fsGetDoc } = await import('firebase/firestore');
+        const privateSnap = await fsGetDoc(fsDoc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId));
+        if (privateSnap.exists()) {
+          const privateData = privateSnap.data();
+          for (const key of PRIVATE_PROFILE_FIELDS) {
+            if (privateData[key] !== undefined) full[key] = privateData[key];
+          }
+        }
+      } catch (e) {
+        logger.warn('Private profile merge skipped', { userId, error: e?.message });
+      }
+    }
+
     // Resolve real displayName & username if missing or generic in document
     let authUser = null;
     try {
@@ -433,7 +447,6 @@ class ProfessionalUserService {
       }
     } catch {}
 
-    const isSelfUser = Boolean((authUser?.uid === userId) || (requesterId === userId));
     full.displayName = (full.displayName && full.displayName !== 'User')
       ? full.displayName
       : (full.name && full.name !== 'User')
@@ -586,12 +599,36 @@ class ProfessionalUserService {
 
     full._cachedAt = Date.now();
     this.cache.set(cacheKey, { data: full, timestamp: Date.now() });
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`arvdoul_prof_${userId}`, JSON.stringify(full));
-      }
-    } catch {}
     return full;
+  }
+
+  /**
+   * Read the owner-only contact/payment document for a user. Only ever called
+   * for the signed-in user themselves; Firestore rules deny any other caller.
+   */
+  async getPrivateProfile(userId) {
+    if (!userId) return null;
+    await this._ensureInitialized();
+    const { doc, getDoc } = await import('firebase/firestore');
+    try {
+      const snap = await getDoc(doc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    } catch (e) {
+      logger.warn('getPrivateProfile failed', { userId, error: e?.message });
+      return null;
+    }
+  }
+
+  /** Merge the private contact document into a public profile object. */
+  async _mergePrivateProfile(profile) {
+    if (!profile?.id && !profile?.uid) return profile;
+    const privateData = await this.getPrivateProfile(profile.id || profile.uid);
+    if (!privateData) return profile;
+    const merged = { ...profile };
+    for (const key of PRIVATE_PROFILE_FIELDS) {
+      if (privateData[key] !== undefined) merged[key] = privateData[key];
+    }
+    return merged;
   }
 
   /**
@@ -686,13 +723,22 @@ class ProfessionalUserService {
 
     const userDoc = doc(this.firestore, 'users', userId);
     const usernameDoc = doc(this.firestore, 'usernames', username);
+    const privateDoc = doc(this.firestore, PRIVATE_PROFILE_COLLECTION, userId);
+
+    // Split the payload: PII (email, phone, verification flags, Stripe ids)
+    // goes to users_private/{uid}, which only the owner and admins may read.
+    // `users/{uid}` is world-signed-in readable and must stay PII-free. Both
+    // writes share one transaction so a profile can never exist without its
+    // private half (or vice versa).
+    const { publicFields, privateFields } = splitProfileFields(profile);
 
     await runTransaction(this.firestore, async (transaction) => {
       const existing = await transaction.get(usernameDoc);
       if (existing.exists() && existing.data()?.userId !== userId) {
         throw new Error(`Username "${username}" is already taken. Please choose another one.`);
       }
-      transaction.set(userDoc, profile, { merge: true });
+      transaction.set(userDoc, publicFields, { merge: true });
+      transaction.set(privateDoc, { uid: userId, ...privateFields, updatedAt: serverTimestamp() }, { merge: true });
       transaction.set(usernameDoc, {
         userId,
         username,
