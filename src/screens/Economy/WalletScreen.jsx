@@ -23,17 +23,17 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { COINS_PER_DOLLAR, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
+import { COINS_PER_DOLLAR, MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL } from '../../shared/levelConfig.cjs';
 
-// Package ids and amounts must match the Cloud Function COIN_PACKAGES contract
-// (functions/monetization.js). The server credits `coins` exactly, so no bonus
-// is advertised here.
-const COIN_PACKAGES = [
-  { id: 'coins_100',  coins: 100,  price: '$0.99' },
-  { id: 'coins_500',  coins: 500,  price: '$4.99', popular: true },
-  { id: 'coins_1200', coins: 1200, price: '$9.99' },
-  { id: 'coins_2500', coins: 2500, price: '$19.99' },
-];
+// Package amounts/prices come from the shared COIN_PACKAGES (the same table the
+// server prices from). The server credits `coins` exactly, so no bonus is
+// advertised here.
+const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg, i) => ({
+  id: pkg.id,
+  coins: pkg.coins,
+  popular: i === 1,
+  price: `$${(pkg.priceUsdCents / 100).toFixed(2)}`,
+}));
 
 const MIN_WITHDRAWAL_USD = (MIN_WITHDRAWAL_COINS / COINS_PER_DOLLAR).toFixed(2);
 

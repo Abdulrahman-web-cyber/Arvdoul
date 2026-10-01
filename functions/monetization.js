@@ -1062,24 +1062,12 @@ exports.recoverStuckWithdrawals = functions.pubsub.schedule('every 5 minutes').o
 //     (client-facing callables that were referenced but never deployed)
 // ======================================================================
 
-const COIN_PACKAGES = {
-  coins_100:  { coins: 100,  priceUsdCents: 99 },
-  coins_500:  { coins: 500,  priceUsdCents: 499 },
-  coins_1200: { coins: 1200, priceUsdCents: 999 },
-  coins_2500: { coins: 2500, priceUsdCents: 1999 },
-  coins_5000: { coins: 5000, priceUsdCents: 3999 },
-};
+// Coin packages and subscription tiers come from the shared levelConfig so the
+// store UI, this callable and the Stripe price creation can never disagree.
+const COIN_PACKAGES = require('./levelConfig.cjs').COIN_PACKAGES_BY_ID;
+const SUBSCRIPTION_TIERS = require('./levelConfig.cjs').SUBSCRIPTION_TIERS;
 
-// Subscription tiers are single-source: price (USD cents) + monthly coin grant.
-// The Stripe price is created from `priceUsdCents` at subscribe time; there is
-// no pre-baked `priceId` placeholder to drift out of sync.
-const SUBSCRIPTION_TIERS = {
-  basic: { priceUsdCents: 499, coinsPerMonth: 500 },
-  pro: { priceUsdCents: 999, coinsPerMonth: 2000 },
-  premium: { priceUsdCents: 1999, coinsPerMonth: 5000 },
-};
-
-const AD_REWARD_PER_30S = 2; // coins per 30 seconds watched
+const AD_REWARD_PER_30S = require('./levelConfig.cjs').AD_REWARD_COINS;
 const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
 
 async function getOrCreateStripeCustomer(uid) {

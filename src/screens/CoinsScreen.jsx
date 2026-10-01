@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
-import { MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
+import { MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL, AD_REWARD_COINS as AD_REWARD_COINS_CANONICAL } from '../shared/levelConfig.cjs';
 
 import {
   Coins, CreditCard, Wallet, Crown, Zap, Rocket, Star,
@@ -19,20 +19,25 @@ import PaymentModal from '../components/Shared/PaymentModal';
 import CoinStackIcon from '../components/Shared/CoinStackIcon';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
-// Package ids MUST match the Cloud Function COIN_PACKAGES contract
-// (functions/monetization.js). `priceUsdCents` and `coins` are the exact
-// server-side values; the price label is derived from them so the client can
-// never advertise a price or coin amount the server will not honour. The server
-// credits `coins` exactly — there is no bonus grant, so none is advertised.
-const COIN_PACKAGES = [
-  { id: 'coins_100',  coins: 100,  priceUsdCents: 99,   icon: Coins,   color: 'from-amber-500 to-yellow-500' },
-  { id: 'coins_500',  coins: 500,  priceUsdCents: 499,  popular: true, icon: Crown,   color: 'from-purple-500 to-pink-500' },
-  { id: 'coins_1200', coins: 1200, priceUsdCents: 999,  icon: Star,    color: 'from-blue-500 to-cyan-500' },
-  { id: 'coins_2500', coins: 2500, priceUsdCents: 1999, icon: Rocket,  color: 'from-orange-500 to-red-500' },
-  { id: 'coins_5000', coins: 5000, priceUsdCents: 3999, icon: Zap,     color: 'from-green-500 to-emerald-500' },
-].map((pkg) => ({ ...pkg, price: `$${(pkg.priceUsdCents / 100).toFixed(2)}` }));
+// Presentation-only icon/color, keyed by the canonical package id. Amounts and
+// prices come from COIN_PACKAGES in the shared levelConfig (same table the
+// server prices from), so the client can never advertise a price or coin amount
+// the server will not honour.
+const PACKAGE_STYLE = {
+  coins_100:  { icon: Coins,   color: 'from-amber-500 to-yellow-500' },
+  coins_500:  { icon: Crown,   color: 'from-purple-500 to-pink-500', popular: true },
+  coins_1200: { icon: Star,    color: 'from-blue-500 to-cyan-500' },
+  coins_2500: { icon: Rocket,  color: 'from-orange-500 to-red-500' },
+  coins_5000: { icon: Zap,     color: 'from-green-500 to-emerald-500' },
+};
+const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg) => ({
+  ...pkg,
+  ...(PACKAGE_STYLE[pkg.id] || {}),
+  price: `$${(pkg.priceUsdCents / 100).toFixed(2)}`,
+}));
 
-const AD_REWARD_COINS = 2; // coins per 30s (matches functions/monetization.js AD_REWARD_PER_30S)
+// Ad reward comes from the shared config (server AD_REWARD_PER_30S).
+const AD_REWARD_COINS = AD_REWARD_COINS_CANONICAL;
 
 export default function CoinsScreen() {
   const navigate = useNavigate();
@@ -60,11 +65,13 @@ export default function CoinsScreen() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [currentSub, setCurrentSub] = useState(null);
 
+  // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names, perks
+  // and popularity are presentation.
   const SUBSCRIPTION_TIERS = [
-    { id: 'basic', name: 'Basic', coinsPerMonth: 500, price: '$4.99/mo', perks: ['500 coins monthly', 'Ad-free browsing', 'Priority support'] },
-    { id: 'pro', name: 'Pro', coinsPerMonth: 2000, price: '$9.99/mo', popular: true, perks: ['2,000 coins monthly', 'Creator badge', 'Advanced analytics', 'Boost discounts'] },
-    { id: 'premium', name: 'Premium', coinsPerMonth: 5000, price: '$19.99/mo', perks: ['5,000 coins monthly', 'Verified badge', 'Early features', 'Top support'] },
-  ];
+    { id: 'basic', name: 'Basic', ...SUBSCRIPTION_TIERS_CANONICAL.basic, perks: ['500 coins monthly', 'Ad-free browsing', 'Priority support'] },
+    { id: 'pro', name: 'Pro', ...SUBSCRIPTION_TIERS_CANONICAL.pro, popular: true, perks: ['2,000 coins monthly', 'Creator badge', 'Advanced analytics', 'Boost discounts'] },
+    { id: 'premium', name: 'Premium', ...SUBSCRIPTION_TIERS_CANONICAL.premium, perks: ['5,000 coins monthly', 'Verified badge', 'Early features', 'Top support'] },
+  ].map((t) => ({ ...t, price: `$${(t.priceUsdCents / 100).toFixed(2)}/mo` }));
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawEmail, setWithdrawEmail] = useState('');

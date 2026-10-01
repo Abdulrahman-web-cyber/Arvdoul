@@ -138,6 +138,12 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   `liveService.GIFT_TYPES`, `monetizationService.GIFTS`) derives from them, and
   the server prices gifts from `GIFT_VALUES` (`functions/monetization.js`
   `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug.
+- `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS` and
+  `AD_REWARD_COINS` own store pricing, the monthly subscription grant and the
+  rewarded-ad payout. `functions/monetization.js` (`purchaseCoins`,
+  `createSubscription`), `functions/index.js` (`verifyPurchase`) and the store
+  screens (`CoinsScreen`, `Economy/WalletScreen`) all read these tables. Never
+  re-declare a package id, price or coin amount in a screen or a function.
 - Rank bands, perks and royal eligibility follow the Profile System blueprint
   (sections 21-22 and 31-32); `getRoyalEligibility` requires every dimension, so
   level alone can never grant a royal title.

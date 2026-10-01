@@ -883,6 +883,39 @@ const GIFT_VALUES = Object.freeze(
 );
 
 /**
+ * Coin top-up packages — SINGLE SOURCE OF TRUTH.
+ * The server credits `coins` for `priceUsdCents`; every store surface reads this
+ * so the client can never advertise a package the server cannot price (or a
+ * different price). Ids are the wire ids accepted by purchaseCoins.
+ */
+const COIN_PACKAGES = Object.freeze([
+  Object.freeze({ id: 'coins_100',  coins: 100,  priceUsdCents: 99 }),
+  Object.freeze({ id: 'coins_500',  coins: 500,  priceUsdCents: 499 }),
+  Object.freeze({ id: 'coins_1200', coins: 1200, priceUsdCents: 999 }),
+  Object.freeze({ id: 'coins_2500', coins: 2500, priceUsdCents: 1999 }),
+  Object.freeze({ id: 'coins_5000', coins: 5000, priceUsdCents: 3999 }),
+]);
+
+/** Coin packages keyed by id, for the server's lookup shape. */
+const COIN_PACKAGES_BY_ID = Object.freeze(
+  COIN_PACKAGES.reduce((acc, pkg) => { acc[pkg.id] = { coins: pkg.coins, priceUsdCents: pkg.priceUsdCents }; return acc; }, {})
+);
+
+/**
+ * Subscription tiers — SINGLE SOURCE OF TRUTH.
+ * `coinsPerMonth` is the monthly grant the server credits; `priceUsdCents` is
+ * the Stripe unit amount created at subscribe time.
+ */
+const SUBSCRIPTION_TIERS = Object.freeze({
+  basic: Object.freeze({ priceUsdCents: 499, coinsPerMonth: 500 }),
+  pro: Object.freeze({ priceUsdCents: 999, coinsPerMonth: 2000 }),
+  premium: Object.freeze({ priceUsdCents: 1999, coinsPerMonth: 5000 }),
+});
+
+/** Coins credited for watching a 30s rewarded ad (server AD_REWARD_PER_30S). */
+const AD_REWARD_COINS = 2;
+
+/**
  * Initial economy/status values for a brand-new account — SINGLE SOURCE OF TRUTH.
  *
  * The client writes these once when it creates users/{uid}; firestore.rules pins
@@ -934,6 +967,10 @@ module.exports = {
   NEW_USER_DEFAULTS,
   GIFT_CATALOG,
   GIFT_VALUES,
+  COIN_PACKAGES,
+  COIN_PACKAGES_BY_ID,
+  SUBSCRIPTION_TIERS,
+  AD_REWARD_COINS,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,

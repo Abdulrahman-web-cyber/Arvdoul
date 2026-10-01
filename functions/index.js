@@ -311,10 +311,9 @@ exports.verifyPurchase = functions.https.onCall(async (data, context) => {
 
   // Real platform-specific validation would call the Apple/Google servers
   // here (JWS receipt payload -> App Store Server API, or Play Developer
-  // API purchases.products.get). The product-to-coin mapping only runs AFTER
-  // a verified receipt:
-  const coinMap = { coins_100: 100, coins_500: 500, coins_1000: 1000 };
-  const coinAmount = coinMap[productId];
+  // API purchases.products.get). The product-to-coin mapping is the canonical
+  // shared catalog, so IAP cannot grant a different amount than the web store.
+  const coinAmount = require('./levelConfig.cjs').COIN_PACKAGES_BY_ID[productId]?.coins;
   if (!coinAmount) throw new functions.https.HttpsError('invalid-argument', 'Invalid product');
 
   await db.runTransaction(async (transaction) => {

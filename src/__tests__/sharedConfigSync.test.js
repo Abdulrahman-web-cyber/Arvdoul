@@ -157,4 +157,27 @@ describe('shared config single source of truth', () => {
     expect(server).toContain("require('./levelConfig.cjs').GIFT_VALUES");
     expect(server).not.toContain("DEFAULT_GIFT_TYPES = { rose:");
   });
+
+  test('coin packages, subscription tiers and ad reward are single-sourced', () => {
+    const monetization = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+    expect(monetization).toContain("require('./levelConfig.cjs').COIN_PACKAGES_BY_ID");
+    expect(monetization).toContain("require('./levelConfig.cjs').SUBSCRIPTION_TIERS");
+    expect(monetization).toContain("require('./levelConfig.cjs').AD_REWARD_COINS");
+    expect(monetization).not.toContain('coins_1200: { coins: 1200');
+    expect(monetization).not.toContain('basic: { priceUsdCents: 499');
+
+    // IAP mapping must not diverge from the web store catalog (it used to list
+    // coins_1000, an id that does not exist in COIN_PACKAGES).
+    const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
+    expect(index).toContain('COIN_PACKAGES_BY_ID[productId]');
+    expect(index).not.toContain('coins_1000: 1000');
+
+    // The client screens read the shared tables, not their own literals.
+    for (const rel of ['src/screens/CoinsScreen.jsx', 'src/screens/Economy/WalletScreen.jsx']) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).toContain('COIN_PACKAGES as COIN_PACKAGES_CANONICAL');
+    }
+    expect(fs.readFileSync(path.join(root, 'src/screens/CoinsScreen.jsx'), 'utf8'))
+      .toContain('SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL');
+  });
 });

@@ -48,7 +48,6 @@ import { apiSecurityGatewayService } from '../services/apiSecurityGatewayService
 import { childSafetyService } from '../services/childSafetyService.js';
 import { metricsService } from '../services/metricsService.js';
 import { alertingService } from '../services/alertingService.js';
-import { billingService } from '../services/billingService.js';
 import { disasterRecoveryService } from '../services/disasterRecoveryService.js';
 import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
@@ -424,19 +423,18 @@ describe('Upgraded Production Services Integration Tests', () => {
     });
   });
 
-  describe('BillingService (VAT & Invoice Generation)', () => {
-    test('correctly calculates subtotal and tax amounts for line items', () => {
-      const bundle = { coins: 1000, priceUSD: 8.99 };
-      const profile = { displayName: 'John Doe', email: 'john@doe.com' };
-
-      const invoice = billingService.generateInvoice('tx_strip_123', profile, bundle, 'card', 0.20);
-
-      expect(invoice.invoiceNumber).toContain('INV-');
-      expect(invoice.pricing.totalUSD).toBe(8.99);
-      // subtotal + vat = 8.99, subtotal * 1.20 = 8.99 => subtotal = 7.49, vat = 1.50
-      expect(invoice.pricing.subtotal).toBe(7.49);
-      expect(invoice.pricing.vatAmount).toBe(1.50);
-      expect(invoice.htmlInvoiceTemplate).toContain('ARVDOUL PLATFORM');
+  describe('Coin package catalog (server-authoritative pricing)', () => {
+    test('the server prices coin packages and subscription tiers', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const { fileURLToPath } = await import('node:url');
+      const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+      const src = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+      expect(src).toContain("require('./levelConfig.cjs').COIN_PACKAGES_BY_ID");
+      expect(src).toContain("require('./levelConfig.cjs').SUBSCRIPTION_TIERS");
+      // The removed client billingService duplicated this catalog with
+      // different prices; the client must never declare its own pricing.
+      expect(fs.existsSync(path.join(root, 'src', 'services', 'billingService.js'))).toBe(false);
     });
   });
 
