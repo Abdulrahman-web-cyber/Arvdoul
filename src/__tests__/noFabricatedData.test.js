@@ -1515,3 +1515,32 @@ describe('CreateStory - creative tools write real payload fields', () => {
     expect(s).toContain('getCapabilities');
   });
 });
+
+describe('Action wiring - buttons call the real service signature', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('draft cloud sync uses the real firestoreService signature', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    // saveDraft(draftId, userId, draftData); get/deleteDraft(draftId).
+    expect(s).toContain('saveDraft(draft.id, userRef.current.uid, draft)');
+    expect(s).toContain('getDraft(draftId)');
+    expect(s).toContain('deleteDraft(draftId)');
+    // The old calls passed (userId, draft) / (userId, draftId) and were silently
+    // swallowed, so drafts never synced.
+    expect(s).not.toContain('saveDraft(userRef.current.uid, draft)');
+    expect(s).not.toContain("typeof services.current.firestore.saveDraft === 'function'");
+  });
+
+  test('ad reporting calls reportAd directly instead of gating on a typeof check', () => {
+    const s = read('src/components/Ads/SponsoredPostCard.jsx');
+    expect(s).toContain('getMonetizationService().reportAd(ad.id, placement)');
+    expect(s).not.toContain('Reporting is unavailable right now.');
+  });
+
+  test('username generation calls the service without a dead capability guard', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).toContain('userService.generateUniqueUsername(cleanBase, userProfile?.uid)');
+    expect(s).not.toContain('Username generation is unavailable right now.');
+  });
+});
+

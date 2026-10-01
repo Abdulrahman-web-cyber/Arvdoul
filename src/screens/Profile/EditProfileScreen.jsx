@@ -156,10 +156,6 @@ export default function EditProfileScreen() {
     try {
       const base = formData.displayName || userProfile?.displayName || userProfile?.email?.split('@')[0] || 'creator';
       const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'creator';
-      if (!userService?.generateUniqueUsername) {
-        toast.error('Username generation is unavailable right now.');
-        return;
-      }
       let uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
       // Ensure no leftover user_ prefix
       if (uniqueUser.startsWith('user_')) {

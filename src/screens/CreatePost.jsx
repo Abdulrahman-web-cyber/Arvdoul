@@ -911,12 +911,9 @@ function CreatePostProvider({ children }) {
     await refreshDraftsList();
     if (!isOfflineRef.current && services.current.firestore) {
       try {
-        if (typeof services.current.firestore.saveDraft === 'function') {
-          await services.current.firestore.saveDraft(userRef.current.uid, draft);
-          toast.success("Draft saved & synced");
-        } else {
-          toast.success("Draft saved locally (cloud sync unavailable)");
-        }
+        // firestoreService.saveDraft(draftId, userId, draftData)
+        await services.current.firestore.saveDraft(draft.id, userRef.current.uid, draft);
+        toast.success("Draft saved & synced");
       } catch { toast.success("Draft saved locally"); }
     } else { toast.success("Draft saved locally"); }
   }, [storeBlobWithDedup, refreshDraftsList]);
@@ -926,9 +923,7 @@ function CreatePostProvider({ children }) {
     let draft = await dbRef.current.get("drafts", draftId);
     if (!draft && !isOfflineRef.current && services.current.firestore) {
       try {
-        if (typeof services.current.firestore.getDraft === 'function') {
-          draft = await services.current.firestore.getDraft(userRef.current.uid, draftId);
-        }
+        draft = await services.current.firestore.getDraft(draftId);
       } catch {}
     }
     if (!draft) { toast.error("Draft not found"); return; }
@@ -954,9 +949,7 @@ function CreatePostProvider({ children }) {
     await refreshDraftsList();
     if (!isOfflineRef.current && services.current.firestore) {
       try {
-        if (typeof services.current.firestore.deleteDraft === 'function') {
-          await services.current.firestore.deleteDraft(userRef.current.uid, draftId);
-        }
+        await services.current.firestore.deleteDraft(draftId);
       } catch {}
     }
     toast.success("Draft deleted");

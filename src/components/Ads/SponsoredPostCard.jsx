@@ -152,13 +152,8 @@ export default function SponsoredPostCard({
     if (!ad?.id || isReporting) return;
     setIsReporting(true);
     try {
-      const svc = getMonetizationService();
-      if (typeof svc.reportAd === 'function') {
-        await svc.reportAd(ad.id, placement);
-        toast.success('Ad reported. Our team will review it.');
-      } else {
-        toast.error('Reporting is unavailable right now.');
-      }
+      await getMonetizationService().reportAd(ad.id, placement);
+      toast.success('Ad reported. Our team will review it.');
     } catch (err) {
       toast.error(err?.message || 'Could not report this ad.');
     } finally {
