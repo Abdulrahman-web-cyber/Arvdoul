@@ -7,10 +7,13 @@
  *  2. FIREBASE REMOTE CONFIG - dynamic overlay when available; the service
  *     degrades gracefully when Remote Config is unavailable (no Firebase
  *     config, blocked network, test environment).
- *  3. KILL SWITCHES - admin overrides persisted to localStorage that take
- *     precedence over everything. This is the emergency rollback lever:
- *     `featureFlagService.setOverride('new_feed_ranking', false)` disables a
- *     flag instantly for this client without a deploy.
+ *  3. ADMIN GOVERNANCE - platform-wide overrides live in Firestore
+ *     `feature_flags/{flag}` and are written only by the admin-gated
+ *     `setFeatureFlagOverride` callable, which appends an audit record. The
+ *     client subscribes to that collection, so a kill switch flips for every
+ *     signed-in user, not just the admin who pressed it.
+ *     `setOverride()` remains as a *local* emergency lever for one device and
+ *     is not a governance record.
  *  4. SUBSCRIPTIONS - React components can react to flag changes at runtime
  *     (see src/hooks/useFeatureFlag.js).
  *
@@ -20,79 +23,9 @@
  */
 
 import { logger } from '../utils/Logger.js';
+import { DEFAULT_FLAGS } from '../shared/featureFlagRegistry.cjs';
 
-/**
- * Static baseline flag registry. Treat this as the contract for all flags:
- * keep it sorted, versioned, and documented. `description` helps the admin UI
- * and on-call engineers; it is never shipped in payloads.
- */
-export const DEFAULT_FLAGS = Object.freeze({
-  'feed.ml_ranking': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'ML-based feed ranking (Cloud Function). Off = fallback scoring.',
-  },
-  'feed.diversity_rerank': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'Author/category/topic diversity enforcement on feed pages.',
-  },
-  'feed.ads': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'Ad insertion in the feed (monetization).',
-  },
-  'messaging.e2ee': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'End-to-end encryption for direct messages.',
-  },
-  'messaging.calls': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'Voice/video calls in messaging (WebRTC).',
-  },
-  'live.recording': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Live stream recording & replay (server-side).',
-  },
-  'ai.studio': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'AI Studio (captions, scripts, images).',
-  },
-  'ai.streaming': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Streaming responses for AI Studio.',
-  },
-  'stories.music_library': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Licensed music library for stories.',
-  },
-  'monetization.pay_per_view': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'Pay-per-view videos.',
-  },
-  'admin.analytics_beta': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Beta analytics dashboard for creators.',
-  },
-  'search.vector': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Vector search (Pinecone) alongside Algolia.',
-  },
-  'moderation.auto_review': {
-    defaultValue: true,
-    type: 'boolean',
-    description: 'Automated moderation pipeline on publish.',
-  },
-});
+export { DEFAULT_FLAGS };
 
 const OVERRIDE_PREFIX = 'arvdoul_flag_override_';
 
@@ -100,6 +33,7 @@ class FeatureFlagService {
   constructor() {
     this._values = new Map();
     this._overrides = new Map();
+    this._remoteOverrides = new Map();
     this._listeners = new Set();
     this._remoteReady = false;
     this._appliedDefaults = false;
@@ -230,6 +164,7 @@ class FeatureFlagService {
   /** Typed read respecting overrides > remote config > defaults. */
   getRaw(name) {
     if (this._overrides.has(name)) return this._overrides.get(name);
+    if (this._remoteOverrides?.has(name)) return this._remoteOverrides.get(name);
     return this._values.get(name);
   }
 
@@ -263,6 +198,7 @@ class FeatureFlagService {
     for (const name of Object.keys(DEFAULT_FLAGS)) {
       let source = 'default';
       if (this._overrides.has(name)) source = 'override';
+      else if (this._remoteOverrides?.has(name)) source = 'governed';
       else if (this._remoteReady) source = 'remote';
       out[name] = { value: this.getRaw(name), source, type: DEFAULT_FLAGS[name].type };
     }
@@ -309,6 +245,77 @@ class FeatureFlagService {
       }
     }
     this._emit();
+  }
+
+  // -------------------------------------------------------------------------
+  // Firestore governance overlay (platform-wide, server-written)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Applies a server-governed override map ({ flagName: value }) on top of the
+   * Remote Config values. Only registered flags are accepted; unknown names are
+   * ignored so a stray document cannot invent a flag.
+   */
+  applyRemoteOverrides(overrides = {}) {
+    this._remoteOverrides = new Map();
+    for (const [name, value] of Object.entries(overrides)) {
+      if (!this._checkRegistered(name)) continue;
+      if (value === null || value === undefined) continue;
+      this._remoteOverrides.set(name, this._coerce(name, value));
+    }
+    this._emit();
+  }
+
+  /**
+   * Subscribes to the server-governed `feature_flags` collection so a kill
+   * switch flips for every signed-in user, not just the admin who set it.
+   * Reads are allowed for signed-in users by firestore.rules; a signed-out
+   * session simply keeps the defaults. Idempotent and never throws.
+   * @param {Object} firestore
+   * @returns {Promise<(() => void)|null>} unsubscribe, or null when unavailable
+   */
+  async attachFirestoreOverrides(firestore) {
+    if (!firestore || this._governanceUnsub) return null;
+    try {
+      const { collection, onSnapshot } = await import('firebase/firestore');
+      this._governanceUnsub = onSnapshot(
+        collection(firestore, 'feature_flags'),
+        (snap) => {
+          const overrides = {};
+          snap.docs.forEach((d) => {
+            const record = d.data();
+            if (record && record.overridden === true && record.value !== undefined) {
+              overrides[d.id] = record.value;
+            }
+          });
+          this.applyRemoteOverrides(overrides);
+        },
+        (err) => {
+          logger.warn('[FeatureFlags] Governance listener unavailable', { error: err.message });
+        }
+      );
+      return this._governanceUnsub;
+    } catch (err) {
+      logger.warn('[FeatureFlags] Could not attach governance listener', { error: err.message });
+      return null;
+    }
+  }
+
+  /** Reads a local (device-scoped) override, or null when none is set. */
+  getOverride(name) {
+    return this._overrides.has(name) ? this._overrides.get(name) : null;
+  }
+
+  /** Full flag state map: `{ flagName: value }`. */
+  getAll() {
+    const out = {};
+    for (const name of Object.keys(DEFAULT_FLAGS)) out[name] = this.getRaw(name);
+    return out;
+  }
+
+  /** Alias of {@link onUpdate} kept for the admin console. */
+  subscribe(callback) {
+    return this.onUpdate(callback);
   }
 
   // -------------------------------------------------------------------------

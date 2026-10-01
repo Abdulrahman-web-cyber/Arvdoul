@@ -1300,3 +1300,31 @@ describe('Admin screens - server-authoritative admin gate', () => {
     expect(s).not.toMatch(/updateDoc\(\s*doc\(firestore, collectionName/);
   });
 });
+
+describe('Admin feature flags - platform-wide, server-authoritative', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminFeatureFlagsScreen.jsx'), 'utf8');
+
+  test('platform toggles go through the governance callable', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.SET_FEATURE_FLAG_OVERRIDE');
+    expect(s).toContain('FUNCTIONS.GET_FEATURE_FLAG_OVERRIDES');
+    expect(s).not.toContain("from '../../utils/AuditLogger.js'");
+  });
+
+  test('the flag registry lives in the shared module only', () => {
+    const service = fs.readFileSync(path.join(root, 'src', 'services', 'featureFlagService.js'), 'utf8');
+    expect(service).toContain("from '../shared/featureFlagRegistry.cjs'");
+    expect(service).not.toContain("'feed.ml_ranking': {");
+    const server = fs.readFileSync(path.join(root, 'functions', 'featureFlags.js'), 'utf8');
+    expect(server).toContain("require('./featureFlagRegistry.cjs')");
+    expect(server).toContain('isKnownFlag');
+  });
+
+  test('the server module is required by index.js and audited', () => {
+    const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
+    expect(index).toContain("require('./featureFlags.js')");
+    const server = fs.readFileSync(path.join(root, 'functions', 'featureFlags.js'), 'utf8');
+    expect(server).toContain("db.collection('moderation_logs').add(");
+    expect(server).toContain("db.collection('admins').doc(uid).get()");
+  });
+});

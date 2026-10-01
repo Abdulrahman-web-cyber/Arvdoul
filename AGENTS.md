@@ -44,6 +44,21 @@ are expected — only treat errors as failures.
   (`getUserIdFromContext`, `isAdmin`, `checkIsAdmin`, `assertAdmin`). Do not re-declare
   `isAdmin` in a module — a divergent check means an account can be admin for one endpoint
   and not another.
+- **Feature flags**: `src/shared/featureFlagRegistry.cjs` is the canonical flag
+  list (synced to `functions/featureFlagRegistry.cjs`, guarded by
+  `sharedConfigSync.test.js`). Platform-wide overrides live in Firestore
+  `feature_flags/{flag}` and are written ONLY by the admin-gated
+  `setFeatureFlagOverride` callable (`functions/featureFlags.js`), which
+  validates the name against the registry and audits to `moderation_logs`.
+  `featureFlagService.setOverride()` is a device-local lever, not governance —
+  never present it as an audit record.
+- **Audit trail**: `functions/admin.js#writeAudit` appends to `moderation_logs`
+  (admin-readable, server-write-only). `AdminAuditLogsScreen` reads that
+  collection. `src/utils/AuditLogger.js` is a local IndexedDB queue and is not
+  a server-side audit trail.
+- **Admin gate**: `admins/{uid}` is not client-readable, so admin screens must
+  call `fetchAdminStatus()` rather than `getDoc(doc(firestore, 'admins', uid))`
+  (which always denies and silently shows the "no access" state).
 - **Callables from the client**: go through `src/services/callableService.js`
   (`callFunction`, `FUNCTIONS`) rather than inlining `httpsCallable(getFunctions(), ...)`,
   so app binding and error normalisation stay consistent.

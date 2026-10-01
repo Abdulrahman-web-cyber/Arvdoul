@@ -58,14 +58,17 @@ const SystemInitializer = ({ onReady }) => {
         // Don't await - let it run in background
         firebaseInit();
 
-        // Feature flags: pull Firebase Remote Config in the background. Until
-        // it resolves (or fails), the static defaults are active, so nothing
-        // blocks startup. Admin overrides (kill switches) are applied
-        // synchronously from localStorage by the service constructor.
+        // Feature flags: pull Firebase Remote Config in the background and
+        // subscribe to the server-governed `feature_flags` overrides so a kill
+        // switch applies to every signed-in user. Until either resolves (or
+        // fails), the static defaults are active, so nothing blocks startup.
         const featureFlagsInit = async () => {
           try {
             const { featureFlagService } = await import('../services/featureFlagService.js');
             await featureFlagService.init();
+            const { getFirestoreInstance } = await import('../firebase/firebase.js');
+            const firestore = await getFirestoreInstance();
+            await featureFlagService.attachFirestoreOverrides(firestore);
           } catch (error) {
             console.warn('⚠️ Feature flags init failed (defaults active):', error.message);
           }

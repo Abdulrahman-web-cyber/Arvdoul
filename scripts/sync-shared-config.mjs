@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SHARED_MODULES = ['levelConfig.cjs'];
+const SHARED_MODULES = ['levelConfig.cjs', 'featureFlagRegistry.cjs'];
 
 mkdirSync(join(repoRoot, 'functions'), { recursive: true });
 

@@ -26,6 +26,8 @@ export const FUNCTIONS = {
   ADMIN_LIST_COMMUNITIES: 'adminListCommunities',
   ADMIN_SET_COMMUNITY_VERIFIED: 'adminSetCommunityVerified',
   ADMIN_ISSUE_COMMUNITY_STRIKE: 'adminIssueCommunityStrike',
+  GET_FEATURE_FLAG_OVERRIDES: 'getFeatureFlagOverrides',
+  SET_FEATURE_FLAG_OVERRIDE: 'setFeatureFlagOverride',
 };
 
 /**

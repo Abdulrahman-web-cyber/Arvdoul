@@ -12,7 +12,7 @@ const root = process.cwd();
  * copies src/shared/*.cjs into functions/, and these tests are the guardrail
  * that the copy never silently drifts from the canonical source.
  */
-const SHARED_MODULES = ['levelConfig.cjs'];
+const SHARED_MODULES = ['levelConfig.cjs', 'featureFlagRegistry.cjs'];
 
 describe('shared config single source of truth', () => {
   test.each(SHARED_MODULES)('%s is byte-identical in src/shared and functions', (name) => {
@@ -33,6 +33,18 @@ describe('shared config single source of truth', () => {
     const src = fs.readFileSync(path.join(root, 'functions', 'levelSystem.js'), 'utf8');
     expect(src).not.toContain('Array.from({ length: 100 }');
     expect(src).toContain("require('./levelConfig.cjs')");
+  });
+
+  test('the client flag service does not redefine the flag registry', () => {
+    const src = fs.readFileSync(path.join(root, 'src', 'services', 'featureFlagService.js'), 'utf8');
+    expect(src).not.toContain("'feed.ml_ranking': {");
+    expect(src).toContain("from '../shared/featureFlagRegistry.cjs'");
+  });
+
+  test('the server flag governance module imports the shared registry, not a copy', () => {
+    const src = fs.readFileSync(path.join(root, 'functions', 'featureFlags.js'), 'utf8');
+    expect(src).not.toContain("'feed.ml_ranking': {");
+    expect(src).toContain("require('./featureFlagRegistry.cjs')");
   });
 
   test('sync script and predeploy hook exist so the copy cannot go stale', () => {

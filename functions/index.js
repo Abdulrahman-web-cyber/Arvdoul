@@ -35,6 +35,8 @@ require('./saml.js');
 require('./levelSystem.js');
 // Moderation, reporting, AI authoring and post-performance prediction.
 require('./moderation.js');
+// Server-authoritative feature-flag governance (platform-wide kill switches).
+require('./featureFlags.js');
 // Server-authoritative admin actions (ban/suspend/verify, user directory,
 // report resolution). The client never writes privileged user fields directly.
 require('./admin.js');
