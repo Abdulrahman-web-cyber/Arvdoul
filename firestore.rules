@@ -28,7 +28,7 @@ service cloud.firestore {
     }
     // Fields only the server (Cloud Functions / Admin SDK) may ever change.
     // Mirrors SERVER_AUTHORITATIVE_FIELDS in src/config/profileContracts.js;
-    // a parity test in functionsContract.test.js keeps the two lists in step.
+    // a parity test in profilePiiBoundary.test.js keeps the two lists in step.
     // Clients that attempt to write any of these are rejected outright.
     function touchesServerAuthoritativeFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -71,6 +71,27 @@ service cloud.firestore {
         !request.resource.data.keys().hasAny([
           'email', 'phoneNumber', 'emailVerified', 'phoneVerified',
           'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId'
+        ]) &&
+        // Economy/status fields are server-authoritative; on create they must be
+        // exactly the new-account defaults (NEW_USER_DEFAULTS in
+        // src/shared/levelConfig.cjs). Without this a client could mint itself
+        // coins, XP, a level, verification or a privileged role at signup.
+        request.resource.data.get('coins', null) == 100 &&
+        request.resource.data.get('level', null) == 1 &&
+        request.resource.data.get('experience', null) == 0 &&
+        request.resource.data.get('experienceToNextLevel', null) == 100 &&
+        request.resource.data.get('totalEarned', null) == 0 &&
+        request.resource.data.get('reputation', null) == 0 &&
+        request.resource.data.get('isVerified', null) == false &&
+        request.resource.data.get('isCreator', null) == false &&
+        request.resource.data.get('accountStatus', null) == 'active' &&
+        !request.resource.data.keys().hasAny([
+          'roles', 'role', 'policyStanding', 'creatorStatus', 'creatorTier',
+          'titles', 'activeTitle', 'achievements', 'monetizationEligible',
+          'levelBand', 'activeDays', 'activeDaysCount', 'activeStreak',
+          'longestStreak', 'lastActiveDate', 'lastActiveDay', 'coinBalance',
+          'earnings', 'reputationScore', 'reputationTier', 'influence',
+          'influenceScore', 'contribution', 'contributionScore'
         ]);
       // Admins (admins/{uid} doc) may moderate via the applyUserAdminAction
       // callable; a direct admin write from the client is refused so every

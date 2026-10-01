@@ -3,6 +3,9 @@
 import { jest } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
+import levelConfig from '../shared/levelConfig.cjs';
+
+const { NEW_USER_DEFAULTS } = levelConfig;
 
 const root = process.cwd();
 
@@ -103,5 +106,31 @@ describe('shared config single source of truth', () => {
     const src = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
     expect(src).toContain("require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS");
     expect(src).toContain('amount < MIN_WITHDRAWAL_COINS');
+  });
+
+  test('the users create rule pins the new-account economy defaults', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const start = rules.indexOf("allow create: if isOwner(userId)");
+    const block = rules.slice(start, rules.indexOf(']);', rules.indexOf('contributionScore', start)));
+    // Every numeric/boolean default must appear as a literal equality in the
+    // create guard, so the rule can never drift from NEW_USER_DEFAULTS.
+    expect(block).toContain(`get('coins', null) == ${NEW_USER_DEFAULTS.coins}`);
+    expect(block).toContain(`get('level', null) == ${NEW_USER_DEFAULTS.level}`);
+    expect(block).toContain(`get('experience', null) == ${NEW_USER_DEFAULTS.experience}`);
+    expect(block).toContain(`get('experienceToNextLevel', null) == ${NEW_USER_DEFAULTS.experienceToNextLevel}`);
+    expect(block).toContain(`get('totalEarned', null) == ${NEW_USER_DEFAULTS.totalEarned}`);
+    expect(block).toContain(`get('reputation', null) == ${NEW_USER_DEFAULTS.reputation}`);
+    expect(block).toContain(`get('isVerified', null) == ${NEW_USER_DEFAULTS.isVerified}`);
+    expect(block).toContain(`get('isCreator', null) == ${NEW_USER_DEFAULTS.isCreator}`);
+    expect(block).toContain(`get('accountStatus', null) == '${NEW_USER_DEFAULTS.accountStatus}'`);
+  });
+
+  test('the client seeds a new profile from NEW_USER_DEFAULTS, not literals', () => {
+    const src = fs.readFileSync(path.join(root, 'src', 'services', 'userService.js'), 'utf8');
+    expect(src).toContain("from '../shared/levelConfig.cjs'");
+    expect(src).toContain('NEW_USER_DEFAULTS.coins');
+    expect(src).toContain('NEW_USER_DEFAULTS.level');
+    expect(src).not.toContain('DEFAULT_COINS: 100');
+    expect(src).not.toContain('DEFAULT_LEVEL: 1');
   });
 });

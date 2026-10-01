@@ -123,6 +123,16 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
 - Never re-declare a level curve, level name, coin reward or gate threshold in a
   component or service. Read `LEVEL_GATES` / `getLevelInfo` / `getRankTitle`
   from the shared config. A literal like `LEVEL >= 10` in JSX is a bug.
+- The shared config also owns the economy constants: `COINS_PER_DOLLAR` and
+  `MIN_WITHDRAWAL_COINS`. The wallet/payout screens read them and
+  `functions/monetization.js` `requestWithdrawal` enforces
+  `MIN_WITHDRAWAL_COINS` server-side — never hardcode a payout rate or minimum.
+- `NEW_USER_DEFAULTS` is the only place the new-account economy/status values
+  live (`coins`, `level`, `experience`, `reputation`, `isVerified`, ...).
+  `userService.createUserProfile` seeds from it and `firestore.rules` pins the
+  `users/{uid}` create to exactly those values, so a client cannot mint coins,
+  XP, a level, verification or a role at signup. `sharedConfigSync.test.js`
+  guards both the sync and the rules parity.
 - Rank bands, perks and royal eligibility follow the Profile System blueprint
   (sections 21-22 and 31-32); `getRoyalEligibility` requires every dimension, so
   level alone can never grant a royal title.

@@ -860,6 +860,26 @@ const COINS_PER_DOLLAR = 200;
 const MIN_WITHDRAWAL_COINS = 5000;
 
 /**
+ * Initial economy/status values for a brand-new account — SINGLE SOURCE OF TRUTH.
+ *
+ * The client writes these once when it creates users/{uid}; firestore.rules pins
+ * the create to exactly these values so a client cannot mint itself coins, XP,
+ * a level, a verification flag or a privileged role at signup. Keep the rules
+ * block and this object in step (guarded by sharedConfigSync.test.js).
+ */
+const NEW_USER_DEFAULTS = Object.freeze({
+  coins: 100,
+  level: 1,
+  experience: 0,
+  experienceToNextLevel: 100,
+  totalEarned: 0,
+  reputation: 0,
+  isVerified: false,
+  isCreator: false,
+  accountStatus: 'active',
+});
+
+/**
  * Prestige info beyond Level 100.
  */
 function getPrestigeInfo(level = 1) {
@@ -888,6 +908,7 @@ module.exports = {
   TRANSACTION_STATES,
   COINS_PER_DOLLAR,
   MIN_WITHDRAWAL_COINS,
+  NEW_USER_DEFAULTS,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,

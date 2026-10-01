@@ -4,6 +4,7 @@ import { addCoins as monetizationAddCoins } from './monetizationService.js';
 import { getStorageService } from './storageService.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { cacheManager } from '../utils/CacheManager.js';
+import { NEW_USER_DEFAULTS } from '../shared/levelConfig.cjs';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
@@ -29,8 +30,6 @@ const USER_CONFIG = {
   DEFAULT_USERNAME_LENGTH: 20,
   CACHE_EXPIRY: 5 * 60 * 1000,           // 5 min general profile cache
   RECOMMENDATION_CACHE_MS: 60 * 1000,    // 60 sec throttle for friend recommendations
-  DEFAULT_COINS: 100,
-  DEFAULT_LEVEL: 1,
   CREATOR_THRESHOLD: 5,
   MUTUAL_FRIENDS_MAX_FOLLOWS: 1000,
   FRIENDS_OF_FRIENDS_MAX_FRIENDS: 200,
@@ -690,17 +689,18 @@ class ProfessionalUserService {
       followerCount: 0,
       followingCount: 0,
       postCount: 0,
-      coins: USER_CONFIG.DEFAULT_COINS,
-      totalEarned: 0,
-      level: USER_CONFIG.DEFAULT_LEVEL,
-      experience: 0,
-      experienceToNextLevel: 100,
-      isCreator: false,
+      coins: NEW_USER_DEFAULTS.coins,
+      totalEarned: NEW_USER_DEFAULTS.totalEarned,
+      level: NEW_USER_DEFAULTS.level,
+      experience: NEW_USER_DEFAULTS.experience,
+      experienceToNextLevel: NEW_USER_DEFAULTS.experienceToNextLevel,
+      reputation: NEW_USER_DEFAULTS.reputation,
+      isCreator: NEW_USER_DEFAULTS.isCreator,
 
       authProvider: profileData.authProvider || 'email',
       isProfileComplete: profileData.isProfileComplete !== undefined ? !!profileData.isProfileComplete : false,
-      accountStatus: 'active',
-      isVerified: false,
+      accountStatus: NEW_USER_DEFAULTS.accountStatus,
+      isVerified: NEW_USER_DEFAULTS.isVerified,
       isPrivate: false,
       isOnline: true,
       lastActive: serverTimestamp(),
