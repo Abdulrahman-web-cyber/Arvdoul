@@ -40,7 +40,9 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import Konva from 'konva';
 import { useGesture } from '@use-gesture/react';
 import { v4 as uuidv4 } from 'uuid';
-import imageCompression from 'browser-image-compression';
+// NOTE: browser-image-compression is loaded on demand inside imageEffects.js
+// (compressImage). A static import here would also pull it into the initial
+// ImageEditor chunk, defeating that lazy load (audit build warning).
 import FocusTrap from 'focus-trap-react';
 import clamp from 'lodash-es/clamp';
 import { cn } from '../../lib/utils';

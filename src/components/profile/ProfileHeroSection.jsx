@@ -34,10 +34,10 @@ import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
-const getLevelInfo = LevelModule.getLevelInfo || LevelModule.levelSystemService?.getLevelInfo || (() => ({ level: 1, title: 'Citizen', progress: 0 }));
-const getRankTitle = LevelModule.getRankTitle || (() => 'Citizen');
-const getCitizenTier = LevelModule.getCitizenTier || (() => ({ tier: 'Citizen' }));
-const LEVELS = LevelModule.LEVELS || [];
+// Fallbacks return "unknown" (null), never a fabricated Citizen/Level 1
+// standing (audit N005/U-4). The real exports always win when present.
+const getRankTitle = LevelModule.getRankTitle || (() => null);
+const getCitizenTier = LevelModule.getCitizenTier || (() => null);
 
 const ProfileHeroSection = memo(({
   profile,
@@ -66,50 +66,31 @@ const ProfileHeroSection = memo(({
   const navigate = useNavigate();
   const isDark = theme === 'dark';
 
-  // Compute real level & progression from levelSystemService
-  const userExperience = useMemo(() => {
-    if (profile?.experience !== undefined && profile?.experience !== null) {
-      return Number(profile.experience) || 0;
-    }
-    if (profile?.xp !== undefined && profile?.xp !== null) {
-      return Number(profile.xp) || 0;
-    }
-    if (profile?.level && Array.isArray(LEVELS)) {
-      const idx = Math.max(0, Math.min(Number(profile.level) - 1, LEVELS.length - 1));
-      return LEVELS[idx]?.minXp || 0;
-    }
-    return 0;
-  }, [profile?.experience, profile?.xp, profile?.level]);
-
-  const levelInfo = useMemo(() => {
-    try {
-      const res = getLevelInfo(userExperience);
-      // Guard against mock returning Promise in tests
-      if (res && typeof res.then === 'function') {
-        return { level: 1, title: 'Citizen', progress: 0 };
-      }
-      return res || { level: 1, title: 'Citizen', progress: 0 };
-    } catch {
-      return { level: 1, title: 'Citizen', progress: 0 };
-    }
-  }, [userExperience]);
-
-  const effectiveLevel = Number(level || profile?.level || levelInfo?.level) || 1;
+  // Only a stored level is real. Never invent "Level 1"/"Citizen" for a profile
+  // that has no progression data (audit N005/U-4): absent data renders as
+  // unavailable instead of a plausible-but-false standing.
+  const explicitLevel = Number(level || profile?.level);
+  const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
+  const effectiveLevel = hasLevel ? explicitLevel : null;
   const rankTitle = useMemo(() => {
+    if (!hasLevel) return null;
     try {
       return getRankTitle(effectiveLevel);
     } catch {
-      return 'Citizen';
+      return null;
     }
-  }, [effectiveLevel]);
+  }, [hasLevel, effectiveLevel]);
 
   const citizenStanding = useMemo(() => {
+    if (!hasLevel) return null;
     try {
-      return getCitizenTier(effectiveLevel, Number(profile?.activeDaysCount) || 1);
+      return getCitizenTier(effectiveLevel, Number(profile?.activeDaysCount) || 0);
     } catch {
-      return { tier: 'Citizen' };
+      return null;
     }
-  }, [effectiveLevel, profile?.activeDaysCount]);
+  }, [hasLevel, effectiveLevel, profile?.activeDaysCount]);
+
+  const rankLabel = profile?.primaryTitle || profile?.activeTitle?.name || rankTitle || citizenStanding?.tier || null;
 
   // Safe display strings with actual identity resolution
   const displayName = useMemo(() => {
@@ -314,19 +295,27 @@ const ProfileHeroSection = memo(({
               {/* Handle & Civic Rank (Unboxed Clean Typography with Separators) */}
               <div className="flex items-center gap-1.5 flex-wrap text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                 <span className="font-mono">@{username}</span>
-                <span aria-hidden="true">·</span>
-                <button
-                  type="button"
-                  onClick={() => navigate(isOwner ? '/titles' : `/passport/${profileUid}`)}
-                  className="text-purple-600 dark:text-purple-400 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <Crown className="w-3.5 h-3.5" />
-                  <span>{profile?.primaryTitle || profile?.activeTitle?.name || rankTitle || citizenStanding.tier}</span>
-                </button>
-                <span aria-hidden="true">·</span>
-                <span className="text-indigo-600 dark:text-indigo-400 font-medium">
-                  Level {effectiveLevel}
-                </span>
+                {rankLabel && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      onClick={() => navigate(isOwner ? '/titles' : `/passport/${profileUid}`)}
+                      className="text-purple-600 dark:text-purple-400 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>{rankLabel}</span>
+                    </button>
+                  </>
+                )}
+                {hasLevel && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                      Level {effectiveLevel}
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Bio */}

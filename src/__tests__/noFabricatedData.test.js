@@ -1083,3 +1083,35 @@ describe('VideoAnalytics RevenueTab - real payout wiring', () => {
   });
 });
 
+
+describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
+  test('ProfileHeroSection does not invent a level or rank when none is stored', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileHeroSection.jsx'), 'utf8');
+    expect(src).not.toContain('|| 1;');
+    expect(src).not.toMatch(/return \{ level: 1, title: 'Citizen'/);
+    expect(src).not.toMatch(/\(\) => 'Citizen'/);
+  });
+
+  test('ProfilePublicScreen does not default a missing level to 1', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ProfilePublicScreen.jsx'), 'utf8');
+    expect(src).not.toContain('Number(profileData.level) || 1');
+    expect(src).not.toContain('effectiveProfile.level || 1');
+  });
+});
+
+describe('Analytics view dedupe is transactional (N019)', () => {
+  test('trackProfileView claims the daily marker inside a transaction', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/analyticsService.js'), 'utf8');
+    const body = src.slice(src.indexOf('async trackProfileView'));
+    expect(body).not.toMatch(/await getDoc\(viewRef\)/);
+    expect(body).toMatch(/runTransaction\(this\.firestore/);
+  });
+});
+
+describe('Offline sync - single canonical queue instance (N014)', () => {
+  test('syncEngine re-exports the shared queue instead of constructing its own', () => {
+    const src = fs.readFileSync(path.join(root, 'src/offline/syncEngine.js'), 'utf8');
+    expect(src).not.toContain('new OfflineQueue()');
+    expect(src).toContain("from '../utils/OfflineQueue'");
+  });
+});

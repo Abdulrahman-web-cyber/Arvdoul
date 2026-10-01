@@ -672,6 +672,9 @@ export const useProfileStore = create(
      */
     follow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
+      // Idempotent: a double-tap while already following must not increment
+      // the optimistic counter a second time (audit N012/D-4).
+      if (get().followStatus?.isFollowing === true) return;
 
       // Snapshot before the optimistic write so rollback restores the
       // real previous state instead of a hard-coded guess (audit N012).
@@ -722,6 +725,9 @@ export const useProfileStore = create(
      */
     unfollow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
+      // Idempotent: a double-tap while not following must not decrement the
+      // optimistic counter a second time (audit N012/D-4).
+      if (get().followStatus?.isFollowing === false) return;
       
       // Store previous state for rollback
       const previousFollowStatus = get().followStatus;

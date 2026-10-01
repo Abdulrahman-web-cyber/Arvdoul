@@ -85,3 +85,17 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
 - Rank bands, perks and royal eligibility follow the Profile System blueprint
   (sections 21-22 and 31-32); `getRoyalEligibility` requires every dimension, so
   level alone can never grant a royal title.
+
+## Offline queue — one instance, one owner
+`src/utils/OfflineQueue.js` exports the single `offlineQueue` singleton.
+`src/offline/syncEngine.js` re-exports it; never construct a second
+`OfflineQueue` (the in-memory fallback and drain state would diverge, so
+service-layer ops could never drain). Every queued op carries an `ownerUid`;
+enqueues without an explicit owner bind to the live session
+(`window._arvdoul_auth`), drains are scoped with `syncQueue({ ownerUid })`, and
+`purgeQueueForOwner(uid)` runs on sign-out/account switch.
+
+## No fabricated standing
+A missing `level`/`xp` renders as unavailable (null), never as `Level 1` /
+`Citizen`. Do not add `|| 1` level defaults or `() => 'Citizen'` fallbacks in
+profile components — `src/__tests__/noFabricatedData.test.js` guards this.

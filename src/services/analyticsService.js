@@ -317,33 +317,30 @@ class UltimateAnalyticsService {
     try {
       await this._ensureInitialized();
 
-      const { doc, getDoc, setDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
+      const { doc, serverTimestamp, runTransaction } = await import('firebase/firestore');
       const today = this._getDateString();
       const viewDocId = this._generateDocId(viewerId, profileOwnerId, today);
 
-      // Dedupe: one analytics write per (viewer, owner, day) - no per-view hot writes.
       const viewRef = doc(this.firestore, 'profile_views', viewDocId);
-      const existingView = await getDoc(viewRef);
-      if (existingView.exists()) return;
-
-      // Record the view
-      await setDoc(viewRef, {
-        viewerId,
-        profileOwnerId,
-        viewedAt: serverTimestamp(),
-        date: today,
-      });
-
-      // Sharded counters for totalViews/totalReach (no hot profile_analytics doc).
-      const docPath = `profile_analytics/${profileOwnerId}`;
-      await countersManager.increment({ docPath, field: 'totalViews' });
-      await countersManager.increment({ docPath, field: 'totalReach' });
-
-      // Daily stats: bounded map (365 days), written at most once per viewer per day.
       const analyticsRef = doc(this.firestore, 'profile_analytics', profileOwnerId);
-      await runTransaction(this.firestore, async (transaction) => {
-        const analyticsDoc = await transaction.get(analyticsRef);
 
+      // Atomic dedupe (audit N019): the daily view marker and the owner's
+      // daily stats are claimed in one transaction, so two concurrent tabs
+      // cannot both count the same viewer twice. The previous check-then-write
+      // read the marker and wrote it non-atomically, so a race inflated both
+      // the daily stats and the sharded counters.
+      const counted = await runTransaction(this.firestore, async (transaction) => {
+        const viewSnap = await transaction.get(viewRef);
+        if (viewSnap.exists()) return false;
+
+        transaction.set(viewRef, {
+          viewerId,
+          profileOwnerId,
+          viewedAt: serverTimestamp(),
+          date: today,
+        });
+
+        const analyticsDoc = await transaction.get(analyticsRef);
         if (!analyticsDoc.exists()) {
           transaction.set(analyticsRef, {
             totalEngagement: 0,
@@ -377,7 +374,18 @@ class UltimateAnalyticsService {
             lastUpdated: serverTimestamp(),
           });
         }
+
+        return true;
       });
+
+      // The view was already counted today; nothing further to do.
+      if (!counted) return;
+
+      // Sharded counters for totalViews/totalReach (approximate aggregates, no
+      // hot profile_analytics doc).
+      const docPath = `profile_analytics/${profileOwnerId}`;
+      await countersManager.increment({ docPath, field: 'totalViews' });
+      await countersManager.increment({ docPath, field: 'totalReach' });
 
       // Invalidate cache (centralized CacheManager)
       this.cache.invalidatePattern(`analytics_${profileOwnerId}_*`);

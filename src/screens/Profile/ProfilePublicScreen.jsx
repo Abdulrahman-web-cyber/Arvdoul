@@ -308,7 +308,8 @@ export default function ProfilePublicScreen() {
         ? profileData.name.trim()
         : 'Creator';
 
-    const safeLevel = Number(profileData.level) || 1;
+    // No stored level => unknown, not a fabricated Level 1 (audit N005/U-4).
+    const safeLevel = Number(profileData.level) > 0 ? Number(profileData.level) : null;
 
     return {
       ...profileData,
@@ -324,7 +325,7 @@ export default function ProfilePublicScreen() {
       likesReceived: Number(profileData.likesReceived ?? profileData.likesCount ?? 0),
       coins: Number(profileData.coins ?? profileData.coinBalance ?? 0),
       isVerified: Boolean(profileData.isVerified || profileData.verified),
-      isCreator: Boolean(profileData.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
+      isCreator: Boolean(profileData.isCreator || (safeLevel !== null && safeLevel >= LEVEL_GATES.creatorProfile)),
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
       links: Array.isArray(profileData.links) ? profileData.links : [],
@@ -524,7 +525,7 @@ export default function ProfilePublicScreen() {
           <ProfileHeroSection
             profile={effectiveProfile}
             isOwner={false}
-            level={effectiveProfile.level || 1}
+            level={effectiveProfile.level}
             theme={theme}
             onBack={() => navigate(-1)}
             onOpenQrCode={() => setShowQrModal(true)}

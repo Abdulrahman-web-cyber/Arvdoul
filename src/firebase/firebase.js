@@ -38,6 +38,28 @@ if (typeof window !== 'undefined') {
   window._arvdoul_auth = auth;
 }
 
+// ==================== APP CHECK (audit N016) ====================
+// App Check attests that requests come from our own app before the backend
+// accepts them. The reCAPTCHA site key is environment-supplied (never a
+// committed literal); when it is absent we skip initialisation rather than
+// silently shipping an unattested client. Enforcement is switched on in the
+// Firebase console once tokens are observed in production.
+const APP_CHECK_SITE_KEY = import.meta.env?.VITE_FIREBASE_APPCHECK_SITE_KEY || '';
+export const appCheckEnabled = Boolean(APP_CHECK_SITE_KEY);
+
+if (typeof window !== 'undefined' && APP_CHECK_SITE_KEY) {
+  import('firebase/app-check')
+    .then(({ initializeAppCheck, ReCaptchaV3Provider }) => {
+      initializeAppCheck(_fbApp, {
+        provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY),
+        isTokenAutoRefreshEnabled: true,
+      });
+    })
+    .catch((err) => {
+      console.error('App Check initialization failed:', err?.message);
+    });
+}
+
 // Mirror the manager's auth hardening so phone/SMS auth keeps working.
 try {
   if (typeof process === 'undefined' || !process.env || process.env.NODE_ENV !== 'test') {
