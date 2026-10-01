@@ -29,17 +29,21 @@ const ADMIN_USER_ACTIONS = {
   unverify: { isVerified: false },
 };
 
-async function writeAudit(actorUid, action, targetId, details = {}) {
+async function writeAudit(actorUid, action, targetId, details = {}, targetType = 'user') {
   await db.collection('moderation_logs').add({
     actorId: actorUid,
     actorUid,
     action,
     targetId,
-    targetType: 'user',
+    targetType,
     details,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
+
+// Shared with the flag-governance module so every admin intervention lands in
+// one audit collection with one schema.
+module.exports.writeAudit = writeAudit;
 
 // ----------------------------------------------------------------------
 //  applyUserAdminAction — ban / suspend / restore / verify (admin only)
@@ -469,9 +473,13 @@ exports.adminSetCommunityVerified = functions.https.onCall(async (data, context)
     verifiedAt: verified ? admin.firestore.FieldValue.serverTimestamp() : null,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await writeAudit(actorUid, verified ? 'community_verified' : 'community_unverified', communityId, {
-    communityName: snap.data().name || null,
-  });
+  await writeAudit(
+    actorUid,
+    verified ? 'community_verified' : 'community_unverified',
+    communityId,
+    { communityName: snap.data().name || null },
+    'community'
+  );
 
   return { success: true, communityId, isVerified: verified };
 });
@@ -504,10 +512,13 @@ exports.adminIssueCommunityStrike = functions.https.onCall(async (data, context)
     issuedBy: actorUid,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await writeAudit(actorUid, 'community_strike_issued', communityId, {
-    communityName: snap.data().name || null,
-    reason: trimmedReason.slice(0, 500),
-  });
+  await writeAudit(
+    actorUid,
+    'community_strike_issued',
+    communityId,
+    { communityName: snap.data().name || null, reason: trimmedReason.slice(0, 500) },
+    'community'
+  );
 
   return { success: true, communityId, reason: trimmedReason };
 });

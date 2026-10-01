@@ -1323,8 +1323,13 @@ describe('Admin feature flags - platform-wide, server-authoritative', () => {
   test('the server module is required by index.js and audited', () => {
     const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
     expect(index).toContain("require('./featureFlags.js')");
+    // Flag governance reuses the canonical admin helper and audit writer
+    // instead of re-declaring an isAdmin check or a second audit collection.
     const server = fs.readFileSync(path.join(root, 'functions', 'featureFlags.js'), 'utf8');
-    expect(server).toContain("db.collection('moderation_logs').add(");
-    expect(server).toContain("db.collection('admins').doc(uid).get()");
+    expect(server).toContain("require('./auth')");
+    expect(server).toContain("require('./admin')");
+    expect(server).not.toContain("collection('admins')");
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('module.exports.writeAudit = writeAudit');
   });
 });
