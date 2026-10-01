@@ -222,5 +222,13 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
       expect(block).not.toMatch(/allow create: if isSignedIn/);
     }
   });
+
+  test('the coin audit reconciles the supply counter instead of trusting it', () => {
+    // It used to log the counter and return ("we'll still do a sample check for
+    // now"), so a mint/burn path that forgot to bump the counter went unnoticed.
+    expect(monetization).not.toContain('sample check for now');
+    expect(monetization).toContain("aggregate({ total: admin.firestore.AggregateField.sum('coins') })");
+    expect(monetization).toContain('coin_audit_drift');
+  });
 });
 

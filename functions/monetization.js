@@ -1047,20 +1047,42 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 // ----------------------------------------------------------------------
 exports.auditCoins = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
   try {
-    // Instead of scanning all users, we compare the incremental total in 'system/coin_supply'
-    // with a running audit counter that is updated during each add/spend/transfer.
-    // This requires that every coin operation updates both totalCoins and auditCounter.
-    // For simplicity, we'll still do a sample check for now.
     const supplyDoc = await admin.firestore().collection('system').doc('coin_supply').get();
     const supplyTotal = supplyDoc.exists ? (supplyDoc.data().totalCoins || 0) : 0;
 
-    // To avoid full scan, we can use an approximate check: sum of a random sample of users.
-    // For 1B users, full scan is impossible. We'll rely on ledger reconciliation instead.
-    // For now, we log the supply total and trust the ledger.
-    console.log(`Coin audit: system supply = ${supplyTotal}`);
+    // Reconcile the incremental supply counter against the authoritative sum of
+    // every user balance. A server-side aggregate is a single index scan, so
+    // this stays O(1) in result size even at large user counts. If the counter
+    // drifts (a mint/burn path that forgot to bump it), the gap is reported
+    // instead of being logged and trusted.
+    if (typeof admin.firestore.AggregateField === 'undefined'
+        || typeof admin.firestore().collection('users').aggregate !== 'function') {
+      functions.logger.warn('Coin audit skipped: aggregate queries unavailable on this firebase-admin version.');
+      return null;
+    }
+
+    const agg = await admin.firestore().collection('users')
+      .aggregate({ total: admin.firestore.AggregateField.sum('coins') })
+      .get();
+    const balanceTotal = Number(agg.data().total) || 0;
+    const drift = supplyTotal - balanceTotal;
+
+    if (drift === 0) {
+      functions.logger.info(`Coin audit OK: supply = balances = ${supplyTotal}`);
+      return null;
+    }
+
+    functions.logger.error('Coin audit drift detected', { supplyTotal, balanceTotal, drift });
+    await admin.firestore().collection('admin_notifications').add({
+      type: 'coin_audit_drift',
+      supplyTotal,
+      balanceTotal,
+      drift,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     return null;
   } catch (err) {
-    console.error('Coin audit failed:', err);
+    functions.logger.error('Coin audit failed:', err);
     return null;
   }
 });
