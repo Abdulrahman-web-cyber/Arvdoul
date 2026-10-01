@@ -141,6 +141,7 @@ import { MdAdsClick, MdOutlinePaid, MdAccountBalance, MdTrendingUp, MdShowChart 
 import { RiCopperCoinLine } from "react-icons/ri";
 import { SiCashapp } from "react-icons/si";
 import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES } from "../../services/levelSystemService";
+import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 
 // Monetization (withdrawals) gate — read from the shared level config so the
 // panel can never advertise a different level than the server enforces.
@@ -862,19 +863,19 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   }, [playSound]);
 
   const copyProfileLink = useCallback(async () => {
-    const username = currentUser?.username;
-    if (username) {
-      const link = `${window.location.origin}/profile/${username}`;
-      try {
-        await navigator.clipboard.writeText(link);
-        track("Profile_Link_Copied");
-        toast.success("Profile link copied!");
-      } catch (err) {
-        console.error("Failed to copy:", err);
-        toast.error("Could not copy link");
-      }
+    // Share links must resolve the same handle as every other share entry point
+    // (username first, then id), so go through the canonical helper rather than
+    // rebuilding the URL from the username alone.
+    if (!currentUser) return;
+    try {
+      await copyToClipboard(getProfileUrl(currentUser));
+      track("Profile_Link_Copied");
+      toast.success("Profile link copied!");
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      toast.error("Could not copy link");
     }
-  }, [currentUser?.username, track]);
+  }, [currentUser, track]);
 
   // ==================== RENDER FUNCTIONS ====================
   const renderUserProfile = () => {

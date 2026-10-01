@@ -81,4 +81,31 @@ describe('shareUtils', () => {
       await expect(copyToClipboard('x')).rejects.toThrow();
     });
   });
+
+  describe('no shadow share links', () => {
+    it('no source file hand-builds an absolute profile url', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const { fileURLToPath } = await import('node:url');
+      const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+      const offenders = [];
+      const walk = (dir) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            walk(full);
+          } else if (/\.(js|jsx)$/.test(entry.name) && full !== fileURLToPath(import.meta.url)) {
+            const text = fs.readFileSync(full, 'utf8');
+            // Absolute share URLs (origin + /profile/) must come from getProfileUrl.
+            if (/origin\}\/profile\/|\$\{[^}]*origin[^}]*\}\/profile\//.test(text)) {
+              offenders.push(path.relative(srcRoot, full));
+            }
+          }
+        }
+      };
+      walk(srcRoot);
+      expect(offenders).toEqual([]);
+    });
+  });
 });
