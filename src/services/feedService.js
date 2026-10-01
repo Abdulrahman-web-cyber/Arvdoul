@@ -1308,7 +1308,7 @@ class UltimateFeedService {
         adType: ad.type || 'display',
         title: ad.title || 'Sponsored',
         content: ad.description || ad.content || 'Discover amazing products',
-        imageUrl: ad.imageUrl || ad.image || '/assets/ad-REAL.png',
+        imageUrl: ad.imageUrl || ad.image || '/assets/ad-fallback.png',
         link: ad.targetUrl || ad.link || '/ads',
         advertiser: ad.advertiser || 'Advertiser',
         cta: ad.cta || 'Learn More',

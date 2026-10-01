@@ -29,7 +29,7 @@ export default function SplashScreen() {
     return {
       isDark: resolvedTheme === 'dark',
       logo: resolvedTheme === 'dark' ? '/logo/logo-dark.png' : '/logo/logo-light.png',
-      fallbackLogo: resolvedTheme === 'dark' ? '/logo/logo-default.png' : '/logo/logo-default.png',
+      fallbackLogo: '/logo/logo-default.png',
       background: resolvedTheme === 'dark'
         ? '#03071B'
         : '#F6F8FC',
