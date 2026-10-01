@@ -670,7 +670,7 @@ const collaborationService = {
   publishContent: (pid, vid, pid2, pr) => getCollaborationService().publishContent(pid, vid, pid2, pr),
   acquireLock: (cid, uid, ttl) => getCollaborationService().acquireLock(cid, uid, ttl),
   releaseLock: (cid, uid) => getCollaborationService().releaseLock(cid, uid),
-  getStats: () => getCollaborationService().getStats(),
+  getStats: (uid) => getCollaborationService().getStats(uid),
   destroy: () => getCollaborationService().destroy(),
   getService: getCollaborationService,
 };

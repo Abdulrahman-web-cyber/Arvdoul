@@ -74,9 +74,11 @@ export default function MediaDrawer({
             STOCK_VIDEOS.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {STOCK_VIDEOS.map((video) => (
-                  <div
+                  <button
                     key={video.id}
-                    className="group relative rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer shadow-md"
+                    type="button"
+                    aria-label={`Add ${video.title} to timeline`}
+                    className="group relative text-left rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer shadow-md"
                     onClick={() => {
                       onAddMedia?.({
                         type: 'video',
@@ -106,11 +108,11 @@ export default function MediaDrawer({
                     </div>
                     <div className="p-2 flex items-center justify-between">
                       <div className="text-xs font-semibold text-white truncate">{video.title}</div>
-                      <button className="p-1 rounded-lg bg-purple-600/30 group-hover:bg-purple-600 text-purple-300 group-hover:text-white transition-colors">
+                      <span className="p-1 rounded-lg bg-purple-600/30 group-hover:bg-purple-600 text-purple-300 group-hover:text-white transition-colors" aria-hidden="true">
                         <Plus className="w-3.5 h-3.5" />
-                      </button>
+                      </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -126,9 +128,11 @@ export default function MediaDrawer({
             STOCK_AUDIO.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {STOCK_AUDIO.map((audio) => (
-                  <div
+                  <button
                     key={audio.id}
-                    className="flex items-center justify-between p-3 rounded-2xl bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer"
+                    type="button"
+                    aria-label={`Add ${audio.title} to timeline`}
+                    className="flex items-center justify-between text-left w-full p-3 rounded-2xl bg-black/40 border border-white/10 hover:border-purple-500 transition-all cursor-pointer"
                     onClick={() => {
                       onAddMedia?.({
                         type: 'audio',
@@ -149,10 +153,10 @@ export default function MediaDrawer({
                       </div>
                     </div>
 
-                    <button className="p-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600 text-purple-300 hover:text-white">
+                    <span className="p-1.5 rounded-lg bg-purple-600/30 group-hover:bg-purple-600 text-purple-300 group-hover:text-white" aria-hidden="true">
                       <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                    </span>
+                  </button>
                 ))}
               </div>
             ) : (

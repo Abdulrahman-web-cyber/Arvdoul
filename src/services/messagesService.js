@@ -1833,6 +1833,22 @@ class UltimateMessagingService {
     return { success: true };
   }
 
+  async pinConversation(conversationId, userId) {
+    await this.ensureInitialized();
+    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
+    await this.fs.updateDoc(convRef, { pinnedBy: arrayUnion(userId), updatedAt: this.fs.serverTimestamp() });
+    this.conversationsCache.delete(conversationId);
+    return { success: true };
+  }
+
+  async unpinConversation(conversationId, userId) {
+    await this.ensureInitialized();
+    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
+    await this.fs.updateDoc(convRef, { pinnedBy: arrayRemove(userId), updatedAt: this.fs.serverTimestamp() });
+    this.conversationsCache.delete(conversationId);
+    return { success: true };
+  }
+
   async unarchiveConversation(conversationId, userId) {
     await this.ensureInitialized();
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
@@ -3308,6 +3324,8 @@ const messagingService = {
   unmuteConversation: (cid, uid) => getMessagingService().unmuteConversation(cid, uid),
   archiveConversation: (cid, uid) => getMessagingService().archiveConversation(cid, uid),
   unarchiveConversation: (cid, uid) => getMessagingService().unarchiveConversation(cid, uid),
+  pinConversation: (cid, uid) => getMessagingService().pinConversation(cid, uid),
+  unpinConversation: (cid, uid) => getMessagingService().unpinConversation(cid, uid),
   hideConversation: (cid, uid) => getMessagingService().hideConversation(cid, uid),
   unhideConversation: (cid, uid) => getMessagingService().unhideConversation(cid, uid),
   leaveGroup: (cid, uid) => getMessagingService().leaveGroup(cid, uid),

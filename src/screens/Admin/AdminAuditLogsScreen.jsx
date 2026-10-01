@@ -198,9 +198,9 @@ const AdminAuditLogsScreen = () => {
                     className="flex items-center justify-between gap-4 cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
-                      <button className="text-gray-400">
+                      <span className="text-gray-400" aria-hidden="true">
                         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      </button>
+                      </span>
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-gray-900 dark:text-white font-mono">{log.action || 'unknown_action'}</span>

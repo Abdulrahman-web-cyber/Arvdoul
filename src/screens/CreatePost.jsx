@@ -2929,7 +2929,25 @@ function EditPostLoader() {
   const [searchParams] = useSearchParams();
   const { dispatch } = useCreatePostState();
   const editId = searchParams.get("edit");
+  const quoteSnippet = searchParams.get("quote");
   const loadedRef = React.useRef(false);
+  const quotedRef = React.useRef(false);
+
+  // "Quote Post" seeds the composer with the quoted snippet as a blockquote.
+  React.useEffect(() => {
+    if (!quoteSnippet || quotedRef.current) return;
+    quotedRef.current = true;
+    const quoted = quoteSnippet
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+    dispatch({
+      type: "LOAD_DRAFT",
+      payload: { postType: "text", content: `${quoted}\n\n`, contentJSON: null, mediaItems: [], visibility: "public", isDraftLoaded: true, isDirty: false },
+    });
+    dispatch({ type: "SET_POST_TYPE", payload: "text" });
+    dispatch({ type: "SET_STEP", payload: 2 });
+  }, [quoteSnippet, dispatch]);
 
   React.useEffect(() => {
     if (!editId || loadedRef.current) return;

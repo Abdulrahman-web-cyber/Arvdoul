@@ -140,7 +140,7 @@ export default function MenuScreen() {
     { id: "audio-editor", category: "creator", icon: Music, label: "Audio Editor & Synthesizer", description: "Multi-waveform audio splicing & volume normalizer", color: "#ec4899", path: "/audio-editor", badge: "New" },
     { id: "thumbnail-designer", category: "creator", icon: Sliders, label: "Thumbnail & Poster Studio", description: "Layer-based typography, gradients & presets", color: "#06b6d4", path: "/thumbnail-designer", badge: "Design" },
     { id: "create-story", category: "creator", icon: Flame, label: "Create 24h Vibe Story", description: "Ephemeral stories with interactive stickers", color: "#f97316", path: "/create-story", badge: null },
-    { id: "creator-dashboard", category: "creator", icon: TrendingUp, label: "Creator Dashboard & Analytics", description: "Reach metrics, audience retention & coin revenue", color: "#10b981", path: "/profile/creator-dashboard", badge: "Stats" },
+    { id: "creator-dashboard", category: "creator", icon: TrendingUp, label: "Creator Dashboard & Analytics", description: "Reach metrics, audience retention & coin revenue", color: "#10b981", path: "/creator/dashboard", badge: "Stats" },
     { id: "creator-payout", category: "creator", icon: Wallet, label: "Monetization & Payouts", description: "Stripe Connect payout balance and tip-jar logs", color: "#f59e0b", path: "/creator-payout", badge: "Earn" },
 
     // Social & Feeds
@@ -164,8 +164,8 @@ export default function MenuScreen() {
     // System & Preferences
     { id: "profile", category: "system", icon: User, label: "My Profile", description: "Manage bio, showcase grid, and creator portfolio", color: "#ec4899", path: "/profile", badge: null },
     { id: "settings", category: "system", icon: Settings, label: "Account & App Settings", description: "Account security, notifications, and language", color: "#6b7280", path: "/settings", badge: null },
-    { id: "privacy", category: "system", icon: Shield, label: "Privacy & Security", description: "Two-factor auth, blocked users & visibility", color: "#10b981", path: "/settings/privacy", badge: null },
-    { id: "appearance", category: "system", icon: Palette, label: "Theme & Appearance", description: "Dark mode, OLED accents & display density", color: "#8b5cf6", path: "/settings/appearance", badge: null },
+    { id: "privacy", category: "system", icon: Shield, label: "Privacy & Security", description: "Two-factor auth, blocked users & visibility", color: "#10b981", path: "/settings#privacy", badge: null },
+    { id: "appearance", category: "system", icon: Palette, label: "Theme & Appearance", description: "Dark mode, OLED accents & display density", color: "#8b5cf6", path: "/settings#appearance", badge: null },
     { id: "help", category: "system", icon: HelpCircle, label: "Help Center & Support", description: "Community guidelines, FAQ & 24/7 ticket support", color: "#3b82f6", path: "/help", badge: null },
   ], [unreadCounts, formattedCoins]);
 

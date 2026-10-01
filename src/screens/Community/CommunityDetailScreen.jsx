@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getCommunityService } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
+import { copyToClipboard } from '../../utils/shareUtils';
 
 const CommunityDetailScreen = () => {
   const { communityId } = useParams();
@@ -133,6 +134,25 @@ const CommunityDetailScreen = () => {
     }
   }, [isAuthenticated, isMember, community, communityId, user?.uid, communityService, loadCommunity]);
 
+  // Share a canonical link to this community.
+  const handleShareCommunity = useCallback(async () => {
+    const url = `${window.location.origin}/community/${communityId}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: community?.name || 'Arvdoul community', url });
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    try {
+      await copyToClipboard(url);
+      toast.success('Community link copied');
+    } catch {
+      toast.error('Could not copy link');
+    }
+  }, [communityId, community?.name]);
+
   // Get role badge color
   const getRoleBadgeColor = (role) => {
     switch (role) {
@@ -213,7 +233,11 @@ const CommunityDetailScreen = () => {
 
           <div className="flex items-center gap-2">
             {isMember && (
-              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors">
+              <button
+                onClick={handleShareCommunity}
+                aria-label="Share community"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
+              >
                 <Share2 className="w-5 h-5 text-gray-700 dark:text-gray-300" />
               </button>
             )}

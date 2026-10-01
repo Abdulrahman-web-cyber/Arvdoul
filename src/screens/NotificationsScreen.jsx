@@ -921,7 +921,10 @@ export default function NotificationsScreen() {
                 <Sparkles className="w-3.5 h-3.5 text-violet-400" />
                 Highlights
               </h2>
-              <button className="text-xs font-semibold text-violet-400 hover:text-violet-300 flex items-center gap-0.5">
+              <button
+                onClick={() => navigate('/profile/highlights')}
+                className="text-xs font-semibold text-violet-400 hover:text-violet-300 flex items-center gap-0.5"
+              >
                 View all <ChevronRight className="w-3 h-3" />
               </button>
             </div>

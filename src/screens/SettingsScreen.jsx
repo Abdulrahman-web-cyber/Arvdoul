@@ -12,8 +12,8 @@
  *  - Danger zone: real account deletion via userService.deleteUserData
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Bell, Shield, Globe, HelpCircle, LogOut, Moon, Sun,
@@ -68,9 +68,9 @@ function ToggleRow({ icon: Icon, label, description, checked, onChange, disabled
   );
 }
 
-function Section({ icon: Icon, title, children }) {
+function Section({ icon: Icon, title, children, id }) {
   return (
-    <section className="rounded-3xl p-5 border shadow-sm bg-white/[0.03] dark:bg-white/[0.03] border-gray-200 dark:border-white/10">
+    <section id={id} className="rounded-3xl p-5 border shadow-sm bg-white/[0.03] dark:bg-white/[0.03] border-gray-200 dark:border-white/10 scroll-mt-24">
       <div className="flex items-center gap-2.5 text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
         <Icon className="w-4 h-4" aria-hidden="true" />
         <span>{title}</span>
@@ -147,6 +147,20 @@ export default function SettingsScreen() {
       mounted = false;
     };
   }, [uid]);
+
+  // Deep-link support: /settings#appearance, /settings#privacy, /settings#data
+  // scroll to the matching section once settings have rendered.
+  const location = useLocation();
+  const scrollTargetRef = useRef(null);
+  useEffect(() => {
+    const hash = (location.hash || '').replace('#', '');
+    if (!hash || !settings) return;
+    const el = document.getElementById(`settings-${hash}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollTargetRef.current = hash;
+    }
+  }, [location.hash, settings]);
 
   // ---------- Persisted update with optimistic UI + rollback ----------
   const updateSetting = useCallback(
@@ -343,7 +357,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ============ APPEARANCE ============ */}
-        <Section icon={Sparkles} title={t('settings.appearanceSection')}>
+        <Section id="settings-appearance" icon={Sparkles} title={t('settings.appearanceSection')}>
           <div className="w-full py-3.5 flex items-center justify-between gap-3">
             <div className="flex items-start gap-3">
               {isDark ? <Moon className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" /> : <Sun className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />}
@@ -398,7 +412,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ============ PRIVACY ============ */}
-        <Section icon={Shield} title={t('settings.privacySection')}>
+        <Section id="settings-privacy" icon={Shield} title={t('settings.privacySection')}>
           <ToggleRow icon={Eye} label={t('settings.privateProfile')} description={t('settings.privateProfileDesc')} checked={settings.privacy.profilePrivate} onChange={(v) => updateSetting('privacy.profilePrivate', v)} />
           <ToggleRow icon={Eye} label={t('settings.activeStatus')} checked={settings.privacy.showActiveStatus} onChange={(v) => updateSetting('privacy.showActiveStatus', v)} />
           <div className="w-full py-3.5">
@@ -445,7 +459,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ============ DATA & CACHE ============ */}
-        <Section icon={Database} title={t('settings.dataSection')}>
+        <Section id="settings-data" icon={Database} title={t('settings.dataSection')}>
           <button onClick={handleClearCache} className="w-full py-3.5 flex items-center justify-between text-left group">
             <div className="flex items-start gap-3">
               <RefreshCw className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />

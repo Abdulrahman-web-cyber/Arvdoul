@@ -8,17 +8,17 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import {
-  X, Zap, RefreshCw, Sliders, FileText, Type, PenTool,
+  X, Zap, RefreshCw, Sliders, FileText, Type,
   Smile, Music, Video, Image as ImageIcon, BarChart2,
   HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight,
   ChevronLeft, Sparkles, Send, Camera, Grid, Check, Loader2
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import storageService, { getStorageService } from '../services/storageService';
+import GIFPicker from '../components/Shared/GIFPicker';
 
 const CREATIVE_TOOLS = [
   { id: 'text', label: 'Text', icon: Type, color: 'text-white' },
-  { id: 'draw', label: 'Draw', icon: PenTool, color: 'text-white' },
   { id: 'stickers', label: 'Stickers', icon: Smile, color: 'text-white' },
   { id: 'music', label: 'Music', icon: Music, color: 'text-white' },
   { id: 'gif', label: 'GIF', icon: Sparkles, color: 'text-white' },
@@ -53,6 +53,7 @@ export default function CreateStory() {
   const [flashMode, setFlashMode] = useState('auto'); // 'off' | 'on' | 'auto'
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
   const [cameraActive, setCameraActive] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
@@ -69,6 +70,11 @@ export default function CreateStory() {
   const [musicLoading, setMusicLoading] = useState(false);
   const [mediaFile, setMediaFile] = useState(null);
   const [capturedPreview, setCapturedPreview] = useState(null);
+  const [selectedGif, setSelectedGif] = useState(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [storyLocation, setStoryLocation] = useState('');
+  const [mentionHandle, setMentionHandle] = useState('');
+  const [storyTimer, setStoryTimer] = useState(0);
   const [publishing, setPublishing] = useState(false);
 
   const videoRef = useRef(null);
@@ -103,6 +109,9 @@ export default function CreateStory() {
           videoRef.current.srcObject = stream;
           videoRef.current.play();
           setCameraActive(true);
+          const track = stream.getVideoTracks?.()[0];
+          const caps = track?.getCapabilities?.();
+          setTorchSupported(Boolean(caps?.torch));
         }
       }
     } catch (err) {
@@ -127,10 +136,20 @@ export default function CreateStory() {
     setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
 
-  // Toggle Flash
-  const handleToggleFlash = () => {
-    setFlashMode((prev) => (prev === 'auto' ? 'on' : prev === 'on' ? 'off' : 'auto'));
-    toast.info(`Flash: ${flashMode.toUpperCase()}`);
+  // Toggle Flash — drives the camera track torch when the hardware exposes it.
+  const handleToggleFlash = async () => {
+    const next = flashMode === 'auto' ? 'on' : flashMode === 'on' ? 'off' : 'auto';
+    setFlashMode(next);
+    const track = videoRef.current?.srcObject?.getVideoTracks?.()[0];
+    if (!track || !torchSupported) {
+      toast.info(`Flash: ${next.toUpperCase()}`);
+      return;
+    }
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next === 'on' }] });
+    } catch {
+      toast.error('This camera does not support flash control.');
+    }
   };
 
   // Shutter Action (Tap for photo, hold for video)
@@ -227,6 +246,18 @@ export default function CreateStory() {
     setCapturedPreview(URL.createObjectURL(file));
   };
 
+  // Real stickers assembled from the active creative tools.
+  const buildStickers = () => {
+    const stickers = [];
+    if (selectedGif) {
+      stickers.push({ type: 'gif', data: { url: selectedGif.url, title: selectedGif.title }, position: { x: 0.5, y: 0.5 } });
+    }
+    if (storyTimer > 0) {
+      stickers.push({ type: 'countdown', data: { seconds: storyTimer }, position: { x: 0.5, y: 0.35 } });
+    }
+    return stickers.length ? stickers : null;
+  };
+
   // Publish Story to Firestore / StoryService
   const handlePublishStory = async () => {
     if (!user?.uid || publishing) {
@@ -248,6 +279,10 @@ export default function CreateStory() {
         textColor: '#FFFFFF',
         poll: pollQuestion ? { question: pollQuestion, options: [pollOption1, pollOption2] } : null,
         music: selectedMusic || null,
+        linkUrl: linkUrl.trim() || null,
+        location: storyLocation.trim() || null,
+        taggedUsers: mentionHandle.trim() ? [mentionHandle.trim().replace(/^@/, '')] : [],
+        stickers: buildStickers(),
         // audience maps to the service visibility contract (public/followers).
         visibility: 'public',
       };
@@ -464,6 +499,122 @@ export default function CreateStory() {
               </div>
             )}
 
+            {/* Text tool */}
+            {activeTool === 'text' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={storyText}
+                  onChange={(e) => setStoryText(e.target.value)}
+                  placeholder="Type your text…"
+                  className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* GIF / Stickers */}
+            {(activeTool === 'gif' || activeTool === 'stickers') && (
+              <div className="absolute bottom-24 inset-x-4 z-20">
+                <GIFPicker
+                  onSelect={(url, gif) => setSelectedGif({ url, title: gif?.title || 'GIF' })}
+                  onClose={() => setActiveTool(null)}
+                />
+              </div>
+            )}
+
+            {/* Link sticker */}
+            {activeTool === 'link' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://…"
+                  className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none"
+                />
+                {linkUrl.trim() && (
+                  <a
+                    href={linkUrl.trim()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block mt-3 px-3 py-2 rounded-full bg-white text-black text-xs font-bold text-center"
+                  >
+                    Link preview
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Location sticker */}
+            {activeTool === 'location' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={storyLocation}
+                  onChange={(e) => setStoryLocation(e.target.value)}
+                  placeholder="Add a location"
+                  className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* Mention sticker */}
+            {activeTool === 'mention' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={mentionHandle}
+                  onChange={(e) => setMentionHandle(e.target.value)}
+                  placeholder="@username"
+                  className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* Question sticker */}
+            {activeTool === 'question' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={pollQuestion}
+                  onChange={(e) => setPollQuestion(e.target.value)}
+                  placeholder="Ask me a question…"
+                  className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* Timer sticker */}
+            {activeTool === 'timer' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <div className="flex items-center justify-center gap-2">
+                  <Timer className="w-4 h-4 text-violet-300" />
+                  <input
+                    type="number"
+                    min="0"
+                    max="86400"
+                    value={storyTimer}
+                    onChange={(e) => setStoryTimer(Number(e.target.value) || 0)}
+                    className="w-24 text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                  />
+                  <span className="text-xs text-white/70">seconds</span>
+                </div>
+              </div>
+            )}
+
+            {/* Selected GIF preview */}
+            {selectedGif && (
+              <div className="absolute top-20 right-4 z-10 w-24 rounded-2xl overflow-hidden border-2 border-white/40">
+                <img src={selectedGif.url} alt={selectedGif.title} className="w-full h-auto" />
+                <button
+                  onClick={() => setSelectedGif(null)}
+                  className="w-full py-1 bg-black/70 text-white text-[10px] font-bold"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
             {/* Recording Indicator */}
             {isRecording && (
               <div className="absolute top-16 left-6 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-600 text-white text-xs font-bold animate-pulse">
@@ -501,7 +652,8 @@ export default function CreateStory() {
 
               {/* Settings */}
               <button
-                onClick={() => toast.info('Camera filters calibrated for ultra HDR quality')}
+                onClick={() => setToolsExpanded((prev) => !prev)}
+                aria-label="Toggle camera tools"
                 className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
               >
                 <Sliders className="w-4 h-4 text-white" />

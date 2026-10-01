@@ -1,7 +1,7 @@
 // src/screens/AudioEditor/components/StudioHeader.jsx
 import React, { useState } from 'react';
 import {
-  X, Undo2, Redo2, Columns, Download, ChevronDown, Check, Send
+  X, Undo2, Redo2, Download, ChevronDown, Check, Send
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../../lib/utils';
@@ -80,13 +80,6 @@ export default function StudioHeader({
           title="Redo (Ctrl+Y)"
         >
           <Redo2 className="w-4 h-4" />
-        </button>
-        <div className="w-px h-5 bg-white/10 mx-1" />
-        <button
-          className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
-          title="Split View"
-        >
-          <Columns className="w-4 h-4" />
         </button>
       </div>
 

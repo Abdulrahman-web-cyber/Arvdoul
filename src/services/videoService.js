@@ -30,7 +30,6 @@ import {
   limit,
   startAfter,
   serverTimestamp,
-  increment,
   writeBatch,
   runTransaction,
   Timestamp,
@@ -741,7 +740,7 @@ class UltimateVideoService {
     try {
       const feedService = (await import('./feedService.js')).getFeedService();
       const feedResult = await feedService.getSmartFeed(safeUserId, {
-        feedType: feedType === 'for_you' ? 'for_you' : 'videos',
+        feedType: feedType === 'for_you' ? 'for_you' : (feedType === 'following' ? 'following' : 'videos'),
         limit,
         lastDoc: lastDocSnapshot,
         type: type ? { video: true } : undefined,
@@ -803,22 +802,12 @@ class UltimateVideoService {
       return { success: true, offlineQueued: true };
     }
     return dedupeRequest(`like_${videoId}`, async () => {
-      try {
-        const res = await this.fns.likeVideo({ videoId });
-        this.cache.invalidateVideo(videoId);
-        return res.data;
-      } catch {
-        const currentUser = this.auth?.currentUser;
-        if (currentUser && this.firestore) {
-          const videoRef = doc(this.firestore, 'videos', videoId);
-          await updateDoc(videoRef, {
-            'stats.likes': increment(1),
-            updatedAt: serverTimestamp(),
-          }).catch(() => {});
-        }
-        this.cache.invalidateVideo(videoId);
-        return { success: true, fallback: true };
-      }
+      // Server-authoritative toggle: no direct-doc fallback. A local
+      // increment could not reproduce the toggle (like vs unlike) and
+      // videos/{id} is owner-writable, so a failed call is surfaced.
+      const res = await this.fns.likeVideo({ videoId });
+      this.cache.invalidateVideo(videoId);
+      return res.data;
     });
   }
 
@@ -832,15 +821,10 @@ class UltimateVideoService {
       const res = await this.fns.shareVideo({ videoId, platform });
       return res.data;
     } catch {
-      const currentUser = this.auth?.currentUser;
-      if (currentUser && this.firestore) {
-        const videoRef = doc(this.firestore, 'videos', videoId);
-        await updateDoc(videoRef, {
-          'stats.shares': increment(1),
-          updatedAt: serverTimestamp(),
-        }).catch(() => {});
-      }
-      return { success: true, fallback: true };
+      // The share itself already happened client-side (native share/clipboard);
+      // the server counter is a secondary metric. No direct-doc write here —
+      // videos/{id} is owner-writable and would both over-count and fail.
+      return { success: false, counted: false };
     }
   }
 
@@ -981,62 +965,54 @@ class UltimateVideoService {
   }
 
   // ==================== SAVED VIDEOS (WATCH LATER) ====================
-  // Real server-side persistence: users/{uid}/saved_videos/{videoId} with a
-  // transaction that snapshots the video + increments its saves counter.
+  // Real server-side persistence: users/{uid}/saved_videos/{videoId} (owner-
+  // only per rules). The snapshot is the source of truth for the Watch Later
+  // list; the public saves counter is server-owned and is never touched here.
   async saveVideo(videoId, userId) {
     await this.ensureInitialized();
-    try {
-      let videoRef = doc(this.firestore, 'videos', videoId);
-      const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
-      let videoSnap = await getDoc(videoRef);
-      if (!videoSnap.exists()) {
-        videoRef = doc(this.firestore, 'posts', videoId);
-        videoSnap = await getDoc(videoRef);
-      }
-      const data = videoSnap.exists() ? videoSnap.data() : {};
-      const savedSnap = await getDoc(savedRef);
-      const alreadySaved = savedSnap.exists();
-      if (!alreadySaved) {
-        await updateDoc(videoRef, { 'stats.saves': increment(1), saves: increment(1) }).catch(() => {});
-        await setDoc(savedRef, {
-          videoId,
-          savedAt: serverTimestamp(),
-          snapshot: {
-            id: videoId,
-            title: data.title || data.content?.slice(0, 50) || '',
-            videoUrl: data.videoUrl || data.url || (Array.isArray(data.media) ? data.media.find(m => m.type === 'video')?.url : '') || '',
-            thumbnail: data.thumbnail || data.thumbnailUrl || (Array.isArray(data.media) ? data.media.find(m => m.preview)?.preview : '') || '',
-            creator: data.creator || {
-              name: data.authorName || 'Creator',
-              username: data.authorUsername || 'creator',
-              avatar: getSafeAvatarUrl(data.authorPhoto, data.authorName || 'Creator', data.authorId || data.userId),
-              id: data.authorId || data.userId,
-            },
-            authorId: data.authorId || data.userId || null,
-            duration: data.duration || 0,
-            createdAt: data.createdAt || null,
-          },
-        });
-      }
-      this.cache.invalidateVideo(videoId);
-      return { success: true, alreadySaved };
-    } catch {
-      return { success: true, localOnly: true };
+    if (!userId) throw new Error('userId is required to save a video');
+    const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
+    let videoRef = doc(this.firestore, 'videos', videoId);
+    let videoSnap = await getDoc(videoRef);
+    if (!videoSnap.exists()) {
+      videoRef = doc(this.firestore, 'posts', videoId);
+      videoSnap = await getDoc(videoRef);
     }
+    const data = videoSnap.exists() ? videoSnap.data() : {};
+    const savedSnap = await getDoc(savedRef);
+    const alreadySaved = savedSnap.exists();
+    if (!alreadySaved) {
+      await setDoc(savedRef, {
+        videoId,
+        savedAt: serverTimestamp(),
+        snapshot: {
+          id: videoId,
+          title: data.title || data.content?.slice(0, 50) || '',
+          videoUrl: data.videoUrl || data.url || (Array.isArray(data.media) ? data.media.find(m => m.type === 'video')?.url : '') || '',
+          thumbnail: data.thumbnail || data.thumbnailUrl || (Array.isArray(data.media) ? data.media.find(m => m.preview)?.preview : '') || '',
+          creator: data.creator || {
+            name: data.authorName || 'Creator',
+            username: data.authorUsername || 'creator',
+            avatar: getSafeAvatarUrl(data.authorPhoto, data.authorName || 'Creator', data.authorId || data.userId),
+            id: data.authorId || data.userId,
+          },
+          authorId: data.authorId || data.userId || null,
+          duration: data.duration || 0,
+          createdAt: data.createdAt || null,
+        },
+      });
+    }
+    this.cache.invalidateVideo(videoId);
+    return { success: true, alreadySaved };
   }
 
   async unsaveVideo(videoId, userId) {
     await this.ensureInitialized();
-    try {
-      const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
-      let videoRef = doc(this.firestore, 'videos', videoId);
-      await updateDoc(videoRef, { 'stats.saves': increment(-1), saves: increment(-1) }).catch(() => {});
-      await deleteDoc(savedRef).catch(() => {});
-      this.cache.invalidateVideo(videoId);
-      return { success: true };
-    } catch {
-      return { success: true };
-    }
+    if (!userId) throw new Error('userId is required to unsave a video');
+    const savedRef = doc(this.firestore, 'users', userId, 'saved_videos', videoId);
+    await deleteDoc(savedRef);
+    this.cache.invalidateVideo(videoId);
+    return { success: true };
   }
 
   async getSavedVideos(userId, { limit: max = 50 } = {}) {

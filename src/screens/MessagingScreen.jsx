@@ -44,13 +44,14 @@ export default function MessagingScreen() {
   const { theme, isDark } = useTheme();
 
   const [activeFilter, setActiveFilter] = useState('all');
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [conversations, setConversations] = useState([]);
   // Pinned/quick-access carousel derived from REAL conversations
   const pinnedItems = useMemo(
     () =>
       [...conversations]
-        .sort((a, b) => (b.unread || 0) - (a.unread || 0))
+        .sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || ((b.unread || 0) - (a.unread || 0)))
         .slice(0, 5)
         .map((c) => ({
           id: c.id,
@@ -90,7 +91,8 @@ export default function MessagingScreen() {
             time: c.lastActivity ? new Date(c.lastActivity.toDate ? c.lastActivity.toDate() : c.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
             unread: c.unreadCounts?.[user.uid] || 0,
             muted: Boolean(c.mutedBy?.includes(user.uid)),
-            category: c.category || 'personal',
+            pinned: Boolean(c.pinnedBy?.includes(user.uid)),
+            category: (c.archivedBy?.includes(user.uid)) ? 'archived' : (c.category || 'personal'),
             activeDot: Boolean(c.presenceOnline),
             participantCount: c.participantCount || (c.participants?.length || 2),
           };
@@ -132,6 +134,24 @@ export default function MessagingScreen() {
     return () => { cancelled = true; };
   }, [user?.uid]);
 
+  const handleTogglePin = useCallback(async (conversationId, currentlyPinned) => {
+    if (!user?.uid) return;
+    setConversations((prev) => prev.map((c) => (
+      c.id === conversationId ? { ...c, pinned: !currentlyPinned } : c
+    )));
+    try {
+      const { getMessagingService } = await import('../services/messagesService.js');
+      if (currentlyPinned) await getMessagingService().unpinConversation(conversationId, user.uid);
+      else await getMessagingService().pinConversation(conversationId, user.uid);
+      toast.success(currentlyPinned ? 'Unpinned conversation' : 'Pinned conversation 📌');
+    } catch (err) {
+      setConversations((prev) => prev.map((c) => (
+        c.id === conversationId ? { ...c, pinned: currentlyPinned } : c
+      )));
+      toast.error(err?.message || 'Could not update pin');
+    }
+  }, [user?.uid]);
+
   const handleRequestResponse = useCallback(async (requestId, accept) => {
     if (!user?.uid) return;
     try {
@@ -160,16 +180,20 @@ export default function MessagingScreen() {
         if (!matchesName && !matchesPreview) return false;
       }
 
+      // Pinned-only toggle (real pinnedBy membership)
+      if (pinnedOnly && !item.pinned) return false;
+
       // Filter tabs
       if (activeFilter === 'unread') return item.unread > 0;
       if (activeFilter === 'groups') return item.category === 'groups';
       if (activeFilter === 'personal') return item.category === 'personal';
       if (activeFilter === 'channels') return item.category === 'channels';
       if (activeFilter === 'archived') return item.category === 'archived';
+      if (activeFilter === 'all') return item.category !== 'archived';
 
       return true;
     });
-  }, [conversations, searchQuery, activeFilter]);
+  }, [conversations, searchQuery, activeFilter, pinnedOnly]);
 
   return (
     <div className={`min-h-screen flex flex-col justify-between select-none relative overflow-x-hidden font-sans pb-24 transition-colors duration-200 ${
@@ -323,12 +347,14 @@ export default function MessagingScreen() {
                 <span>Pinned</span>
               </div>
               <button
-                onClick={() => toast.info('Managing pinned conversations')}
+                onClick={() => setPinnedOnly((v) => !v)}
                 className={`text-xs font-semibold flex items-center gap-0.5 transition-colors ${
-                  isDark ? 'text-gray-400 hover:text-purple-400' : 'text-slate-500 hover:text-purple-600'
+                  pinnedOnly
+                    ? 'text-purple-500'
+                    : isDark ? 'text-gray-400 hover:text-purple-400' : 'text-slate-500 hover:text-purple-600'
                 }`}
               >
-                <span>View all</span>
+                <span>{pinnedOnly ? 'Show all' : 'View all'}</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -537,10 +563,15 @@ export default function MessagingScreen() {
                     <BellOff className="w-3.5 h-3.5 text-gray-400" />
                   )}
 
-                  {/* Pin icon */}
-                  {item.pinned && (
-                    <Pin className="w-3.5 h-3.5 text-purple-500 rotate-45" />
-                  )}
+                  {/* Pin toggle — real pinnedBy membership */}
+                  <button
+                    type="button"
+                    aria-label={item.pinned ? 'Unpin conversation' : 'Pin conversation'}
+                    onClick={(e) => { e.stopPropagation(); handleTogglePin(item.id, item.pinned); }}
+                    className={`p-0.5 rounded transition-colors ${item.pinned ? 'text-purple-500' : 'text-gray-400 hover:text-purple-500'}`}
+                  >
+                    <Pin className={`w-3.5 h-3.5 ${item.pinned ? 'rotate-45' : ''}`} />
+                  </button>
 
                   {/* Unread Counter Pill */}
                   {item.unread > 0 && (

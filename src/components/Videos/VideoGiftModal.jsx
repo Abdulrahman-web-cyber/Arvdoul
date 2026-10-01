@@ -74,7 +74,7 @@ const VideoGiftModal = memo(({
         recipientId,
         selectedGift.coins,
         'video_gift',
-        { giftType: selectedGift.id, giftName: selectedGift.name }
+        { giftType: selectedGift.type, giftName: selectedGift.name }
       );
       if (!res?.success) {
         throw new Error(res?.message || 'Gift could not be sent');
@@ -157,16 +157,16 @@ const VideoGiftModal = memo(({
             <div className="grid grid-cols-3 gap-3 mb-6">
               {VIRTUAL_GIFTS.map((gift) => (
                 <motion.button
-                  key={gift.id}
+                  key={gift.type}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setSelectedGift(gift)}
                   className={`p-3 rounded-2xl border text-center transition-colors ${
-                    selectedGift?.id === gift.id
+                    selectedGift?.type === gift.type
                       ? 'border-purple-500 bg-purple-500/15'
                       : 'border-gray-700/60 bg-black/20 hover:border-purple-500/50'
                   }`}
                 >
-                  <div className="text-2xl mb-1">{gift.icon}</div>
+                  <div className="text-2xl mb-1">{gift.emoji}</div>
                   <div className="text-[10px] font-semibold text-white truncate">{gift.name}</div>
                   <div className="text-[10px] font-bold text-yellow-400 flex items-center justify-center gap-0.5">
                     <Coins className="w-3 h-3" /> {gift.coins}
@@ -200,7 +200,7 @@ const VideoGiftModal = memo(({
                 className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm"
               >
                 <div className="text-center">
-                  <div className="text-6xl mb-2">{sentAnimation.icon}</div>
+                  <div className="text-6xl mb-2">{sentAnimation.emoji}</div>
                   <p className="text-white font-bold">Gift sent! ✨</p>
                 </div>
               </motion.div>

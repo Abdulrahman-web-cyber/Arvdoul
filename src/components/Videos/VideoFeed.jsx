@@ -37,6 +37,7 @@ const VideoFeed = memo(({
   const [showComments, setShowComments] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [showGiftModal, setShowGiftModal] = useState(false);
+  const [showReportSheet, setShowReportSheet] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [preloadedVideos, setPreloadedVideos] = useState({});
 
@@ -97,7 +98,7 @@ const VideoFeed = memo(({
   // Keyboard navigation for desktop (Arrow Up/Down, Space, M)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (showComments || showShareSheet || showGiftModal) return;
+      if (showComments || showShareSheet || showGiftModal || showReportSheet) return;
 
       if (e.key === 'ArrowDown' || e.key === 'j') {
         e.preventDefault();
@@ -110,7 +111,7 @@ const VideoFeed = memo(({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, scrollToIndex, showComments, showShareSheet, showGiftModal]);
+  }, [currentIndex, scrollToIndex, showComments, showShareSheet, showGiftModal, showReportSheet]);
 
   // Swipe gestures
   const handlers = useSwipeable({
@@ -133,19 +134,22 @@ const VideoFeed = memo(({
   const handleLike = useCallback(async (video) => {
     if (!video) return;
     const wasLiked = video.isLiked;
-    const newLikes = wasLiked ? Math.max(0, (video.likes || 1) - 1) : (video.likes || 0) + 1;
+    const optimisticLikes = wasLiked ? Math.max(0, (video.likes || 1) - 1) : (video.likes || 0) + 1;
+    const withFormatted = (n) => ({ likes: n, likesFormatted: n > 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}` });
 
-    updateVideo(video.id, {
-      isLiked: !wasLiked,
-      likes: newLikes,
-      likesFormatted: newLikes > 1000 ? `${(newLikes / 1000).toFixed(1)}K` : `${newLikes}`,
-    });
+    updateVideo(video.id, { isLiked: !wasLiked, ...withFormatted(optimisticLikes) });
 
     try {
-      await videoService.likeVideo(video.id);
+      // likeVideo TOGGLES server-side — the returned action is authoritative.
+      const res = await videoService.likeVideo(video.id);
+      const serverLiked = res?.action ? res.action === 'liked' : !wasLiked;
+      const serverLikes = serverLiked === wasLiked
+        ? (video.likes || 0)
+        : Math.max(0, (video.likes || 0) + (serverLiked ? 1 : -1));
+      updateVideo(video.id, { isLiked: serverLiked, ...withFormatted(serverLikes) });
     } catch (err) {
-      // Revert if error
-      console.warn('Like request fallback:', err);
+      updateVideo(video.id, { isLiked: wasLiked, ...withFormatted(video.likes || 0) });
+      toast.error('Could not update like');
     }
   }, [updateVideo]);
 
@@ -158,15 +162,21 @@ const VideoFeed = memo(({
     setSelectedVideo(video);
     setShowShareSheet(true);
     if (video) {
-      updateVideo(video.id, {
-        shares: (video.shares || 0) + 1,
-      });
-      videoService.shareVideo(video.id).catch(() => {});
+      // The share counter is server-owned (shareVideo callable). Only reflect
+      // the increment when the server confirms it — never a local guess.
+      try {
+        const res = await videoService.shareVideo(video.id);
+        if (res?.success) updateVideo(video.id, { shares: (video.shares || 0) + 1 });
+      } catch { /* share sheet still works; counter stays authoritative */ }
     }
   }, [updateVideo]);
 
   const handleSave = useCallback(async (video) => {
     if (!video) return;
+    if (!user?.uid) {
+      toast.error('Sign in to save videos');
+      return;
+    }
     const wasSaved = video.isSaved;
     updateVideo(video.id, {
       isSaved: !wasSaved,
@@ -180,24 +190,22 @@ const VideoFeed = memo(({
       toast.info('Removed from saved');
     }
 
-    // Real server-side persistence (best-effort with rollback on failure).
-    if (user?.uid) {
-      try {
-        if (wasSaved) {
-          await videoService.unsaveVideo(video.id, user.uid);
-        } else {
-          await videoService.saveVideo(video.id, user.uid);
-        }
-      } catch (err) {
-        // Rollback local state.
-        updateVideo(video.id, {
-          isSaved: wasSaved,
-          saves: wasSaved ? (video.saves || 0) : Math.max(0, (video.saves || 1) - 1),
-        });
-        if (wasSaved) addToWatchLater(video);
-        else removeFromWatchLater(video.id);
-        toast.error(err?.message || 'Could not sync save. Are you signed in?');
+    // Real server-side persistence (rollback on failure).
+    try {
+      if (wasSaved) {
+        await videoService.unsaveVideo(video.id, user.uid);
+      } else {
+        await videoService.saveVideo(video.id, user.uid);
       }
+    } catch (err) {
+      // Rollback local state.
+      updateVideo(video.id, {
+        isSaved: wasSaved,
+        saves: wasSaved ? (video.saves || 0) : Math.max(0, (video.saves || 1) - 1),
+      });
+      if (wasSaved) addToWatchLater(video);
+      else removeFromWatchLater(video.id);
+      toast.error(err?.message || 'Could not sync save');
     }
   }, [updateVideo, addToWatchLater, removeFromWatchLater, user?.uid]);
 
@@ -208,7 +216,7 @@ const VideoFeed = memo(({
 
   const handleReport = useCallback((video) => {
     setSelectedVideo(video);
-    setShowShareSheet(true);
+    setShowReportSheet(true);
   }, []);
 
   return (
@@ -348,6 +356,14 @@ const VideoFeed = memo(({
         isOpen={showShareSheet}
         onClose={() => setShowShareSheet(false)}
         video={selectedVideo || currentVideo}
+      />
+
+      {/* Report Bottom Sheet — dedicated report flow (not the share sheet) */}
+      <VideoBottomSheet
+        isOpen={showReportSheet}
+        onClose={() => setShowReportSheet(false)}
+        video={selectedVideo || currentVideo}
+        initialView="report"
       />
 
       {/* Virtual Coin Gift Modal */}

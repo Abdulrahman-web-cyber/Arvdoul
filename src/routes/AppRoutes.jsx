@@ -124,6 +124,7 @@ const SoundsScreen = lazy(() => import("../screens/Sounds/SoundsScreen.jsx"));
 const MarketplaceScreen = lazy(() => import("../screens/Marketplace/MarketplaceScreen.jsx"));
 const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
 const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
+const HelpCenterScreen = lazy(() => import("../screens/Help/HelpCenterScreen.jsx"));
 
 import PageLoader from "../components/UI/PageLoader.jsx";
 import {
@@ -1072,6 +1073,13 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/sync-conflicts" element={<Navigate to="/conflicts" replace />} />
+
+      {/* Help Center & Support */}
+      <Route path="/help" element={
+        <Suspense fallback={<RouteFallback />}>
+          <HelpCenterScreen />
+        </Suspense>
+      } />
 
       {/* Creator Payouts */}
       <Route path="/creator-payout" element={

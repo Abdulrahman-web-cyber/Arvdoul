@@ -4,13 +4,15 @@
  * Contains only real configuration catalogs (virtual gift catalog).
  * The previous fabricated "INITIAL_VIDEOS" dataset (fake creators, Unsplash
  * stock URLs) was REMOVED - the video feed reads exclusively from Firestore.
+ *
+ * The gift `type` values MUST match the server catalog (DEFAULT_GIFT_TYPES in
+ * functions/monetization.js). The server rejects unknown gift types, so a
+ * divergent local id would present a button that can never succeed.
  */
 
 export const VIRTUAL_GIFTS = [
-  { id: "g1", name: "Super Heart", icon: "❤️", coins: 10, animation: "heart_burst" },
-  { id: "g2", name: "ARVDOUL Crown", icon: "👑", coins: 50, animation: "crown_glow" },
-  { id: "g3", name: "Diamond Gem", icon: "💎", coins: 100, animation: "diamond_sparkle" },
-  { id: "g4", name: "Neon Rocket", icon: "🚀", coins: 250, animation: "rocket_launch" },
-  { id: "g5", name: "Golden Mic", icon: "🎙️", coins: 500, animation: "gold_waves" },
-  { id: "g6", name: "Galaxy Star", icon: "🌌", coins: 1000, animation: "galaxy_burst" }
+  { type: "rose", name: "Rose", emoji: "🌹", coins: 5, animation: "heart_burst" },
+  { type: "crown", name: "Crown", emoji: "👑", coins: 50, animation: "crown_glow" },
+  { type: "diamond", name: "Diamond", emoji: "💎", coins: 100, animation: "diamond_sparkle" },
+  { type: "rocket", name: "Rocket", emoji: "🚀", coins: 500, animation: "rocket_launch" },
 ];

@@ -7,6 +7,7 @@
  */
 
 import React, { memo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import { Plus, ChevronRight } from 'lucide-react';
 import ProfileAvatar from './ProfileAvatar';
@@ -22,6 +23,7 @@ const ProfileHighlights = ({
   onAddHighlight,
   theme = 'light',
 }) => {
+  const navigate = useNavigate();
   const handlePress = useCallback((highlight) => {
     if (onHighlightPress) {
       onHighlightPress(highlight);
@@ -141,6 +143,7 @@ const ProfileHighlights = ({
         {/* View All (Non-owner) */}
         {highlights.length > 5 && (
           <button
+            onClick={() => navigate('/vibes')}
             className={cn(
               'flex flex-col items-center gap-1',
               'min-w-[70px]',

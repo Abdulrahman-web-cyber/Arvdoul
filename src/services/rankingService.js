@@ -523,9 +523,9 @@ class RankingService {
         prolific_creator: { progress: posts.length, target: 100 },
         spark_master: { progress: sparkCount, target: 50 },
         storyteller: { progress: storyCount, target: 100 },
-        verified: { progress: null, target: 1 },
-        founder: { progress: null, target: 1 }, // unknown threshold — never claimed
-        premium: { progress: null, target: 1 },
+        verified: { progress: isVerified ? 1 : 0, target: 1 },
+        founder: { progress: null, target: 1 }, // first-1000 cohort is not exposed to the client
+        premium: { progress: isPremium ? 1 : 0, target: 1 },
         year_one: { progress: accountDays, target: 365 },
       };
 

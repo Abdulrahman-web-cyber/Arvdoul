@@ -151,7 +151,7 @@ export const useVideo = (videoId, options = {}) => {
   const share = useCallback(async () => {
     if (!video || !navigator.share) {
       // Fallback to clipboard
-      const url = `${window.location.origin}/videos/${videoId}`;
+      const url = `${window.location.origin}/video/${videoId}`;
       await navigator.clipboard.writeText(url);
       toast.success('Link copied to clipboard!');
       return;
@@ -161,7 +161,7 @@ export const useVideo = (videoId, options = {}) => {
       await navigator.share({
         title: video.title || 'Check out this video',
         text: video.description || '',
-        url: `${window.location.origin}/videos/${videoId}`,
+        url: `${window.location.origin}/video/${videoId}`,
       });
     } catch (err) {
       if (err.name !== 'AbortError') {

@@ -212,7 +212,7 @@ export const formatFileSize = (bytes) => {
  */
 export const generateShareUrl = (videoId, baseUrl = window.location.origin) => {
   if (!videoId) return baseUrl;
-  return `${baseUrl}/videos/${videoId}`;
+  return `${baseUrl}/video/${videoId}`;
 };
 
 /**

@@ -19,6 +19,7 @@
  */
 
 import React, { memo, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 import ProfileOptionsMenu from './ProfileOptionsMenu';
 import { 
@@ -46,6 +47,7 @@ const ProfileActions = memo(({
   theme = 'light',
   profile = null,
 }) => {
+  const navigate = useNavigate();
   const [showOptions, setShowOptions] = useState(false);
   // ARVDOUL DNA Gradient
   const buttonGradient = 'linear-gradient(135deg, #B416DB 0%, #872FE2 50%, #4B6BFF 100%)';
@@ -104,6 +106,7 @@ const ProfileActions = memo(({
           )}
           style={{ background: buttonGradient }}
           aria-label="Edit Profile"
+          onClick={() => navigate('/profile/edit')}
         >
           <span>Edit Profile</span>
         </button>
