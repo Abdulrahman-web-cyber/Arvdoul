@@ -182,5 +182,17 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     // No pre-transaction ledger read that would let a retry double-lock.
     expect(body).not.toContain('const ledgerSnap = await ledgerRef.get();');
   });
+
+  test('the settlement path converts coins at the shared rate, not a shadow copy', () => {
+    const settlement = fs.readFileSync(
+      path.join(root, 'functions', 'withdrawalSettlement.js'), 'utf8'
+    );
+    // It used to hardcode `... : 200`, a shadow rate that would drift if
+    // COINS_PER_DOLLAR ever changed.
+    expect(settlement).toContain("require('./levelConfig.cjs')");
+    expect(settlement).toContain('COINS_PER_DOLLAR');
+    expect(settlement).toContain('coinsToUsd(withdrawalData.amount)');
+    expect(settlement).not.toMatch(/coinsPerDollar\s*\)\s*:\s*200\b/);
+  });
 });
 

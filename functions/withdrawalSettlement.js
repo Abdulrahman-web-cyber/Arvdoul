@@ -18,6 +18,7 @@
 
 const admin = require('firebase-admin');
 const functions = require('firebase-functions');
+const { COINS_PER_DOLLAR, coinsToUsd } = require('./levelConfig.cjs');
 
 const db = admin.firestore();
 
@@ -27,7 +28,9 @@ const db = admin.firestore();
  * @param {Object} deps
  * @param {Object} deps.stripe            Stripe client (already configured).
  * @param {Function} deps.createLedgerEntry (tx, debit, credit, amount, meta) => void
- * @param {number} deps.coinsPerDollar    Coin→USD conversion rate.
+ * @param {number} [deps.coinsPerDollar]  Coin→USD rate override; defaults to
+ *                                        the shared config so a caller cannot
+ *                                        settle payouts at a different rate.
  * @param {number} deps.maxRetries        Firestore transaction retry count.
  * @param {string} withdrawalId
  * @param {'approve'|'reject'} action
@@ -35,7 +38,8 @@ const db = admin.firestore();
  */
 async function settleWithdrawal(deps, withdrawalId, action) {
   const { stripe, createLedgerEntry, maxRetries = 5 } = deps;
-  const coinsPerDollar = Number(deps.coinsPerDollar) > 0 ? Number(deps.coinsPerDollar) : 200;
+  const coinsPerDollar = Number(deps.coinsPerDollar) > 0 ? Number(deps.coinsPerDollar) : COINS_PER_DOLLAR;
+
   if (!withdrawalId || !['approve', 'reject'].includes(action)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
@@ -91,7 +95,9 @@ async function settleWithdrawal(deps, withdrawalId, action) {
       throw new functions.https.HttpsError('aborted', 'Withdrawal is being processed by another request.');
     }
 
-    const usdAmount = withdrawalData.amount / coinsPerDollar;
+    // Convert through the shared helper so the settled payout uses the same
+    // rate/rounding policy the wallet and payout screens display.
+    const usdAmount = coinsToUsd(withdrawalData.amount) * (COINS_PER_DOLLAR / coinsPerDollar);
     const stripeAmount = Math.round(usdAmount * 100);
     const stripeIdempotencyKey = `wd_${withdrawalId}`;
     let payout;
