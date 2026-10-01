@@ -1083,12 +1083,39 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
   });
 });
 
-describe('Analytics view dedupe is transactional (N019)', () => {
-  test('trackProfileView claims the daily marker inside a transaction', () => {
+describe('Analytics view dedupe is transactional and server-authoritative (N019/N010)', () => {
+  test('client trackProfileView delegates to the callable, never writes Firestore', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/analyticsService.js'), 'utf8');
-    const body = src.slice(src.indexOf('async trackProfileView'));
-    expect(body).not.toMatch(/await getDoc\(viewRef\)/);
-    expect(body).toMatch(/runTransaction\(this\.firestore/);
+    const body = src.slice(src.indexOf('async trackProfileView'), src.indexOf('async getCreatorRanking'));
+    expect(body).toContain('FUNCTIONS.TRACK_PROFILE_VIEW');
+    // The client must not touch the analytics collections directly.
+    expect(body).not.toContain("'profile_views'");
+    expect(body).not.toContain("'profile_analytics'");
+  });
+
+  test('rules deny all client writes to profile_views and profile_analytics', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const blockFor = (name) => {
+      const start = rules.indexOf(`match /${name}/`);
+      return rules.slice(start, rules.indexOf('match /', start + 10));
+    };
+    for (const name of ['profile_views', 'profile_analytics']) {
+      const block = blockFor(name);
+      expect(block).toContain('allow write: if false;');
+      expect(block).not.toMatch(/allow create:\s*if isSignedIn/);
+    }
+  });
+
+  test('trackProfileView callable owns the dedupe transaction and the counter shards', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/analytics.js'), 'utf8');
+    expect(src).toContain('db.runTransaction');
+    expect(src).toContain('getUserIdFromContext');
+    expect(src).toContain('checkRateLimit');
+    // Shard key must match CountersManager.hashString (same algorithm).
+    expect(src).toContain('5381');
+    expect(src).toContain("'counter_shards'");
+    const index = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(index).toContain("require('./analytics.js')");
   });
 });
 

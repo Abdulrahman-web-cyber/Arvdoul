@@ -705,25 +705,21 @@ service cloud.firestore {
     // creator's traffic, reach or earnings figures.
     match /profile_analytics/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      // A visitor records a view by creating/incrementing dailyStats; the write
-      // surface is limited to the non-authoritative stat fields.
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        isOwner(userId) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dailyStats', 'lastUpdated'])
-      );
-      allow delete: if isAdmin();
+      // Views/reach are counted server-side by the trackProfileView callable,
+      // which owns the daily dedupe and the sharded totals. A client write here
+      // let any signed-in user inflate another creator's stats (audit N010).
+      allow write: if false;
     }
     match /post_analytics/{postId} {
       allow read: if true;
       // Aggregate post analytics are server-computed (sharded counters); never client-written.
       allow write: if false;
     }
-    // A profile view record is written by the viewer and read back only by the
-    // profile owner (who is the subject) or an admin. It is not a public feed.
+    // A profile view record is written by the trackProfileView callable and
+    // read back only by the profile owner (who is the subject) or an admin.
     match /profile_views/{viewId} {
       allow read: if isSignedIn() && (resource.data.profileOwnerId == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.viewerId == uid();
+      allow write: if false;
     }
     // Sharded counters: rules defined once, above, under idempotency_ledger.
 

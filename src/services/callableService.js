@@ -32,6 +32,7 @@ export const FUNCTIONS = {
   ADMIN_RESOLVE_SUPPORT_TICKET: 'adminResolveSupportTicket',
   GET_FEATURE_FLAG_OVERRIDES: 'getFeatureFlagOverrides',
   SET_FEATURE_FLAG_OVERRIDE: 'setFeatureFlagOverride',
+  TRACK_PROFILE_VIEW: 'trackProfileView',
 };
 
 /**

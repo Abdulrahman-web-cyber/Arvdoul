@@ -62,6 +62,10 @@ are expected — only treat errors as failures.
 - **Callables from the client**: go through `src/services/callableService.js`
   (`callFunction`, `FUNCTIONS`) rather than inlining `httpsCallable(getFunctions(), ...)`,
   so app binding and error normalisation stay consistent.
+- **Profile view analytics**: `functions/analytics.js` (`trackProfileView`) is the only
+  writer of `profile_views` / `profile_analytics`; rules deny all client writes. Its
+  shard key must stay byte-identical to `hashString()` in
+  `src/utils/CountersManager.js` (the client sums `counter_shards` on read).
 
 ## Admin mutations are server-authoritative
 An admin screen may read a collection directly only when the rules already grant

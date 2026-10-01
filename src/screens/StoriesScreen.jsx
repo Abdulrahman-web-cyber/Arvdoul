@@ -28,6 +28,24 @@ const CATEGORY_TABS = [
 
 const QUICK_EMOJIS = ['❤️', '🔥', '👏', '😮', '😂', '💎'];
 
+// Real relative time from a Firestore Timestamp/Date/ISO string. Returns null
+// when the story carries no creation time so the UI can omit it rather than
+// claim every story was posted "Recently".
+function relativeTime(createdAt) {
+  if (!createdAt) return null;
+  const ms = typeof createdAt.toDate === 'function'
+    ? createdAt.toDate().getTime()
+    : new Date(createdAt).getTime();
+  if (!Number.isFinite(ms)) return null;
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function StoriesScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,7 +86,7 @@ export default function StoriesScreen() {
           const author = storiesArr[0]?.authorName || g.userId;
           const authorPhoto = storiesArr[0]?.authorPhoto || '/assets/default-profile.png';
           return {
-            id: g.userId || `g-${Math.random().toString(36).slice(2, 7)}`,
+            id: g.userId,
             user: {
               id: g.userId,
               name: author,
@@ -79,7 +97,7 @@ export default function StoriesScreen() {
               isCloseFriend: false,
               isLive: false,
             },
-            timeAgo: 'Recently',
+            timeAgo: relativeTime(storiesArr[0]?.createdAt),
             itemsCount: storiesArr.length,
             activeItemIndex: 0,
             mediaType: storiesArr[0]?.type || 'image',
@@ -739,7 +757,9 @@ export default function StoriesScreen() {
                     {currentStory.user.verified && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400" />
                     )}
-                    <span className="text-xs text-white/70">• {currentStory.timeAgo}</span>
+                    {currentStory.timeAgo && (
+                      <span className="text-xs text-white/70">• {currentStory.timeAgo}</span>
+                    )}
                   </div>
                   {currentStory.caption && (
                     <span className="text-xs text-white/90 truncate max-w-[200px] drop-shadow">

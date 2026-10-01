@@ -42,6 +42,8 @@ require('./featureFlags.js');
 require('./admin.js');
 require('./auth.js');
 require('./pushQueue.js');
+// Server-authoritative profile view analytics (trackProfileView callable).
+require('./analytics.js');
 // PII boundary backfill: moves legacy contact/verification/Stripe fields off
 // the world-readable users/{uid} doc into users_private/{uid}.
 require('./privacyMigration.js');

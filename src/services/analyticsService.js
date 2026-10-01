@@ -151,10 +151,6 @@ class UltimateAnalyticsService {
     return map[timeframe] || 30;
   }
 
-  _generateDocId(...parts) {
-    return parts.join('_');
-  }
-
   // ==================== PROFILE ANALYTICS ====================
   /**
    * Get comprehensive user analytics for a given timeframe
@@ -310,87 +306,26 @@ class UltimateAnalyticsService {
   async trackProfileView(viewerId, profileOwnerId) {
     if (!viewerId || viewerId === profileOwnerId) return; // Don't track self-views
 
-    // Client-side UX guard against view-write storms (server rules enforce the real boundary).
+    // Client-side UX guard against view-write storms (the callable enforces the
+    // real server-side rate limit).
     const rl = rateLimiter.checkAndHit(`analytics:view:${viewerId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.TRACK_VIEW_MAX, windowMs: 60000 });
     if (!rl.allowed) return; // silently drop excess view events
 
     try {
-      await this._ensureInitialized();
+      // Counting is server-authoritative: the daily marker, the owner's daily
+      // stats and the sharded totals are written by the trackProfileView
+      // callable in one transaction. The client no longer writes
+      // profile_views/profile_analytics (rules deny those writes; audit N010).
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const result = await callFunction(FUNCTIONS.TRACK_PROFILE_VIEW, { profileOwnerId });
 
-      const { doc, serverTimestamp, runTransaction } = await import('firebase/firestore');
-      const today = this._getDateString();
-      const viewDocId = this._generateDocId(viewerId, profileOwnerId, today);
-
-      const viewRef = doc(this.firestore, 'profile_views', viewDocId);
-      const analyticsRef = doc(this.firestore, 'profile_analytics', profileOwnerId);
-
-      // Atomic dedupe (audit N019): the daily view marker and the owner's
-      // daily stats are claimed in one transaction, so two concurrent tabs
-      // cannot both count the same viewer twice. The previous check-then-write
-      // read the marker and wrote it non-atomically, so a race inflated both
-      // the daily stats and the sharded counters.
-      const counted = await runTransaction(this.firestore, async (transaction) => {
-        const viewSnap = await transaction.get(viewRef);
-        if (viewSnap.exists()) return false;
-
-        transaction.set(viewRef, {
-          viewerId,
-          profileOwnerId,
-          viewedAt: serverTimestamp(),
-          date: today,
-        });
-
-        const analyticsDoc = await transaction.get(analyticsRef);
-        if (!analyticsDoc.exists()) {
-          transaction.set(analyticsRef, {
-            totalEngagement: 0,
-            coinsEarned: 0,
-            dailyStats: {
-              [today]: { views: 1, reach: 1, engagement: 0, coins: 0 },
-            },
-            topPosts: [],
-            growthRate: 0,
-            activeDays: 1,
-            demographics: {
-              ageGroups: {},
-              gender: {},
-              locations: {},
-              interests: {},
-            },
-            lastUpdated: serverTimestamp(),
-          });
-        } else {
-          const data = analyticsDoc.data();
-          const dailyStats = data.dailyStats || {};
-          const todayStats = dailyStats[today] || { views: 0, reach: 0, engagement: 0, coins: 0 };
-
-          transaction.update(analyticsRef, {
-            [`dailyStats.${today}`]: {
-              views: (todayStats.views || 0) + 1,
-              reach: (todayStats.reach || 0) + 1,
-              engagement: todayStats.engagement || 0,
-              coins: todayStats.coins || 0,
-            },
-            lastUpdated: serverTimestamp(),
-          });
-        }
-
-        return true;
-      });
-
-      // The view was already counted today; nothing further to do.
-      if (!counted) return;
-
-      // Sharded counters for totalViews/totalReach (approximate aggregates, no
-      // hot profile_analytics doc).
-      const docPath = `profile_analytics/${profileOwnerId}`;
-      await countersManager.increment({ docPath, field: 'totalViews' });
-      await countersManager.increment({ docPath, field: 'totalReach' });
-
-      // Invalidate cache (centralized CacheManager)
-      this.cache.invalidatePattern(`analytics_${profileOwnerId}_*`);
-      countersManager.invalidate({ docPath, field: 'totalViews' });
-      countersManager.invalidate({ docPath, field: 'totalReach' });
+      if (result?.counted) {
+        // Invalidate cache (centralized CacheManager)
+        this.cache.invalidatePattern(`analytics_${profileOwnerId}_*`);
+        const docPath = `profile_analytics/${profileOwnerId}`;
+        countersManager.invalidate({ docPath, field: 'totalViews' });
+        countersManager.invalidate({ docPath, field: 'totalReach' });
+      }
     } catch (error) {
       logger.warn('Track profile view failed', { error: error.message, profileOwnerId });
       // Don't throw - this is a non-critical operation
