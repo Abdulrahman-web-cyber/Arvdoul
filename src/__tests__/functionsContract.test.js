@@ -27,8 +27,11 @@ function read(p) {
 function listFiles(dir) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) out.push(...listFiles(path.join(dir, entry.name)));
-    else if (/\.(js|jsx)$/.test(entry.name)) out.push(path.join(dir, entry.name));
+    if (entry.isDirectory()) {
+      // Vendored dependencies are not deployable function modules.
+      if (entry.name === 'node_modules') continue;
+      out.push(...listFiles(path.join(dir, entry.name)));
+    } else if (/\.(js|jsx)$/.test(entry.name)) out.push(path.join(dir, entry.name));
   }
   return out;
 }

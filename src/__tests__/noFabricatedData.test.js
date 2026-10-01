@@ -627,7 +627,13 @@ describe('Messaging master-spec: security rules', () => {
 
   test('supergroup monthly shards are covered by rules', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    expect(rules).toContain('match /messages_{year}_{month}/{messageId}');
+    // A wildcard cannot share a path segment with literal text:
+    // `match /messages_{year}_{month}/{messageId}` made the entire ruleset
+    // fail to compile (so `firebase deploy` rejected it and the old rules
+    // stayed live). The subcollection is matched as a single wildcard and
+    // validated by name instead.
+    expect(rules).toMatch(/match\s+\/\{messageShardCollection\}\/\{messageId\}/);
+    expect(rules).toContain("collection.matches('messages_[0-9]{4}_[0-9]{2}')");
   });
 
   test('last_messages writes are participant-scoped (no spoofing)', () => {

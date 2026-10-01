@@ -26,6 +26,16 @@ service cloud.firestore {
     function isMember(userId, participantIds) {
       return isSignedIn() && userId in (participantIds || []);
     }
+    // Supergroups rotate messages into monthly collections
+    // (`conversations/{id}/messages_YYYY_MM`) once they pass the participant
+    // threshold (MESSAGING_CONFIG.SUPERGROUP in src/services/messagesService.js).
+    // Firestore rules cannot match a wildcard mid-path (`messages_{year}_{month}`
+    // fails to compile), so the subcollection is matched as a single wildcard
+    // and validated here. Before this, the whole ruleset failed to deploy.
+    function isMessageShardCollection(collection) {
+      return collection == 'messages' ||
+        collection.matches('messages_[0-9]{4}_[0-9]{2}');
+    }
     // Fields only the server (Cloud Functions / Admin SDK) may ever change.
     // Mirrors SERVER_AUTHORITATIVE_FIELDS in src/config/profileContracts.js;
     // a parity test in profilePiiBoundary.test.js keeps the two lists in step.
@@ -464,31 +474,20 @@ service cloud.firestore {
       //    id to receipt arrays — the update must touch ONLY those fields
       //    (spec §17/18: conversation-level read position is preferred; these
       //    arrays are the per-message fallback).
-      match /messages/{messageId} {
-        allow read: if isSignedIn() && uid() in convParticipants();
+      // Supergroups rotate into monthly shard collections
+      // (`messages_YYYY_MM`, 1000+ participants); the subcollection name is
+      // validated so both layouts get identical ownership rules.
+      match /{messageShardCollection}/{messageId} {
+        allow read: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants();
         allow create: if isSignedIn() &&
+          isMessageShardCollection(messageShardCollection) &&
           uid() in convParticipants() &&
           request.resource.data.senderId == uid();
-        allow update, delete: if isSignedIn() && uid() in convParticipants() && (
+        allow update, delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
           resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
         );
         // Reactions are per-user docs — no message-doc rewrites (spec §26).
-        match /reactions/{userId} {
-          allow read: if isSignedIn() && uid() in convParticipants();
-          allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
-        }
-      }
-      // Supergroup monthly shards (1000+ participants) — same ownership rules.
-      match /messages_{year}_{month}/{messageId} {
-        allow read: if isSignedIn() && uid() in convParticipants();
-        allow create: if isSignedIn() &&
-          uid() in convParticipants() &&
-          request.resource.data.senderId == uid();
-        allow update, delete: if isSignedIn() && uid() in convParticipants() && (
-          resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
-        );
         match /reactions/{userId} {
           allow read: if isSignedIn() && uid() in convParticipants();
           allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
