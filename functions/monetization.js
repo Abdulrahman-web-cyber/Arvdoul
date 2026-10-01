@@ -20,6 +20,7 @@ const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
 const { getUserIdFromContext, getUserEmail } = require('./auth');
+const { settleWithdrawal } = require('./withdrawalSettlement');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -759,139 +760,32 @@ exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
     return;
   }
 
+  const { withdrawalId, action } = req.body || {};
   try {
-    const { withdrawalId, action } = req.body;
-    if (!withdrawalId || !action) {
-      res.status(400).json({ error: 'withdrawalId and action (approve|reject) required.' });
-      return;
-    }
-
-    const withdrawalRef = admin.firestore().collection('withdrawal_requests').doc(withdrawalId);
-    const withdrawalSnap = await withdrawalRef.get();
-    if (!withdrawalSnap.exists) {
-      res.status(404).json({ error: 'Withdrawal request not found.' });
-      return;
-    }
-
-    const withdrawalData = withdrawalSnap.data();
-    const validStatus = withdrawalData.status === 'pending' || withdrawalData.status === 'pending_review';
-    if (!validStatus) {
-      res.status(409).json({ error: 'Withdrawal already processed.' });
-      return;
-    }
-
-    if (action === 'approve') {
-      const serverId = `worker-${Math.random().toString(36).substring(7)}`;
-      const lockExpiresAt = Date.now() + 5 * 60 * 1000;
-      const lockObtained = await admin.firestore().runTransaction(async (t) => {
-        const freshSnap = await t.get(withdrawalRef);
-        const curStatus = freshSnap.data().status;
-        if (curStatus !== 'pending' && curStatus !== 'pending_review') return false;
-        t.update(withdrawalRef, {
-          status: 'processing',
-          processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lockOwner: serverId,
-          lockExpiresAt: new Date(lockExpiresAt),
-        });
-        return true;
+    const result = await settleWithdrawal(
+      { stripe, createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+      withdrawalId,
+      action
+    );
+    if (result.status === 'completed') {
+      logEvent('withdrawal_approved', {
+        withdrawalId, amount: result.amount, usdAmount: result.usdAmount,
       });
-
-      if (!lockObtained) {
-        res.status(409).json({ error: 'Withdrawal is being processed by another request.' });
-        return;
-      }
-
-      const usdAmount = withdrawalData.amount / COINS_PER_DOLLAR;
-      const stripeAmount = Math.round(usdAmount * 100);
-      const stripeIdempotencyKey = `wd_${withdrawalId}`;
-      let payout;
-      try {
-        payout = await stripe.payouts.create(
-          { amount: stripeAmount, currency: 'usd', method: 'standard' },
-          { idempotencyKey: stripeIdempotencyKey, stripeAccount: withdrawalData.paymentDetails?.stripeAccountId }
-        );
-      } catch (stripeError) {
-        await withdrawalRef.update({
-          status: 'pending',
-          processingError: stripeError.message,
-          lockOwner: admin.firestore.FieldValue.delete(),
-          lockExpiresAt: admin.firestore.FieldValue.delete(),
-        });
-        res.status(502).json({ error: 'Stripe payout failed.', details: stripeError.message });
-        return;
-      }
-
-      await createFirestoreTransaction(async (t) => {
-        const finalSnap = await t.get(withdrawalRef);
-        if (finalSnap.data().status !== 'processing' || finalSnap.data().lockOwner !== serverId) {
-          throw new Error('Invalid lock state.');
-        }
-
-        const userRef = admin.firestore().collection('users').doc(withdrawalData.userId);
-        const userSnap = await t.get(userRef);
-        const currentBalance = userSnap.data().coins || 0;
-        const currentLocked = userSnap.data().lockedCoins || 0;
-
-        if (currentLocked < withdrawalData.amount || currentBalance < withdrawalData.amount) {
-          t.update(withdrawalRef, { status: 'failed', failureReason: 'Insufficient balance at finalization.' });
-          throw new Error('Insufficient balance.');
-        }
-
-        t.update(userRef, {
-          coins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
-          lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
-          lastWithdrawalCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        const finalTxRef = admin.firestore().collection('coin_transactions').doc();
-        t.set(finalTxRef, {
-          userId: withdrawalData.userId, type: 'debit', amount: withdrawalData.amount,
-          reason: 'withdrawal_completed',
-          metadata: { withdrawalId, stripePayoutId: payout.id, usdAmount },
-          balanceAfter: currentBalance - withdrawalData.amount,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-
-        createLedgerEntry(t, `users:${withdrawalData.userId}`, 'system:reserve', withdrawalData.amount, {
-          reason: 'withdrawal',
-          transactionId: finalTxRef.id,
-          payoutId: payout.id,
-        });
-
-        t.update(withdrawalRef, {
-          status: 'completed',
-          stripePayoutId: payout.id,
-          processedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lockOwner: admin.firestore.FieldValue.delete(),
-          lockExpiresAt: admin.firestore.FieldValue.delete(),
-        });
-      });
-
-      logEvent('withdrawal_approved', { withdrawalId, userId: withdrawalData.userId, amount: withdrawalData.amount, usdAmount });
-      res.json({ success: true, status: 'completed', payoutId: payout.id, usdAmount });
-    } else if (action === 'reject') {
-      const userRef = admin.firestore().collection('users').doc(withdrawalData.userId);
-      await admin.firestore().runTransaction(async (t) => {
-        const withdrawalSnap = await t.get(withdrawalRef);
-        if (withdrawalSnap.data().status !== 'pending' && withdrawalSnap.data().status !== 'pending_review') {
-          throw new Error('Invalid status for rejection.');
-        }
-        t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) });
-        const lockSnapshot = await t.get(
-          admin.firestore().collection('coin_transactions')
-            .where('metadata.withdrawalId', '==', withdrawalId)
-            .where('type', '==', 'withdrawal_lock')
-        );
-        lockSnapshot.forEach(doc => t.update(doc.ref, { status: 'cancelled', cancelledAt: admin.firestore.FieldValue.serverTimestamp() }));
-        t.update(withdrawalRef, { status: 'rejected', processedAt: admin.firestore.FieldValue.serverTimestamp() });
-      });
-      logEvent('withdrawal_rejected', { withdrawalId, userId: withdrawalData.userId });
-      res.json({ success: true, status: 'rejected' });
+      res.json({ success: true, ...result });
     } else {
-      res.status(400).json({ error: 'Invalid action. Use approve or reject.' });
+      logEvent('withdrawal_rejected', { withdrawalId });
+      res.json({ success: true, ...result });
     }
   } catch (err) {
+    if (err instanceof functions.https.HttpsError) {
+      const code = err.code === 'not-found' ? 404
+        : err.code === 'invalid-argument' ? 400
+        : err.code === 'failed-precondition' || err.code === 'aborted' ? 409
+        : err.code === 'unavailable' ? 502
+        : 500;
+      res.status(code).json({ error: err.message });
+      return;
+    }
     console.error('processWithdrawal error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
@@ -1649,3 +1543,9 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
     return result;
   } catch (err) { throw handleError(err); }
 });
+
+// Shared internals exposed to sibling modules (admin.js) so the money-path
+// helpers exist exactly once: the single configured Stripe client and the
+// double-entry ledger writer. Not deployed as callables.
+module.exports.getMonetizationStripe = () => stripe;
+module.exports.createLedgerEntry = createLedgerEntry;

@@ -1150,3 +1150,41 @@ describe('Audit logging - real action + metadata (not a swapped signature)', () 
     }
   });
 });
+
+describe('Admin economy - real data, server-side settlement', () => {
+  const screen = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminEconomyScreen.jsx'), 'utf8');
+
+  test('renders no seeded treasury figures or fake creators', () => {
+    const src = screen();
+    for (const seed of ['4825900', '144777', 'usr_sarah_craft', 'leo.sound@example.com', 'payout-101', 'tx-901']) {
+      expect(src).not.toContain(seed);
+    }
+  });
+
+  test('never writes a payout status directly from the client', () => {
+    const src = screen();
+    expect(src).not.toMatch(/updateDoc\(\s*doc\([^)]*payout_requests/);
+    expect(src).not.toContain("'payout_requests'");
+    expect(src).toContain("collection(firestore, 'withdrawal_requests')");
+  });
+
+  test('approve/reject go through the admin settlement callable', () => {
+    const src = screen();
+    expect(src).toContain('FUNCTIONS.ADMIN_DECIDE_WITHDRAWAL');
+    expect(src).toContain('FUNCTIONS.GET_ECONOMY_SUMMARY');
+  });
+
+  test('the Stripe settlement path exists exactly once', () => {
+    const settlement = fs.readFileSync(path.join(root, 'functions/withdrawalSettlement.js'), 'utf8');
+    expect(settlement).toContain('stripe.payouts.create');
+    const monetization = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    expect(monetization).not.toContain('stripe.payouts.create');
+    expect(monetization).toContain("require('./withdrawalSettlement')");
+  });
+
+  test('admin callables for the economy are exported', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
+    expect(admin).toContain('exports.getEconomySummary =');
+    expect(admin).toContain('exports.adminDecideWithdrawal =');
+  });
+});

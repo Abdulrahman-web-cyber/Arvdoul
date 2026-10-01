@@ -12,6 +12,9 @@ const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 const { checkRateLimit } = require('./rateLimit');
 const { assertAdmin, isAdmin, getUserIdFromContext } = require('./auth');
+const { settleWithdrawal } = require('./withdrawalSettlement');
+const { COINS_PER_DOLLAR, getRankTitle } = require('./levelConfig.cjs');
+const { getMonetizationStripe } = require('./monetization');
 
 const db = admin.firestore();
 
@@ -317,7 +320,100 @@ exports.listAdmins = functions.https.onCall(async (data, context) => {
 });
 
 // ----------------------------------------------------------------------
+//  Economy oversight (admin only)
+//
+//  The console used to render seeded treasury numbers and "approve" a payout
+//  by writing status: 'completed' straight to Firestore - a payout that was
+//  never sent and coins that were never debited. Both now go through the
+//  server: `getEconomySummary` reads real aggregates and
+//  `adminDecideWithdrawal` runs the same settlement path as the Stripe worker.
+// ----------------------------------------------------------------------
+
+exports.getEconomySummary = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'getEconomySummary', 30, 60000);
+
+  // AggregateField is present in firebase-admin >= 11; guard so an older
+  // deployment degrades to an explicit null instead of throwing.
+  const canAggregate = typeof admin.firestore.AggregateField !== 'undefined'
+    && typeof db.collection('users').count === 'function';
+
+  const now = Date.now();
+  const monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const pendingWithdrawals = await db.collection('withdrawal_requests')
+    .where('status', 'in', ['pending', 'pending_review', 'processing'])
+    .limit(500)
+    .get();
+  const pendingAmountCoins = pendingWithdrawals.docs
+    .reduce((sum, d) => sum + Number(d.data().amount || 0), 0);
+
+  let circulatingCoins = null;
+  if (canAggregate) {
+    try {
+      const agg = await db.collection('users').aggregate({ total: admin.firestore.AggregateField.sum('coins') }).get();
+      circulatingCoins = Number(agg.data().total) || 0;
+    } catch {
+      circulatingCoins = null;
+    }
+  }
+
+  let monthlyVolumeCoins = null;
+  if (canAggregate) {
+    try {
+      const agg = await db.collection('coin_transactions')
+        .where('createdAt', '>=', monthAgo)
+        .aggregate({ total: admin.firestore.AggregateField.sum('amount') }).get();
+      monthlyVolumeCoins = Number(agg.data().total) || 0;
+    } catch {
+      monthlyVolumeCoins = null;
+    }
+  }
+
+  const completedThisMonth = await db.collection('withdrawal_requests')
+    .where('status', '==', 'completed')
+    .where('processedAt', '>=', monthAgo)
+    .limit(500)
+    .get();
+  const completedPayoutCoins = completedThisMonth.docs
+    .reduce((sum, d) => sum + Number(d.data().amount || 0), 0);
+
+  return {
+    success: true,
+    coinsPerDollar: COINS_PER_DOLLAR,
+    circulatingCoins,
+    pendingPayoutCoins: pendingAmountCoins,
+    pendingPayoutCount: pendingWithdrawals.size,
+    completedPayoutCoins,
+    completedPayoutCount: completedThisMonth.size,
+    monthlyVolumeCoins,
+    treasuryReserveUsd: circulatingCoins === null ? null : circulatingCoins / COINS_PER_DOLLAR,
+    generatedAt: new Date().toISOString(),
+  };
+});
+
+exports.adminDecideWithdrawal = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminDecideWithdrawal', 60, 60000);
+
+  const { withdrawalId, action, reason = '' } = data || {};
+  const result = await settleWithdrawal(
+    { stripe: getMonetizationStripe(), createLedgerEntry: require('./monetization').createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+    withdrawalId,
+    action
+  );
+  await writeAudit(actorUid, `withdrawal_${result.status}`, withdrawalId, {
+    action,
+    amount: result.amount,
+    usdAmount: result.usdAmount || null,
+    reason: String(reason || '').slice(0, 500),
+  });
+  return { success: true, ...result };
+});
+
+// ----------------------------------------------------------------------
 //  getAdminStatus — lets a signed-in client learn its *own* admin status
+//  without read access to the whole admins collection.
+// ---------------------------------------------------------------------- — lets a signed-in client learn its *own* admin status
 //  without read access to the whole admins collection.
 // ----------------------------------------------------------------------
 exports.getAdminStatus = functions.https.onCall(async (data, context) => {

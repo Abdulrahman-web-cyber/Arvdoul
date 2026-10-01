@@ -12,23 +12,19 @@ import {
   Coins,
   DollarSign,
   TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
   Search,
-  Filter,
   RefreshCw,
   Clock,
   ShieldCheck,
   ChevronRight,
-  ExternalLink,
-  ShieldAlert,
   Wallet,
   ArrowUpRight,
   ArrowDownLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { auditLogger } from '../../utils/AuditLogger.js';
+import { callFunction, FUNCTIONS } from '../../services/callableService.js';
+import { COINS_PER_DOLLAR, getRankTitle } from '../../services/levelSystemService.js';
 
 const AdminEconomyScreen = () => {
   const navigate = useNavigate();
@@ -39,173 +35,66 @@ const AdminEconomyScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [payoutFilter, setPayoutFilter] = useState('pending'); // 'all' | 'pending' | 'completed' | 'rejected'
 
-  // Metric states
+  // Metric states — populated from the admin-only getEconomySummary callable.
+  // null means "unknown" and renders as such; never a placeholder number.
   const [metrics, setMetrics] = useState({
-    circulatingCoins: 4825900,
-    totalTreasuryUsd: 144777,
-    platformFeeRate: 30, // 30% platform take on gifts/tips
-    pendingPayoutsTotal: 12450,
-    completedPayoutsTotal: 86420,
-    monthlyVolumeUsd: 38910,
+    circulatingCoins: null,
+    treasuryReserveUsd: null,
+    pendingPayoutCoins: null,
+    pendingPayoutCount: null,
+    completedPayoutCoins: null,
+    monthlyVolumeCoins: null,
   });
 
-  // Payout queue items
-  const [payouts, setPayouts] = useState([
-    {
-      id: 'payout-101',
-      userId: 'usr_sarah_craft',
-      creatorName: 'Sarah Jenkins',
-      handle: '@sarahcraft',
-      tier: 'Chancellor',
-      level: 48,
-      coins: 25000,
-      amountUsd: 250.0,
-      method: 'Stripe Direct',
-      destination: '**** 4242 (USD)',
-      requestedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      status: 'pending',
-      riskScore: 'Low (0.02)',
-    },
-    {
-      id: 'payout-102',
-      userId: 'usr_leo_sound',
-      creatorName: 'Leonardo V.',
-      handle: '@leosoundfx',
-      tier: 'Senator',
-      level: 32,
-      coins: 50000,
-      amountUsd: 500.0,
-      method: 'PayPal',
-      destination: 'leo.sound@example.com',
-      requestedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-      status: 'pending',
-      riskScore: 'Low (0.05)',
-    },
-    {
-      id: 'payout-103',
-      userId: 'usr_crypto_dan',
-      creatorName: 'Dan Sparks',
-      handle: '@dansparks',
-      tier: 'Citizen',
-      level: 16,
-      coins: 10000,
-      amountUsd: 100.0,
-      method: 'Bank Wire',
-      destination: 'JP Morgan Chase **** 8812',
-      requestedAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-      status: 'pending',
-      riskScore: 'Medium (0.42)',
-    },
-    {
-      id: 'payout-104',
-      userId: 'usr_maya_tech',
-      creatorName: 'Maya Thorne',
-      handle: '@mayathorne',
-      tier: 'Chancellor',
-      level: 75,
-      coins: 120000,
-      amountUsd: 1200.0,
-      method: 'Stripe Direct',
-      destination: '**** 9901 (EUR)',
-      requestedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      status: 'completed',
-      riskScore: 'Low (0.01)',
-    },
-  ]);
+  // Payout queue — live withdrawal_requests only.
+  const [payouts, setPayouts] = useState([]);
 
-  // Recent transactions ledger
-  const [transactions, setTransactions] = useState([
-    {
-      id: 'tx-901',
-      type: 'tip',
-      from: '@alex_dev',
-      to: '@sarahcraft',
-      coins: 500,
-      feeCoins: 150,
-      usdValue: 5.0,
-      timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-902',
-      type: 'coin_purchase',
-      from: '@elena_w',
-      to: 'Arvdoul Treasury',
-      coins: 2500,
-      feeCoins: 0,
-      usdValue: 24.99,
-      timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-903',
-      type: 'gift',
-      from: '@marcus_t',
-      to: '@leosoundfx',
-      coins: 1200,
-      feeCoins: 360,
-      usdValue: 12.0,
-      timestamp: new Date(Date.now() - 1000 * 60 * 75).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-904',
-      type: 'subscription',
-      from: '@clara_music',
-      to: '@sarahcraft',
-      coins: 800,
-      feeCoins: 240,
-      usdValue: 8.0,
-      timestamp: new Date(Date.now() - 1000 * 60 * 140).toISOString(),
-      status: 'confirmed',
-    },
-    {
-      id: 'tx-905',
-      type: 'payout',
-      from: 'Arvdoul Treasury',
-      to: '@mayathorne',
-      coins: 120000,
-      feeCoins: 0,
-      usdValue: 1200.0,
-      timestamp: new Date(Date.now() - 86400000 * 3).toISOString(),
-      status: 'confirmed',
-    },
-  ]);
+  // Recent transaction ledger — live coin_transactions only.
+  const [transactions, setTransactions] = useState([]);
 
-  // Load live data from Firestore if available
+  // Load live data: the admin summary comes from the server (aggregates over
+  // users/coin_transactions that the client cannot compute), the queues come
+  // from the collections the admin rules allow.
   const loadData = useCallback(async () => {
+    setRefreshing(true);
     try {
-      setRefreshing(true);
       const { collection, getDocs, query, limit, orderBy } = await import('firebase/firestore');
       const { getFirestoreInstance } = await import('../../firebase/firebase.js');
       const firestore = await getFirestoreInstance();
 
-      // Attempt to load payouts from collection if available
-      try {
-        const snap = await getDocs(
-          query(collection(firestore, 'payout_requests'), orderBy('createdAt', 'desc'), limit(50))
-        );
-        if (!snap.empty) {
-          const livePayouts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setPayouts(livePayouts);
-        }
-      } catch (e) {
-        // Fallback to seeded demo state if collection is fresh
+      const summary = await callFunction(FUNCTIONS.GET_ECONOMY_SUMMARY);
+      if (summary?.success) {
+        setMetrics({
+          circulatingCoins: summary.circulatingCoins,
+          treasuryReserveUsd: summary.treasuryReserveUsd,
+          pendingPayoutCoins: summary.pendingPayoutCoins,
+          pendingPayoutCount: summary.pendingPayoutCount,
+          completedPayoutCoins: summary.completedPayoutCoins,
+          monthlyVolumeCoins: summary.monthlyVolumeCoins,
+        });
       }
 
-      // Attempt to load transaction ledger
+      // The withdrawal_requests rules let an admin read every request.
+      try {
+        const snap = await getDocs(
+          query(collection(firestore, 'withdrawal_requests'), orderBy('createdAt', 'desc'), limit(100))
+        );
+        setPayouts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch {
+        setPayouts([]);
+      }
+
+      // A user's own entries are readable; the admin branch of the rules widens
+      // this to the platform ledger.
       try {
         const txSnap = await getDocs(
-          query(collection(firestore, 'coin_transactions'), orderBy('createdAt', 'desc'), limit(50))
+          query(collection(firestore, 'coin_transactions'), orderBy('createdAt', 'desc'), limit(100))
         );
-        if (!txSnap.empty) {
-          const liveTx = txSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setTransactions(liveTx);
-        }
-      } catch (e) {
-        // Keep active baseline
+        setTransactions(txSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch {
+        setTransactions([]);
       }
-    } catch (err) {
+    } catch {
       toast.error('Could not sync live economy data');
     } finally {
       setLoading(false);
@@ -217,88 +106,77 @@ const AdminEconomyScreen = () => {
     loadData();
   }, [loadData]);
 
-  // Handle payout approval
+  // Payout approval runs through the server: only the server can call Stripe
+  // and debit locked coins. The client never writes a payout status.
   const handleApprovePayout = async payoutId => {
     try {
       const payout = payouts.find(p => p.id === payoutId);
       if (!payout) return;
 
-      // Update state optimistically
-      setPayouts(prev =>
-        prev.map(p => (p.id === payoutId ? { ...p, status: 'completed', processedAt: new Date().toISOString() } : p))
-      );
+      const result = await callFunction(FUNCTIONS.ADMIN_DECIDE_WITHDRAWAL, {
+        withdrawalId: payoutId,
+        action: 'approve',
+      });
+      if (!result?.success) throw new Error(result?.error || 'Settlement failed');
 
-      // Log to audit logger
       await auditLogger.log('PAYOUT_APPROVED', {
-        userId: user?.uid || 'system_admin',
-        meta: {
-          payoutId,
-          creatorId: payout.userId,
-          amountCoins: payout.coins,
-          amountUsd: payout.amountUsd,
-          paymentMethod: payout.method,
-        },
+        userId: user?.uid,
+        meta: { withdrawalId: payoutId, amountCoins: result.amount, usdAmount: result.usdAmount, payoutId: result.payoutId },
       });
 
-      // Update Firestore if record exists
-      try {
-        const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-        await updateDoc(doc(firestore, 'payout_requests', payoutId), {
-          status: 'completed',
-          approvedBy: user?.uid,
-          approvedAt: serverTimestamp(),
-        });
-      } catch (e) {
-        // Handled
-      }
-
-      toast.success(`Payout of $${payout.amountUsd.toFixed(2)} approved for ${payout.creatorName}`);
+      setPayouts(prev => prev.map(p => (
+        p.id === payoutId ? { ...p, status: 'completed', stripePayoutId: result.payoutId } : p
+      )));
+      toast.success(`Payout of $${Number(result.usdAmount || 0).toFixed(2)} sent.`);
+      loadData();
     } catch (err) {
-      toast.error('Failed to approve payout request');
+      toast.error(err?.message || 'Failed to approve payout request');
     }
   };
 
-  // Handle payout rejection
+  // Payout rejection also runs server-side so the locked coins are released.
   const handleRejectPayout = async payoutId => {
     const reason = window.prompt('Enter rejection reason for creator notification:');
     if (!reason) return;
 
     try {
-      const payout = payouts.find(p => p.id === payoutId);
-      setPayouts(prev =>
-        prev.map(p => (p.id === payoutId ? { ...p, status: 'rejected', rejectionReason: reason } : p))
-      );
+      const result = await callFunction(FUNCTIONS.ADMIN_DECIDE_WITHDRAWAL, {
+        withdrawalId: payoutId,
+        action: 'reject',
+        reason,
+      });
+      if (!result?.success) throw new Error(result?.error || 'Settlement failed');
 
       await auditLogger.log('PAYOUT_REJECTED', {
-        userId: user?.uid || 'system_admin',
-        meta: {
-          payoutId,
-          creatorId: payout?.userId,
-          reason,
-        },
+        userId: user?.uid,
+        meta: { withdrawalId: payoutId, reason },
       });
 
+      setPayouts(prev => prev.map(p => (
+        p.id === payoutId ? { ...p, status: 'rejected', rejectionReason: reason } : p
+      )));
       toast.info(`Payout request rejected: ${reason}`);
+      loadData();
     } catch (err) {
-      toast.error('Failed to reject payout');
+      toast.error(err?.message || 'Failed to reject payout');
     }
   };
 
+  // Both 'pending' and 'pending_review' are awaiting an admin decision.
+  const isAwaitingReview = status => status === 'pending' || status === 'pending_review';
   const filteredPayouts = payouts.filter(p => {
     if (payoutFilter === 'all') return true;
-    return p.status === payoutFilter;
+    return isAwaitingReview(p.status) ? payoutFilter === 'pending' : p.status === payoutFilter;
   });
 
   const filteredTransactions = transactions.filter(t => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      t.id.toLowerCase().includes(q) ||
-      t.from.toLowerCase().includes(q) ||
-      t.to.toLowerCase().includes(q) ||
-      t.type.toLowerCase().includes(q)
+      String(t.id).toLowerCase().includes(q) ||
+      String(t.userId || '').toLowerCase().includes(q) ||
+      String(t.type || '').toLowerCase().includes(q) ||
+      String(t.reason || '').toLowerCase().includes(q)
     );
   });
 
@@ -362,9 +240,9 @@ const AdminEconomyScreen = () => {
             }`}
           >
             <span>Payout Queue</span>
-            {payouts.filter(p => p.status === 'pending').length > 0 && (
+            {payouts.filter(p => isAwaitingReview(p.status)).length > 0 && (
               <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-bold">
-                {payouts.filter(p => p.status === 'pending').length}
+                {payouts.filter(p => isAwaitingReview(p.status)).length}
               </span>
             )}
           </button>
@@ -387,8 +265,9 @@ const AdminEconomyScreen = () => {
         {/* TAB 1: OVERVIEW & TREASURY */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* KPI Cards — every value comes from getEconomySummary; null is
+                shown as an explicit dash rather than a placeholder figure. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               <div id="card-circulating-coins" className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Circulating Coins</span>
@@ -397,80 +276,97 @@ const AdminEconomyScreen = () => {
                   </div>
                 </div>
                 <div className="text-3xl font-extrabold tracking-tight">
-                  {metrics.circulatingCoins.toLocaleString()}
+                  {metrics.circulatingCoins === null ? '—' : metrics.circulatingCoins.toLocaleString()}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>+4.2% minting velocity this month</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Sum of every citizen's coin balance
                 </p>
               </div>
 
               <div id="card-treasury-balance" className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Treasury Reserve (USD)</span>
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Reserve Liability (USD)</span>
                   <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
                     <DollarSign className="w-5 h-5" />
                   </div>
                 </div>
                 <div className="text-3xl font-extrabold tracking-tight">
-                  ${metrics.totalTreasuryUsd.toLocaleString()}
+                  {metrics.treasuryReserveUsd === null ? '—' : `$${metrics.treasuryReserveUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                 </div>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
-                  100% full-reserve backing on user coin liabilities
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Coin liability at {COINS_PER_DOLLAR} coins / $1
                 </p>
               </div>
 
-              <div id="card-platform-take-rate" className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+              <div id="card-pending-payouts" className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Platform Revenue Rate</span>
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Awaiting Payouts</span>
                   <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-                    <ShieldCheck className="w-5 h-5" />
+                    <Clock className="w-5 h-5" />
                   </div>
                 </div>
                 <div className="text-3xl font-extrabold tracking-tight">
-                  {metrics.platformFeeRate}%
+                  {metrics.pendingPayoutCount === null ? '—' : metrics.pendingPayoutCount}
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  70% paid directly to verified creators
+                  {metrics.pendingPayoutCoins === null
+                    ? 'Locked coin value unavailable'
+                    : `${metrics.pendingPayoutCoins.toLocaleString()} coins locked`}
+                </p>
+              </div>
+
+              <div id="card-monthly-volume" className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">30-Day Ledger Volume</span>
+                  <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                </div>
+                <div className="text-3xl font-extrabold tracking-tight">
+                  {metrics.monthlyVolumeCoins === null ? '—' : metrics.monthlyVolumeCoins.toLocaleString()}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Coins moved in the last 30 days
                 </p>
               </div>
             </div>
 
-            {/* Tokenomics Health & Risk Matrix */}
+            {/* Treasury oversight — real counters, and the only mutating
+                action is a link into the audit trail. No simulated actions. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div id="tokenomics-health-panel" className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-indigo-500" />
-                  Tokenomics Security & Solvency
+                  Ledger Integrity
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                     <div>
-                      <p className="font-semibold text-sm">Collateralization Ratio</p>
-                      <p className="text-xs text-gray-500">Stripe Escrow vs. Coin Obligations</p>
+                      <p className="font-semibold text-sm">Coin Liability (Circulating)</p>
+                      <p className="text-xs text-gray-500">Owed to citizens from coin balances</p>
                     </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
-                      108.4% (Overcollateralized)
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-100">
+                      {metrics.circulatingCoins === null ? 'Unavailable' : `${metrics.circulatingCoins.toLocaleString()} coins`}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                     <div>
-                      <p className="font-semibold text-sm">Double-Entry Ledger Audit</p>
-                      <p className="text-xs text-gray-500">Automated ledger reconciliation check</p>
+                      <p className="font-semibold text-sm">Locked In Payouts</p>
+                      <p className="text-xs text-gray-500">Coins reserved against open requests</p>
                     </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
-                      Zero Variance (Clean)
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                      {metrics.pendingPayoutCoins === null ? 'Unavailable' : `${metrics.pendingPayoutCoins.toLocaleString()} coins`}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                     <div>
-                      <p className="font-semibold text-sm">Fraud & Sybil Detection</p>
-                      <p className="text-xs text-gray-500">Self-tipping & wash trading monitor</p>
+                      <p className="font-semibold text-sm">30-Day Ledger Movement</p>
+                      <p className="text-xs text-gray-500">Sum of coin_transactions in the window</p>
                     </div>
                     <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                      Normal (0 flagged)
+                      {metrics.monthlyVolumeCoins === null ? 'Unavailable' : `${metrics.monthlyVolumeCoins.toLocaleString()} coins`}
                     </span>
                   </div>
                 </div>
@@ -482,22 +378,23 @@ const AdminEconomyScreen = () => {
                   Treasury Actions
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  Administrative safeguards for platform liquidity adjustments and reward campaign minting.
+                  Financial mutations are server-side only. Review the immutable trail of every
+                  coin and payout event.
                 </p>
                 <div className="space-y-3">
                   <button
-                    onClick={() => toast.info('Reward minting simulation: Audit entry created.')}
+                    onClick={() => navigate('/admin/audit-logs')}
                     className="w-full flex items-center justify-between p-3.5 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium rounded-xl transition"
                   >
-                    <span>Run Seasonal Reward Pool Injection</span>
+                    <span>Open the Audit Trail</span>
                     <ChevronRight className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => toast.info('Reconciliation report generated and saved to Audit Logs.')}
+                    onClick={() => navigate('/admin/economy')}
                     className="w-full flex items-center justify-between p-3.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 font-medium rounded-xl transition"
                   >
-                    <span>Generate Financial Compliance Statement</span>
-                    <ExternalLink className="w-4 h-4" />
+                    <span>Refresh Ledger Aggregates</span>
+                    <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
               </div>
@@ -548,30 +445,43 @@ const AdminEconomyScreen = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {filteredPayouts.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                          {loading ? 'Loading payout queue…' : 'No payout requests match this filter.'}
+                        </td>
+                      </tr>
+                    )}
                     {filteredPayouts.map(payout => (
                       <tr key={payout.id} className="hover:bg-gray-50/70 dark:hover:bg-gray-750 transition">
                         <td className="px-6 py-4">
-                          <div className="font-semibold text-gray-900 dark:text-white">{payout.creatorName}</div>
-                          <div className="text-xs text-gray-500">{payout.handle}</div>
+                          <div className="font-semibold text-gray-900 dark:text-white font-mono text-xs">{payout.userId}</div>
+                          <div className="text-xs text-gray-500 font-mono">{payout.id}</div>
                         </td>
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 mr-2">
-                            {payout.tier}
+                            {getRankTitle(payout.level || 0)}
                           </span>
-                          <span className="text-xs text-gray-500">Lvl {payout.level}</span>
+                          <span className="text-xs text-gray-500">Lvl {payout.level ?? '—'}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-bold text-gray-900 dark:text-white">${payout.amountUsd.toFixed(2)}</div>
-                          <div className="text-xs text-amber-600 font-medium">{payout.coins.toLocaleString()} coins</div>
+                          <div className="font-bold text-gray-900 dark:text-white">
+                            ${(Number(payout.amount || 0) / COINS_PER_DOLLAR).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-amber-600 font-medium">{Number(payout.amount || 0).toLocaleString()} coins</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-medium text-xs text-gray-900 dark:text-white">{payout.method}</div>
-                          <div className="text-xs text-gray-500">{payout.destination}</div>
+                          <div className="font-medium text-xs text-gray-900 dark:text-white">{payout.paymentMethod || '—'}</div>
+                          <div className="text-xs text-gray-500">
+                            {payout.paymentDetails?.stripeAccountId
+                              ? `Stripe ${payout.paymentDetails.stripeAccountId}`
+                              : payout.paymentDetails?.accountMask || 'details on file'}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
                             <ShieldCheck className="w-3.5 h-3.5" />
-                            {payout.riskScore}
+                            {payout.processingError ? 'Payment error' : 'Server-settled'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -588,7 +498,7 @@ const AdminEconomyScreen = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          {payout.status === 'pending' ? (
+                          {isAwaitingReview(payout.status) ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleApprovePayout(payout.id)}
@@ -641,21 +551,26 @@ const AdminEconomyScreen = () => {
             {/* Transactions List */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
               <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                {filteredTransactions.length === 0 && (
+                  <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                    {loading ? 'Loading ledger…' : 'No ledger entries match this search.'}
+                  </div>
+                )}
                 {filteredTransactions.map(tx => (
                   <div key={tx.id} className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-gray-50/50 dark:hover:bg-gray-750 transition">
                     <div className="flex items-center gap-3.5">
                       <div
                         className={`p-2.5 rounded-xl ${
-                          tx.type === 'coin_purchase'
+                          tx.type === 'credit' || tx.type === 'coin_purchase'
                             ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                            : tx.type === 'payout'
+                            : tx.type === 'debit' || tx.type === 'payout'
                             ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
                             : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
                         }`}
                       >
-                        {tx.type === 'payout' ? (
+                        {tx.type === 'debit' || tx.type === 'payout' ? (
                           <ArrowUpRight className="w-5 h-5" />
-                        ) : tx.type === 'coin_purchase' ? (
+                        ) : tx.type === 'credit' || tx.type === 'coin_purchase' ? (
                           <ArrowDownLeft className="w-5 h-5" />
                         ) : (
                           <Coins className="w-5 h-5" />
@@ -663,22 +578,22 @@ const AdminEconomyScreen = () => {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sm capitalize">{tx.type.replace('_', ' ')}</span>
+                          <span className="font-semibold text-sm capitalize">{String(tx.type || 'entry').replace('_', ' ')}</span>
                           <span className="text-xs text-gray-400 font-mono">#{tx.id}</span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          From <span className="font-medium text-gray-700 dark:text-gray-300">{tx.from}</span> to{' '}
-                          <span className="font-medium text-gray-700 dark:text-gray-300">{tx.to}</span>
+                          Account <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{tx.userId}</span>
+                          {tx.reason ? ` • ${String(tx.reason).replace('_', ' ')}` : ''}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className="font-bold text-sm text-gray-900 dark:text-white">
-                        {tx.coins.toLocaleString()} Coins
+                        {Number(tx.amount || 0).toLocaleString()} Coins
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        ${tx.usdValue.toFixed(2)} USD • Fee: {tx.feeCoins} coins
+                        ${(Number(tx.amount || 0) / COINS_PER_DOLLAR).toFixed(2)} USD
                       </div>
                     </div>
                   </div>

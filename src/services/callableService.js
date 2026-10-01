@@ -20,6 +20,8 @@ export const FUNCTIONS = {
   CLAIM_TITLE: 'claimTitle',
   SET_ACTIVE_TITLE: 'setActiveTitle',
   APPLY_FOR_CREATOR: 'applyForCreator',
+  GET_ECONOMY_SUMMARY: 'getEconomySummary',
+  ADMIN_DECIDE_WITHDRAWAL: 'adminDecideWithdrawal',
 };
 
 /**

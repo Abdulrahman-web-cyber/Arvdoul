@@ -78,9 +78,11 @@ describe('Cloud Functions deploy contract', () => {
     // userDelete.js is intentionally not required: its deleteUserData is a
     // duplicate of the complete cascade implementation in user.js - requiring
     // both would crash deployment with a duplicate-export error.
-    // rateLimit.js is a shared utility module (no exports.* functions) —
-    // required by the modules that use it, never deployed standalone.
-    const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && m !== 'rateLimit.js');
+    // rateLimit.js and withdrawalSettlement.js are shared utility modules (no
+    // exports.* functions) — required by the modules that use them, never
+    // deployed standalone.
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js']);
+    const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.
     expect(read(path.join(functionsDir, 'monetization.js'))).toContain("require('./rateLimit')");

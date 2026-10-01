@@ -31,6 +31,7 @@ import {
   getInfluenceBand,
   getContributionBand,
   getPrestigeInfo,
+  COINS_PER_DOLLAR,
 } from '../shared/levelConfig.cjs';
 
 // The curve, reward tables, XP rules and gating thresholds live in ONE place:
@@ -67,6 +68,7 @@ export {
   getInfluenceBand,
   getContributionBand,
   getPrestigeInfo,
+  COINS_PER_DOLLAR,
 };
 
 class LevelSystemService {
