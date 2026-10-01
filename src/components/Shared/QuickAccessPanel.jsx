@@ -140,6 +140,7 @@ import { GiGoldBar, GiTreasureMap, GiCrownCoin } from "react-icons/gi";
 import { MdAdsClick, MdOutlinePaid, MdAccountBalance, MdTrendingUp, MdShowChart } from "react-icons/md";
 import { RiCopperCoinLine } from "react-icons/ri";
 import { SiCashapp } from "react-icons/si";
+import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES } from "../../services/levelSystemService";
 
 // Monetization (withdrawals) unlocks at level 10 — matches levelSystemService LEVEL_PERKS.
 const MONETIZATION_MIN_LEVEL = 10;
@@ -157,42 +158,6 @@ const ANIMATION_CONFIG = {
 };
 
 // Level system configuration
-const LEVEL_CONFIG = {
-  maxLevel: 50,
-  baseXP: 100,
-  growthFactor: 1.2,
-  levelNames: {
-    1: "Newcomer",
-    5: "Active User",
-    10: "Rising Star",
-    15: "Content Creator",
-    20: "Community Builder",
-    25: "Influencer",
-    30: "Trendsetter",
-    35: "Social Pro",
-    40: "Viral Star",
-    45: "Platform Elite",
-    50: "Arvdoul Legend"
-  },
-  levelRewards: {
-    5: { coins: 100, badge: "Active", feature: "Basic Features" },
-    10: { coins: 500, badge: "Rising Star", feature: "Analytics" },
-    15: { coins: 1000, badge: "Creator", feature: "Advanced Tools" },
-    20: { coins: 2500, badge: "Builder", feature: "Community Features" },
-    25: { coins: 5000, badge: "Influencer", feature: "Monetization" },
-    30: { coins: 10000, badge: "Trendsetter", feature: "Premium Tools" },
-    35: { coins: 25000, badge: "Social Pro", feature: "Priority Support" },
-    40: { coins: 50000, badge: "Viral Star", feature: "Customization" },
-    45: { coins: 100000, badge: "Platform Elite", feature: "Early Access" },
-    50: { coins: 250000, badge: "Arvdoul Legend", feature: "All Features" }
-  }
-};
-
-// Calculate XP required for each level
-const calculateXPForLevel = (level) => {
-  return Math.floor(LEVEL_CONFIG.baseXP * Math.pow(LEVEL_CONFIG.growthFactor, level - 1));
-};
-
 // Color schemes
 const getThemeColors = (theme) => ({
   panelBg: theme === "dark" 
@@ -304,14 +269,7 @@ const ProgressBar = memo(({ value, max = 100, label, showLabel = true, color = "
 });
 
 const LevelBadge = memo(({ level, size = "md", showLevel = true }) => {
-  // Level bands aligned with the real 15-level curve (levelSystemService.LEVELS).
-  const getBadgeColor = () => {
-    if (level >= 15) return "from-yellow-400 via-amber-500 to-orange-500";
-    if (level >= 12) return "from-purple-400 via-pink-500 to-rose-500";
-    if (level >= 8) return "from-blue-400 via-cyan-500 to-teal-500";
-    if (level >= 4) return "from-green-400 via-emerald-500 to-teal-500";
-    return "from-gray-400 via-gray-500 to-gray-600";
-  };
+  const getBadgeColor = () => getLevelBandColor(level);
 
   const sizes = {
     sm: "w-6 h-6 text-xs",
@@ -394,30 +352,23 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
   // ==================== LEVEL SYSTEM CALCULATIONS ====================
   const levelSystem = useMemo(() => {
-    const currentLevel = currentUser?.level || 1;
     const currentXP = currentUser?.experience || 0;
-    const xpForCurrentLevel = calculateXPForLevel(currentLevel);
-    const xpForNextLevel = calculateXPForLevel(currentLevel + 1);
-    const xpNeededForNextLevel = Math.max(0, xpForNextLevel - currentXP);
-    const progressPercentage = Math.min(100, (currentXP / xpForNextLevel) * 100);
-    
-    const nextLevelReward = LEVEL_CONFIG.levelRewards[currentLevel + 1] || null;
-    const currentLevelName = LEVEL_CONFIG.levelNames[currentLevel] || "Newcomer";
-    const nextLevelName = LEVEL_CONFIG.levelNames[currentLevel + 1] || "Next Level";
-    
+    // The curve, rank bands and gates live in shared/levelConfig.cjs only.
+    const info = getLevelInfo(currentXP);
+    const currentLevel = info.level;
+
     return {
       currentLevel,
       currentXP,
-      xpForCurrentLevel,
-      xpForNextLevel,
-      xpNeededForNextLevel,
-      progressPercentage,
-      nextLevelReward,
-      currentLevelName,
-      nextLevelName,
-      isMaxLevel: currentLevel >= LEVEL_CONFIG.maxLevel
+      xpForCurrentLevel: info.currentLevelXp,
+      xpForNextLevel: info.nextLevelXp,
+      xpNeededForNextLevel: info.xpToNext,
+      progressPercentage: info.progress,
+      currentLevelName: getRankTitle(currentLevel),
+      nextLevelName: getRankTitle(currentLevel + 1),
+      isMaxLevel: info.isMaxLevel
     };
-  }, [currentUser?.level, currentUser?.experience]);
+  }, [currentUser?.experience]);
 
   // ==================== REAL USER STATISTICS ====================
   const userStatistics = useMemo(() => {
@@ -597,13 +548,13 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
       },
       { 
         id: 3, 
-        title: "Level 10", 
-        icon: Trophy, 
-        unlocked: levelSystem.currentLevel >= 10, 
-        required: 10, 
-        current: levelSystem.currentLevel, 
+        title: `Level ${LEVEL_GATES.withdrawals}`,
+        icon: Trophy,
+        unlocked: levelSystem.currentLevel >= LEVEL_GATES.withdrawals,
+        required: LEVEL_GATES.withdrawals,
+        current: levelSystem.currentLevel,
         points: 1000,
-        progress: Math.min((levelSystem.currentLevel / 10) * 100, 100)
+        progress: Math.min((levelSystem.currentLevel / LEVEL_GATES.withdrawals) * 100, 100)
       },
       { 
         id: 4, 

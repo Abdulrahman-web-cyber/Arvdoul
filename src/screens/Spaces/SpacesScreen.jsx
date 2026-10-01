@@ -87,12 +87,19 @@ export default function SpacesScreen() {
     toast.success(`Joined "${space.title}" 🎧`);
   };
 
-  const handleToggleHand = () => {
-    setIsHandRaised(!isHandRaised);
-    if (!isHandRaised) {
-      toast.info('Raised hand to speak! ✋ The host was notified.');
-    } else {
-      toast.info('Lowered hand.');
+  const handleToggleHand = async () => {
+    if (!activeSpace?.id || !user?.uid) {
+      toast.error('Join a space to raise your hand.');
+      return;
+    }
+    const raising = !isHandRaised;
+    setIsHandRaised(raising);
+    try {
+      await spacesService.toggleRaisedHand(activeSpace.id, user, raising);
+      toast.info(raising ? 'Hand raised ✋' : 'Hand lowered');
+    } catch {
+      setIsHandRaised(!raising);
+      toast.error('Could not update your hand state.');
     }
   };
 

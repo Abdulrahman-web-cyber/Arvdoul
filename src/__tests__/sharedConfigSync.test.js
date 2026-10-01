@@ -47,6 +47,26 @@ describe('shared config single source of truth', () => {
     expect(src).toContain("require('./featureFlagRegistry.cjs')");
   });
 
+  test('no component re-derives the level curve or reward table', () => {
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+          walk(full);
+        } else if (/\.(js|jsx)$/.test(entry.name)) {
+          const src = fs.readFileSync(full, 'utf8');
+          if (src.includes('calculateXPForLevel') || src.includes('LEVEL_CONFIG.levelRewards')) {
+            offenders.push(path.relative(root, full));
+          }
+        }
+      }
+    };
+    walk(path.join(root, 'src'));
+    expect(offenders).toEqual([]);
+  });
+
   test('sync script and predeploy hook exist so the copy cannot go stale', () => {
     expect(fs.existsSync(path.join(root, 'scripts', 'sync-shared-config.mjs'))).toBe(true);
     const fnsPkg = JSON.parse(fs.readFileSync(path.join(root, 'functions', 'package.json'), 'utf8'));
