@@ -1338,3 +1338,165 @@ describe('Admin feature flags - platform-wide, server-authoritative', () => {
     expect(admin).toContain('module.exports.writeAudit = writeAudit');
   });
 });
+
+describe('Audio Studio - real graph, no invented signal', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('the engine meters and positions come from the AudioContext, not Math.random', () => {
+    const engine = read('src/screens/AudioEditor/audioEngine.js');
+    expect(engine).not.toContain('Math.random');
+    expect(engine).toContain('createBiquadFilter');
+    expect(engine).toContain('getFloatTimeDomainData');
+    expect(engine).toContain('createStereoPanner');
+    expect(engine).toContain('getPosition()');
+  });
+
+  test('the studio starts empty instead of seeding demo tracks', () => {
+    const screen = read('src/screens/AudioEditor/AudioEditorScreen.jsx');
+    expect(screen).not.toContain('INITIAL_STUDIO_TRACKS');
+    expect(screen).toContain('audioStudioEngine');
+    for (const seed of ['Lead Verse 1', 'Grand Chords', 'Drum Kit & 808', 'Sub & Slap Bass']) {
+      expect(screen).not.toContain(seed);
+    }
+  });
+
+  test('the console draws real peaks and reports a missing waveform honestly', () => {
+    const consoleSrc = read('src/screens/AudioEditor/components/MultiTrackConsole.jsx');
+    expect(consoleSrc).toContain('computePeaks');
+    expect(consoleSrc).toContain('Waveform unavailable');
+    expect(consoleSrc).not.toContain('Math.sin(idx');
+    expect(consoleSrc).not.toContain('INITIAL_STUDIO_TRACKS');
+  });
+
+  test('meters and spectrum read the engine rather than animating randomly', () => {
+    const transport = read('src/screens/AudioEditor/components/TransportBar.jsx');
+    const eq = read('src/screens/AudioEditor/components/EqualizerModule.jsx');
+    const inspector = read('src/screens/AudioEditor/components/ClipInspectorModule.jsx');
+    for (const src of [transport, eq, inspector]) {
+      expect(src).not.toContain('Math.random');
+      expect(src).toContain('audioStudioEngine');
+    }
+    expect(transport).toContain('getMeter');
+    expect(eq).toContain('getPresetBands');
+  });
+
+  test('the header never claims an export succeeded on a timer', () => {
+    const header = read('src/screens/AudioEditor/components/StudioHeader.jsx');
+    expect(header).not.toContain('setTimeout');
+    expect(header).not.toContain('exported successfully');
+    expect(header).toContain('isExporting');
+  });
+
+  test('EQ presets live in one shared table', () => {
+    const presets = read('src/screens/AudioEditor/audioPresets.js');
+    expect(presets).toContain('export const EQ_PRESET_NAMES');
+    expect(presets).toContain('export function getPresetBands');
+  });
+});
+
+describe('Admin support desk - server-authoritative', () => {
+  test('support list/reply callables exist and are wired into the callable service', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminListSupportTickets');
+    expect(admin).toContain('exports.adminResolveSupportTicket');
+    const svc = fs.readFileSync(path.join(root, 'src/services/callableService.js'), 'utf8');
+    expect(svc).toContain("ADMIN_LIST_SUPPORT_TICKETS: 'adminListSupportTickets'");
+    expect(svc).toContain("ADMIN_RESOLVE_SUPPORT_TICKET: 'adminResolveSupportTicket'");
+  });
+});
+
+describe('Admin moderation queue - reads the whole routing table', () => {
+  test('the server lists every report collection including post/story/ad', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminListModerationReports');
+    for (const collection of ['post_reports', 'story_reports', 'ad_reports']) {
+      expect(admin).toContain(`${collection}`);
+    }
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminModerationQueueScreen.jsx'), 'utf8');
+    expect(screen).toContain('FUNCTIONS.ADMIN_LIST_MODERATION_REPORTS');
+  });
+
+  test('content removal goes through the callable, not a direct posts write', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminModerateContent');
+    expect(admin).toContain("post: 'posts'");
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminContentManagementScreen.jsx'), 'utf8');
+    expect(screen).toContain('FUNCTIONS.ADMIN_MODERATE_CONTENT');
+    expect(screen).not.toContain('updateDoc');
+  });
+});
+
+describe('Sponsored ads - no fabricated advertisers', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/components/Ads/SponsoredPostCard.jsx'), 'utf8');
+
+  test('no hardcoded sponsor catalogue and no random fallback', () => {
+    const s = src();
+    expect(s).not.toContain('VERIFIED_SPONSORS');
+    expect(s).not.toContain('Math.random');
+    expect(s).toContain("adState === 'loading'");
+  });
+
+  test('reporting an ad goes through the server callable', () => {
+    expect(src()).toContain('reportAd');
+    const svc = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(svc).toContain('async reportAd(');
+    expect(svc).toContain("httpsCallable(functions, 'reportAd')");
+    expect(svc).not.toMatch(/addDoc\(collection\(this\.db, 'ad_impressions'/);
+    const server = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+    expect(server).toContain('exports.reportAd');
+  });
+
+  test('ad_reports is covered by firestore rules', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('match /ad_reports/{reportId}');
+  });
+});
+
+describe('Curated sample content - removed in favour of real data', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('in-feed stories render only real story groups', () => {
+    const s = read('src/components/feed/InFeedStoriesModule.jsx');
+    expect(s).not.toContain('DEFAULT_STORY_CREATORS');
+    expect(s).not.toContain('images.unsplash.com');
+  });
+
+  test('notifications suggestions have no fabricated creators or badge counts', () => {
+    const s = read('src/screens/NotificationsScreen.jsx');
+    expect(s).not.toContain('CURATED_CREATORS');
+    expect(s).not.toContain('images.unsplash.com');
+    expect(s).not.toMatch(/id: 'Messages', label: 'Messages', badge:/);
+  });
+
+  test('story composer has no fabricated default track or "Drafts (5)" strip', () => {
+    const s = read('src/screens/CreateStory.jsx');
+    expect(s).not.toContain('Lost in the City');
+    expect(s).not.toContain('SAMPLE_DRAFTS');
+    expect(s).not.toContain('Drafts (5)');
+    expect(s).toContain('soundService.getTrendingSounds');
+  });
+
+  test('reels have no starter sparks and no hardcoded like count', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).not.toContain('STARTER_SPARKS');
+    expect(s).not.toContain('128.4K');
+    expect(s).not.toContain('images.unsplash.com');
+  });
+
+  test('splash progress is milestone-driven, not random', () => {
+    const s = read('src/screens/SplashScreen.jsx');
+    expect(s).not.toContain('Math.random');
+    expect(s).not.toContain('statusSequence');
+  });
+
+  test('voice recorder meter reads the real microphone, not random bars', () => {
+    const s = read('src/screens/VideoEditor/components/RecordVoiceModal.jsx');
+    expect(s).not.toContain('Math.random');
+    expect(s).toContain('createAnalyser');
+  });
+
+  test('edit profile has no random username fallback', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).not.toContain('Math.floor(1000 + Math.random()');
+  });
+});

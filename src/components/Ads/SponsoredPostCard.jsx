@@ -14,45 +14,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMonetizationService } from '../../services/monetizationService';
 
-const VERIFIED_SPONSORS = [
-  {
-    id: 'ad_pro_creator',
-    brandName: 'Arvdoul Pro Studio',
-    brandAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
-    title: 'Unlock 4K Video Exports & 32-Track Mixing',
-    description: 'Get exclusive access to Arvdoul Pro Studio plugins, high-res stem export, and 0% creator fee on your music tips for 3 months.',
-    mediaUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1000&auto=format&fit=crop&q=80',
-    ctaText: 'Claim 50% Off',
-    clickUrl: 'https://arvdoul.com/pro',
-    rewardCoins: 5,
-    tag: 'Creator Tools',
-  },
-  {
-    id: 'ad_soundwave',
-    brandName: 'SoundWave Acoustic Gear',
-    brandAvatar: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=150&auto=format&fit=crop&q=80',
-    title: 'Studio Reference Headphones — Zero Latency',
-    description: 'Tuned specifically for mobile creators and beatmakers. Ultra-light titanium drivers with spatial audio support.',
-    mediaUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1000&auto=format&fit=crop&q=80',
-    ctaText: 'Shop Special Edition',
-    clickUrl: 'https://soundwave.example.com',
-    rewardCoins: 5,
-    tag: 'Audio Tech',
-  },
-  {
-    id: 'ad_neoncyber',
-    brandName: 'NeonCyber Visual FX',
-    brandAvatar: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=150&auto=format&fit=crop&q=80',
-    title: 'Over 500+ Cinematic LUTs & 3D Glitch Transitions',
-    description: 'Transform your short-form videos and vibe stories with one click. Compatible with the Arvdoul Video Studio.',
-    mediaUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1000&auto=format&fit=crop&q=80',
-    ctaText: 'Download Pack',
-    clickUrl: 'https://neoncyber.example.com',
-    rewardCoins: 5,
-    tag: 'Video FX',
-  },
-];
-
 export default function SponsoredPostCard({
   adData = null,
   placement = 'home',
@@ -62,9 +23,9 @@ export default function SponsoredPostCard({
   const isDark = theme !== 'light';
   const { user } = useAuth();
 
-  const [ad, setAd] = useState(adData || VERIFIED_SPONSORS[0]);
+  const [ad, setAd] = useState(adData || null);
+  const [adState, setAdState] = useState(adData ? 'ready' : 'loading');
   const [showMenu, setShowMenu] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [hasRecordedImpression, setHasRecordedImpression] = useState(false);
 
   // Rewarded Ad Modal state
@@ -76,37 +37,41 @@ export default function SponsoredPostCard({
   const cardRef = useRef(null);
   const countdownIntervalRef = useRef(null);
 
-  // Fetch real ad from monetization service if not provided
+  // The ad is whatever the monetization service returns. There is no local
+  // advertiser catalogue: an empty inventory renders an empty state rather than
+  // a fabricated sponsor and a fake reward.
   useEffect(() => {
     if (adData) {
       setAd(adData);
-      return;
+      setAdState('ready');
+      return undefined;
     }
     let isMounted = true;
-    const loadAd = async () => {
+    setAdState('loading');
+    (async () => {
       try {
-        const svc = getMonetizationService();
-        const fetchedAd = await svc.getAd(placement, user?.uid);
-        if (isMounted && fetchedAd) {
-          setAd({
-            ...VERIFIED_SPONSORS[Math.floor(Math.random() * VERIFIED_SPONSORS.length)],
-            ...fetchedAd,
-          });
+        const fetchedAd = await getMonetizationService().getAd(placement, user?.uid);
+        if (!isMounted) return;
+        if (fetchedAd && fetchedAd.mediaUrl) {
+          setAd(fetchedAd);
+          setAdState('ready');
+        } else {
+          setAd(null);
+          setAdState('empty');
         }
       } catch {
-        // Fallback to random sponsor
-        const randomIndex = Math.floor(Math.random() * VERIFIED_SPONSORS.length);
-        if (isMounted) setAd(VERIFIED_SPONSORS[randomIndex]);
+        if (!isMounted) return;
+        setAd(null);
+        setAdState('error');
       }
-    };
-    loadAd();
+    })();
     return () => { isMounted = false; };
   }, [adData, placement, user?.uid]);
 
   // Real IntersectionObserver for impression logging
   useEffect(() => {
     const el = cardRef.current;
-    if (!el || hasRecordedImpression) return;
+    if (!el || !ad?.id || hasRecordedImpression) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -178,9 +143,39 @@ export default function SponsoredPostCard({
 
   const handleHideAd = () => {
     setShowMenu(false);
-    toast.info('Ad dismissed. We will show you fewer ads like this.');
     onAdHidden(ad.id);
   };
+
+  const [isReporting, setIsReporting] = useState(false);
+  const handleReportAd = async () => {
+    setShowMenu(false);
+    if (!ad?.id || isReporting) return;
+    setIsReporting(true);
+    try {
+      const svc = getMonetizationService();
+      if (typeof svc.reportAd === 'function') {
+        await svc.reportAd(ad.id, placement);
+        toast.success('Ad reported. Our team will review it.');
+      } else {
+        toast.error('Reporting is unavailable right now.');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not report this ad.');
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
+  if (adState !== 'ready' || !ad) {
+    return (
+      <div className={cn(
+        "w-full rounded-2xl border my-4 px-4 py-3 text-xs",
+        isDark ? "bg-[#060B24]/60 border-white/10 text-gray-400" : "bg-white border-gray-200 text-gray-500"
+      )}>
+        {adState === 'loading' ? 'Loading sponsor…' : 'No sponsored content available.'}
+      </div>
+    );
+  }
 
   return (
     <>

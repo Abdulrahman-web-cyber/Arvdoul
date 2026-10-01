@@ -26,6 +26,8 @@ export const FUNCTIONS = {
   ADMIN_LIST_COMMUNITIES: 'adminListCommunities',
   ADMIN_SET_COMMUNITY_VERIFIED: 'adminSetCommunityVerified',
   ADMIN_ISSUE_COMMUNITY_STRIKE: 'adminIssueCommunityStrike',
+  ADMIN_MODERATE_CONTENT: 'adminModerateContent',
+  ADMIN_LIST_MODERATION_REPORTS: 'adminListModerationReports',
   ADMIN_LIST_SUPPORT_TICKETS: 'adminListSupportTickets',
   ADMIN_RESOLVE_SUPPORT_TICKET: 'adminResolveSupportTicket',
   GET_FEATURE_FLAG_OVERRIDES: 'getFeatureFlagOverrides',

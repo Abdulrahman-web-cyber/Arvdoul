@@ -63,6 +63,32 @@ are expected — only treat errors as failures.
   (`callFunction`, `FUNCTIONS`) rather than inlining `httpsCallable(getFunctions(), ...)`,
   so app binding and error normalisation stay consistent.
 
+## Admin mutations are server-authoritative
+An admin screen may read a collection directly only when the rules already grant
+admins that read. Anything that *changes* state — or reads a collection that is
+not admin-readable — goes through a callable in `functions/admin.js` that calls
+`assertAdmin`, rate-limits, and writes `moderation_logs` via `writeAudit`:
+
+- `adminListSupportTickets` / `adminResolveSupportTicket` — the support queue and
+  agent replies (`support_tickets` is user-owned, so a client query cannot see
+  every customer's ticket).
+- `adminListModerationReports` — one server-side read over every collection in
+  `REPORT_TARGETS`, so the queue cannot drift from the report routing table.
+- `resolveUserReport` — report decisions (post/story/ad report types included).
+
+Never add a second report collection without adding it to both
+`functions/moderation.js` `REPORT_TARGETS` and `functions/admin.js`
+`REPORT_COLLECTIONS`, and never log an admin action with the client-side
+`AuditLogger` (it writes to a local IndexedDB queue, not to the server trail).
+
+## Audio Studio
+`src/screens/AudioEditor/` is a real Web Audio editor: `audioEngine.js` owns the
+graph (clip sources → track gain/pan → EQ biquads → master → analyser), and the
+transport, meters, spectrum and EQ curve all read from it. The project starts
+empty — it only has clips once a decoded source is passed in route state. Do not
+seed demo tracks, animate meters with `Math.random`, or claim an export succeeded
+before `MediaRecorder` produced a blob.
+
 ## Owner / admin bootstrap
 `admins/{uid}` is server-write-only, so the first admin must be claimed:
 1. Set `OWNER_EMAILS` (comma-separated) for the functions deployment and deploy functions.

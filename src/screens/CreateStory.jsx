@@ -33,7 +33,7 @@ const CREATIVE_TOOLS = [
 const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'LAYOUT'];
 
 // Story background templates - real gradient presets (no fabricated photos)
-const SAMPLE_DRAFTS = [
+const STORY_GRADIENTS = [
   { id: 'd1', gradient: 'linear-gradient(135deg, #FF512F, #F09819)', label: 'Sunset' },
   { id: 'd2', gradient: 'linear-gradient(135deg, #0F2027, #2C5364)', label: 'City lights' },
   { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Mountain' },
@@ -64,7 +64,9 @@ export default function CreateStory() {
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOption1, setPollOption1] = useState('Yes 🔥');
   const [pollOption2, setPollOption2] = useState('No ❄️');
-  const [selectedMusic, setSelectedMusic] = useState('Lost in the City - ARVDOUL Beats');
+  const [selectedMusic, setSelectedMusic] = useState(null);
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [musicLoading, setMusicLoading] = useState(false);
   const [mediaFile, setMediaFile] = useState(null);
   const [capturedPreview, setCapturedPreview] = useState(null);
   const [publishing, setPublishing] = useState(false);
@@ -74,6 +76,20 @@ export default function CreateStory() {
   const timerRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
+
+  // Music tool pulls the real catalog; there is no hardcoded default track.
+  const loadMusicTracks = useCallback(async () => {
+    setMusicLoading(true);
+    try {
+      const { default: soundService } = await import('../services/soundService.js');
+      const tracks = await soundService.getTrendingSounds('All');
+      setMusicTracks(Array.isArray(tracks) ? tracks : []);
+    } catch {
+      setMusicTracks([]);
+    } finally {
+      setMusicLoading(false);
+    }
+  }, []);
 
   // Initialize WebRTC Camera Stream
   const initCamera = useCallback(async () => {
@@ -231,7 +247,7 @@ export default function CreateStory() {
         backgroundColor: backgroundGradient || (isText ? '#1e1b4b' : '#000000'),
         textColor: '#FFFFFF',
         poll: pollQuestion ? { question: pollQuestion, options: [pollOption1, pollOption2] } : null,
-        musicTrack: selectedMusic,
+        music: selectedMusic || null,
         // audience maps to the service visibility contract (public/followers).
         visibility: 'public',
       };
@@ -304,9 +320,7 @@ export default function CreateStory() {
                       key={tool.id}
                       onClick={() => {
                         setActiveTool(isSelected ? null : tool.id);
-                        if (tool.id === 'text' && !storyText) setStoryText('✨ Arvdoul moment');
-                        if (tool.id === 'poll' && !pollQuestion) setPollQuestion('Where to next? 🌴');
-                        toast.info(`Tool: ${tool.label} activated`);
+                        if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
                       }}
                       className={cn(
                         "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-200",
@@ -400,6 +414,53 @@ export default function CreateStory() {
                     {pollOption2}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Active Music Picker */}
+            {activeTool === 'music' && (
+              <div className="absolute bottom-24 inset-x-4 z-20 p-3 rounded-3xl bg-black/70 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300">
+                    Music
+                  </span>
+                  {selectedMusic && (
+                    <button
+                      onClick={() => setSelectedMusic(null)}
+                      className="text-[11px] text-white/60 hover:text-white"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {musicLoading ? (
+                  <p className="text-xs text-white/60 px-1 py-2">Loading tracks…</p>
+                ) : musicTracks.length === 0 ? (
+                  <p className="text-xs text-white/60 px-1 py-2">
+                    No tracks available yet.
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {musicTracks.slice(0, 20).map((track) => (
+                      <button
+                        key={track.id}
+                        onClick={() => setSelectedMusic(track)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs transition-colors",
+                          selectedMusic?.id === track.id
+                            ? "bg-violet-600/60 text-white"
+                            : "text-white/80 hover:bg-white/10"
+                        )}
+                      >
+                        <Music className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">
+                          {track.title || 'Untitled'}
+                          {track.artist ? ` — ${track.artist}` : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -667,21 +728,21 @@ export default function CreateStory() {
             <div className="flex items-center justify-between text-xs font-bold">
               <span className="flex items-center gap-1.5 text-violet-300">
                 <Sparkles className="w-3.5 h-3.5" />
-                QUICK TIP
+                BACKGROUNDS
               </span>
-              <span className="text-[10px] text-white/50">Drafts (5)</span>
+              <span className="text-[10px] text-white/50">Backgrounds</span>
             </div>
             <p className="text-[11px] text-arvdoul-text-secondary">
-              Swipe right to open gallery or left to view drafts.
+              Tap a gradient to use it as your story background.
             </p>
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {SAMPLE_DRAFTS.map((d) => (
+              {STORY_GRADIENTS.map((d) => (
                 <div
                   key={d.id}
                   onClick={() => {
                     // Apply the gradient template as the story background
                     setBackgroundGradient(d.gradient);
-                    toast.success(`Draft "${d.label}" loaded!`);
+                    toast.success(`${d.label} background applied`);
                   }}
                   className="w-11 h-14 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-400 transition-all flex-shrink-0"
                   style={{ background: d.gradient }}

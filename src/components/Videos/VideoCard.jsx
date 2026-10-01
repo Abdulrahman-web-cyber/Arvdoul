@@ -465,7 +465,7 @@ const VideoCard = memo(({
             />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.likesFormatted || '128K'}
+            {formatViewCount(video?.likes || 0)}
           </span>
         </div>
 
@@ -483,7 +483,7 @@ const VideoCard = memo(({
             <MessageCircle className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.commentsCount ? formatViewCount(video.commentsCount) : '2,345'}
+            {formatViewCount(video?.commentsCount || 0)}
           </span>
         </div>
 
@@ -501,7 +501,7 @@ const VideoCard = memo(({
             <Share2 className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.shares ? formatViewCount(video.shares) : '12.6K'}
+            {formatViewCount(video?.shares || 0)}
           </span>
         </div>
 
@@ -527,7 +527,7 @@ const VideoCard = memo(({
             />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.saves ? formatViewCount(video.saves) : '8,942'}
+            {formatViewCount(video?.saves || 0)}
           </span>
         </div>
 
@@ -546,7 +546,7 @@ const VideoCard = memo(({
             <Gift className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-purple-300 text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.gifts ? formatViewCount(video.gifts) : '1,230'}
+            {formatViewCount(video?.gifts || 0)}
           </span>
         </div>
 

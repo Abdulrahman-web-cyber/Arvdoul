@@ -364,7 +364,7 @@ const GridView = memo(({
                 <div className="flex items-center gap-2 text-[11px] text-white/70 font-medium">
                   <span>{video.likesFormatted || `${video.likes || 0}`} likes</span>
                   <span>•</span>
-                  <span>{video.views?.toLocaleString() || '12.4K'} views</span>
+                  <span>{(video.views || 0).toLocaleString()} views</span>
                 </div>
               </div>
             </motion.div>

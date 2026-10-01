@@ -174,6 +174,9 @@ const REPORT_COLLECTIONS = {
   user: 'user_reports',
   comment: 'comment_reports',
   video: 'video_reports',
+  post: 'post_reports',
+  story: 'story_reports',
+  ad: 'ad_reports',
 };
 
 exports.resolveUserReport = functions.https.onCall(async (data, context) => {
@@ -205,6 +208,84 @@ exports.resolveUserReport = functions.https.onCall(async (data, context) => {
   await writeAudit(actorUid, 'resolve_report', reportId, { action, reportType });
 
   return { success: true, reportId, status: action, reportType };
+});
+
+// ----------------------------------------------------------------------
+//  adminModerateContent — remove/restore reported content (admin only)
+//
+//  The console previously wrote `posts/{id}` directly. That only works while
+//  the rules happen to grant admins update, and it skipped the audit trail.
+//  Routing it here keeps the decision and its audit entry on the server.
+// ----------------------------------------------------------------------
+const MODERATABLE_CONTENT = {
+  post: 'posts',
+  video: 'videos',
+  comment: 'comments',
+  story: 'stories',
+};
+
+exports.adminModerateContent = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminModerateContent', 60, 60000);
+
+  const { contentType = 'post', contentId, action } = data || {};
+  const collectionName = MODERATABLE_CONTENT[contentType];
+  if (!contentId || !collectionName || !['remove', 'restore'].includes(action)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'contentId, a known contentType and action (remove|restore) are required.'
+    );
+  }
+
+  const removed = action === 'remove';
+  await db.doc(`${collectionName}/${contentId}`).update({
+    isDeleted: removed,
+    moderationStatus: removed ? 'removed' : 'approved',
+    moderatedBy: actorUid,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await writeAudit(actorUid, `content_${action}`, contentId, { contentType }, contentType);
+
+  return { success: true, contentId, action, contentType };
+});
+
+// ----------------------------------------------------------------------
+//  adminListModerationReports — one server-side read for the whole queue
+//
+//  The report collections are admin-readable, but a client-side fan-out means
+//  the queue silently misses any collection it forgot to query (it previously
+//  omitted post and story reports entirely). Reading them here keeps the queue
+//  and REPORT_TARGETS in step.
+// ----------------------------------------------------------------------
+exports.adminListModerationReports = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminListModerationReports', 60, 60000);
+
+  const limitCount = Math.min(Math.max(Number(data?.limit) || 100, 1), 200);
+  const entries = Object.entries(REPORT_COLLECTIONS);
+
+  const snapshots = await Promise.all(entries.map(([, collection]) => (
+    db.collection(collection).orderBy('createdAt', 'desc').limit(limitCount).get().catch(() => null)
+  )));
+
+  const reports = [];
+  snapshots.forEach((snap, i) => {
+    if (!snap) return;
+    const [type] = entries[i];
+    snap.docs.forEach((d) => {
+      const doc = d.data();
+      reports.push({
+        id: d.id,
+        type,
+        status: doc.status || 'pending',
+        ...doc,
+        createdAt: doc.createdAt?.toDate?.()?.toISOString?.() || null,
+      });
+    });
+  });
+
+  reports.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return { success: true, reports };
 });
 
 // ----------------------------------------------------------------------

@@ -320,6 +320,7 @@ class MonetizationService {
       this.cfGetSponsoredSearchResult = httpsCallable(functions, 'getSponsoredSearchResult');
       this.cfGetAd = httpsCallable(functions, 'getAd');
       this.cfWatchAd = httpsCallable(functions, 'watchAd');
+      this.cfReportAd = httpsCallable(functions, 'reportAd');
       this.cfPurchaseCoins = httpsCallable(functions, 'purchaseCoins');
       this.cfGetSubscriptionStatus = httpsCallable(functions, 'getSubscriptionStatus');
       this.cfCreateSubscription = httpsCallable(functions, 'createSubscription');
@@ -608,17 +609,23 @@ class MonetizationService {
 
   async recordAdImpression(adId, placement, deviceMetadata = {}) {
     await this._ensureInitialized();
+    // ad_impressions is server-write-only (see firestore.rules), so a direct
+    // addDoc is denied. The callable is the only path that actually records it.
     try {
-      await addDoc(collection(this.db, 'ad_impressions'), {
-        adId,
-        placement,
-        userId: auth?.currentUser?.uid || null,
-        deviceMetadata,
-        createdAt: serverTimestamp()
-      });
+      await this.cfRecordAdImpression({ adId, placement, deviceMetadata });
     } catch (e) {
       log.error('Failed to log ad impression:', e);
     }
+  }
+
+  /**
+   * Flags a creative for review. Server-stored (ad_reports) so the moderation
+   * queue sees it alongside every other report type.
+   */
+  async reportAd(adId, placement, reason = '', details = '') {
+    await this._ensureInitialized();
+    const result = await retryOperation(() => this.cfReportAd({ adId, placement, reason, details }));
+    return result.data;
   }
 
   // -------------------- SPONSORED SEARCH --------------------

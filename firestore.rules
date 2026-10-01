@@ -740,6 +740,13 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update, delete: if isAdmin();
     }
+    // Ad reports are written by the reportAd callable (Admin SDK) and read by
+    // the reporter or a moderator, matching the other report queues.
+    match /ad_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
     match /moderation_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false; // server-verified

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { fetchAdminStatus } from '../../services/callableService.js';
+import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -51,22 +51,19 @@ const AdminContentManagementScreen = () => {
            c.authorName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // Moderation decisions are server-authoritative: the callable re-checks
+  // admins/{uid}, updates the document and writes the audit entry.
   const handleContentAction = async (contentId, action) => {
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-      const ref = doc(firestore, 'posts', contentId);
-      await updateDoc(ref, {
-        isDeleted: action === 'remove',
-        moderationStatus: action === 'remove' ? 'removed' : 'approved',
-        updatedAt: serverTimestamp(),
-        moderatedBy: user?.uid || null,
+      await callFunction(FUNCTIONS.ADMIN_MODERATE_CONTENT, {
+        contentType: 'post',
+        contentId,
+        action,
       });
       setContent(prev => prev.map(c => (c.id === contentId ? { ...c, isDeleted: action === 'remove' } : c)));
       toast.success(action === 'remove' ? 'Content removed.' : 'Content restored.');
     } catch (error) {
-      toast.error('Action failed.');
+      toast.error(error?.message || 'Action failed.');
     }
   };
 

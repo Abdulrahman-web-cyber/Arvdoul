@@ -24,26 +24,15 @@ const AdminModerationQueueScreen = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  // Load real reports (comment_reports + user_reports), admin-gated.
+  // One server-side read covers every report collection (post and story
+  // reports included), so the queue cannot drift from the report routing table.
   useEffect(() => {
     const load = async () => {
       try {
-        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
+        // Cheap gate first so a non-admin never fires an admin callable.
         if (!(await fetchAdminStatus())) { setLoading(false); return; }
-
-        const [commentReports, userReports, videoReports] = await Promise.all([
-          getDocs(query(collection(firestore, 'comment_reports'), orderBy('createdAt', 'desc'), limit(100))),
-          getDocs(query(collection(firestore, 'user_reports'), orderBy('createdAt', 'desc'), limit(100))),
-          getDocs(query(collection(firestore, 'video_reports'), orderBy('createdAt', 'desc'), limit(100))),
-        ]);
-        const mapped = [
-          ...commentReports.docs.map(d => ({ id: d.id, type: 'comment', status: d.data().status || 'pending', ...d.data() })),
-          ...userReports.docs.map(d => ({ id: d.id, type: 'user', status: d.data().status || 'pending', ...d.data() })),
-          ...videoReports.docs.map(d => ({ id: d.id, type: 'video', status: d.data().status || 'pending', ...d.data() })),
-        ];
-        setReports(mapped.sort((a, b) => new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0)));
+        const res = await callFunction(FUNCTIONS.ADMIN_LIST_MODERATION_REPORTS, { limit: 100 });
+        setReports(Array.isArray(res?.reports) ? res.reports : []);
       } catch {
         toast.error('Could not load moderation queue.');
       } finally {

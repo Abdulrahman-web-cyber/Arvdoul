@@ -1,47 +1,32 @@
 // src/screens/AudioEditor/components/StudioHeader.jsx
 import React, { useState } from 'react';
 import {
-  X, Undo2, Redo2, Columns, Download, ChevronDown, Check,
-  Share2, Music, Save, Sparkles, Send
+  X, Undo2, Redo2, Columns, Download, ChevronDown, Check, Send
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { cn } from '../../../lib/utils';
 import ArvdoulLogo from '../../../components/Shared/ArvdoulLogo';
 
 export default function StudioHeader({
-  projectName = 'Sunset Beat Mix 01',
+  projectName = 'Untitled Audio Session',
   setProjectName,
   onUndo,
   onRedo,
-  canUndo = true,
+  canUndo = false,
   canRedo = false,
-  isSaved = true,
   onExport,
+  isExporting = false,
+  hasSource = false,
   isDark = true,
 }) {
   const navigate = useNavigate();
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
 
+  // Export is performed by the parent (a real MediaRecorder render). The header
+  // only reports progress; it never claims success on a timer.
   const handleExportOption = (format) => {
     setShowExportMenu(false);
-    setIsExporting(true);
-    toast.loading(`Mastering & exporting ${format}...`, { id: 'audio_export' });
-
-    setTimeout(() => {
-      setIsExporting(false);
-      toast.success(`${projectName}.${format.toLowerCase()} exported successfully!`, { id: 'audio_export' });
-
-      if (format === 'Post') {
-        navigate('/create-post', {
-          state: {
-            postType: 'audio',
-            audioTitle: projectName,
-          },
-        });
-      }
-    }, 1200);
+    onExport?.(format);
   };
 
   return (

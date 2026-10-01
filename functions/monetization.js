@@ -818,6 +818,48 @@ exports.recordAdImpression = functions.https.onCall(async (data, context) => {
 });
 
 // ----------------------------------------------------------------------
+// 8b. reportAd — a user flags a creative as misleading/offensive
+//
+//  Ads are server-written, so an ad report is stored server-side too. The
+//  document shape matches the other report queues (status/reporterId/reason)
+//  so the admin moderation queue can read it with no special casing.
+// ----------------------------------------------------------------------
+exports.reportAd = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  const { adId, reason = '', details = '' } = data || {};
+  if (!adId) throw new functions.https.HttpsError('invalid-argument', 'adId is required.');
+
+  const cleanedReason = String(reason).replace(/<[^>]*>/g, '').trim().slice(0, 300) || 'unspecified';
+  await checkRateLimit(uid, 'reportAd', 10, 60000);
+
+  const reportRef = admin.firestore().collection('ad_reports').doc(`${uid}_${adId}`);
+  if ((await reportRef.get()).exists) {
+    throw new functions.https.HttpsError('already-exists', 'You have already reported this ad.');
+  }
+
+  const reporterSnap = await admin.firestore().doc(`users/${uid}`).get().catch(() => null);
+  const reporter = reporterSnap && reporterSnap.exists ? reporterSnap.data() : {};
+  const adSnap = await admin.firestore().doc(`ads/${adId}`).get().catch(() => null);
+  const ad = adSnap && adSnap.exists ? adSnap.data() : {};
+
+  await reportRef.set({
+    adId,
+    reporterId: uid,
+    reporterName: reporter.username || reporter.displayName || 'Arvdoul user',
+    reason: cleanedReason,
+    details: String(details).replace(/<[^>]*>/g, '').trim().slice(0, 1000),
+    content: ad.title || ad.brandName || '',
+    status: 'pending',
+    priority: 'normal',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    resolvedAt: null,
+    resolvedBy: null,
+  });
+
+  return { success: true, adId };
+});
+
+// ----------------------------------------------------------------------
 // 9. getSponsoredSearchResult (returns exact shape client expects)
 // ----------------------------------------------------------------------
 exports.getSponsoredSearchResult = functions.https.onCall(async (data, context) => {
