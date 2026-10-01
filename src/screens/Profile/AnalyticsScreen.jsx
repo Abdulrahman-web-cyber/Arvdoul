@@ -109,6 +109,11 @@ export default function AnalyticsScreen() {
     { label: 'Total Posts', value: metrics.posts || 0, icon: MessageCircle, change: 0 },
   ];
 
+  const dailySeries = Array.isArray(analytics?.dailyStats)
+    ? analytics.dailyStats.filter((d) => d && d.date)
+    : [];
+  const maxEngagement = dailySeries.reduce((max, d) => Math.max(max, d.engagement || 0), 0) || 1;
+
   return (
     <div className="min-h-screen pb-20" style={backgroundStyle}>
       {/* Header */}
@@ -178,22 +183,28 @@ export default function AnalyticsScreen() {
         </div>
       </div>
 
-      {/* Engagement Chart Placeholder */}
+      {/* Engagement Over Time - real dailyStats series */}
       <div className="px-4 mt-6">
         <div className={cn(
           "p-4 rounded-arvdoul-xl",
           "bg-arvdoul-surface border border-arvdoul-border"
         )}>
           <h3 className="text-lg font-semibold text-white mb-4">Engagement Over Time</h3>
-          <div className="h-40 flex items-center justify-center text-gray-500">
-            {analytics?.chartData ? (
-              <div className="w-full h-full flex items-end gap-1">
-                {/* Chart would render here with real data */}
-              </div>
-            ) : (
-              <p>No engagement data available yet</p>
-            )}
-          </div>
+          {dailySeries.length > 0 ? (
+            <div className="h-40 flex items-end gap-1" role="img" aria-label="Engagement over the selected timeframe">
+              {dailySeries.map((point) => (
+                <div key={point.date} className="flex-1 flex flex-col items-center justify-end h-full">
+                  <div
+                    className="w-full rounded-t bg-arvdoul-gradient min-h-[2px]"
+                    style={{ height: `${Math.max(2, (point.engagement / maxEngagement) * 100)}%` }}
+                    title={`${point.date}: ${point.engagement} engagement`}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-10">No engagement data available yet</p>
+          )}
         </div>
       </div>
 
@@ -204,9 +215,9 @@ export default function AnalyticsScreen() {
           "bg-arvdoul-surface border border-arvdoul-border"
         )}>
           <h3 className="text-lg font-semibold text-white mb-4">Top Performing Content</h3>
-          {analytics?.topContent?.length > 0 ? (
+          {analytics?.topPosts?.length > 0 ? (
             <div className="space-y-3">
-              {analytics.topContent.slice(0, 5).map((post, index) => (
+              {analytics.topPosts.slice(0, 5).map((post, index) => (
                 <div key={post.id} className="flex items-center gap-3">
                   <span className="text-arvdoul-purple font-bold">{index + 1}</span>
                   <div className="flex-1">

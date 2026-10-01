@@ -1500,3 +1500,35 @@ describe('Curated sample content - removed in favour of real data', () => {
     expect(s).not.toContain('Math.floor(1000 + Math.random()');
   });
 });
+
+describe('Reels - canonical service ownership, no direct Firestore', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ReelsFeed reads the feed through videoService and never writes Firestore directly', () => {
+    const s = read('src/components/Home/ReelsFeed.jsx');
+    expect(s).not.toContain("from 'firebase/firestore'");
+    expect(s).not.toContain('collection(db');
+    expect(s).not.toContain('updateDoc(');
+    expect(s).toContain('videoService.getVideoFeed');
+    // Likes/shares are server-authoritative through the service callables.
+    expect(s).toContain('videoService.likeVideo');
+    expect(s).toContain('videoService.shareVideo');
+  });
+});
+
+describe('CreateStory - creative tools write real payload fields', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('story payload carries stickers, link, location and tagged users', () => {
+    const s = read('src/screens/CreateStory.jsx');
+    expect(s).toContain('linkUrl:');
+    expect(s).toContain('location:');
+    expect(s).toContain('taggedUsers:');
+    expect(s).toContain('buildStickers');
+    // The dead Draw tool (no compositing pipeline) must not be advertised.
+    expect(s).not.toContain("id: 'draw'");
+    // Flash drives the real camera torch instead of a cosmetic toast.
+    expect(s).toContain('applyConstraints');
+    expect(s).toContain('getCapabilities');
+  });
+});
