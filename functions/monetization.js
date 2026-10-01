@@ -188,7 +188,7 @@ const getAvailableBalance = (userData) => {
 // ENVIRONMENT & STRIPE
 // ----------------------------------------------------------------------
 const stripe = new Stripe(functions.config().stripe?.secret_key, { apiVersion: '2023-10-16' });
-const DEFAULT_GIFT_TYPES = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
+const DEFAULT_GIFT_TYPES = require('./levelConfig.cjs').GIFT_VALUES;
 
 // ----------------------------------------------------------------------
 // 1. addCoins (credit) – double‑entry: credit user, debit system coin supply

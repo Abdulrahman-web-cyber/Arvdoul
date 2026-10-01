@@ -411,10 +411,11 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
 });
 
 describe('Level gate - aligned with the real 15-level curve', () => {
-  test('no "Level 25" monetization gate (max level is 15)', () => {
+  test('no hardcoded monetization gate literal (max level is 15)', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
     expect(src).not.toContain('Level 25');
-    expect(src).toContain('MONETIZATION_MIN_LEVEL = 10');
+    // The gate must come from the shared config, not a literal.
+    expect(src).toContain('MONETIZATION_MIN_LEVEL = LEVEL_GATES.withdrawals');
   });
 });
 
@@ -1000,7 +1001,7 @@ describe('Auth - signup never grants fabricated coins/levels', () => {
 describe('Monetization - canonical level curve (no duplicated drift)', () => {
   test('monetizationService reads LEVELS from the shared levelConfig', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
-    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS } from '../shared/levelConfig.cjs';");
+    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG } from '../shared/levelConfig.cjs';");
     expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
     expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
   });

@@ -133,6 +133,11 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
   `users/{uid}` create to exactly those values, so a client cannot mint coins,
   XP, a level, verification or a role at signup. `sharedConfigSync.test.js`
   guards both the sync and the rules parity.
+- `GIFT_CATALOG` / `GIFT_VALUES` own the virtual-gift types and prices. Every
+  picker (`src/data/videoData.js` `VIRTUAL_GIFTS`, `GiftScreen`, `PostOptionsDrawer`,
+  `liveService.GIFT_TYPES`, `monetizationService.GIFTS`) derives from them, and
+  the server prices gifts from `GIFT_VALUES` (`functions/monetization.js`
+  `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug.
 - Rank bands, perks and royal eligibility follow the Profile System blueprint
   (sections 21-22 and 31-32); `getRoyalEligibility` requires every dimension, so
   level alone can never grant a royal title.

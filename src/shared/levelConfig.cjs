@@ -860,6 +860,29 @@ const COINS_PER_DOLLAR = 200;
 const MIN_WITHDRAWAL_COINS = 5000;
 
 /**
+ * Virtual gift catalog — SINGLE SOURCE OF TRUTH.
+ *
+ * The server (functions/monetization.js sendGift) prices a gift from
+ * DEFAULT_GIFT_TYPES; every client picker must show the same types and amounts
+ * or it will render a button whose cost (or even existence) the server rejects.
+ * `type` is the wire id, `id` the picker key, `coins` the price.
+ */
+const GIFT_CATALOG = Object.freeze([
+  Object.freeze({ type: 'rose',    id: 'rose',    name: 'Rose',    emoji: '🌹', coins: 5 }),
+  Object.freeze({ type: 'heart',   id: 'heart',   name: 'Heart',   emoji: '💖', coins: 10 }),
+  Object.freeze({ type: 'star',    id: 'star',    name: 'Star',    emoji: '⭐', coins: 25 }),
+  Object.freeze({ type: 'crown',   id: 'crown',   name: 'Crown',   emoji: '👑', coins: 50 }),
+  Object.freeze({ type: 'diamond', id: 'diamond', name: 'Diamond', emoji: '💎', coins: 100 }),
+  Object.freeze({ type: 'rocket',  id: 'rocket',  name: 'Rocket',  emoji: '🚀', coins: 500 }),
+  Object.freeze({ type: 'galaxy',  id: 'galaxy',  name: 'Galaxy',  emoji: '🌌', coins: 1000 }),
+]);
+
+/** Gift prices keyed by type, for the server's DEFAULT_GIFT_TYPES shape. */
+const GIFT_VALUES = Object.freeze(
+  GIFT_CATALOG.reduce((acc, gift) => { acc[gift.type] = gift.coins; return acc; }, {})
+);
+
+/**
  * Initial economy/status values for a brand-new account — SINGLE SOURCE OF TRUTH.
  *
  * The client writes these once when it creates users/{uid}; firestore.rules pins
@@ -909,6 +932,8 @@ module.exports = {
   COINS_PER_DOLLAR,
   MIN_WITHDRAWAL_COINS,
   NEW_USER_DEFAULTS,
+  GIFT_CATALOG,
+  GIFT_VALUES,
   getRankTitle,
   getPerksForLevel,
   getLevelInfo,

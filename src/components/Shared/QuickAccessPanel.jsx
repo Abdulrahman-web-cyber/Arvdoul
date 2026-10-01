@@ -142,8 +142,9 @@ import { RiCopperCoinLine } from "react-icons/ri";
 import { SiCashapp } from "react-icons/si";
 import { getLevelInfo, getRankTitle, getLevelBandColor, LEVEL_GATES } from "../../services/levelSystemService";
 
-// Monetization (withdrawals) unlocks at level 10 — matches levelSystemService LEVEL_PERKS.
-const MONETIZATION_MIN_LEVEL = 10;
+// Monetization (withdrawals) gate — read from the shared level config so the
+// panel can never advertise a different level than the server enforces.
+const MONETIZATION_MIN_LEVEL = LEVEL_GATES.withdrawals;
 
 // ==================== CONSTANTS & CONFIGURATION ====================
 const ANIMATION_CONFIG = {

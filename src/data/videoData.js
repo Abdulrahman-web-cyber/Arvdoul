@@ -10,9 +10,11 @@
  * divergent local id would present a button that can never succeed.
  */
 
-export const VIRTUAL_GIFTS = [
-  { type: "rose", name: "Rose", emoji: "🌹", coins: 5, animation: "heart_burst" },
-  { type: "crown", name: "Crown", emoji: "👑", coins: 50, animation: "crown_glow" },
-  { type: "diamond", name: "Diamond", emoji: "💎", coins: 100, animation: "diamond_sparkle" },
-  { type: "rocket", name: "Rocket", emoji: "🚀", coins: 500, animation: "rocket_launch" },
-];
+import { GIFT_CATALOG } from "../shared/levelConfig.cjs";
+
+const GIFT_ANIMATIONS = ["heart_burst", "crown_glow", "diamond_sparkle", "rocket_launch", "galaxy_spin"];
+
+export const VIRTUAL_GIFTS = GIFT_CATALOG.map((gift, i) => ({
+  ...gift,
+  animation: GIFT_ANIMATIONS[i % GIFT_ANIMATIONS.length],
+}));

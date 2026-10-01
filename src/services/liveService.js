@@ -24,6 +24,7 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
+import { GIFT_CATALOG, GIFT_VALUES } from '../shared/levelConfig.cjs';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase.js';
 import { secureRandom } from '../lib/utils.js';
 
@@ -40,24 +41,10 @@ const LIVE_CONFIG = {
   MAX_DURATION_HOURS: 4,
   COOLDOWN_MINUTES: 5,
   MAX_COMMENTS_PER_MINUTE: 60,
-  COIN_VALUES: {
-    rose: 5,
-    heart: 10,
-    star: 25,
-    crown: 50,
-    diamond: 100,
-    rocket: 500,
-    galaxy: 1000,
-  },
-  GIFT_TYPES: [
-    { id: 'rose', name: 'Rose', emoji: '🌹', coinValue: 5 },
-    { id: 'heart', name: 'Heart', emoji: '💖', coinValue: 10 },
-    { id: 'star', name: 'Star', emoji: '⭐', coinValue: 25 },
-    { id: 'crown', name: 'Crown', emoji: '👑', coinValue: 50 },
-    { id: 'diamond', name: 'Diamond', emoji: '💎', coinValue: 100 },
-    { id: 'rocket', name: 'Rocket', emoji: '🚀', coinValue: 500 },
-    { id: 'galaxy', name: 'Galaxy', emoji: '🌌', coinValue: 1000 },
-  ],
+  COIN_VALUES: GIFT_VALUES,
+  GIFT_TYPES: GIFT_CATALOG.map((g) => ({
+    id: g.id, name: g.name, emoji: g.emoji, coinValue: g.coins,
+  })),
   TIPS: {
     MIN: 1,
     MAX: 1000,

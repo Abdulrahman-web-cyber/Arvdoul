@@ -133,4 +133,28 @@ describe('shared config single source of truth', () => {
     expect(src).not.toContain('DEFAULT_COINS: 100');
     expect(src).not.toContain('DEFAULT_LEVEL: 1');
   });
+
+  test('every gift picker derives from the shared GIFT_CATALOG', () => {
+    // Consumers either read GIFT_CATALOG directly or the VIRTUAL_GIFTS view
+    // derived from it; either way no picker declares its own prices.
+    const direct = [
+      'src/data/videoData.js',
+      'src/services/liveService.js',
+      'src/services/monetizationService.js',
+    ];
+    for (const rel of direct) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).toContain('GIFT_CATALOG');
+    }
+    const viaView = ['src/screens/GiftScreen.jsx', 'src/screens/PostOptionsDrawer.jsx'];
+    for (const rel of viaView) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).toContain('VIRTUAL_GIFTS');
+      expect(src).not.toMatch(/coins: (5|50|100|500)\b/);
+    }
+    // The server prices gifts from the same catalog.
+    const server = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+    expect(server).toContain("require('./levelConfig.cjs').GIFT_VALUES");
+    expect(server).not.toContain("DEFAULT_GIFT_TYPES = { rose:");
+  });
 });

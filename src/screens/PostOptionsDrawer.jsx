@@ -22,6 +22,7 @@ import {
   Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck
 } from 'lucide-react';
 import { triggerHaptic } from '../utils/haptics';
+import { VIRTUAL_GIFTS } from '../data/videoData';
 import firestoreService from '../services/firestoreService.js';
 import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
@@ -1315,12 +1316,9 @@ const TipModal = ({ onSelectAmount, onCancel, loading, coinBalance, theme }) => 
 };
 
 const GiftModal = ({ onSelectGift, onCancel, loading, coinBalance, theme }) => {
-  const gifts = [
-    { name: 'Rose', value: 'rose', coins: 5, icon: '🌹' },
-    { name: 'Crown', value: 'crown', coins: 50, icon: '👑' },
-    { name: 'Diamond', value: 'diamond', coins: 100, icon: '💎' },
-    { name: 'Rocket', value: 'rocket', coins: 500, icon: '🚀' },
-  ];
+  const gifts = VIRTUAL_GIFTS.map((g) => ({
+    name: g.name, value: g.type, coins: g.coins, icon: g.emoji,
+  }));
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={onCancel} />

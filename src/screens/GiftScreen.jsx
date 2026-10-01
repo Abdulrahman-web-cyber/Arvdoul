@@ -12,14 +12,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Coins, Loader2, Send } from 'lucide-react';
 
-const GIFTS = [
-  { id: 'rose', emoji: '🌹', name: 'Rose', coins: 5 },
-  { id: 'heart', emoji: '💖', name: 'Heart', coins: 10 },
-  { id: 'star', emoji: '⭐', name: 'Star', coins: 25 },
-  { id: 'crown', emoji: '👑', name: 'Crown', coins: 50 },
-  { id: 'diamond', emoji: '💎', name: 'Diamond', coins: 100 },
-  { id: 'rocket', emoji: '🚀', name: 'Rocket', coins: 500 },
-];
+import { VIRTUAL_GIFTS as GIFTS } from '../data/videoData';
 
 export default function GiftScreen() {
   const { userId } = useParams();

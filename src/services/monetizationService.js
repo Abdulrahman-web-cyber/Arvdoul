@@ -32,7 +32,7 @@ import { svcLogger } from './ServiceKit.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
-import { LEVELS as CANONICAL_LEVELS } from '../shared/levelConfig.cjs';
+import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG } from '../shared/levelConfig.cjs';
 
 const log = svcLogger('monetizationService');
 
@@ -62,13 +62,8 @@ function generateIdempotencyKey() {
 // ---------- DEFAULT CONFIG (all amounts in COINS or CENTS) ----------
 const DEFAULT_CONFIG = {
   LEVELS: CANONICAL_LEVELS,
-  WITHDRAWAL_MIN_LEVEL: 10,
-  GIFTS: [
-    { type: 'rose', value: 5 },
-    { type: 'crown', value: 50 },
-    { type: 'diamond', value: 100 },
-    { type: 'rocket', value: 500 },
-  ],
+  WITHDRAWAL_MIN_LEVEL: LEVEL_GATES.withdrawals,
+  GIFTS: GIFT_CATALOG.map((g) => ({ type: g.type, value: g.coins })),
   BOOST_COST_PER_DAY: 10,
   AD_PLACEMENTS: ['home', 'videos', 'stories', 'messages', 'notifications', 'profile', 'feed', 'conversation_list', 'search'],
   MAX_ADS_PER_USER_PER_DAY: 20,
