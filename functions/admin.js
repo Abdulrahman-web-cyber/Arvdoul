@@ -166,19 +166,27 @@ exports.listUsers = functions.https.onCall(async (data, context) => {
 // ----------------------------------------------------------------------
 //  resolveUserReport — moderation queue resolution (admin only)
 // ----------------------------------------------------------------------
+const REPORT_COLLECTIONS = {
+  user: 'user_reports',
+  comment: 'comment_reports',
+  video: 'video_reports',
+};
+
 exports.resolveUserReport = functions.https.onCall(async (data, context) => {
   const actorUid = await assertAdmin(context);
   await checkRateLimit(actorUid, 'resolveUserReport', 60, 60000);
 
-  const { reportId, action, reason = '' } = data || {};
-  if (!reportId || !['resolved', 'dismissed', 'escalated'].includes(action)) {
+  const { reportId, action, reportType = 'user', reason = '' } = data || {};
+  const collectionName = REPORT_COLLECTIONS[reportType];
+  const MODERATION_ACTIONS = ['resolved', 'dismissed', 'escalated', 'warned', 'removed'];
+  if (!reportId || !collectionName || !MODERATION_ACTIONS.includes(action)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
-      'reportId and action (resolved|dismissed|escalated) are required.'
+      `reportId, a known reportType and action (${MODERATION_ACTIONS.join('|')}) are required.`
     );
   }
 
-  const reportRef = db.doc(`user_reports/${reportId}`);
+  const reportRef = db.doc(`${collectionName}/${reportId}`);
   const snap = await reportRef.get();
   if (!snap.exists) {
     throw new functions.https.HttpsError('not-found', 'Report not found.');
@@ -190,9 +198,9 @@ exports.resolveUserReport = functions.https.onCall(async (data, context) => {
     resolvedBy: actorUid,
     resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await writeAudit(actorUid, 'resolve_report', reportId, { action });
+  await writeAudit(actorUid, 'resolve_report', reportId, { action, reportType });
 
-  return { success: true, reportId, status: action };
+  return { success: true, reportId, status: action, reportType };
 });
 
 // ----------------------------------------------------------------------
@@ -411,9 +419,101 @@ exports.adminDecideWithdrawal = functions.https.onCall(async (data, context) => 
 });
 
 // ----------------------------------------------------------------------
+//  Community governance (admin only)
+//
+//  Hub verification and policy strikes are server-authoritative: the client
+//  admin console reads the directory but never writes governance fields.
+// ----------------------------------------------------------------------
+
+exports.adminListCommunities = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminListCommunities', 30, 60000);
+
+  const { limit: rawLimit = 50 } = data || {};
+  const pageSize = Math.min(Math.max(Number(rawLimit) || 50, 1), 100);
+
+  const snap = await db
+    .collection('communities')
+    .orderBy('stats.memberCount', 'desc')
+    .limit(pageSize)
+    .get();
+
+  const communities = snap.docs
+    .filter((d) => d.data().isDeleted !== true)
+    .map((d) => ({ id: d.id, ...d.data() }));
+
+  return { success: true, communities };
+});
+
+exports.adminSetCommunityVerified = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminSetCommunityVerified', 60, 60000);
+
+  const { communityId, verified } = data || {};
+  if (!communityId || typeof verified !== 'boolean') {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'communityId and verified (boolean) are required.'
+    );
+  }
+
+  const ref = db.doc(`communities/${communityId}`);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Community not found.');
+  }
+
+  await ref.update({
+    isVerified: verified,
+    verifiedBy: verified ? actorUid : null,
+    verifiedAt: verified ? admin.firestore.FieldValue.serverTimestamp() : null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await writeAudit(actorUid, verified ? 'community_verified' : 'community_unverified', communityId, {
+    communityName: snap.data().name || null,
+  });
+
+  return { success: true, communityId, isVerified: verified };
+});
+
+exports.adminIssueCommunityStrike = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminIssueCommunityStrike', 30, 60000);
+
+  const { communityId, reason = '' } = data || {};
+  const trimmedReason = String(reason || '').trim();
+  if (!communityId || !trimmedReason) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'communityId and reason are required.'
+    );
+  }
+
+  const ref = db.doc(`communities/${communityId}`);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Community not found.');
+  }
+
+  await ref.update({
+    strikesCount: admin.firestore.FieldValue.increment(1),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await db.collection('communities').doc(communityId).collection('strikes').add({
+    reason: trimmedReason.slice(0, 500),
+    issuedBy: actorUid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await writeAudit(actorUid, 'community_strike_issued', communityId, {
+    communityName: snap.data().name || null,
+    reason: trimmedReason.slice(0, 500),
+  });
+
+  return { success: true, communityId, reason: trimmedReason };
+});
+
+// ----------------------------------------------------------------------
 //  getAdminStatus — lets a signed-in client learn its *own* admin status
-//  without read access to the whole admins collection.
-// ---------------------------------------------------------------------- — lets a signed-in client learn its *own* admin status
 //  without read access to the whole admins collection.
 // ----------------------------------------------------------------------
 exports.getAdminStatus = functions.https.onCall(async (data, context) => {

@@ -10,140 +10,120 @@ import { toast } from 'sonner';
 import {
   ArrowLeft,
   Activity,
-  CheckCircle2,
-  AlertTriangle,
   RefreshCw,
-  Server,
   Database,
   Shield,
   Wifi,
   HardDrive,
   Cpu,
-  Clock,
   Radio,
-  Play,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { rumService } from '../../services/rumService.js';
 
 const AdminSystemHealthScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [lastCheckTime, setLastCheckTime] = useState(new Date().toLocaleTimeString());
 
-  // Services list
+  // Component probes. Each entry is measured for real (Firestore round-trip,
+  // client heap, RUM vitals); a probe that cannot run reports `unknown` rather
+  // than a fabricated latency.
   const [services, setServices] = useState([
-    {
-      id: 'db',
-      name: 'Firestore Database',
-      icon: Database,
-      status: 'operational',
-      latency: 42,
-      uptime: '99.98%',
-      details: 'Read/write throughput optimal. Indexing complete.',
-    },
-    {
-      id: 'auth',
-      name: 'Firebase Identity & Auth',
-      icon: Shield,
-      status: 'operational',
-      latency: 28,
-      uptime: '100%',
-      details: 'Google OAuth & passkey authentication healthy.',
-    },
-    {
-      id: 'storage',
-      name: 'Cloud Media Storage',
-      icon: HardDrive,
-      status: 'operational',
-      latency: 64,
-      uptime: '99.95%',
-      details: 'Media upload and CDN distribution active.',
-    },
-    {
-      id: 'streaming',
-      name: 'Live Streaming Engine',
-      icon: Radio,
-      status: 'operational',
-      latency: 85,
-      uptime: '99.90%',
-      details: 'WebRTC ingest relays & chat multiplexer ready.',
-    },
-    {
-      id: 'editor',
-      name: 'Video/Audio Rendering Engine',
-      icon: Cpu,
-      status: 'operational',
-      latency: 18,
-      uptime: '100%',
-      details: 'Client-side WebCodecs & Web Audio pipeline active.',
-    },
-    {
-      id: 'cdn',
-      name: 'Edge Cache & Reverse Proxy',
-      icon: Wifi,
-      status: 'operational',
-      latency: 14,
-      uptime: '99.99%',
-      details: 'Static bundle cache hit ratio: 94.2%.',
-    },
+    { id: 'db', name: 'Firestore Database', icon: Database, status: 'unknown', latency: null, details: 'Not probed yet — run a health check.' },
+    { id: 'auth', name: 'Firebase Identity & Auth', icon: Shield, status: 'unknown', latency: null, details: 'Sign-in is validated by the current session.' },
+    { id: 'storage', name: 'Cloud Media Storage', icon: HardDrive, status: 'unknown', latency: null, details: 'Upload path is exercised when a file is sent.' },
+    { id: 'streaming', name: 'Live Streaming Engine', icon: Radio, status: 'unknown', latency: null, details: 'WebRTC ingest reports its own connection state.' },
+    { id: 'editor', name: 'Video/Audio Rendering Engine', icon: Cpu, status: 'unknown', latency: null, details: 'Client-side WebCodecs pipeline.' },
+    { id: 'cdn', name: 'Edge Cache & Reverse Proxy', icon: Wifi, status: 'unknown', latency: null, details: 'Static bundle served from the CDN edge.' },
   ]);
 
-  // Telemetry metrics
+  // Telemetry — real browser measurements only. null renders as an em dash.
   const [telemetry, setTelemetry] = useState({
-    avgLatency: 38,
-    errorRate: '0.012%',
-    activeConnections: 1420,
-    memoryHeapMb: 48,
-    fcpMs: 820,
-    lcpMs: 1420,
+    avgLatency: null,
+    activeConnections: null,
+    memoryHeapMb: null,
+    fcpMs: null,
+    lcpMs: null,
+    longTasks: null,
+    errorRate: null,
   });
 
-  // Diagnostic Runner
+  const networkType = (() => {
+    try {
+      return navigator?.connection?.effectiveType || 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  })();
+
+  // Pull whatever the browser already recorded for this session.
+  const readSessionTelemetry = useCallback(() => {
+    let fcp = null;
+    let lcp = null;
+    try {
+      const paints = performance.getEntriesByType('paint') || [];
+      const fcpEntry = paints.find(p => p.name === 'first-contentful-paint');
+      if (fcpEntry) fcp = Math.round(fcpEntry.startTime);
+      const vitals = rumService.getWebVitals();
+      lcp = vitals?.lcp != null ? Math.round(vitals.lcp) : null;
+      setTelemetry(prev => ({
+        ...prev,
+        fcpMs: fcp,
+        lcpMs: lcp,
+        memoryHeapMb: typeof performance.memory?.usedJSHeapSize === 'number'
+          ? Math.round(performance.memory.usedJSHeapSize / (1024 * 1024))
+          : null,
+        longTasks: vitals?.longTasks ?? null,
+      }));
+    } catch {
+      // Browser APIs unavailable — leave values as unknown.
+    }
+  }, []);
+
+  useEffect(() => {
+    readSessionTelemetry();
+  }, [readSessionTelemetry]);
+
+  // Diagnostic Runner — every number below is measured, never estimated.
   const runLiveDiagnostics = async () => {
     setRunningDiagnostics(true);
-    toast.info('Initiating live platform health probe...');
+    toast.info('Running live platform health probe…');
 
-    const start = performance.now();
     try {
-      // 1. Probe Firestore
       const { doc, getDocFromServer } = await import('firebase/firestore');
       const { getFirestoreInstance } = await import('../../firebase/firebase.js');
       const firestore = await getFirestoreInstance();
 
-      let dbLatency = 35;
+      let dbLatency = null;
+      let dbStatus = 'degraded';
+      const probeStart = performance.now();
       try {
-        const probeStart = performance.now();
         await getDocFromServer(doc(firestore, 'system_health', 'probe'));
         dbLatency = Math.round(performance.now() - probeStart);
-      } catch (e) {
-        // Fallback estimated latency
-        dbLatency = Math.round(Math.random() * 20 + 25);
+        dbStatus = 'operational';
+      } catch {
+        // A missing probe document still proves the round-trip succeeded; only
+        // a network/permission failure lands here and stays 'degraded'.
+        dbStatus = 'degraded';
       }
 
-      // Memory estimation if supported
-      let memHeap = 45;
-      if (typeof window !== 'undefined' && window.performance && window.performance.memory) {
-        memHeap = Math.round(window.performance.memory.usedJSHeapSize / (1024 * 1024));
-      }
+      setServices(prev => prev.map(s => (
+        s.id === 'db'
+          ? { ...s, latency: dbLatency, status: dbStatus, details: dbStatus === 'operational' ? 'Round-trip to Firestore measured just now.' : 'Last probe failed; retry to re-measure.' }
+          : s
+      )));
 
-      setServices(prev =>
-        prev.map(s => {
-          if (s.id === 'db') return { ...s, latency: dbLatency, status: 'operational' };
-          return { ...s, latency: Math.round(s.latency * (0.9 + Math.random() * 0.2)) };
-        })
-      );
+      if (dbLatency !== null) setTelemetry(prev => ({ ...prev, avgLatency: dbLatency }));
 
-      setTelemetry(prev => ({
-        ...prev,
-        avgLatency: Math.round((dbLatency + 28 + 64 + 14) / 4),
-        memoryHeapMb: memHeap,
-      }));
-
+      readSessionTelemetry();
       setLastCheckTime(new Date().toLocaleTimeString());
-      toast.success('System diagnostics complete: All core services operational.');
-    } catch (err) {
-      toast.error('Diagnostic probe completed with warnings.');
+      if (dbStatus === 'operational') {
+        toast.success('Firestore probe succeeded.');
+      } else {
+        toast.warning('Firestore probe did not complete.');
+      }
+    } catch {
+      toast.error('Diagnostic probe could not run.');
     } finally {
       setRunningDiagnostics(false);
     }
@@ -166,9 +146,9 @@ const AdminSystemHealthScreen = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight">System Health & Telemetry</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  All Systems Operational
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <Activity className="w-3.5 h-3.5" />
+                  {services.some(sv => sv.status === 'operational') ? 'Probe Complete' : 'Awaiting Probe'}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
@@ -190,35 +170,43 @@ const AdminSystemHealthScreen = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* Telemetry Metrics Row */}
+        {/* Telemetry Metrics Row — measured values only, em dash when unknown */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">API Latency</span>
-            <div className="text-xl font-bold mt-1 text-emerald-600 dark:text-emerald-400">
-              {telemetry.avgLatency} ms
+            <span className="text-xs text-gray-500">Firestore Round-trip</span>
+            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+              {telemetry.avgLatency === null ? '—' : `${telemetry.avgLatency} ms`}
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Error Rate</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">{telemetry.errorRate}</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500">Active Streams/WebRTC</span>
+            <span className="text-xs text-gray-500">Long Tasks</span>
             <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
-              {telemetry.activeConnections.toLocaleString()}
+              {telemetry.longTasks === null ? '—' : telemetry.longTasks}
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-500">Client Memory</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">{telemetry.memoryHeapMb} MB</div>
+            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+              {telemetry.memoryHeapMb === null ? '—' : `${telemetry.memoryHeapMb} MB`}
+            </div>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-500">First Contentful Paint</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">{telemetry.fcpMs} ms</div>
+            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+              {telemetry.fcpMs === null ? '—' : `${telemetry.fcpMs} ms`}
+            </div>
           </div>
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-500">Largest Contentful Paint</span>
-            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">1.42 s</div>
+            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+              {telemetry.lcpMs === null ? '—' : `${telemetry.lcpMs} ms`}
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
+            <span className="text-xs text-gray-500">Network</span>
+            <div className="text-xl font-bold mt-1 text-gray-900 dark:text-white">
+              {networkType}
+            </div>
           </div>
         </div>
 
@@ -245,8 +233,16 @@ const AdminSystemHealthScreen = () => {
                         </div>
                         <div>
                           <h3 className="font-bold text-sm text-gray-900 dark:text-white">{svc.name}</h3>
-                          <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                          <span className={`text-xs font-semibold flex items-center gap-1 ${
+                            svc.status === 'operational'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : svc.status === 'degraded'
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-gray-500 dark:text-gray-400'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                              svc.status === 'operational' ? 'bg-emerald-500' : svc.status === 'degraded' ? 'bg-amber-500' : 'bg-gray-400'
+                            }`} />
                             {svc.status}
                           </span>
                         </div>
@@ -256,8 +252,8 @@ const AdminSystemHealthScreen = () => {
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-gray-200/60 dark:border-gray-700/60 flex items-center justify-between text-xs text-gray-500">
-                    <span>Latency: <b className="text-gray-900 dark:text-white">{svc.latency}ms</b></span>
-                    <span>SLO Uptime: <b className="text-gray-900 dark:text-white">{svc.uptime}</b></span>
+                    <span>Latency: <b className="text-gray-900 dark:text-white">{svc.latency === null ? '—' : `${svc.latency}ms`}</b></span>
+                    <span>Status: <b className="text-gray-900 dark:text-white capitalize">{svc.status}</b></span>
                   </div>
                 </div>
               );

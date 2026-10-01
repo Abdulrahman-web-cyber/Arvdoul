@@ -24,6 +24,18 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
+// Firestore timestamps arrive as { seconds, nanoseconds } objects; ISO strings
+// come from client-side writes. Render whatever is actually present.
+const formatTimestamp = value => {
+  if (!value) return 'unknown time';
+  const date = typeof value?.toDate === 'function'
+    ? value.toDate()
+    : value?.seconds != null
+    ? new Date(value.seconds * 1000)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? 'unknown time' : date.toLocaleString();
+};
+
 const AdminAuditLogsScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -33,7 +45,9 @@ const AdminAuditLogsScreen = () => {
   const [selectedAction, setSelectedAction] = useState('all');
   const [expandedLogId, setExpandedLogId] = useState(null);
 
-  // Fetch audit logs from Firestore
+  // The server writes every administrative intervention through writeAudit()
+  // in functions/admin.js, which appends to moderation_logs (admin-readable).
+  // That collection — not a never-written client buffer — is the audit trail.
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
@@ -42,15 +56,11 @@ const AdminAuditLogsScreen = () => {
       const firestore = await getFirestoreInstance();
 
       const snap = await getDocs(
-        query(collection(firestore, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100))
+        query(collection(firestore, 'moderation_logs'), orderBy('createdAt', 'desc'), limit(100))
       );
-
-      if (!snap.empty) {
-        setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } else {
-        setLogs([]);
-      }
-    } catch (e) {
+      setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch {
+      toast.error('Could not load the audit trail.');
       setLogs([]);
     } finally {
       setLoading(false);
@@ -74,14 +84,18 @@ const AdminAuditLogsScreen = () => {
   };
 
   const filteredLogs = logs.filter(l => {
-    if (selectedAction !== 'all' && l.category?.toLowerCase() !== selectedAction.toLowerCase()) return false;
+    if (selectedAction !== 'all') {
+      const action = String(l.action || '').toLowerCase();
+      const target = String(l.targetType || '').toLowerCase();
+      if (!action.includes(selectedAction) && !target.includes(selectedAction)) return false;
+    }
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      l.action?.toLowerCase().includes(q) ||
-      l.actor?.toLowerCase().includes(q) ||
-      l.actorEmail?.toLowerCase().includes(q) ||
-      l.id?.toLowerCase().includes(q)
+      String(l.action || '').toLowerCase().includes(q) ||
+      String(l.actorId || l.actorUid || '').toLowerCase().includes(q) ||
+      String(l.targetId || '').toLowerCase().includes(q) ||
+      String(l.id || '').toLowerCase().includes(q)
     );
   });
 
@@ -149,7 +163,7 @@ const AdminAuditLogsScreen = () => {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
-            {['all', 'security', 'economy', 'moderation', 'system', 'governance'].map(cat => (
+            {['all', 'withdrawal', 'community', 'verification', 'report', 'user'].map(cat => (
               <button
                 key={cat}
                 onClick={() => setSelectedAction(cat)}
@@ -168,6 +182,13 @@ const AdminAuditLogsScreen = () => {
         {/* Logs Table / List */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {!loading && filteredLogs.length === 0 && (
+              <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                {logs.length === 0
+                  ? 'No administrative actions have been recorded yet.'
+                  : 'No log entries match this filter.'}
+              </div>
+            )}
             {filteredLogs.map(log => {
               const isExpanded = expandedLogId === log.id;
               return (
@@ -182,32 +203,26 @@ const AdminAuditLogsScreen = () => {
                       </button>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-gray-900 dark:text-white font-mono">{log.action}</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              log.severity === 'critical'
-                                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-                                : log.severity === 'warning'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                            }`}
-                          >
-                            {log.severity || 'info'}
-                          </span>
+                          <span className="font-bold text-sm text-gray-900 dark:text-white font-mono">{log.action || 'unknown_action'}</span>
+                          {log.targetType && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                              {log.targetType}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5">
                           <User className="w-3 h-3 text-gray-400" />
-                          <span>{log.actorEmail || log.actor}</span>
+                          <span>{log.actorId || log.actorUid || 'unknown actor'}</span>
                           <span>•</span>
                           <Clock className="w-3 h-3 text-gray-400" />
-                          <span>{new Date(log.timestamp).toLocaleString()}</span>
+                          <span>{formatTimestamp(log.createdAt)}</span>
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                        {log.category || 'General'}
+                      <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-mono">
+                        {log.targetId || log.id}
                       </span>
                     </div>
                   </div>
@@ -224,7 +239,7 @@ const AdminAuditLogsScreen = () => {
                         <span>Forensic Payload Data</span>
                       </div>
                       <pre className="p-3 bg-gray-900 text-gray-100 rounded-xl text-xs font-mono overflow-x-auto">
-                        {JSON.stringify(log.metadata || {}, null, 2)}
+                        {JSON.stringify(log.details || {}, null, 2)}
                       </pre>
                     </motion.div>
                   )}

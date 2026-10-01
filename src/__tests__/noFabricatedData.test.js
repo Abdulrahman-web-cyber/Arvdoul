@@ -1188,3 +1188,115 @@ describe('Admin economy - real data, server-side settlement', () => {
     expect(admin).toContain('exports.adminDecideWithdrawal =');
   });
 });
+
+describe('Admin system health - measured telemetry only', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminSystemHealthScreen.jsx'), 'utf8');
+
+  test('no hardcoded uptime or latency figures', () => {
+    const s = src();
+    for (const seed of ['99.98%', '99.95%', '99.90%', '99.99%', 'latency: 42', 'latency: 28', 'latency: 85']) {
+      expect(s).not.toContain(seed);
+    }
+    expect(s).not.toContain('All Systems Operational');
+  });
+
+  test('no random latency estimates', () => {
+    const s = src();
+    expect(s).not.toMatch(/Math\.random\(\)\s*\*\s*20/);
+    expect(s).not.toMatch(/s\.latency \* \(0\.9/);
+  });
+
+  test('uses the RUM service for real web vitals', () => {
+    expect(src()).toContain('rumService.getWebVitals()');
+  });
+});
+
+describe('Admin community governance - live directory, server-authoritative', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminCommunityManagementScreen.jsx'), 'utf8');
+
+  test('renders no seeded community directory', () => {
+    const s = src();
+    for (const seed of ['comm-101', 'comm-102', 'comm-103', 'comm-104', 'usr_crypto_bot', 'quick-arbitrage-alerts']) {
+      expect(s).not.toContain(seed);
+    }
+  });
+
+  test('reads and mutates through the admin callables, never direct writes', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.ADMIN_LIST_COMMUNITIES');
+    expect(s).toContain('FUNCTIONS.ADMIN_SET_COMMUNITY_VERIFIED');
+    expect(s).toContain('FUNCTIONS.ADMIN_ISSUE_COMMUNITY_STRIKE');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'communities'/);
+  });
+
+  test('community governance callables are exported server-side', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminListCommunities =');
+    expect(admin).toContain('exports.adminSetCommunityVerified =');
+    expect(admin).toContain('exports.adminIssueCommunityStrike =');
+  });
+});
+
+describe('Admin creator verification - live queue, server-authoritative', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminVerificationScreen.jsx'), 'utf8');
+
+  test('renders no seeded applicant queue', () => {
+    const s = src();
+    for (const seed of ['verif-201', 'verif-202', 'verif-203', 'verif-204', 'usr_sarah_craft', '@sarahcraft']) {
+      expect(s).not.toContain(seed);
+    }
+  });
+
+  test('decisions go through applyVerificationDecision, not direct user writes', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.APPLY_VERIFICATION_DECISION');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'users'/);
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'creator_verifications'/);
+  });
+
+  test('requirements come from the shared profile contract', () => {
+    expect(src()).toContain('CREATOR_VERIFICATION_REQUIREMENTS');
+  });
+});
+
+describe('Admin support tickets - persisted replies only', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminSupportTicketsScreen.jsx'), 'utf8');
+
+  test('agent replies are persisted before being shown as resolved', () => {
+    const s = src();
+    expect(s).toMatch(/updateDoc\(\s*doc\([^)]*'support_tickets'/);
+    expect(s).toContain('toast.error');
+  });
+});
+
+describe('Admin audit logs - real server-written trail', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminAuditLogsScreen.jsx'), 'utf8');
+
+  test('reads the collection the server actually writes to', () => {
+    const s = src();
+    expect(s).toContain("collection(firestore, 'moderation_logs')");
+    expect(s).not.toContain("collection(firestore, 'audit_logs')");
+    const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
+    expect(admin).toContain("db.collection('moderation_logs').add(");
+  });
+});
+
+describe('Admin screens - server-authoritative admin gate', () => {
+  test('admin screens never read the unreadable admins collection', () => {
+    for (const file of [
+      'AdminDashboardScreen.jsx',
+      'AdminContentManagementScreen.jsx',
+      'AdminModerationQueueScreen.jsx',
+    ]) {
+      const s = fs.readFileSync(path.join(root, 'src/screens/Admin', file), 'utf8');
+      expect(s).not.toMatch(/getDoc\(\s*doc\(firestore, 'admins'/);
+      expect(s).toContain('fetchAdminStatus');
+    }
+  });
+
+  test('moderation decisions go through the resolve callable', () => {
+    const s = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminModerationQueueScreen.jsx'), 'utf8');
+    expect(s).toContain('FUNCTIONS.RESOLVE_USER_REPORT');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\(firestore, collectionName/);
+  });
+});

@@ -20,8 +20,12 @@ export const FUNCTIONS = {
   CLAIM_TITLE: 'claimTitle',
   SET_ACTIVE_TITLE: 'setActiveTitle',
   APPLY_FOR_CREATOR: 'applyForCreator',
+  APPLY_VERIFICATION_DECISION: 'applyVerificationDecision',
   GET_ECONOMY_SUMMARY: 'getEconomySummary',
   ADMIN_DECIDE_WITHDRAWAL: 'adminDecideWithdrawal',
+  ADMIN_LIST_COMMUNITIES: 'adminListCommunities',
+  ADMIN_SET_COMMUNITY_VERIFIED: 'adminSetCommunityVerified',
+  ADMIN_ISSUE_COMMUNITY_STRIKE: 'adminIssueCommunityStrike',
 };
 
 /**

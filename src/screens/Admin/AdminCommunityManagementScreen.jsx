@@ -3,7 +3,7 @@
 // ✅ Search, filter by privacy tier, and member oversight
 // ✅ Server-authoritative audit logging on governance interventions
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -21,86 +21,28 @@ import {
   Flag,
   Trash2,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { auditLogger } from '../../utils/AuditLogger.js';
+import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 
 const AdminCommunityManagementScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [privacyFilter, setPrivacyFilter] = useState('all');
 
-  // Baseline community list
-  const [communities, setCommunities] = useState([
-    {
-      id: 'comm-101',
-      name: 'Synthesizer & Audio Production',
-      slug: 'audio-synthesis',
-      description: 'Modular synthesis patch sharing, sound design challenges, and DAW workflows.',
-      memberCount: 8420,
-      postCount: 1240,
-      privacy: 'public',
-      isVerified: true,
-      ownerHandle: '@leosoundfx',
-      ownerId: 'usr_leo_sound',
-      strikesCount: 0,
-    },
-    {
-      id: 'comm-102',
-      name: 'Generative 3D Visuals & Shaders',
-      slug: 'glsl-threejs',
-      description: 'Exploring WebGL, Raymarching, GLSL, and creative computational graphics.',
-      memberCount: 6200,
-      postCount: 980,
-      privacy: 'public',
-      isVerified: true,
-      ownerHandle: '@sarahcraft',
-      ownerId: 'usr_sarah_craft',
-      strikesCount: 0,
-    },
-    {
-      id: 'comm-103',
-      name: 'Private Alpha Testers Guild',
-      slug: 'alpha-guild',
-      description: 'Confidential feature rollout discussions and preview builds feedback.',
-      memberCount: 140,
-      postCount: 450,
-      privacy: 'private',
-      isVerified: false,
-      ownerHandle: '@arvdoul_lead',
-      ownerId: 'usr_admin_owner',
-      strikesCount: 0,
-    },
-    {
-      id: 'comm-104',
-      name: 'Crypto Pump & Quick Arbitrage',
-      slug: 'quick-arbitrage-alerts',
-      description: 'High frequency crypto signaling and telegram trading group.',
-      memberCount: 410,
-      postCount: 120,
-      privacy: 'public',
-      isVerified: false,
-      ownerHandle: '@cryptosignals99',
-      ownerId: 'usr_crypto_bot',
-      strikesCount: 2,
-    },
-  ]);
+  // Real community directory — populated only from the admin callable.
+  const [communities, setCommunities] = useState([]);
 
-  // Load from Firestore
+  // Directory is read through the admin callable so governance fields never
+  // depend on a client-side write path.
   useEffect(() => {
     const loadCommunities = async () => {
+      setLoading(true);
       try {
-        const { collection, getDocs, query, limit } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        const snap = await getDocs(query(collection(firestore, 'communities'), limit(50)));
-        if (!snap.empty) {
-          setCommunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
-      } catch (e) {
-        // Fallback
+        const res = await callFunction(FUNCTIONS.ADMIN_LIST_COMMUNITIES, { limit: 50 });
+        setCommunities(Array.isArray(res?.communities) ? res.communities : []);
+      } catch {
+        toast.error('Could not load the community directory.');
+        setCommunities([]);
       } finally {
         setLoading(false);
       }
@@ -108,44 +50,39 @@ const AdminCommunityManagementScreen = () => {
     loadCommunities();
   }, []);
 
-  // Toggle verified hub badge
+  // Governance mutations are server-authoritative: the callable re-checks
+  // admins/{uid}, writes the field, records a strike subdoc and audits.
   const handleToggleVerified = async comm => {
     const newStatus = !comm.isVerified;
-    setCommunities(prev =>
-      prev.map(c => (c.id === comm.id ? { ...c, isVerified: newStatus } : c))
-    );
-
-    await auditLogger.log('COMMUNITY_VERIFICATION_TOGGLED', {
-      userId: user?.uid || 'admin',
-      meta: {
+    try {
+      await callFunction(FUNCTIONS.ADMIN_SET_COMMUNITY_VERIFIED, {
         communityId: comm.id,
-        communityName: comm.name,
-        newVerifiedStatus: newStatus,
-      },
-    });
-
-    toast.success(`Community "${comm.name}" marked as ${newStatus ? 'VERIFIED' : 'UNVERIFIED'}`);
+        verified: newStatus,
+      });
+      setCommunities(prev =>
+        prev.map(c => (c.id === comm.id ? { ...c, isVerified: newStatus } : c))
+      );
+      toast.success(`Community "${comm.name || comm.id}" marked as ${newStatus ? 'VERIFIED' : 'UNVERIFIED'}`);
+    } catch {
+      toast.error('Could not update community verification.');
+    }
   };
 
-  // Issue strike / warning
   const handleIssueStrike = async comm => {
-    const reason = window.prompt(`Issue policy strike to "${comm.name}". Specify guideline breach:`);
+    const reason = window.prompt(`Issue policy strike to "${comm.name || comm.id}". Specify guideline breach:`);
     if (!reason) return;
-
-    setCommunities(prev =>
-      prev.map(c => (c.id === comm.id ? { ...c, strikesCount: (c.strikesCount || 0) + 1 } : c))
-    );
-
-    await auditLogger.log('COMMUNITY_STRIKE_ISSUED', {
-      userId: user?.uid || 'admin',
-      meta: {
+    try {
+      await callFunction(FUNCTIONS.ADMIN_ISSUE_COMMUNITY_STRIKE, {
         communityId: comm.id,
-        communityName: comm.name,
         reason,
-      },
-    });
-
-    toast.warning(`Strike issued to "${comm.name}". Owner notified.`);
+      });
+      setCommunities(prev =>
+        prev.map(c => (c.id === comm.id ? { ...c, strikesCount: (c.strikesCount || 0) + 1 } : c))
+      );
+      toast.warning(`Strike issued to "${comm.name || comm.id}".`);
+    } catch {
+      toast.error('Could not issue the strike.');
+    }
   };
 
   const filtered = communities.filter(c => {
@@ -153,9 +90,9 @@ const AdminCommunityManagementScreen = () => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      c.name.toLowerCase().includes(q) ||
-      c.slug.toLowerCase().includes(q) ||
-      c.ownerHandle.toLowerCase().includes(q)
+      String(c.name || '').toLowerCase().includes(q) ||
+      String(c.slug || '').toLowerCase().includes(q) ||
+      String(c.ownerHandle || c.ownerId || '').toLowerCase().includes(q)
     );
   });
 
@@ -218,11 +155,18 @@ const AdminCommunityManagementScreen = () => {
             />
           </div>
           <div className="text-xs text-gray-500 font-medium">
-            {filtered.length} communities listed
+            {loading ? 'Loading communities…' : `${filtered.length} communities listed`}
           </div>
         </div>
 
         {/* Communities Grid */}
+        {!loading && filtered.length === 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+            {communities.length === 0
+              ? 'No communities have been created yet.'
+              : 'No communities match this filter.'}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filtered.map(comm => (
             <div
@@ -233,14 +177,14 @@ const AdminCommunityManagementScreen = () => {
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-base text-gray-900 dark:text-white">{comm.name}</h3>
+                      <h3 className="font-bold text-base text-gray-900 dark:text-white">{comm.name || comm.id}</h3>
                       {comm.isVerified && (
                         <span className="p-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400">
                           <CheckCircle2 className="w-4 h-4" />
                         </span>
                       )}
                     </div>
-                    <span className="text-xs font-mono text-gray-400">c/{comm.slug}</span>
+                    <span className="text-xs font-mono text-gray-400">c/{comm.slug || comm.id}</span>
                   </div>
 
                   <span
@@ -256,22 +200,22 @@ const AdminCommunityManagementScreen = () => {
                 </div>
 
                 <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">
-                  {comm.description}
+                  {comm.description || 'No description provided.'}
                 </p>
 
                 <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-750 rounded-xl text-xs mb-4">
                   <div>
                     <span className="text-gray-500">Members</span>
-                    <div className="font-bold text-gray-900 dark:text-white">{comm.memberCount.toLocaleString()}</div>
+                    <div className="font-bold text-gray-900 dark:text-white">{Number(comm.stats?.memberCount ?? comm.memberCount ?? 0).toLocaleString()}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Posts</span>
-                    <div className="font-bold text-gray-900 dark:text-white">{comm.postCount.toLocaleString()}</div>
+                    <div className="font-bold text-gray-900 dark:text-white">{Number(comm.stats?.postCount ?? comm.postCount ?? 0).toLocaleString()}</div>
                   </div>
                   <div>
                     <span className="text-gray-500">Strikes</span>
-                    <div className={`font-bold ${comm.strikesCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                      {comm.strikesCount || 0}
+                    <div className={`font-bold ${Number(comm.strikesCount) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                      {Number(comm.strikesCount) || 0}
                     </div>
                   </div>
                 </div>
@@ -279,7 +223,7 @@ const AdminCommunityManagementScreen = () => {
 
               <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
                 <span className="text-xs text-gray-500">
-                  Lead: <b className="text-gray-800 dark:text-gray-200">{comm.ownerHandle}</b>
+                  Lead: <b className="text-gray-800 dark:text-gray-200">{comm.ownerHandle || comm.ownerId || '—'}</b>
                 </span>
 
                 <div className="flex items-center gap-2">

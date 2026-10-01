@@ -2,7 +2,7 @@
 // ✅ AI & human hybrid ticket triage (integrated with supportAutomationService)
 // ✅ Categorization, canned responses, status workflows, and resolution audit
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -49,11 +49,10 @@ const AdminSupportTicketsScreen = () => {
         const snap = await getDocs(
           query(collection(firestore, 'support_tickets'), orderBy('createdAt', 'desc'), limit(50))
         );
-        if (!snap.empty) {
-          setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
-      } catch (e) {
-        // Fallback
+        setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch {
+        toast.error('Could not load the support queue.');
+        setTickets([]);
       } finally {
         setLoading(false);
       }
@@ -61,7 +60,8 @@ const AdminSupportTicketsScreen = () => {
     loadTickets();
   }, []);
 
-  // Send agent reply
+  // Send agent reply — persisted to support_tickets (admins may update the
+  // document per firestore.rules), then audited.
   const handleSendReply = async () => {
     if (!replyMessage.trim() || !selectedTicket) return;
 
@@ -70,25 +70,34 @@ const AdminSupportTicketsScreen = () => {
       text: replyMessage.trim(),
       timestamp: new Date().toISOString(),
     };
+    const messages = [...(selectedTicket.messages || []), newMsg];
 
-    const updated = {
-      ...selectedTicket,
-      status: 'resolved',
-      messages: [...(selectedTicket.messages || []), newMsg],
-    };
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
+      const firestore = await getFirestoreInstance();
 
-    setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updated : t)));
-    setSelectedTicket(updated);
-    setReplyMessage('');
+      await updateDoc(doc(firestore, 'support_tickets', selectedTicket.id), {
+        status: 'resolved',
+        messages,
+        updatedAt: serverTimestamp(),
+        resolvedBy: user?.uid || null,
+      });
 
-    await auditLogger.log('SUPPORT_TICKET_RESOLVED', {
-      userId: user?.uid || 'admin',
-      meta: {
-        ticketId: selectedTicket.id,
-      },
-    });
+      const updated = { ...selectedTicket, status: 'resolved', messages };
+      setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updated : t)));
+      setSelectedTicket(updated);
+      setReplyMessage('');
 
-    toast.success('Reply dispatched. Ticket marked as resolved.');
+      await auditLogger.log('SUPPORT_TICKET_RESOLVED', {
+        userId: user?.uid || null,
+        meta: { ticketId: selectedTicket.id },
+      });
+
+      toast.success('Reply dispatched. Ticket marked as resolved.');
+    } catch {
+      toast.error('Could not save the reply.');
+    }
   };
 
   // Quick auto-resolution helper
@@ -105,10 +114,10 @@ const AdminSupportTicketsScreen = () => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      t.subject.toLowerCase().includes(q) ||
-      t.userName.toLowerCase().includes(q) ||
-      t.userEmail.toLowerCase().includes(q) ||
-      t.id.toLowerCase().includes(q)
+      String(t.subject || '').toLowerCase().includes(q) ||
+      String(t.userName || '').toLowerCase().includes(q) ||
+      String(t.userEmail || '').toLowerCase().includes(q) ||
+      String(t.id || '').toLowerCase().includes(q)
     );
   });
 
@@ -179,6 +188,13 @@ const AdminSupportTicketsScreen = () => {
         {/* Tickets List */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {!loading && filteredTickets.length === 0 && (
+              <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                {tickets.length === 0
+                  ? 'No support tickets have been submitted yet.'
+                  : 'No tickets match this filter.'}
+              </div>
+            )}
             {filteredTickets.map(tkt => (
               <div
                 key={tkt.id}
@@ -208,7 +224,7 @@ const AdminSupportTicketsScreen = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
                       <span>{tkt.userName} ({tkt.userEmail})</span>
                       <span>•</span>
-                      <span>Category: <b className="text-gray-700 dark:text-gray-300 capitalize">{tkt.category.replace('_', ' ')}</b></span>
+                      <span>Category: <b className="text-gray-700 dark:text-gray-300 capitalize">{String(tkt.category || 'uncategorised').replace('_', ' ')}</b></span>
                     </p>
                   </div>
                 </div>

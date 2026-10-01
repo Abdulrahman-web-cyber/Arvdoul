@@ -13,6 +13,7 @@ import {
   ShieldCheck, UserCheck, Zap, Radio
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { fetchAdminStatus } from '../../services/callableService.js';
 
 const AdminDashboardScreen = () => {
   const navigate = useNavigate();
@@ -42,15 +43,14 @@ const AdminDashboardScreen = () => {
     }
     const init = async () => {
       try {
-        const { doc, getDoc } = await import('firebase/firestore');
         const { getFirestoreInstance } = await import('../../firebase/firebase.js');
         const firestore = await getFirestoreInstance();
 
-        // Real admin gate: membership in the `admins` collection (matches
-        // the server-side isAdmin() used by monetization functions).
+        // Real admin gate: the server checks `admins/{uid}` on our behalf.
+        // admins/ is not client-readable, so the callable is the only path.
         if (!user?.uid) { navigate('/login'); return; }
-        const adminSnap = await getDoc(doc(firestore, 'admins', user.uid));
-        if (!adminSnap.exists()) {
+        const isAdmin = await fetchAdminStatus();
+        if (!isAdmin) {
           setError('You do not have admin access.');
           setLoading(false);
           return;

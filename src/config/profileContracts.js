@@ -170,6 +170,18 @@ export const PROFILE_CONSTRAINTS = {
 };
 
 /**
+ * Displayed eligibility checklist for a creator verification badge. The badge
+ * decision itself is server-authoritative (`applyVerificationDecision`); these
+ * thresholds only drive the reviewer's standing checklist in the admin UI.
+ */
+export const CREATOR_VERIFICATION_REQUIREMENTS = {
+  MIN_FOLLOWERS: 1000,
+  MAX_STRIKES: 0,
+  REQUIRE_EMAIL_VERIFIED: true,
+  REQUIRE_PHONE_VERIFIED: true
+};
+
+/**
  * Allowed URL protocols for profile links to guard against XSS and javascript: injections
  */
 const SAFE_URL_PROTOCOLS = ['https:', 'http:'];
@@ -491,6 +503,7 @@ export default {
   PRIVATE_PROFILE_COLLECTION,
   splitProfileFields,
   PROFILE_CONSTRAINTS,
+  CREATOR_VERIFICATION_REQUIREMENTS,
   isValidWebUrl,
   sanitizeProfileUrl,
   validateProfileUpdate,

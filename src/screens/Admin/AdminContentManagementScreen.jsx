@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { fetchAdminStatus } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -25,12 +26,11 @@ const AdminContentManagementScreen = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const { collection, query, orderBy, limit, getDocs, doc, getDoc } = await import('firebase/firestore');
+        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
         const { getFirestoreInstance } = await import('../../firebase/firebase.js');
         const firestore = await getFirestoreInstance();
         if (!user?.uid) { setLoading(false); return; }
-        const adminSnap = await getDoc(doc(firestore, 'admins', user.uid));
-        if (!adminSnap.exists()) { setLoading(false); return; }
+        if (!(await fetchAdminStatus())) { setLoading(false); return; }
         const snap = await getDocs(query(collection(firestore, 'posts'), orderBy('createdAt', 'desc'), limit(100)));
         setContent(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (err) {
