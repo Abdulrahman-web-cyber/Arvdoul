@@ -151,9 +151,10 @@ class PassportService {
   }
 
   /**
-   * Resolve the relationship between viewer and target from the canonical
-   * follow + block graph. Used so passport privacy gates see the true
-   * relationship rather than an assumed empty one.
+   * Resolve the relationship between viewer and target. Delegates to the
+   * canonical userService.getRelationshipState so the passport gates see the
+   * same follow/block graph as every other surface, rather than a second
+   * hand-rolled read.
    * @private
    */
   async _resolveRelationship(viewerUserId, targetUserId) {
@@ -161,19 +162,13 @@ class PassportService {
       return { isFollower: false, isFollowing: false, isMutualFriend: false, isBlocked: false };
     }
     try {
-      const db = await getFirestoreInstance();
-      const [forward, reverse, blocked] = await Promise.all([
-        getDoc(doc(db, 'follows', `${viewerUserId}_${targetUserId}`)),
-        getDoc(doc(db, 'follows', `${targetUserId}_${viewerUserId}`)),
-        getDoc(doc(db, 'blocks', `${targetUserId}_${viewerUserId}`)),
-      ]);
-      const isFollowing = forward.exists();
-      const isFollower = reverse.exists();
+      const { getRelationshipState } = await import('./userService.js');
+      const rel = await getRelationshipState(viewerUserId, targetUserId);
       return {
-        isFollowing,
-        isFollower,
-        isMutualFriend: isFollowing && isFollower,
-        isBlocked: blocked.exists(),
+        isFollowing: Boolean(rel?.isFollowing),
+        isFollower: Boolean(rel?.isFollower),
+        isMutualFriend: Boolean(rel?.isMutualFriend),
+        isBlocked: Boolean(rel?.isBlocked),
       };
     } catch (e) {
       logger.warn('[PassportService] Relationship resolution failed; failing closed', {
