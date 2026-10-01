@@ -3145,21 +3145,22 @@ class UltimateMessagingService {
     try {
       const ad = await monetization.getAd('conversation_list', userId, { position });
       if (!ad) return null;
+      const adName = ad.advertiserName || ad.advertiser || ad.advertiserId || ad.title || 'Sponsored';
       return {
-        id: `ad_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: `ad_${ad.id}`,
         type: 'ad',
         adType: ad.type || 'sponsored',
-        name: ad.title || 'Sponsored',
-        photoURL: ad.imageUrl || ad.image || '/assets/sponsored-default.png',
+        name: ad.title || adName,
+        photoURL: ad.imageUrl || ad.image || ad.mediaUrl || ad.media?.url || '/assets/sponsored-default.png',
         lastMessage: {
-          text: ad.description || ad.content || 'Earn coins – tap to learn more',
+          text: ad.description || ad.content || ad.title || '',
           senderId: 'system',
           timestamp: new Date().toISOString(),
         },
         unreadCounts: { [userId]: 0 },
         participantDetails: [{
-          displayName: ad.advertiser || 'Sponsor',
-          photoURL: ad.imageUrl || null,
+          displayName: adName,
+          photoURL: ad.imageUrl || ad.mediaUrl || ad.media?.url || null,
         }],
         isAd: true,
         _adData: {

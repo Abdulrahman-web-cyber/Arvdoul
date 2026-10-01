@@ -88,7 +88,6 @@ export default function StoriesScreen() {
             caption: storiesArr[0]?.content || '',
             viewsCount: String(storiesArr[0]?.stats?.views || 0),
             isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
-            rewardCoins: storiesArr[0]?.rewardCoins || 0,
             ctaText: storiesArr[0]?.ctaText || '',
             ctaUrl: storiesArr[0]?.ctaUrl || '',
             items: storiesArr.map((st) => ({
@@ -99,7 +98,6 @@ export default function StoriesScreen() {
               duration: st.duration || 5,
               ctaText: st.ctaText || '',
               ctaUrl: st.ctaUrl || '',
-              rewardCoins: st.rewardCoins || 0,
             })),
           };
         });
@@ -828,7 +826,7 @@ export default function StoriesScreen() {
 
             {/* Bottom Action Rail: Reply Bar, Emojis, Gift */}
             <div className="absolute bottom-0 left-0 right-0 z-30 p-4 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-3">
-              {/* Sponsored CTA Banner & Coin Reward */}
+              {/* Sponsored CTA Banner */}
               {currentStory?.isSponsored && (
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-purple-900/80 via-indigo-900/80 to-blue-900/80 border border-purple-400/40 backdrop-blur-xl shadow-xl">
                   <div className="flex items-center gap-2.5">
@@ -838,35 +836,34 @@ export default function StoriesScreen() {
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold text-white">Sponsored Partner</span>
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                          +{currentStory.rewardCoins || 5} Coins
-                        </span>
                       </div>
                       <span className="text-[11px] text-white/80 line-clamp-1">
-                        {currentStory.caption || 'Tap CTA below to visit and claim reward'}
+                        {currentStory.caption || 'Tap CTA below to visit the sponsor'}
                       </span>
                     </div>
                   </div>
-                  <a
-                    href={currentStory.ctaUrl || 'https://arvdoul.com'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const svc = getMonetizationService();
-                        if (user?.uid) {
-                          await svc.recordAdClick(currentStory.id, 'stories', user.uid);
-                        }
-                        toast.success(`🎁 +${currentStory.rewardCoins || 5} ARVDOUL Coins credited!`);
-                      } catch {
-                        toast.success('🎁 Reward claimed!');
-                      }
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] to-[#0EA3E6] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
-                  >
-                    {currentStory.ctaText || 'Learn More'}
-                  </a>
+                  {currentStory.ctaUrl ? (
+                    <a
+                      href={currentStory.ctaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Real server-side click tracking; no coins are minted
+                        // client-side (there is no server story-reward path).
+                        try {
+                          getMonetizationService().recordAdImpression(currentStory.id, 'stories_click');
+                        } catch {}
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] to-[#0EA3E6] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                    >
+                      {currentStory.ctaText || 'Learn More'}
+                    </a>
+                  ) : (
+                    <span className="px-3.5 py-2 rounded-xl bg-white/10 text-white/70 text-xs font-bold whitespace-nowrap">
+                      {currentStory.ctaText || 'Sponsored'}
+                    </span>
+                  )}
                 </div>
               )}
 
