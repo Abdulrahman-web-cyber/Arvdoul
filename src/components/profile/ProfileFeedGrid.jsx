@@ -74,7 +74,7 @@ const ProfileFeedGrid = memo(({
 
           <div>
             <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">
-              Unlocked Perks (Level {profile?.level || 24})
+              Unlocked Perks (Level {profile?.level || 1})
             </h4>
             <div className="space-y-2">
               {perks.slice(0, 4).map((perk, i) => (

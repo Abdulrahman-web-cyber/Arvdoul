@@ -232,6 +232,10 @@ export default function NotificationsScreen() {
                   verified: !!fn.senderVerified,
                 },
                 message: fn.body || fn.message || '',
+                // Real gift metadata only — never invent an amount. The gift
+                // modal hides the amount block when the payload omits it.
+                amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
+                giftType: fn.metadata?.giftType || null,
                 timestamp: ts,
                 unread: !fn.read,
               };
@@ -1227,17 +1231,22 @@ export default function NotificationsScreen() {
             <Gift className="w-8 h-8" aria-hidden="true" />
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {giftModal?.user?.name || 'A creator'} gifted you {giftModal?.amount || 250} ARVDOUL Coins.
+            {giftModal?.user?.name || 'A creator'}
+            {Number.isFinite(giftModal?.amount)
+              ? ` gifted you ${giftModal.amount} ARVDOUL Coins.`
+              : ' sent you a Creator Coin Gift.'}
           </p>
 
-          <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
-            <span className="text-3xl font-black text-amber-400 font-display">
-              +{giftModal?.amount || 250}
-            </span>
-            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Coins
-            </span>
-          </div>
+          {Number.isFinite(giftModal?.amount) && (
+            <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
+              <span className="text-3xl font-black text-amber-400 font-display">
+                +{giftModal.amount}
+              </span>
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Coins
+              </span>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button
