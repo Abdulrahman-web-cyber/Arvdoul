@@ -205,4 +205,39 @@ describe('Profile System Hardening & Validation Contracts', () => {
       expect(state.balance).toBe(0);
     });
   });
+
+  describe('stale-response guards (audit N013 / §26)', () => {
+    test('a newer load invalidates an in-flight one', () => {
+      useProfileStore.getState().clear();
+      const first = useProfileStore.getState()._startLoad('posts');
+      const second = useProfileStore.getState()._startLoad('posts');
+
+      expect(second).toBeGreaterThan(first);
+      expect(useProfileStore.getState()._isLoadCurrent('posts', second)).toBe(true);
+      expect(useProfileStore.getState()._isLoadCurrent('posts', first)).toBe(false);
+    });
+
+    test('loaders are tracked independently', () => {
+      useProfileStore.getState().clear();
+      const posts = useProfileStore.getState()._startLoad('posts');
+      const balance = useProfileStore.getState()._startLoad('balance');
+
+      expect(useProfileStore.getState()._isLoadCurrent('posts', posts)).toBe(true);
+      expect(useProfileStore.getState()._isLoadCurrent('balance', balance)).toBe(true);
+      expect(useProfileStore.getState()._isLoadCurrent('posts', balance)).toBe(false);
+    });
+
+    test('clear invalidates every in-flight loader', () => {
+      useProfileStore.getState().clear();
+      const posts = useProfileStore.getState()._startLoad('posts');
+      const stories = useProfileStore.getState()._startLoad('stories');
+
+      useProfileStore.getState().clear();
+
+      expect(useProfileStore.getState()._isLoadCurrent('posts', posts)).toBe(false);
+      expect(useProfileStore.getState()._isLoadCurrent('stories', stories)).toBe(false);
+      expect(useProfileStore.getState().loadSeq.posts).toBeGreaterThan(posts);
+      expect(useProfileStore.getState().loadSeq.stories).toBeGreaterThan(stories);
+    });
+  });
 });

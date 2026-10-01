@@ -79,12 +79,30 @@ const initialState = {
   // in-flight response whose token is stale is discarded, so a slow response
   // for a previous account or route cannot overwrite current state (audit N013).
   requestSeq: 0,
+  // Per-loader tokens for the same guard on the secondary profile loaders
+  // (posts, highlights, saved, stories, level, balance, position). Without
+  // these, switching accounts while one of them is in flight lets the old
+  // account's data land in the new account's store (audit §26).
+  loadSeq: {},
 };
 
 // ==================== STORE ====================
 export const useProfileStore = create(
   immer((set, get) => ({
     ...initialState,
+
+    // ==================== STALE-RESPONSE GUARDS ====================
+    // Take a fresh token for a named loader. Any response that resolves after a
+    // newer load started (or after clear()) sees a mismatched token and is
+    // discarded, so a slow account-A response can never populate account B.
+    _startLoad: (key) => {
+      const seq = (get().loadSeq?.[key] || 0) + 1;
+      set((state) => {
+        state.loadSeq[key] = seq;
+      });
+      return seq;
+    },
+    _isLoadCurrent: (key, seq) => get().loadSeq?.[key] === seq,
     
     // ==================== PROFILE ACTIONS ====================
     /**
@@ -344,7 +362,7 @@ export const useProfileStore = create(
      */
     loadPosts: async (userId, options = {}) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('posts');      
       set((state) => {
         state.postsLoading = true;
         state.postsError = null;
@@ -375,6 +393,7 @@ export const useProfileStore = create(
           }
         } catch {}
         
+        if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
           state.posts = userPosts;
           state.postsLoading = false;
@@ -383,6 +402,7 @@ export const useProfileStore = create(
         });
       } catch (error) {
         console.error('❌ Load posts failed:', error);
+        if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
           state.postsLoading = false;
           state.postsError = error.message || 'Failed to load posts';
@@ -433,7 +453,7 @@ export const useProfileStore = create(
      */
     loadHighlights: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('highlights');      
       set((state) => {
         state.highlightsLoading = true;
       });
@@ -442,12 +462,14 @@ export const useProfileStore = create(
         const storyService = (await import('../services/storyService.js')).getStoryService();
         const highlights = await storyService.getHighlights(userId);
         
+        if (!get()._isLoadCurrent('highlights', __seq)) return;
         set((state) => {
           state.highlights = highlights || [];
           state.highlightsLoading = false;
         });
       } catch (error) {
         console.error('❌ Load highlights failed:', error);
+        if (!get()._isLoadCurrent('highlights', __seq)) return;
         set((state) => {
           state.highlightsLoading = false;
         });
@@ -460,6 +482,7 @@ export const useProfileStore = create(
      */
     loadSavedPosts: async (userId) => {
       if (!userId) return;
+      const __seq = get()._startLoad('saved');
       set((state) => {
         state.savedLoading = true;
       });
@@ -467,12 +490,14 @@ export const useProfileStore = create(
         const { getFirestoreService } = await import('../services/firestoreService.js');
         const res = await getFirestoreService().getSavedPosts(userId);
         const posts = Array.isArray(res) ? res : res?.posts || [];
+        if (!get()._isLoadCurrent('saved', __seq)) return;
         set((state) => {
           state.savedPosts = posts;
           state.savedLoading = false;
         });
       } catch (error) {
         console.error('❌ Load saved posts failed:', error);
+        if (!get()._isLoadCurrent('saved', __seq)) return;
         set((state) => {
           state.savedLoading = false;
         });
@@ -484,18 +509,21 @@ export const useProfileStore = create(
      * @param {string} [userId] - Creator user ID
      */
     loadShopItems: async (userId) => {
+      const __seq = get()._startLoad('shop');
       set((state) => {
         state.shopLoading = true;
       });
       try {
         const { marketplaceService } = await import('../services/marketplaceService.js');
         const items = await marketplaceService.getProducts();
+        if (!get()._isLoadCurrent('shop', __seq)) return;
         set((state) => {
           state.shopItems = items || [];
           state.shopLoading = false;
         });
       } catch (error) {
         console.error('❌ Load shop items failed:', error);
+        if (!get()._isLoadCurrent('shop', __seq)) return;
         set((state) => {
           state.shopLoading = false;
         });
@@ -509,7 +537,7 @@ export const useProfileStore = create(
      */
     loadStories: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('stories');      
       set((state) => {
         state.storiesLoading = true;
       });
@@ -520,12 +548,14 @@ export const useProfileStore = create(
         
         const userStories = storiesFeed?.filter(s => s.userId === userId) || [];
         
+        if (!get()._isLoadCurrent('stories', __seq)) return;
         set((state) => {
           state.stories = userStories;
           state.storiesLoading = false;
         });
       } catch (error) {
         console.error('❌ Load stories failed:', error);
+        if (!get()._isLoadCurrent('stories', __seq)) return;
         set((state) => {
           state.storiesLoading = false;
         });
@@ -539,7 +569,7 @@ export const useProfileStore = create(
      */
     loadLevel: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('level');      
       set((state) => {
         state.levelLoading = true;
       });
@@ -548,12 +578,14 @@ export const useProfileStore = create(
         const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
         const levelData = await monetizationService.getUserLevel(userId);
         
+        if (!get()._isLoadCurrent('level', __seq)) return;
         set((state) => {
           state.level = levelData?.level || 1;
           state.levelLoading = false;
         });
       } catch (error) {
         console.error('❌ Load level failed:', error);
+        if (!get()._isLoadCurrent('level', __seq)) return;
         set((state) => {
           state.levelLoading = false;
         });
@@ -567,7 +599,7 @@ export const useProfileStore = create(
      */
     loadBalance: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('balance');      
       set((state) => {
         state.balanceLoading = true;
       });
@@ -576,12 +608,14 @@ export const useProfileStore = create(
         const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
         const balanceData = await monetizationService.getBalance(userId);
         
+        if (!get()._isLoadCurrent('balance', __seq)) return;
         set((state) => {
           state.balance = balanceData?.coins || 0;
           state.balanceLoading = false;
         });
       } catch (error) {
         console.error('❌ Load balance failed:', error);
+        if (!get()._isLoadCurrent('balance', __seq)) return;
         set((state) => {
           state.balanceLoading = false;
         });
@@ -595,7 +629,7 @@ export const useProfileStore = create(
      */
     loadPosition: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('position');      
       set((state) => {
         state.positionLoading = true;
       });
@@ -604,12 +638,14 @@ export const useProfileStore = create(
         const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
         const positionData = await monetizationService.getUserPosition(userId);
         
+        if (!get()._isLoadCurrent('position', __seq)) return;
         set((state) => {
           state.position = positionData;
           state.positionLoading = false;
         });
       } catch (error) {
         console.error('❌ Load position failed:', error);
+        if (!get()._isLoadCurrent('position', __seq)) return;
         set((state) => {
           state.positionLoading = false;
         });
@@ -811,10 +847,13 @@ export const useProfileStore = create(
     clear: () => {
       set((state) => {
         const nextSeq = (state.requestSeq || 0) + 1;
+        const nextLoads = {};
+        for (const k of Object.keys(state.loadSeq || {})) nextLoads[k] = (state.loadSeq[k] || 0) + 1;
         Object.assign(state, initialState);
-        // Keep the bumped token so any in-flight load for the previous account
-        // is discarded when it resolves (audit N013).
+        // Keep the bumped tokens so any in-flight load for the previous account
+        // is discarded when it resolves (audit N013 / §26).
         state.requestSeq = nextSeq;
+        state.loadSeq = nextLoads;
       });
     },
     
