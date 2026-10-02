@@ -22,7 +22,7 @@
 | `src/config/**` | 1 file | `profileContracts.js` |
 | `src/context/**` | 3 files | |
 | `functions/*.js` | 24 modules | 152 deployable exports after the deploy fix |
-| `src/__tests__/*.test.js(x)` | 62 suites | 890 tests, all green |
+| `src/__tests__/*.test.js(x)` | 68 suites | 883 tests, all green |
 | routes | 147 `path=` entries | 22 are `/profile/*` |
 | `firestore.rules` | 1196 lines | |
 | `storage.rules` | 108 lines | |
