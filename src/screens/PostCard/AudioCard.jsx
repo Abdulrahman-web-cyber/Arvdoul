@@ -1,13 +1,12 @@
 // src/screens/PostCard/AudioCard.jsx
+
 import React, { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, Volume2, VolumeX, Music, RotateCcw, RotateCw, Loader2 } from 'lucide-react';
 import { create } from 'zustand';
 import { openDB } from 'idb';
 
-// ------------------------------------------------------------------
 // 1. ZUSTAND STORE – Single source of truth for playback state
-// ------------------------------------------------------------------
 const useAudioStore = create((set, get) => ({
   // Global manager instance (set after init)
   manager: null,
@@ -31,12 +30,10 @@ const useAudioStore = create((set, get) => ({
   }),
 }));
 
-// ------------------------------------------------------------------
 // 2. GLOBAL AUDIO MANAGER (Singleton)
 //    - Safe source creation (never disconnect)
 //    - Reactive store updates
 //    - Watchdog, focus recovery, media session
-// ------------------------------------------------------------------
 class GlobalAudioManager {
   constructor() {
     if (GlobalAudioManager.instance) return GlobalAudioManager.instance;
@@ -238,9 +235,7 @@ class GlobalAudioManager {
 
 const globalAudioManager = new GlobalAudioManager();
 
-// ------------------------------------------------------------------
 // 3. REACT HOOK TO SUBSCRIBE TO AUDIO STATE (useSyncExternalStore)
-// ------------------------------------------------------------------
 const audioStore = useAudioStore;
 function useAudioState() {
   const state = useSyncExternalStore(
@@ -256,9 +251,7 @@ function useAudioState() {
   return state;
 }
 
-// ------------------------------------------------------------------
 // 4. AUDIO CACHE (IndexedDB)
-// ------------------------------------------------------------------
 class AudioCache {
   constructor() { this.dbPromise = null; this.init(); }
   async init() {
@@ -281,9 +274,7 @@ class AudioCache {
 }
 const audioCache = new AudioCache();
 
-// ------------------------------------------------------------------
 // 5. HELPERS
-// ------------------------------------------------------------------
 const haptic = (pattern = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
 };
@@ -312,9 +303,7 @@ const getNeonWaveGradient = (ctx, width, height, tokens) => {
   return gradient;
 };
 
-// ------------------------------------------------------------------
 // 6. MAIN COMPONENT
-// ------------------------------------------------------------------
 const AudioCard = React.memo(({
   audio,
   tokens,
@@ -350,7 +339,7 @@ const AudioCard = React.memo(({
   const [displayTime, setDisplayTime] = useState(0); // for UI label (throttled)
   const [isDraggingSeek, setIsDraggingSeek] = useState(false);
 
-  // Waveform data (cached by audio id). REAL data only: when the audio has no
+  // Waveform data (cached by audio id). data only: when the audio has no
   // analyzed waveform, render neutral bars — never a fabricated pattern.
   const rawWaveform = useMemo(() => {
     if (audio?.waveformData && Array.isArray(audio.waveformData)) return audio.waveformData;

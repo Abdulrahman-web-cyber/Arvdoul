@@ -1,4 +1,5 @@
 // src/components/ui/Avatar.jsx
+
 /**
  * ARVDOUL DESIGN SYSTEM — AVATAR PRIMITIVE
  * Guide Part II: image/initials/fallback variants, status indicators

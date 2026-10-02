@@ -1,5 +1,5 @@
-// src/screens/StoriesScreen.jsx - ARVDOUL STORIES & VIBES IMMERSIVE SCREEN
-// 100% Pixel-perfect replica of Arvdoul Stories Grid & Interactive Viewer from user design specs
+// src/screens/StoriesScreen.jsx
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -73,7 +73,7 @@ export default function StoriesScreen() {
 
   const progressIntervalRef = useRef(null);
 
-  // Load REAL stories from storyService (Firestore-backed feed)
+  // Load stories from storyService (Firestore-backed feed)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -206,7 +206,7 @@ export default function StoriesScreen() {
     progressIntervalRef.current = setInterval(() => {
       setStoryProgress((prev) => {
         if (prev + step >= 100) {
-          // REAL completion event (spec §23/58): the item was watched to the
+          // completion event (spec §23/58): the item was watched to the
           // end — buffered server-side, never a per-frame write.
           if (currentItem?.id) {
             getStoryService().reportStoryCompletion(currentItem.id).catch(() => {});
@@ -239,7 +239,7 @@ export default function StoriesScreen() {
     const x = e.clientX - rect.left;
     const isRight = x > rect.width / 2;
 
-    // REAL tap analytics (spec §58) — buffered, never per-tap doc writes.
+    // tap analytics (spec §58) — buffered, never per-tap doc writes.
     const svc = getStoryService();
     if (isRight) {
       if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch(() => {});
@@ -308,7 +308,7 @@ export default function StoriesScreen() {
   }, [activeStoryIndex, activeItemIndex, currentStory, filteredStories.length]);
 
   // Handle quick emoji reaction with particle explosion
-  // REAL reaction via reactToStory (spec §22) — particle is the visual
+  // reaction via reactToStory (spec §22) — particle is the visual
   // confirmation, the service call is the actual interaction.
   const [reactingId, setReactingId] = useState(null);
   const handleSendReaction = async (emoji) => {
@@ -331,7 +331,7 @@ export default function StoriesScreen() {
   // Handle gift coins
   const [gifting, setGifting] = useState(false);
 
-  // REAL coin gift via the double-entry ledger (spec — no free coins).
+  // coin gift via the double-entry ledger (spec — no free coins).
   const handleGiftCoin = async () => {
     if (!user?.uid || gifting) return;
     const storyUserId = currentStory?.user?.id || currentStory?.userId;
@@ -356,7 +356,7 @@ export default function StoriesScreen() {
     }
   };
 
-  // Handle story reply — REAL: replyToStory creates a direct conversation
+  // Handle story reply — replyToStory creates a direct conversation
   // with the creator carrying the vibe reference (spec §21/65).
   const [replying, setReplying] = useState(false);
   const handleSendReply = async (e) => {

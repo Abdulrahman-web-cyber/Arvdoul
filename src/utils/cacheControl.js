@@ -1,6 +1,4 @@
 /**
- * src/utils/cacheControl.js - ARVDOUL Enterprise Cache Policies & Directives
- * 
  * Provides standard, audited HTTP cache headers and client storage tiers
  * for global CDN edge acceleration and client battery/data preservation.
  */

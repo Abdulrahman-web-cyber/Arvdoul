@@ -1,16 +1,11 @@
-// src/services/storageService.js - ENTERPRISE CLOUD STORAGE SERVICE - FIXED
-// 🏢 Enterprise Architecture • Military-Grade Security • Production Ready
-// 📁 Advanced File Management • Real-time Progress • Perfect Error Recovery
-// 🔐 SOC2/HIPAA/GDPR Compliant • Multi-region • Disaster Recovery
+// src/services/storageService.js
 
-// ==================== SHARED UTILITIES ====================
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
 
-// ==================== ENTERPRISE IMPORTS ====================
 // Lazy loading for optimal bundle splitting
 let storageModule = null;
 let ref = null;
@@ -23,7 +18,6 @@ let updateMetadata = null;
 let list = null;
 let listAll = null;
 
-// ==================== ENTERPRISE CONFIGURATION ====================
 const STORAGE_CONFIG = {
   RATE_LIMITS: {
     UPLOADS_PER_HOUR: 60,
@@ -100,7 +94,6 @@ const STORAGE_CONFIG = {
   }
 };
 
-// ==================== ENTERPRISE LOGGER ====================
 class StorageLogger {
   constructor(serviceName = 'StorageService') {
     this.serviceName = serviceName;
@@ -139,7 +132,6 @@ class StorageLogger {
         SECURITY: 'color: #9C27B0;',
         PERFORMANCE: 'color: #FF9800;'
       };
-//       logger.warn(`%c[${this.serviceName} ${level}] ${action}`, colors[level] || 'color: #666;', data);
     }
 
     // Store log
@@ -281,7 +273,6 @@ class StorageLogger {
   }
 }
 
-// ==================== CACHE MANAGER ====================
 class StorageCacheManager {
   constructor() {
     this.urlCache = new Map();
@@ -439,7 +430,6 @@ class StorageCacheManager {
   }
 }
 
-// ==================== SECURITY & VALIDATION SERVICE ====================
 class StorageSecurityService {
   constructor() {
     this.logger = new StorageLogger('SecurityService');
@@ -747,7 +737,6 @@ class StorageSecurityService {
   }
 }
 
-// ==================== ENTERPRISE STORAGE SERVICE ====================
 class EnterpriseStorageService {
   constructor() {
     this.logger = new StorageLogger('EnterpriseStorageService');
@@ -779,7 +768,6 @@ class EnterpriseStorageService {
     }, 60 * 60 * 1000); // Every hour
   }
 
-  // ==================== INITIALIZATION ====================
   async initialize() {
     if (this.firebaseInitialized) return true;
 
@@ -894,7 +882,6 @@ class EnterpriseStorageService {
     }
   }
 
-  // ==================== FILE UPLOAD ====================
   async uploadFile(file, path, options = {}) {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -1238,7 +1225,6 @@ class EnterpriseStorageService {
     });
   }
 
-  // ==================== FILE MANAGEMENT ====================
   async getFileURL(path, options = {}) {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -1563,7 +1549,6 @@ class EnterpriseStorageService {
     }
   }
 
-  // ==================== BATCH OPERATIONS ====================
   async batchDeleteFiles(paths, options = {}) {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -1719,7 +1704,6 @@ class EnterpriseStorageService {
     }
   }
 
-  // ==================== LISTING OPERATIONS ====================
   async listFiles(path, options = {}) {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -1796,7 +1780,6 @@ class EnterpriseStorageService {
     }
   }
 
-  // ==================== UTILITY METHODS ====================
   generateOperationId() {
     return `storage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
@@ -1857,7 +1840,6 @@ class EnterpriseStorageService {
     }
   }
 
-  // ==================== HEALTH & METRICS ====================
   async checkHealth() {
     try {
       const storage = await this.getStorageInstance();
@@ -1922,7 +1904,6 @@ class EnterpriseStorageService {
     this.logger.info('Metrics reset');
   }
 
-  // ==================== CLEANUP ====================
   cancelUpload(uploadId) {
     const upload = this.activeUploads.get(uploadId);
     if (upload && upload.task) {
@@ -1969,7 +1950,6 @@ class EnterpriseStorageService {
   }
 }
 
-// ==================== SINGLETON INSTANCE ====================
 let storageServiceInstance = null;
 
 function getStorageService() {
@@ -1979,7 +1959,6 @@ function getStorageService() {
   return storageServiceInstance;
 }
 
-// ==================== COMPATIBILITY EXPORTS ====================
 // Legacy function exports for backward compatibility
 async function uploadFile(file, path, metadata) {
   const service = getStorageService();
@@ -2006,7 +1985,6 @@ async function getFileMetadata(path) {
   return service.getFileMetadata(path);
 }
 
-// ==================== DEFAULT EXPORT ====================
 const storageService = {
   // File Operations
   uploadFile,
@@ -2093,7 +2071,6 @@ const storageService = {
 
 export default storageService;
 
-// ==================== NAMED EXPORTS ====================
 export {
   // Core Functions
   uploadFile,
@@ -2106,13 +2083,10 @@ export {
   getStorageService
 };
 
-// ==================== AUTOMATIC INITIALIZATION ====================
 // Auto-initialize in production (optional-chained: never crash when
-// import.meta.env is absent, e.g. tests/SSR).
 if (import.meta.env?.PROD) {
   setTimeout(() => {
     getStorageService().initialize().catch(error => {
-//       logger.warn('Storage service auto-initialization failed:', error.message);
     });
   }, 3000);
 }

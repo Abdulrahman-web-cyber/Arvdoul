@@ -1,5 +1,4 @@
-// src/components/Videos/VideoComments.jsx - ARVDOUL VIDEO COMMENTS
-// World-class glass bottom sheet with real-time comments & rapid emoji reactions
+// src/components/Videos/VideoComments.jsx
 
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';

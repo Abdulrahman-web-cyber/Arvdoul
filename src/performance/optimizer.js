@@ -1,5 +1,4 @@
 /**
- * src/performance/optimizer.js - Production-grade client performance engine.
  * Provides idle-time task scheduling, memory pressure garbage collection,
  * and adaptive rendering profiles.
  */

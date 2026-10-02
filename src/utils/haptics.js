@@ -1,5 +1,4 @@
 // src/utils/haptics.js
-// Ultra Pro Max Production Ready Haptics Engine for Arvdoul
 
 const canVibrate =
   typeof navigator !== "undefined" &&

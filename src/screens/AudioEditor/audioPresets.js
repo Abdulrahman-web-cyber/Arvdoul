@@ -2,7 +2,6 @@
 //
 // Canonical EQ preset table for the Audio Studio. These are real parametric
 // settings (frequency / gain / Q) applied to the mixing graph — not cosmetic
-// labels. Band order is fixed: HPF, three bells, LPF.
 
 export const EQ_BAND_COLORS = ['#8B1EF3', '#00C4FF', '#10B981', '#F59E0B', '#EF4444'];
 

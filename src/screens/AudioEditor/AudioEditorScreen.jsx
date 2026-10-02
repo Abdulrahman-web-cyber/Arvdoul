@@ -1,4 +1,4 @@
-// src/screens/AudioEditor/AudioEditorScreen.jsx - ARVDOUL AUDIO STUDIO
+// src/screens/AudioEditor/AudioEditorScreen.jsx
 //
 // Multitrack editor backed by the Web Audio graph in ./audioEngine.
 // The transport, meters, EQ and export all operate on real audio: the project

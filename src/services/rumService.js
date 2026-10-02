@@ -1,6 +1,4 @@
 /**
- * src/services/rumService.js - ARVDOUL REAL USER MONITORING (RUM) & CORE WEB VITALS
- *
  * Implements:
  * 1. Web Vitals Observers: Largest Contentful Paint (LCP < 2.5s), Cumulative
  *    Layout Shift (CLS < 0.1), Interaction to Next Paint (INP < 200ms), and
@@ -129,9 +127,7 @@ class RUMService {
     checkAndLog();
   }
 
-  // -------------------------------------------------------------------------
   // Route timing (SPA navigation)
-  // -------------------------------------------------------------------------
 
   /** Call at the start of a route render. */
   startRouteTiming(routeName) {
@@ -157,9 +153,7 @@ class RUMService {
     return this.routeTimings.get(routeName) || { count: 0, totalMs: 0, lastMs: 0 };
   }
 
-  // -------------------------------------------------------------------------
   // Metrics pipeline
-  // -------------------------------------------------------------------------
 
   /**
    * Forwards vitals + route timings into the shared metricsService so they

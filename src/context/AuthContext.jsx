@@ -1,8 +1,4 @@
-// src/context/AuthContext.jsx - ULTIMATE PRODUCTION V33 - NO BLINK, STABLE LOADING
-// 🎯 SINGLE SOURCE OF TRUTH (ZUSTAND) • REALTIME PROFILE SYNC • MULTI-TAB COORDINATION
-// 🔧 FIXED: Removed `user` dependency from auth listener – prevents re-subscription on every profile change
-// 🔧 ADDED: `initialProfileLoaded` flag to avoid loading flicker after first load
-// ✅ NO BLINKING • SMOOTH AUTH TRANSITIONS
+// src/context/AuthContext.jsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -24,7 +20,6 @@ import { PRIVATE_PROFILE_FIELDS } from "../config/profileContracts.js";
 
 const AuthContext = createContext(null);
 
-// ==================== ENHANCED STORAGE MANAGER ====================
 const AuthStorageManager = {
   clearAll() {
     const sessionItems = [
@@ -114,7 +109,6 @@ const AuthStorageManager = {
   }
 };
 
-// ==================== TOAST DEBOUNCER ====================
 let lastToastTime = 0;
 const debouncedToast = (message, type = 'error') => {
   const now = Date.now();
@@ -127,7 +121,6 @@ const debouncedToast = (message, type = 'error') => {
   }
 };
 
-// ==================== ERROR NORMALIZATION ====================
 const normalizeFirebaseError = (error) => {
   const code = error?.code || 'unknown';
   const commonMap = {
@@ -163,7 +156,6 @@ const normalizeFirebaseError = (error) => {
   return commonMap[code] || error?.message || 'Authentication failed. Please try again.';
 };
 
-// ==================== AUTH STATE MACHINE ====================
 const AuthState = {
   BOOTING: 'booting',
   AUTHENTICATED: 'authenticated',
@@ -174,7 +166,6 @@ const AuthState = {
   ERROR: 'error',
 };
 
-// ==================== SYNC HELPER ====================
 const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   if (!user) {
     setCurrentUser(null);
@@ -220,7 +211,6 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   return userData;
 };
 
-// ==================== OPERATION DEDUPLICATOR ====================
 const pendingOperations = new Map();
 const CLEANUP_INTERVAL = 60000;
 if (typeof window !== 'undefined') {
@@ -242,7 +232,6 @@ const runOnce = async (key, fn) => {
   }
 };
 
-// ==================== PERFECT AUTH PROVIDER ====================
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -283,7 +272,6 @@ export function AuthProvider({ children }) {
   const unsubscribeProfileRef = useRef(null);
   // Monotonic token that invalidates an in-flight profile listener setup.
   // `setupRealtimeProfile` awaits `userService.initialize()` and a dynamic
-  // import before it can subscribe; without this, a concurrent sign-in (A then
   // B) left A's listener alive and let A's snapshot overwrite B's session.
   const profileListenerGenerationRef = useRef(0);
   // The uid whose profile we last hydrated; used to detect account switches.
@@ -313,7 +301,6 @@ export function AuthProvider({ children }) {
   // Guard to prevent loading flicker after initial profile load
   const initialProfileLoaded = useRef(false);
   
-  // ========== MULTI‑TAB BROADCAST ==========
   useEffect(() => {
     let channel;
     let storageHandler;
@@ -363,7 +350,6 @@ export function AuthProvider({ children }) {
     };
   }, [authService]);
 
-  // ========== CLEANUP ==========
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -378,7 +364,6 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // ========== SERVICE INITIALIZATION ==========
   useEffect(() => {
     const abortController = new AbortController();
     let mounted = true;
@@ -420,7 +405,6 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // ========== REALTIME PROFILE LISTENER (SAFE, NO UNNECESSARY LOADING TOGGLES) ==========
   const setupRealtimeProfile = useCallback(async (uid, firebaseUser) => {
     if (!userService || !uid || !firebaseUser) return;
 
@@ -606,7 +590,6 @@ export function AuthProvider({ children }) {
     }
   }, [userService, authService]);
 
-  // ========== AUTH STATE LISTENER (NO `user` DEPENDENCY – PREVENTS BLINK) ==========
   useEffect(() => {
     if (!authService || listenerSetUp.current || !isMounted.current) return;
     
@@ -650,7 +633,7 @@ export function AuthProvider({ children }) {
                 console.warn('Cache clear on account switch failed:', cacheError?.message);
               }
               // Drop the departing account's queued offline writes so they
-              // cannot drain into this session (audit N014).
+              // cannot drain into this session.
               import('../offline/syncEngine.js')
                 .then(({ purgeQueueForOwner }) => purgeQueueForOwner(lastProfileUidRef.current))
                 .catch(() => {});
@@ -690,7 +673,7 @@ export function AuthProvider({ children }) {
             
           } else {
             isLoggingOutRef.current = true;
-            // Clear the signed-out account's queued offline writes (audit N014).
+            // Clear the signed-out account's queued offline writes.
             const departingUid = lastProfileUidRef.current;
             if (departingUid) {
               import('../offline/syncEngine.js')
@@ -785,10 +768,9 @@ export function AuthProvider({ children }) {
       unsubscribeProfileRef.current = null;
       listenerSetUp.current = false;
     };
-    // ✅ CRITICAL: `user` is NOT in dependencies – prevents re‑subscription on every profile change
+    // `user` is NOT in dependencies – prevents re‑subscription on every profile change
   }, [authService, navigate, setupRealtimeProfile]);
 
-  // ========== AUTH METHODS (unchanged, all stable) ==========
   const signUpWithEmailPassword = useCallback(async (email, password, profileData = {}) => {
     return runOnce(`signup_${email}`, async () => {
       if (!authService) throw new Error('Auth service not ready');

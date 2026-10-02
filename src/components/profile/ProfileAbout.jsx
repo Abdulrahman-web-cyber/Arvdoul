@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileAbout.jsx - ARVDOUL Profile About Component
- * 
  * Displays profile about/bio information.
  * 
  * @component

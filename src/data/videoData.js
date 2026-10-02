@@ -1,6 +1,4 @@
 /**
- * src/data/videoData.js
- * ARVDOUL STATIC CATALOG DATA.
  * Contains only real configuration catalogs (virtual gift catalog).
  * The previous fabricated "INITIAL_VIDEOS" dataset (fake creators, Unsplash
  * stock URLs) was REMOVED - the video feed reads exclusively from Firestore.

@@ -1,7 +1,4 @@
-// src/screens/Community/CommunityDirectoryScreen.jsx - ARVDOUL COMMUNITY DIRECTORY
-// ✅ Browse and search communities
-// ✅ Filter by privacy type
-// ✅ Sort by popularity, newest, active
+// src/screens/Community/CommunityDirectoryScreen.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';

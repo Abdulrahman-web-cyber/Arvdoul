@@ -1,6 +1,4 @@
 /**
- * src/services/complianceGovernanceService.js - ARVDOUL GLOBAL COMPLIANCE & PRIVACY GOVERNANCE v1.0
- * 
  * Production-grade data sovereignty & privacy compliance suite:
  * • GDPR Article 20 / CCPA Portability: Machine-readable cryptographic data export bundle
  * • GDPR Article 17 "Right to be Forgotten": Irreversible cascading erasure & anonymization

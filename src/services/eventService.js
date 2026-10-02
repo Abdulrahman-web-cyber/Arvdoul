@@ -1,8 +1,4 @@
 import { logger } from '../utils/Logger.js';
-// src/services/eventService.js - ARVDOUL EVENT SERVICE
-// ✅ Complete CRUD for events
-// ✅ Registration management
-// ✅ Event analytics
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
@@ -37,8 +33,6 @@ class EventService {
     this.db = await getFirestoreInstance();
     this.initialized = true;
   }
-
-  // ========== EVENT CRUD ==========
 
   /**
    * Create a new event
@@ -190,8 +184,6 @@ class EventService {
 
     return true;
   }
-
-  // ========== REGISTRATION ==========
 
   /**
    * Register for an event
@@ -358,8 +350,6 @@ class EventService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  // ========== LISTING & SEARCH ==========
-
   /**
    * List events
    * @param {Object} options - Query options
@@ -507,8 +497,6 @@ class EventService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  // ========== FEEDBACK ==========
-
   /**
    * Submit event feedback
    * @param {string} eventId - Event ID
@@ -577,8 +565,6 @@ class EventService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  // ========== NOTIFICATIONS ==========
-
   /**
    * Notify all attendees
    * @param {string} eventId - Event ID
@@ -611,8 +597,6 @@ class EventService {
     }
   }
 
-  // ========== REAL-TIME SUBSCRIPTIONS ==========
-
   /**
    * Subscribe to event updates
    * @param {string} eventId - Event ID
@@ -641,8 +625,6 @@ class EventService {
       }
     });
   }
-
-  // ========== STATISTICS ==========
 
   /**
    * Get event statistics

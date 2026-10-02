@@ -1,6 +1,4 @@
 /**
- * src/services/phishingDetectionService.js - ARVDOUL MALICIOUS URL & PHISHING SCANNER v8.0
- *
  * Implements:
  * 1. URL Domain Extraction: Extracts and normalizes links embedded in posts, bio fields, and direct messages.
  * 2. Lookalike / Punycode & Typosquatting Detection: Identifies homoglyph attacks (e.g. `arvd0ul.com`, `paypa1.com`, `goog1e.com`).

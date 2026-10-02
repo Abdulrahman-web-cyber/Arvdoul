@@ -1,5 +1,4 @@
 /**
- * src/offline/syncEngine.js - High-Performance Offline Synchronization Engine.
  * Coordinates between IndexedDB (OfflineQueue), online network transitions,
  * server APIs, and reactive UI sync status indicators.
  */
@@ -182,7 +181,7 @@ export async function enqueueAction({ type, payload = {}, priority = 'medium', i
   notifyListeners(await getQueueStatus());
 
   // If online, trigger a background drain scoped to the owning account so a
-  // queued op is never executed on behalf of a different session (audit N014).
+  // queued op is never executed on behalf of a different session.
   if (typeof navigator !== 'undefined' && navigator.onLine) {
     syncQueue({ ownerUid }).catch(() => {});
   }
@@ -198,7 +197,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     const uid = sessionOwnerUid();
     // Only drain the signed-in account's queue; never replay another
-    // account's pending writes (audit N014).
+    // account's pending writes.
     if (!uid) return;
     console.info('🌐 App went online. Draining offline mutation queue...');
     syncQueue({ ownerUid: uid });
@@ -212,7 +211,7 @@ if (typeof window !== 'undefined') {
 
 /**
  * Purge queued operations on account change. Ops owned by the departing
- * account are dropped so a later session cannot replay them (audit N014).
+ * account are dropped so a later session cannot replay them.
  * @param {string|null} uid
  */
 export async function purgeQueueForOwner(uid) {

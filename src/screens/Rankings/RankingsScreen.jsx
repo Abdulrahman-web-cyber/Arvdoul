@@ -1,6 +1,4 @@
-// src/screens/Rankings/RankingsScreen.jsx – ARVDOUL RANKINGS SCREEN V1
-// 🏆 Leaderboards, Rankings, Reputation, Badges
-// ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
+// src/screens/Rankings/RankingsScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +11,6 @@ import {
 import { RANKING_CONFIG } from '../../services/rankingService.js';
 import rankingService from '../../services/rankingService.js';
 
-// ==================== UTILITY COMPONENTS ====================
 const TabButton = ({ active, onClick, children, icon: Icon }) => (
   <button
     onClick={onClick}
@@ -101,7 +98,6 @@ const UserAvatar = ({ user, size = 'md' }) => {
   );
 };
 
-// ==================== RANK CARD ====================
 const RankCard = ({ rank, item, type }) => {
   const navigate = useNavigate();
   
@@ -165,7 +161,6 @@ const RankCard = ({ rank, item, type }) => {
   );
 };
 
-// ==================== MAIN RANKINGS SCREEN ====================
 export default function RankingsScreen() {
   const { theme, isDark } = useTheme();
   const navigate = useNavigate();

@@ -1,4 +1,5 @@
-// src/components/Shared/ArvdoulLogo.jsx - ARVDOUL OFFICIAL BRAND LOGO SYSTEM
+// src/components/Shared/ArvdoulLogo.jsx
+
 import React, { memo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';

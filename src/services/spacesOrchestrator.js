@@ -1,6 +1,4 @@
 /**
- * src/services/spacesOrchestrator.js - ARVDOUL LIVE AUDIO SPACES & CO-PRESENCE ORCHESTRATOR v1.0
- * 
  * Production-grade orchestration for interactive audio spaces:
  * • Role-Based Stage Management (HOST, CO_HOST, SPEAKER, LISTENER)
  * • Real-time Hand-Raise Queue with priority ordering and permissions

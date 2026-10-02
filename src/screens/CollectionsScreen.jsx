@@ -1,6 +1,4 @@
 /**
- * src/screens/CollectionsScreen.jsx - ARVDOUL Ultimate Collections & Folders Manager
- * 
  * Production-ready collections management with custom folders, cover art,
  * privacy controls, batch organization, and live item counts.
  */
@@ -30,7 +28,7 @@ export default function CollectionsScreen() {
   const [newDesc, setNewDesc] = useState('');
   const [newIsPrivate, setNewIsPrivate] = useState(false);
 
-  // Load REAL collections from collectionsService (Firestore-backed)
+  // Load collections from collectionsService (Firestore-backed)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -60,7 +58,7 @@ export default function CollectionsScreen() {
     return () => { cancelled = true; };
   }, [user?.uid]);
 
-  // Create Collection (REAL: persists via collectionsService)
+  // Create Collection ( persists via collectionsService)
   const handleCreateCollection = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) {
@@ -101,7 +99,7 @@ export default function CollectionsScreen() {
     }
   };
 
-  // Delete Collection (REAL)
+  // Delete Collection
   const handleDeleteCollection = async (id, title) => {
     if (!window.confirm(`Delete folder "${title}"?`)) return;
     try {

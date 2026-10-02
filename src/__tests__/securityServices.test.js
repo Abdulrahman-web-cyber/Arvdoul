@@ -53,6 +53,11 @@ describe('no client-side security theatre', () => {
   //                       attacker's automation controls end to end.
   //   - userIntegrity     client-computed trust/strike/sybil decisions that
   //                       carry no server enforcement.
+  //   - apiSecurityGateway a client generated and client stored API key that the
+  //                       same client validates; it can never be the authority
+  //                       over its own key. Server-side key issuance is required.
+  //   - searchAbuse       client rate limiting and "CAPTCHA" on search; an
+  //                       attacker skips the client. Server rate limiting owns this.
   // Real replacements already exist: firestore.rules (authorization),
   // functions/rateLimit.js (per-user sharded server limits) and Firebase App
   // Check (bot/abuse). This guard stops the theatre from being reintroduced.
@@ -66,6 +71,8 @@ describe('no client-side security theatre', () => {
     'challengeService',
     'botProtectionService',
     'userIntegrityService',
+    'apiSecurityGatewayService',
+    'searchAbuseService',
   ];
 
   test('false-security client services are gone', () => {

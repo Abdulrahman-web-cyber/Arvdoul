@@ -1,6 +1,4 @@
-// src/screens/Menu/MenuScreen.jsx – ARVDOUL SUPREME MENU & STUDIO HUB
-// 🎯 Advanced Floating Card Navigation Hub • Pro Creator Control Center
-// ✅ WCAG 2.1 AA Compliant • Glassmorphism • Real User Data • Instant Filter Search
+// src/screens/Menu/MenuScreen.jsx
 
 import React, { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";

@@ -1,5 +1,5 @@
-// src/screens/NotificationsScreen.jsx - ARVDOUL ULTIMATE NOTIFICATIONS SCREEN
-// Pixel-perfect replica of Arvdoul Luxury Design System with real-time Firestore synchronization
+// src/screens/NotificationsScreen.jsx
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';

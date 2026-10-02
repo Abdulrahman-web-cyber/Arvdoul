@@ -1,5 +1,4 @@
 // src/screens/GroupInfoScreen.jsx
-// 🎯 Group information and management screen (Web version - React Router)
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';

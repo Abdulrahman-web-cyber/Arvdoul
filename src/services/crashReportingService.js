@@ -1,6 +1,4 @@
 /**
- * src/services/crashReportingService.js - ARVDOUL CRASH REPORTING & ERROR DEDUPLICATION
- *
  * Implements:
  * 1. Global Unhandled Rejection & Error Listeners: Captures unhandled promises, runtime syntax errors, and DOM exceptions.
  * 2. Fingerprinting & Deduplication: Hashes stack trace call frames to group duplicate crashes into single issue buckets.

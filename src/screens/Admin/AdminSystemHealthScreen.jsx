@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminSystemHealthScreen.jsx - ARVDOUL SYSTEM HEALTH & TELEMETRY
-// ✅ Real-time platform component monitoring & SLO compliance
-// ✅ Live latency, Web Vitals, memory heaps, and diagnostic probe runner
-// ✅ Cloud service statuses (Firestore, Auth, Storage, WebRTC, CDN)
+// src/screens/Admin/AdminSystemHealthScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -90,22 +87,8 @@ const AdminSystemHealthScreen = () => {
     toast.info('Running live platform health probe…');
 
     try {
-      const { doc, getDocFromServer } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-
-      let dbLatency = null;
-      let dbStatus = 'degraded';
-      const probeStart = performance.now();
-      try {
-        await getDocFromServer(doc(firestore, 'system_health', 'probe'));
-        dbLatency = Math.round(performance.now() - probeStart);
-        dbStatus = 'operational';
-      } catch {
-        // A missing probe document still proves the round-trip succeeded; only
-        // a network/permission failure lands here and stays 'degraded'.
-        dbStatus = 'degraded';
-      }
+      const { getAdminService } = await import('../../services/adminService.js');
+      const { status: dbStatus, latencyMs: dbLatency } = await getAdminService().probeDatabase();
 
       setServices(prev => prev.map(s => (
         s.id === 'db'

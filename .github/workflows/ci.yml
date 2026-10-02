@@ -200,6 +200,40 @@ jobs:
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
+  # ========== ARCHITECTURE + COST GUARDS (HARD FAIL) ==========
+  # These are enforcement gates, not advisories: unlike the advisory lint/test
+  # jobs above, they MUST fail the pipeline. They freeze architectural
+  # invariants so a future change cannot silently reintroduce a direct Firebase
+  # import in UI, an upward (UI) import in a service, an unbounded Firestore
+  # read, or a new realtime listener. (Directives §83/§84.)
+  guards:
+    name: Architecture & Cost Guards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run architecture + cost guards
+        run: >-
+          npm run test -- --watchAll=false
+          src/__tests__/architectureBoundaries.test.js
+          src/__tests__/firebaseCostGuard.test.js
+          src/__tests__/securityServices.test.js
+          src/__tests__/deployIntegrity.test.js
+          src/__tests__/sharedConfigSync.test.js
+          src/__tests__/firestoreRulesCompile.test.js
+          src/__tests__/profileReadModel.test.js
+          src/__tests__/userServicePrivacyProjection.test.js
+
   # ========== SECURITY CHECK ==========
   security:
     name: Security Audit

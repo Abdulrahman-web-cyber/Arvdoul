@@ -1,6 +1,4 @@
 /**
- * src/screens/SettingsScreen.jsx - ARVDOUL Master Settings & Preferences Center
- *
  * REAL SYSTEM (not static UI):
  *  - Every toggle persists via settingsService (Firestore `users/{uid}`
  *    settings field, optimistic updates, offline queue, rollback on failure)
@@ -127,7 +125,6 @@ export default function SettingsScreen() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // ---------- Load settings + level ----------
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -162,7 +159,6 @@ export default function SettingsScreen() {
     }
   }, [location.hash, settings]);
 
-  // ---------- Persisted update with optimistic UI + rollback ----------
   const updateSetting = useCallback(
     async (path, value) => {
       if (!settings || !uid) return;
@@ -186,7 +182,6 @@ export default function SettingsScreen() {
     [settings, uid, t]
   );
 
-  // ---------- Appearance side-effects ----------
   const handleReduceMotion = (value) => {
     document.documentElement.classList.toggle('arvdoul-reduce-motion', value);
     updateSetting('appearance.reduceMotion', value);
@@ -202,7 +197,6 @@ export default function SettingsScreen() {
     }
   };
 
-  // ---------- Data & cache ----------
   const handleClearCache = async () => {
     try {
       const res = await settingsService.clearApplicationCache();
@@ -212,7 +206,6 @@ export default function SettingsScreen() {
     }
   };
 
-  // ---------- Danger zone ----------
   const handleLogout = async () => {
     try {
       if (signOut) await signOut();
@@ -245,7 +238,6 @@ export default function SettingsScreen() {
     }
   }, [toggleTheme]);
 
-  // ---------- Loading state ----------
   if (!settings) {
     return (
       <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>

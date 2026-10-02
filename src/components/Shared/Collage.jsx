@@ -1,4 +1,5 @@
-// src/components/Shared/Collage.jsx - ARVDOUL COLLAGE MAKER & COMPOSER
+// src/components/Shared/Collage.jsx
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

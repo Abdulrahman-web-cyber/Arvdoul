@@ -1,4 +1,5 @@
-// src/lib/searchUtils.jsx - ARVDOUL Search Utilities
+// src/lib/searchUtils.jsx
+
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 

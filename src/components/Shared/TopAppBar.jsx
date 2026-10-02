@@ -1,4 +1,5 @@
-// src/components/Shared/TopAppBar.jsx - ARVDOUL TOP APP BAR vNEXT
+// src/components/Shared/TopAppBar.jsx
+
 import React, {
   useState,
   useEffect,

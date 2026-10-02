@@ -1,6 +1,4 @@
 /**
- * src/services/searchIndexingService.js - ARVDOUL SEARCH INDEXING & N-GRAM PIPELINE v8.0
- *
  * Implements:
  * 1. Tokenization & Stemming: Normalizes text, removes stop words, generates edge n-grams for prefix autocompletion.
  * 2. Real-Time Index Ingestion: Updates index docs on post, user, or sound creation.

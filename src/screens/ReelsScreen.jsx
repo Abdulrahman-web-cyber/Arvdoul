@@ -1,5 +1,5 @@
-// src/screens/ReelsScreen.jsx - ARVDOUL FULL SCREEN REELS & SHORT VIDEOS
-// 100% Pixel-perfect replica of Arvdoul Short Video Feed from user screenshot
+// src/screens/ReelsScreen.jsx
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -26,14 +26,12 @@ export default function ReelsScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-
 const formatDuration = (seconds) => {
   const secs = Math.max(0, Math.round(Number(seconds) || 0));
   const m = Math.floor(secs / 60);
   const s2 = String(secs % 60).padStart(2, '0');
   return `${m}:${s2}`;
 };
-
 
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -61,7 +59,7 @@ const formatDuration = (seconds) => {
     setReels((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
-  // Load REAL reels from the video feed (Firestore-backed, no mock data).
+  // Load reels from the video feed (Firestore-backed, no mock data).
   const loadReels = useCallback(async (feedType) => {
     if (!user?.uid) {
       setReels([]);
@@ -120,7 +118,7 @@ const formatDuration = (seconds) => {
     loadReels(activeTab);
   }, [activeTab, loadReels]);
 
-  // Resolve the REAL follow state for the loaded creators (never a local-only fake).
+  // Resolve the follow state for the loaded creators (never a local-only fake).
   useEffect(() => {
     if (!user?.uid || reels.length === 0) return;
     let cancelled = false;
@@ -170,7 +168,6 @@ const formatDuration = (seconds) => {
     if (delta > 0) handleNextReelRef.current();
     else handlePrevReelRef.current();
   }, []);
-
 
   // Handle Double Tap to Like
   const handleDoubleTap = () => {

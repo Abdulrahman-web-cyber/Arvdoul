@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileMutualFriends.jsx - ARVDOUL Profile Mutual Friends Component
- * 
  * Shows mutual friends with avatar chips.
  * 
  * @component

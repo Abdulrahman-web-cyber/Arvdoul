@@ -1,5 +1,7 @@
-// src/screens/ConversationSettingsScreen.jsx - ARVDOUL CONVERSATION SETTINGS (REAL)
+// src/screens/ConversationSettingsScreen.jsx
+//
 // Conversation info, mute/unmute, leave group — backed by messagesService.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';

@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminAuditLogsScreen.jsx - ARVDOUL SECURITY AUDIT LOG EXPLORER
-// ✅ Centralized security & compliance event inspection
-// ✅ Actor filtering, action classification, and forensic payload viewer
-// ✅ Exportable compliance trail (GDPR / SOC2 ready)
+// src/screens/Admin/AdminAuditLogsScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -51,14 +48,9 @@ const AdminAuditLogsScreen = () => {
   const fetchLogs = useCallback(async () => {
     try {
       setLoading(true);
-      const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-
-      const snap = await getDocs(
-        query(collection(firestore, 'moderation_logs'), orderBy('createdAt', 'desc'), limit(100))
-      );
-      setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const { getAdminService } = await import('../../services/adminService.js');
+      const rows = await getAdminService().listAuditLogs(100);
+      setLogs(rows);
     } catch {
       toast.error('Could not load the audit trail.');
       setLogs([]);

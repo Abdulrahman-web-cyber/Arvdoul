@@ -1,4 +1,5 @@
-// src/screens/PostDetails.jsx – Full post view with swipe to go back, all types work
+// src/screens/PostDetails.jsx
+
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, useMotionValue } from 'framer-motion';

@@ -1,6 +1,4 @@
 /**
- * src/services/copyrightDetectionService.js - ARVDOUL COPYRIGHT & PERCEPTUAL HASHING ENGINE v8.0
- *
  * Implements:
  * 1. 64-bit Perceptual Hash (dHash/pHash) Simulation: Generates visual media fingerprints.
  * 2. Hamming Distance Matching: Verifies overlap proximity against registered copyrighted assets.
@@ -15,7 +13,7 @@ class CopyrightDetectionService {
     this.hammingMatchThreshold = 10; // Max allowed bit difference for copyright hit (out of 64)
 
     // Registered copyrighted media signatures. Populated from Firestore
-    // (collection `copyright_registry`) - a REAL database of registered
+    // (collection `copyright_registry`) - a database of registered
     // works. Empty until works are registered via `registerWork()` or an
     // admin import. No fabricated sample entries.
     this.copyrightRegistry = new Map();
@@ -181,7 +179,7 @@ class CopyrightDetectionService {
 
   /**
    * Evaluates media fingerprint against the copyrighted visual database.
-   * Waits for the registry to load so matches are computed against the REAL
+ * Waits for the registry to load so matches are computed against the REAL
    * registered-work database (empty registry = no matches, never fabricated).
    */
   async evaluateCopyright(mediaBuffer, metadata = {}) {

@@ -1,6 +1,4 @@
 /**
- * src/services/multiRegionMeshService.js - ARVDOUL MULTI-REGION RESILIENCE & CIRCUIT BREAKER MESH v1.0
- * 
  * Production-grade autonomous multi-region disaster recovery:
  * • Regional Topologies (us-central1, europe-west3, asia-northeast1)
  * • Finite State Machine Circuit Breakers (CLOSED, OPEN, HALF_OPEN)

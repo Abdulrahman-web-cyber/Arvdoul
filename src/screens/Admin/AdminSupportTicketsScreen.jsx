@@ -1,6 +1,4 @@
-// src/screens/Admin/AdminSupportTicketsScreen.jsx - ARVDOUL SUPPORT & TRIAGE CENTER
-// ✅ AI & human hybrid ticket triage (integrated with supportAutomationService)
-// ✅ Categorization, canned responses, status workflows, and resolution audit
+// src/screens/Admin/AdminSupportTicketsScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

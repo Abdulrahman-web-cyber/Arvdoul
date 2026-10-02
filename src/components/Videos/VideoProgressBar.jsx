@@ -1,4 +1,5 @@
-// src/components/Videos/VideoProgressBar.jsx - VIDEO PROGRESS BAR
+// src/components/Videos/VideoProgressBar.jsx
+
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { ARVDOUL_GRADIENT } from '../../utils/videoUtils';

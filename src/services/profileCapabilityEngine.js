@@ -1,6 +1,4 @@
 /**
- * src/services/profileCapabilityEngine.js - ARVDOUL ACTION CAPABILITY ENGINE
- * 
  * Part 1 Master Blueprint (Section 16 & 17) - Centralized Capability & Social Graph Engine.
  * Authoritatively resolves permissions and action capabilities for any viewer-target pair.
  * 
@@ -41,7 +39,7 @@ export const ACCOUNT_STATES = Object.freeze({
  * @returns {string} One of RELATIONSHIP_STATES
  */
 export function resolveRelationshipState(relationship = {}) {
-  // Explicit, documented precedence (audit N017). Safety states win over
+  // Explicit, documented precedence. Safety states win over
   // social states; mute is a viewer preference that must survive a follow edge
   // (previously muted+following reported FOLLOWING and lost the mute).
   //   1. blocked (either direction, incl. the aggregate flag)
@@ -182,7 +180,7 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
   const canViewCommunities = canViewProfileSection('communities', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewCollections = canViewProfileSection('collections', targetPrivacy, effectiveRelation) && canViewContent;
   // All gated sections require canViewContent so the capability map can never
-  // report a section visible while content itself is restricted (audit N007).
+  // report a section visible while content itself is restricted.
   const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewEconomicStatus = isSimulatedOwner || (canViewProfileSection('economicStatus', targetPrivacy, effectiveRelation) && canViewContent);

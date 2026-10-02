@@ -1,6 +1,4 @@
 /**
- * src/services/tracingService.js - ARVDOUL DISTRIBUTED TRACING & SPAN ENGINE v8.0
- *
  * Implements:
  * 1. OpenTelemetry Compatible Trace Context Propagation: Generates W3C `traceparent` headers (`00-<trace_id>-<span_id>-01`).
  * 2. Nested Span Timings: Measures execution latency across UI rendering, Firestore queries, and Cloud Functions.

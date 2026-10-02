@@ -1,6 +1,4 @@
 /**
- * src/store/analyticsStore.js - ARVDOUL Analytics Store
- * 
  * Zustand store with Immer for analytics state management.
  * Manages user analytics data, timeframes, and dashboard metrics.
  * 
@@ -18,7 +16,6 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 
-// ==================== INITIAL STATE ====================
 const initialState = {
   // Analytics data
   analytics: null,
@@ -42,12 +39,10 @@ const initialState = {
   refreshKey: 0,
 };
 
-// ==================== STORE ====================
 export const useAnalyticsStore = create(
   immer((set, get) => ({
     ...initialState,
     
-    // ==================== ANALYTICS ACTIONS ====================
     /**
      * Load user analytics
      * @param {string} userId - User ID
@@ -126,7 +121,6 @@ export const useAnalyticsStore = create(
       await get().loadAnalytics(userId, timeframe);
     },
     
-    // ==================== DETAILED METRICS ====================
     /**
      * Load daily stats
      * @param {string} userId - User ID
@@ -185,7 +179,6 @@ export const useAnalyticsStore = create(
       }
     },
     
-    // ==================== TIMEFRAME ACTIONS ====================
     /**
      * Set timeframe and reload analytics
      * @param {string} timeframe - Timeframe (7d, 30d, 90d, 365d)
@@ -196,7 +189,6 @@ export const useAnalyticsStore = create(
       });
     },
     
-    // ==================== RESET ACTIONS ====================
     /**
      * Clear analytics state
      */
@@ -208,7 +200,6 @@ export const useAnalyticsStore = create(
   }))
 );
 
-// ==================== SELECTORS ====================
 export const selectAnalytics = (state) => state.analytics;
 export const selectLoading = (state) => state.loading;
 export const selectError = (state) => state.error;

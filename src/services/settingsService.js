@@ -1,5 +1,4 @@
 /**
- * src/services/settingsService.js
  * ARVDOUL USER SETTINGS SERVICE — real persistence
  *
  * The settings screen previously kept toggles in local useState: they reset

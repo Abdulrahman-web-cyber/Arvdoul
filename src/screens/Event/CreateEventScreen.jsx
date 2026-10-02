@@ -1,7 +1,4 @@
-// src/screens/Event/CreateEventScreen.jsx - ARVDOUL CREATE EVENT
-// ✅ Create new event with all settings
-// ✅ Cover image upload
-// ✅ Ticket tiers and capacity
+// src/screens/Event/CreateEventScreen.jsx
 
 import React, { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';

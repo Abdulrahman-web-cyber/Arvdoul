@@ -1,6 +1,4 @@
 /**
- * src/services/AggregationCacheService.js - ARVDOUL AGGREGATION CACHING ENGINE
- *
  * Implements:
  * 1. Count / Sum / Average Aggregation Caching: Intercepts expensive queries and stores computed metrics in fast cache.
  * 2. Event-driven and mutation-based cache invalidation.

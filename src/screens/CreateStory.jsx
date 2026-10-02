@@ -1,5 +1,5 @@
-// src/screens/CreateStory.jsx - ARVDOUL STORY CAMERA & CREATIVE STUDIO
-// 100% Pixel-perfect implementation matching Arvdoul Story Camera screenshot
+// src/screens/CreateStory.jsx
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -178,7 +178,7 @@ export default function CreateStory() {
   // Hold for Video Recording
   const handleShutterMouseDown = () => {
     if (capturedPreview) return;
-    // REAL video recording via MediaRecorder on the camera stream
+    // video recording via MediaRecorder on the camera stream
     const stream = videoRef.current?.srcObject;
     if (!stream || typeof MediaRecorder === 'undefined') {
       toast.error('Camera is not active. Enable camera access to record.');

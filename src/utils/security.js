@@ -1,8 +1,4 @@
 /**
- * ARVDOUL Security Utilities
- */
-
-/**
  * Safely parses the stored user object from localStorage without throwing.
  * @returns {object|null}
  */
@@ -14,12 +10,12 @@ export function getStoredUser() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
     // Stale-identity guard: if a different session uid is recorded, the cached
-    // `user` blob belongs to a previous account (audit N002) and must not be
+    // `user` blob belongs to a previous account and must not be
     // used as the current identity.
     const sessionUid = localStorage.getItem('arvdoul_uid');
     // Fail closed: when a session uid is recorded the blob must carry the same
     // uid. A blob with no uid cannot be attributed to this session, so it is
-    // rejected rather than trusted (audit N002).
+    // rejected rather than trusted.
     if (sessionUid && (!parsed.uid || parsed.uid !== sessionUid)) return null;
     return parsed;
   } catch {

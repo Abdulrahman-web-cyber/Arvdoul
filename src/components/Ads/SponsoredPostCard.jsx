@@ -1,5 +1,6 @@
 // src/components/Ads/SponsoredPostCard.jsx
-// ARVDOUL REAL SPONSORED AD CARD & REWARDED AD SYSTEM
+//
+// ARVDOUL SPONSORED AD CARD & REWARDED AD SYSTEM
 // Supports light & dark themes, real Firestore impression & click tracking, and Rewarded Ad video modal
 
 import React, { useState, useEffect, useRef } from 'react';

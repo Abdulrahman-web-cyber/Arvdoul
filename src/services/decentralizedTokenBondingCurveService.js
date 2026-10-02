@@ -1,6 +1,4 @@
 /**
- * src/services/decentralizedTokenBondingCurveService.js - ARVDOUL CREATOR TOKEN BONDING CURVES & DYNAMIC LIQUIDITY v1.0
- * 
  * Production-grade creator social tokens & automated market makers:
  * • Bancor-style continuous bonding curve pricing: Price = m * (Supply)^k
  * • Slippage protection & minimum output guarantees on buy/sell

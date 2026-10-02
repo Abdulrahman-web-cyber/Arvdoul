@@ -2,8 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
 
-// ==================== ARVDOUL DESIGN TOKENS ====================
-
 /**
  * ARVDOUL DNA Gradient - The signature gradient used throughout the platform
  */
@@ -196,11 +194,7 @@ export const DURATION = {
   slower: 750,
 };
 
-// ==================== CONTEXT ====================
-
 const ThemeContext = createContext(null);
-
-// ==================== HOOK ====================
 
 /**
  * useTheme - theme hook with full ARVDOUL design system
@@ -240,8 +234,6 @@ const getDefaultTheme = () => ({
   duration: DURATION,
   gradient: ARVDOUL_GRADIENT,
 });
-
-// ==================== PROVIDER ====================
 
 /**
  * Safe localStorage access - sandboxed iframes (previews, embedded webviews)
@@ -398,8 +390,6 @@ export const ThemeProvider = memo(({ children }) => {
 });
 
 ThemeProvider.displayName = 'ThemeProvider';
-
-// ==================== EXPORTS ====================
 
 export {
   LIGHT_THEME,

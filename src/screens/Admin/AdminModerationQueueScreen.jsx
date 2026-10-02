@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminModerationQueueScreen.jsx - ARVDOUL MODERATION QUEUE
-// ✅ Review reported content
-// ✅ Take moderation actions
-// ✅ View moderation history
+// src/screens/Admin/AdminModerationQueueScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

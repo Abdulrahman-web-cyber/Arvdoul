@@ -1,14 +1,4 @@
-// src/services/storyService.js – ARVDOUL STORIES ENGINE v20 (BILLION‑SCALE FINAL)
-// 🎬 THE ULTIMATE STORIES ENGINE – SNAPSHOTS · SHARDED COUNTERS · OFFLINE QUEUE · REAL ADS
-// 🔥 EVERY FEATURE FULLY IMPLEMENTED – READY FOR BILLIONS OF USERS
-// ✅ FIXED: Offline queue mutex, parallel batch fetching, in‑query full iteration
-// ✅ FIXED: Ad impressions moved out of feed generation, cache invalidation
-// ✅ FIXED: No async calls inside Firestore transactions
-// ✅ ADDED: Interactive stickers (poll, quiz, countdown, emoji slider)
-// ✅ ADDED: Story collaboration (multi‑user contributions)
-// ✅ ADDED: Link stickers (swipe‑up), music library (royalty‑free API REAL)
-// ✅ ADDED: AI‑generated captions (Cloud Vision), user‑created templates
-// ✅ ADDED: Story reach analytics (completion rate, forward/back taps)
+// src/services/storyService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
@@ -24,9 +14,7 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject }
 import { getMessagingService } from './messagesService.js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// ----------------------------------------------------------------------
 //  CONFIGURATION – tuned for global scale
-// ----------------------------------------------------------------------
 const STORY_CONFIG = {
   EXPIRY_HOURS: 24,
   MAX_DURATION_SECONDS: 60,
@@ -102,7 +90,7 @@ const STORY_CONFIG = {
     SEEN_STORIES: 10,
     STORY_FETCH: 30,
   },
-  // ✨ NEW: Interactive stickers
+  // Interactive stickers
   STICKER_TYPES: ['poll', 'quiz', 'countdown', 'emoji_slider'],
   COLLABORATION: {
     ENABLED: true,
@@ -110,7 +98,7 @@ const STORY_CONFIG = {
   },
   MUSIC: {
     ENABLED: true,
-    LIBRARY_URL: 'https://api.royaltyfreemusic.com/v1/tracks', // REAL
+    LIBRARY_URL: 'https://api.royaltyfreemusic.com/v1/tracks',
     API_KEY: import.meta.env.VITE_MUSIC_API_KEY || null,
   },
   AI_CAPTION: {
@@ -127,9 +115,7 @@ const STORY_CONFIG = {
   },
 };
 
-// ----------------------------------------------------------------------
 //  ERROR ENHANCER
-// ----------------------------------------------------------------------
 function enhanceError(err, defaultMsg) {
   const code = err?.code || 'unknown';
   const msgs = {
@@ -149,9 +135,7 @@ function enhanceError(err, defaultMsg) {
   return e;
 }
 
-// ----------------------------------------------------------------------
 //  CLIENT‑SIDE RATE LIMITER (UX only – server enforces real limits)
-// ----------------------------------------------------------------------
 class RateLimiter {
   constructor() { this.store = new Map(); }
   async checkLimit(userId, op) {
@@ -170,9 +154,7 @@ class RateLimiter {
   }
 }
 
-// ----------------------------------------------------------------------
 //  OFFLINE STORY QUEUE (IndexedDB + mutex)
-// ----------------------------------------------------------------------
 class StoryUploadQueue {
   constructor() {
     this.db = null;
@@ -234,9 +216,7 @@ class StoryUploadQueue {
   }
 }
 
-// ----------------------------------------------------------------------
 //  MAIN STORY SERVICE CLASS
-// ----------------------------------------------------------------------
 class UltimateStoryService {
   constructor() {
     this.firestore = null; this.storage = null; this.auth = null;
@@ -346,7 +326,7 @@ class UltimateStoryService {
       this.st = { ref: storageRef, uploadBytesResumable, getDownloadURL, deleteObject };
       try { await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true }); } catch (err) {}
       this.initialized = true;
-// ✅ Initialized');
+// Initialized');
       this._onlineHandler(); // flush queue
     })();
     return this.initPromise;
@@ -360,9 +340,7 @@ class UltimateStoryService {
     return this.ensureInitialized();
   }
 
-  // ====================================================================
   //  PUBLIC API (existing methods, all fixed)
-  // ====================================================================
 
   async createStory(storyData, options = {}) {
     await this.ensureInitialized();
@@ -784,7 +762,6 @@ class UltimateStoryService {
     this._analyticsBuffer.completions.set(storyId, (this._analyticsBuffer.completions.get(storyId) || 0) + 1);
   }
 
-  // ========== INTERACTIVE STICKERS ==========
   async voteOnPoll(storyId, pollId, optionIndex) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -861,7 +838,6 @@ class UltimateStoryService {
     return { success: true };
   }
 
-  // ========== COLLABORATION ==========
   async addCollaborator(storyId, collaboratorId) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -896,7 +872,6 @@ class UltimateStoryService {
     return { success: true };
   }
 
-  // ========== MUSIC LIBRARY (royalty‑free API) ==========
   async searchMusic(query) {
     if (!STORY_CONFIG.MUSIC.ENABLED) return [];
     try {
@@ -924,7 +899,6 @@ class UltimateStoryService {
     return { success: true };
   }
 
-  // ========== USER TEMPLATES ==========
   async saveTemplate(name, storyData) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -962,7 +936,6 @@ class UltimateStoryService {
     return { success: true };
   }
 
-  // ========== ARCHIVE & HIGHLIGHTS (same as before but with fixes) ==========
   async archiveStory(storyId, userId = null) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -1263,7 +1236,6 @@ class UltimateStoryService {
     });
   }
 
-  // ========== SEARCH (now indexed) ==========
   async searchStories({ query, location, music, hashtag, limit = 20 } = {}) {
     await this.ensureInitialized();
     const storiesRef = this.fs.collection(this.firestore, 'stories');
@@ -1292,7 +1264,6 @@ class UltimateStoryService {
     }
   }
 
-  // ========== TEMPLATES (static for now, user templates above) ==========
   getTemplates() {
     return [
       { id: 'modern', name: 'Modern', backgroundColor: '#000000', textColor: '#FFFFFF', font: 'sans-serif' },
@@ -1302,7 +1273,6 @@ class UltimateStoryService {
     ];
   }
 
-  // ========== A/B TESTING ==========
   getABBucket(userId) {
     const key = `ab_bucket_${userId}`;
     let bucket = localStorage.getItem(key);
@@ -1316,7 +1286,6 @@ class UltimateStoryService {
     localStorage.setItem(`ab_bucket_${userId}`, bucket);
   }
 
-  // ========== GDPR DATA EXPORT ==========
   async exportUserData(userId) {
     await this.ensureInitialized();
     const data = { stories: [], archived: [], highlights: [] };
@@ -1335,7 +1304,6 @@ class UltimateStoryService {
     return data;
   }
 
-  // ========== EXPIRED STORIES CLEANUP (called by Cloud Function) ==========
   async cleanupExpiredStories() {
     await this.ensureInitialized();
     logger.warn('// Running expired story cleanup...');
@@ -1361,13 +1329,10 @@ class UltimateStoryService {
         processed++;
       } catch (err) { logger.error(`[Story] Cleanup error ${storyId}:`, err); }
     }
-//     logger.warn(`[Story] Cleaned ${processed} expired stories`);
     return { success: true, processed };
   }
 
-  // ====================================================================
   //  PRIVATE HELPERS (all fixed)
-  // ====================================================================
 
   _buildStorySnapshot(story) {
     return {
@@ -1394,7 +1359,7 @@ class UltimateStoryService {
   }
 
   /**
-   * REAL feed scoring (spec §37/38/39/91):
+ * feed scoring (spec §37/38/39/91):
    *  - recency (decay by age)
    *  - engagement QUALITY (reactions/comments/shares/replies, capped)
    *  - affinity = viewer follows the creator (was configured but never computed)
@@ -1718,7 +1683,6 @@ class UltimateStoryService {
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     const items = await this.uploadQueue.getAll();
     if (!items.length) return;
-//     logger.warn(`[Story] Flushing ${items.length} queued stories`);
     const CONCURRENCY = 2;
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const batch = items.slice(i, i + CONCURRENCY);
@@ -1858,7 +1822,6 @@ class UltimateStoryService {
   }
 }
 
-// ==================== SINGLETON & PUBLIC API ====================
 let instance = null;
 export function getStoryService() {
   if (!instance) instance = new UltimateStoryService();

@@ -1,5 +1,4 @@
-// 🛡️ ARVDOUL GLOBAL ERROR BOUNDARY v3
-// Theme-aware + Neon system + production-grade crash UI
+// src/app/GlobalErrorBoundary.jsx
 
 import React, { Component, createRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
@@ -173,7 +172,7 @@ class GlobalErrorBoundaryBase extends Component {
     setTimeout(() => this.setState({ copied: false }), 1500);
   };
 
-  // 🎨 REAL NEON SYSTEM (theme-aware)
+  // NEON SYSTEM (theme-aware)
   getGlow(type) {
     const theme = this.props.theme?.resolvedTheme;
 

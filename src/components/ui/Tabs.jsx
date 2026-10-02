@@ -1,4 +1,5 @@
 // src/components/ui/Tabs.jsx
+
 /**
  * ARVDOUL DESIGN SYSTEM — ACCESSIBLE TABS
  * Guide Part II: keyboard navigation (arrow keys, Home/End), roving tabindex,

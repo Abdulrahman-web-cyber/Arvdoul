@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/EditProfileScreen.jsx - ARVDOUL Edit Profile Screen
- * 
  * Screen for editing user profile information.
  * 
  * @component

@@ -1,6 +1,4 @@
 /**
- * src/services/chaosDefenseService.js - ARVDOUL CHAOS DEFENSE, RED-TEAMING & IMMUNITY ENGINE v1.0
- * 
  * Production-grade resilience, adversarial testing & automated self-healing:
  * • Controlled chaos injection (synthetic latency, failure rate, memory simulation)
  * • Automated adversarial red-team fuzzing & payload sanitization assessment

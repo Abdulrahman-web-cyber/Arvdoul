@@ -22,7 +22,7 @@
 | `src/config/**` | 1 file | `profileContracts.js` |
 | `src/context/**` | 3 files | |
 | `functions/*.js` | 24 modules | 152 deployable exports after the deploy fix |
-| test files | 71 | 71 suites / 1114 tests, all green (was 883 before this branch) |
+| test files | 72 | 72 suites / 1127 tests, all green (was 883 before this branch) |
 | routes | 147 `path=` entries | 22 are `/profile/*` |
 | `firestore.rules` | 1189 lines | |
 | `storage.rules` | 108 lines | |
@@ -75,8 +75,8 @@ Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed
 | Level curve / gates / rewards | ✅ canonical | `src/shared/levelConfig.cjs`; consumers import `LEVEL_GATES` from `levelSystemService`, no literal `LEVEL >= N` in JSX |
 | Callables from client | ✅ canonical | `callableService.callFunction` / `FUNCTIONS` |
 | Coin packages / tiers / IAP | ✅ canonical | shared config; `monetizationService` no longer declares shadow tables (guarded by `noFabricatedData.test.js`) |
-| Profile read model | ✅ canonical | `src/services/profileReadModel.js` owns placeholder/name/handle/avatar/count/level/creator-flag derivation and the single `projectProfileForViewer` masking; `ProfilePublicScreen`, `ProfilePreviewScreen`, `ProfileMyScreen`, `passportService` consume it (AUDIT V3 A-3/N018). Guarded by `profileReadModel.test.js`. |
-| Relationship/capability | ✅ canonical | `profileCapabilityEngine.resolveCapabilities` decides once; screens project via `projectProfileForViewer` and no longer re-derive privacy (N007/N017/N018). |
+| Profile read model | ✅ canonical | `src/services/profileReadModel.js` owns placeholder/name/handle/avatar/count/level/creator-flag derivation and the single `projectProfileForViewer` masking; `ProfilePublicScreen`, `ProfilePreviewScreen`, `ProfileMyScreen`, `AboutScreen`, `passportService` consume it (AUDIT V3 A-3/N018). Guarded by `profileReadModel.test.js`. |
+| Relationship/capability | ✅ canonical | `profileCapabilityEngine.resolveCapabilities` decides once; `userService.getUserProfile`, screens and passport project via `projectProfileForViewer` and no longer re-derive privacy (N007/N017/N018). |
 
 ---
 
@@ -118,8 +118,8 @@ job of `.github/workflows/ci.yml`.
 
 ## 7. Contradictions found (documentation / config vs code)
 
-1. **CSP is contradictory.** `index.html:19` ships a permissive meta CSP (`script-src ... 'unsafe-inline' 'unsafe-eval'`), while `CSPService` (never applied) advertises a strict nonce-based CSP. The strict policy is not the one in force. **Open.**
-2. **Security headers** are real in `firebase.json` (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS is *not* present) but `SecureHeadersService` (never applied) advertises `Strict-Transport-Security`. Firebase Hosting sets HSTS by default, so this is cosmetic, but the service is dead code. **Open.**
+1. **CSP** — ✅ **resolved.** The never-applied strict-CSP `CSPService` is deleted; the policy actually in force is the `index.html:19` meta CSP (documented as such). No service advertises a policy that is not shipped.
+2. **Security headers** — ✅ **resolved.** `SecureHeadersService` is deleted. The real headers are `firebase.json` (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`); HSTS is set by Firebase Hosting, so no client service needs to claim it.
 3. **`docs/ENGINEERING_READINESS.md`** claimed "21 core files" with a coverage floor on `sessionSecurityService` after that service was deleted. Fixed ✅ (floor removed, doc updated).
 4. **AUDIT V3's own remediation status was stale** relative to the branch. Several P0s are already fixed in code (§8); the audit still describes them as open.
 
@@ -143,8 +143,11 @@ job of `.github/workflows/ci.yml`.
 | N014 offline queue account bleed | ✅ fixed | `ownerUid` scoping + `purgeQueueForOwner` |
 | N016 App Check | ✅ fixed | `firebase/app-check` initialised when `VITE_FIREBASE_APPCHECK_SITE_KEY` is set; enforcement is a console toggle |
 | N019 analytics client-writable | ✅ fixed | `profile_analytics`/`profile_views` are server-write-only |
-| N007/N017/N018 capability divergence | ✅ **now closed** | `profileReadModel.projectProfileForViewer` applies the capability decision once; screens/passport no longer re-derive privacy or hardcode the creator gate. Guarded by `profileReadModel.test.js`. |
+| N007 capability engine vs projection | ✅ **now closed** | `userService.getUserProfile` resolves only the relation flags and delegates the decision to `resolveCapabilities` + `projectProfileForViewer`; it no longer runs a second hand-rolled `canViewProfileSection` mask. Guarded by `userServicePrivacyProjection.test.js` (12 tests, real fake-Firestore path: public/private/follower/blocked-both-directions/muted/restricted/suspended/owner/absent). |
+| N017 relationship precedence | ✅ **now closed** | `resolveRelationshipState` documents and enforces an explicit precedence (blocked → blocked-by → restricted → muted → pending → mutual/follow); the aggregate `isBlocked` is honoured. Guarded by `profileCapabilityEngine.test.js`. |
+| N018 component-level privacy re-derivation | ✅ **now closed** | `profileReadModel.projectProfileForViewer` applies the capability decision once; screens/passport no longer re-derive privacy or hardcode the creator gate. Guarded by `profileReadModel.test.js`. |
 | V2-01 monetization pagination | ✅ **now closed** | `getTransactionHistory(userId, limit, cursor)` and `getCoinLeaderboard(limit, cursor)` return `{ items, nextCursor }` with real `createdAt <` / `coins <` cursor clauses; `CoinsScreen` has a working *Load more*; the two other history consumers unwrap `.items`. Contract test: `monetizationPagination.test.js` (7 tests). |
+| V2-09 privacy/capability divergence | ✅ **now closed** | `canViewProfileSection` fails closed on unknown section/scope (`profileContracts.js:475-494`); the capability engine is the single decision point and `projectProfileForViewer` applies it once. `getUserProfile` no longer runs a parallel mask (N007/N017/N018). Guarded by `profileCapabilityEngine.test.js` + `userServicePrivacyProjection.test.js` + `profileReadModel.test.js`. |
 | N011 PII boundary | ✅ mostly | `users_private` exists and is written by the owner |
 | §11 shadow-system classification | 🟨 mostly done | 11 removed (WAF/CSRF/DDoS/session + CSP/headers/PoW + botProtection/userIntegrity + apiSecurityGateway/searchAbuse); all remaining client-side infra-control services classified (§10.1). WRONG-TIER detectors await a server home. |
 | §83 cost guards in CI | ✅ **now closed** | `firebaseCostGuard.test.js` freezes unbounded `getDocs`, `onSnapshot` and runtime dependency counts; hard-failing `guards` CI job (§5). |
@@ -154,12 +157,13 @@ job of `.github/workflows/ci.yml`.
 ## 9. Next actions (ordered)
 
 1. **Classify the remaining security-adjacent services** (§2.2b) as REAL CLIENT / UX-ONLY / FALSE SECURITY / DUPLICATE / DEAD, and remove the theatre with guards — **done ✅** (§10, §10.1).
-2. **Consolidate the profile read model** (N018): make screens/passport consume the capability object only; never recompute privacy — **done ✅** (`src/services/profileReadModel.js` owns the derivation and the single `projectProfileForViewer` masking; the four surfaces consume it; `profileReadModel.test.js` freezes it).
+2. **Consolidate the profile read model** (N018): make screens/passport consume the capability object only; never recompute privacy — **done ✅** (`src/services/profileReadModel.js` owns the derivation and the single `projectProfileForViewer` masking; the five surfaces consume it; `userService.getUserProfile` delegates too; `profileReadModel.test.js` and `userServicePrivacyProjection.test.js` freeze it).
 3. **CI cost guard** (§83): fail on new `onSnapshot`/`getDocs` without `limit`, on new realtime listeners, and on new runtime dependencies — **done ✅** (§5, `firebaseCostGuard.test.js`, hard-failing `guards` CI job).
 4. **Architecture guard** (§84): fail if `src/screens/**` or `src/components/**` import `firebase/firestore` directly, or if a lower layer imports UI — **done ✅**; all previous violations migrated through services and the allowlist is now empty.
 5. **Reconcile the CSP** (§7.1): either apply the strict policy or delete `CSPService` and document the real policy — **done ✅** (`CSPService` deleted; the real policy is the `index.html` meta CSP).
 6. **Monetization pagination** (V2-01) — **done ✅** (`getTransactionHistory`/`getCoinLeaderboard` cursor pages + `CoinsScreen` *Load more*; `monetizationPagination.test.js`).
 7. **Comment debt** (§52): forbidden "TODO integrate / production would / handled later" comment patterns and decorative emoji/change-history prefixes removed from production source — **done ✅** (one corrupted line at `storyService.js` repaired).
+8. **Close the residual privacy/capability divergence** (N007/N017/V2-09): `getUserProfile` now resolves only relation flags and delegates to the engine + projection; `resolveRelationshipState` has explicit precedence; `canViewProfileSection` fails closed — **done ✅** (`userServicePrivacyProjection.test.js`, `profileCapabilityEngine.test.js`, `profileReadModel.test.js`; all in the hard-failing `guards` CI job).
 
 ---
 
@@ -218,7 +222,7 @@ the client copy is removed.
 ## 11. Verification commands
 
 ```
-NODE_OPTIONS=--experimental-vm-modules npm test        # 71 suites / 1114 tests, green
+NODE_OPTIONS=--experimental-vm-modules npm test        # 72 suites / 1127 tests, green
 npm run build                                          # vite build succeeds (307 chunks, 8.8 MB dist, 3.9 s)
 npm run lint                                           # 0 errors (warnings expected)
 node scripts/sync-shared-config.mjs                    # shared config copy in sync

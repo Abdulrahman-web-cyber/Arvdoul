@@ -1,4 +1,5 @@
-// src/screens/PostCard.jsx – ARVDOUL ULTIMATE POST CARD (FINAL PERFECT)
+// src/screens/PostCard.jsx
+//
 // Perfect rounded edges, compact height, larger avatar, bubble counts, all bugs fixed.
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
@@ -35,9 +36,7 @@ import { VIRTUAL_GIFTS } from '../data/videoData';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ------------------------------------------------------------------
 // 1. DESIGN TOKENS – Perfectly rounded, compact, neon purple
-// ------------------------------------------------------------------
 const getDesignTokens = (theme) => {
   const isDark = theme === 'dark';
   return {
@@ -64,9 +63,7 @@ const getDesignTokens = (theme) => {
   };
 };
 
-// ------------------------------------------------------------------
 // 3. OFFLINE QUEUE (safe, with crypto‑strong IDs, collapse by action)
-// ------------------------------------------------------------------
 let offlineQueueDB = null;
 let offlineQueueInitPromise = null;
 
@@ -104,7 +101,7 @@ async function addToOfflineQueue(action, data) {
     ? crypto.randomUUID()
     : `${data.postId}_${data.userId}_${action}_${Date.now()}_${Math.random().toString(36)}`;
   // ownerUid partitions the queue by account so a later session cannot replay
-  // this user's pending writes (audit N014).
+  // this user's pending writes.
   const request = store.put({ id, action, data, ownerUid: data.userId || null, timestamp: Date.now() });
   await idbRequestPromise(request);
 }
@@ -121,7 +118,7 @@ async function replayOfflineQueue(currentUid = null) {
   const deleteStore = deleteTx.objectStore('actions');
   for (const item of items) {
     const { action, data } = item;
-    // Never replay another account's queued action (audit N014).
+    // Never replay another account's queued action.
     if (!currentUid || item.ownerUid !== currentUid || data.userId !== currentUid) continue;
     try {
       if (action === 'like') {
@@ -144,9 +141,7 @@ async function replayOfflineQueue(currentUid = null) {
   }
 }
 
-// ------------------------------------------------------------------
 // 4. ERROR BOUNDARY (dev/prod friendly)
-// ------------------------------------------------------------------
 class PostErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -176,9 +171,7 @@ class PostErrorBoundary extends React.Component {
   }
 }
 
-// ------------------------------------------------------------------
 // 5. SHARE SHEET (tap outside / ESC, download only if hasMedia)
-// ------------------------------------------------------------------
 const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia, navigate, currentUser }) => {
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
@@ -384,9 +377,7 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
   );
 });
 
-// ------------------------------------------------------------------
 // 6. REACTIONS PICKER (tap outside / ESC)
-// ------------------------------------------------------------------
 const REACTIONS = [
   { emoji: '👍', label: 'Like' }, { emoji: '❤️', label: 'Love' }, { emoji: '😂', label: 'Haha' },
   { emoji: '😮', label: 'Wow' }, { emoji: '😢', label: 'Sad' }, { emoji: '😡', label: 'Angry' },
@@ -463,9 +454,7 @@ const CardReactionsPicker = React.memo(({ onSelect, onClose, tokens, targetRect 
   );
 });
 
-// ------------------------------------------------------------------
 // 7. DOUBLE TAP HEART (reduced motion)
-// ------------------------------------------------------------------
 const DoubleTapHeart = React.memo(({ position, onFinish, prefersReducedMotion }) => {
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -484,9 +473,7 @@ const DoubleTapHeart = React.memo(({ position, onFinish, prefersReducedMotion })
   );
 });
 
-// ------------------------------------------------------------------
 // 8. INLINE COMMENT PREVIEW (abort controller only, no mounted flag)
-// ------------------------------------------------------------------
 const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible, tokens }) => {
   const [preview, setPreview] = useState([]);
   const abortRef = useRef(null);
@@ -517,9 +504,7 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
   );
 });
 
-// ------------------------------------------------------------------
 // 9. MAIN POST CARD – perfect rounded edges, compact, bubble counts
-// ------------------------------------------------------------------
 // Engagement reducer (unified state management)
 const engagementReducer = (state, action) => {
   switch (action.type) {
@@ -662,7 +647,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
 
   // Online listener for offline queue. Keyed on uid so an account switch
-  // re-binds the handler to the current session (audit N014).
+  // re-binds the handler to the current session.
   useEffect(() => {
     const onlineHandler = () => replayOfflineQueue(currentUser?.uid || null);
     window.addEventListener('online', onlineHandler);
@@ -686,12 +671,10 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     };
   }, []);
 
-  // ------------------------------------------------------------------
   // HANDLERS with snapshot rollback, separate debounces, lock
-  // ------------------------------------------------------------------
   const handleLikeClick = useCallback(() => {
     // Identity comes from the live session only; a localStorage uid can belong
-    // to a previous account on a shared device (audit N002).
+    // to a previous account on a shared device.
     const userId = currentUser?.uid || null;
     if (!userId) {
       toast.error('Please sign in to like posts');
@@ -1181,9 +1164,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   );
 }
 
-// ------------------------------------------------------------------
 // Gift picker — real coin amounts, server-validated via sendGift
-// ------------------------------------------------------------------
 const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
   const [selected, setSelected] = useState(VIRTUAL_GIFTS[0]);
   const canAfford = balance == null || balance >= selected.coins;

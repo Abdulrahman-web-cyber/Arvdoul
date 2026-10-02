@@ -1,6 +1,4 @@
 /**
- * src/screens/MessagingScreen.jsx - ARVDOUL MASTER MESSAGES & INBOX HUB
- * 
  * 100% Pixel-perfect replica of the Arvdoul Messages Screenshots (Image 2 & Image 3)
  * Featuring:
  * - Brand Header with Logo / Online User Avatar, Search, AI Sparkles & New Message + Button
@@ -47,7 +45,7 @@ export default function MessagingScreen() {
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [conversations, setConversations] = useState([]);
-  // Pinned/quick-access carousel derived from REAL conversations
+  // Pinned/quick-access carousel derived from conversations
   const pinnedItems = useMemo(
     () =>
       [...conversations]
@@ -65,7 +63,7 @@ export default function MessagingScreen() {
   );
   const [loadingConversations, setLoadingConversations] = useState(true);
 
-  // Load REAL conversations from messagesService (Firestore-backed, enriched
+  // Load conversations from messagesService (Firestore-backed, enriched
   // with participant details + unread counts). No mock data.
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +110,7 @@ export default function MessagingScreen() {
   const [messageRequests, setMessageRequests] = useState([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
 
-  // Load REAL pending message requests (spec §35) — users who were blocked by
+  // Load pending message requests (spec §35) — users who were blocked by
   // privacy settings but requested a conversation.
   useEffect(() => {
     if (!user?.uid) return;

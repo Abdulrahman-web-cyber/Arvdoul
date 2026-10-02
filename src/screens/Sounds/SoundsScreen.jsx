@@ -1,5 +1,5 @@
 // src/screens/Sounds/SoundsScreen.jsx
-// 🎵 ARVDOUL SOUNDS & VIRAL MUSIC DISCOVERY HUB
+//
 // Viral audio tracks, real-time waveform playback, reels creation integration, and audio stem library
 
 import React, { useState, useEffect, useRef } from 'react';

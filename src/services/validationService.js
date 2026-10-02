@@ -1,6 +1,4 @@
 /**
- * src/services/validationService.js - ARVDOUL CENTRALIZED INPUT VALIDATION ENGINE
- *
  * Implements:
  * 1. Strict Schema Enforcement: Validates data types, lengths, character sets, and formats for:
  *    - Posts & Comments (max length, allowed media types, tag limits)

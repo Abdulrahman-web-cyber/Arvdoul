@@ -1,22 +1,4 @@
-// src/screens/HomeScreen.jsx – ARVDOUL ULTIMATE FEED v33.0 (FINAL – ENTERPRISE ULTRA PRO MAX)
-// ✅ All critical issues from deep audit fixed:
-//   - Retry closure captures correct reset/skipCache parameters
-//   - feedRef used instead of feedStateRef for cache logic
-//   - MediaPreloader counters reset properly per batch
-//   - SessionEngine sliding window (no aggressive full reset)
-//   - VisibilityProvider root condition fixed (null = not ready)
-//   - useMemo dependencies corrected
-//   - Consolidated feedRuntimeRef (single source of truth)
-//   - pendingRequestPromises cleanup with .finally()
-//   - Session token (sessionId) prevents stale async updates
-//   - IntersectionObserver disconnects before recreate
-//   - insertNewPosts sorts new posts by createdAt desc
-//   - Set rebuild optimized (only on length change)
-//   - Offline fallback prioritises cache over error state
-//   - hasMore uses consistent logic (nextCursor priority)
-// ✅ Extreme styling – Arvdoul purple gradient, glassmorphism, smooth animations
-// ✅ Production‑ready, surpasses TikTok/Instagram/Facebook feed architecture
-// ✅ No file splitting – single unified screen
+// src/screens/HomeScreen.jsx
 
 import React, { useState, useEffect, useCallback, useRef, useReducer, useContext, createContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -48,7 +30,6 @@ import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ==================== CONSTANTS ====================
 const FEED_PAGE_SIZE = 15;
 const RETRY_MAX = 3;
 const RETRY_BASE_DELAY = 1000;
@@ -85,7 +66,6 @@ const STATUS = {
   PRELOADING: 'preloading',
 };
 
-// ==================== DEVICE PERFORMANCE TIERING ====================
 function getDevicePerformanceTier() {
   if (typeof navigator === 'undefined') return 'mid';
   const memory = navigator.deviceMemory || 4;
@@ -95,7 +75,6 @@ function getDevicePerformanceTier() {
   return 'mid';
 }
 
-// ==================== SAFE IDLE CALLBACK ====================
 const safeRequestIdleCallback = (callback, options) => {
   if (typeof window !== 'undefined' && window.requestIdleCallback) {
     return window.requestIdleCallback(callback, options);
@@ -110,14 +89,12 @@ const safeCancelIdleCallback = (id) => {
   }
 };
 
-// ==================== TRUE EXPONENTIAL BACKOFF ====================
 function getRetryDelay(attempt) {
   const base = RETRY_BASE_DELAY * Math.pow(2, attempt - 1);
   const jitter = Math.random() * 200;
   return Math.min(base + jitter, 30000);
 }
 
-// ==================== INDEXEDDB CACHE WITH MIGRATION ====================
 let dbInstance = null;
 async function getCacheDB() {
   if (dbInstance) return dbInstance;
@@ -219,7 +196,6 @@ async function getScrollPosition(userId) {
   } catch { return null; }
 }
 
-// ==================== OPTIMISTIC QUEUE (persisted) ====================
 let optimisticQueue = [];
 let isProcessingQueue = false;
 let queueLoaded = false;
@@ -291,7 +267,6 @@ async function processOptimisticQueue(userId) {
   isProcessingQueue = false;
 }
 
-// ==================== NORMALIZED FEED STORE (active memory) ====================
 const feedReducer = (state, action) => {
   switch (action.type) {
     case 'SET_FEED': {
@@ -321,7 +296,7 @@ const feedReducer = (state, action) => {
     case 'PREPEND_FEED': {
       const newById = { ...state.byId };
       const existingIds = new Set(state.order);
-      // ✅ sort new posts before insertion
+      // sort new posts before insertion
       const sortedNew = [...action.payload].sort((a, b) => {
         const aTime = a.createdAt?.getTime?.() || a.createdAt?.toDate?.()?.getTime() || 0;
         const bTime = b.createdAt?.getTime?.() || b.createdAt?.toDate?.()?.getTime() || 0;
@@ -353,7 +328,6 @@ const feedReducer = (state, action) => {
   }
 };
 
-// ==================== FEED SESSION ENGINE (sliding window, no full reset) ====================
 class FeedSessionEngine {
   constructor() {
     this.history = []; // stores { postId, authorId, type, timestamp }
@@ -395,7 +369,6 @@ class FeedSessionEngine {
   }
 }
 
-// ==================== FEED HYDRATION ====================
 function hydratePost(post) {
   const authorName = post.authorName || 'Arvdoul User';
   const authorId = post.authorId || post.userId || '';
@@ -411,7 +384,6 @@ function hydratePost(post) {
   };
 }
 
-// ==================== MEDIA PRELOAD COORDINATOR (LRU, batch counters) ====================
 class MediaPreloader {
   constructor() {
     this.loadedUrls = new Map();
@@ -482,7 +454,6 @@ class MediaPreloader {
   }
 }
 
-// ==================== FEED TELEMETRY ====================
 class FeedTelemetry {
   constructor() {
     this.metrics = { feedLoadStart: 0, feedLoadEnd: 0, firstPostRender: 0 };
@@ -498,7 +469,6 @@ class FeedTelemetry {
   }
 }
 
-// ==================== VISIBILITY PROVIDER (fixed root condition, disconnect observer) ====================
 const VisibilityContext = createContext({
   register: () => {},
   unregister: () => {},
@@ -600,7 +570,6 @@ function VisibilityProvider({ children, scrollerRef }) {
   );
 }
 
-// ==================== POST CARD WRAPPER ====================
 const MemoizedPostCard = React.memo(PostCard);
 
 const PostWithTracking = React.memo(({
@@ -647,12 +616,10 @@ const PostWithTracking = React.memo(({
   );
 });
 
-// ==================== NON-BLOCKING TOP BANNER ====================
 const FeedLoadingBanner = () => (
   <TopAppLoadingBanner isAnimating={true} label="Refreshing feed in background..." />
 );
 
-// ==================== MAIN HOMESCREEN ====================
 export default function HomeScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -1020,7 +987,7 @@ export default function HomeScreen() {
                 }, CACHE_WRITE_DEBOUNCE_MS);
               }
             }
-            // ✅ hasMore: prioritise nextCursor
+            // hasMore: prioritise nextCursor
             const more = result.nextCursor ? true : (result.hasMore === true);
             setHasMore(more);
             nextCursorRef.current = result.nextCursor || null;
@@ -1081,7 +1048,7 @@ export default function HomeScreen() {
         }
       })();
 
-      // ✅ promise cleanup in .finally
+      // promise cleanup in .finally
       const wrappedPromise = promise.finally(() => {
         if (pendingRequestPromisesRef.current.get(requestKey) === wrappedPromise) {
           pendingRequestPromisesRef.current.delete(requestKey);
@@ -1166,7 +1133,7 @@ export default function HomeScreen() {
     let newPosts = pendingNewPostIdsRef.current
       .map(id => pendingNewPostsMapRef.current.get(id)?.post)
       .filter(Boolean);
-    // ✅ sort before insertion
+    // sort before insertion
     newPosts.sort((a, b) => {
       const aTime = a.createdAt?.getTime?.() || a.createdAt?.toDate?.()?.getTime() || 0;
       const bTime = b.createdAt?.getTime?.() || b.createdAt?.toDate?.()?.getTime() || 0;

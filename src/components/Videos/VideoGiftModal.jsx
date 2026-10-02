@@ -1,5 +1,6 @@
-// src/components/Videos/VideoGiftModal.jsx - ARVDOUL VIRTUAL GIFT MODAL
-// Send coin gifts to creators — REAL double-entry coin transfer via the
+// src/components/Videos/VideoGiftModal.jsx
+//
+// Send coin gifts to creators — double-entry coin transfer via the
 // monetization ledger (transferCoins CF with atomic fallback). The local
 // store is only updated AFTER the server confirms the debit; no free gifts,
 // no fabricated balances.
@@ -28,7 +29,7 @@ const VideoGiftModal = memo(({
   const [sentAnimation, setSentAnimation] = useState(null);
   const [balance, setBalance] = useState(null);
 
-  // REAL balance from the ledger whenever the modal opens.
+  // balance from the ledger whenever the modal opens.
   useEffect(() => {
     if (!isOpen || !user?.uid) return;
     let cancelled = false;
@@ -67,7 +68,7 @@ const VideoGiftModal = memo(({
 
     setSending(true);
     try {
-      // REAL server-authoritative transfer (double-entry ledger).
+      // server-authoritative transfer (double-entry ledger).
       const { getMonetizationService } = await import('../../services/monetizationService.js');
       const res = await getMonetizationService().transferCoins(
         user.uid,
@@ -80,7 +81,7 @@ const VideoGiftModal = memo(({
         throw new Error(res?.message || 'Gift could not be sent');
       }
 
-      // Refresh the REAL balance from the ledger.
+      // Refresh the balance from the ledger.
       try {
         const b = await getMonetizationService().getBalance(user.uid);
         if (typeof b === 'number') {

@@ -1,5 +1,7 @@
-// src/screens/NetworkScreen.jsx - ARVDOUL NETWORK (REAL)
+// src/screens/NetworkScreen.jsx
+//
 // Followers, following and friend-request management backed by userService.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';

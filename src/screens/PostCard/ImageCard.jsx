@@ -1,4 +1,5 @@
 // src/screens/PostCard/ImageCard.jsx
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useMotionValueEvent } from 'framer-motion';
 import {
@@ -7,9 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ------------------------------------------------------------------
 // SSR-safe helpers
-// ------------------------------------------------------------------
 const hasWindow = typeof window !== 'undefined';
 
 const requestIdle = hasWindow
@@ -19,9 +18,7 @@ const cancelIdle = hasWindow
   ? window.cancelIdleCallback || clearTimeout
   : clearTimeout;
 
-// ------------------------------------------------------------------
 // LRU URL cache (true LRU with Map)
-// ------------------------------------------------------------------
 const urlCache = new Map();
 let cacheMaxSize = 50;
 if (hasWindow && navigator.deviceMemory) {
@@ -37,9 +34,7 @@ const addToUrlCache = (url) => {
 };
 const isUrlCached = (url) => urlCache.has(url);
 
-// ------------------------------------------------------------------
 // LocalStorage LRU with timestamp (safe)
-// ------------------------------------------------------------------
 const STORAGE_KEY_PREFIX = 'arvdoul_img_idx_';
 const MAX_STORED_INDICES = 100;
 const saveIndex = (postId, index) => {
@@ -79,9 +74,7 @@ const loadIndex = (postId) => {
   }
 };
 
-// ------------------------------------------------------------------
 // Moderation cache with size limit
-// ------------------------------------------------------------------
 const moderationCache = new Map();
 const MODERATION_CACHE_MAX = 500;
 const MODERATION_TTL = 5 * 60 * 1000;
@@ -101,9 +94,7 @@ const setModeration = (url, isSafe) => {
   moderationCache.set(url, { isSafe, timestamp: Date.now() });
 };
 
-// ------------------------------------------------------------------
 // Helpers
-// ------------------------------------------------------------------
 const isLowEndDevice = () => {
   if (!hasWindow) return false;
   const memory = navigator.deviceMemory || 4;
@@ -120,9 +111,7 @@ const getNetworkQuality = () => {
   return conn.effectiveType || '4g';
 };
 
-// ------------------------------------------------------------------
 // Analytics batching (per component)
-// ------------------------------------------------------------------
 const useAnalyticsBatcher = (onAnalytics) => {
   const queue = useRef([]);
   const timer = useRef(null);
@@ -149,9 +138,7 @@ const useAnalyticsBatcher = (onAnalytics) => {
   return push;
 };
 
-// ------------------------------------------------------------------
 // Retry with exponential backoff (correct increment)
-// ------------------------------------------------------------------
 const useRetry = () => {
   const retryMap = useRef(new Map());
   const timers = useRef({});
@@ -179,9 +166,7 @@ const useRetry = () => {
   return { getAttempts, shouldRetry, incrementAttempt, resetRetry, scheduleRetry };
 };
 
-// ------------------------------------------------------------------
 // Memoized image slide (renders only when needed)
-// ------------------------------------------------------------------
 const ImageSlide = React.memo(({
   image,
   index,
@@ -252,9 +237,7 @@ const ImageSlide = React.memo(({
   );
 });
 
-// ------------------------------------------------------------------
 // Gallery dot with accessibility
-// ------------------------------------------------------------------
 const Dot = ({ active, index, onClick }) => (
   <button
     onClick={() => onClick(index)}
@@ -265,9 +248,7 @@ const Dot = ({ active, index, onClick }) => (
   />
 );
 
-// ------------------------------------------------------------------
 // Error boundary for this card
-// ------------------------------------------------------------------
 class ImageCardErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -280,18 +261,14 @@ class ImageCardErrorBoundary extends React.Component {
   }
 }
 
-// ------------------------------------------------------------------
 // Gallery indicator (glass pill)
-// ------------------------------------------------------------------
 const GalleryIndicator = ({ current, total }) => (
   <div className="absolute top-3 right-3 z-20 bg-black/50 backdrop-blur-md rounded-full px-3 py-1 text-xs text-white font-medium shadow-lg">
     {current}/{total}
   </div>
 );
 
-// ------------------------------------------------------------------
 // MAIN COMPONENT
-// ------------------------------------------------------------------
 const ImageCard = React.memo(({
   images,
   onDoubleTap,
@@ -313,7 +290,6 @@ const ImageCard = React.memo(({
   const total = safeImages.length;
   const isSingle = total === 1;
 
-  // ----- state -----
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = loadIndex(postId);
     return Math.max(0, Math.min(saved, total > 0 ? total - 1 : 0));
@@ -471,7 +447,6 @@ const ImageCard = React.memo(({
     return () => saveIndex(postId, currentIndex);
   }, [postId, currentIndex]);
 
-  // ----- Modal zoom/pan (motion values) -----
   const scale = useMotionValue(1);
   const translateX = useMotionValue(0);
   const translateY = useMotionValue(0);

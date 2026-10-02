@@ -1,4 +1,5 @@
-// src/services/reputationService.js — ARVDOUL REPUTATION, INFLUENCE & CONTRIBUTION ENGINE (Part 2)
+// src/services/reputationService.js
+//
 // Measures genuine trust, impact, and ecosystem value. Zero Pay-to-Legitimacy.
 
 import {

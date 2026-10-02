@@ -1,18 +1,4 @@
-// src/services/videoService.js – ARVDOUL ULTIMATE VIDEO ENGINE V28 (BILLION‑SCALE FINAL)
-// 🎬 WORLD‑CLASS VIDEO PLATFORM • SHARDED COUNTERS • SECURE SIGNED URLS
-// 🔥 PROFIT‑OPTIMIZED • REELS READY • TRANCODING • AUDIO LIBRARY • WATERMARKING
-// 🚀 SURPASSES TIKTOK, INSTAGRAM, YOUTUBE, FACEBOOK
-// ✅ EVENT‑DRIVEN PIPELINE • REAL‑TIME ENGAGEMENT (PROTECTED) • OFFLINE QUEUE
-// ✅ VISIBLE EXPORT WATERMARK + INVISIBLE FORENSIC WATERMARK (SERVER‑SIDE FFMPEG)
-// ✅ AI RECOMMENDATION ENGINE (embedding ready) • FRAUD DETECTION LAYER
-// ✅ FULLY INTEGRATED WITH MONETIZATION, NOTIFICATIONS, FEED, USER SERVICES
-// ✅ BILLION‑USER SCALE: REDIS‑READY, EDGE CACHE, GLOBAL EVENT BUS, REAL‑TIME LIMITS
-// ✅ FIXED: offline queue sync with service instance, transaction error handling
-// ✅ FIXED: AbortController used in feed, pagination with document snapshots
-// ✅ FIXED: listener limit enforcement and cleanup
-// ✅ FIXED: file type detection using both extension and MIME type
-// ✅ FIXED: daily upload sharding with proper error throwing
-// ✅ FIXED: cache invalidation for feed, analytics, recommendations
+// src/services/videoService.js
 
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -44,7 +30,6 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 
-// ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
   UPLOAD: {
     MAX_FILE_SIZE: {
@@ -160,7 +145,6 @@ const VIDEO_CONFIG = {
   },
 };
 
-// ==================== CUSTOM ERROR ====================
 class VideoError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -184,7 +168,6 @@ function enhanceError(error, defaultMessage) {
   return new VideoError(code, msg, { original: error });
 }
 
-// ==================== LRU CACHE (with reverse index) ====================
 class LRUCache {
   constructor(maxSize = 100, ttl = 5 * 60 * 1000) {
     this.maxSize = maxSize;
@@ -263,7 +246,6 @@ class LRUCache {
   get size() { return this.cache.size; }
 }
 
-// ==================== REQUEST DEDUPLICATION ====================
 const pendingRequests = new Map();
 setInterval(() => {
   const now = Date.now();
@@ -287,7 +269,6 @@ function dedupeRequest(key, fn) {
   return promise;
 }
 
-// ==================== OFFLINE QUEUE (IndexedDB with service instance) ====================
 class OfflineVideoQueue {
   constructor() {
     this.dbPromise = openDB('arvdoul_video_offline', 2, {
@@ -339,7 +320,6 @@ class OfflineVideoQueue {
         }
         await this.delete(item.id);
       } catch (err) {
-//         logger.warn('Offline sync failed', err);
         if (Date.now() - item.timestamp > 7 * 24 * 60 * 60 * 1000) await this.delete(item.id);
       }
     }
@@ -347,7 +327,6 @@ class OfflineVideoQueue {
   }
 }
 
-// ==================== MAIN SERVICE CLASS ====================
 class UltimateVideoService {
   constructor() {
     this.firestore = null;
@@ -437,7 +416,6 @@ class UltimateVideoService {
     return this.ensureInitialized();
   }
 
-  // ==================== UPLOAD ====================
   async uploadVideo(file, metadata, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -569,7 +547,6 @@ class UltimateVideoService {
     }
   }
 
-  // ==================== GET SINGLE VIDEO ====================
   async getVideo(videoId, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -650,7 +627,6 @@ class UltimateVideoService {
     }, 5 * 60 * 1000);
   }
 
-  // ==================== GET VIDEOS BY USER ====================
   async getVideosByUser(userId, options = {}) {
     await this.ensureInitialized();
     const videosRef = collection(this.firestore, 'videos');
@@ -673,7 +649,6 @@ class UltimateVideoService {
     };
   }
 
-  // ==================== SET VIDEO CHAPTERS ====================
   async setVideoChapters(videoId, userId, chapters = []) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -689,7 +664,6 @@ class UltimateVideoService {
     return { success: true, chapters };
   }
 
-  // ==================== VIDEO FEED (with AbortController) ====================
   async getVideoFeed(userId, options = {}) {
     await this.ensureInitialized();
     const { feedType = 'for_you', limit = 20, type = null, lastDocSnapshot, signal } = options;
@@ -719,7 +693,7 @@ class UltimateVideoService {
         title: item.title || item.content?.slice(0, 50) || '',
         description: item.description || item.content || '',
         // Preserve whatever identity the source document actually has; never
-        // synthesize an author name/handle (audit N005).
+        // synthesize an author name/handle.
         creator: item.creator || {
           name: item.authorName || '',
           username: item.authorUsername || '',
@@ -794,7 +768,6 @@ class UltimateVideoService {
     }
   }
 
-  // ==================== ACTIONS ====================
   async likeVideo(videoId) {
     await this.ensureInitialized();
     if (!navigator.onLine) {
@@ -889,7 +862,6 @@ class UltimateVideoService {
     return { success: true, url: data.url, watermarked: true };
   }
 
-  // ==================== ANALYTICS & LIBRARY ====================
   async getVideoAnalytics(videoId) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -964,7 +936,6 @@ class UltimateVideoService {
     return res.data;
   }
 
-  // ==================== SAVED VIDEOS (WATCH LATER) ====================
   // Real server-side persistence: users/{uid}/saved_videos/{videoId} (owner-
   // only per rules). The snapshot is the source of truth for the Watch Later
   // list; the public saves counter is server-owned and is never touched here.
@@ -1043,7 +1014,6 @@ class UltimateVideoService {
     return res.data.recommendations || [];
   }
 
-  // ==================== PRIVATE HELPERS ====================
   async _validateVideoFile(file, metadata, userId, videoType) {
     const errors = [];
     const userRef = doc(this.firestore, 'users', userId);
@@ -1140,7 +1110,6 @@ class UltimateVideoService {
     return unique;
   }
 
-  // ==================== SERVICE MANAGEMENT ====================
   getStats() {
     return {
       cacheSize: this.cache.size,
@@ -1160,7 +1129,6 @@ class UltimateVideoService {
   }
 }
 
-// ==================== SINGLETON EXPORT ====================
 let instance = null;
 export function getVideoService() {
   if (!instance) instance = new UltimateVideoService();

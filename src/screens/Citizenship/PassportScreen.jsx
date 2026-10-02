@@ -1,4 +1,5 @@
-// src/screens/Citizenship/PassportScreen.jsx — ARVDOUL DIGITAL PASSPORT (Part 2)
+// src/screens/Citizenship/PassportScreen.jsx
+//
 // Institutional digital-nation identity artifact. Zero-pill, high dignity.
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';

@@ -1,4 +1,5 @@
-// src/components/Videos/VideoCard.jsx - ARVDOUL ULTIMATE VIDEO CARD
+// src/components/Videos/VideoCard.jsx
+//
 // Immersive full-screen vertical player with interactive action rail, creator overlay, and playback controls
 
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
@@ -234,7 +235,7 @@ const VideoCard = memo(({
   const navigate = useNavigate();
   const [followBusy, setFollowBusy] = useState(false);
 
-  // REAL follow/unfollow via userService (Firestore follows collection +
+  // follow/unfollow via userService (Firestore follows collection +
   // counters). Optimistic toggle with rollback; never a local-only fake.
   const handleFollowClick = async (e) => {
     e.stopPropagation();

@@ -1,4 +1,5 @@
 // src/screens/PostCard/PollCard.jsx
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -6,9 +7,7 @@ import { Sparkles, Coins, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ------------------------------------------------------------------
 // Helper: format time left (live updates)
-// ------------------------------------------------------------------
 function formatTimeLeft(closeDate) {
   if (!closeDate) return null;
   try {
@@ -25,9 +24,7 @@ function formatTimeLeft(closeDate) {
   }
 }
 
-// ------------------------------------------------------------------
 // Normalise poll options (supports strings or object array)
-// ------------------------------------------------------------------
 function normaliseOptions(rawOptions) {
   if (!rawOptions || !Array.isArray(rawOptions)) return [];
   return rawOptions.map((opt, idx) => {
@@ -42,18 +39,14 @@ function normaliseOptions(rawOptions) {
   });
 }
 
-// ------------------------------------------------------------------
 // Normalise user vote (always returns array)
-// ------------------------------------------------------------------
 function normaliseUserVote(vote) {
   if (!vote) return null;
   if (Array.isArray(vote)) return vote;
   return [vote];
 }
 
-// ------------------------------------------------------------------
 // Calculate percentages and identify leaders (safe)
-// ------------------------------------------------------------------
 function computeResults(options, totalVotes) {
   if (!options.length) return { results: [], leaderIds: [] };
   const safeTotal = totalVotes > 0 && isFinite(totalVotes) ? totalVotes : 0;
@@ -66,9 +59,7 @@ function computeResults(options, totalVotes) {
   return { results: withPct, leaderIds };
 }
 
-// ------------------------------------------------------------------
 // MAIN COMPONENT
-// ------------------------------------------------------------------
 const PollCard = React.memo(({
   poll,
   postId,
@@ -79,7 +70,6 @@ const PollCard = React.memo(({
   onReward,
   isPollClosed = false,
 }) => {
-  // ----- All hooks MUST be called before any conditional return -----
   const t = tokens || {};
   const normalisedOptions = useMemo(() => normaliseOptions(poll?.options), [poll?.options]);
 
@@ -129,7 +119,6 @@ const PollCard = React.memo(({
   const canVote = !isClosed && currentUser && !isVoting && !pendingVoteRef.current;
   const rewardAmount = poll?.rewardCoins ?? 0;
 
-  // ----- Voting handler (optimistic + rollback + versioning) -----
   const handleVote = useCallback(async (optionId) => {
     if (!currentUser) {
       toast.error('Sign in to vote');
@@ -226,7 +215,6 @@ const PollCard = React.memo(({
   }, [currentUser, onVote, canVote, isMulti, optimisticOptions, optimisticTotal, optimisticUserVote,
       postId, onAnalytics, rewardAmount, onReward, isVoting]);
 
-  // ----- Arvdoul purple glass styling (exactly like EventCard, reduced glow) -----
   const neonGradient = `linear-gradient(135deg, ${t.audioNeonPrimary || '#9333ea'}, ${t.audioNeonSecondary || '#c026d3'}, #ec4899)`;
   const buttonGlow = `0 0 4px rgba(236, 72, 153, 0.3)`; // reduced from 8px to 4px, lower opacity
   const cardShadow = t.shadowDirectional || '0 8px 20px -6px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.1)';

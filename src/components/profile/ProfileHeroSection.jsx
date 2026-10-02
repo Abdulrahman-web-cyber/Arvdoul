@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileHeroSection.jsx - ARVDOUL Master Profile Identity
- * 
  * Production-grade, zero-cover-photo digital nation identity header.
  * High contrast, razor-sharp typography, zero muddy blur, clean interactive controls.
  * Eliminates duplicate action rows and button clutter.
@@ -35,7 +33,7 @@ import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
 // Fallbacks return "unknown" (null), never a fabricated Citizen/Level 1
-// standing (audit N005/U-4). The real exports always win when present.
+// standing. The real exports always win when present.
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getCitizenTier = LevelModule.getCitizenTier || (() => null);
 
@@ -67,7 +65,7 @@ const ProfileHeroSection = memo(({
   const isDark = theme === 'dark';
 
   // Only a stored level is real. Never invent "Level 1"/"Citizen" for a profile
-  // that has no progression data (audit N005/U-4): absent data renders as
+  // that has no progression data: absent data renders as
   // unavailable instead of a plausible-but-false standing.
   const explicitLevel = Number(level || profile?.level);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;

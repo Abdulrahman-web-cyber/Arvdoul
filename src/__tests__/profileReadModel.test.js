@@ -184,4 +184,13 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       expect(read(file)).not.toContain("startsWith('user_')");
     }
   });
+
+  it('userService.getUserProfile is not a second privacy layer (N007)', () => {
+    const src = read('src/services/userService.js');
+    // The relation flags are resolved there, but the decision is the engine's.
+    expect(src).toContain('resolveCapabilities(');
+    expect(src).toContain('projectProfileForViewer(');
+    // A second hand-rolled section mask would be the divergence N007 describes.
+    expect(src).not.toContain('canViewProfileSection(');
+  });
 });

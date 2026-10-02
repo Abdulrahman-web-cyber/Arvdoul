@@ -1,4 +1,5 @@
-// src/screens/Achievements/AchievementsScreen.jsx — ARVDOUL ACHIEVEMENTS GALLERY (Part 2)
+// src/screens/Achievements/AchievementsScreen.jsx
+//
 // Server-validated, categorized, auditable, zero-pill design.
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';

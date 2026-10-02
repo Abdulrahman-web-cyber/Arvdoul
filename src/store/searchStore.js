@@ -1,4 +1,5 @@
-// src/store/searchStore.js - ARVDOUL Search State Management
+// src/store/searchStore.js
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 

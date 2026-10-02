@@ -1,12 +1,4 @@
-// src/services/feedService.js – ARVDOUL ULTRA FEED ENGINE v24.2 (Complete, Fixed, Production‑Ready)
-// ✅ Smart feed, pagination, realtime re-ranking and ad injection
-// ✅ Immediate initialisation with timeout fallback – never hangs
-// ✅ Graceful fallback – always returns a valid feed result
-// ✅ Fixed diversity loop O(n) instead of O(n²)
-// ✅ Efficient following feed using batched IN queries (same as server)
-// ✅ Cursor compressed & URL‑safe
-// ✅ Pending awards processed in parallel with error isolation
-// Upgrades: Feed poisoning validation, scrape protection, and A/B test split models.
+// src/services/feedService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
@@ -1261,7 +1253,6 @@ class UltimateFeedService {
     return a;
   }
 
-  // ==================== MONETISATION ====================
   async _insertMonetizationOptimized(posts, userId, options) {
     if (options.ads === false) return posts;
     let adInterval = options.adInterval || FEED_CONFIG.MONETISATION.AD_INTERVAL;
@@ -1322,7 +1313,6 @@ class UltimateFeedService {
     }
   }
 
-  // ==================== DEMOTE POST & NOT INTERESTED ====================
   async demotePost(userId, postId, reason = 'user_dislike') {
     if (this.offlineMode) return { success: true };
     await this._ensureInitialized();

@@ -1,4 +1,5 @@
-// src/utils/videoUtils.js - ARVDOUL VIDEO UTILITIES
+// src/utils/videoUtils.js
+//
 // Comprehensive utilities for video formatting, validation, and manipulation
 
 /**

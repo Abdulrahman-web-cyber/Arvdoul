@@ -1,6 +1,4 @@
 /**
- * src/utils/Logger.js - ARVDOUL Structured Logger
- *
  * Shared logging utility required by the service-layer refactoring program
  * (see REFACTOR_PROGRESS.md). Provides:
  * - Level-based filtering (debug | info | warn | error | fatal)
@@ -11,7 +9,6 @@
  * Zero dependencies. Safe to import from any client module.
  */
 
-// ==================== LEVELS ====================
 export const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40, fatal: 50 };
 
 // Keys whose values are redacted entirely.
@@ -58,7 +55,6 @@ function sanitizeMeta(meta, seen = new Set()) {
   return out;
 }
 
-// ==================== LOGGER ====================
 export class Logger {
   /**
    * @param {Object} opts

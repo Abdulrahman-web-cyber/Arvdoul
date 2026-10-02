@@ -1,11 +1,9 @@
 // src/screens/AudioEditor/audioEngine.js
 //
 // Web Audio graph for the Arvdoul Audio Studio.
-//
 //   clip BufferSource -> clipGain -> trackPanner -> trackGain ┐
 //                                                             ├-> eqChain -> masterGain -> analyser -> destination
 //   metronome Oscillator -------------------------------------┘
-//
 // Everything the UI shows is derived from this graph: the transport advances a
 // real AudioContext clock, the meters read a real analyser, the EQ curve drives
 // real BiquadFilterNodes. Nothing here invents a level or a frequency.
@@ -90,9 +88,7 @@ class AudioStudioEngine {
     return this.startedAtPosition + elapsed;
   }
 
-  // ---------------------------------------------------------------------
   // EQ chain
-  // ---------------------------------------------------------------------
 
   /**
    * Rebuilds the master EQ chain from a band list.
@@ -143,9 +139,7 @@ class AudioStudioEngine {
     chain[chain.length - 1].connect(this.analyser);
   }
 
-  // ---------------------------------------------------------------------
   // Transport
-  // ---------------------------------------------------------------------
 
   /**
    * Starts playback.
@@ -294,9 +288,7 @@ class AudioStudioEngine {
     }
   }
 
-  // ---------------------------------------------------------------------
   // Metering — measured from the live signal, never synthesised
-  // ---------------------------------------------------------------------
 
   _startMeter() {
     if (this.meterTimer || !this.meterAnalyser) return;

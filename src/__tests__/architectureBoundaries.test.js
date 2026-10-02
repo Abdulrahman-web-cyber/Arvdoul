@@ -19,20 +19,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 // Files that still import firebase/* directly. Each entry is a migration item;
 // remove a line here only when the file goes through a service instead.
-const KNOWN_VIOLATIONS = new Set([
-  'src/screens/CallScreen.jsx',
-  'src/screens/CommentsDrawer.jsx',
-  'src/screens/CreatePost.jsx',
-  'src/screens/CreatePost/CreateImage.jsx',
-  'src/screens/CreatePost/CreateLink.jsx',
-  'src/screens/GiftScreen.jsx',
-  'src/screens/Help/HelpCenterScreen.jsx',
-  'src/screens/PostOptionsDrawer.jsx',
-  'src/screens/SetupProfile.jsx',
-  'src/screens/VideoDetailScreen.jsx',
-]);
+// (Empty: all previously tracked offenders now reach the backend via services.)
+const KNOWN_VIOLATIONS = new Set([]);
 
-const FIREBASE_IMPORT = /from\s+['"]firebase\/(firestore|auth|storage|functions|database)['"]/;
+const FIREBASE_IMPORT = /(from\s+|import\(\s*)['"]firebase\/(firestore|auth|storage|functions|database|app)['"]/;
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -72,5 +62,31 @@ describe('architecture boundary: UI must not import the Firebase SDK directly', 
       }
     }
     expect(stale).toEqual([]);
+  });
+});
+
+// Lower layers must never import a higher layer. Services, stores, hooks and
+// utilities are consumed BY screens/components, never the other way round; an
+// upward import creates a cycle and drags JSX into a module the Cloud
+// Functions runtime or a service test may load. (Directive §84.)
+const UI_IMPORT = /(from\s+|import\(\s*)['"][^'"]*(?:screens|components)\//;
+
+// `routePrefetcher` is a routing concern owned by the app shell: its whole
+// purpose is to warm the screen chunks the router will render next, so its
+// dynamic imports of `../screens/*` are the feature, not an upward dependency.
+// It is consumed only by `src/app/AppBootstrap.jsx`.
+const UI_IMPORT_EXCEPTIONS = new Set(['src/utils/routePrefetcher.js']);
+
+describe('architecture boundary: lower layers must not import UI', () => {
+  test('services, stores, hooks and utils do not import screens/components', () => {
+    const offenders = [];
+    for (const dir of ['src/services', 'src/store', 'src/hooks', 'src/utils', 'src/context']) {
+      for (const full of walk(path.join(root, dir))) {
+        const rel = path.relative(root, full);
+        if (UI_IMPORT_EXCEPTIONS.has(rel)) continue;
+        if (UI_IMPORT.test(fs.readFileSync(full, 'utf8'))) offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

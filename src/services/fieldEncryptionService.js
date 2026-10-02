@@ -1,6 +1,4 @@
 /**
- * src/services/fieldEncryptionService.js - ARVDOUL FIELD-LEVEL ENCRYPTION ENGINE v8.0
- *
  * Implements:
  * 1. Client-Side Envelope Encryption (AES-GCM 256-bit): Encrypts sensitive PII fields (phone, legal tax ID, SSN, bank details)
  *    before writing to Firestore documents.

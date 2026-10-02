@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminVerificationScreen.jsx - ARVDOUL CREATOR VERIFICATION OVERSIGHT
-// ✅ Review creator verification requests & identity credentials
-// ✅ Citizenship status, follower threshold, and strike history validation
-// ✅ Approve/Reject with server-side audit trail and notification triggers
+// src/screens/Admin/AdminVerificationScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -35,14 +32,9 @@ const AdminVerificationScreen = () => {
     const loadApplications = async () => {
       setLoading(true);
       try {
-        const { collection, getDocs, query, limit, orderBy } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        const snap = await getDocs(
-          query(collection(firestore, 'creator_verifications'), orderBy('submittedAt', 'desc'), limit(50))
-        );
-        setApplicants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const { getAdminService } = await import('../../services/adminService.js');
+        const rows = await getAdminService().listVerificationApplications(50);
+        setApplicants(rows);
       } catch {
         toast.error('Could not load creator verification applications.');
         setApplicants([]);

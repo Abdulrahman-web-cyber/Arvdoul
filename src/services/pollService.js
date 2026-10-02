@@ -1,5 +1,5 @@
 // src/services/pollService.js
-// 📊 ARVDOUL POLLS & PREDICTION MARKETS SERVICE
+//
 // Real-time community voting, predictive coin markets, and creator opinion analytics in Firestore.
 
 import { svcLogger } from './ServiceKit.js';

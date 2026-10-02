@@ -1,6 +1,4 @@
 /**
- * src/services/realIntegration.js - ARVDOUL EXTERNAL INTEGRATION REGISTRY
- *
  * The single source of truth for third-party provider configuration.
  * Replaces the previous placeholder export with a real, fail-loud registry:
  *

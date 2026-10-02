@@ -1,4 +1,5 @@
 // src/services/callableService.js
+//
 // Canonical entry point for invoking Firebase Cloud Functions callables from client.
 // Ensures consistent error handling, app instance binding, and admin status retrieval.
 
@@ -33,6 +34,15 @@ export const FUNCTIONS = {
   GET_FEATURE_FLAG_OVERRIDES: 'getFeatureFlagOverrides',
   SET_FEATURE_FLAG_OVERRIDE: 'setFeatureFlagOverride',
   TRACK_PROFILE_VIEW: 'trackProfileView',
+  EXPORT_USER_DATA: 'exportUserData',
+  REPORT_COMMENT: 'reportComment',
+  REPORT_POST: 'reportPost',
+  GET_MUX_PLAYBACK_URL: 'getMuxPlaybackUrl',
+  GENERATE_AI_CAPTION: 'generateAICaption',
+  GENERATE_AI_HASHTAGS: 'generateAIHashtags',
+  MODERATE_POST: 'moderatePost',
+  PREDICT_POST_PERFORMANCE: 'predictPostPerformance',
+  SCRAPE_LINK: 'scrapeLink',
 };
 
 /**

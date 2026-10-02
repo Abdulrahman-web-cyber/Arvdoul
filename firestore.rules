@@ -1127,13 +1127,6 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ==================== API KEYS (owner-scoped) ====================
-    // Records store only a SHA-256 hash of the secret (never the raw key).
-    match /api_keys/{keyId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create, update: if isOwner(request.resource.data.userId);
-    }
-
     // ==================== ACCOUNT DELETIONS (owner-scoped) ====================
     match /account_deletions/{userId} {
       allow read: if isOwner(userId) || isAdmin();

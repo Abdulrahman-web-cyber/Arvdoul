@@ -1,4 +1,5 @@
-// src/components/Videos/VideoTopBar.jsx - ARVDOUL FLOATING TOP BAR
+// src/components/Videos/VideoTopBar.jsx
+
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Camera, Sparkles } from 'lucide-react';

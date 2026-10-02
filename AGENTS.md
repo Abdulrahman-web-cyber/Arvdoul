@@ -35,8 +35,11 @@ are expected — only treat errors as failures.
   (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
   `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
   `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
-  re-implement the `user_`/`creator` placeholder filter. `profileReadModel.test.js` fails CI
-  if any surface regresses.
+  re-implement the `user_`/`creator` placeholder filter. `userService.getUserProfile` resolves
+  only the relation flags and delegates the decision to the engine + projection — it must not
+  call `canViewProfileSection` itself. `profileReadModel.test.js` and
+  `userServicePrivacyProjection.test.js` fail CI if any surface regresses; both are in the
+  hard-failing `guards` CI job.
 - **Friendship**: `userService.areFriends(a, b)` is canonical. `_areMutualFriends` only
   delegates to it; treat both names as one implementation, never fork the logic.
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls

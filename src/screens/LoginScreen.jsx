@@ -1,7 +1,4 @@
-// This file must reflect: 'everything should be more extremely advanced, styled, ultra pro max professional creation and robust also production ready and working perfectly smooth'
-
-// src/screens/LoginScreen.jsx – ARVDOUL SUPREMACY • GLASS CARD • MATCHES SIGNUP STEP 2
-// ✅ Phone (original dropdown) • Email • Google • Offline banner • Shake on error • No scroll
+// src/screens/LoginScreen.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -14,7 +11,6 @@ import { safeReturnPath } from "../utils/profileCompletion.js";
 // Import country codes (same as login)
 import { countryCodes, sortedCountryCodes, getCountryByIso } from "../data/countryCodes.js";
 
-// ---------- ORIGINAL PHONE INPUT (inline dropdown, matching SignupStep2) ----------
 const UltimatePhoneInput = React.memo(({
   value,
   onChange,
@@ -235,7 +231,6 @@ const UltimatePhoneInput = React.memo(({
 });
 UltimatePhoneInput.displayName = 'UltimatePhoneInput';
 
-// ---------- GLOWING GOOGLE AUTH (original style but with glow) ----------
 const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) => {
   const { theme } = useTheme();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -354,7 +349,6 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
 });
 UltimateGoogleAuth.displayName = 'UltimateGoogleAuth';
 
-// ---------- METHOD TOGGLE (identical to SignupStep2) ----------
 const UltimateMethodToggle = React.memo(({ method, onToggle, disabled = false }) => {
   const { theme } = useTheme();
   const resolvedTheme = theme === 'system'
@@ -443,7 +437,6 @@ const UltimateMethodToggle = React.memo(({ method, onToggle, disabled = false })
 });
 UltimateMethodToggle.displayName = 'UltimateMethodToggle';
 
-// ==================== MAIN COMPONENT ====================
 export default function LoginScreen() {
   const navigate = useNavigate();
   const themeCtx = useTheme?.() || { theme: 'light' };

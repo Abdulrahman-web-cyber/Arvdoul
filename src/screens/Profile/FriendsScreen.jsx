@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/FriendsScreen.jsx - ARVDOUL Friends Screen
- * 
  * Displays mutual friends list.
  * 
  * @component

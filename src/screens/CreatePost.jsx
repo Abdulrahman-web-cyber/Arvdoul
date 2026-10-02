@@ -1,11 +1,4 @@
 // src/screens/CreatePost.jsx
-// ARVDOUL ULTIMATE POST CREATOR – FINAL PRODUCTION‑READY
-// ✅ Exact custom SVG icons (Photo, Events, Question, Poll, Text, Video, Audio, Vibe, Link) – 100% as provided
-// ✅ Header with DNA gradient, reduced size
-// ✅ Templates & Schedule buttons match header gradient exactly
-// ✅ Post‑type cards are floating glass cards with increased height (aspect‑[3/5]), shadows, round edges
-// ✅ 3‑column responsive grid
-// ✅ All previous features intact (offline, drafts, AI, etc.)
 
 import React, {
   useReducer, useEffect, useCallback, useRef, useState,
@@ -25,7 +18,7 @@ import { produce } from "immer";
 import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import { ErrorBoundary } from "../components/ErrorBoundary.jsx";
 import { CreatePostSkeleton } from "../components/UI/SkeletonLoaders.jsx";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { callFunction, FUNCTIONS } from "../services/callableService.js";
 
 // Lazy‑loaded editors
 const CreateText = lazy(() => import("./CreatePost/CreateText"));
@@ -701,7 +694,7 @@ function CreatePostProvider({ children }) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { setCurrentUser } = useAppStore();
-  // REAL coin balance from the ledger (Firestore users/{uid}.coins via the
+  // coin balance from the ledger (Firestore users/{uid}.coins via the
   // monetization service). Never the store's in-memory number — the store is
   // not synced with the server.
   const [userCoins, setUserCoins] = useState(null);
@@ -798,12 +791,6 @@ function CreatePostProvider({ children }) {
         services.current = {
           firestore: fs, storage: st, search: se, video: vs, story: ss,
           monetization: ms, notifications: ns, feed: fd, user: us,
-          ai: {
-            generateCaption: httpsCallable(getFunctions(), "generateAICaption"),
-            generateHashtags: httpsCallable(getFunctions(), "generateAIHashtags"),
-          },
-          moderation: { check: httpsCallable(getFunctions(), "moderatePost") },
-          analytics: { predict: httpsCallable(getFunctions(), "predictPostPerformance") },
         };
 
         dbRef.current = await timedPromise(
@@ -911,7 +898,6 @@ function CreatePostProvider({ children }) {
     await refreshDraftsList();
     if (!isOfflineRef.current && services.current.firestore) {
       try {
-        // firestoreService.saveDraft(draftId, userId, draftData)
         await services.current.firestore.saveDraft(draft.id, userRef.current.uid, draft);
         toast.success("Draft saved & synced");
       } catch { toast.success("Draft saved locally"); }
@@ -1274,33 +1260,30 @@ function CreatePostProvider({ children }) {
   const [aiLoading, setAiLoading] = useState(false);
 
   const generateAICaption = useCallback(async (style = "casual") => {
-    if (!services.current.ai) return;
     setAiLoading(true);
     try {
-      const result = await services.current.ai.generateCaption({ content: stateRef.current.content, mediaDescriptions: stateRef.current.mediaItems.map(m => m.name || ""), style });
-      dispatch({ type: "SET_AI_CAPTION", payload: result.data.caption });
+      const result = await callFunction(FUNCTIONS.GENERATE_AI_CAPTION, { content: stateRef.current.content, mediaDescriptions: stateRef.current.mediaItems.map(m => m.name || ""), style });
+      dispatch({ type: "SET_AI_CAPTION", payload: result.caption });
       toast.success("AI caption generated");
     } catch { toast.error("AI caption failed"); }
     finally { setAiLoading(false); }
   }, []);
 
   const generateAIHashtags = useCallback(async () => {
-    if (!services.current.ai) return;
     setAiLoading(true);
     try {
-      const result = await services.current.ai.generateHashtags({ content: stateRef.current.content, mediaTypes: stateRef.current.mediaItems.map(m => m.type) });
-      dispatch({ type: "SET_AI_HASHTAGS", payload: result.data.hashtags });
+      const result = await callFunction(FUNCTIONS.GENERATE_AI_HASHTAGS, { content: stateRef.current.content, mediaTypes: stateRef.current.mediaItems.map(m => m.type) });
+      dispatch({ type: "SET_AI_HASHTAGS", payload: result.hashtags });
       toast.success("AI hashtags generated");
     } catch { toast.error("AI hashtags failed"); }
     finally { setAiLoading(false); }
   }, []);
 
   const moderateContent = useCallback(async (content, mediaUrls) => {
-    if (!services.current.moderation) return null;
     try {
-      const result = await services.current.moderation.check({ content, mediaUrls });
-      dispatch({ type: "SET_MODERATION_STATUS", payload: result.data });
-      return result.data;
+      const result = await callFunction(FUNCTIONS.MODERATE_POST, { content, mediaUrls });
+      dispatch({ type: "SET_MODERATION_STATUS", payload: result });
+      return result;
     } catch {
       dispatch({ type: "SET_MODERATION_STATUS", payload: { approved: true, flags: [], fallback: true } });
       return null;
@@ -1308,14 +1291,13 @@ function CreatePostProvider({ children }) {
   }, []);
 
   const getPredictions = useCallback(async () => {
-    if (!services.current.analytics) return;
     try {
-      const result = await services.current.analytics.predict({
+      const result = await callFunction(FUNCTIONS.PREDICT_POST_PERFORMANCE, {
         postType: stateRef.current.postType, content: stateRef.current.content,
         mediaCount: stateRef.current.mediaItems.length, scheduledTime: stateRef.current.scheduledTime,
         visibility: stateRef.current.visibility, boost: stateRef.current.boost,
       });
-      dispatch({ type: "SET_INSIGHTS", payload: result.data });
+      dispatch({ type: "SET_INSIGHTS", payload: result });
     } catch { /* silent */ }
   }, []);
 
@@ -1356,14 +1338,14 @@ function CreatePostProvider({ children }) {
     try {
       if (!userNow?.uid) {
         try {
-          const { getAuth } = await import("firebase/auth");
-          const auth = getAuth();
-          if (auth.currentUser) {
+          const { getAuthService } = await import('../services/authService.js');
+          const current = getAuthService().getCurrentUser();
+          if (current) {
             userNow = {
-              uid: auth.currentUser.uid,
-              displayName: auth.currentUser.displayName || "Arvdoul User",
-              email: auth.currentUser.email || "",
-              photoURL: auth.currentUser.photoURL || "",
+              uid: current.uid,
+              displayName: current.displayName || "Arvdoul User",
+              email: current.email || "",
+              photoURL: current.photoURL || "",
             };
           }
         } catch {}
@@ -1430,7 +1412,6 @@ function CreatePostProvider({ children }) {
       if (effectiveType === "event" && (!current.typeData.event.date || new Date(current.typeData.event.date) <= new Date())) throw new Error("Event date must be in the future.");
       if (effectiveType === "link" && (!current.typeData.link.url || !current.typeData.link.url.startsWith("http"))) throw new Error("Please enter a valid URL (e.g. https://example.com).");
 
-      // ==================== INSTANT PUBLISH (OPTIMISTIC ENGINE) ====================
       // Generate instant post ID and media references
       const instantPostId = `post_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const instantMedia = (current.mediaItems || []).map((m, idx) => ({
@@ -1924,7 +1905,7 @@ export function TaggingPanel({ defaultOpen = false }) {
 export function MonetizationPanel({ defaultOpen = false }) {
   const { state, dispatch } = useCreatePostState();
   const { userCoins } = useCreatePostServices();
-  // userCoins is the REAL ledger balance (null while loading / unauthenticated).
+  // userCoins is the ledger balance (null while loading / unauthenticated).
   const insufficient = state.monetization.type === "boost" &&
     userCoins != null && state.boost.budget > userCoins;
   return (

@@ -112,6 +112,17 @@ describe('profileCapabilityEngine (Digital Nation Identity Specification)', () =
       .toBe(RELATIONSHIP_STATES.MUTED);
   });
 
+  it('orders the safety states: blocked > blocked-by > restricted > muted (N017)', () => {
+    expect(resolveRelationshipState({ isBlocking: true, isBlockedBy: true, isRestricted: true, isMuted: true }))
+      .toBe(RELATIONSHIP_STATES.BLOCKED);
+    expect(resolveRelationshipState({ isBlockedBy: true, isRestricted: true, isMuted: true }))
+      .toBe(RELATIONSHIP_STATES.BLOCKED_BY);
+    expect(resolveRelationshipState({ isRestricted: true, isMuted: true }))
+      .toBe(RELATIONSHIP_STATES.RESTRICTED);
+    expect(resolveRelationshipState({ isFollower: true }))
+      .toBe(RELATIONSHIP_STATES.FOLLOWED_BY);
+  });
+
   it('gates links/presence/economic on content visibility (N007)', () => {
     const privateTarget = { ...mockTarget, isPrivate: true };
     const visitor = { uid: 'user-visitor' };

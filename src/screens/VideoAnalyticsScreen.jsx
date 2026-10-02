@@ -1,6 +1,6 @@
-// src/screens/VideoAnalyticsScreen.jsx - ARVDOUL WORLD-CLASS VIDEO ANALYTICS SCREEN
+// src/screens/VideoAnalyticsScreen.jsx
+//
 // Creator dashboard with video performance metrics
-// Surpasses TikTok, Instagram, YouTube with futuristic analytics
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -48,7 +48,7 @@ const VideoAnalyticsScreen = () => {
   const [analytics, setAnalytics] = useState(null);
   const { user } = useAuth();
 
-  // Load REAL analytics from analyticsService (Firestore-backed, sharded
+  // Load analytics from analyticsService (Firestore-backed, sharded
   // counters). Zero state until real data arrives - no fabricated numbers.
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +119,6 @@ const VideoAnalyticsScreen = () => {
     load();
     return () => { cancelled = true; };
   }, [user?.uid, timeRange]);
-
 
   
 
@@ -545,8 +544,9 @@ const RevenueTab = ({ revenue }) => {
         const pendingCoins = walletRes.status === 'fulfilled' ? (walletRes.value?.pendingCoins || 0) : 0;
 
         let lastPayoutCoins = null;
-        if (historyRes.status === 'fulfilled' && Array.isArray(historyRes.value)) {
-          const withdrawals = historyRes.value.filter(
+        const historyItems = historyRes.status === 'fulfilled' ? historyRes.value?.items : null;
+        if (Array.isArray(historyItems)) {
+          const withdrawals = historyItems.filter(
             (tx) => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')
           );
           if (withdrawals.length > 0) lastPayoutCoins = Number(withdrawals[0].amount) || 0;

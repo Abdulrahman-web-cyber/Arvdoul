@@ -1,6 +1,4 @@
 /**
- * src/screens/ConflictResolutionScreen.jsx - ARVDOUL SYNC CONFLICT RESOLUTION UI
- *
  * Honest implementation: shows REAL unsynced local changes from the offline
  * queue (operations that have not been applied to the server yet). No
  * fabricated example conflicts — when there is nothing pending, the screen

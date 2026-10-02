@@ -1,4 +1,5 @@
-// src/screens/CreatorPayoutScreen.jsx - ARVDOUL CREATOR PAYOUT & EARNINGS DASHBOARD
+// src/screens/CreatorPayoutScreen.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -55,14 +56,14 @@ export default function CreatorPayoutScreen() {
         const b = balRes.value;
         setBalance(typeof b === 'number' ? b : Number(b?.coins || b?.balance || 0));
       }
-      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
-        setPayouts(histRes.value.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
+        setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
       if (analyticsRes.status === 'fulfilled') {
         setAnalytics(analyticsRes.value);
       }
 
-      // REAL payout account status (never simulated).
+      // payout account status (never simulated).
       try {
         const settings = await monSvc.getPayoutSettings();
         const status = settings?.accountStatus || 'unconfigured';
@@ -89,7 +90,7 @@ export default function CreatorPayoutScreen() {
     }
     setConnectingStripe(true);
     try {
-      // REAL Stripe Express onboarding via the Cloud Function
+      // Stripe Express onboarding via the Cloud Function
       // (functions/monetization.js createPayoutAccount). No timers, no
       // simulated success — the account is only "connected" when the
       // server actually created it.

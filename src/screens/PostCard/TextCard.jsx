@@ -1,4 +1,5 @@
-// src/screens/PostCard/TextCard.jsx – Arvdoul Final (All Issues Resolved)
+// src/screens/PostCard/TextCard.jsx
+//
 // Solid random backgrounds, no gradients, no expand button, perfect responsive.
 // Includes: summary, listen (TTS), translate, copy, reading time, sentiment, topic, markdown.
 
@@ -11,9 +12,7 @@ import {
 import DOMPurify from 'dompurify';
 import { marked } from 'marked'; // optional – we'll handle safely
 
-// ------------------------------------------------------------------
 // 1. SOLID BACKGROUND COLOURS (random but stable per post)
-// ------------------------------------------------------------------
 const TEXT_BACKGROUNDS = [
   '#2563EB', '#7C3AED', '#DB2777', '#DC2626', '#059669', '#0891B2',
   '#EA580C', '#4338CA', '#0F172A', '#374151', '#166534', '#9A3412'
@@ -33,9 +32,7 @@ function getRandomSolidBackground(postId) {
   return TEXT_BACKGROUNDS[index];
 }
 
-// ------------------------------------------------------------------
 // 2. SHARED LRU CACHE (single instance – prevents memory bloat)
-// ------------------------------------------------------------------
 class LRUCache {
   constructor(maxSize = 800) {
     this.maxSize = maxSize;
@@ -60,9 +57,7 @@ class LRUCache {
 
 const sharedCache = new LRUCache(800);
 
-// ------------------------------------------------------------------
 // 3. GLOBAL SPEECH CONTROLLER (with proper event cleanup)
-// ------------------------------------------------------------------
 let globalSynth = null;
 let globalUtterance = null;
 if (typeof window !== 'undefined') {
@@ -106,9 +101,7 @@ if (typeof window !== 'undefined' && globalSynth) {
   loadVoices();
 }
 
-// ------------------------------------------------------------------
 // 4. SINGLE ANALYSIS PIPELINE (performance + avoids duplicate work)
-// ------------------------------------------------------------------
 function sentenceTokenizer(text) {
   return text.match(/[^.!?]+[.!?]+/g) || [text];
 }
@@ -189,9 +182,7 @@ function getFullAnalysis(content) {
   return analysis;
 }
 
-// ------------------------------------------------------------------
 // 5. MARKDOWN RENDERER (safe, with size limit, sync-safe)
-// ------------------------------------------------------------------
 function simpleMarkdownToHtml(md) {
   return md
     .replace(/^### (.*$)/gim, '<h3>$1</h3>')
@@ -234,9 +225,7 @@ function getCachedMarkdown(content) {
   return result;
 }
 
-// ------------------------------------------------------------------
 // 6. TRANSLATION (cached, with proper fallback)
-// ------------------------------------------------------------------
 async function translateTextRaw(text, targetLang) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
@@ -257,9 +246,7 @@ async function getCachedTranslation(text, lang) {
   return result;
 }
 
-// ------------------------------------------------------------------
 // MAIN COMPONENT
-// ------------------------------------------------------------------
 const TextCard = React.memo(({
   content,
   expanded,        // unused – we manage internal expansion

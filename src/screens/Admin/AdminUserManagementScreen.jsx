@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminUserManagementScreen.jsx - ARVDOUL USER MANAGEMENT
-// ✅ List and search users
-// ✅ View user details
-// ✅ Suspend/Ban/Verify/Roles
+// src/screens/Admin/AdminUserManagementScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

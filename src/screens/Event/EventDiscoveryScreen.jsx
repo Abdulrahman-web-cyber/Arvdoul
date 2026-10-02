@@ -1,7 +1,4 @@
-// src/screens/Event/EventDiscoveryScreen.jsx - ARVDOUL EVENT DISCOVERY
-// ✅ Browse and search events
-// ✅ Filter by type, date, location
-// ✅ View upcoming and past events
+// src/screens/Event/EventDiscoveryScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

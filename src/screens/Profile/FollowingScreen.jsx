@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/FollowingScreen.jsx - ARVDOUL Following Screen
- * 
  * Displays list of users being followed with unfollow functionality.
  * 
  * @component

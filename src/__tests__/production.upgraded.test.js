@@ -44,7 +44,6 @@ if (typeof globalThis.IDBRequest === 'undefined') {
 import { getMessagingService } from '../services/messagesService.js';
 import { activeActiveService } from '../services/activeActiveService.js';
 import { samlService } from '../services/samlService.js';
-import { apiSecurityGatewayService } from '../services/apiSecurityGatewayService.js';
 import { childSafetyService } from '../services/childSafetyService.js';
 import { metricsService } from '../services/metricsService.js';
 import { alertingService } from '../services/alertingService.js';
@@ -258,38 +257,6 @@ describe('Upgraded Production Services Integration Tests', () => {
       } finally {
         globalThis.fetch = originalFetch;
       }
-    });
-  });
-
-  describe('APISecurityGatewayService (Persistent Key Verification & Quotas)', () => {
-    test('generates raw secrets and successfully verifies hashed key', async () => {
-      const keyResult = await apiSecurityGatewayService.generateAPIKey('dev_user_123', 'My API Key', ['read:posts']);
-      expect(keyResult.keyId).toBeDefined();
-      expect(keyResult.rawKeySecret).toBeDefined();
-
-      const isValid = await apiSecurityGatewayService.validateAPIKeySecret(
-        keyResult.keyId,
-        keyResult.rawKeySecret,
-        'read:posts'
-      );
-      expect(isValid).toBe(true);
-    });
-
-    test('blocks verification when request exceeds key daily quotas', async () => {
-      const keyResult = await apiSecurityGatewayService.generateAPIKey('dev_user_456', 'Overlimit Key', ['read:posts']);
-
-      // Force limit breach
-      const localKey = apiSecurityGatewayService._localKeysStore.get(keyResult.keyId);
-      if (localKey) {
-        localKey.requestCount = apiSecurityGatewayService.quotaLimit + 1;
-      }
-
-      const isValid = await apiSecurityGatewayService.validateAPIKeySecret(
-        keyResult.keyId,
-        keyResult.rawKeySecret,
-        'read:posts'
-      );
-      expect(isValid).toBe(false);
     });
   });
 

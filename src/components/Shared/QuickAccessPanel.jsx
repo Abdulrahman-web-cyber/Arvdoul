@@ -147,7 +147,6 @@ import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 // panel can never advertise a different level than the server enforces.
 const MONETIZATION_MIN_LEVEL = LEVEL_GATES.withdrawals;
 
-// ==================== CONSTANTS & CONFIGURATION ====================
 const ANIMATION_CONFIG = {
   panelSpring: { 
     type: "spring", 
@@ -197,7 +196,6 @@ const getThemeColors = (theme) => ({
     : "text-yellow-600"
 });
 
-// ==================== UTILITY COMPONENTS ====================
 const Badge = memo(({ children, variant = "default", className, ...props }) => {
   const variants = {
     default: "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300",
@@ -292,7 +290,6 @@ const LevelBadge = memo(({ level, size = "md", showLevel = true }) => {
   );
 });
 
-// ==================== MAIN COMPONENT ====================
 const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -352,7 +349,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     videoEditor: "/video-editor"
   }), []);
 
-  // ==================== LEVEL SYSTEM CALCULATIONS ====================
   const levelSystem = useMemo(() => {
     const currentXP = currentUser?.experience || 0;
     // The curve, rank bands and gates live in shared/levelConfig.cjs only.
@@ -372,7 +368,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     };
   }, [currentUser?.experience]);
 
-  // ==================== REAL USER STATISTICS ====================
   const userStatistics = useMemo(() => {
     const stats = currentUser || {};
     const monetizationStats = monetization || {};
@@ -483,7 +478,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     };
   }, [currentUser, levelSystem, navigate, NAVIGATION_PATHS]);
 
-  // ==================== MONETIZATION STATS ====================
   const monetizationStats = useMemo(() => {
     const stats = monetization || {};
     const userStats = currentUser || {};
@@ -524,7 +518,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     ];
   }, [monetization, currentUser?.coins, navigate, NAVIGATION_PATHS]);
 
-  // ==================== ACHIEVEMENTS ====================
   const achievements = useMemo(() => {
     const stats = currentUser || {};
     const monetizationStats = monetization || {};
@@ -589,7 +582,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     ];
   }, [currentUser, monetization, levelSystem.currentLevel]);
 
-  // ==================== QUICK ACTIONS ====================
   const quickActions = useMemo(() => {
     const isCreator = currentUser?.isCreator || false;
     const canMonetize = (currentUser?.level || 1) >= MONETIZATION_MIN_LEVEL || isCreator;
@@ -760,7 +752,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     };
   }, [navigateToWithLoading, navigate, track, monetization, currentUser, NAVIGATION_PATHS]);
 
-  // ==================== EFFECTS ====================
   useEffect(() => {
     if (isPanelOpen) {
       playSound("panel_open");
@@ -825,7 +816,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPanelOpen, closePanel, navigateToWithLoading, navigate, NAVIGATION_PATHS]);
 
-  // ==================== HANDLERS ====================
   const handlePanelDragEnd = useCallback((event, info) => {
     const velocity = info.velocity.y;
     const delta = info.offset.y;
@@ -877,7 +867,6 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
     }
   }, [currentUser, track]);
 
-  // ==================== RENDER FUNCTIONS ====================
   const renderUserProfile = () => {
     // Get profile picture - use professional avatar if none
     const profilePicture = currentUser?.photoURL || 

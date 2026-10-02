@@ -1,6 +1,4 @@
 /**
- * src/utils/AuditLogger.js - ARVDOUL Audit Logger
- *
  * Persists security-sensitive events (login, logout, password change,
  * permission change, data export, deletion, moderation actions) with
  * userId, action, timestamp, correlationId and sanitized metadata.

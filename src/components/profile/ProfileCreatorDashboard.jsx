@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileCreatorDashboard.jsx - ARVDOUL Creator Dashboard Component
- * 
  * Recreates the Creator Dashboard section from the uploaded designs:
  * - Header with BarChart2 icon and timeframe dropdown
  * - 5 metric cards:
@@ -74,7 +72,7 @@ const ProfileCreatorDashboard = memo(({
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
   // Only a stored level is real; absent progression must not be shown as
-  // "Level 1" (audit N005/U-4). Null keeps the gate closed without inventing
+  // "Level 1". Null keeps the gate closed without inventing
   // a standing, and `isCreator` still unlocks the dashboard for real creators.
   const explicitLevel = Number(userLevel);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;

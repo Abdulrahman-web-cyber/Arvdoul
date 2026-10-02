@@ -1,6 +1,4 @@
 /**
- * src/store/profileStore.js - ARVDOUL Profile Store
- * 
  * Zustand store with Immer for profile state management.
  * Manages profile data, posts, follow status, and more.
  * 
@@ -21,7 +19,6 @@ import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
 
-// ==================== INITIAL STATE ====================
 const initialState = {
   // Profile data
   profile: null,
@@ -77,7 +74,7 @@ const initialState = {
   refreshKey: 0,
   // Monotonic request token. Every loadProfile call takes a new value and any
   // in-flight response whose token is stale is discarded, so a slow response
-  // for a previous account or route cannot overwrite current state (audit N013).
+  // for a previous account or route cannot overwrite current state.
   requestSeq: 0,
   // Per-loader tokens for the same guard on the secondary profile loaders
   // (posts, highlights, saved, stories, level, balance, position). Without
@@ -86,12 +83,10 @@ const initialState = {
   loadSeq: {},
 };
 
-// ==================== STORE ====================
 export const useProfileStore = create(
   immer((set, get) => ({
     ...initialState,
 
-    // ==================== STALE-RESPONSE GUARDS ====================
     // Take a fresh token for a named loader. Any response that resolves after a
     // newer load started (or after clear()) sees a mismatched token and is
     // discarded, so a slow account-A response can never populate account B.
@@ -104,7 +99,6 @@ export const useProfileStore = create(
     },
     _isLoadCurrent: (key, seq) => get().loadSeq?.[key] === seq,
     
-    // ==================== PROFILE ACTIONS ====================
     /**
      * Load user profile with all related data
      * @param {string} userId - User ID to load
@@ -354,7 +348,6 @@ export const useProfileStore = create(
       }
     },
 
-    // ==================== POSTS ACTIONS ====================
     /**
      * Load user posts
      * @param {string} userId - User ID
@@ -446,7 +439,6 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== HIGHLIGHTS ACTIONS ====================
     /**
      * Load user highlights
      * @param {string} userId - User ID
@@ -530,7 +522,6 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== STORIES ACTIONS ====================
     /**
      * Load user stories
      * @param {string} userId - User ID
@@ -562,7 +553,6 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== LEVEL ACTIONS ====================
     /**
      * Load user level
      * @param {string} userId - User ID
@@ -581,8 +571,8 @@ export const useProfileStore = create(
         if (!get()._isLoadCurrent('level', __seq)) return;
         set((state) => {
           // Absent progression data stays null (honest unavailable state); a
-          // fabricated `|| 1` here re-introduced audit N005/U-4 and, via
-          // ProfileMyScreen's creator gate, could mis-state standing.
+          // fabricated `|| 1` here would mis-state standing through
+          // ProfileMyScreen's creator gate.
           state.level = levelData?.level ?? null;
           state.levelLoading = false;
         });
@@ -595,7 +585,6 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== BALANCE ACTIONS ====================
     /**
      * Load user balance
      * @param {string} userId - User ID
@@ -625,7 +614,6 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== POSITION ACTIONS ====================
     /**
      * Load user position
      * @param {string} userId - User ID
@@ -655,7 +643,6 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== FOLLOW ACTIONS ====================
     /**
      * Load follow status
      * @param {string} followerId - Follower user ID
@@ -715,11 +702,11 @@ export const useProfileStore = create(
     follow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
       // Idempotent: a double-tap while already following must not increment
-      // the optimistic counter a second time (audit N012/D-4).
+      // the optimistic counter a second time.
       if (get().followStatus?.isFollowing === true) return;
 
       // Snapshot before the optimistic write so rollback restores the
-      // real previous state instead of a hard-coded guess (audit N012).
+      // real previous state instead of a hard-coded guess.
       const previousFollowStatus = get().followStatus;
       const previousFollowerCount = get().profile?.followerCount || 0;
 
@@ -747,7 +734,7 @@ export const useProfileStore = create(
       } catch (error) {
         console.error('❌ Follow failed:', error);
         
-        // Rollback to the captured snapshot (audit N012).
+        // Rollback to the captured snapshot.
         set((state) => {
           state.followLoading = false;
           state.followStatus = previousFollowStatus;
@@ -768,7 +755,7 @@ export const useProfileStore = create(
     unfollow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
       // Idempotent: a double-tap while not following must not decrement the
-      // optimistic counter a second time (audit N012/D-4).
+      // optimistic counter a second time.
       if (get().followStatus?.isFollowing === false) return;
       
       // Store previous state for rollback
@@ -835,7 +822,6 @@ export const useProfileStore = create(
       });
     },
     
-    // ==================== UI ACTIONS ====================
     /**
      * Set active tab
      * @param {string} tab - Tab name
@@ -846,7 +832,6 @@ export const useProfileStore = create(
       });
     },
     
-    // ==================== RESET ACTIONS ====================
     /**
      * Clear all profile state
      */
@@ -857,7 +842,7 @@ export const useProfileStore = create(
         for (const k of Object.keys(state.loadSeq || {})) nextLoads[k] = (state.loadSeq[k] || 0) + 1;
         Object.assign(state, initialState);
         // Keep the bumped tokens so any in-flight load for the previous account
-        // is discarded when it resolves (audit N013 / §26).
+        // is discarded when it resolves.
         state.requestSeq = nextSeq;
         state.loadSeq = nextLoads;
       });
@@ -872,7 +857,6 @@ export const useProfileStore = create(
   }))
 );
 
-// ==================== SELECTORS ====================
 export const selectProfile = (state) => state.profile;
 export const selectIsOwner = (state) => state.isOwner;
 export const selectFollowStatus = (state) => state.followStatus;

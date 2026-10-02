@@ -1,6 +1,4 @@
-// src/app/AppBootstrap.jsx - ULTIMATE REFACTORED VERSION - FIXED
-// 🏗️ Perfect architecture with clean imports
-// ⚡ No circular dependencies, perfect chunking
+// src/app/AppBootstrap.jsx
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { BrowserRouter } from 'react-router-dom';

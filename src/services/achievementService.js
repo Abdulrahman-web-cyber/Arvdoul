@@ -1,4 +1,5 @@
-// src/services/achievementService.js — ARVDOUL ACHIEVEMENTS ENGINE (Part 2)
+// src/services/achievementService.js
+//
 // Server-validated, idempotent, categorized, auditable, and persistent.
 
 import { ACHIEVEMENTS_CATALOG } from './levelSystemService.js';

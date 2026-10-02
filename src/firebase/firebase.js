@@ -1,6 +1,5 @@
 // src/firebase/firebase.js
 
-// ==================== ENTERPRISE CONFIGURATION ====================
 // Environment-overridable Firebase config. VITE_FIREBASE_* takes precedence
 // (set in CI / .env); fallbacks keep local dev working. The committed values
 // are public client keys (not secrets) — rotate in the Firebase console and
@@ -18,7 +17,6 @@ const FIREBASE_CONFIG = {
 
 const FIRESTORE_DATABASE_ID = import.meta.env?.VITE_FIREBASE_DATABASE_ID || "ai-studio-arvdoul-22fc8386-1c12-445c-a748-45267b88f61a";
 
-// ==================== EAGER SYNCHRONOUS INITIALIZATION ====================
 // Several components import `db` / `auth` / `storage` as *live* SDK instances and
 // use them synchronously (e.g. `collection(db, …)`, `signInWithPhoneNumber(auth, …)`).
 // We initialize the app and these services eagerly at module load so those bindings
@@ -38,7 +36,6 @@ if (typeof window !== 'undefined') {
   window._arvdoul_auth = auth;
 }
 
-// ==================== APP CHECK (audit N016) ====================
 // App Check attests that requests come from our own app before the backend
 // accepts them. The reCAPTCHA site key is environment-supplied (never a
 // committed literal); when it is absent we skip initialisation rather than
@@ -72,7 +69,6 @@ try {
   /* Persistence may be unavailable in some environments (e.g. private mode). */
 }
 
-// ==================== ULTIMATE SINGLETON MANAGER ====================
 class UltimateFirebaseManager {
   constructor() {
     this._app = null;
@@ -102,7 +98,6 @@ class UltimateFirebaseManager {
     console.log('🔥 Ultimate Firebase Manager created');
   }
 
-  // ==================== SINGLE INITIALIZATION PATH ====================
   async initialize() {
     if (this._initialized) {
       console.log('✅ Firebase already initialized');
@@ -154,7 +149,6 @@ class UltimateFirebaseManager {
     return this._initPromise;
   }
 
-  // ==================== LAZY SERVICE LOADING ====================
   async getAuth() {
     if (!this._initialized) await this.initialize();
     
@@ -165,7 +159,7 @@ class UltimateFirebaseManager {
       
       this._auth = getAuth(this._app);
       
-      // 🔧 CRITICAL FIX: Immediately guarantee that auth.settings and the required
+      // Immediately guarantee that auth.settings and the required
       // property exist, so the RecaptchaVerifier constructor does not crash.
       if (!this._auth.settings) {
         this._auth.settings = {};
@@ -273,7 +267,6 @@ class UltimateFirebaseManager {
     }
   }
 
-  // ==================== UTILITY METHODS ====================
   async awaitReady(timeout = 10000) {
     if (this._initialized) return true;
     
@@ -307,7 +300,6 @@ class UltimateFirebaseManager {
   }
 }
 
-// ==================== SINGLETON INSTANCE ====================
 let managerInstance = null;
 
 function getFirebaseManager() {
@@ -317,7 +309,6 @@ function getFirebaseManager() {
   return managerInstance;
 }
 
-// ==================== COMPATIBILITY EXPORTS ====================
 async function getAuthInstance() {
   const manager = getFirebaseManager();
   return manager.getAuth();
@@ -358,7 +349,6 @@ function isFirebaseInitialized() {
   return manager.isReady();
 }
 
-// ==================== EXPORTS ====================
 export {
   getAuthInstance,
   getFirestoreInstance,

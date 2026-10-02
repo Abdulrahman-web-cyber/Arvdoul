@@ -1,6 +1,8 @@
-// src/screens/CoinsScreen.jsx - ARVDOUL COINS & MONETIZATION (PRODUCTION)
+// src/screens/CoinsScreen.jsx
+//
 // Real flows only: live balance, CF-verified purchases, ad-earn rewards,
 // transaction history and withdrawal requests. No demo/simulated paths.
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,6 +51,8 @@ export default function CoinsScreen() {
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsCursor, setTransactionsCursor] = useState(null);
+  const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
 
   const [selectedPackage, setSelectedPackage] = useState('coins_500');
   const [purchasing, setPurchasing] = useState(null); // package id in flight
@@ -104,15 +108,33 @@ export default function CoinsScreen() {
     if (!user?.uid) return;
     try {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
-      const txs = await svc.getTransactionHistory(user.uid, 15);
-      setTransactions(Array.isArray(txs) ? txs : []);
+      const page = await svc.getTransactionHistory(user.uid, 15);
+      setTransactions(Array.isArray(page?.items) ? page.items : []);
+      setTransactionsCursor(page?.nextCursor ?? null);
     } catch (err) {
       // Non-fatal: history may be gated by rules until the P0 rules deploy.
       setTransactions([]);
+      setTransactionsCursor(null);
     } finally {
       setTransactionsLoading(false);
     }
   }, [user?.uid, monetization]);
+
+  const loadMoreTransactions = useCallback(async () => {
+    if (!user?.uid || !transactionsCursor || transactionsLoadingMore) return;
+    setTransactionsLoadingMore(true);
+    try {
+      const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
+      const page = await svc.getTransactionHistory(user.uid, 15, transactionsCursor);
+      const items = Array.isArray(page?.items) ? page.items : [];
+      setTransactions((prev) => [...prev, ...items]);
+      setTransactionsCursor(page?.nextCursor ?? null);
+    } catch (err) {
+      toast.error('Could not load more transactions.');
+    } finally {
+      setTransactionsLoadingMore(false);
+    }
+  }, [user?.uid, monetization, transactionsCursor, transactionsLoadingMore]);
 
   useEffect(() => { loadBalance(); }, [loadBalance]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
@@ -185,7 +207,6 @@ export default function CoinsScreen() {
     })();
   }, [user?.uid, monetization]);
 
-  // ==================== AD EARNING (real getAd/watchAd flow) ====================
   const fetchAd = async () => {
     if (!user?.uid) return;
     setAdLoading(true);
@@ -236,7 +257,6 @@ export default function CoinsScreen() {
     }
   };
 
-  // ==================== WITHDRAWAL (real requestWithdrawal CF) ====================
   const handleWithdraw = async () => {
     if (!user?.uid || withdrawing) return;
     const amount = Number(withdrawAmount);
@@ -569,6 +589,19 @@ export default function CoinsScreen() {
                 </div>
               ))}
             </div>
+          )}
+          {!transactionsLoading && transactionsCursor && (
+            <button
+              type="button"
+              onClick={loadMoreTransactions}
+              disabled={transactionsLoadingMore}
+              className={cn(
+                "mt-3 w-full py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-60",
+                colors.border, colors.secondary, "hover:opacity-80"
+              )}
+            >
+              {transactionsLoadingMore ? 'Loading…' : 'Load more'}
+            </button>
           )}
         </div>
 

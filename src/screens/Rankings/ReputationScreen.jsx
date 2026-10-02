@@ -1,4 +1,5 @@
-// src/screens/Rankings/ReputationScreen.jsx — ARVDOUL REPUTATION & CIVIC TRUST (Part 2)
+// src/screens/Rankings/ReputationScreen.jsx
+//
 // Multidimensional: Trust Standing, Genuine Influence, Civic Contribution.
 // WCAG 2.1 AA Compliant, Zero-Pill discipline.
 

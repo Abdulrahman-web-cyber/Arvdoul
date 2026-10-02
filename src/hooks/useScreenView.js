@@ -1,5 +1,4 @@
 /**
- * src/hooks/useScreenView.js
  * ARVDOUL SCREEN VIEW ANALYTICS
  *
  * Fires on every route change:

@@ -1,6 +1,4 @@
 /**
- * src/utils/OfflineQueue.js - ARVDOUL Persistent Offline Queue (hardened)
- *
  * IndexedDB-backed operation queue with exponential backoff retry and
  * online-event draining. Used for critical writes (messages, follows,
  * likes, uploads) so they survive network drops.
@@ -77,7 +75,7 @@ class OfflineQueue {
    * @param {Object} [op.payload]
    * @param {string} [op.idempotencyKey] - de-duplicates identical pending ops
    * @param {'high'|'medium'|'low'} [op.priority='medium']
-   * @param {string|null} [op.ownerUid] - account the op belongs to (audit N014)
+   * @param {string|null} [op.ownerUid] - account the op belongs to
    * @returns {Promise<number>} queued id (or existing id when de-duplicated)
    */
   async enqueue({ type, payload = {}, idempotencyKey = null, priority = 'medium', ownerUid = null }) {
@@ -160,7 +158,7 @@ class OfflineQueue {
    * @param {(op: Object) => Promise<any>} handler
    * @param {{ownerUid?: string|null}} [opts] - when `ownerUid` is given, ops
    *   explicitly owned by a different account are skipped and left pending
-   *   instead of being replayed (audit N014). Unowned ops (no session at
+   *   instead of being replayed. Unowned ops (no session at
    *   enqueue time) are still attempted.
    * @returns {Promise<{processed: number, failed: number, skipped: number}>}
    */
@@ -261,7 +259,7 @@ class OfflineQueue {
 
   /**
    * Drop every queued op owned by `uid`. Called on account change so the next
-   * session cannot drain the previous account's pending writes (audit N014).
+   * session cannot drain the previous account's pending writes.
    */
   async purgeOwner(uid) {
     if (!uid) return 0;
@@ -308,7 +306,7 @@ class OfflineQueue {
     if (typeof window === 'undefined') return () => {};
     const run = () => {
       // Scope the drain to the signed-in account so a reconnect cannot replay
-      // another account's pending writes (audit N014).
+      // another account's pending writes.
       const ownerUid = window._arvdoul_auth?.currentUser?.uid || null;
       if (!ownerUid) return;
       this.process(handler, { ownerUid }).catch(() => {});

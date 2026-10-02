@@ -1,6 +1,8 @@
 // src/components/Home/ReelsFeed.jsx
+//
 // Reels feed backed by the canonical videoService (server-authoritative
 // likes/shares, no direct Firestore writes).
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {

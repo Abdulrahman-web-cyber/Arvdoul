@@ -1,8 +1,4 @@
 // src/screens/CreatePost/CreateImage.jsx
-// ARVDOUL IMAGE STUDIO – ULTIMATE PRODUCTION FINAL
-// ✅ All issues fixed: card width, arrows, toolbar spacing, delete payload
-// ✅ Draft saving comment, unused code removed, accessibility improved
-// ✅ Fully responsive, pixel‑perfect, production‑ready
 
 import React, {
   useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense,
@@ -18,7 +14,6 @@ import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 import { TopAppLoadingBanner } from "../../components/Navigation/RouteProgressBar.jsx";
 import { getStorageService } from "../../services/storageService";
 import { openDB } from "idb";
-import { getAuth } from "firebase/auth";
 
 const ImageEditor = lazy(() => import("./ImageEditor"));
 const Collage = lazy(() => import("../../components/Shared/Collage"));
@@ -188,17 +183,18 @@ class UploadManager {
     const controller = new AbortController();
     this._abortControllers.set(item.id, controller);
 
-    // The upload is REAL (Firebase Storage, see storage.uploadFileWithProgress
+    // The upload is (Firebase Storage, see storage.uploadFileWithProgress
     // below). When the SDK emits no progress events, the UI shows an honest
     // indeterminate state instead of fabricated percentages — progress shown
-    // to the user is always REAL upload progress.
+    // to the user is always upload progress.
     let fallbackInterval = null;
     let lastRealProgress = 0;
     let uploadTimeout = null;
 
-    // Auth check
-    const auth = getAuth();
-    if (!auth.currentUser) {
+    // Auth check (canonical auth service, no direct firebase/auth import)
+    const { getAuthService } = await import('../../services/authService.js');
+    const auth = await getAuthService().initialize();
+    if (!auth?.currentUser) {
       this._updateState(item.id, UPLOAD_STATES.ERROR, 0);
       if (this.onError) {
         this.onError(item.id, new Error("You must be signed in to upload"));
@@ -1306,8 +1302,8 @@ export default function CreateImage() {
   // ─── Authentication check ──────────────────────────────────────────
   const getAuthUser = useCallback(() => {
     try {
-      const auth = getAuth();
-      return auth.currentUser;
+      const { getAuthService } = require('../../services/authService.js');
+      return getAuthService().getCurrentUser();
     } catch {
       return null;
     }

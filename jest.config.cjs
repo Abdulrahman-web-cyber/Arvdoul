@@ -26,6 +26,9 @@ module.exports = {
     '^@assets/(.*)$': '<rootDir>/src/assets/$1',
     '^@app-firebase/(.*)$': '<rootDir>/src/firebase/$1',
     '^@styles/(.*)$': '<rootDir>/src/styles/$1',
+    // Vite loads stylesheets; Jest needs them stubbed or any screen that
+    // imports one fails to load with a syntax error.
+    '\\.(css|less|scss|sass)$': '<rootDir>/tests/styleMock.cjs',
   },
   testTimeout: 15000,
   clearMocks: true,
@@ -67,7 +70,6 @@ module.exports = {
     'src/services/validationService.js': { statements: 80 },
     'src/services/soundService.js': { statements: 80 },
     'src/services/selfHarmDetectionService.js': { statements: 80 },
-    'src/services/searchAbuseService.js': { statements: 80 },
     'src/services/searchIndexingService.js': { statements: 75 },
     'src/services/safeSearchService.js': { statements: 75 },
     'src/services/phishingDetectionService.js': { statements: 75 },

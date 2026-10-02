@@ -1,6 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.jsx - ARVDOUL ADMIN DASHBOARD
-// ✅ Platform overview and stats
-// ✅ Quick access to admin functions
+// src/screens/Admin/AdminDashboardScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -43,9 +41,6 @@ const AdminDashboardScreen = () => {
     }
     const init = async () => {
       try {
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
         // Real admin gate: the server checks `admins/{uid}` on our behalf.
         // admins/ is not client-readable, so the callable is the only path.
         if (!user?.uid) { navigate('/login'); return; }
@@ -56,30 +51,24 @@ const AdminDashboardScreen = () => {
           return;
         }
 
-        // Real platform stats via aggregate count queries.
-        const { collection, getCountFromServer, query, where } = await import('firebase/firestore');
-        const count = async (path, constraints = []) => {
-          try {
-            const colRef = constraints.length
-              ? query(collection(firestore, path), ...constraints)
-              : collection(firestore, path);
-            const s = await getCountFromServer(colRef);
-            return s.data().count;
-          } catch (e) { return 0; }
-        };
+        // Real platform stats via aggregate count queries (adminService).
+        const { getAdminService } = await import('../../services/adminService.js');
+        const admin = getAdminService();
+        const count = (path, constraints = []) => admin.count(path, constraints);
+        const where = (field, op, value) => admin.where(field, op, value);
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const [users, activeUsers, posts, reports, pendingReports, communities, events] = await Promise.all([
           count('users'),
-          count('users', [where('lastActive', '>=', thirtyDaysAgo)]),
+          count('users', [await where('lastActive', '>=', thirtyDaysAgo)]),
           count('posts'),
           count('comment_reports'),
-          count('comment_reports', [where('status', '==', 'pending')]),
+          count('comment_reports', [await where('status', '==', 'pending')]),
           count('communities'),
           count('events'),
         ]);
         // pending reports across all report collections (honest sum).
-        const pendingUser = await count('user_reports', [where('status', '==', 'pending')]);
-        const pendingVideo = await count('video_reports', [where('status', '==', 'pending')]);
+        const pendingUser = await count('user_reports', [await where('status', '==', 'pending')]);
+        const pendingVideo = await count('video_reports', [await where('status', '==', 'pending')]);
         setStats({
           totalUsers: users,
           activeUsers,

@@ -1,6 +1,4 @@
 /**
- * src/services/featureFlagService.js - ARVDOUL FEATURE FLAG SERVICE
- *
  * Production-grade feature flags with:
  *  1. STATIC DEFAULTS - a typed, versioned baseline that works offline and
  *     before Firebase Remote Config resolves (zero-latency reads).
@@ -43,9 +41,7 @@ class FeatureFlagService {
     this._loadOverrides();
   }
 
-  // -------------------------------------------------------------------------
   // Internal
-  // -------------------------------------------------------------------------
 
   _applyDefaults() {
     for (const [name, def] of Object.entries(DEFAULT_FLAGS)) {
@@ -106,9 +102,7 @@ class FeatureFlagService {
     return true;
   }
 
-  // -------------------------------------------------------------------------
   // Lifecycle
-  // -------------------------------------------------------------------------
 
   /**
    * Fetches and applies Firebase Remote Config (idempotent, never throws).
@@ -150,9 +144,7 @@ class FeatureFlagService {
     }
   }
 
-  // -------------------------------------------------------------------------
   // Reads
-  // -------------------------------------------------------------------------
 
   /** Fail-closed boolean read. */
   isEnabled(name) {
@@ -205,9 +197,7 @@ class FeatureFlagService {
     return out;
   }
 
-  // -------------------------------------------------------------------------
   // Overrides (kill switches / admin UI)
-  // -------------------------------------------------------------------------
 
   /** Sets an admin override (persisted). Pass `null` to clear. */
   setOverride(name, value) {
@@ -247,9 +237,7 @@ class FeatureFlagService {
     this._emit();
   }
 
-  // -------------------------------------------------------------------------
   // Firestore governance overlay (platform-wide, server-written)
-  // -------------------------------------------------------------------------
 
   /**
    * Applies a server-governed override map ({ flagName: value }) on top of the
@@ -318,9 +306,7 @@ class FeatureFlagService {
     return this.onUpdate(callback);
   }
 
-  // -------------------------------------------------------------------------
   // Subscriptions
-  // -------------------------------------------------------------------------
 
   /** @returns {() => void} unsubscribe */
   onUpdate(callback) {

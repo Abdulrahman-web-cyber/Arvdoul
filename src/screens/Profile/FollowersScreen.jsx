@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/FollowersScreen.jsx - ARVDOUL Followers Screen
- * 
  * Displays list of followers with follow/unfollow functionality.
  * 
  * @component

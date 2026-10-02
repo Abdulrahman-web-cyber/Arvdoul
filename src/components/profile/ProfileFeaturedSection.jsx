@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileFeaturedSection.jsx - ARVDOUL Featured by Creator
- * 
  * Recreates the 'Featured by [Name]' section for Public Profile view:
  * - Header with Sparkles icon and 'See all >' button
  * - Grid / carousel of creator's featured media projects & sparks

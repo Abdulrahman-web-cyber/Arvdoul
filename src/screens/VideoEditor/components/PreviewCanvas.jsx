@@ -1,4 +1,5 @@
 // src/screens/VideoEditor/components/PreviewCanvas.jsx
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { motion, AnimatePresence } from 'framer-motion';

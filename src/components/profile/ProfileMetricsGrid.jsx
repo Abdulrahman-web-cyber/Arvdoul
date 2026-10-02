@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileMetricsGrid.jsx - ARVDOUL Unified Metrics Strip
- * 
  * Replaces noisy floating glass boxes with an authoritative, high-contrast metric strip.
  * Features crisp typography, accessible touch targets, and zero blurry visual pollution.
  * 

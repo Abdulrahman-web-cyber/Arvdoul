@@ -1,5 +1,7 @@
-// src/components/profile/ProfileOptionsMenu.jsx - ARVDOUL PROFILE OPTIONS MENU (REAL)
+// src/components/profile/ProfileOptionsMenu.jsx
+//
 // Share, copy link, block/unblock, report — backed by userService.
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';

@@ -1,4 +1,5 @@
 // src/screens/AudioEditor/components/BottomStudioNav.jsx
+
 import React from 'react';
 import { FolderOpen, Grid, Plus, Mic, Settings } from 'lucide-react';
 import { cn } from '../../../lib/utils';

@@ -4,7 +4,6 @@
 import { IdempotencyStore } from '../utils/IdempotencyKey';
 import { safeSearchService } from '../services/safeSearchService.js';
 import { scamDetectionService } from '../services/scamDetectionService.js';
-import { searchAbuseService } from '../services/searchAbuseService.js';
 import { searchIndexingService } from '../services/searchIndexingService.js';
 import { audioModerationService } from '../services/audioModerationService.js';
 import { childSafetyService } from '../services/childSafetyService.js';
@@ -453,36 +452,6 @@ describe('Service Layer Tests', () => {
       const res = scamDetectionService.evaluateScam(text);
       expect(res.isScam).toBe(false);
       expect(res.score).toBe(0);
-    });
-  });
-
-  describe('SearchAbuseService Upgrades (v8.0)', () => {
-    test('enforces query length restriction limits', () => {
-      const longQuery = 'a'.repeat(200);
-      const res = searchAbuseService.validateSearchRequest('user123', longQuery);
-      expect(res.allowed).toBe(false);
-      expect(res.requiresCaptcha).toBe(true);
-    });
-
-    test('blocks sliding window search rate spikes', () => {
-      searchAbuseService.resetAbuseCounters('user_temp');
-      for (let i = 0; i < 30; i++) {
-        const check = searchAbuseService.validateSearchRequest('user_temp', `Query ${i}`);
-        expect(check.allowed).toBe(true);
-      }
-      const overLimit = searchAbuseService.validateSearchRequest('user_temp', 'One more search');
-      expect(overLimit.allowed).toBe(false);
-    });
-
-    test('detects dictionary sequential letter sweeps and triggers captcha', () => {
-      searchAbuseService.resetAbuseCounters('sweep_user');
-      // alphabetical sequence sweeps
-      searchAbuseService.validateSearchRequest('sweep_user', 'aaa');
-      searchAbuseService.validateSearchRequest('sweep_user', 'aab');
-      searchAbuseService.validateSearchRequest('sweep_user', 'aac');
-      const sweepCheck = searchAbuseService.validateSearchRequest('sweep_user', 'aad');
-      expect(sweepCheck.allowed).toBe(false);
-      expect(sweepCheck.requiresCaptcha).toBe(true);
     });
   });
 

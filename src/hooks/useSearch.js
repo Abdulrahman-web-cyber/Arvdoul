@@ -1,4 +1,5 @@
-// src/hooks/useSearch.js - ARVDOUL Search Hook
+// src/hooks/useSearch.js
+
 import { useCallback, useEffect, useRef } from 'react';
 import { useSearchStore } from '../store/searchStore';
 import searchService from '../services/searchService';

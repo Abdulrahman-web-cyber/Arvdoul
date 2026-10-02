@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminEconomyScreen.jsx - ARVDOUL ECONOMY OVERSIGHT & LEDGER
-// ✅ Platform coin liquidity, revenue, and treasury oversight
-// ✅ Payout review, approval, and rejection workflow with audit logging
-// ✅ Real-time transaction ledger explorer
+// src/screens/Admin/AdminEconomyScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -56,9 +53,8 @@ const AdminEconomyScreen = () => {
   const loadData = useCallback(async () => {
     setRefreshing(true);
     try {
-      const { collection, getDocs, query, limit, orderBy } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
+      const { getAdminService } = await import('../../services/adminService.js');
+      const admin = getAdminService();
 
       const summary = await callFunction(FUNCTIONS.GET_ECONOMY_SUMMARY);
       if (summary?.success) {
@@ -74,10 +70,8 @@ const AdminEconomyScreen = () => {
 
       // The withdrawal_requests rules let an admin read every request.
       try {
-        const snap = await getDocs(
-          query(collection(firestore, 'withdrawal_requests'), orderBy('createdAt', 'desc'), limit(100))
-        );
-        setPayouts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const rows = await admin.listWithdrawalRequests(100);
+        setPayouts(rows);
       } catch {
         setPayouts([]);
       }
@@ -85,10 +79,8 @@ const AdminEconomyScreen = () => {
       // A user's own entries are readable; the admin branch of the rules widens
       // this to the platform ledger.
       try {
-        const txSnap = await getDocs(
-          query(collection(firestore, 'coin_transactions'), orderBy('createdAt', 'desc'), limit(100))
-        );
-        setTransactions(txSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const rows = await admin.listCoinTransactions(100);
+        setTransactions(rows);
       } catch {
         setTransactions([]);
       }

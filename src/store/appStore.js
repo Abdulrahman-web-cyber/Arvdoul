@@ -1,6 +1,4 @@
-// src/store/appStore.js - ENTERPRISE PRO MAX v3 (FIXED PERSISTENCE)
-// ✅ SMART COINS • NOTIFICATIONS • USER PROFILE • PRODUCTION READY
-// 🔧 FIX: coins & transactions no longer persisted – now live‑synced from Firestore
+// src/store/appStore.js
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -188,8 +186,8 @@ setAppState: (updates) => set(updates),
   name: 'arvdoul-app-store',  
   // Identity is NEVER persisted. A persisted `currentUser` survived
   // sign-out and rehydrated on reload, so on a shared device account A's
-  // profile could render in account B's session before auth resolved
-  // (audit N002). The live Firebase Auth user (AuthContext) is the only
+  // profile could render in account B's session before auth resolved.
+  // The live Firebase Auth user (AuthContext) is the only
   // identity source; this store is only a UI mirror set from it.
   partialize: (state) => ({  
     subscription: state.subscription,  

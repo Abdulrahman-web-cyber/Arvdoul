@@ -1,22 +1,4 @@
-// src/services/notificationsService.js – ARVDOUL NOTIFICATIONS v30 (BILLION‑SCALE FINAL)
-// 🔔 WORLD'S MOST ADVANCED NOTIFICATION SYSTEM • REAL‑TIME • SMART • PRODUCTION READY
-// 💰 FULL INTEGRATION WITH MONETIZATION SERVICE • COIN REWARDS • ZERO MOCK DATA
-// ✅ FIXED: offline queue IndexedDB with cursor iteration, tx.done removed
-// ✅ FIXED: DND timezone‑aware, enforced in send path
-// ✅ FIXED: grouping O(n) using Map, async display name resolved in metadata
-// ✅ FIXED: LRU cache for notifications and prefs, memory leaks cleared
-// ✅ FIXED: service worker push (registration.showNotification) for background
-// ✅ FIXED: docChanges() instead of whole snapshot rebuild
-// ✅ FIXED: deep merge for notification preferences
-// ✅ FIXED: getCurrentUser dynamic, navigator.onLine safe for SSR
-// ✅ ADDED: Event bus subscriptions (post.liked, user.followed, etc.)
-// ✅ ADDED: Notification ranking engine (score based on signals)
-// ✅ ADDED: Smart digest engine (batch similar notifications)
-// ✅ ADDED: Sharded unread counters (client aggregates)
-// ✅ ADDED: Notification search, filter, categories
-// ✅ ADDED: Monetization notification types (coin reward, payout, streak)
-// ✅ ADDED: Bulk notification jobs (REAL, actual CF)
-// ✅ ADDED: AI ranking REAL (client can ask for sorted list)
+// src/services/notificationsService.js
 
 import { getFirestoreInstance, getAuthInstance, getMessagingInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';
@@ -47,9 +29,7 @@ import {
 import { openDB } from 'idb';
 import QuickLRU from 'quick-lru';
 
-// ----------------------------------------------------------------------
 // SAFE BROWSER GLOBALS
-// ----------------------------------------------------------------------
 const hasWindow = typeof window !== 'undefined';
 const hasNotification = hasWindow && 'Notification' in window;
 const hasServiceWorker = hasWindow && 'serviceWorker' in navigator;
@@ -65,9 +45,7 @@ function safeLocalStorageRemove(key) {
   try { localStorage.removeItem(key); } catch {}
 }
 
-// ----------------------------------------------------------------------
 //  OFFLINE QUEUE (IndexedDB with idb library, cursor iteration)
-// ----------------------------------------------------------------------
 class OfflineNotificationQueue {
   constructor(service) {
     this.service = service;
@@ -127,7 +105,6 @@ class OfflineNotificationQueue {
         }
         await this.delete(item.id);
       } catch (err) {
-//         logger.warn('Offline notification queue: retry later', err);
         if (Date.now() - item.timestamp > 7 * 24 * 60 * 60 * 1000) {
           await this.delete(item.id);
         }
@@ -143,9 +120,7 @@ class OfflineNotificationQueue {
   }
 }
 
-// ----------------------------------------------------------------------
 //  CONFIGURATION (expanded)
-// ----------------------------------------------------------------------
 const NOTIFICATIONS_CONFIG = {
   TYPES: {
     LIKE: 'like',
@@ -242,9 +217,7 @@ const NOTIFICATIONS_CONFIG = {
   REGION: 'europe-west1',
 };
 
-// ----------------------------------------------------------------------
 //  LRU CACHE with TTL
-// ----------------------------------------------------------------------
 class LRUCacheWithTTL {
   constructor(maxSize, ttlMs) {
     this.cache = new QuickLRU({ maxSize });
@@ -267,9 +240,7 @@ class LRUCacheWithTTL {
   get size() { return this.cache.size; }
 }
 
-// ----------------------------------------------------------------------
 //  UTILITIES
-// ----------------------------------------------------------------------
 function enhanceError(error, defaultMessage) {
   const code = error?.code || 'unknown';
   const message = {
@@ -298,9 +269,7 @@ function deepMerge(target, source) {
   return target;
 }
 
-// ----------------------------------------------------------------------
 //  MAIN SERVICE CLASS
-// ----------------------------------------------------------------------
 class UltimateNotificationsService {
   constructor() {
     this.firestore = null;
@@ -342,19 +311,15 @@ class UltimateNotificationsService {
       tokensRefreshed: 0,
     };
 
-//     logger.warn('[Notifications] Service instantiated – v30');
   }
 
-  // --------------------------------------------------------------------
   //  INITIALIZATION
-  // --------------------------------------------------------------------
   async ensureInitialized() {
     if (this.initialized) return;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
       try {
-//         logger.warn('[Notifications] Initializing...');
         const firebase = await import('firebase/firestore');
         const authMod = await import('firebase/auth');
         const messagingMod = await import('firebase/messaging');
@@ -432,7 +397,6 @@ class UltimateNotificationsService {
 
         this.offlineQueue.processAll();
         this.initialized = true;
-//         logger.warn('[Notifications] ✅ Initialized (v30)');
       } catch (err) {
         logger.error('[Notifications] ❌ Init failed', err);
         this.initPromise = null;
@@ -451,9 +415,7 @@ class UltimateNotificationsService {
     return this.ensureInitialized();
   }
 
-  // --------------------------------------------------------------------
   //  CORE NOTIFICATION METHODS (via Cloud Functions)
-  // --------------------------------------------------------------------
   async sendNotification(notificationData, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.authMethods.getCurrentUser();
@@ -567,9 +529,7 @@ class UltimateNotificationsService {
     return result.data;
   }
 
-  // --------------------------------------------------------------------
   //  PUSH TOKEN MANAGEMENT (with service worker)
-  // --------------------------------------------------------------------
   async requestPushPermission(userId) {
     await this.ensureInitialized();
     if (!hasNotification) throw new Error('Notifications not supported');
@@ -584,7 +544,6 @@ class UltimateNotificationsService {
           // Also register our custom SW for background pushes
           await navigator.serviceWorker.register(`${base}sw-notifications.js`);
         } catch (err) {
-//           logger.warn('[Notifications] SW registration failed', err);
         }
       }
       const token = await this._getFreshPushToken();
@@ -601,7 +560,6 @@ class UltimateNotificationsService {
   async _getFreshPushToken() {
     try {
       const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-//       if (!vapidKey) logger.warn('[Notifications] VAPID key missing');
       const token = await this.messagingMethods.getToken(this.messaging, { vapidKey });
       return token;
     } catch (err) {
@@ -617,7 +575,6 @@ class UltimateNotificationsService {
     if (oldToken !== newToken) {
       await this._savePushToken(userId, newToken);
       this.metrics.tokensRefreshed++;
-//       logger.warn('[Notifications] Token refreshed for user', userId);
     }
   }
 
@@ -697,7 +654,6 @@ class UltimateNotificationsService {
   _setupPushMessageListener() {
     if (!this.messaging || !this.messagingMethods.onMessage) return;
     this.messagingMethods.onMessage(this.messaging, (payload) => {
-//       logger.warn('[Notifications] Foreground push received', payload);
       if (payload.notification) {
         this._showNativeNotification({
           id: payload.data?.notificationId || Date.now().toString(),
@@ -725,7 +681,6 @@ class UltimateNotificationsService {
         'https://app.arvdoul.com',
       ];
       if (allowedOrigins.includes(parsed.origin)) return parsed.href;
-//       logger.warn('[Notifications] Blocked unsafe action URL:', url);
       return null;
     } catch { return null; }
   }
@@ -756,9 +711,7 @@ class UltimateNotificationsService {
     }
   }
 
-  // --------------------------------------------------------------------
   //  PREFERENCES (deep merge)
-  // --------------------------------------------------------------------
   async getUserNotificationPreferences(userId) {
     const cached = this.userPreferencesCache.get(userId);
     if (cached) return cached;
@@ -819,9 +772,7 @@ class UltimateNotificationsService {
     else return hour >= start || hour < end;
   }
 
-  // --------------------------------------------------------------------
-  //  REAL‑TIME SUBSCRIPTIONS (using docChanges)
-  // --------------------------------------------------------------------
+  // REAL‑TIME SUBSCRIPTIONS (using docChanges)
   subscribeToUserNotifications(userId, callback) {
     const subscriptionId = `notif_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     let cancelled = false;
@@ -916,10 +867,8 @@ class UltimateNotificationsService {
     return false;
   }
 
-  // --------------------------------------------------------------------
   //  INTELLIGENCE: Ranking & Digest (client side for display)
   //  Actual ranking is done in Cloud Function, but client can also reorder.
-  // --------------------------------------------------------------------
   async getRankedNotifications(userId, options = {}) {
     const result = await this.getUserNotifications(userId, options);
     if (!result.success || !result.notifications) return result;
@@ -931,9 +880,7 @@ class UltimateNotificationsService {
     return { ...result, notifications: ranked };
   }
 
-  // --------------------------------------------------------------------
   //  HELPER NOTIFICATION CREATORS (via event bus)
-  // --------------------------------------------------------------------
   async createLikeNotification(postId, likerId, ownerId) {
     if (likerId === ownerId) return;
     return this.sendNotification({
@@ -1036,9 +983,7 @@ class UltimateNotificationsService {
     });
   }
 
-  // --------------------------------------------------------------------
   //  PRIVATE HELPERS
-  // --------------------------------------------------------------------
   _invalidateUserCache(userId) {
     for (const key of this.notificationsCache.cache.keys()) {
       if (key.startsWith(`notifications_${userId}`)) this.notificationsCache.delete(key);
@@ -1053,9 +998,7 @@ class UltimateNotificationsService {
     return 'web';
   }
 
-  // --------------------------------------------------------------------
   //  SERVICE MANAGEMENT
-  // --------------------------------------------------------------------
   getStats() {
     return {
       ...this.metrics,
@@ -1081,13 +1024,10 @@ class UltimateNotificationsService {
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-//     logger.warn('[Notifications] Service destroyed');
   }
 }
 
-// ----------------------------------------------------------------------
 //  SINGLETON EXPORT
-// ----------------------------------------------------------------------
 let instance = null;
 export function getNotificationsService() {
   if (!instance) instance = new UltimateNotificationsService();

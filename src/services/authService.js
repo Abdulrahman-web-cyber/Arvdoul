@@ -47,7 +47,7 @@ class ProductionAuthService {
       const authInstance = firebaseApp.auth || (await firebaseApp.getAuthInstance?.());
       this.auth = authInstance;
       
-      // 🔧 CRITICAL FIX: Ensure auth.settings object exists.
+      // Ensure auth.settings object exists.
       if (!this.auth.settings) {
         this.auth.settings = {};
       }
@@ -103,7 +103,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== PRIVATE: Welcome notification (non‑blocking) ==========
   async _sendWelcomeNotification(userId, userName = '') {
     try {
       const notifications = await import('./notificationsService.js').then(
@@ -131,7 +130,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== SERVER‑SIDE RATE LIMIT (optional) ==========
   async _checkServerRateLimit(identifier, action = 'auth') {
     if (!AUTH_CONFIG.SERVER_RATE_LIMIT_FUNCTION) return { allowed: true };
     try {
@@ -143,12 +141,10 @@ class ProductionAuthService {
       const data = await res.json();
       return { allowed: data.allowed, waitTime: data.waitTime || 0 };
     } catch (e) {
-//       logger.warn('Server rate limit check failed, falling back to client', e);
       return { allowed: true };
     }
   }
 
-  // ========== CLIENT‑SIDE RATE LIMITING ==========
   _getRateLimitKey(identifier) {
     return `rate_limit_${identifier}`;
   }
@@ -172,7 +168,6 @@ class ProductionAuthService {
       }
       return { allowed: true, waitTime: 0 };
     } catch (e) {
-//       logger.warn('Rate limit check failed, allowing', e);
       return { allowed: true, waitTime: 0 };
     }
   }
@@ -197,7 +192,6 @@ class ProductionAuthService {
       }
       localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
-//       logger.warn('Failed to record rate limit', e);
     }
   }
 
@@ -207,7 +201,6 @@ class ProductionAuthService {
     } catch (e) {}
   }
 
-  // ========== Helper: merge step1 data from sessionStorage ==========
   _getSignupStep1Data() {
     try {
       const raw = sessionStorage.getItem('signup_step1');
@@ -217,7 +210,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== EMAIL SIGN‑UP (never deletes auth user on profile failure) ==========
   async createUserWithEmailPassword(email, password, profileData = {}) {
     const rateLimit = await this._checkRateLimit(email);
     if (!rateLimit.allowed) {
@@ -337,7 +329,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== PENDING PROFILE STORAGE ==========
   _storePendingProfile(uid, data) {
     try {
       localStorage.setItem(`pending_profile_${uid}`, JSON.stringify({
@@ -345,7 +336,6 @@ class ProductionAuthService {
         timestamp: Date.now()
       }));
     } catch (e) {
-//       logger.warn('Failed to store pending profile', e);
     }
   }
 
@@ -370,7 +360,6 @@ class ProductionAuthService {
     } catch (e) {}
   }
 
-  // ========== EMAIL SIGN IN (with pending profile recovery) ==========
   async signInWithEmailPassword(email, password) {
     const rateLimit = await this._checkRateLimit(email);
     if (!rateLimit.allowed) {
@@ -395,7 +384,6 @@ class ProductionAuthService {
       try {
         profile = await getUserProfile(user.uid);
       } catch (err) {
-//         logger.warn('Could not fetch user profile', err);
       }
 
       if (!profile) {
@@ -407,7 +395,6 @@ class ProductionAuthService {
             this._clearPendingProfile(user.uid);
             logger.warn('// Pending profile recovered');
           } catch (e) {
-//             logger.warn('Failed to recover pending profile', e);
           }
         }
       }
@@ -446,7 +433,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== CHECK EMAIL VERIFICATION STATUS ==========
   async checkEmailVerification(userId) {
     try {
       await this.initialize();
@@ -487,7 +473,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== PASSWORD RESET ==========
   async sendPasswordResetEmail(email) {
     const rateLimit = await this._checkRateLimit(`reset_${email}`);
     if (!rateLimit.allowed) {
@@ -527,7 +512,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== RESEND VERIFICATION ==========
   async resendEmailVerification(userId) {
     try {
       await this.initialize();
@@ -558,7 +542,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== PHONE AUTH (real only, no mock) ==========
   async sendPhoneVerificationCode(phoneNumber, recaptchaVerifier = null) {
     if (!phoneNumber) {
       throw new AuthError('auth/missing-phone-number', 'Phone number is required.');
@@ -722,7 +705,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== GOOGLE AUTH ==========
   async signInWithGoogle(options = {}) {
     try {
       await this.initialize();
@@ -849,7 +831,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== RECAPTCHA MANAGEMENT ==========
   async createRecaptchaVerifier(containerId = 'signup-recaptcha-container', options = {}) {
     try {
       await this.initialize();
@@ -934,7 +915,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== MFA (TOTP) – FULLY IMPLEMENTED ==========
   async enrollMFA() {
     await this.initialize();
     const user = this.auth.currentUser;
@@ -1015,7 +995,6 @@ class ProductionAuthService {
     throw new AuthError('auth/not-implemented', 'Use verifyMFAAndSignIn with resolver');
   }
 
-  // ========== SIGN OUT ==========
   async signOut() {
     try {
       await this.initialize();
@@ -1032,7 +1011,6 @@ class ProductionAuthService {
     }
   }
 
-  // ========== ERROR FORMATTING ==========
   formatPhoneAuthError(error) {
     const errorCode = error.code || 'auth/phone-verification-failed';
     let errorMessage = error.message || 'Phone verification failed';
@@ -1106,13 +1084,46 @@ class ProductionAuthService {
     return new AuthError(errorCode, errorMessage, error);
   }
 
-  // ========== UTILITY ==========
   getCurrentUser() {
     return this.auth?.currentUser;
   }
 
   isAuthenticated() {
     return !!this.auth?.currentUser;
+  }
+
+  /**
+   * Update the Firebase Auth profile (displayName/photoURL) for the signed-in
+   * user. Canonical wrapper so screens never import firebase/auth directly.
+   */
+  async updateAuthProfile({ displayName, photoURL }) {
+    const current = this.auth?.currentUser || (await this.initialize())?.currentUser;
+    if (!current) return false;
+    const { updateProfile } = await import('firebase/auth');
+    await updateProfile(current, { displayName, photoURL });
+    return true;
+  }
+
+  /**
+   * Apply an email action code (e.g. verifyEmail from an emailed link) and
+   * reload the current user if signed in.
+   */
+  async applyEmailActionCode(oobCode) {
+    await this.initialize();
+    const { applyActionCode } = await import('firebase/auth');
+    await applyActionCode(this.auth, oobCode);
+    const current = this.auth?.currentUser;
+    if (current?.reload) await current.reload();
+    return true;
+  }
+
+  /** Delete the currently signed-in Firebase Auth user (signup cancellation). */
+  async deleteCurrentUser() {
+    const current = this.auth?.currentUser || (await this.initialize())?.currentUser;
+    if (!current) return false;
+    const { deleteUser } = await import('firebase/auth');
+    await deleteUser(current);
+    return true;
   }
 
   async getAuthToken() {

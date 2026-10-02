@@ -1,6 +1,4 @@
 /**
- * src/hooks/useAnalytics.js - ARVDOUL Analytics Hook
- * 
  * Custom hook for analytics management including event tracking and
  * profile analytics loading.
  * 

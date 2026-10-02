@@ -1,6 +1,4 @@
 /**
- * src/services/predictiveAnalyticsService.js - ARVDOUL PREDICTIVE ENGAGEMENT & FORECASTING ENGINE v1.0
- * 
  * Production-grade creator predictive analytics:
  * • Longitudinal engagement curve forecasting with confidence intervals
  * • Personalized "Best Time to Publish" scheduling heatmaps

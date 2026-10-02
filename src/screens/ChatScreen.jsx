@@ -1,4 +1,5 @@
 // src/screens/ChatScreen.jsx
+
 /**
  * ARVDOUL CHAT SCREEN — REAL MESSAGING (no simulation)
  *
@@ -72,9 +73,7 @@ export default function ChatScreen() {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   const reloadTimerRef = useRef(null);
 
-  // ------------------------------------------------------------------
   // Conversation load + realtime subscription
-  // ------------------------------------------------------------------
   const loadMessages = useCallback(async () => {
     if (!conversationId || !uid) return;
     try {
@@ -217,9 +216,7 @@ export default function ChatScreen() {
     return () => { if (readTimerRef.current) clearTimeout(readTimerRef.current); };
   }, [conversationId, uid, messages]);
 
-  // ------------------------------------------------------------------
   // Actions (all real, via messagesService)
-  // ------------------------------------------------------------------
   const handleSendMessage = useCallback(
     async (data) => {
       if (!conversationId || !uid || !data?.content?.trim()) return;
@@ -313,9 +310,7 @@ export default function ChatScreen() {
     }
   }, [conversationId, uid]);
 
-  // ------------------------------------------------------------------
   // Derived UI
-  // ------------------------------------------------------------------
   const otherParticipants = useMemo(() => {
     if (!conversation || !uid) return [];
     return (conversation.participants || []).filter((p) => p !== uid);
@@ -339,9 +334,7 @@ export default function ChatScreen() {
     return names.length === 1 ? `${names[0]} is typing...` : 'Several people are typing...';
   }, [typingUsers, conversation]);
 
-  // ------------------------------------------------------------------
   // Conversation info panel: pinned messages, shared media, search
-  // ------------------------------------------------------------------
   const openInfoPanel = useCallback(async () => {
     setShowInfoPanel(true);
     loadSavedState();
@@ -460,10 +453,8 @@ export default function ChatScreen() {
     }, 100);
   };
 
-  // ------------------------------------------------------------------
   // Derived render items: date separators, sender grouping (spec §49),
   // unread divider (spec §50)
-  // ------------------------------------------------------------------
   const renderItems = useMemo(() => {
     const items = [];
     let lastDateKey = null;
@@ -504,9 +495,7 @@ export default function ChatScreen() {
     return items;
   }, [messages, conversation, uid]);
 
-  // ------------------------------------------------------------------
   // States
-  // ------------------------------------------------------------------
   if (loading) {
     return (
       <div className={cn('min-h-screen pb-24', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>

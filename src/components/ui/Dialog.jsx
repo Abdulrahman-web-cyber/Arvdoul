@@ -1,4 +1,5 @@
 // src/components/ui/Dialog.jsx
+
 /**
  * ARVDOUL DESIGN SYSTEM — ACCESSIBLE DIALOG (MODAL)
  *

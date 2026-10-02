@@ -1,13 +1,4 @@
-// src/services/firestoreService.js - ARVDOUL ENTERPRISE PRO MAX v5.0 (BILLION-SCALE)
-// 🚀 REAL-TIME SYNC • ALL POST TYPES • SUBCOLLECTION‑BASED LIKES/SAVES/REACTIONS
-// 🔥 MONETIZATION • NOTIFICATIONS • SHARDED COUNTERS • NO ARRAY LIMITS
-// ✅ ATOMIC LIKES/SAVES • CORRECT VIEW SHARDS • IDEMPOTENT REACTIONS • FULLY IMPLEMENTED
-// ✅ UNLIKE / UNSAVE / REMOVE REACTION • NOTIFICATIONS OUTSIDE TX
-// ✅ FIXED: getPostsByUser pagination, getSavedPosts denormalised, getLikedPosts via subcollection
-// ✅ ADDED: sharePost, sendGift, addReaction, removeReaction, incrementCommentCount
-// ✅ REMOVED: client‑side scheduled jobs (moved to Cloud Functions)
-// ✅ SCALABLE: savedBy/likedBy/poll.votes replaced with subcollections
-// ✅ ADDED: saveDraft, getDraft, deleteDraft, publishToPlatform (Pillar 11 Gaps resolved)
+// src/services/firestoreService.js
 
 import { countersManager } from '../utils/CountersManager.js';
 import { cacheManager } from '../utils/CacheManager.js';
@@ -165,7 +156,6 @@ class EnterpriseFirestoreService {
     return this.ensureInitialized();
   }
 
-  // ==================== DRAFTS AND PUBLISH (GAPS COMPLIANCE) ====================
   async saveDraft(draftId, userId, draftData) {
     await this.ensureInitialized();
     try {
@@ -228,7 +218,6 @@ class EnterpriseFirestoreService {
     }
   }
 
-  // ==================== POST OPERATIONS ====================
   async createPost(postData) {
     await this.ensureInitialized();
     const startTime = Date.now();
@@ -484,6 +473,21 @@ class EnterpriseFirestoreService {
       this.invalidateCachePattern(`user_posts_`);
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to delete post'); }
+  }
+
+  async restorePost(postId, userId) {
+    await this.ensureInitialized();
+    try {
+      const { doc, updateDoc, serverTimestamp } = this.firestoreMethods;
+      const postRef = doc(this.firestore, 'posts', postId);
+      await updateDoc(postRef, {
+        isDeleted: false, deletedAt: null, updatedAt: serverTimestamp(),
+        status: 'published', deletedBy: userId
+      });
+      this.cache.delete(postId);
+      this.invalidateCachePattern(`user_posts_`);
+      return { success: true };
+    } catch (error) { throw enhanceError(error, 'Failed to restore post'); }
   }
 
   async batchDeletePosts(postIds, userId, isAdmin = false) {
@@ -1091,6 +1095,7 @@ const firestoreService = {
   getPostsByUser: (uid, opts) => getFirestoreService().getPostsByUser(uid, opts),
   updatePost: (id, updates) => getFirestoreService().updatePost(id, updates),
   deletePost: (id, uid) => getFirestoreService().deletePost(id, uid),
+  restorePost: (id, uid) => getFirestoreService().restorePost(id, uid),
   batchDeletePosts: (ids, uid, isAdmin) => getFirestoreService().batchDeletePosts(ids, uid, isAdmin),
   likePost: (pid, uid) => getFirestoreService().likePost(pid, uid),
   unlikePost: (pid, uid) => getFirestoreService().unlikePost(pid, uid),

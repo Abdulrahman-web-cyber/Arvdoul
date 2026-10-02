@@ -1,7 +1,4 @@
 /**
- * src/design-system/Button.jsx
- * ARVDOUL DESIGN SYSTEM — BUTTON PRIMITIVE
- *
  * Exhaustive variant/state coverage:
  *   variants: primary (brand gradient), secondary, ghost, outline, destructive, success
  *   sizes:    sm, md, lg

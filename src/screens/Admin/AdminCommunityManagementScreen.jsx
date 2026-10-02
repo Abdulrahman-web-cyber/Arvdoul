@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminCommunityManagementScreen.jsx - ARVDOUL COMMUNITY GOVERNANCE & DIRECTORY
-// ✅ Community space administration, strike issuance, and verified status badge
-// ✅ Search, filter by privacy tier, and member oversight
-// ✅ Server-authoritative audit logging on governance interventions
+// src/screens/Admin/AdminCommunityManagementScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';

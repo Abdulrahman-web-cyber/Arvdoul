@@ -8,7 +8,6 @@ import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 
-// ==================== CONFIGURATION ====================
 const ANALYTICS_CONFIG = {
   CACHE_TTL: 5 * 60 * 1000, // 5 minutes cache TTL
   MAX_DAILY_STATS: 365, // Store up to 1 year of daily stats
@@ -28,7 +27,6 @@ const ANALYTICS_CONFIG = {
   SNAPSHOT_COLLECTION: 'user_daily_stats', // follower-count snapshots (migration: REFACTOR_PROGRESS.md)
 };
 
-// ==================== LRU CACHE ====================
 class LRUCache {
   constructor(maxSize = 100, ttl = ANALYTICS_CONFIG.CACHE_TTL) {
     this.maxSize = maxSize;
@@ -65,7 +63,6 @@ class LRUCache {
   }
 }
 
-// ==================== ENHANCED ERROR HANDLER ====================
 function enhanceError(error, defaultMessage) {
   const errorMap = {
     'permission-denied': 'You do not have permission to access analytics.',
@@ -89,7 +86,6 @@ function enhanceError(error, defaultMessage) {
   return enhanced;
 }
 
-// ==================== ANALYTICS SERVICE CLASS ====================
 class UltimateAnalyticsService {
   constructor() {
     this.firestore = null;
@@ -103,10 +99,8 @@ class UltimateAnalyticsService {
       this._cacheCleanupInterval = setInterval(() => this.clearExpiredCache(), 5 * 60 * 1000);
     }
 
-//     this.initialize().catch(err => logger.warn('Analytics service init warning:', err.message));
   }
 
-  // ==================== INITIALIZATION ====================
   async initialize() {
     if (this.initialized && this.firestore) return this.firestore;
 
@@ -120,7 +114,6 @@ class UltimateAnalyticsService {
         await enableIndexedDbPersistence(this.firestore);
         // Analytics persistence enabled
       } catch (e) {
-//         logger.warn('⚠️ Analytics persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -136,7 +129,6 @@ class UltimateAnalyticsService {
     return this.firestore;
   }
 
-  // ==================== HELPER FUNCTIONS ====================
   _getDateString(date = new Date()) {
     return date.toISOString().split('T')[0];
   }
@@ -151,7 +143,6 @@ class UltimateAnalyticsService {
     return map[timeframe] || 30;
   }
 
-  // ==================== PROFILE ANALYTICS ====================
   /**
    * Get comprehensive user analytics for a given timeframe
    * @param {string} userId - User ID
@@ -315,7 +306,7 @@ class UltimateAnalyticsService {
       // Counting is server-authoritative: the daily marker, the owner's daily
       // stats and the sharded totals are written by the trackProfileView
       // callable in one transaction. The client no longer writes
-      // profile_views/profile_analytics (rules deny those writes; audit N010).
+      // profile_views/profile_analytics (rules deny those writes).
       const { callFunction, FUNCTIONS } = await import('./callableService.js');
       const result = await callFunction(FUNCTIONS.TRACK_PROFILE_VIEW, { profileOwnerId });
 
@@ -377,7 +368,6 @@ class UltimateAnalyticsService {
       
       return ranking;
     } catch (error) {
-//       logger.warn('⚠️ Get creator ranking failed:', error);
       return {
         position: null,
         percentile: null,
@@ -387,7 +377,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== POST ANALYTICS ====================
   /**
    * Track post analytics event
    * @param {string} postId - Post ID
@@ -459,7 +448,6 @@ class UltimateAnalyticsService {
       });
       countersManager.invalidate({ docPath, field: totalField });
     } catch (error) {
-//       logger.warn('⚠️ Track post analytics failed:', error);
     }
   }
 
@@ -525,7 +513,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== DEMOGRAPHICS ====================
   /**
    * Get audience demographics for a user
    * @param {string} userId - User ID
@@ -561,7 +548,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== GROWTH METRICS ====================
   /**
    * Get follower growth data
    * @param {string} userId - User ID
@@ -679,7 +665,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== COIN ANALYTICS ====================
   /**
    * Get coin earning history
    * @param {string} userId - User ID
@@ -863,7 +848,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== CACHE MANAGEMENT ====================
   clearExpiredCache() {
     const now = Date.now();
     for (const [key, entry] of cacheManager.getStore().entries()) {
@@ -882,7 +866,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== CLEANUP ====================
   destroy() {
     if (this._cacheCleanupInterval) {
       clearInterval(this._cacheCleanupInterval);
@@ -901,7 +884,6 @@ class UltimateAnalyticsService {
   }
 }
 
-// ==================== SINGLETON & EXPORTS ====================
 let serviceInstance = null;
 
 export function getAnalyticsService() {

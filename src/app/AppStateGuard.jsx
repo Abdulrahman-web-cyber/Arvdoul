@@ -1,4 +1,5 @@
-// src/app/AppStateGuard.jsx - Resilient route guard and navigation coordinator
+// src/app/AppStateGuard.jsx
+
 import React, { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";

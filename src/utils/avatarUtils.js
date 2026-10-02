@@ -1,4 +1,5 @@
-// src/utils/avatarUtils.js - Instant Deterministic SVG Avatar Generator
+// src/utils/avatarUtils.js
+
 /**
  * Generates beautiful, responsive SVG avatars based on user ID and display name.
  * Prevents missing/broken image states and replaces static default PNGs with

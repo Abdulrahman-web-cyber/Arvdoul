@@ -1,4 +1,5 @@
-// src/components/Videos/VideoBottomSheet.jsx - ARVDOUL VIDEO BOTTOM SHEET
+// src/components/Videos/VideoBottomSheet.jsx
+//
 // Share and save options bottom sheet
 
 import React, { useState, useEffect, memo } from 'react';
@@ -125,7 +126,7 @@ const VideoBottomSheet = memo(({
     }
   };
 
-  // Handle save to watch later — REAL persistence: optimistic local store +
+  // Handle save to watch later — persistence: optimistic local store +
   // server-side saved_videos record (best-effort with rollback on failure).
   const handleSave = async () => {
     if (!video?.id || saving) return;
@@ -233,7 +234,7 @@ const VideoBottomSheet = memo(({
     }
   };
 
-  // Handle report — REAL submission to the reportVideo Cloud Function.
+  // Handle report — submission to the reportVideo Cloud Function.
   const submitReport = async () => {
     if (!video?.id) return;
     if (!reportReason) {

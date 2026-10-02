@@ -1,4 +1,5 @@
-// src/services/searchService.js - ARVDOUL SEARCH ENGINE v5.0 (ALGOLIA + REAL FIRESTORE OVERLAP INDEXING)
+// src/services/searchService.js
+//
 // Fully optimized search routing, real Algolia index querying, and structured lexical token-overlap indexing fallback.
 
 import { getMonetizationService } from './monetizationService.js';
@@ -12,7 +13,6 @@ import {
   startAfter,
 } from 'firebase/firestore';
 
-// ==================== HELPER: enhanceError ====================
 function enhanceError(error, defaultMessage) {
   const code = error?.code || 'unknown';
   const message = {
@@ -35,7 +35,6 @@ function enhanceError(error, defaultMessage) {
   return err;
 }
 
-// ==================== CONFIGURATION ====================
 const SEARCH_CONFIG = {
   ALGOLIA_APP_ID: import.meta.env?.VITE_ALGOLIA_APP_ID,
   ALGOLIA_SEARCH_KEY: import.meta.env?.VITE_ALGOLIA_SEARCH_KEY,
@@ -152,10 +151,8 @@ const SEARCH_CONFIG = {
   DEBOUNCE_MS: 300,
 };
 
-// ==================== safe environment detection ====================
 const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
-// ==================== Local TTL Cache ====================
 class LocalTTLCache {
   constructor() {
     this.store = new Map();
@@ -189,7 +186,6 @@ class LocalTTLCache {
   }
 }
 
-// ==================== Fast deterministic hash ====================
 function fastHash(obj) {
   const str = JSON.stringify(obj, Object.keys(obj).sort());
   let hash = 0;
@@ -200,7 +196,6 @@ function fastHash(obj) {
   return Math.abs(hash).toString(36);
 }
 
-// ==================== Query Normalization ====================
 function normalizeQuery(rawQuery) {
   let q = rawQuery || '';
   if (SEARCH_CONFIG.NORMALIZE.TRIM) q = q.trim();
@@ -209,7 +204,6 @@ function normalizeQuery(rawQuery) {
   return q;
 }
 
-// ==================== Analytics Buffer ====================
 import { cacheManager } from '../utils/CacheManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
 import { logger } from '../utils/Logger.js';
@@ -272,7 +266,6 @@ class AnalyticsBuffer {
   }
 }
 
-// ==================== Result Item ====================
 class SearchResultItem {
   constructor(rawHit, type, source, score = 0) {
     this.id = rawHit.objectID || rawHit.id;
@@ -296,7 +289,6 @@ class SearchResultItem {
   }
 }
 
-// ==================== LRU Cache ====================
 class LRUCache {
   constructor(maxSize = 50, ttl = 5 * 60 * 1000) {
     this.maxSize = maxSize;
@@ -333,7 +325,6 @@ class LRUCache {
   }
 }
 
-// ==================== MAIN SEARCH SERVICE ====================
 class UltimateSearchService {
   constructor() {
     this.client = null;
@@ -395,9 +386,7 @@ class UltimateSearchService {
     return this.ensureInitialized();
   }
 
-  // --------------------------------------------------------------------
-  //  🔍 PUBLIC SEARCH (debounced + versioned)
-  // --------------------------------------------------------------------
+  // PUBLIC SEARCH (debounced + versioned)
   async search(searchQuery, options = {}) {
     await this.ensureInitialized();
 
@@ -584,9 +573,7 @@ class UltimateSearchService {
     }
   }
 
-  // --------------------------------------------------------------------
-  //  🔍 ALGOLIA SEARCH
-  // --------------------------------------------------------------------
+  // ALGOLIA SEARCH
   async _algoliaSearch(query, indices, page, hitsPerPage, filters, facetFilters, sortBy, userId, resolvedIndexMap) {
     const requests = indices.map(baseIndex => ({
       indexName: resolvedIndexMap.get(baseIndex),
@@ -622,9 +609,7 @@ class UltimateSearchService {
     return resultsByType;
   }
 
-  // --------------------------------------------------------------------
-  //  🔥 FIRESTORE FALLBACK
-  // --------------------------------------------------------------------
+  // FIRESTORE FALLBACK
   async _firestoreFallbackSearch(query, indices, { hitsPerPage, cursorByIndex }) {
     const limitCount = Math.min(hitsPerPage, SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_RESULTS);
     const resultsByType = {};
@@ -1034,14 +1019,12 @@ class UltimateSearchService {
   }
 }
 
-// ==================== SINGLETON ====================
 let instance = null;
 export function getSearchService() {
   if (!instance) instance = new UltimateSearchService();
   return instance;
 }
 
-// ==================== PUBLIC API ====================
 const searchService = {
   initialize: () => getSearchService().initialize(),
   ensureInitialized: () => getSearchService().ensureInitialized(),

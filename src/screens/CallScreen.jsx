@@ -1,21 +1,21 @@
-// src/screens/CallScreen.jsx - ARVDOUL VIDEO CALL (REAL WebRTC)
+// src/screens/CallScreen.jsx
+//
 // 1:1 WebRTC video/audio call with Firestore signaling:
 //   - Local stream via getUserMedia
 //   - RTCPeerConnection with STUN
 //   - Offer/answer/ICE-candidate exchange through a `calls/{id}` doc
 // Works across tabs/devices on the same Firestore project.
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getFirestoreInstance } from '../firebase/firebase';
-import { doc, getDoc, setDoc, onSnapshot, collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getCallService, CALL_STATUS } from '../services/callService';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Loader2 } from 'lucide-react';
 
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-const CALL_STATUS = { RINGING: 'ringing', ACTIVE: 'active', ENDED: 'ended' };
 
 export default function CallScreen() {
   const { conversationId } = useParams();
@@ -37,6 +37,7 @@ export default function CallScreen() {
   const localStreamRef = useRef(null);
   const callIdRef = useRef(null);
   const unsubRef = useRef(null);
+  const iceUnsubRef = useRef(null);
   const timerRef = useRef(null);
   const endedRef = useRef(false);
 
@@ -45,21 +46,19 @@ export default function CallScreen() {
     secondary: isDark ? 'text-gray-400' : 'text-gray-600',
   };
 
-  // ---------- cleanup ----------
+  const startTimer = useCallback(() => {
+    if (timerRef.current) return;
+    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+  }, []);
+
   const endCall = useCallback(async () => {
     if (endedRef.current) return;
     endedRef.current = true;
     if (unsubRef.current) unsubRef.current();
+    if (iceUnsubRef.current) iceUnsubRef.current();
     if (timerRef.current) clearInterval(timerRef.current);
     if (callIdRef.current && user?.uid) {
-      try {
-        const firestore = await getFirestoreInstance();
-        await updateDoc(doc(firestore, 'calls', callIdRef.current), {
-          status: CALL_STATUS.ENDED,
-          endedAt: serverTimestamp(),
-          endedBy: user.uid,
-        });
-      } catch (e) { /* best-effort */ }
+      await getCallService().endCall(callIdRef.current, user.uid);
     }
     pcRef.current?.close();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -68,29 +67,14 @@ export default function CallScreen() {
 
   useEffect(() => () => { endCall(); }, [endCall]);
 
-  // ---------- init ----------
   useEffect(() => {
     if (!user?.uid || !conversationId) return;
     const init = async () => {
+      const svc = getCallService();
       try {
-        const firestore = await getFirestoreInstance();
-
-        // Resolve peer from conversation
-        const convSnap = await getDoc(doc(firestore, 'conversations', conversationId));
-        if (!convSnap.exists()) throw new Error('Conversation not found');
-        const participants = convSnap.data().participants || [];
-        const peerId = participants.find((p) => p !== user.uid);
-        if (!peerId) throw new Error('No peer in conversation');
-        setPeer({ id: peerId, name: 'User', avatar: null });
-
-        // Try to load peer profile
-        try {
-          const pSnap = await getDoc(doc(firestore, 'users', peerId));
-          if (pSnap.exists()) {
-            const d = pSnap.data();
-            setPeer({ id: peerId, name: d.displayName || d.username || 'User', avatar: d.photoURL });
-          }
-        } catch (e) { /* optional */ }
+        // Resolve peer from conversation (profile via userService).
+        const { participants, peerId, peer: peerInfo } = await svc.resolveCall(conversationId, user.uid);
+        setPeer(peerInfo);
 
         // Local media
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -107,60 +91,55 @@ export default function CallScreen() {
         pc.onconnectionstatechange = () => {
           if (pc.connectionState === 'connected') {
             setStatus(CALL_STATUS.ACTIVE);
-            timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+            startTimer();
           } else if (['failed', 'disconnected'].includes(pc.connectionState) && !endedRef.current) {
             setError('Connection lost.');
           }
         };
 
-        // Create the call doc (signaling channel)
-        const callRef = await addDoc(collection(firestore, 'calls'), {
-          conversationId,
-          callerId: user.uid,
-          calleeId: peerId,
-          status: CALL_STATUS.RINGING,
-          createdAt: serverTimestamp(),
-        });
-        callIdRef.current = callRef.id;
+        // Deterministic role split: lower uid creates the offer.
+        const isCaller = user.uid < peerId;
+
+        // Create the signaling doc (service writes the `participants` array the
+        // rules require, plus caller/callee).
+        const callId = await svc.createCall({ conversationId, selfUid: user.uid, peerId, participants });
+        callIdRef.current = callId;
         setStatus(CALL_STATUS.RINGING);
 
-        // Role: caller creates offer; callee answers.
-        const isCaller = user.uid < peerId; // deterministic role split
+        // Local ICE candidates → signaling doc.
+        pc.onicecandidate = (e) => {
+          if (e.candidate) svc.addIceCandidate(callId, e.candidate, user.uid).catch(() => {});
+        };
+        // Remote ICE candidates ← signaling doc (previously never applied).
+        iceUnsubRef.current = await svc.subscribeToIce(callId, user.uid, async (candidate) => {
+          try { await pc.addIceCandidate(candidate); } catch (e) { /* stale/duplicate candidate */ }
+        });
 
-        // Listen for signaling
-        unsubRef.current = onSnapshot(doc(firestore, 'calls', callRef.id), async (snap) => {
-          const data = snap.data();
-          if (!data) return;
+        // Offer/answer/status exchange.
+        unsubRef.current = await svc.subscribe(callId, async (data) => {
           if (data.status === CALL_STATUS.ENDED && !endedRef.current) {
             endCall();
             toast.info('Call ended');
             return;
           }
-          if (data.offer && !isCaller) {
+          if (data.offer && !isCaller && !pc.currentRemoteDescription) {
             await pc.setRemoteDescription(data.offer);
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            await updateDoc(callRef, { answer, status: CALL_STATUS.ACTIVE });
+            await svc.setAnswer(callId, answer);
             setStatus(CALL_STATUS.ACTIVE);
-            timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-          } else if (data.answer && isCaller) {
+            startTimer();
+          } else if (data.answer && isCaller && !pc.currentRemoteDescription) {
             await pc.setRemoteDescription(data.answer);
             setStatus(CALL_STATUS.ACTIVE);
-            timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+            startTimer();
           }
         });
-
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            addDoc(collection(firestore, 'calls', callRef.id, 'ice'), { candidate: e.candidate, from: user.uid })
-              .catch(() => {});
-          }
-        };
 
         if (isCaller) {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          await updateDoc(callRef, { offer });
+          await svc.setOffer(callId, offer);
         }
       } catch (err) {
         setError(err?.message || 'Could not start the call.');

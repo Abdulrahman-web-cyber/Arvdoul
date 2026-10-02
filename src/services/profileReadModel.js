@@ -117,9 +117,20 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   if (!profile) return profile;
   const caps = capabilities || {};
   const mayViewEconomic = isOwner || Boolean(caps.canViewEconomicStatus);
+  const blocked = Boolean(caps.isBlocked);
   return {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
+    // Safety flags come from the engine so the UI reflects the same decision
+    // that gated the sections (N007). A blocked viewer loses the bio/counts.
+    isBlocked: blocked,
+    isBlockedByTarget: Boolean(caps.isBlockedBy),
+    isBlockedByViewer: Boolean(caps.isBlocking),
+    isRestricted: blocked || Boolean(caps.isRestricted),
+    bio: blocked ? '' : profile.bio,
+    followerCount: blocked ? 0 : profile.followerCount,
+    followingCount: blocked ? 0 : profile.followingCount,
+    postCount: blocked ? 0 : profile.postCount,
     canViewActivity: Boolean(caps.canViewActivity),
     canViewAchievements: Boolean(caps.canViewAchievements),
     canViewTitles: Boolean(caps.canViewTitles),

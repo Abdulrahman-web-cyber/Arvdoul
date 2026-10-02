@@ -1,4 +1,5 @@
-// src/screens/VideoEditor/constants.js - ARVDOUL VIDEO STUDIO CONSTANTS
+// src/screens/VideoEditor/constants.js
+//
 // Presets, filters, stock media, transitions, and design tokens
 
 export const RESOLUTION_PRESETS = [

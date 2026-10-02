@@ -1,6 +1,4 @@
 /**
- * src/services/samlService.js - ARVDOUL ENTERPRISE SAML 2.0 / SSO SERVICE
- *
  * Implements:
  * 1. Enterprise SSO Integration: Integrates with Okta, Azure AD, PingIdentity, and Google Workspace via SAML 2.0.
  * 2. SAML Metadata XML Parsing: Parses Identity Provider (IdP) single sign-on URLs and X.509 signing certificates.

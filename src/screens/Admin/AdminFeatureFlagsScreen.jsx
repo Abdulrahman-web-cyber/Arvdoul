@@ -1,7 +1,4 @@
-// src/screens/Admin/AdminFeatureFlagsScreen.jsx - ARVDOUL FEATURE FLAGS & KILL SWITCHES
-// ✅ Platform-wide overrides, written server-side and audited
-// ✅ Category filtering and revert-to-baseline
-// ✅ A device-scoped emergency lever for the admin's own browser
+// src/screens/Admin/AdminFeatureFlagsScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';

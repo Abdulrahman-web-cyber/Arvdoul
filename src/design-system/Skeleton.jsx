@@ -1,7 +1,4 @@
 /**
- * src/design-system/Skeleton.jsx
- * ARVDOUL DESIGN SYSTEM — SKELETON LOADING PLACEHOLDER
- *
  * Shape variants: text, circle, rect, card. Pulse respects
  * prefers-reduced-motion via the global tokens.css kill-switch
  * (animation-duration collapses to 0.01ms).

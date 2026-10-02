@@ -19,11 +19,12 @@ import {
   isValidWebUrl,
   sanitizeProfileUrl,
   validateProfileUpdate,
-  canViewProfileSection,
   PRIVATE_PROFILE_FIELDS,
   PRIVATE_PROFILE_COLLECTION,
   splitProfileFields
 } from '../config/profileContracts.js';
+import { resolveCapabilities } from './profileCapabilityEngine.js';
+import { projectProfileForViewer } from './profileReadModel.js';
 
 const USER_CONFIG = {
   MAX_USERNAME_ATTEMPTS: 50,
@@ -68,7 +69,6 @@ class ProfessionalUserService {
     }
   }
 
-  // ==================== INITIALIZATION ====================
   async initialize() {
     if (this.initialized) return this.firestore;
     try {
@@ -81,7 +81,6 @@ class ProfessionalUserService {
         await enableIndexedDbPersistence(this.firestore);
         // Persistence enabled
       } catch (e) {
-//         logger.warn('⚠️ Persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -106,7 +105,6 @@ class ProfessionalUserService {
     return mod.getNotificationsService();
   }
 
-  // ==================== CENTRAL CACHE INVALIDATION ====================
   _invalidateUserCache(userId) {
     // Delete all cache keys that start with profile_${userId} or direct userId key
     const keysToDelete = [];
@@ -146,7 +144,6 @@ class ProfessionalUserService {
     }
   }
 
-  // ==================== AVATAR SYSTEM ====================
   generateDefaultAvatar(userId, displayName = 'User') {
     try {
       let hash = 0;
@@ -199,7 +196,6 @@ class ProfessionalUserService {
       const base64 = btoa(unescape(encodeURIComponent(svg)));
       return `data:image/svg+xml;base64,${base64}`;
     } catch (error) {
-//       logger.warn('Avatar fallback used');
       return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(
         '<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#3B82F6" rx="20"/><text x="100" y="110" text-anchor="middle" font-family="Arial" font-size="80" font-weight="bold" fill="white">U</text></svg>'
       )))}`;
@@ -229,7 +225,6 @@ class ProfessionalUserService {
     return result;
   }
 
-  // ==================== USERNAME SYSTEM (instant & robust) ====================
   async checkUsernameAvailability(username, excludeUserId = null) {
     try {
       if (!username || typeof username !== 'string') return { available: false, error: 'Username required' };
@@ -327,7 +322,6 @@ class ProfessionalUserService {
     }
   }
 
-  // ==================== PROFILE CRUD ====================
   /**
    * Resolves a profile by username, falling back to the immutable
    * previous_usernames index so shared/QR links keep working after a rename.
@@ -475,9 +469,11 @@ class ProfessionalUserService {
       lastActive: lastActiveDate ? lastActiveDate.toISOString() : null
     };
 
-    // Evaluate Relationship & Bidirectional Block enforcement
+    // Evaluate Relationship & Bidirectional Block enforcement. The relation
+    // flags are resolved here; the *decision* is made once, by the capability
+    // engine below — this method must not run a second privacy layer (N007).
     const isOwner = requesterId === userId;
-    let viewerRelation = isOwner ? 'OWNER' : 'PUBLIC';
+    const relationshipFlags = {};
 
     // Auto-record active day in server-authoritative ledger for owner
     if (isOwner) {
@@ -490,115 +486,38 @@ class ProfessionalUserService {
     }
 
     if (requesterId && requesterId !== userId) {
-      const [targetBlockedViewer, viewerBlockedTarget] = await Promise.all([
+      const [targetBlockedViewer, viewerBlockedTarget, muted, restricted, followStatus, isFriend] = await Promise.all([
         this.isBlocked(userId, requesterId),
-        this.isBlocked(requesterId, userId)
-      ]);
-
-      if (targetBlockedViewer?.blocked || viewerBlockedTarget?.blocked) {
-        const blockedProfile = {
-          id: userId,
-          uid: userId,
-          username: full.username,
-          displayName: full.displayName,
-          photoURL: full.photoURL,
-          isBlocked: true,
-          isBlockedByTarget: Boolean(targetBlockedViewer?.blocked),
-          isBlockedByViewer: Boolean(viewerBlockedTarget?.blocked),
-          isRestricted: true,
-          bio: '',
-          followerCount: 0,
-          followingCount: 0,
-          postCount: 0,
-          links: [],
-          presence: { isOnline: false, status: 'offline', lastActive: null },
-          canViewActivity: false,
-          canViewAchievements: false,
-          canViewTitles: false
-        };
-        this.cache.set(cacheKey, { data: blockedProfile, timestamp: Date.now() });
-        return blockedProfile;
-      }
-
-      // Check follow & friend relationships
-      const [isFollowingTarget, isFriend] = await Promise.all([
+        this.isBlocked(requesterId, userId),
+        this.isMuted(requesterId, userId),
+        this.isRestricted(requesterId, userId),
         this.getFollowStatus(requesterId, userId),
         this._areMutualFriends(userId, requesterId)
       ]);
 
-      if (isFriend) {
-        viewerRelation = 'CONNECTION';
-      } else if (isFollowingTarget?.isFollowing) {
-        viewerRelation = 'FOLLOWER';
-      }
+      // `isBlocking` = the viewer blocked the target; `isBlockedBy` = the
+      // target blocked the viewer. The engine derives the aggregate `isBlocked`
+      // from these two, so direction is preserved (N007).
+      relationshipFlags.isBlocking = Boolean(viewerBlockedTarget?.blocked);
+      relationshipFlags.isBlockedBy = Boolean(targetBlockedViewer?.blocked);
+      relationshipFlags.isMuted = Boolean(muted?.muted);
+      relationshipFlags.isRestricted = Boolean(restricted?.restricted);
+      relationshipFlags.isFollowing = Boolean(followStatus?.isFollowing);
+      relationshipFlags.isMutualFriend = Boolean(isFriend);
     }
 
-    // Support viewAs simulation for owner previewing public/follower views
-    if (isOwner && viewAs) {
-      if (viewAs === 'public') viewerRelation = 'PUBLIC';
-      else if (viewAs === 'follower') viewerRelation = 'FOLLOWER';
-      else if (viewAs === 'connection') viewerRelation = 'CONNECTION';
-    }
+    // Single decision: the engine resolves capabilities from the relation,
+    // privacy contracts and safety state; projectProfileForViewer applies it
+    // exactly once. This replaces the previous hand-rolled masking that could
+    // diverge from the engine (N007/N018).
+    const capabilities = resolveCapabilities({
+      viewer: requesterId ? { uid: requesterId } : null,
+      target: { ...full, uid: userId, id: userId },
+      relationship: { isOwner, ...relationshipFlags },
+      viewAs: isOwner ? viewAs : null
+    });
 
-    // Profile Privacy Projection
-    const userPrivacy = full.privacy || DEFAULT_PROFILE_PRIVACY;
-
-    if (viewerRelation !== 'OWNER') {
-      // If profile is strictly private and viewer is neither a connection nor follower
-      if (full.isPrivate && viewerRelation === 'PUBLIC') {
-        const restricted = {
-          id: userId,
-          uid: userId,
-          username: full.username,
-          displayName: full.displayName,
-          photoURL: full.photoURL,
-          bio: full.bio || '',
-          isPrivate: true,
-          isRestricted: true,
-          followerCount: full.followerCount || 0,
-          followingCount: full.followingCount || 0,
-          postCount: full.postCount || 0,
-          isVerified: Boolean(full.isVerified),
-          isCreator: Boolean(full.isCreator),
-          links: [],
-          presence: { isOnline: false, status: 'offline', lastActive: null },
-          canViewActivity: false,
-          canViewAchievements: false,
-          canViewTitles: false
-        };
-        this.cache.set(cacheKey, { data: restricted, timestamp: Date.now() });
-        return restricted;
-      }
-
-      // Granular section-level masking
-      if (!canViewProfileSection('links', userPrivacy, viewerRelation)) {
-        full.links = [];
-      }
-      if (!canViewProfileSection('presence', userPrivacy, viewerRelation)) {
-        full.presence = { isOnline: false, status: 'offline', lastActive: null };
-      }
-      if (!canViewProfileSection('economicStatus', userPrivacy, viewerRelation)) {
-        delete full.coins;
-        delete full.coinBalance;
-        delete full.earnings;
-        delete full.totalEarned;
-      }
-      full.canViewActivity = canViewProfileSection('activity', userPrivacy, viewerRelation);
-      full.canViewAchievements = canViewProfileSection('achievements', userPrivacy, viewerRelation);
-      full.canViewTitles = canViewProfileSection('titles', userPrivacy, viewerRelation);
-      full.canViewFollowersList = canViewProfileSection('followersList', userPrivacy, viewerRelation);
-      full.canViewFollowingList = canViewProfileSection('followingList', userPrivacy, viewerRelation);
-    } else {
-      full.canViewActivity = true;
-      full.canViewAchievements = true;
-      full.canViewTitles = true;
-      full.canViewFollowersList = true;
-      full.canViewFollowingList = true;
-    }
-
-    full._cachedAt = Date.now();
-    this.cache.set(cacheKey, { data: full, timestamp: Date.now() });
-    return full;
+    return projectProfileForViewer(full, capabilities, { isOwner });
   }
 
   /**
@@ -859,7 +778,6 @@ class ProfessionalUserService {
     return profile.isProfileComplete === true || !!(profile.displayName?.trim() && profile.username?.trim());
   }
 
-  // ==================== ECONOMY ====================
   async getCoinBalance(userId) {
     const profile = await this.getUserProfile(userId);
     return profile?.coins || 0;
@@ -873,7 +791,6 @@ class ProfessionalUserService {
     return { success: true };
   }
 
-  // ==================== FOLLOW / FRIENDS ====================
   async _assertNotBlocked(userA, userB) {
     const { blocked } = await this.isBlocked(userA, userB);
     if (blocked) throw new Error(`Blocked by user`);
@@ -1205,7 +1122,6 @@ class ProfessionalUserService {
       const res = await func({ userId, otherUserId });
       return { success: true, mutualFriends: res.data.mutualFriends || [] };
     } catch (cloudError) {
-//       logger.warn('Cloud Function getMutualFriends unavailable, using client fallback.');
       const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
       const followsRef = collection(this.firestore, 'follows');
       const max = USER_CONFIG.MUTUAL_FRIENDS_MAX_FOLLOWS;
@@ -1282,7 +1198,6 @@ class ProfessionalUserService {
     return { success: true, recommendations };
   }
 
-  // ==================== FRIEND REQUESTS ====================
   async sendFriendRequest(fromUserId, toUserId) {
     if (fromUserId === toUserId) throw new Error('Cannot send to yourself');
     await this._ensureInitialized();
@@ -1424,7 +1339,6 @@ class ProfessionalUserService {
     return { success: true, requests: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
   }
 
-  // ==================== BLOCKING ====================
   async blockUser(blockerId, blockedId) {
     if (blockerId === blockedId) throw new Error('Cannot block yourself');
     await this._ensureInitialized();
@@ -1512,7 +1426,6 @@ class ProfessionalUserService {
     return { success: true, blockedUsers: profiles.filter(Boolean) };
   }
 
-  // ==================== MUTING ====================
   async muteUser(muterId, mutedId) {
     if (muterId === mutedId) throw new Error('Cannot mute yourself');
     await this._ensureInitialized();
@@ -1563,7 +1476,6 @@ class ProfessionalUserService {
     return { success: true, mutedUsers: profiles.filter(Boolean) };
   }
 
-  // ==================== RESTRICTION ====================
   async restrictUser(restricterId, restrictedId) {
     if (restricterId === restrictedId) throw new Error('Cannot restrict yourself');
     await this._ensureInitialized();
@@ -1614,7 +1526,6 @@ class ProfessionalUserService {
     return { success: true, restrictedUsers: profiles.filter(Boolean) };
   }
 
-  // ==================== REPORTING ====================
   // Routed through the reportContent callable so rate limiting, de-duplication
   // and the report record shape match every other report type.
   async reportUser(reporterId, reportedId, reason, details = '') {
@@ -1625,7 +1536,6 @@ class ProfessionalUserService {
     return { success: true, ...(res?.data || {}) };
   }
 
-  // ==================== ACCOUNT DELETION ====================
   // The server-side cascade is the only thing that actually deletes the
   // account, so its result is authoritative: if the callable fails we surface
   // the failure rather than reporting a deletion that never happened.
@@ -1649,7 +1559,6 @@ class ProfessionalUserService {
     return { success: true, ...(result?.data || {}), message: 'Account deleted.' };
   }
 
-  // ==================== SEARCH ====================
   async searchUsers(queryStr, options = {}) {
     try {
       const { searchUsers: extSearch } = await import('./searchService.js');
@@ -1683,7 +1592,6 @@ class ProfessionalUserService {
     }
   }
 
-  // ==================== ACTIVITY ====================
   async updateLastActive(userId) {
     try {
       await this._ensureInitialized();
@@ -1703,7 +1611,6 @@ class ProfessionalUserService {
     return { success: true };
   }
 
-  // ==================== AVATAR & E2EE ====================
   async updateUserAvatar(userId, photoURL) {
     return this.updateUserProfile(userId, { photoURL });
   }
@@ -1724,7 +1631,6 @@ class ProfessionalUserService {
     return profile?.publicKey || null;
   }
 
-  // ==================== CACHE MANAGEMENT ====================
   _cleanupExpiredCache() {
     const now = Date.now();
     for (const [key, entry] of this.cache.entries()) {
@@ -1761,7 +1667,6 @@ class ProfessionalUserService {
   }
 }
 
-// ==================== SINGLETON & EXPORTS ====================
 let serviceInstance = null;
 export function getUserService() {
   if (!serviceInstance) serviceInstance = new ProfessionalUserService();

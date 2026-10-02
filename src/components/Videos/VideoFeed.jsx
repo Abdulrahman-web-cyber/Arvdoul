@@ -1,4 +1,5 @@
-// src/components/Videos/VideoFeed.jsx - ARVDOUL VIDEO FEED
+// src/components/Videos/VideoFeed.jsx
+//
 // TikTok-style vertical scrolling video feed with gesture support, interactive modals, and preloading
 
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';

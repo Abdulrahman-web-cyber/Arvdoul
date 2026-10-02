@@ -1,12 +1,4 @@
-// src/services/monetizationService.js - ARVDOUL ULTIMATE MONETIZATION ENGINE v5.0 (BILLION-SCALE)
-// 🔒 FINANCIAL-GRADE • DOUBLE-ENTRY LEDGER • DYNAMIC CONFIG • FRAUD RESISTANT
-// 👑 GENDER‑AWARE ROYAL POSITIONS • MOST POPULAR RANKS
-// 💰 COIN PURCHASE (STRIPE REAL/HYBRID) • AD REWARDS • SUBSCRIPTION TIERS • CREATOR PAYOUTS
-// ✅ ALL OPERATIONS DELEGATED TO CLOUD FUNCTIONS FOR SECURITY OR HYBRID LOCAL SIMULATOR
-// ✅ SERVER‑SIDE DAILY AD LIMITS, NO CLIENT‑SIDE BYPASS
-// ✅ FIXED: offline queue sync lifecycle, JSON.parse crash, ad cache leak, fake online detection
-// ✅ FIXED: config timing safety, leaderboard index hint, destroy() cleanup
-// ✅ ADDED: Firestore outbox pattern fallback for offline queue (not just IndexedDB)
+// src/services/monetizationService.js
 
 import { getFirestoreInstance, auth } from '../firebase/firebase.js';
 import {
@@ -36,7 +28,6 @@ import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG } from '../shared
 
 const log = svcLogger('monetizationService');
 
-// ---------- safe browser globals ----------
 const hasDocument = typeof document !== 'undefined';
 const hasWindow = typeof window !== 'undefined';
 const hasPerformance = typeof performance !== 'undefined' && typeof window !== 'undefined' && 'performance' in window ? !!window.performance.now : false;
@@ -50,7 +41,6 @@ function secureRandom() {
   return Math.random();
 }
 
-// ---------- crypto‑strong idempotency key with fallback ----------
 function generateIdempotencyKey() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -59,7 +49,6 @@ function generateIdempotencyKey() {
   return `${Date.now()}-${secureRandom().toString(36).slice(2)}-${perf}`;
 }
 
-// ---------- DEFAULT CONFIG (all amounts in COINS or CENTS) ----------
 const DEFAULT_CONFIG = {
   LEVELS: CANONICAL_LEVELS,
   GIFTS: GIFT_CATALOG.map((g) => ({ type: g.type, value: g.coins })),
@@ -89,7 +78,6 @@ const DEFAULT_CONFIG = {
   REMOTE_CONFIG_MIN_FETCH_INTERVAL_MS: 3600000,
 };
 
-// ---------- safe JSON parse with fallback ----------
 function safeJsonParse(str, fallback) {
   if (!str) return fallback;
   try {
@@ -99,7 +87,6 @@ function safeJsonParse(str, fallback) {
   }
 }
 
-// ---------- fetch dynamic config from Remote Config (cached, with min interval) ----------
 let cachedConfig = null;
 let configPromise = null;
 async function getMonetizationConfig(forceRefresh = false) {
@@ -149,7 +136,6 @@ async function getMonetizationConfig(forceRefresh = false) {
   return configPromise;
 }
 
-// ---------- retry helper for Cloud Function calls ----------
 async function retryOperation(fn, maxRetries = 3, baseDelay = 1000) {
   let lastError;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -165,7 +151,6 @@ async function retryOperation(fn, maxRetries = 3, baseDelay = 1000) {
   throw lastError;
 }
 
-// ---------- Offline queue (IndexedDB + Firestore outbox) with fixed event binding ----------
 class OfflineMonetizationQueue {
   constructor(service) {
     this.service = service; // store reference to service for sync
@@ -255,7 +240,6 @@ class OfflineMonetizationQueue {
   }
 }
 
-// ---------- Main Service Class ----------
 class MonetizationService {
   constructor() {
     this.db = null;
@@ -350,7 +334,6 @@ class MonetizationService {
     }
   }
 
-  // ---------- real connection check (more robust) ----------
   async _isActuallyOnline() {
     if (hasWindow && !navigator.onLine) return false;
     try {
@@ -368,7 +351,6 @@ class MonetizationService {
     }
   }
 
-  // -------------------- READ-ONLY METHODS --------------------
   async getBalance(userId) {
     if (!userId) return 0;
     await this._ensureInitialized();
@@ -383,22 +365,29 @@ class MonetizationService {
     }
   }
 
-  async getTransactionHistory(userId, limitCount = 50) {
-    if (!userId) return [];
+  // Cursor-paginated: `cursor` is the ISO `createdAt` of the last row the
+  // caller already holds. Ordering is by createdAt only (a server-side
+  // timestamp), so the cursor is a stable, gap-free page boundary.
+  async getTransactionHistory(userId, limitCount = 50, cursor = null) {
+    if (!userId) return { items: [], nextCursor: null };
     await this._ensureInitialized();
     try {
+      const pageSize = Math.max(1, Math.min(Number(limitCount) || 50, 200));
       const txRef = collection(this.db, 'coin_transactions');
-      const q = query(
-        txRef,
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc'),
-        firestoreLimit(limitCount)
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const clauses = [where('userId', '==', userId)];
+      if (cursor) clauses.push(where('createdAt', '<', new Date(cursor)));
+      clauses.push(orderBy('createdAt', 'desc'), firestoreLimit(pageSize));
+      const snapshot = await getDocs(query(txRef, ...clauses));
+      const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const last = items[items.length - 1];
+      const nextCursor =
+        snapshot.docs.length === pageSize && last?.createdAt?.toDate
+          ? last.createdAt.toDate().toISOString()
+          : null;
+      return { items, nextCursor };
     } catch (e) {
       log.error('Failed to get transaction history:', e);
-      return [];
+      return { items: [], nextCursor: null };
     }
   }
 
@@ -444,15 +433,15 @@ class MonetizationService {
 
   async getMonetizationStats(userId) {
     if (!userId) return { balance: 0, level: { level: 1, progress: 0 }, totalTransactions: 0 };
-    const [balance, levelInfo, txs] = await Promise.all([
+    const [balance, levelInfo, history] = await Promise.all([
       this.getBalance(userId),
       this.getUserLevel(userId),
       this.getTransactionHistory(userId, 100),
     ]);
-    return { balance, level: levelInfo, totalTransactions: txs.length };
+    return { balance, level: levelInfo, totalTransactions: history.items.length };
   }
 
-  // 👑 GENDER‑AWARE ROYAL POSITIONS (safe config access)
+  // GENDER‑AWARE ROYAL POSITIONS (safe config access)
   async getUserPosition(userId, gender = 'other') {
     await this._ensureInitialized();
     const balance = await this.getBalance(userId);
@@ -500,22 +489,32 @@ class MonetizationService {
     return { title: 'Community Member', emoji: '👥', minFollowers: 0, type: 'popularity' };
   }
 
-  async getCoinLeaderboard(limitCount = 50) {
+  // Cursor-paginated by coins. `cursor` is the `coins` value of the last row
+  // already held; ties at the boundary are acceptable for a leaderboard page.
+  async getCoinLeaderboard(limitCount = 50, cursor = null) {
     await this._ensureInitialized();
     try {
+      const pageSize = Math.max(1, Math.min(Number(limitCount) || 50, 200));
       const usersRef = collection(this.db, 'users');
-      const q = query(usersRef, orderBy('coins', 'desc'), firestoreLimit(limitCount));
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
+      const clauses = [];
+      if (cursor != null) clauses.push(where('coins', '<', Number(cursor)));
+      clauses.push(orderBy('coins', 'desc'), firestoreLimit(pageSize));
+      const snapshot = await getDocs(query(usersRef, ...clauses));
+      const items = snapshot.docs.map((doc) => ({
         userId: doc.id,
         displayName: doc.data().displayName || 'User',
         photoURL: getSafeAvatarUrl(doc.data().photoURL, doc.data().displayName || 'User', doc.id),
         coins: doc.data().coins || 0,
         position: this.getPositionTitle(doc.data().coins || 0),
       }));
+      const nextCursor =
+        snapshot.docs.length === pageSize && items.length > 0
+          ? items[items.length - 1].coins
+          : null;
+      return { items, nextCursor };
     } catch (e) {
       log.error('Failed to get leaderboard:', e);
-      return [];
+      return { items: [], nextCursor: null };
     }
   }
 
@@ -531,7 +530,6 @@ class MonetizationService {
     return 'Commoner';
   }
 
-  // -------------------- AD METHODS (server-side enforced with Firestore resilience) --------------------
   async getAd(placement, userId, context = {}) {
     await this._ensureInitialized();
     if (!this.config.AD_PLACEMENTS.includes(placement)) {
@@ -619,7 +617,6 @@ class MonetizationService {
     return result.data;
   }
 
-  // -------------------- SPONSORED SEARCH --------------------
   async getSponsoredSearchResult(userId, query, context = {}) {
     await this._ensureInitialized();
     try {
@@ -630,7 +627,6 @@ class MonetizationService {
     }
   }
 
-  // -------------------- COIN PURCHASE (Stripe & Ledger) --------------------
   async purchaseCoins(packageId, paymentMethodId = null, deviceMetadata = {}) {
     await this._ensureInitialized();
     const isOnline = await this._isActuallyOnline();
@@ -701,7 +697,6 @@ class MonetizationService {
     }
   }
 
-  // -------------------- SUBSCRIPTIONS --------------------
   async getSubscriptionStatus() {
     await this._ensureInitialized();
     try {
@@ -743,7 +738,6 @@ class MonetizationService {
     }
   }
 
-  // -------------------- CREATOR PAYOUTS (Stripe Connect) --------------------
   async getPayoutSettings() {
     await this._ensureInitialized();
     try {
@@ -775,7 +769,6 @@ class MonetizationService {
     }
   }
 
-  // -------------------- FINANCIAL OPERATIONS WITH ATOMIC FALLBACKS --------------------
   async addCoins(userId, amount, reason = 'credit', metadata = {}, idempotencyKey = null) {
     await this._ensureInitialized();
     const key = idempotencyKey || generateIdempotencyKey();
@@ -918,7 +911,6 @@ class MonetizationService {
     }
   }
 
-  // -------------------- CLEANUP --------------------
   destroy() {
     this.destroyed = true;
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
@@ -928,7 +920,6 @@ class MonetizationService {
   }
 }
 
-// -------------------- SINGLETON & EXPORTS --------------------
 let instance = null;
 export function getMonetizationService() {
   if (!instance) instance = new MonetizationService();
@@ -937,7 +928,7 @@ export function getMonetizationService() {
 
 // Named exports for convenience
 export const getBalance = (userId) => getMonetizationService().getBalance(userId);
-export const getTransactionHistory = (userId, limitCount) => getMonetizationService().getTransactionHistory(userId, limitCount);
+export const getTransactionHistory = (userId, limitCount, cursor) => getMonetizationService().getTransactionHistory(userId, limitCount, cursor);
 export const getUserLevel = (userId) => getMonetizationService().getUserLevel(userId);
 export const getMonetizationStats = (userId) => getMonetizationService().getMonetizationStats(userId);
 export const getAd = (placement, userId, context) => getMonetizationService().getAd(placement, userId, context);
@@ -960,8 +951,8 @@ export const getUserPosition = (userId, gender = 'other') =>
   getMonetizationService().getUserPosition(userId, gender);
 export const getUserPopularityPosition = (userId) =>
   getMonetizationService().getUserPopularityPosition(userId);
-export const getCoinLeaderboard = (limitCount) =>
-  getMonetizationService().getCoinLeaderboard(limitCount);
+export const getCoinLeaderboard = (limitCount, cursor) =>
+  getMonetizationService().getCoinLeaderboard(limitCount, cursor);
 
 export const addCoins = (userId, amount, reason, metadata, idempotencyKey) =>
   getMonetizationService().addCoins(userId, amount, reason, metadata, idempotencyKey);

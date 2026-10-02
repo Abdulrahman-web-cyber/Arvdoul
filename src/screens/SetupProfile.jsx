@@ -1,8 +1,4 @@
-// src/screens/SetupProfile.jsx – ARVDOUL SUPREMACY • FIXED FOR EXISTING USERS
-// ✅ Auto‑redirect if profile already complete
-// ✅ Forces profile refresh after creation
-// ✅ Username generation robust with retries
-// ✅ Non‑scrollable glass card, offline banner, glowing button
+// src/screens/SetupProfile.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -11,7 +7,6 @@ import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { clearOnboardingRequired } from "../utils/profileCompletion.js";
-import { updateProfile as firebaseUpdateProfile } from "firebase/auth";
 
 import {
   createUserProfile,
@@ -21,7 +16,6 @@ import {
 } from "../services/userService.js";
 import storageService from "../services/storageService.js";
 
-// ==================== AVATAR UPLOADER (unchanged, perfect) ====================
 const PerfectAvatarUploader = React.memo(
   ({ onUpload, currentAvatar, displayName, userId, theme, loading = false }) => {
     const [avatarPreview, setAvatarPreview] = useState(currentAvatar);
@@ -250,7 +244,6 @@ const PerfectAvatarUploader = React.memo(
 );
 PerfectAvatarUploader.displayName = "PerfectAvatarUploader";
 
-// ==================== SMART USERNAME GENERATOR (WORLD CLASS) ====================
 const SmartUsernameGenerator = React.memo(
   ({ username, onChange, theme, loading = false, displayName = "", userId = null }) => {
     const [status, setStatus] = useState("idle");
@@ -480,7 +473,6 @@ const SmartUsernameGenerator = React.memo(
 );
 SmartUsernameGenerator.displayName = "SmartUsernameGenerator";
 
-// ==================== MAIN COMPONENT ====================
 export default function SetupProfile() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -571,7 +563,8 @@ export default function SetupProfile() {
   const updateFirebaseAuthProfile = async (authUser, profile) => {
     if (!authUser) return;
     try {
-      await firebaseUpdateProfile(authUser, {
+      const { getAuthService } = await import('../services/authService.js');
+      await getAuthService().updateAuthProfile({
         displayName: profile.displayName,
         photoURL: profile.photoURL,
       });

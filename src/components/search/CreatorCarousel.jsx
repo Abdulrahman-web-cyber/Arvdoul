@@ -1,4 +1,5 @@
-// src/components/search/CreatorCarousel.jsx - ARVDOUL Creator Carousel
+// src/components/search/CreatorCarousel.jsx
+
 import React, { memo, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Award, Users } from 'lucide-react';

@@ -1,6 +1,4 @@
 /**
- * src/services/activeActiveService.js - ARVDOUL MULTI-REGION FAILOVER & ACTIVE-ACTIVE ROUTER
- *
  * Implements:
  * 1. Region Health Probing: Continuously checks HTTP latency and availability across primary (europe-west3) and secondary regions (us-central1, asia-northeast1).
  * 2. Automatic Edge Failover: Seamlessly switches client-side endpoints to fallback region if primary region health drops below 95%.

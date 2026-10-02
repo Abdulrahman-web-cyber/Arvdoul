@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/CreatorDashboardScreen.jsx - ARVDOUL Creator Dashboard Screen
- * 
  * Full analytics dashboard for creators.
  * 
  * @component

@@ -1,5 +1,4 @@
 // src/screens/NewConversationScreen.jsx
-// 🎯 Create new conversation screen (Web version - React Router)
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';

@@ -1,4 +1,5 @@
-// src/services/walletService.js — ARVDOUL WALLET & ECONOMIC LEDGER (Part 2)
+// src/services/walletService.js
+//
 // Double-entry, ledger-backed, multi-state transactions.
 
 import { TRANSACTION_STATES } from './levelSystemService.js';

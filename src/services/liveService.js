@@ -1,7 +1,5 @@
 /**
- * src/services/liveService.js - ARVDOUL Ultimate Live Streaming Service - PRODUCTION READY v5.0
- * 
- * Comprehensive live streaming functionality for creators with real WebRTC signaling fallback.
+ * Live streaming service for creators with real WebRTC signaling.
  * Features:
  * - Level-based live streaming (min level 5)
  * - Live stream management (start, end, join, leave)
@@ -28,7 +26,6 @@ import { GIFT_CATALOG, GIFT_VALUES } from '../shared/levelConfig.cjs';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase.js';
 import { secureRandom } from '../lib/utils.js';
 
-// ==================== CONFIGURATION ====================
 const LIVE_CONFIG = {
   MIN_LEVEL_TO_START: 5,
   VIEWER_LIMITS: {
@@ -242,7 +239,6 @@ class UltimateLiveService {
     }
   }
 
-  // ==================== REAL SERVERLESS WEBRTC SIGNALLING ====================
   /**
    * Initializes RTCPeerConnection with STUN servers and links to Firestore signaling rooms.
    */
@@ -1087,7 +1083,6 @@ class UltimateLiveService {
   }
 }
 
-// ==================== SINGLETON & EXPORTS ====================
 let serviceInstance = null;
 
 export function getLiveService() {

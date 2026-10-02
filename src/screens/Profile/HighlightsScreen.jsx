@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/HighlightsScreen.jsx - ARVDOUL Highlights Screen
- * 
  * Manage story highlights.
  * 
  * @component

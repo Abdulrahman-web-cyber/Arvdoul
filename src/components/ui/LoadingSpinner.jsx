@@ -1,4 +1,5 @@
 // src/components/ui/LoadingSpinner.jsx
+
 import React, { memo } from 'react';
 import { cn } from '../../lib/utils';
 

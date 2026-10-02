@@ -1,4 +1,5 @@
-// src/screens/Progression/ProgressScreen.jsx — ARVDOUL CITIZEN PROGRESSION ENGINE (Part 2)
+// src/screens/Progression/ProgressScreen.jsx
+//
 // Answers: Where am I? Why am I here? What did I accomplish? What can I unlock? What comes next?
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';

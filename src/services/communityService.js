@@ -1,9 +1,4 @@
-// src/services/communityService.js - ARVDOUL COMMUNITY SERVICE
-// ✅ Complete CRUD for communities
-// ✅ Membership management
-// ✅ Role-based permissions
-// ✅ Moderation features
-// Upgrades: Algorithmic recommendations and rule enforcement pipelines.
+// src/services/communityService.js
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
@@ -38,8 +33,6 @@ class CommunityService {
     this.db = await getFirestoreInstance();
     this.initialized = true;
   }
-
-  // ========== COMMUNITY CRUD ==========
 
   async createCommunity(userId, data) {
     await this.initialize();
@@ -177,8 +170,6 @@ class CommunityService {
     return true;
   }
 
-  // ========== LISTING & SEARCH ==========
-
   async listCommunities(options = {}) {
     await this.initialize();
     
@@ -259,8 +250,6 @@ class CommunityService {
       )
       .slice(0, limitNum);
   }
-
-  // ========== MEMBERSHIP MANAGEMENT ==========
 
   async joinCommunity(communityId, userId) {
     await this.initialize();
@@ -409,8 +398,6 @@ class CommunityService {
     return true;
   }
 
-  // ========== ROLE MANAGEMENT ==========
-
   async assignRole(communityId, targetUserId, role, adminUserId) {
     await this.initialize();
     
@@ -483,8 +470,6 @@ class CommunityService {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
-
-  // ========== MODERATION ==========
 
   async banUser(communityId, targetUserId, moderatorId, reason = '') {
     await this.initialize();
@@ -640,8 +625,6 @@ class CommunityService {
     return true;
   }
 
-  // ========== SPACES & CHANNELS ==========
-
   async addSpace(communityId, space, userId) {
     await this.initialize();
     
@@ -694,8 +677,6 @@ class CommunityService {
 
     return true;
   }
-
-  // ========== COMMUNITY POSTS ==========
 
   async createCommunityPost(communityId, userId, postData) {
     await this.initialize();
@@ -781,8 +762,6 @@ class CommunityService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  // ========== MODERATION LOGGING ==========
-
   async logModerationAction(communityId, moderatorId, action, targetUserId = null, reason = '') {
     await this.initialize();
     
@@ -810,8 +789,6 @@ class CommunityService {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
-
-  // ========== STATISTICS & RECS ==========
 
   async getCommunityStats(communityId) {
     await this.initialize();
@@ -865,8 +842,6 @@ class CommunityService {
       .filter(c => !c.members?.[userId])
       .slice(0, limitNum);
   }
-
-  // ========== REAL-TIME SUBSCRIPTIONS ==========
 
   subscribeToCommunity(communityId, callback) {
     return onSnapshot(doc(this.db, 'communities', communityId), (doc) => {

@@ -1,6 +1,4 @@
 /**
- * src/i18n/index.js - ARVDOUL INTERNATIONALIZATION (i18n) BOOTSTRAP
- *
  * Initializes i18next with:
  *  - SYNCHRONOUS, FAILURE-PROOF base init at module load: `initReactI18next`
  *    is registered before any component renders, so `useTranslation()` can

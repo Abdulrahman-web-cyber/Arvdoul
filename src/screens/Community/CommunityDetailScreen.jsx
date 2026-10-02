@@ -1,7 +1,4 @@
-// src/screens/Community/CommunityDetailScreen.jsx - ARVDOUL COMMUNITY DETAIL
-// ✅ View community info, posts, members
-// ✅ Join/Leave community
-// ✅ Access to spaces and channels
+// src/screens/Community/CommunityDetailScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';

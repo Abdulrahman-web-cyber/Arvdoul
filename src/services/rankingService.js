@@ -1,7 +1,4 @@
 import { logger } from '../utils/Logger.js';
-// src/services/rankingService.js – ARVDOUL RANKINGS & REPUTATION SERVICE V1
-// 🏆 Ranking System for Creators, Content, Communities
-// ✅ Creator Rankings • Wealth Rankings • Reputation • Community Rankings
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import {
@@ -18,7 +15,6 @@ import {
   increment,
 } from 'firebase/firestore';
 
-// ==================== CONFIGURATION ====================
 export const RANKING_CONFIG = {
   CATEGORIES: {
     CREATORS: {
@@ -74,7 +70,6 @@ export const RANKING_CONFIG = {
   PAGE_SIZE: 20,
 };
 
-// ==================== CUSTOM ERROR ====================
 export class RankingError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -85,7 +80,6 @@ export class RankingError extends Error {
   }
 }
 
-// ==================== RANKING SERVICE ====================
 class RankingService {
   constructor() {
     this.firestore = null;
@@ -117,7 +111,6 @@ class RankingService {
     if (!this.initialized) await this.initialize();
   }
 
-  // ==================== CACHE MANAGEMENT ====================
   _getCacheKey(category, timeRange, offset = 0) {
     return `${category}_${timeRange}_${offset}`;
   }
@@ -138,7 +131,6 @@ class RankingService {
     this.cache.clear();
   }
 
-  // ==================== CREATOR RANKINGS ====================
   async getCreatorRankings(category = 'engagement', timeRange = 'month', offset = 0) {
     await this.ensureInitialized();
 
@@ -206,7 +198,6 @@ class RankingService {
     }
   }
 
-  // ==================== WEALTH RANKINGS ====================
   async getWealthRankings(category = 'net_worth', timeRange = 'month', offset = 0) {
     await this.ensureInitialized();
 
@@ -256,7 +247,6 @@ class RankingService {
     }
   }
 
-  // ==================== REPUTATION RANKINGS ====================
   async getReputationRankings(category = 'trust', timeRange = 'month', offset = 0) {
     await this.ensureInitialized();
 
@@ -307,7 +297,6 @@ class RankingService {
     }
   }
 
-  // ==================== COMMUNITY RANKINGS ====================
   async getCommunityRankings(category = 'activity', timeRange = 'month', offset = 0) {
     await this.ensureInitialized();
 
@@ -349,7 +338,6 @@ class RankingService {
     }
   }
 
-  // ==================== TRENDING CONTENT ====================
   async getTrendingContent(type = 'videos', timeRange = 'day', offset = 0) {
     await this.ensureInitialized();
 
@@ -382,7 +370,6 @@ class RankingService {
     }
   }
 
-  // ==================== RISING CREATORS ====================
   async getRisingCreators(timeRange = 'week', offset = 0) {
     await this.ensureInitialized();
 
@@ -432,7 +419,6 @@ class RankingService {
     }
   }
 
-  // ==================== USER REPUTATION ====================
   async getUserReputation(userId) {
     await this.ensureInitialized();
 
@@ -561,8 +547,6 @@ class RankingService {
     }
   }
 
-
-  // ==================== BATCHED USER FETCH (kills N+1) ====================
   // Fetches user docs for many ids with `where('__name__', 'in', chunk)` in
   // chunks of 30 (Firestore limit) — 1-2 round trips instead of one per user.
   async _fetchUsersByIds(userIds) {
@@ -583,7 +567,6 @@ class RankingService {
     return users;
   }
 
-  // ==================== HELPER METHODS ====================
   _getTier(score) {
     for (const tier of RANKING_CONFIG.TIERS) {
       if (score >= tier.min && score <= tier.max) {
@@ -599,7 +582,6 @@ class RankingService {
       .filter(Boolean);
   }
 
-  // ==================== SERVICE MANAGEMENT ====================
   getStats() {
     return {
       initialized: this.initialized,
@@ -613,7 +595,6 @@ class RankingService {
   }
 }
 
-// ==================== SINGLETON EXPORT ====================
 let instance = null;
 export function getRankingService() {
   if (!instance) instance = new RankingService();

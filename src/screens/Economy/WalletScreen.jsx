@@ -1,4 +1,5 @@
-// src/screens/Economy/WalletScreen.jsx — ARVDOUL CITIZEN WALLET & ECONOMIC LEDGER (Part 2)
+// src/screens/Economy/WalletScreen.jsx
+//
 // Double-entry, ledger-backed, multi-state transactions.
 
 import React, { useState, useEffect, useCallback } from 'react';

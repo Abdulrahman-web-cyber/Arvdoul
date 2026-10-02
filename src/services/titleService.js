@@ -1,4 +1,5 @@
-// src/services/titleService.js — ARVDOUL TITLES & PROVENANCE ENGINE (Part 2)
+// src/services/titleService.js
+//
 // Server-validated, multidimensional criteria, Zero Pay-to-Legitimacy.
 
 import { TITLES_CATALOG, ROYAL_ELIGIBILITY, getRoyalEligibility } from './levelSystemService.js';

@@ -1,4 +1,5 @@
-// src/screens/Help/HelpCenterScreen.jsx - ARVDOUL HELP CENTER & SUPPORT
+// src/screens/Help/HelpCenterScreen.jsx
+//
 // Real, working support entry point (route: /help). Users search a FAQ, read
 // community guidelines, and file a support ticket that is persisted to
 // `support_tickets` (owner-readable per firestore.rules) and triaged by
@@ -14,11 +15,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { getFirestoreInstance } from '../../firebase/firebase';
-import {
-  collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp,
-} from 'firebase/firestore';
-import { supportAutomationService } from '../../services/supportAutomationService.js';
+import { getSupportTicketService } from '../../services/supportTicketService.js';
 
 // FAQ content mirrors the automation knowledge base so an auto-resolved
 // answer is exactly what the user can read here.
@@ -96,15 +93,8 @@ export default function HelpCenterScreen() {
     if (!user?.uid) return;
     setTicketsLoading(true);
     try {
-      const firestore = await getFirestoreInstance();
-      const q = query(
-        collection(firestore, 'support_tickets'),
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      const snap = await getDocs(q);
-      setTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const rows = await getSupportTicketService().listMyTickets(user.uid);
+      setTickets(rows);
     } catch {
       // Index/offline failures should not block filing a new ticket.
       setTickets([]);
@@ -144,26 +134,14 @@ export default function HelpCenterScreen() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const triage = supportAutomationService.triageSupportTicket(`${trimmedSubject} ${trimmedMessage}`);
-      const firestore = await getFirestoreInstance();
-      const createdAt = new Date().toISOString();
-      const ref = await addDoc(collection(firestore, 'support_tickets'), {
-        userId: user.uid,
+      const created = await getSupportTicketService().fileTicket(user.uid, {
         subject: trimmedSubject,
-        category: triage.category,
-        status: 'open',
-        messages: [{ sender: 'user', text: trimmedMessage, timestamp: createdAt }],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        message: trimmedMessage,
       });
-      setTickets((prev) => [
-        { id: ref.id, subject: trimmedSubject, category: triage.category, status: 'open',
-          messages: [{ sender: 'user', text: trimmedMessage, timestamp: createdAt }] },
-        ...prev,
-      ]);
+      setTickets((prev) => [created, ...prev]);
       setSubject('');
       setMessage('');
-      if (triage.autoResolved) {
+      if (created.autoResolved) {
         toast.success('Thanks! A matching answer is in the FAQ above — a specialist can still follow up.');
       } else {
         toast.success('Ticket filed. Our Trust & Support team will reply in-app.');

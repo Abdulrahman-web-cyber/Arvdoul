@@ -1,5 +1,4 @@
 // src/components/messaging/MessageInput.jsx
-// 🎯 Message input bar with attachments, voice recording, etc.
 
 import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '../../lib/utils';

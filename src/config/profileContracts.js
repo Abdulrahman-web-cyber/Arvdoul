@@ -1,4 +1,5 @@
-// src/config/profileContracts.js - ARVDOUL PROFILE SYSTEM DOMAIN CONTRACTS
+// src/config/profileContracts.js
+//
 // Authoritative definitions for profile identity, visibility scopes, validation rules,
 // and privacy models adhering to Blueprint Specification Version 1.0.
 

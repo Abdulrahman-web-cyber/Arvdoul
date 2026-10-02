@@ -1,4 +1,5 @@
-// src/screens/VideosScreen.jsx - ARVDOUL VIDEOS & REELS EXPERIENCE
+// src/screens/VideosScreen.jsx
+//
 // Futuristic TikTok & Reels style immersive video ecosystem
 
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
