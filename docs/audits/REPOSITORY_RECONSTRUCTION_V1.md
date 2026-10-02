@@ -154,10 +154,38 @@ No automated guard currently fails CI on a new unbounded query or a new realtime
 
 ---
 
-## 10. Verification commands
+## 10. §11 shadow-system classification ledger
+
+Every candidate named by the directive, classified. **REAL CLIENT CONTROL** = the
+browser is genuinely the enforcement point; **UX-ONLY** = useful client-side
+ergonomics that must never be trusted as a control; **FALSE SECURITY** = advertises
+a control it cannot hold (removed); **DEAD** = no reachable caller.
+
+| Service | Classification | Evidence / action |
+|---|---|---|
+| `WAFService` | FALSE SECURITY (removed ✅) | client regex; attacker skips the client |
+| `CSRFService` | FALSE SECURITY (removed ✅) | Firebase Auth uses bearer ID tokens, no ambient cookie to forge |
+| `DDoSProtectionService` | FALSE SECURITY (removed ✅) | client token bucket cannot scrub a network flood |
+| `sessionSecurityService` | FALSE SECURITY (removed ✅) | IP/geo/impossible-travel are server-only signals |
+| `CSPService` | FALSE SECURITY (removed ✅) | CSP builder never applied; real policy is the `index.html` meta tag |
+| `SecureHeadersService` | FALSE SECURITY (removed ✅) | header map never sent; real headers in `firebase.json` |
+| `challengeService` | FALSE SECURITY (removed ✅) | client proof-of-work; real bot control is App Check |
+| `botProtectionService` | FALSE SECURITY (removed ✅) | client entropy scoring the attacker's automation controls |
+| `userIntegrityService` | FALSE SECURITY (removed ✅) | client trust/strike/sybil decisions, no server enforcement |
+| `sanitizationService` | UX-ONLY (keep) | no `dangerouslySetInnerHTML` consumer; React escapes output; harmless defense-in-depth |
+| `fieldEncryptionService` | DEAD (decision pending) | real WebCrypto, but no caller; key lifecycle is undefined; never wire client-held PII keys — PII belongs in `users_private` server-side |
+| `apiSecurityGatewayService` | FALSE SECURITY (open ⬜) | client-generated, client-stored API keys; a client cannot be the authority that validates its own key |
+| `searchAbuseService` | FALSE SECURITY (open ⬜) | client rate limiting on search |
+| `fraudDetectionService` | REAL-INTENT, WRONG TIER (open ⬜) | detection logic is genuine but must run server-side with server-held signals |
+| `manipulatedMediaService` | REAL-INTENT, WRONG TIER (open ⬜) | detector belongs on upload (server), not in the viewer's browser |
+
+"WRONG TIER" services are not deleted: their algorithms are real and should be
+moved behind a Cloud Function, then the client copy removed.
+
+## 11. Verification commands
 
 ```
-NODE_OPTIONS=--experimental-vm-modules npm test        # 67 suites / 890 tests, green
+NODE_OPTIONS=--experimental-vm-modules npm test        # 68 suites / 883 tests, green
 npm run build                                          # vite build succeeds
 npm run lint                                           # 0 errors (warnings expected)
 node scripts/sync-shared-config.mjs                    # shared config copy in sync
