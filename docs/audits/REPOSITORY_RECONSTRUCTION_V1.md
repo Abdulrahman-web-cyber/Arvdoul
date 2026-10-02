@@ -13,21 +13,22 @@
 
 | Area | Count | Notes |
 |---|---|---|
-| `src/screens/**` | 136 files | includes non-Profile screens |
-| `src/components/**` | 82 files | |
-| `src/services/**` | 106 files | 57 have **no** non-test importer (§3) |
+| `src/screens/**` | 131 `.jsx` files | includes non-Profile screens |
+| `src/components/**` | 80 `.jsx` files | |
+| `src/services/**` | 102 files | 49 have **no** non-test importer (§3) |
 | `src/store/**` | 6 files | profileStore is the largest |
 | `src/hooks/**` | 9 files | |
 | `src/utils/**` | 26 files | |
 | `src/config/**` | 1 file | `profileContracts.js` |
 | `src/context/**` | 3 files | |
 | `functions/*.js` | 24 modules | 152 deployable exports after the deploy fix |
-| `src/__tests__/*.test.js(x)` | 68 suites | 883 tests, all green |
+| test files | 71 | 71 suites / 1114 tests, all green (was 883 before this branch) |
 | routes | 147 `path=` entries | 22 are `/profile/*` |
-| `firestore.rules` | 1196 lines | |
+| `firestore.rules` | 1189 lines | |
 | `storage.rules` | 108 lines | |
 | `firestore.indexes.json` | 120 composite indexes | |
-| client `onSnapshot` sites | 30 across 19 files | cost surface (§5) |
+| client `onSnapshot` sites | 31 across 15 files | cost surface (§5); frozen by `firebaseCostGuard.test.js` |
+| unbounded `getDocs` sites | 119 across 22 files | no `limit`; frozen by `firebaseCostGuard.test.js` |
 
 ---
 
@@ -54,10 +55,9 @@ These are **not all equivalent** and must be classified individually before dele
 
 **(c) Infrastructure services that look aspirational:** `decentralized*`, `activityPubMeshService`, `multiRegionMeshService`, `verifiableCredentialsService`, `immutableAuditLedgerService`, `chaosDefenseService`, `activeActiveService`, `disasterRecoveryService`, `spacesOrchestrator`, `recommendationEngine`, `predictiveAnalyticsService`, `watchPartyService`, `TTLOptimizationService`, `CacheInvalidationService`, `AggregationCacheService`, `logAggregationService`, `tracingService`, `observabilityService`, `incidentService`, `costOptimizationService`, `revenueSplitsService`, `digitalEscrowService`, `complianceGovernanceService`, `communityGovernanceService`, `decentralizedBountyMarketService`, `decentralizedModerationJuryService`, `decentralizedStorageMeshService`, `decentralizedTokenBondingCurveService`, `liveInteractiveGamificationService`, `aiCoPilotDirectorService`, `samlService`, `vendorManagementService`, `viralPredictionService`, `fieldEncryptionService`.
 
-### 2.3 Architecture boundary violations (open ⬜)
-Screens/components import Firestore directly instead of going through a service — a violation of the directive's "screens cannot import firebase directly" (10 files):
-`CallScreen.jsx`, `CommentsDrawer.jsx`, `CreatePost.jsx`, `CreatePost/CreateImage.jsx`, `CreatePost/CreateLink.jsx`, `GiftScreen.jsx`, `Help/HelpCenterScreen.jsx`, `PostOptionsDrawer.jsx`, `SetupProfile.jsx`, `VideoDetailScreen.jsx`.
-Frozen as an allowlist by `src/__tests__/architectureBoundaries.test.js` so no *new* violation can be introduced.
+### 2.3 Architecture boundary violations (fixed ✅)
+Screens/components previously imported Firestore directly instead of going through a service — a violation of the directive's "screens cannot import firebase directly" (was 10 files): `CallScreen.jsx`, `CommentsDrawer.jsx`, `CreatePost.jsx`, `CreatePost/CreateImage.jsx`, `CreatePost/CreateLink.jsx`, `GiftScreen.jsx`, `Help/HelpCenterScreen.jsx`, `PostOptionsDrawer.jsx`, `SetupProfile.jsx`, `VideoDetailScreen.jsx`.
+**All migrated through services; the allowlist is now empty.** `src/__tests__/architectureBoundaries.test.js` freezes zero violations, fails if any file goes stale in the allowlist, and additionally fails if a lower layer (`src/services|store|hooks|utils|context`) imports `screens/components` (§84). The single documented exception is `src/utils/routePrefetcher.js`, whose dynamic `../screens/*` imports are its purpose.
 
 ### 2.4 Unverifiable deletions (must not delete yet)
 Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed until reachability (static + barrel + dynamic import + route) is proven. No further Profile-component deletion was performed.
@@ -75,8 +75,8 @@ Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed
 | Level curve / gates / rewards | ✅ canonical | `src/shared/levelConfig.cjs`; consumers import `LEVEL_GATES` from `levelSystemService`, no literal `LEVEL >= N` in JSX |
 | Callables from client | ✅ canonical | `callableService.callFunction` / `FUNCTIONS` |
 | Coin packages / tiers / IAP | ✅ canonical | shared config; `monetizationService` no longer declares shadow tables (guarded by `noFabricatedData.test.js`) |
-| Profile read model | ⬜ open | still re-derived in `ProfilePublicScreen`, `ProfilePreviewScreen`, `ProfileMyScreen`, `passportService` (AUDIT V3 A-3/N018) |
-| Relationship/capability | ⬜ open | `profileCapabilityEngine` vs per-screen re-derivation (N007/N017/N018) |
+| Profile read model | ✅ canonical | `src/services/profileReadModel.js` owns placeholder/name/handle/avatar/count/level/creator-flag derivation and the single `projectProfileForViewer` masking; `ProfilePublicScreen`, `ProfilePreviewScreen`, `ProfileMyScreen`, `passportService` consume it (AUDIT V3 A-3/N018). Guarded by `profileReadModel.test.js`. |
+| Relationship/capability | ✅ canonical | `profileCapabilityEngine.resolveCapabilities` decides once; screens project via `projectProfileForViewer` and no longer re-derive privacy (N007/N017/N018). |
 
 ---
 
@@ -90,13 +90,21 @@ Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed
 
 | Surface | Measure | Risk |
 |---|---|---|
-| Client listeners | 30 `onSnapshot` sites in 19 files | **High** — heaviest: `spacesService` (5), `messagesService` (4), `liveService` (4), `communityService` (3) |
-| Unbounded queries | 152 `getDocs(` sites in `src/services` | **High** — needs per-query `limit` audit |
+| Client listeners | 31 `onSnapshot` sites in 15 files | **High** — heaviest: `spacesService` (5), `messagesService` (4), `liveService` (4), `communityService` (3) |
+| Unbounded queries | 119 `getDocs(` sites without a `limit` across 22 files | **High** — needs per-query `limit` audit |
 | Duplicate profile reads | AuthContext + profileStore + walletService + passportService + screens | **Medium** — consolidation pending |
 | `profile_views` / `profile_analytics` | ✅ server-write-only now (`firestore.rules:705-722`); client write denied | dedupe + sharded counters in `trackProfileView` |
 | Client write fallback reads | ✅ client coin write fallback removed; no `tx.get` amplification on the money path | |
 
-No automated guard currently fails CI on a new unbounded query or a new realtime listener. Recommended: a CI guard that flags new `onSnapshot`/`getDocs` without `limit` (directive §83).
+**Cost guard ✅ (§83).** `scripts/firebaseCostAnalyzer.cjs` measures unbounded
+`getDocs` (no `limit`, resolving one local variable hop, ignoring single-document
+reads) and `onSnapshot` counts per file; `scripts/firebaseCostBaseline.json`
+freezes the current numbers; `src/__tests__/firebaseCostGuard.test.js` fails CI
+when a new unbounded read, a new listener, or a new runtime dependency is added.
+The baseline is allowed to shrink (bound a query, delete a listener, drop a dep)
+but never to grow silently. Negative path verified: a temporary unbounded read
+was caught and the probe removed. The guard runs in the hard-failing `guards`
+job of `.github/workflows/ci.yml`.
 
 ---
 
@@ -135,22 +143,23 @@ No automated guard currently fails CI on a new unbounded query or a new realtime
 | N014 offline queue account bleed | ✅ fixed | `ownerUid` scoping + `purgeQueueForOwner` |
 | N016 App Check | ✅ fixed | `firebase/app-check` initialised when `VITE_FIREBASE_APPCHECK_SITE_KEY` is set; enforcement is a console toggle |
 | N019 analytics client-writable | ✅ fixed | `profile_analytics`/`profile_views` are server-write-only |
-| N007/N017/N018 capability divergence | ⬜ open | screens/passport still re-derive privacy/capabilities |
+| N007/N017/N018 capability divergence | ✅ **now closed** | `profileReadModel.projectProfileForViewer` applies the capability decision once; screens/passport no longer re-derive privacy or hardcode the creator gate. Guarded by `profileReadModel.test.js`. |
+| V2-01 monetization pagination | ✅ **now closed** | `getTransactionHistory(userId, limit, cursor)` and `getCoinLeaderboard(limit, cursor)` return `{ items, nextCursor }` with real `createdAt <` / `coins <` cursor clauses; `CoinsScreen` has a working *Load more*; the two other history consumers unwrap `.items`. Contract test: `monetizationPagination.test.js` (7 tests). |
 | N011 PII boundary | ✅ mostly | `users_private` exists and is written by the owner |
-| V2-01 monetization pagination | ⬜ open | history/leaderboard cursor support unverified |
-| §11 shadow-system classification | ⬜ partial | 9 removed (WAF/CSRF/DDoS/session + CSP/headers/PoW + botProtection/userIntegrity); ~12 security-adjacent services still unclassified (§2.2b) |
-| §83 cost guards in CI | ⬜ open | no unbounded-query/listener guard |
+| §11 shadow-system classification | 🟨 mostly done | 11 removed (WAF/CSRF/DDoS/session + CSP/headers/PoW + botProtection/userIntegrity + apiSecurityGateway/searchAbuse); all remaining client-side infra-control services classified (§10.1). WRONG-TIER detectors await a server home. |
+| §83 cost guards in CI | ✅ **now closed** | `firebaseCostGuard.test.js` freezes unbounded `getDocs`, `onSnapshot` and runtime dependency counts; hard-failing `guards` CI job (§5). |
 
 ---
 
 ## 9. Next actions (ordered)
 
-1. **Classify the remaining security-adjacent services** (§2.2b) as REAL CLIENT / UX-ONLY / FALSE SECURITY / DUPLICATE / DEAD, and remove the theatre with guards (as done for the first four).
-2. **Consolidate the profile read model** (N018): make screens/passport consume the capability object only; never recompute privacy.
-3. **CI cost guard** (§83): fail on new `onSnapshot`/`getDocs` without `limit`, and on new realtime listeners.
-4. **Architecture guard** (§84): fail if `src/screens/**` or `src/components/**` import `firebase/firestore` directly (5 current violations).
-5. **Reconcile the CSP** (§7.1): either apply the strict policy or delete `CSPService` and document the real policy.
-6. **Monetization pagination** (V2-01).
+1. **Classify the remaining security-adjacent services** (§2.2b) as REAL CLIENT / UX-ONLY / FALSE SECURITY / DUPLICATE / DEAD, and remove the theatre with guards — **done ✅** (§10, §10.1).
+2. **Consolidate the profile read model** (N018): make screens/passport consume the capability object only; never recompute privacy — **done ✅** (`src/services/profileReadModel.js` owns the derivation and the single `projectProfileForViewer` masking; the four surfaces consume it; `profileReadModel.test.js` freezes it).
+3. **CI cost guard** (§83): fail on new `onSnapshot`/`getDocs` without `limit`, on new realtime listeners, and on new runtime dependencies — **done ✅** (§5, `firebaseCostGuard.test.js`, hard-failing `guards` CI job).
+4. **Architecture guard** (§84): fail if `src/screens/**` or `src/components/**` import `firebase/firestore` directly, or if a lower layer imports UI — **done ✅**; all previous violations migrated through services and the allowlist is now empty.
+5. **Reconcile the CSP** (§7.1): either apply the strict policy or delete `CSPService` and document the real policy — **done ✅** (`CSPService` deleted; the real policy is the `index.html` meta CSP).
+6. **Monetization pagination** (V2-01) — **done ✅** (`getTransactionHistory`/`getCoinLeaderboard` cursor pages + `CoinsScreen` *Load more*; `monetizationPagination.test.js`).
+7. **Comment debt** (§52): forbidden "TODO integrate / production would / handled later" comment patterns and decorative emoji/change-history prefixes removed from production source — **done ✅** (one corrupted line at `storyService.js` repaired).
 
 ---
 
@@ -174,19 +183,65 @@ a control it cannot hold (removed); **DEAD** = no reachable caller.
 | `userIntegrityService` | FALSE SECURITY (removed ✅) | client trust/strike/sybil decisions, no server enforcement |
 | `sanitizationService` | UX-ONLY (keep) | no `dangerouslySetInnerHTML` consumer; React escapes output; harmless defense-in-depth |
 | `fieldEncryptionService` | DEAD (decision pending) | real WebCrypto, but no caller; key lifecycle is undefined; never wire client-held PII keys — PII belongs in `users_private` server-side |
-| `apiSecurityGatewayService` | FALSE SECURITY (open ⬜) | client-generated, client-stored API keys; a client cannot be the authority that validates its own key |
-| `searchAbuseService` | FALSE SECURITY (open ⬜) | client rate limiting on search |
+| `apiSecurityGatewayService` | FALSE SECURITY (removed ✅) | client-generated, client-stored API keys that the same client validates; a client cannot be the authority over its own key. Server-side issuance required. Dead `api_keys` rule removed. |
+| `searchAbuseService` | FALSE SECURITY (removed ✅) | client rate limiting + client "CAPTCHA" on search; an attacker skips the client. Server `rateLimit` owns this. |
 | `fraudDetectionService` | REAL-INTENT, WRONG TIER (open ⬜) | detection logic is genuine but must run server-side with server-held signals |
 | `manipulatedMediaService` | REAL-INTENT, WRONG TIER (open ⬜) | detector belongs on upload (server), not in the viewer's browser |
 
 "WRONG TIER" services are not deleted: their algorithms are real and should be
 moved behind a Cloud Function, then the client copy removed.
 
+### 10.1 Remaining client-side infra-control services (inert, no non-test caller)
+
+These are not referenced by any screen, component or service; they are
+imported only by their own tests. None is a real client control:
+
+| Service | Classification | Evidence |
+|---|---|---|
+| `textModerationService`, `imageModerationService`, `videoModerationService`, `audioModerationService`, `liveModerationService` | REAL-INTENT, WRONG TIER | detectors run in the browser and are unenforced; the enforced path is `functions/moderation.js` `moderatePost` + `reportContent` |
+| `childSafetyService`, `copyrightDetectionService`, `extremismDetectionService`, `selfHarmDetectionService`, `scamDetectionService`, `phishingDetectionService`, `misinformationService`, `safeSearchService`, `searchIndexingService` | REAL-INTENT, WRONG TIER | classification belongs on the server; a client can bypass its own detector |
+| `multiRegionMeshService`, `activeActiveService`, `chaosDefenseService`, `disasterRecoveryService`, `multiRegionMeshService` | DEAD | client-side failover/chaos simulation cannot route real infrastructure; Google Cloud owns regional failover |
+| `immutableAuditLedgerService`, `verifiableCredentialsService` | DEAD | client-computed hash chain / credential signature is not tamper-evident against the client that computes it |
+| `observabilityService`, `alertingService`, `tracingService`, `logAggregationService`, `incidentService`, `costMonitoringService`, `costOptimizationService` | DEAD / UX-ONLY | operate only in the browser (client timers/localStorage); real telemetry is Cloud Logging + Cloud Monitoring |
+| `AggregationCacheService`, `CacheInvalidationService`, `RedisCacheManager`, `TTLOptimizationService`, `ServiceKit` | DEAD | in-memory client caches with no caller; Redis is not reachable from the browser |
+| `digitalEscrowService`, `revenueSplitsService`, `decentralized*Service`, `activityPubMeshService`, `watchPartyService`, `spacesOrchestrator`, `liveInteractiveGamificationService`, `communityGovernanceService`, `contentProvenanceService`, `recommendationEngine`, `predictiveAnalyticsService`, `viralPredictionService`, `aiCoPilotDirectorService`, `realIntegration` | DEAD | no caller; logic depends on data the client does not hold |
+| `samlService` | DEAD / WRONG TIER | SAML assertion validation is an IdP/server concern; Firebase Auth federated providers own it |
+| `validationService` | UX-ONLY | duplicates `profileContracts` / `firestore.rules`; never a substitute for rules |
+| `sanitizationService` | UX-ONLY (keep) | defense-in-depth; React escapes output |
+| `fieldEncryptionService` | DEAD | real WebCrypto, no caller, undefined key lifecycle; PII keys must be server-side (`users_private`) |
+
+Removal policy: FALSE SECURITY is deleted with a guard
+(`src/__tests__/securityServices.test.js`). DEAD services may be deleted once no
+test depends on them; WRONG TIER services move behind a Cloud Function before
+the client copy is removed.
+
 ## 11. Verification commands
 
 ```
-NODE_OPTIONS=--experimental-vm-modules npm test        # 68 suites / 883 tests, green
-npm run build                                          # vite build succeeds
+NODE_OPTIONS=--experimental-vm-modules npm test        # 71 suites / 1114 tests, green
+npm run build                                          # vite build succeeds (307 chunks, 8.8 MB dist, 3.9 s)
 npm run lint                                           # 0 errors (warnings expected)
 node scripts/sync-shared-config.mjs                    # shared config copy in sync
+node -e "require('./scripts/firebaseCostAnalyzer.cjs')"  # cost snapshot (see §5)
 ```
+
+### 11.1 §58 performance evidence (measured, not claimed)
+
+Measured on this branch with `vite build`:
+
+| Signal | Value |
+|---|---|
+| Production chunks | 307 JS files, 6160 KB raw JS total |
+| Largest chunks | `index` 591 KB (183 KB gzip), `index.esm` 558 KB (165 KB gzip), `ImageEditor` 443 KB (129 KB gzip), `ChatScreen` 359 KB |
+| `dist/` total | 8.8 MB |
+| Build time | 3.93 s |
+| Client listeners | 31 sites / 15 files (frozen) |
+| Unbounded `getDocs` | 119 sites / 22 files (frozen) |
+
+Vite flagged three `INEFFECTIVE_DYNAMIC_IMPORT` warnings where a module is both
+statically and dynamically imported (`src/i18n/index.js`, `src/utils/OfflineQueue.js`,
+`src/services/levelSystemService.js`). The dynamic import in those cases does not
+create a separate chunk — the module is already in the entry graph. This is a
+known, harmless pattern (the dynamic call sites are for code paths that must not
+await at module-eval time); it is recorded here rather than asserted as an
+optimisation, because no measurement shows it costs anything.

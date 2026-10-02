@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/ProfilePreviewScreen.jsx - ARVDOUL Profile Preview Screen
- * 
  * Deep preview mode for the user's profile before or after editing.
  * Supports toggling between Owner Perspective and Visitor Perspective.
  * Displays hero identity, metric strip, highlights, and tabbed feed content.
@@ -22,8 +20,17 @@ import ProfileHighlightsSection from '../../components/profile/ProfileHighlights
 import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
-import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { getStoredUid, getStoredUser } from '../../utils/security';
+import {
+  pickHandle,
+  deriveHandle,
+  pickDisplayName,
+  resolveAvatarUrl,
+  resolveCount,
+  resolveLevelValue,
+  resolveVerifiedFlag,
+  projectProfileForViewer,
+} from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 
 /**
@@ -64,8 +71,8 @@ export default function ProfilePreviewScreen({
   const effectiveProfile = useMemo(() => {
     if (!rawProfile && !currentUserId) return null;
     const p = rawProfile || {};
-    const safeDisplayName = p.displayName || p.name || 'Arvdoul Citizen';
-    const safeUsername = p.username || authUser?.email?.split('@')[0] || 'citizen';
+    const safeDisplayName = pickDisplayName([p.displayName, p.name], { fallback: 'Arvdoul Citizen' });
+    const safeUsername = pickHandle([p.username]) || deriveHandle(authUser?.email) || 'citizen';
     return {
       ...p,
       id: p.id || p.uid || currentUserId,
@@ -75,13 +82,13 @@ export default function ProfilePreviewScreen({
       bio: p.bio || '',
       location: p.location || '',
       website: p.website || '',
-      level: Number(p.level || p.creatorLevel || 1),
-      photoURL: getSafeAvatarUrl(p.photoURL || authUser?.photoURL, safeDisplayName, currentUserId),
-      followerCount: Number(p.followerCount ?? p.followersCount ?? 0),
-      followingCount: Number(p.followingCount ?? 0),
-      postCount: Number(p.postCount ?? storePosts?.length ?? 0),
-      coins: Number(p.coins ?? p.coinBalance ?? 0),
-      isVerified: Boolean(p.isVerified || p.verified),
+      level: resolveLevelValue(p.level, p.creatorLevel),
+      photoURL: resolveAvatarUrl(p.photoURL || authUser?.photoURL, safeDisplayName, currentUserId),
+      followerCount: resolveCount(p.followerCount, p.followersCount),
+      followingCount: resolveCount(p.followingCount),
+      postCount: resolveCount(p.postCount, storePosts?.length),
+      coins: resolveCount(p.coins, p.coinBalance),
+      isVerified: resolveVerifiedFlag(p),
       isPrivate: Boolean(p.isPrivate),
     };
   }, [rawProfile, currentUserId, authUser, storePosts?.length]);
@@ -101,15 +108,11 @@ export default function ProfilePreviewScreen({
     });
   }, [authUser, effectiveProfile, isOwnerMode]);
 
-  // Apply the capability decision once; the view layer never re-derives it
-  // (audit N018). In public simulation mode economic status is masked.
-  const projectedProfile = useMemo(() => {
-    if (!effectiveProfile) return effectiveProfile;
-    return {
-      ...effectiveProfile,
-      coins: capabilities.canViewEconomicStatus ? effectiveProfile.coins : null,
-    };
-  }, [effectiveProfile, capabilities]);
+  // Apply the capability decision once; the view layer never re-derives it.
+  const projectedProfile = useMemo(
+    () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isOwnerMode }),
+    [effectiveProfile, capabilities, isOwnerMode]
+  );
 
   const handleBack = () => {
     if (onBack) {
@@ -215,7 +218,7 @@ export default function ProfilePreviewScreen({
         <ProfileHeroSection
           profile={projectedProfile}
           isOwner={isOwnerMode}
-          level={effectiveProfile?.level || 1}
+          level={effectiveProfile?.level ?? null}
           theme={theme}
           onBack={handleBack}
           onEditProfile={handleEdit}

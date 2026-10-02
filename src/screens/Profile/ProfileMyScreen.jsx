@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/ProfileMyScreen.jsx - ARVDOUL My Profile Screen
- * 
  * Production-grade owner view of the authenticated user's profile.
  * Rebuilt to perfectly match the uploaded design specifications across Light and Dark themes.
  * Fully integrated with real system data, server-authoritative level & progression,
@@ -20,10 +18,18 @@ import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
-import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
-import { LEVEL_GATES } from '../../services/levelSystemService';
+import {
+  pickHandle,
+  deriveHandle,
+  pickDisplayName,
+  resolveAvatarUrl,
+  resolveCount,
+  resolveLevelValue,
+  resolveCreatorFlag,
+  resolveVerifiedFlag,
+} from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { toast } from 'sonner';
 
@@ -96,37 +102,26 @@ export default function ProfileMyScreen() {
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
   // Fallback username if Firestore is yet to populate
-  const cleanUsername = useMemo(() => {
-    try {
-      const raw = profile?.username || currentUser?.username;
-      if (raw && typeof raw === 'string' && !raw.startsWith('user_') && raw !== 'user' && raw !== 'creator') {
-        return raw;
-      }
-      const rawEmail = typeof currentUser?.email === 'string' ? currentUser.email : (typeof profile?.email === 'string' ? profile.email : '');
-      const fromEmail = rawEmail.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '');
-      if (fromEmail && fromEmail !== 'user') return fromEmail;
-
-      const rawName = typeof currentUser?.displayName === 'string' ? currentUser.displayName : (typeof profile?.displayName === 'string' ? profile.displayName : '');
-      const fromName = rawName.toLowerCase().replace(/[^a-z0-9_]/g, '');
-      if (fromName && fromName !== 'user') return fromName;
-
-      return 'creator';
-    } catch {
-      return 'creator';
-    }
-  }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
+  const cleanUsername = useMemo(() => (
+    pickHandle([profile?.username, currentUser?.username])
+    || deriveHandle(currentUser?.email)
+    || deriveHandle(profile?.email)
+    || deriveHandle(currentUser?.displayName)
+    || deriveHandle(profile?.displayName)
+    || 'creator'
+  ), [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
 
   // Server-authoritative composite profile
   const effectiveProfile = useMemo(() => {
-    const rawDisplayName = currentUser?.displayName || currentUser?.name || profile?.displayName || profile?.name;
-    const safeDisplayName = (typeof rawDisplayName === 'string' && rawDisplayName.trim())
-      ? rawDisplayName.trim()
-      : (typeof currentUser?.email === 'string' && currentUser.email ? currentUser.email.split('@')[0] : 'Creator');
+    const safeDisplayName = pickDisplayName(
+      [currentUser?.displayName, currentUser?.name, profile?.displayName, profile?.name],
+      { fallback: deriveHandle(currentUser?.email) || 'Creator' }
+    );
 
     const safeBio = (typeof profile?.bio === 'string' ? profile.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
     const safeLocation = typeof profile?.location === 'string' ? profile.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
     const safeWebsite = typeof profile?.website === 'string' ? profile.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
-    const safeLevel = Number(level || profile?.level || currentUser?.level) || null;
+    const safeLevel = resolveLevelValue(level, profile?.level, currentUser?.level);
 
     if (profile && typeof profile === 'object') {
       return {
@@ -139,13 +134,13 @@ export default function ProfileMyScreen() {
         location: safeLocation,
         website: safeWebsite,
         level: safeLevel,
-        photoURL: getSafeAvatarUrl(profile.photoURL || currentUser?.photoURL, safeDisplayName, currentUserId),
-        followerCount: Number(profile.followerCount ?? profile.followersCount ?? currentUser?.followerCount ?? 0) || 0,
-        followingCount: Number(profile.followingCount ?? currentUser?.followingCount ?? 0) || 0,
-        postCount: Number(profile.postCount ?? posts?.length ?? 0) || 0,
-        coins: Number(profile.coins ?? profile.coinBalance ?? balance ?? currentUser?.coins ?? 0) || 0,
-        isVerified: Boolean(profile.isVerified || profile.verified || currentUser?.isVerified),
-        isCreator: Boolean(profile.isCreator || currentUser?.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
+        photoURL: resolveAvatarUrl(profile.photoURL || currentUser?.photoURL, safeDisplayName, currentUserId),
+        followerCount: resolveCount(profile.followerCount, profile.followersCount, currentUser?.followerCount),
+        followingCount: resolveCount(profile.followingCount, currentUser?.followingCount),
+        postCount: resolveCount(profile.postCount, posts?.length),
+        coins: resolveCount(profile.coins, profile.coinBalance, balance, currentUser?.coins),
+        isVerified: resolveVerifiedFlag(profile) || Boolean(currentUser?.isVerified),
+        isCreator: resolveCreatorFlag(profile, currentUser, safeLevel),
       };
     }
 
@@ -155,13 +150,13 @@ export default function ProfileMyScreen() {
       username: cleanUsername,
       displayName: safeDisplayName,
       bio: safeBio,
-      photoURL: getSafeAvatarUrl(currentUser?.photoURL, safeDisplayName, currentUserId),
-      followerCount: Number(currentUser?.followerCount || currentUser?.followersCount) || 0,
-      followingCount: Number(currentUser?.followingCount) || 0,
-      postCount: posts?.length || 0,
-      coins: Number(currentUser?.coins) || balance || 0,
-      isVerified: Boolean(currentUser?.isVerified),
-      isCreator: Boolean(currentUser?.isCreator || safeLevel >= LEVEL_GATES.creatorProfile),
+      photoURL: resolveAvatarUrl(currentUser?.photoURL, safeDisplayName, currentUserId),
+      followerCount: resolveCount(currentUser?.followerCount, currentUser?.followersCount),
+      followingCount: resolveCount(currentUser?.followingCount),
+      postCount: resolveCount(posts?.length),
+      coins: resolveCount(currentUser?.coins, balance),
+      isVerified: resolveVerifiedFlag(currentUser),
+      isCreator: resolveCreatorFlag({}, currentUser, safeLevel),
       level: safeLevel,
       location: safeLocation,
       website: safeWebsite,

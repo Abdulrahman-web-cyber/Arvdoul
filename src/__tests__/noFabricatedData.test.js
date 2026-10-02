@@ -196,7 +196,9 @@ describe('DataUsageScreen - real storage, cache and GDPR export', () => {
     expect(src).not.toContain('You\'ll receive an email when ready');
     expect(src).toContain('navigator.storage?.estimate'); // REAL storage numbers
     expect(src).toContain('settingsService.clearApplicationCache'); // REAL cache clearing
-    expect(src).toContain("'exportUserData'"); // REAL GDPR Cloud Function
+    expect(src).toContain('FUNCTIONS.EXPORT_USER_DATA'); // REAL GDPR Cloud Function
+    const callables = fs.readFileSync(path.join(root, 'src/services/callableService.js'), 'utf8');
+    expect(callables).toContain("EXPORT_USER_DATA: 'exportUserData'");
   });
 });
 
@@ -1051,7 +1053,7 @@ describe('Passport - no synthetic holder identity', () => {
   test('passportService reports an absent displayName as null', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/passportService.js'), 'utf8');
     expect(src).not.toContain("'Citizen of Arvdoul'");
-    expect(src).toContain('displayName: profile.displayName || profile.name || null');
+    expect(src).toContain('pickDisplayName([profile.displayName, profile.name], { fallback: null })');
   });
 });
 
@@ -1186,7 +1188,8 @@ describe('Admin economy - real data, server-side settlement', () => {
     const src = screen();
     expect(src).not.toMatch(/updateDoc\(\s*doc\([^)]*payout_requests/);
     expect(src).not.toContain("'payout_requests'");
-    expect(src).toContain("collection(firestore, 'withdrawal_requests')");
+    const adminSvc = fs.readFileSync(path.join(root, 'src/services/adminService.js'), 'utf8');
+    expect(adminSvc).toContain("'withdrawal_requests'");
   });
 
   test('approve/reject go through the admin settlement callable', () => {
@@ -1299,9 +1302,9 @@ describe('Admin audit logs - real server-written trail', () => {
   const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminAuditLogsScreen.jsx'), 'utf8');
 
   test('reads the collection the server actually writes to', () => {
-    const s = src();
-    expect(s).toContain("collection(firestore, 'moderation_logs')");
-    expect(s).not.toContain("collection(firestore, 'audit_logs')");
+    const adminSvc = fs.readFileSync(path.join(root, 'src/services/adminService.js'), 'utf8');
+    expect(adminSvc).toContain("_readCollection('moderation_logs'");
+    expect(adminSvc).not.toContain("'audit_logs'");
     const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
     expect(admin).toContain("db.collection('moderation_logs').add(");
   });

@@ -1,4 +1,5 @@
-// src/services/passportService.js — ARVDOUL PASSPORT & CITIZENSHIP ENGINE (Part 2)
+// src/services/passportService.js
+//
 // The institutional digital-nation identity artifact.
 
 import {
@@ -10,6 +11,7 @@ import {
 } from './levelSystemService.js';
 import { getProfileUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
+import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag } from './profileReadModel.js';
 import achievementService from './achievementService.js';
 import titleService from './titleService.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
@@ -36,7 +38,7 @@ class PassportService {
       profile = snap.exists() ? { id: snap.id, ...snap.data() } : { id: targetUserId };
     }
 
-    // Resolve the REAL relationship (owner / follower / connection / blocked)
+    // Resolve the relationship (owner / follower / connection / blocked)
     // from the follow + block graph instead of assuming an empty relationship.
     // An empty relationship made every passport render as if it were the
     // viewer's own, bypassing the privacy gates below.
@@ -125,8 +127,8 @@ class PassportService {
       citizenId,
       issueDate,
       // No invented holder name: when the profile has none, report absence
-      // (audit N005) rather than presenting a synthetic generic citizen name.
-      displayName: profile.displayName || profile.name || null,
+      // rather than presenting a synthetic generic citizen name.
+      displayName: pickDisplayName([profile.displayName, profile.name], { fallback: null }),
       username: profile.username || null,
       photoURL: profile.photoURL || null,
       primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier?.tier || null,
@@ -144,8 +146,8 @@ class PassportService {
       passportUrl: getProfileUrl(targetUserId),
       isOwner,
       capabilities,
-      isVerified: Boolean(profile.isVerified),
-      isCreator: Boolean(profile.isCreator),
+      isVerified: resolveVerifiedFlag(profile),
+      isCreator: resolveCreatorFlag(profile, {}, level),
       creatorTier: profile.creatorTier || null,
     };
   }

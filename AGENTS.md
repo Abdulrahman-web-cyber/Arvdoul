@@ -26,6 +26,17 @@ are expected — only treat errors as failures.
 - **Profile sharing**: `src/utils/shareUtils.js` (`shareProfile`, `getProfileUrl`,
   `getProfileHandle`, `copyToClipboard`). All share entry points must use it so links resolve
   consistently. Do not rebuild `${origin}/profile/${id}` by hand — use `getProfileUrl`.
+- **Profile read model / capabilities**: `src/services/profileCapabilityEngine.js` decides
+  access (`resolveCapabilities`); `src/services/profileReadModel.js` owns the derivation every
+  profile surface needs — placeholder name/handle rejection (`pickHandle`, `pickDisplayName`,
+  `deriveHandle`), avatar fallback (`resolveAvatarUrl`), count/level coercion
+  (`resolveCount`, `resolveLevelValue`), creator/verified flags (`resolveCreatorFlag`,
+  `resolveVerifiedFlag`) — and applies the capability decision exactly once
+  (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
+  `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
+  `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
+  re-implement the `user_`/`creator` placeholder filter. `profileReadModel.test.js` fails CI
+  if any surface regresses.
 - **Friendship**: `userService.areFriends(a, b)` is canonical. `_areMutualFriends` only
   delegates to it; treat both names as one implementation, never fork the logic.
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
@@ -110,6 +121,13 @@ method that is not defined on the service. Run it after adding/renaming service 
   `profile.privacy.*` scopes) — not in the settings document.
 - Never reset a form from an effect keyed on the whole profile object; key on `uid` so
   in-progress edits are not discarded by realtime snapshots.
+- **No client-side security theatre (§11).** A browser cannot be a WAF, a CSRF
+  authority, a DDoS scrubber, an API-key issuer, or a rate limiter that an attacker
+  must obey. Real controls are `firestore.rules`, `functions/rateLimit.js`, App Check,
+  and Cloud Functions. `src/__tests__/securityServices.test.js` bans reintroducing the
+  removed theatre services; classify any new client-side "infra-control" service as
+  REAL CLIENT CONTROL / UX-ONLY / FALSE SECURITY before wiring it up. The ledger lives
+  in `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` §10.
 
 ## Level system — single source of truth
 The level curve, reward tables, XP rules, rank bands, unlock gates and royal
@@ -203,11 +221,39 @@ impossible-travel engine. `WAFService`, `CSRFService`, `DDoSProtectionService`,
 ## UI reaches the backend only through services
 Screens/components must not import `firebase/*` directly — direct SDK use
 bypasses cache scoping, authorization helpers and error normalisation.
-`src/__tests__/architectureBoundaries.test.js` freezes the remaining offenders
-as an explicit allowlist; remove a file from that list only after migrating it
-to a service. Add no new entries.
+`src/__tests__/architectureBoundaries.test.js` enforces this with an allowlist
+that is now **empty** (all offenders migrated): callables go through
+`src/services/callableService.js` (`callFunction` + `FUNCTIONS`), post
+mutations through `firestoreService`, and follows/mutes/profile through
+`userService`. Do not re-add direct SDK imports in UI — add a service method
+and a `FUNCTIONS` key instead. Never add an allowlist entry.
 
 ## Reconstruction deliverable
 `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/
 duplication/cost/route/dependency reconstruction and the AUDIT V3 finding-status
 ledger. Update it when a finding closes.
+
+## Firebase cost is enforced in CI
+A new unbounded Firestore read, a new realtime listener, or a new runtime
+dependency is a billing change, not a detail. `scripts/firebaseCostAnalyzer.cjs`
+measures unbounded `getDocs` (no `limit`, one local-variable hop resolved,
+single-document reads ignored) and `onSnapshot` counts per file;
+`scripts/firebaseCostBaseline.json` freezes them;
+`src/__tests__/firebaseCostGuard.test.js` fails when a count or the runtime
+dependency count exceeds the baseline. The baseline may only shrink — bound the
+query, delete the listener, or drop the dependency and lower the number in the
+same change. Do not raise a baseline to make a test pass.
+
+## Architecture layering
+Lower layers never import higher ones: `src/services|store|hooks|utils|context`
+must not import `screens/components` (an upward import creates a cycle and drags
+JSX into modules the Functions runtime or a service test loads). Enforced by
+`architectureBoundaries.test.js`; the only documented exception is
+`src/utils/routePrefetcher.js`, whose dynamic `../screens/*` imports are its job.
+
+## CI enforcement jobs must fail, not advise
+The `lint`/`test` jobs in `.github/workflows/ci.yml` use `continue-on-error: true`
+(advisory). The `guards` job is deliberately hard-failing and runs the invariant
+suites: architecture boundaries, Firebase cost, security-services, deploy
+integrity, shared-config sync, and Firestore rules compile. Add new invariant
+suites to that job.
