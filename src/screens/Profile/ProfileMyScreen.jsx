@@ -126,7 +126,7 @@ export default function ProfileMyScreen() {
     const safeBio = (typeof profile?.bio === 'string' ? profile.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
     const safeLocation = typeof profile?.location === 'string' ? profile.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
     const safeWebsite = typeof profile?.website === 'string' ? profile.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
-    const safeLevel = Number(level || profile?.level || currentUser?.level) || 1;
+    const safeLevel = Number(level || profile?.level || currentUser?.level) || null;
 
     if (profile && typeof profile === 'object') {
       return {
@@ -389,7 +389,7 @@ export default function ProfileMyScreen() {
                 <ProfileCreatorDashboard
                   analytics={analytics}
                   ranking={ranking}
-                  userLevel={level || effectiveProfile?.level || 1}
+                  userLevel={level ?? effectiveProfile?.level ?? null}
                   userXp={effectiveProfile?.experience || 0}
                   isCreator={effectiveProfile?.isCreator}
                   theme={theme}

@@ -1674,5 +1674,20 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
     expect(s).not.toContain('SUBSCRIPTION_TIERS: {');
     expect(s).not.toContain('AD_REWARD_COINS: {');
   });
+
+  test('progression is never fabricated as Level 1 when absent', () => {
+    // Audit N005/U-4: a missing level must render as unavailable, not as a
+    // plausible-but-false "Level 1". `|| 1` / `Number(x) || 1` re-introduce it.
+    const store = read('src/store/profileStore.js');
+    expect(store).not.toContain('levelData?.level || 1');
+    expect(store).toContain('levelData?.level ?? null');
+
+    const myScreen = read('src/screens/Profile/ProfileMyScreen.jsx');
+    expect(myScreen).not.toContain("currentUser?.level) || 1");
+    expect(myScreen).not.toContain('effectiveProfile?.level || 1');
+
+    const dashboard = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    expect(dashboard).not.toContain('Number(userLevel) || 1');
+  });
 });
 

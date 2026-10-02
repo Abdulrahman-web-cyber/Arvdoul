@@ -580,7 +580,10 @@ export const useProfileStore = create(
         
         if (!get()._isLoadCurrent('level', __seq)) return;
         set((state) => {
-          state.level = levelData?.level || 1;
+          // Absent progression data stays null (honest unavailable state); a
+          // fabricated `|| 1` here re-introduced audit N005/U-4 and, via
+          // ProfileMyScreen's creator gate, could mis-state standing.
+          state.level = levelData?.level ?? null;
           state.levelLoading = false;
         });
       } catch (error) {
@@ -660,11 +663,12 @@ export const useProfileStore = create(
      */
     loadFollowStatus: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
+      const __seq = get()._startLoad('followStatus');
       
       try {
         const userService = (await import('../services/userService.js')).getUserService();
         const followStatus = await userService.getFollowStatus(followerId, followingId);
-        
+        if (!get()._isLoadCurrent('followStatus', __seq)) return;
         set((state) => {
           state.followStatus = followStatus;
         });
@@ -680,6 +684,7 @@ export const useProfileStore = create(
      */
     loadMutualFriends: async (userId, otherUserId) => {
       if (!userId || !otherUserId) return;
+      const __seq = get()._startLoad('mutualFriends');
       
       set((state) => {
         state.mutualFriendsLoading = true;
@@ -688,13 +693,14 @@ export const useProfileStore = create(
       try {
         const userService = (await import('../services/userService.js')).getUserService();
         const result = await userService.getMutualFriends(userId, otherUserId);
-        
+        if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
           state.mutualFriends = result?.users?.slice(0, 5) || [];
           state.mutualFriendsLoading = false;
         });
       } catch (error) {
         console.error('❌ Load mutual friends failed:', error);
+        if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
           state.mutualFriendsLoading = false;
         });
