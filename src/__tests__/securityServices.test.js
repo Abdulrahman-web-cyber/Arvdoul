@@ -1,148 +1,21 @@
 /**
  * src/__tests__/securityServices.test.js
- * Real assertions for the security service layer: WAF, CSRF, DDoS, PoW
- * challenges, security headers, CSP, session anomaly detection and
- * sanitization. These are the enforcement points of the platform's
- * OWASP / anti-abuse posture and must never regress.
+ * Real assertions for the security service layer that has genuine client
+ * responsibilities: proof-of-work challenges, security headers, CSP and input
+ * sanitization. The enforcement points that are NOT real client controls
+ * (WAF, CSRF, DDoS, session anomaly detection) were removed — see the
+ * architecture guard at the bottom of this file.
  */
 
-import { wafService } from '../services/WAFService.js';
-import { csrfService } from '../services/CSRFService.js';
-import { ddosProtectionService } from '../services/DDoSProtectionService.js';
 import { challengeService } from '../services/challengeService.js';
 import { secureHeadersService } from '../services/SecureHeadersService.js';
 import { cspService } from '../services/CSPService.js';
-import { sessionSecurityService } from '../services/sessionSecurityService.js';
 import { sanitizationService } from '../services/sanitizationService.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-describe('WAFService', () => {
-  test('allows benign payloads', () => {
-    expect(wafService.inspectPayload('hello world')).toEqual({ safe: true });
-    expect(wafService.inspectPayload('The quick brown fox jumps over the lazy dog')).toEqual({ safe: true });
-    expect(wafService.inspectPayload(null)).toEqual({ safe: true });
-    expect(wafService.inspectPayload(undefined)).toEqual({ safe: true });
-    expect(wafService.inspectPayload('')).toEqual({ safe: true });
-  });
-
-  test('detects SQL injection', () => {
-    const res = wafService.inspectPayload("SELECT * FROM users WHERE id = 1 OR '1'='1'");
-    expect(res.safe).toBe(false);
-    expect(res.threat).toBe('SQLi');
-  });
-
-  test('detects XSS payloads', () => {
-    expect(wafService.inspectPayload('<script>alert(1)</script>').threat).toBe('XSS');
-    expect(wafService.inspectPayload('javascript:alert(1)').threat).toBe('XSS');
-    expect(wafService.inspectPayload('"><img src=x onerror=alert(1)>').threat).toBe('XSS');
-  });
-
-  test('detects path traversal', () => {
-    const res = wafService.inspectPayload('../../etc/passwd');
-    expect(res.safe).toBe(false);
-    expect(res.threat).toBe('PathTraversal');
-  });
-
-  test('detects command injection', () => {
-    expect(wafService.inspectPayload('cat /etc/passwd; rm -rf /').threat).toBe('RCE/CommandInjection');
-    expect(wafService.inspectPayload('$(whoami)').threat).toBe('RCE/CommandInjection');
-  });
-
-  test('detects XXE payloads', () => {
-    const res = wafService.inspectPayload('<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>');
-    expect(res.safe).toBe(false);
-    expect(res.threat).toBe('XXE');
-  });
-
-  test('recursively inspects nested object values', () => {
-    const res = wafService.inspectPayload({ user: { bio: 'hello' }, comment: { text: '<script>alert(1)</script>' } });
-    expect(res.safe).toBe(false);
-    expect(res.threat).toBe('XSS');
-  });
-
-  test('recursively inspects arrays of strings', () => {
-    const res = wafService.inspectPayload({ tags: ['a', 'b', "'; DROP TABLE users; --"] });
-    expect(res.safe).toBe(false);
-  });
-});
-
-describe('CSRFService', () => {
-  beforeEach(() => {
-    // Reset singleton state between tests
-    csrfService._token = null;
-    csrfService._tokenExpiry = 0;
-  });
-
-  test('generates a token and verifies it in constant time', () => {
-    const token = csrfService.getToken();
-    expect(token).toBeTruthy();
-    expect(token.length).toBeGreaterThanOrEqual(32);
-    expect(csrfService.verifyToken(token)).toBe(true);
-  });
-
-  test('rejects invalid, mismatched, and empty tokens', () => {
-    const token = csrfService.getToken();
-    expect(csrfService.verifyToken(token + 'x')).toBe(false);
-    expect(csrfService.verifyToken(token.slice(1))).toBe(false);
-    expect(csrfService.verifyToken('')).toBe(false);
-    expect(csrfService.verifyToken(null)).toBe(false);
-    expect(csrfService.verifyToken(undefined)).toBe(false);
-  });
-
-  test('rotates token after expiry', () => {
-    const token = csrfService.getToken();
-    csrfService._tokenExpiry = Date.now() - 1;
-    const rotated = csrfService.getToken();
-    expect(rotated).not.toBe(token);
-    expect(csrfService.verifyToken(rotated)).toBe(true);
-  });
-});
-
-describe('DDoSProtectionService', () => {
-  beforeEach(() => {
-    ddosProtectionService.requestBuckets.clear();
-    ddosProtectionService.banList.clear();
-  });
-
-  test('allows requests within capacity', () => {
-    const first = ddosProtectionService.checkRateLimit('client-a');
-    expect(first.allowed).toBe(true);
-    expect(first.remaining).toBe(59);
-  });
-
-  test('throttles once the bucket is drained', () => {
-    const clientKey = 'flooder';
-    for (let i = 0; i < 60; i++) {
-      expect(ddosProtectionService.checkRateLimit(clientKey).allowed).toBe(true);
-    }
-    const blocked = ddosProtectionService.checkRateLimit(clientKey);
-    expect(blocked.allowed).toBe(false);
-    expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
-  });
-
-  test('bans clients after 5 consecutive breaches', () => {
-    const clientKey = 'bad-actor';
-    // Drain the bucket entirely
-    for (let i = 0; i < 60; i++) ddosProtectionService.checkRateLimit(clientKey);
-    let last;
-    for (let i = 0; i < 5; i++) last = ddosProtectionService.checkRateLimit(clientKey);
-    expect(last.banned).toBe(true);
-    expect(last.retryAfterSeconds).toBe(ddosProtectionService.BAN_DURATION_MS / 1000);
-
-    // While banned, every request is refused
-    const duringBan = ddosProtectionService.checkRateLimit(clientKey);
-    expect(duringBan.allowed).toBe(false);
-    expect(duringBan.banned).toBe(true);
-  });
-
-  test('isolates clients from each other', () => {
-    const a = ddosProtectionService.checkRateLimit('client-x');
-    expect(a.allowed).toBe(true);
-    // Different client is unaffected by x's usage
-    const b = ddosProtectionService.checkRateLimit('client-y');
-    expect(b.allowed).toBe(true);
-    expect(b.remaining).toBe(59);
-  });
-});
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 describe('ChallengeService (Proof-of-Work)', () => {
   test('generates a puzzle with a target prefix matching difficulty', () => {
@@ -196,49 +69,6 @@ describe('CSPService', () => {
   });
 });
 
-describe('SessionSecurityService', () => {
-  test('flags impossible travel between distant geographies', () => {
-    // Login in New York, then 5 minutes later in Tokyo
-    const risk = sessionSecurityService.evaluateSessionRisk(
-      { ip: '1.1.1.1', latitude: 35.6895, longitude: 139.6917, timestamp: Date.now() },
-      { ip: '2.2.2.2', latitude: 40.7128, longitude: -74.0060, timestamp: Date.now() - 5 * 60 * 1000 }
-    );
-    expect(risk).toBeDefined();
-    expect(risk.riskScore).toBeGreaterThanOrEqual(50);
-    expect(risk.isAnomaly).toBe(true);
-    expect(risk.requiresStepUpAuth).toBe(true);
-    expect(risk.reasons.some((r) => /travel/i.test(r))).toBe(true);
-  });
-
-  test('accepts sessions from the same location', () => {
-    const now = Date.now();
-    const risk = sessionSecurityService.evaluateSessionRisk(
-      { ip: '1.1.1.1', latitude: 40.7128, longitude: -74.0060, timestamp: now },
-      { ip: '1.1.1.2', latitude: 40.7130, longitude: -74.0062, timestamp: now - 60 * 1000 }
-    );
-    expect(risk.riskScore).toBeLessThan(50);
-    expect(risk.isAnomaly).toBe(false);
-  });
-
-  test('treats the first recorded session as low-risk', () => {
-    const risk = sessionSecurityService.evaluateSessionRisk(
-      { ip: '1.1.1.1', latitude: 0, longitude: 0, timestamp: Date.now() },
-      null
-    );
-    expect(risk.isAnomaly).toBe(false);
-    expect(risk.riskScore).toBeLessThan(50);
-  });
-
-  test('flags a new device fingerprint as risk', () => {
-    const risk = sessionSecurityService.evaluateSessionRisk(
-      { deviceId: 'device-b', latitude: 40.7128, longitude: -74.0060, timestamp: Date.now() },
-      { deviceId: 'device-a', latitude: 40.7128, longitude: -74.0060, timestamp: Date.now() - 60 * 1000 }
-    );
-    expect(risk.riskScore).toBeGreaterThanOrEqual(30);
-    expect(risk.reasons.some((r) => /device/i.test(r))).toBe(true);
-  });
-});
-
 describe('SanitizationService', () => {
   test('strips script tags from HTML', () => {
     const clean = sanitizationService.sanitizeHTML('<p>Hello</p><script>alert(1)</script>');
@@ -258,3 +88,54 @@ describe('SanitizationService', () => {
     expect(sanitizationService.sanitizeURL('mailto:hello@arvdoul.com')).toBe('mailto:hello@arvdoul.com');
   });
 });
+
+describe('no client-side security theatre', () => {
+  // A browser cannot be a WAF, a CSRF authority, a DDoS scrubbing layer or an
+  // impossible-travel engine. These services were inert (imported only by their
+  // own tests) but advertised controls that do not exist:
+  //   - WAFService        regex-matching on the client, which an attacker who
+  //                       controls the client simply skips.
+  //   - CSRFService       Firebase Auth uses bearer ID tokens, not ambient
+  //                       cookies, so there is nothing to CSRF.
+  //   - DDoSProtection    client-side token bucket is a UX throttle, not a
+  //                       network-layer control.
+  //   - sessionSecurity   server-only signals (IP, geo, real sessions).
+  // Real replacements already exist: firestore.rules (authorization),
+  // functions/rateLimit.js (per-user sharded server limits) and Firebase App
+  // Check (bot/abuse). This guard stops the theatre from being reintroduced.
+  const banned = [
+    'WAFService',
+    'CSRFService',
+    'DDoSProtectionService',
+    'sessionSecurityService',
+  ];
+
+  test('false-security client services are gone', () => {
+    for (const name of banned) {
+      expect(fs.existsSync(path.join(root, 'src', 'services', `${name}.js`))).toBe(false);
+    }
+  });
+
+  test('no source file references them', () => {
+    const selfPath = fileURLToPath(import.meta.url);
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(js|jsx)$/.test(entry.name)) {
+          // This guard names them intentionally; skip its own source.
+          if (full === selfPath) continue;
+          const src = fs.readFileSync(full, 'utf8');
+          for (const name of banned) {
+            if (src.includes(name)) offenders.push(`${path.relative(root, full)}: ${name}`);
+          }
+        }
+      }
+    };
+    walk(path.join(root, 'src'));
+    expect(offenders).toEqual([]);
+  });
+});
+

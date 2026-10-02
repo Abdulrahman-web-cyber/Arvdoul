@@ -26,7 +26,7 @@
 2. **Coverage floors** — `jest.config.cjs` `coverageThreshold`:
    - Global: ≥11% stmts / ≥9% branch / ≥10% funcs / ≥12% lines.
    - Per-file floors (80% band) on 21 core files: CacheManager, metricsService,
-     validationService, soundService, sessionSecurityService, fraudDetectionService,
+     validationService, soundService, fraudDetectionService,
      fieldEncryption-adjacent security services, etc. A regression in any of
      them fails CI immediately.
 3. **ESLint errors = 0** (warnings tracked, not blocking yet).

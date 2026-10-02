@@ -64,7 +64,6 @@ module.exports = {
     'src/services/extremismDetectionService.js': { statements: 80 },
     'src/services/viralPredictionService.js': { statements: 80 },
     'src/services/vendorManagementService.js': { statements: 80 },
-    'src/services/sessionSecurityService.js': { statements: 80 },
     'src/services/validationService.js': { statements: 80 },
     'src/services/soundService.js': { statements: 80 },
     'src/services/selfHarmDetectionService.js': { statements: 80 },
