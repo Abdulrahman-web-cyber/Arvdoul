@@ -192,9 +192,22 @@ runs).
 
 ## No client-side security theatre
 A browser cannot be a WAF, a CSRF authority, a DDoS scrubbing layer, or an
-impossible-travel engine. `WAFService`, `CSRFService`, `DDoSProtectionService`
-and `sessionSecurityService` were inert (imported only by their own tests) and
-have been removed. Real controls: `firestore.rules` (authorization),
+impossible-travel engine. `WAFService`, `CSRFService`, `DDoSProtectionService`,
+`sessionSecurityService`, `CSPService`, `SecureHeadersService` and
+`challengeService` were inert (imported only by their own tests) and have been
+removed. Real controls: `firestore.rules` (authorization),
 `functions/rateLimit.js` (per-user sharded server limits), Firebase App Check
-(bot/abuse). `src/__tests__/securityServices.test.js` fails if any is
-reintroduced.
+(bot/abuse), the `index.html` meta CSP and the `firebase.json` headers.
+`src/__tests__/securityServices.test.js` fails if any is reintroduced.
+
+## UI reaches the backend only through services
+Screens/components must not import `firebase/*` directly — direct SDK use
+bypasses cache scoping, authorization helpers and error normalisation.
+`src/__tests__/architectureBoundaries.test.js` freezes the remaining offenders
+as an explicit allowlist; remove a file from that list only after migrating it
+to a service. Add no new entries.
+
+## Reconstruction deliverable
+`docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/
+duplication/cost/route/dependency reconstruction and the AUDIT V3 finding-status
+ledger. Update it when a finding closes.

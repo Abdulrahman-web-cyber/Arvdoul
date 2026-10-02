@@ -1,73 +1,16 @@
 /**
  * src/__tests__/securityServices.test.js
- * Real assertions for the security service layer that has genuine client
- * responsibilities: proof-of-work challenges, security headers, CSP and input
- * sanitization. The enforcement points that are NOT real client controls
- * (WAF, CSRF, DDoS, session anomaly detection) were removed — see the
- * architecture guard at the bottom of this file.
+ * Real assertions for the one security utility that has a genuine client
+ * responsibility (input sanitization). The enforcement points that are NOT
+ * real client controls were removed — see the architecture guard below.
  */
 
-import { challengeService } from '../services/challengeService.js';
-import { secureHeadersService } from '../services/SecureHeadersService.js';
-import { cspService } from '../services/CSPService.js';
 import { sanitizationService } from '../services/sanitizationService.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-
-describe('ChallengeService (Proof-of-Work)', () => {
-  test('generates a puzzle with a target prefix matching difficulty', () => {
-    const puzzle = challengeService.generatePoWPuzzle(2);
-    expect(puzzle.seed).toBeTruthy();
-    expect(puzzle.difficulty).toBe(2);
-    expect(puzzle.targetPrefix).toBe('00');
-  });
-
-  test('solves and verifies a puzzle end-to-end', async () => {
-    const puzzle = challengeService.generatePoWPuzzle(2);
-    const solution = await challengeService.solvePoWPuzzle(puzzle);
-    expect(solution).toHaveProperty('nonce');
-    expect(solution.hashHex.startsWith('00')).toBe(true);
-    await expect(challengeService.verifyPoWSolution(puzzle, solution)).resolves.toBe(true);
-  });
-
-  test('rejects wrong seeds and missing solutions', async () => {
-    const puzzle = challengeService.generatePoWPuzzle(2);
-    const solution = await challengeService.solvePoWPuzzle(puzzle);
-    await expect(
-      challengeService.verifyPoWSolution({ ...puzzle, seed: 'different' }, solution)
-    ).resolves.toBe(false);
-    await expect(challengeService.verifyPoWSolution(puzzle, null)).resolves.toBe(false);
-    await expect(challengeService.verifyPoWSolution(null, solution)).resolves.toBe(false);
-  });
-});
-
-describe('SecureHeadersService', () => {
-  test('emits all production security headers', () => {
-    const headers = secureHeadersService.getSecurityHeaders();
-    expect(headers).toHaveProperty('Strict-Transport-Security');
-    expect(headers).toHaveProperty('X-Content-Type-Options');
-    expect(headers).toHaveProperty('Referrer-Policy');
-    expect(headers).toHaveProperty('Permissions-Policy');
-    expect(headers['X-Content-Type-Options']).toBe('nosniff');
-  });
-});
-
-describe('CSPService', () => {
-  test('generates a CSP header containing the nonce and strict defaults', () => {
-    const header = cspService.generateCSPHeader('abc123');
-    expect(header).toContain("default-src 'self'");
-    expect(header).toContain("script-src 'self' 'nonce-abc123'");
-    expect(header).toContain("object-src 'none'");
-  });
-
-  test('handles violation reports without throwing', () => {
-    expect(() => cspService.handleCSPViolation({ 'csp-report': { 'blocked-uri': 'https://evil.example/x.js' } })).not.toThrow();
-    expect(() => cspService.handleCSPViolation(null)).not.toThrow();
-  });
-});
 
 describe('SanitizationService', () => {
   test('strips script tags from HTML', () => {
@@ -100,6 +43,12 @@ describe('no client-side security theatre', () => {
   //   - DDoSProtection    client-side token bucket is a UX throttle, not a
   //                       network-layer control.
   //   - sessionSecurity   server-only signals (IP, geo, real sessions).
+  //   - CSPService        a runtime CSP builder that was never applied; the
+  //                       enforced policy is the index.html meta tag.
+  //   - SecureHeaders     returns a header map that is never sent; the real
+  //                       headers are configured in firebase.json.
+  //   - challengeService  client-side proof-of-work; the real bot control is
+  //                       Firebase App Check.
   // Real replacements already exist: firestore.rules (authorization),
   // functions/rateLimit.js (per-user sharded server limits) and Firebase App
   // Check (bot/abuse). This guard stops the theatre from being reintroduced.
@@ -108,6 +57,9 @@ describe('no client-side security theatre', () => {
     'CSRFService',
     'DDoSProtectionService',
     'sessionSecurityService',
+    'CSPService',
+    'SecureHeadersService',
+    'challengeService',
   ];
 
   test('false-security client services are gone', () => {

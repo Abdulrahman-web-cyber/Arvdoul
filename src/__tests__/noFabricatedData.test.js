@@ -100,10 +100,14 @@ describe('videoUtils - no fake thumbnail service', () => {
 });
 
 describe('CSP headers - no placeholder image hosts', () => {
-  test('CSP img-src allowlists no longer permit unsplash/picsum', () => {
-    const csp = fs.readFileSync(path.join(root, 'src/services/CSPService.js'), 'utf8');
-    expect(csp).not.toContain('images.unsplash.com');
-    expect(csp).not.toContain('picsum.photos');
+  test('the shipped CSP does not permit unsplash/picsum', () => {
+    // The enforced policy is the meta tag in index.html (that CSP builder was dead
+    // code that was never applied, so asserting against it proved nothing).
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const cspMatch = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/);
+    expect(cspMatch).toBeTruthy();
+    expect(cspMatch[1]).not.toContain('images.unsplash.com');
+    expect(cspMatch[1]).not.toContain('picsum.photos');
   });
 });
 
