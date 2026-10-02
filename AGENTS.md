@@ -193,9 +193,9 @@ runs).
 ## No client-side security theatre
 A browser cannot be a WAF, a CSRF authority, a DDoS scrubbing layer, or an
 impossible-travel engine. `WAFService`, `CSRFService`, `DDoSProtectionService`,
-`sessionSecurityService`, `CSPService`, `SecureHeadersService` and
-`challengeService` were inert (imported only by their own tests) and have been
-removed. Real controls: `firestore.rules` (authorization),
+`sessionSecurityService`, `CSPService`, `SecureHeadersService`,
+`challengeService`, `botProtectionService` and `userIntegrityService` were inert
+(imported only by their own tests) and have been removed. Real controls: `firestore.rules` (authorization),
 `functions/rateLimit.js` (per-user sharded server limits), Firebase App Check
 (bot/abuse), the `index.html` meta CSP and the `firebase.json` headers.
 `src/__tests__/securityServices.test.js` fails if any is reintroduced.

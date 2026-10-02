@@ -148,40 +148,6 @@ describe('Upgraded Production Services Integration Tests', () => {
     });
   });
 
-  describe('botProtectionService (Biometrics & Trajectory Analysis)', () => {
-    let botService;
-
-    beforeAll(async () => {
-      const mod = await import('../services/botProtectionService.js');
-      botService = mod.botProtectionService || mod.default;
-    });
-
-    test('flags simulated headless browser environments instantly', () => {
-      // Mock navigator.webdriver
-      const originalWebdriver = globalThis.navigator.webdriver;
-      Object.defineProperty(globalThis.navigator, 'webdriver', { value: true, configurable: true });
-
-      const score = botService.calculateHumanConfidence();
-      expect(score).toBeLessThan(0.10);
-
-      // Restore
-      Object.defineProperty(globalThis.navigator, 'webdriver', { value: originalWebdriver, configurable: true });
-    });
-
-    test('detects keyboard flight-time scripting variance breaches', () => {
-      botService.keyEvents = [
-        { time: 1000, type: 'down', key: 'a' },
-        { time: 1010, type: 'down', key: 'b' },
-        { time: 1020, type: 'down', key: 'c' },
-        { time: 1030, type: 'down', key: 'd' }
-      ];
-
-      const score = botService.calculateHumanConfidence();
-      expect(score).toBeLessThan(0.30); // flagged as scripted typing
-      botService.keyEvents = [];
-    });
-  });
-
   describe('copyrightDetectionService (Licensing & DMCA Notices)', () => {
     let copyrightService;
 

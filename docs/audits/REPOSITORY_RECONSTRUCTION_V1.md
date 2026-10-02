@@ -42,12 +42,12 @@ Measured by searching all of `src/**` (excluding `__tests__`) for each service s
 **(a) Security theatre — DEAD / FALSE SECURITY (removed ✅):**
 `WAFService`, `CSRFService`, `DDoSProtectionService`, `sessionSecurityService`.
 
-**(b) Security theatre (removed ✅):** `challengeService` (client proof-of-work; the real bot control is Firebase App Check), `CSPService` (runtime CSP builder never applied — see §7), `SecureHeadersService` (header map never sent; real headers are in `firebase.json`).
+**(b) Security theatre (removed ✅):** `challengeService` (client proof-of-work; the real bot control is Firebase App Check), `CSPService` (runtime CSP builder never applied — see §7), `SecureHeadersService` (header map never sent; real headers are in `firebase.json`), `botProtectionService` (client mouse/keystroke entropy scoring that the attacker's own automation controls), `userIntegrityService` (client-computed trust/strike/sybil decisions with no server enforcement).
 
 **(b2) Security-adjacent, still present (open ⬜):** imported only by their own tests, never wired into any request path:
 - `sanitizationService` (React escapes output; no `dangerouslySetInnerHTML` consumer)
 - `apiSecurityGatewayService` (client-stored API keys, incl. a localStorage fallback)
-- `botProtectionService`, `searchAbuseService`, `userIntegrityService`, `fraudDetectionService`
+- `searchAbuseService`, `fraudDetectionService`
 - plus domain-specific detectors: `childSafetyService`, `copyrightDetectionService`, `extremismDetectionService`, `selfHarmDetectionService`, `phishingDetectionService`, `scamDetectionService`, `misinformationService`, `manipulatedMediaService`, `contentProvenanceService`, `audioModerationService`, `videoModerationService`, `liveModerationService`, `safeSearchService`, `searchIndexingService`.
 
 These are **not all equivalent** and must be classified individually before deletion (see §9). The ones that are pure security claims with no client role are theatre; the content detectors may have a legitimate future server-side home.
@@ -138,7 +138,7 @@ No automated guard currently fails CI on a new unbounded query or a new realtime
 | N007/N017/N018 capability divergence | ⬜ open | screens/passport still re-derive privacy/capabilities |
 | N011 PII boundary | ✅ mostly | `users_private` exists and is written by the owner |
 | V2-01 monetization pagination | ⬜ open | history/leaderboard cursor support unverified |
-| §11 shadow-system classification | ⬜ partial | 7 removed (WAF/CSRF/DDoS/session + CSP/headers/PoW); ~12 security-adjacent services still unclassified (§2.2b) |
+| §11 shadow-system classification | ⬜ partial | 9 removed (WAF/CSRF/DDoS/session + CSP/headers/PoW + botProtection/userIntegrity); ~12 security-adjacent services still unclassified (§2.2b) |
 | §83 cost guards in CI | ⬜ open | no unbounded-query/listener guard |
 
 ---

@@ -22,7 +22,6 @@ import { logAggregationService } from '../services/logAggregationService.js';
 import { tracingService } from '../services/tracingService.js';
 import { manipulatedMediaService } from '../services/manipulatedMediaService.js';
 import { phishingDetectionService } from '../services/phishingDetectionService.js';
-import { userIntegrityService } from '../services/userIntegrityService.js';
 import { vendorManagementService } from '../services/vendorManagementService.js';
 import { viralPredictionService } from '../services/viralPredictionService.js';
 
@@ -666,19 +665,6 @@ describe('Service Layer Tests', () => {
       const res = phishingDetectionService.evaluateURL('https://arvd0ul.com/login');
       expect(res.safe).toBe(false);
       expect(res.risk).toBe('critical');
-    });
-  });
-
-  describe('UserIntegrityService Upgrades (v8.0)', () => {
-    test('evaluates dynamic multi-dimensional trust score', () => {
-      const profile = {
-        isVerifiedCreator: true,
-        emailVerified: true,
-        phoneNumber: '1234567890',
-        strikesCount: 0
-      };
-      const score = userIntegrityService.calculateTrustScore(profile);
-      expect(score).toBeGreaterThan(60);
     });
   });
 

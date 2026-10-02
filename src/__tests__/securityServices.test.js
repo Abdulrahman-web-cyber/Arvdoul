@@ -49,6 +49,10 @@ describe('no client-side security theatre', () => {
   //                       headers are configured in firebase.json.
   //   - challengeService  client-side proof-of-work; the real bot control is
   //                       Firebase App Check.
+  //   - botProtection     client-side mouse/keystroke entropy scoring, which an
+  //                       attacker's automation controls end to end.
+  //   - userIntegrity     client-computed trust/strike/sybil decisions that
+  //                       carry no server enforcement.
   // Real replacements already exist: firestore.rules (authorization),
   // functions/rateLimit.js (per-user sharded server limits) and Firebase App
   // Check (bot/abuse). This guard stops the theatre from being reintroduced.
@@ -60,6 +64,8 @@ describe('no client-side security theatre', () => {
     'CSPService',
     'SecureHeadersService',
     'challengeService',
+    'botProtectionService',
+    'userIntegrityService',
   ];
 
   test('false-security client services are gone', () => {
