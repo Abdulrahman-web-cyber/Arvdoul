@@ -169,3 +169,32 @@ enqueues without an explicit owner bind to the live session
 A missing `level`/`xp` renders as unavailable (null), never as `Level 1` /
 `Citizen`. Do not add `|| 1` level defaults or `() => 'Citizen'` fallbacks in
 profile components — `src/__tests__/noFabricatedData.test.js` guards this.
+
+## Cloud Functions deploy path — merge, don't just require
+Firebase publishes exactly what `functions/index.js` exports. `require('./x.js')`
+runs a module but does NOT deploy its functions — every module's exports must be
+merged (`merge(require('./x.js'))`). Requiring without merging once dropped ~130
+of 141 functions (only the 11 defined inline deployed), so every callable the app
+depends on returned "not found". `src/__tests__/deployIntegrity.test.js` loads the
+real `index.js` and fails if any client-called callable is not exported, and if
+any `functions/*.js` requires a package not declared in `functions/package.json`
+(`firebase deploy` installs only declared deps, so an undeclared require aborts
+the whole deploy). `auth.js` / `pushQueue.js` are helper-only (no triggers).
+
+## firestore.rules must compile — no wildcards mixed with literals
+A `match` path segment is either `{var}`, `{var=**}` or a literal. A segment that
+mixes a wildcard with text (e.g. `messages_{year}_{month}`) makes the ENTIRE
+ruleset fail to compile, so `firebase deploy` rejects it and the previous rules
+stay live. Match the subcollection as one wildcard and validate the name instead
+(`isMessageShardCollection`). `src/__tests__/firestoreRulesCompile.test.js`
+guards this (syntax, plus emulator-backed adversarial checks when the emulator
+runs).
+
+## No client-side security theatre
+A browser cannot be a WAF, a CSRF authority, a DDoS scrubbing layer, or an
+impossible-travel engine. `WAFService`, `CSRFService`, `DDoSProtectionService`
+and `sessionSecurityService` were inert (imported only by their own tests) and
+have been removed. Real controls: `firestore.rules` (authorization),
+`functions/rateLimit.js` (per-user sharded server limits), Firebase App Check
+(bot/abuse). `src/__tests__/securityServices.test.js` fails if any is
+reintroduced.
