@@ -1,7 +1,7 @@
-// src/screens/DataUsageScreen.jsx - ARVDOUL DATA USAGE
-// REAL implementation: storage usage from the browser's Storage API, cache
+// src/screens/DataUsageScreen.jsx
+//
+// implementation: storage usage from the browser's Storage API, cache
 // clearing that actually clears (settingsService + Cache API), and a GDPR
-// export that actually calls the exportUserData Cloud Function and lets the
 // user download the returned data. No fake timers, no invented GB numbers.
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -36,7 +36,7 @@ export default function DataUsageScreen() {
   const [exporting, setExporting] = useState(false);
   const [lastExport, setLastExport] = useState(null);
 
-  // REAL storage usage via the Storage API (supported in all modern browsers).
+  // storage usage via the Storage API (supported in all modern browsers).
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -77,7 +77,7 @@ export default function DataUsageScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  // REAL cache clearing: settingsService clears localStorage (preserving
+  // cache clearing: settingsService clears localStorage (preserving
   // auth/session), IndexedDB databases, and in-memory caches; we also purge
   // the Cache API (precache only — safe, it re-populates on next load).
   const handleClearCache = useCallback(async () => {
@@ -109,7 +109,7 @@ export default function DataUsageScreen() {
     }
   }, [clearing]);
 
-  // REAL GDPR export: calls the exportUserData Cloud Function and offers a
+  // GDPR export: calls the exportUserData Cloud Function and offers a
   // JSON download of the returned data. No fake "email will arrive".
   const handleExportData = useCallback(async () => {
     if (!user?.uid) {
@@ -119,11 +119,8 @@ export default function DataUsageScreen() {
     if (exporting) return;
     setExporting(true);
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const { getApp } = await import('firebase/app');
-      const fn = httpsCallable(getFunctions(getApp()), 'exportUserData');
-      const res = await fn({});
-      const data = res.data || {};
+      const { callFunction, FUNCTIONS } = await import('../services/callableService.js');
+      const data = (await callFunction(FUNCTIONS.EXPORT_USER_DATA)) || {};
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

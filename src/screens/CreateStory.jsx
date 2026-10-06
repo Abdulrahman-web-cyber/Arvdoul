@@ -1,5 +1,5 @@
-// src/screens/CreateStory.jsx - ARVDOUL STORY CAMERA & CREATIVE STUDIO
-// 100% Pixel-perfect implementation matching Arvdoul Story Camera screenshot
+// src/screens/CreateStory.jsx
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -8,17 +8,17 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import {
-  X, Zap, RefreshCw, Sliders, FileText, Type, PenTool,
+  X, Zap, RefreshCw, Sliders, FileText, Type,
   Smile, Music, Video, Image as ImageIcon, BarChart2,
   HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight,
   ChevronLeft, Sparkles, Send, Camera, Grid, Check, Loader2
 } from 'lucide-react';
 import { getStoryService } from '../services/storyService';
 import storageService, { getStorageService } from '../services/storageService';
+import GIFPicker from '../components/Shared/GIFPicker';
 
 const CREATIVE_TOOLS = [
   { id: 'text', label: 'Text', icon: Type, color: 'text-white' },
-  { id: 'draw', label: 'Draw', icon: PenTool, color: 'text-white' },
   { id: 'stickers', label: 'Stickers', icon: Smile, color: 'text-white' },
   { id: 'music', label: 'Music', icon: Music, color: 'text-white' },
   { id: 'gif', label: 'GIF', icon: Sparkles, color: 'text-white' },
@@ -33,7 +33,7 @@ const CREATIVE_TOOLS = [
 const CAPTURE_MODES = ['STORY', 'TEXT', 'PHOTO', 'VIDEO', 'LAYOUT'];
 
 // Story background templates - real gradient presets (no fabricated photos)
-const SAMPLE_DRAFTS = [
+const STORY_GRADIENTS = [
   { id: 'd1', gradient: 'linear-gradient(135deg, #FF512F, #F09819)', label: 'Sunset' },
   { id: 'd2', gradient: 'linear-gradient(135deg, #0F2027, #2C5364)', label: 'City lights' },
   { id: 'd3', gradient: 'linear-gradient(135deg, #134E5E, #71B280)', label: 'Mountain' },
@@ -53,6 +53,7 @@ export default function CreateStory() {
   const [flashMode, setFlashMode] = useState('auto'); // 'off' | 'on' | 'auto'
   const [facingMode, setFacingMode] = useState('user'); // 'user' | 'environment'
   const [cameraActive, setCameraActive] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
 
@@ -64,9 +65,16 @@ export default function CreateStory() {
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOption1, setPollOption1] = useState('Yes 🔥');
   const [pollOption2, setPollOption2] = useState('No ❄️');
-  const [selectedMusic, setSelectedMusic] = useState('Lost in the City - ARVDOUL Beats');
+  const [selectedMusic, setSelectedMusic] = useState(null);
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [musicLoading, setMusicLoading] = useState(false);
   const [mediaFile, setMediaFile] = useState(null);
   const [capturedPreview, setCapturedPreview] = useState(null);
+  const [selectedGif, setSelectedGif] = useState(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [storyLocation, setStoryLocation] = useState('');
+  const [mentionHandle, setMentionHandle] = useState('');
+  const [storyTimer, setStoryTimer] = useState(0);
   const [publishing, setPublishing] = useState(false);
 
   const videoRef = useRef(null);
@@ -74,6 +82,20 @@ export default function CreateStory() {
   const timerRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
+
+  // Music tool pulls the real catalog; there is no hardcoded default track.
+  const loadMusicTracks = useCallback(async () => {
+    setMusicLoading(true);
+    try {
+      const { default: soundService } = await import('../services/soundService.js');
+      const tracks = await soundService.getTrendingSounds('All');
+      setMusicTracks(Array.isArray(tracks) ? tracks : []);
+    } catch {
+      setMusicTracks([]);
+    } finally {
+      setMusicLoading(false);
+    }
+  }, []);
 
   // Initialize WebRTC Camera Stream
   const initCamera = useCallback(async () => {
@@ -87,6 +109,9 @@ export default function CreateStory() {
           videoRef.current.srcObject = stream;
           videoRef.current.play();
           setCameraActive(true);
+          const track = stream.getVideoTracks?.()[0];
+          const caps = track?.getCapabilities?.();
+          setTorchSupported(Boolean(caps?.torch));
         }
       }
     } catch (err) {
@@ -111,10 +136,20 @@ export default function CreateStory() {
     setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
 
-  // Toggle Flash
-  const handleToggleFlash = () => {
-    setFlashMode((prev) => (prev === 'auto' ? 'on' : prev === 'on' ? 'off' : 'auto'));
-    toast.info(`Flash: ${flashMode.toUpperCase()}`);
+  // Toggle Flash — drives the camera track torch when the hardware exposes it.
+  const handleToggleFlash = async () => {
+    const next = flashMode === 'auto' ? 'on' : flashMode === 'on' ? 'off' : 'auto';
+    setFlashMode(next);
+    const track = videoRef.current?.srcObject?.getVideoTracks?.()[0];
+    if (!track || !torchSupported) {
+      toast.info(`Flash: ${next.toUpperCase()}`);
+      return;
+    }
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next === 'on' }] });
+    } catch {
+      toast.error('This camera does not support flash control.');
+    }
   };
 
   // Shutter Action (Tap for photo, hold for video)
@@ -143,7 +178,7 @@ export default function CreateStory() {
   // Hold for Video Recording
   const handleShutterMouseDown = () => {
     if (capturedPreview) return;
-    // REAL video recording via MediaRecorder on the camera stream
+    // video recording via MediaRecorder on the camera stream
     const stream = videoRef.current?.srcObject;
     if (!stream || typeof MediaRecorder === 'undefined') {
       toast.error('Camera is not active. Enable camera access to record.');
@@ -211,6 +246,18 @@ export default function CreateStory() {
     setCapturedPreview(URL.createObjectURL(file));
   };
 
+  // Real stickers assembled from the active creative tools.
+  const buildStickers = () => {
+    const stickers = [];
+    if (selectedGif) {
+      stickers.push({ type: 'gif', data: { url: selectedGif.url, title: selectedGif.title }, position: { x: 0.5, y: 0.5 } });
+    }
+    if (storyTimer > 0) {
+      stickers.push({ type: 'countdown', data: { seconds: storyTimer }, position: { x: 0.5, y: 0.35 } });
+    }
+    return stickers.length ? stickers : null;
+  };
+
   // Publish Story to Firestore / StoryService
   const handlePublishStory = async () => {
     if (!user?.uid || publishing) {
@@ -231,7 +278,11 @@ export default function CreateStory() {
         backgroundColor: backgroundGradient || (isText ? '#1e1b4b' : '#000000'),
         textColor: '#FFFFFF',
         poll: pollQuestion ? { question: pollQuestion, options: [pollOption1, pollOption2] } : null,
-        musicTrack: selectedMusic,
+        music: selectedMusic || null,
+        linkUrl: linkUrl.trim() || null,
+        location: storyLocation.trim() || null,
+        taggedUsers: mentionHandle.trim() ? [mentionHandle.trim().replace(/^@/, '')] : [],
+        stickers: buildStickers(),
         // audience maps to the service visibility contract (public/followers).
         visibility: 'public',
       };
@@ -304,9 +355,7 @@ export default function CreateStory() {
                       key={tool.id}
                       onClick={() => {
                         setActiveTool(isSelected ? null : tool.id);
-                        if (tool.id === 'text' && !storyText) setStoryText('✨ Arvdoul moment');
-                        if (tool.id === 'poll' && !pollQuestion) setPollQuestion('Where to next? 🌴');
-                        toast.info(`Tool: ${tool.label} activated`);
+                        if (tool.id === 'music' && !isSelected && musicTracks.length === 0) loadMusicTracks();
                       }}
                       className={cn(
                         "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold transition-all duration-200",
@@ -403,6 +452,169 @@ export default function CreateStory() {
               </div>
             )}
 
+            {/* Active Music Picker */}
+            {activeTool === 'music' && (
+              <div className="absolute bottom-24 inset-x-4 z-20 p-3 rounded-3xl bg-black/70 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300">
+                    Music
+                  </span>
+                  {selectedMusic && (
+                    <button
+                      onClick={() => setSelectedMusic(null)}
+                      className="text-[11px] text-white/60 hover:text-white"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {musicLoading ? (
+                  <p className="text-xs text-white/60 px-1 py-2">Loading tracks…</p>
+                ) : musicTracks.length === 0 ? (
+                  <p className="text-xs text-white/60 px-1 py-2">
+                    No tracks available yet.
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {musicTracks.slice(0, 20).map((track) => (
+                      <button
+                        key={track.id}
+                        onClick={() => setSelectedMusic(track)}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-xs transition-colors",
+                          selectedMusic?.id === track.id
+                            ? "bg-violet-600/60 text-white"
+                            : "text-white/80 hover:bg-white/10"
+                        )}
+                      >
+                        <Music className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">
+                          {track.title || 'Untitled'}
+                          {track.artist ? ` — ${track.artist}` : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Text tool */}
+            {activeTool === 'text' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={storyText}
+                  onChange={(e) => setStoryText(e.target.value)}
+                  placeholder="Type your text…"
+                  className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* GIF / Stickers */}
+            {(activeTool === 'gif' || activeTool === 'stickers') && (
+              <div className="absolute bottom-24 inset-x-4 z-20">
+                <GIFPicker
+                  onSelect={(url, gif) => setSelectedGif({ url, title: gif?.title || 'GIF' })}
+                  onClose={() => setActiveTool(null)}
+                />
+              </div>
+            )}
+
+            {/* Link sticker */}
+            {activeTool === 'link' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://…"
+                  className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none"
+                />
+                {linkUrl.trim() && (
+                  <a
+                    href={linkUrl.trim()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block mt-3 px-3 py-2 rounded-full bg-white text-black text-xs font-bold text-center"
+                  >
+                    Link preview
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Location sticker */}
+            {activeTool === 'location' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={storyLocation}
+                  onChange={(e) => setStoryLocation(e.target.value)}
+                  placeholder="Add a location"
+                  className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* Mention sticker */}
+            {activeTool === 'mention' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={mentionHandle}
+                  onChange={(e) => setMentionHandle(e.target.value)}
+                  placeholder="@username"
+                  className="w-full text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* Question sticker */}
+            {activeTool === 'question' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <input
+                  type="text"
+                  value={pollQuestion}
+                  onChange={(e) => setPollQuestion(e.target.value)}
+                  placeholder="Ask me a question…"
+                  className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                />
+              </div>
+            )}
+
+            {/* Timer sticker */}
+            {activeTool === 'timer' && (
+              <div className="absolute top-1/3 inset-x-6 z-10 p-4 rounded-3xl bg-black/60 backdrop-blur-xl border border-white/20 text-white shadow-2xl">
+                <div className="flex items-center justify-center gap-2">
+                  <Timer className="w-4 h-4 text-violet-300" />
+                  <input
+                    type="number"
+                    min="0"
+                    max="86400"
+                    value={storyTimer}
+                    onChange={(e) => setStoryTimer(Number(e.target.value) || 0)}
+                    className="w-24 text-sm bg-transparent border-b border-white/20 pb-2 outline-none text-center"
+                  />
+                  <span className="text-xs text-white/70">seconds</span>
+                </div>
+              </div>
+            )}
+
+            {/* Selected GIF preview */}
+            {selectedGif && (
+              <div className="absolute top-20 right-4 z-10 w-24 rounded-2xl overflow-hidden border-2 border-white/40">
+                <img src={selectedGif.url} alt={selectedGif.title} className="w-full h-auto" />
+                <button
+                  onClick={() => setSelectedGif(null)}
+                  className="w-full py-1 bg-black/70 text-white text-[10px] font-bold"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+
             {/* Recording Indicator */}
             {isRecording && (
               <div className="absolute top-16 left-6 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-600 text-white text-xs font-bold animate-pulse">
@@ -440,7 +652,8 @@ export default function CreateStory() {
 
               {/* Settings */}
               <button
-                onClick={() => toast.info('Camera filters calibrated for ultra HDR quality')}
+                onClick={() => setToolsExpanded((prev) => !prev)}
+                aria-label="Toggle camera tools"
                 className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
               >
                 <Sliders className="w-4 h-4 text-white" />
@@ -667,21 +880,21 @@ export default function CreateStory() {
             <div className="flex items-center justify-between text-xs font-bold">
               <span className="flex items-center gap-1.5 text-violet-300">
                 <Sparkles className="w-3.5 h-3.5" />
-                QUICK TIP
+                BACKGROUNDS
               </span>
-              <span className="text-[10px] text-white/50">Drafts (5)</span>
+              <span className="text-[10px] text-white/50">Backgrounds</span>
             </div>
             <p className="text-[11px] text-arvdoul-text-secondary">
-              Swipe right to open gallery or left to view drafts.
+              Tap a gradient to use it as your story background.
             </p>
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {SAMPLE_DRAFTS.map((d) => (
+              {STORY_GRADIENTS.map((d) => (
                 <div
                   key={d.id}
                   onClick={() => {
                     // Apply the gradient template as the story background
                     setBackgroundGradient(d.gradient);
-                    toast.success(`Draft "${d.label}" loaded!`);
+                    toast.success(`${d.label} background applied`);
                   }}
                   className="w-11 h-14 rounded-xl overflow-hidden ring-1 ring-white/10 cursor-pointer hover:ring-violet-400 transition-all flex-shrink-0"
                   style={{ background: d.gradient }}

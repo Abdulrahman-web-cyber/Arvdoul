@@ -1,25 +1,18 @@
-// src/screens/GiftScreen.jsx - ARVDOUL SEND GIFT (REAL)
+// src/screens/GiftScreen.jsx
+//
 // Sends coins to a user via the server-verified transferCoins Cloud Function
 // (double-entry ledger + idempotency). Route: /gift/:userId
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getFirestoreInstance } from '../firebase/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Coins, Loader2, Send } from 'lucide-react';
 
-const GIFTS = [
-  { id: 'rose', emoji: '🌹', name: 'Rose', coins: 5 },
-  { id: 'heart', emoji: '💖', name: 'Heart', coins: 10 },
-  { id: 'star', emoji: '⭐', name: 'Star', coins: 25 },
-  { id: 'crown', emoji: '👑', name: 'Crown', coins: 50 },
-  { id: 'diamond', emoji: '💎', name: 'Diamond', coins: 100 },
-  { id: 'rocket', emoji: '🚀', name: 'Rocket', coins: 500 },
-];
+import { VIRTUAL_GIFTS as GIFTS } from '../data/videoData';
 
 export default function GiftScreen() {
   const { userId } = useParams();
@@ -43,11 +36,14 @@ export default function GiftScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const firestore = await getFirestoreInstance();
-        const snap = await getDoc(doc(firestore, 'users', userId));
-        if (snap.exists()) {
-          const d = snap.data();
-          setRecipient({ id: userId, name: d.displayName || d.username, avatar: d.photoURL });
+        const { getUserService } = await import('../services/userService.js');
+        const profile = await getUserService().getUserProfile(userId);
+        if (profile) {
+          setRecipient({
+            id: userId,
+            name: profile.displayName || profile.username,
+            avatar: profile.photoURL,
+          });
         }
         if (user?.uid) {
           const { getMonetizationService } = await import('../services/monetizationService.js');

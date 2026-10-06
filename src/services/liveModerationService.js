@@ -1,6 +1,4 @@
 /**
- * src/services/liveModerationService.js - ARVDOUL LIVE STREAM REAL-TIME MODERATION v8.0
- *
  * Implements:
  * 1. Periodic Stream Keyframe Sampling: Captures canvas frame every 3 seconds from active WebRTC / HLS live stream video tag.
  * 2. Instant Stream Interception & Blanking: Automatically mutes audio and covers video with safety warning screen upon severe violation.

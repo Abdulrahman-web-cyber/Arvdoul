@@ -1,6 +1,4 @@
-// src/components/UI/GlassButton.jsx - ARVDOUL WORLD-CLASS BUTTON
-// Futuristic animated button with ARVDOUL DNA gradient
-// Surpasses TikTok, Instagram, YouTube with premium UI
+// src/components/UI/GlassButton.jsx
 
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -8,16 +6,6 @@ import { useTheme } from '../../context/ThemeContext';
 import LoadingSpinner from '../Shared/LoadingSpinner';
 
 /**
- * GlassButton - World-class animated button component
- * 
- * Features:
- * - ARVDOUL DNA gradient variant
- * - Glass variant
- * - Outline variant
- * - Loading state with spinner
- * - Disabled state
- * - Full accessibility
- * 
  * @param {Object} props
  * @param {string} props.variant - Button style: 'gradient' | 'glass' | 'outline' | 'solid'
  * @param {string} props.size - Button size: 'sm' | 'md' | 'lg'

@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileTabsBar.jsx - ARVDOUL Clean Profile Tabs Navigation
- * 
  * Elegant, high-contrast tab strip adhering to Zero-Pill discipline.
  * Clean border-bottom active indicator, crisp typography, and uncluttered layout.
  * 

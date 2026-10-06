@@ -1,48 +1,75 @@
 // src/screens/AudioEditor/components/TransportBar.jsx
-import React, { useState, useEffect } from 'react';
-import {
-  Play, Pause, Square, SkipBack, SkipForward, Repeat,
-  Clock, Activity, Volume2, Sparkles
-} from 'lucide-react';
+//
+// Transport controls. Every readout is measured: the LUFS/peak meter polls the
+// engine's analyser and the spectrum bars read real frequency bins.
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, Square, SkipBack, Repeat, Clock } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { audioStudioEngine } from '../audioEngine';
 
 export default function TransportBar({
   currentTime,
-  totalDuration = 120,
+  totalDuration = 0,
   isPlaying,
+  canPlay = false,
   onPlayPause,
   onStop,
   onSeek,
   tempo = 128,
   setTempo,
+  isLooping = false,
+  setIsLooping,
+  isMetronome = false,
+  setIsMetronome,
   isDark = true,
 }) {
-  const [isLooping, setIsLooping] = useState(true);
-  const [isMetronome, setIsMetronome] = useState(false);
-  const [lufs, setLufs] = useState(-6.2);
+  const [meter, setMeter] = useState({ peakDb: -Infinity, momentaryLufs: null });
+  const [spectrum, setSpectrum] = useState([]);
+  const rafRef = useRef(null);
 
-  // Animate mini spectrum and LUFS during playback
   useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setLufs(-6.2 + (Math.random() * 1.6 - 0.8));
-    }, 120);
-    return () => clearInterval(interval);
+    if (!isPlaying) {
+      setMeter({ peakDb: -Infinity, momentaryLufs: null });
+      return undefined;
+    }
+    const interval = setInterval(() => setMeter(audioStudioEngine.getMeter()), 100);
+
+    const draw = () => {
+      const data = audioStudioEngine.getSpectrumData();
+      const bars = [];
+      for (let i = 0; i < 8; i += 1) {
+        // Log-spaced so the low end is not crushed into the first bar.
+        const bin = Math.floor(Math.pow(data.length / 8, i / 8)) - 1;
+        bars.push(data[Math.max(0, bin)] || 0);
+      }
+      setSpectrum(bars);
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    rafRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      clearInterval(interval);
+      cancelAnimationFrame(rafRef.current);
+    };
   }, [isPlaying]);
 
   const formatLEDTime = (sec) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    const ms = Math.floor((sec % 1) * 1000);
+    const safe = Number.isFinite(sec) ? Math.max(0, sec) : 0;
+    const m = Math.floor(safe / 60);
+    const s = Math.floor(safe % 60);
+    const ms = Math.floor((safe % 1) * 1000);
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}.${ms < 100 ? (ms < 10 ? '00' : '0') : ''}${ms}`;
   };
+
+  const peakLabel = Number.isFinite(meter.peakDb) ? `${meter.peakDb.toFixed(1)}` : '—';
+  const lufsLabel = meter.momentaryLufs === null ? '—' : meter.momentaryLufs.toFixed(1);
 
   return (
     <div className={cn(
       "rounded-2xl border p-3 flex flex-wrap items-center justify-between gap-4 transition-colors",
       isDark ? "bg-[#060B24] border-white/10" : "bg-white border-gray-200 shadow-sm"
     )}>
-      {/* Left: Digital LED Time Display */}
       <div className={cn(
         "px-4 py-2 rounded-xl border flex items-center gap-2 font-mono select-none",
         isDark ? "bg-[#03071B] border-white/10" : "bg-slate-950 border-gray-300 text-white"
@@ -56,9 +83,7 @@ export default function TransportBar({
         </span>
       </div>
 
-      {/* Center: Playback Transport Buttons */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Step Back */}
         <button
           onClick={() => onSeek?.(0)}
           className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
@@ -67,17 +92,16 @@ export default function TransportBar({
           <SkipBack className="w-4 h-4" />
         </button>
 
-        {/* Play / Pause Circular Gradient Button */}
         <button
           onClick={onPlayPause}
-          className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-[0_0_25px_rgba(139,30,243,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          disabled={!canPlay}
+          className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-[0_0_25px_rgba(139,30,243,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100"
           style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
-          title={isPlaying ? "Pause" : "Play"}
+          title={!canPlay ? 'Load audio to enable playback' : isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
         </button>
 
-        {/* Stop Button */}
         <button
           onClick={onStop}
           className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
@@ -86,9 +110,8 @@ export default function TransportBar({
           <Square className="w-4 h-4" />
         </button>
 
-        {/* Loop Toggle */}
         <button
-          onClick={() => setIsLooping(!isLooping)}
+          onClick={() => setIsLooping?.(!isLooping)}
           className={cn(
             "p-2 rounded-xl transition cursor-pointer",
             isLooping
@@ -100,9 +123,8 @@ export default function TransportBar({
           <Repeat className="w-4 h-4" />
         </button>
 
-        {/* Metronome Toggle */}
         <button
-          onClick={() => setIsMetronome(!isMetronome)}
+          onClick={() => setIsMetronome?.(!isMetronome)}
           className={cn(
             "p-2 rounded-xl transition cursor-pointer",
             isMetronome
@@ -115,16 +137,22 @@ export default function TransportBar({
         </button>
       </div>
 
-      {/* Right: Tempo, Time Sig, Spectrum, LUFS */}
       <div className="flex items-center gap-3 sm:gap-4 select-none">
-        {/* BPM & Signature */}
         <div className="flex items-center gap-2 text-xs font-mono">
           <div className={cn(
             "px-2.5 py-1.5 rounded-lg border flex items-center gap-1",
             isDark ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"
           )}>
             <span className="text-gray-400 font-sans font-medium">BPM:</span>
-            <span className="font-bold text-purple-400">{tempo.toFixed(2)}</span>
+            <input
+              type="number"
+              min={30}
+              max={300}
+              value={tempo}
+              onChange={(e) => setTempo?.(Math.max(30, Math.min(300, Number(e.target.value) || 120)))}
+              className="w-14 bg-transparent font-bold text-purple-400 outline-none"
+              aria-label="Tempo in beats per minute"
+            />
           </div>
 
           <div className={cn(
@@ -135,27 +163,24 @@ export default function TransportBar({
           </div>
         </div>
 
-        {/* Mini Spectrum Bounce Bars */}
         <div className="flex items-end gap-0.5 h-6 px-2 py-1 rounded bg-black/40 border border-white/10">
-          {Array.from({ length: 8 }).map((_, i) => {
-            const h = isPlaying ? Math.max(3, (Math.sin(i * 1.2 + Date.now() / 200) * 0.5 + 0.5) * 18) : 4;
-            return (
-              <div
-                key={i}
-                className="w-1 rounded-full bg-gradient-to-t from-[#055BFB] to-[#C82BFF] transition-all duration-75"
-                style={{ height: `${h}px` }}
-              />
-            );
-          })}
+          {(spectrum.length ? spectrum : new Array(8).fill(0)).map((value, i) => (
+            <div
+              key={i}
+              className="w-1 rounded-full bg-gradient-to-t from-[#055BFB] to-[#C82BFF] transition-all duration-75"
+              style={{ height: `${Math.max(2, (value / 255) * 18)}px` }}
+            />
+          ))}
         </div>
 
-        {/* Master LUFS Meter */}
         <div className={cn(
           "px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5",
           isDark ? "bg-white/5 border-white/10 text-emerald-400" : "bg-gray-100 border-gray-200 text-emerald-600"
         )}>
           <span className="text-[10px] text-gray-400 font-sans">LUFS:</span>
-          <span>{lufs.toFixed(1)}</span>
+          <span>{lufsLabel}</span>
+          <span className="text-[10px] text-gray-400 font-sans">Peak:</span>
+          <span>{peakLabel}</span>
         </div>
       </div>
     </div>

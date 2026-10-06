@@ -1,5 +1,4 @@
-// This file reflects: ultra pro max production, all critical fixes applied
-// src/screens/OTPVerification.jsx – ARVDOUL SUPREMACY • BILLION‑USER SCALE
+// src/screens/OtpVerification.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -9,7 +8,6 @@ import { useAuth } from "@context/AuthContext.jsx";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { Shield, Smartphone, ArrowLeft, AlertTriangle, Send, CheckCircle2 } from "lucide-react";
 
-// -------------------- CONSTANTS --------------------
 const DIGIT_COUNT = 6;
 const INITIAL_COUNTDOWN = 120;
 const AUTO_SUBMIT_DELAY = 200;
@@ -17,7 +15,6 @@ const RESEND_COOLDOWN = 60;
 const MAX_FAILED_ATTEMPTS_BEFORE_RESET = 3;
 const SHAKE_DURATION = 500;
 
-// -------------------- HUMAN‑FRIENDLY ERRORS --------------------
 const ERROR_MAP = {
   "auth/invalid-verification-code": {
     title: "That code doesn't look right",
@@ -33,7 +30,6 @@ const ERROR_MAP = {
   default: { title: "Verification failed", subtitle: "Please try again or request a new code.", severity: "soft" },
 };
 
-// -------------------- DETECT LOW‑END DEVICE --------------------
 const isLowPerformance = () => {
   if (typeof navigator === "undefined") return false;
   const cores = navigator.hardwareConcurrency;
@@ -41,7 +37,6 @@ const isLowPerformance = () => {
   return (cores && cores <= 4) || (memory && memory < 4);
 };
 
-// -------------------- SINGLE REDUCED MOTION HOOK --------------------
 const useReducedMotion = () => {
   const [prefersReduced, setPrefersReduced] = useState(false);
   useEffect(() => {
@@ -64,7 +59,6 @@ const useReducedMotion = () => {
   return prefersReduced;
 };
 
-// -------------------- HAPTICS (safe) --------------------
 const triggerHaptic = (pattern = "light") => {
   if (typeof navigator !== "undefined" && navigator.vibrate) {
     const patterns = { light: [10], medium: [15, 30, 15], heavy: [20, 50, 20, 50, 20], success: [30, 50, 30, 50, 60], error: [30, 100, 30], tick: [8] };
@@ -72,7 +66,6 @@ const triggerHaptic = (pattern = "light") => {
   }
 };
 
-// ==================== GLASS OTP DIGIT ====================
 const GlassOTPDigit = forwardRef(
   ({ digit, index, disabled, hasError, isVerifying, onChange, onKeyDown, onPaste, autoFocus, reducedMotion, ariaLabel }, ref) => {
     const { theme } = useTheme();
@@ -145,7 +138,6 @@ const GlassOTPDigit = forwardRef(
 );
 GlassOTPDigit.displayName = "GlassOTPDigit";
 
-// -------------------- ANIMATED SHIELD (low‑performance aware) --------------------
 const AnimatedShield = React.memo(({ attempts, isVerifying, isDark, reducedMotion }) => {
   const color = attempts >= 3 ? "#EF4444" : attempts >= 1 ? "#F59E0B" : "#10B981";
   const glow = attempts >= 3 ? "rgba(239,68,68,0.3)" : attempts >= 1 ? "rgba(245,158,11,0.3)" : "rgba(16,185,129,0.3)";
@@ -175,7 +167,6 @@ const AnimatedShield = React.memo(({ attempts, isVerifying, isDark, reducedMotio
   );
 });
 
-// -------------------- CIRCULAR PROGRESS RING --------------------
 const CircularProgressRing = React.memo(({ progress, size = 52, strokeWidth = 4, isDark, children, reducedMotion }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
@@ -210,7 +201,6 @@ const CircularProgressRing = React.memo(({ progress, size = 52, strokeWidth = 4,
   );
 });
 
-// -------------------- SUCCESS CHECKMARK --------------------
 const SuccessCheckmark = React.memo(({ reducedMotion }) => (
   <motion.div className="flex flex-col items-center gap-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
     <motion.div
@@ -241,7 +231,6 @@ const SuccessCheckmark = React.memo(({ reducedMotion }) => (
   </motion.div>
 ));
 
-// ==================== MAIN COMPONENT ====================
 export default function OTPVerification() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -250,7 +239,6 @@ export default function OTPVerification() {
   const reducedMotion = useReducedMotion();
   const lowPerf = isLowPerformance();
 
-  // ---- STATE ----
   const [otp, setOtp] = useState(Array(DIGIT_COUNT).fill(""));
   const [loading, setLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -269,7 +257,6 @@ export default function OTPVerification() {
   const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // ---- REFS ----
   const inputRefs = useRef([]);
   const countdownInterval = useRef(null);
   const resendCooldownInterval = useRef(null);
@@ -279,7 +266,6 @@ export default function OTPVerification() {
   const lastAttemptTime = useRef(0);
   const isMounted = useRef(true);
 
-  // ---- THEME ----
   const resolvedTheme =
     theme === "system"
       ? typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -288,7 +274,6 @@ export default function OTPVerification() {
       : theme;
   const isDark = resolvedTheme === "dark";
 
-  // ---- OTP DRAFT PERSISTENCE ----
   useEffect(() => {
     const draft = sessionStorage.getItem("otp_draft");
     if (draft && draft.length === DIGIT_COUNT && !otp.some(d => d)) {
@@ -303,7 +288,6 @@ export default function OTPVerification() {
     sessionStorage.setItem("otp_draft", otp.join(""));
   }, [otp]);
 
-  // ---- ONLINE/OFFLINE ----
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -315,7 +299,6 @@ export default function OTPVerification() {
     };
   }, []);
 
-  // ---- LOAD VERIFICATION DATA ----
   useEffect(() => {
     if (verificationLoaded.current) return;
 
@@ -382,7 +365,6 @@ export default function OTPVerification() {
     return () => { isMounted.current = false; };
   }, [location, navigate]);
 
-  // ---- COUNTDOWN ----
   useEffect(() => {
     if (countdown > 0 && !canResend) {
       countdownInterval.current = setInterval(() => {
@@ -399,7 +381,6 @@ export default function OTPVerification() {
     return () => clearInterval(countdownInterval.current);
   }, [countdown, canResend]);
 
-  // ---- AUTO‑SUBMIT WITH LOCK ----
   useEffect(() => {
     const code = otp.join("");
     if (code.length === DIGIT_COUNT && !loading && !isVerifying && dataLoaded && !showSuccess && !submitLock.current) {
@@ -420,7 +401,6 @@ export default function OTPVerification() {
     };
   }, [otp, loading, isVerifying, dataLoaded, showSuccess]);
 
-  // ---- CLEANUP ----
   useEffect(() => {
     return () => {
       clearInterval(countdownInterval.current);
@@ -429,14 +409,12 @@ export default function OTPVerification() {
     };
   }, []);
 
-  // ---- FORMAT TIME ----
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // ---- OTP HANDLERS ----
   const handleOtpChange = useCallback(
     (index, value) => {
       if (!/^\d*$/.test(value)) return;
@@ -493,7 +471,6 @@ export default function OTPVerification() {
     [otp]
   );
 
-  // ---- VERIFICATION (IMMEDIATE NAVIGATION) ----
   const handleVerify = useCallback(
     async (codeOverride) => {
       const code = codeOverride || otp.join("");
@@ -578,7 +555,6 @@ export default function OTPVerification() {
     [dataLoaded, verificationId, otp, loading, isVerifying, attempts, auth, navigate, step1Data, isSignup]
   );
 
-  // ---- RESEND (UPDATES verificationId) ----
   const handleResend = useCallback(async () => {
     if (!canResend || resendCooldown) return;
     setResendCooldown(true);

@@ -1,4 +1,5 @@
-// src/components/Videos/VideoEditor.jsx - ARVDOUL VIDEO EDITOR
+// src/components/Videos/VideoEditor.jsx
+//
 // Video editing capabilities with trim, filters, text, music
 
 import React, { useState, useRef, useCallback, memo } from 'react';

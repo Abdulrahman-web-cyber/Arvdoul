@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/AboutScreen.jsx - ARVDOUL About Screen
- * 
  * Displays comprehensive profile details, citizenship standing, level perks,
  * social links, bio, and identity verification.
  * 
@@ -18,6 +16,12 @@ import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Lin
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getLevelInfo, getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
+import {
+  pickHandle,
+  deriveHandle,
+  pickDisplayName,
+  resolveLevelValue,
+} from '../../services/profileReadModel.js';
 
 /**
  * AboutScreen Component
@@ -43,17 +47,18 @@ export default function AboutScreen() {
   }, [targetId, currentUserId, storeProfile, loadProfile]);
 
   const effectiveProfile = useMemo(() => {
-    const base = (isActualOwner ? (storeProfile || storeUser || authUser || getStoredUser()) : storeProfile) || {};
+    const base = (isActualOwner ? (storeProfile || authUser || storeUser || getStoredUser()) : storeProfile) || {};
+    const fallbackHandle = isActualOwner ? deriveHandle(authUser?.email) : null;
     return {
       ...base,
       id: base.id || base.uid || targetId,
       uid: base.uid || base.id || targetId,
-      displayName: base.displayName || base.name || 'Arvdoul Citizen',
-      username: base.username || (isActualOwner ? authUser?.email?.split('@')[0] : 'citizen'),
+      displayName: pickDisplayName([base.displayName, base.name], { fallback: 'Arvdoul Citizen' }),
+      username: pickHandle([base.username]) || fallbackHandle || 'citizen',
       bio: base.bio || '',
       location: base.location || '',
       website: base.website || '',
-      level: Number(base.level || 1),
+      level: resolveLevelValue(base.level),
     };
   }, [storeProfile, storeUser, authUser, targetId, isActualOwner]);
 

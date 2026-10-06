@@ -1,11 +1,9 @@
-// src/screens/Admin/AdminModerationQueueScreen.jsx - ARVDOUL MODERATION QUEUE
-// ✅ Review reported content
-// ✅ Take moderation actions
-// ✅ View moderation history
+// src/screens/Admin/AdminModerationQueueScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -23,28 +21,16 @@ const AdminModerationQueueScreen = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  // Load real reports (comment_reports + user_reports), admin-gated.
+  // One server-side read covers every report collection (post and story
+  // reports included), so the queue cannot drift from the report routing table.
   useEffect(() => {
     const load = async () => {
       try {
-        const { collection, query, orderBy, limit, getDocs, doc, getDoc } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-        const adminSnap = await getDoc(doc(firestore, 'admins', user?.uid || ''));
-        if (!adminSnap.exists()) { setLoading(false); return; }
-
-        const [commentReports, userReports, videoReports] = await Promise.all([
-          getDocs(query(collection(firestore, 'comment_reports'), orderBy('createdAt', 'desc'), limit(100))),
-          getDocs(query(collection(firestore, 'user_reports'), orderBy('createdAt', 'desc'), limit(100))),
-          getDocs(query(collection(firestore, 'video_reports'), orderBy('createdAt', 'desc'), limit(100))),
-        ]);
-        const mapped = [
-          ...commentReports.docs.map(d => ({ id: d.id, type: 'comment', status: d.data().status || 'pending', ...d.data() })),
-          ...userReports.docs.map(d => ({ id: d.id, type: 'user', status: d.data().status || 'pending', ...d.data() })),
-          ...videoReports.docs.map(d => ({ id: d.id, type: 'video', status: d.data().status || 'pending', ...d.data() })),
-        ];
-        setReports(mapped.sort((a, b) => new Date(b.createdAt?.toDate?.() || 0) - new Date(a.createdAt?.toDate?.() || 0)));
-      } catch (err) {
+        // Cheap gate first so a non-admin never fires an admin callable.
+        if (!(await fetchAdminStatus())) { setLoading(false); return; }
+        const res = await callFunction(FUNCTIONS.ADMIN_LIST_MODERATION_REPORTS, { limit: 100 });
+        setReports(Array.isArray(res?.reports) ? res.reports : []);
+      } catch {
         toast.error('Could not load moderation queue.');
       } finally {
         setLoading(false);
@@ -58,27 +44,22 @@ const AdminModerationQueueScreen = () => {
     return r.status === filter;
   });
 
-  // Real moderation actions: update status + optionally remove content.
+  // Moderation decisions are server-authoritative: the callable re-checks
+  // admins/{uid}, updates the report and writes an audit entry. Clients cannot
+  // write report status directly (rules deny it), so this is the only path.
   const handleReportAction = async (reportId, action) => {
+    const report = reports.find(r => r.id === reportId);
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-      const report = reports.find(r => r.id === reportId);
-      const collectionName =
-        report?.type === 'user' ? 'user_reports'
-        : report?.type === 'video' ? 'video_reports'
-        : 'comment_reports';
-      const ref = doc(firestore, collectionName, reportId);
-      await updateDoc(ref, {
-        status: action === 'resolve' ? 'resolved' : action === 'dismiss' ? 'dismissed' : 'pending',
-        resolvedAt: serverTimestamp(),
-        resolvedBy: user?.uid || null,
+      const decision = { resolve: 'resolved', dismiss: 'dismissed', warn: 'warned', remove: 'removed' }[action] || 'escalated';
+      await callFunction(FUNCTIONS.RESOLVE_USER_REPORT, {
+        reportId,
+        action: decision,
+        reportType: report?.type || 'user',
       });
-      setReports(prev => prev.map(r => (r.id === reportId ? { ...r, status: action === 'resolve' ? 'resolved' : 'dismissed' } : r)));
+      setReports(prev => prev.map(r => (r.id === reportId ? { ...r, status: decision } : r)));
       toast.success(`Report ${action}ed successfully`);
       setShowDetailModal(false);
-    } catch (error) {
+    } catch {
       toast.error(`Failed to ${action} report`);
     }
   };

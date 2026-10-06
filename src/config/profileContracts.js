@@ -1,4 +1,5 @@
-// src/config/profileContracts.js - ARVDOUL PROFILE SYSTEM DOMAIN CONTRACTS
+// src/config/profileContracts.js
+//
 // Authoritative definitions for profile identity, visibility scopes, validation rules,
 // and privacy models adhering to Blueprint Specification Version 1.0.
 
@@ -24,6 +25,45 @@ export const VISIBILITY_SCOPES = {
   CONNECTIONS: 'CONNECTIONS', // Mutual follows / friends
   ONLY_ME: 'ONLY_ME'
 };
+
+/**
+ * Private profile fields.
+ *
+ * `users/{uid}` is readable by every signed-in user (it is the public profile
+ * projection consumed by search, feeds and follower lists). Firestore rules
+ * cannot field-mask a readable document, so any field that must not be public
+ * lives in `users_private/{uid}` instead, which only the owner and admins may
+ * read. These fields must never be written to the public document.
+ *
+ * Mirrors `touchesPrivateProfileFields()` in firestore.rules; a parity test in
+ * firestoreRulesCoverage.test.js keeps the two lists in step.
+ */
+export const PRIVATE_PROFILE_FIELDS = [
+  'email',
+  'phoneNumber',
+  'emailVerified',
+  'phoneVerified',
+  'stripeCustomerId',
+  'stripeAccountId',
+  'stripeSubscriptionId',
+];
+
+export const PRIVATE_PROFILE_COLLECTION = 'users_private';
+
+/**
+ * Split a raw profile payload into the public document fields and the private
+ * document fields. Single source of truth for the users/users_private split so
+ * a new private field only has to be added to PRIVATE_PROFILE_FIELDS.
+ */
+export function splitProfileFields(raw = {}) {
+  const publicFields = {};
+  const privateFields = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (PRIVATE_PROFILE_FIELDS.includes(key)) privateFields[key] = value;
+    else publicFields[key] = value;
+  }
+  return { publicFields, privateFields };
+}
 
 /**
  * Default Privacy Configuration for new and existing profiles
@@ -128,6 +168,18 @@ export const PROFILE_CONSTRAINTS = {
     TITLE_MAX_LENGTH: 50,
     URL_MAX_LENGTH: 500
   }
+};
+
+/**
+ * Displayed eligibility checklist for a creator verification badge. The badge
+ * decision itself is server-authoritative (`applyVerificationDecision`); these
+ * thresholds only drive the reviewer's standing checklist in the admin UI.
+ */
+export const CREATOR_VERIFICATION_REQUIREMENTS = {
+  MIN_FOLLOWERS: 1000,
+  MAX_STRIKES: 0,
+  REQUIRE_EMAIL_VERIFIED: true,
+  REQUIRE_PHONE_VERIFIED: true
 };
 
 /**
@@ -422,7 +474,12 @@ export function validateProfileUpdate(rawUpdates = {}) {
 export function canViewProfileSection(section, profilePrivacy = {}, viewerRelation = 'PUBLIC') {
   if (viewerRelation === 'OWNER') return true;
 
-  const scope = profilePrivacy[section] || DEFAULT_PROFILE_PRIVACY[section] || VISIBILITY_SCOPES.EVERYONE;
+  // Fail CLOSED: an unknown section, an unrecognized scope, or a missing
+  // default must deny. The previous fallbacks (`|| EVERYONE` and
+  // `default: return true`) turned a typo, a migration artifact, or an
+  // attacker-supplied privacy map into public access.
+  const scope = profilePrivacy[section] || DEFAULT_PROFILE_PRIVACY[section];
+  if (!scope) return false;
 
   switch (scope) {
     case VISIBILITY_SCOPES.EVERYONE:
@@ -434,7 +491,7 @@ export function canViewProfileSection(section, profilePrivacy = {}, viewerRelati
     case VISIBILITY_SCOPES.ONLY_ME:
       return false;
     default:
-      return true;
+      return false;
   }
 }
 
@@ -443,7 +500,11 @@ export default {
   VISIBILITY_SCOPES,
   DEFAULT_PROFILE_PRIVACY,
   SERVER_AUTHORITATIVE_FIELDS,
+  PRIVATE_PROFILE_FIELDS,
+  PRIVATE_PROFILE_COLLECTION,
+  splitProfileFields,
   PROFILE_CONSTRAINTS,
+  CREATOR_VERIFICATION_REQUIREMENTS,
   isValidWebUrl,
   sanitizeProfileUrl,
   validateProfileUpdate,

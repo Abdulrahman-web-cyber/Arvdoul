@@ -1,4 +1,5 @@
 // src/routes/AppRoutes.jsx
+
 import React, { lazy, Suspense, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
@@ -7,7 +8,6 @@ import MainLayout from "../layouts/MainLayout.jsx";
 import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import SplashScreen from "../screens/SplashScreen.jsx";
 
-// ==================== LAZY LOAD COMPONENTS ====================
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
 const BadgeScreen = lazy(() => import("../screens/BadgeScreen.jsx"));
@@ -124,6 +124,7 @@ const SoundsScreen = lazy(() => import("../screens/Sounds/SoundsScreen.jsx"));
 const MarketplaceScreen = lazy(() => import("../screens/Marketplace/MarketplaceScreen.jsx"));
 const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
 const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
+const HelpCenterScreen = lazy(() => import("../screens/Help/HelpCenterScreen.jsx"));
 
 import PageLoader from "../components/UI/PageLoader.jsx";
 import {
@@ -145,7 +146,6 @@ const RouteLoadingFallback = ({ variant = "default" }) => (
 );
 const RouteFallback = RouteLoadingFallback;
 
-// ==================== ROUTE WRAPPERS ====================
 const PublicRoute = ({ children }) => {
   return <AppStateGuard>{children}</AppStateGuard>;
 };
@@ -158,7 +158,6 @@ const ProtectedRoute = ({ children }) => {
   );
 };
 
-// ==================== MESSAGING LAYOUT WRAPPER ====================
 // Special layout for messaging that handles both list and chat views
 const MessagingLayout = ({ children }) => {
   return (
@@ -168,7 +167,6 @@ const MessagingLayout = ({ children }) => {
   );
 };
 
-// ==================== ADMIN ROUTE (server-verified gate) ====================
 // Any signed-in user reaching /admin has their own grant checked by the
 // getAdminStatus callable. The client deliberately has no read access to the
 // admins collection, so the roster cannot be enumerated.
@@ -199,7 +197,6 @@ const AdminRoute = ({ children }) => {
   return <AppStateGuard><MainLayout>{children}</MainLayout></AppStateGuard>;
 };
 
-// ==================== MAIN APP ROUTES ====================
 export default function AppRoutes() {
   return (
     <Routes>
@@ -1072,6 +1069,13 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/sync-conflicts" element={<Navigate to="/conflicts" replace />} />
+
+      {/* Help Center & Support */}
+      <Route path="/help" element={
+        <Suspense fallback={<RouteFallback />}>
+          <HelpCenterScreen />
+        </Suspense>
+      } />
 
       {/* Creator Payouts */}
       <Route path="/creator-payout" element={

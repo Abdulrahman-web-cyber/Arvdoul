@@ -1,8 +1,10 @@
-// src/components/Videos/VideoCard.jsx - ARVDOUL ULTIMATE VIDEO CARD
+// src/components/Videos/VideoCard.jsx
+//
 // Immersive full-screen vertical player with interactive action rail, creator overlay, and playback controls
 
 import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Play,
   Pause,
@@ -230,9 +232,10 @@ const VideoCard = memo(({
   }, []);
 
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [followBusy, setFollowBusy] = useState(false);
 
-  // REAL follow/unfollow via userService (Firestore follows collection +
+  // follow/unfollow via userService (Firestore follows collection +
   // counters). Optimistic toggle with rollback; never a local-only fake.
   const handleFollowClick = async (e) => {
     e.stopPropagation();
@@ -254,12 +257,13 @@ const VideoCard = memo(({
     try {
       const { getUserService } = await import('../../services/userService.js');
       const svc = getUserService();
+      const handle = video?.creator?.username ? `@${video.creator.username}` : 'this creator';
       if (prev) {
         await svc.unfollowUser(user.uid, targetId);
-        toast.success(`Unfollowed @${video?.creator?.username || 'creator'}`);
+        toast.success(`Unfollowed ${handle}`);
       } else {
         await svc.followUser(user.uid, targetId);
-        toast.success(`Following @${video?.creator?.username || 'creator'}! 🎉`);
+        toast.success(`Following ${handle}! 🎉`);
       }
       onFollow?.(video?.creator);
     } catch (err) {
@@ -373,36 +377,32 @@ const VideoCard = memo(({
         )}
       </AnimatePresence>
 
-      {/* Floating Mutual Friends Chip (Image 2) */}
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          toast.info('Viewing 12 mutual friends on ARVDOUL');
-        }}
-        className="absolute top-16 sm:top-18 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 shadow-lg hover:bg-black/60 transition-all group"
-      >
-        <div className="flex -space-x-1.5 overflow-hidden">
-          <img
-            src={video?.mutualFriends?.[0]?.avatar || '/assets/default-profile.png'}
-            alt="friend 1"
-            className="w-5 h-5 rounded-full ring-1.5 ring-purple-500 object-cover"
-          />
-          <img
-            src={video?.mutualFriends?.[1]?.avatar || '/assets/default-profile.png'}
-            alt="friend 2"
-            className="w-5 h-5 rounded-full ring-1.5 ring-pink-500 object-cover"
-          />
-          <img
-            src={video?.mutualFriends?.[2]?.avatar || '/assets/default-profile.png'}
-            alt="friend 3"
-            className="w-5 h-5 rounded-full ring-1.5 ring-cyan-400 object-cover"
-          />
+      {/* Floating Mutual Friends Chip (Image 2) — real data only */}
+      {video?.mutualFriendsCount > 0 && Array.isArray(video?.mutualFriends) && video.mutualFriends.length > 0 && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            const targetId = video?.userId || video?.authorId || video?.creator?.id;
+            if (targetId) navigate(`/profile/${targetId}/friends`);
+          }}
+          className="absolute top-16 sm:top-18 left-3 sm:left-5 z-20 pointer-events-auto cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-xl border border-white/20 shadow-lg hover:bg-black/60 transition-all group"
+        >
+          <div className="flex -space-x-1.5 overflow-hidden">
+            {video.mutualFriends.slice(0, 3).map((friend, i) => (
+              <img
+                key={friend?.id || friend?.uid || i}
+                src={friend?.avatar || friend?.photoURL || '/assets/default-profile.png'}
+                alt={friend?.name || friend?.displayName || 'Mutual friend'}
+                className="w-5 h-5 rounded-full ring-1.5 ring-purple-500 object-cover"
+              />
+            ))}
+          </div>
+          <span className="text-white text-xs font-bold tracking-tight">
+            {video.mutualFriendsCount} mutual friends
+          </span>
+          <ChevronRight className="w-3.5 h-3.5 text-white/70 group-hover:translate-x-0.5 transition-transform" />
         </div>
-        <span className="text-white text-xs font-bold tracking-tight">
-          {video?.mutualFriendsCount || 12} mutual friends
-        </span>
-        <ChevronRight className="w-3.5 h-3.5 text-white/70 group-hover:translate-x-0.5 transition-transform" />
-      </div>
+      )}
 
       {/* Right Floating Action Rail (Image 2) */}
       <aside
@@ -415,13 +415,14 @@ const VideoCard = memo(({
             whileTap={{ scale: 0.92 }}
             onClick={(e) => {
               e.stopPropagation();
-              toast.info(`Creator Profile: @${video?.creator?.username || video?.creator?.id || 'creator'}`);
+              const targetId = video?.userId || video?.authorId || video?.creator?.id;
+              if (targetId) navigate(`/profile/${targetId}`);
             }}
             className="w-13 h-13 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-cyan-400 shadow-xl shadow-purple-500/30 ring-2 ring-purple-400/80"
           >
             <img
-              src={video?.creator?.avatar || '/assets/default-profile.png'}
-              alt={video?.creator?.name || 'Creator'}
+              src={video?.creator?.avatar || video?.creator?.photoURL || '/assets/default-profile.png'}
+              alt={video?.creator?.name || video?.creator?.displayName || 'Video creator'}
               className="w-full h-full rounded-full object-cover"
             />
           </motion.button>
@@ -465,7 +466,7 @@ const VideoCard = memo(({
             />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.likesFormatted || '128K'}
+            {formatViewCount(video?.likes || 0)}
           </span>
         </div>
 
@@ -483,7 +484,7 @@ const VideoCard = memo(({
             <MessageCircle className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.commentsCount ? formatViewCount(video.commentsCount) : '2,345'}
+            {formatViewCount(video?.commentsCount || 0)}
           </span>
         </div>
 
@@ -501,7 +502,7 @@ const VideoCard = memo(({
             <Share2 className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.shares ? formatViewCount(video.shares) : '12.6K'}
+            {formatViewCount(video?.shares || 0)}
           </span>
         </div>
 
@@ -527,7 +528,7 @@ const VideoCard = memo(({
             />
           </motion.button>
           <span className="text-white text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.saves ? formatViewCount(video.saves) : '8,942'}
+            {formatViewCount(video?.saves || 0)}
           </span>
         </div>
 
@@ -546,7 +547,7 @@ const VideoCard = memo(({
             <Gift className="w-6 h-6 text-white" />
           </motion.button>
           <span className="text-purple-300 text-xs font-bold mt-1 drop-shadow-md tracking-tight">
-            {video?.gifts ? formatViewCount(video.gifts) : '1,230'}
+            {formatViewCount(video?.gifts || 0)}
           </span>
         </div>
 
@@ -702,8 +703,8 @@ const VideoCard = memo(({
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative">
               <img
-                src={video?.creator?.avatar || '/assets/default-profile.png'}
-                alt={video?.creator?.name || 'Abdulrahman'}
+                src={video?.creator?.avatar || video?.creator?.photoURL || '/assets/default-profile.png'}
+                alt={video?.creator?.name || video?.creator?.displayName || 'Video creator'}
                 className="w-10 h-10 rounded-full ring-2 ring-purple-500/80 object-cover"
               />
               <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-cyan-400 flex items-center justify-center">
@@ -714,12 +715,12 @@ const VideoCard = memo(({
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1">
                 <span className="text-white font-extrabold text-sm sm:text-base tracking-tight truncate">
-                  {video?.creator?.name || 'Creator'}
+                  {video?.creator?.name || video?.creator?.displayName || 'Video creator'}
                 </span>
                 <BadgeCheck className="w-4 h-4 text-cyan-400 fill-cyan-400/20 shrink-0" />
               </div>
               <span className="text-purple-300/80 text-xs font-semibold tracking-tight truncate">
-                @{video?.creator?.username || video?.creator?.id || 'creator'}
+                {video?.creator?.username ? `@${video.creator.username}` : ''}
               </span>
             </div>
           </div>
@@ -740,74 +741,79 @@ const VideoCard = memo(({
 
         {/* Video Caption & Hashtags */}
         <div className="text-white/95 text-xs sm:text-sm font-medium leading-relaxed">
-          <p>
-            {isCaptionExpanded
-              ? (video?.description || 'Chasing dreams and building digital experiences. ✨')
-              : ((video?.description || 'Chasing dreams and building digital experiences. ✨').slice(0, 75) +
-                 ((video?.description || '').length > 75 ? '...' : ''))}
-            {(video?.description || '').length > 75 && (
-              <button
-                onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
-                className="text-purple-300 font-bold ml-1 text-xs hover:underline"
-              >
-                {isCaptionExpanded ? 'less' : 'more'}
-              </button>
-            )}
-          </p>
+          {video?.description ? (
+            <p>
+              {isCaptionExpanded
+                ? video.description
+                : (video.description.slice(0, 75) + (video.description.length > 75 ? '...' : ''))}
+              {video.description.length > 75 && (
+                <button
+                  onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
+                  className="text-purple-300 font-bold ml-1 text-xs hover:underline"
+                >
+                  {isCaptionExpanded ? 'less' : 'more'}
+                </button>
+              )}
+            </p>
+          ) : null}
 
-          {/* Hashtags */}
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {(video?.hashtags?.length > 0
-              ? video.hashtags
-              : ['#arvdoul', '#dreambig', '#motivation']
-            ).map((tag) => (
-              <span
-                key={tag}
-                onClick={() => toast.info(`Viewing ${tag}`)}
-                className="text-purple-400 hover:text-purple-300 font-bold text-xs cursor-pointer transition-colors"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          {/* Hashtags — only the tags actually attached to this video */}
+          {video?.hashtags?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {video.hashtags.map((tag) => {
+                const clean = String(tag).startsWith('#') ? String(tag) : `#${tag}`;
+                return (
+                  <span
+                    key={clean}
+                    onClick={() => navigate(`/search?q=${encodeURIComponent(clean.replace(/^#/, ''))}`)}
+                    className="text-purple-400 hover:text-purple-300 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    {clean}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Audio Track with Animated Waveform Box (Image 2) */}
-        <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
-          <div
-            onClick={() => toast.info(`Audio: ${video?.audio?.title || 'Lost in the City – ARVDOUL Beats'}`)}
-            className="flex items-center gap-2 cursor-pointer group min-w-0"
-          >
-            <Music className="w-3.5 h-3.5 text-purple-400 group-hover:rotate-12 transition-transform" />
-            <span className="text-white/90 text-xs font-semibold truncate max-w-[200px] sm:max-w-[240px]">
-              {video?.audio?.title || 'Lost in the City – ARVDOUL Beats'}
-            </span>
-          </div>
+        {video?.audio?.title ? (
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+            <div
+              onClick={() => navigate(`/search?q=${encodeURIComponent(video.audio.title)}`)}
+              className="flex items-center gap-2 cursor-pointer group min-w-0"
+            >
+              <Music className="w-3.5 h-3.5 text-purple-400 group-hover:rotate-12 transition-transform" />
+              <span className="text-white/90 text-xs font-semibold truncate max-w-[200px] sm:max-w-[240px]">
+                {video.audio.title}
+              </span>
+            </div>
 
-          {/* Equalizer Visualizer Box */}
-          <div className="flex items-end gap-0.5 px-2 py-1 rounded-lg bg-purple-950/50 border border-purple-500/30 h-5 shrink-0">
-            <motion.div
-              animate={{ height: isPlaying ? ['25%', '100%', '40%'] : '30%' }}
-              transition={{ duration: 0.5, repeat: Infinity, ease: 'easeInOut' }}
-              className="w-1 bg-cyan-400 rounded-full"
-            />
-            <motion.div
-              animate={{ height: isPlaying ? ['85%', '20%', '95%'] : '50%' }}
-              transition={{ duration: 0.45, repeat: Infinity, ease: 'easeInOut', delay: 0.1 }}
-              className="w-1 bg-pink-400 rounded-full"
-            />
-            <motion.div
-              animate={{ height: isPlaying ? ['40%', '90%', '30%'] : '25%' }}
-              transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
-              className="w-1 bg-purple-400 rounded-full"
-            />
-            <motion.div
-              animate={{ height: isPlaying ? ['70%', '30%', '80%'] : '45%' }}
-              transition={{ duration: 0.55, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }}
-              className="w-1 bg-indigo-400 rounded-full"
-            />
+            {/* Equalizer Visualizer Box */}
+            <div className="flex items-end gap-0.5 px-2 py-1 rounded-lg bg-purple-950/50 border border-purple-500/30 h-5 shrink-0">
+              <motion.div
+                animate={{ height: isPlaying ? ['25%', '100%', '40%'] : '30%' }}
+                transition={{ duration: 0.5, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-1 bg-cyan-400 rounded-full"
+              />
+              <motion.div
+                animate={{ height: isPlaying ? ['85%', '20%', '95%'] : '50%' }}
+                transition={{ duration: 0.45, repeat: Infinity, ease: 'easeInOut', delay: 0.1 }}
+                className="w-1 bg-pink-400 rounded-full"
+              />
+              <motion.div
+                animate={{ height: isPlaying ? ['40%', '90%', '30%'] : '25%' }}
+                transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut', delay: 0.2 }}
+                className="w-1 bg-purple-400 rounded-full"
+              />
+              <motion.div
+                animate={{ height: isPlaying ? ['70%', '30%', '80%'] : '45%' }}
+                transition={{ duration: 0.55, repeat: Infinity, ease: 'easeInOut', delay: 0.15 }}
+                className="w-1 bg-indigo-400 rounded-full"
+              />
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       {/* Scrubber / Timeline Bar (Image 2) */}
@@ -816,7 +822,7 @@ const VideoCard = memo(({
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-white/90 text-xs font-mono font-bold shrink-0">
-          {formatDuration(currentTime) || '00:12'}
+          {formatDuration(currentTime)}
         </span>
 
         {/* Gradient Scrubber with Glow Knob */}
@@ -845,7 +851,7 @@ const VideoCard = memo(({
         </div>
 
         <span className="text-white/90 text-xs font-mono font-bold shrink-0">
-          {formatDuration(duration) || '00:34'}
+          {formatDuration(duration)}
         </span>
 
         {/* Volume Mute/Unmute Toggle Button */}

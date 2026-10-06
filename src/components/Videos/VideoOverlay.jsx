@@ -1,4 +1,5 @@
-// src/components/Videos/VideoOverlay.jsx - ARVDOUL VIDEO OVERLAY
+// src/components/Videos/VideoOverlay.jsx
+//
 // Floating glass overlay with playback controls
 
 import React, { memo, useState } from 'react';

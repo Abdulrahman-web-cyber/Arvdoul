@@ -1,4 +1,5 @@
 // src/screens/VideoEditor/components/MultiTrackTimeline.jsx
+
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';

@@ -1,6 +1,4 @@
-// src/store/appStore.js - ENTERPRISE PRO MAX v3 (FIXED PERSISTENCE)
-// ✅ SMART COINS • NOTIFICATIONS • USER PROFILE • PRODUCTION READY
-// 🔧 FIX: coins & transactions no longer persisted – now live‑synced from Firestore
+// src/store/appStore.js
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -186,20 +184,31 @@ setAppState: (updates) => set(updates),
 }),  
 {  
   name: 'arvdoul-app-store',  
-  // FIXED: coins and transactions are now excluded from persistence  
-  // They will be kept in memory and synced from Firestore via userService.  
+  // Identity is NEVER persisted. A persisted `currentUser` survived
+  // sign-out and rehydrated on reload, so on a shared device account A's
+  // profile could render in account B's session before auth resolved.
+  // The live Firebase Auth user (AuthContext) is the only
+  // identity source; this store is only a UI mirror set from it.
   partialize: (state) => ({  
-    currentUser: state.currentUser,  
-    // coins: state.coins,          // removed – now in‑memory only  
-    // transactions: state.transactions.slice(0, 50), // removed  
     subscription: state.subscription,  
     notifications: state.notifications.slice(0, 50),  
     unreadNotifications: state.unreadNotifications,  
     theme: state.theme,  
     language: state.language,  
     soundEnabled: state.soundEnabled,  
-    notificationsEnabled: state.notificationsEnabled  
-  })  
+    notificationsEnabled: state.notificationsEnabled
+  }),
+  // Bumped so pre-existing `arvdoul-app-store` blobs (which contained
+  // `currentUser`) are migrated by dropping the persisted identity rather than
+  // rehydrating it into the store.
+  version: 2,
+  migrate: (persisted) => {
+    if (persisted && typeof persisted === 'object') {
+      const { currentUser, ...rest } = persisted;
+      return rest;
+    }
+    return persisted;
+  }
 }
 
 )

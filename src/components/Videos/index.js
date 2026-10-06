@@ -1,4 +1,5 @@
-// src/components/Videos/index.js - ARVDOUL VIDEO COMPONENTS BARREL
+// src/components/Videos/index.js
+//
 // Export all video-related components
 
 export { default as VideoCard } from './VideoCard';

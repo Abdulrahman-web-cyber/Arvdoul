@@ -1,4 +1,5 @@
-// src/components/UI/PageLoader.jsx - Non-blocking top app loader banner
+// src/components/UI/PageLoader.jsx
+
 import React, { memo } from 'react';
 import { TopAppLoadingBanner } from '../Navigation/RouteProgressBar.jsx';
 

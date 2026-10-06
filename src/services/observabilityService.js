@@ -1,5 +1,5 @@
 /**
- * src/services/observabilityService.js - ARVDOUL ENTERPRISE OBSERVABILITY & MONITORING SUITE (100% PRODUCTION READY)
+ * Distributed tracing, metric collection, alerting and SLO tracking for Arvdoul.
  *
  * Implements:
  * - Distributed Tracing (Correlation ID extraction and span lifecycle tracking)

@@ -1,6 +1,4 @@
 /**
- * src/services/costMonitoringService.js - ARVDOUL REAL-TIME CLOUD COST MONITORING v8.0
- *
  * Implements:
  * 1. Firestore Read/Write operations metering.
  * 2. Real-time budget alert notification dispatch upon threshold crossings.

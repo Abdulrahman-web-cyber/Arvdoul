@@ -1,5 +1,6 @@
 // src/components/Ads/SponsoredPostCard.jsx
-// ARVDOUL REAL SPONSORED AD CARD & REWARDED AD SYSTEM
+//
+// ARVDOUL SPONSORED AD CARD & REWARDED AD SYSTEM
 // Supports light & dark themes, real Firestore impression & click tracking, and Rewarded Ad video modal
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -13,45 +14,27 @@ import { cn } from '../../lib/utils';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMonetizationService } from '../../services/monetizationService';
+import { AD_REWARD_COINS } from '../../shared/levelConfig.cjs';
 
-const VERIFIED_SPONSORS = [
-  {
-    id: 'ad_pro_creator',
-    brandName: 'Arvdoul Pro Studio',
-    brandAvatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
-    title: 'Unlock 4K Video Exports & 32-Track Mixing',
-    description: 'Get exclusive access to Arvdoul Pro Studio plugins, high-res stem export, and 0% creator fee on your music tips for 3 months.',
-    mediaUrl: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1000&auto=format&fit=crop&q=80',
-    ctaText: 'Claim 50% Off',
-    clickUrl: 'https://arvdoul.com/pro',
-    rewardCoins: 5,
-    tag: 'Creator Tools',
-  },
-  {
-    id: 'ad_soundwave',
-    brandName: 'SoundWave Acoustic Gear',
-    brandAvatar: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=150&auto=format&fit=crop&q=80',
-    title: 'Studio Reference Headphones — Zero Latency',
-    description: 'Tuned specifically for mobile creators and beatmakers. Ultra-light titanium drivers with spatial audio support.',
-    mediaUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1000&auto=format&fit=crop&q=80',
-    ctaText: 'Shop Special Edition',
-    clickUrl: 'https://soundwave.example.com',
-    rewardCoins: 5,
-    tag: 'Audio Tech',
-  },
-  {
-    id: 'ad_neoncyber',
-    brandName: 'NeonCyber Visual FX',
-    brandAvatar: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=150&auto=format&fit=crop&q=80',
-    title: 'Over 500+ Cinematic LUTs & 3D Glitch Transitions',
-    description: 'Transform your short-form videos and vibe stories with one click. Compatible with the Arvdoul Video Studio.',
-    mediaUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1000&auto=format&fit=crop&q=80',
-    ctaText: 'Download Pack',
-    clickUrl: 'https://neoncyber.example.com',
-    rewardCoins: 5,
-    tag: 'Video FX',
-  },
-];
+// The server (getAd callable) returns a creative as
+// `{ id, type, media, link, title, cta, advertiserId }`. The helpers below
+// accept the documented aliases so a campaign's real fields are used and
+// nothing is invented when a field is absent.
+const adMediaUrl = (ad) => ad?.mediaUrl || ad?.media?.url || ad?.imageUrl || null;
+const adClickUrl = (ad) => ad?.clickUrl || ad?.link || ad?.url || null;
+const adBrandName = (ad) => ad?.brandName || ad?.advertiserName || ad?.title || 'Sponsored';
+const adBrandAvatar = (ad) => ad?.brandAvatar || ad?.advertiserAvatar || ad?.logoUrl || '/assets/ad-fallback.png';
+const adCtaText = (ad) => ad?.ctaText || ad?.cta || 'Learn More';
+
+// Fold the server creative shape onto the fields this card renders.
+const normalizeAd = (ad) => (ad ? {
+  ...ad,
+  brandName: adBrandName(ad),
+  brandAvatar: adBrandAvatar(ad),
+  mediaUrl: adMediaUrl(ad),
+  clickUrl: adClickUrl(ad),
+  ctaText: adCtaText(ad),
+} : ad);
 
 export default function SponsoredPostCard({
   adData = null,
@@ -62,9 +45,9 @@ export default function SponsoredPostCard({
   const isDark = theme !== 'light';
   const { user } = useAuth();
 
-  const [ad, setAd] = useState(adData || VERIFIED_SPONSORS[0]);
+  const [ad, setAd] = useState(adData || null);
+  const [adState, setAdState] = useState(adData ? 'ready' : 'loading');
   const [showMenu, setShowMenu] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [hasRecordedImpression, setHasRecordedImpression] = useState(false);
 
   // Rewarded Ad Modal state
@@ -76,37 +59,41 @@ export default function SponsoredPostCard({
   const cardRef = useRef(null);
   const countdownIntervalRef = useRef(null);
 
-  // Fetch real ad from monetization service if not provided
+  // The ad is whatever the monetization service returns. There is no local
+  // advertiser catalogue: an empty inventory renders an empty state rather than
+  // a fabricated sponsor and a fake reward.
   useEffect(() => {
     if (adData) {
-      setAd(adData);
-      return;
+      setAd(normalizeAd(adData));
+      setAdState('ready');
+      return undefined;
     }
     let isMounted = true;
-    const loadAd = async () => {
+    setAdState('loading');
+    (async () => {
       try {
-        const svc = getMonetizationService();
-        const fetchedAd = await svc.getAd(placement, user?.uid);
-        if (isMounted && fetchedAd) {
-          setAd({
-            ...VERIFIED_SPONSORS[Math.floor(Math.random() * VERIFIED_SPONSORS.length)],
-            ...fetchedAd,
-          });
+        const fetchedAd = await getMonetizationService().getAd(placement, user?.uid);
+        if (!isMounted) return;
+        if (fetchedAd && adMediaUrl(fetchedAd)) {
+          setAd(normalizeAd(fetchedAd));
+          setAdState('ready');
+        } else {
+          setAd(null);
+          setAdState('empty');
         }
       } catch {
-        // Fallback to random sponsor
-        const randomIndex = Math.floor(Math.random() * VERIFIED_SPONSORS.length);
-        if (isMounted) setAd(VERIFIED_SPONSORS[randomIndex]);
+        if (!isMounted) return;
+        setAd(null);
+        setAdState('error');
       }
-    };
-    loadAd();
+    })();
     return () => { isMounted = false; };
   }, [adData, placement, user?.uid]);
 
   // Real IntersectionObserver for impression logging
   useEffect(() => {
     const el = cardRef.current;
-    if (!el || hasRecordedImpression) return;
+    if (!el || !ad?.id || hasRecordedImpression) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -133,8 +120,8 @@ export default function SponsoredPostCard({
     try {
       getMonetizationService().recordAdImpression(ad.id, `${placement}_click`);
     } catch {}
-    if (ad.clickUrl) {
-      window.open(ad.clickUrl, '_blank', 'noopener,noreferrer');
+    if (adClickUrl(ad)) {
+      window.open(adClickUrl(ad), '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -164,7 +151,7 @@ export default function SponsoredPostCard({
     try {
       const svc = getMonetizationService();
       const rewardResult = await svc.watchAd(placement, ad.id, 15);
-      const coins = rewardResult?.coinsAwarded || ad.rewardCoins || 5;
+      const coins = rewardResult?.coinsAdded ?? AD_REWARD_COINS;
       toast.success(`🎉 You earned +${coins} Arvdoul Coins!`, {
         description: 'Coins have been deposited directly into your balance.',
       });
@@ -178,9 +165,34 @@ export default function SponsoredPostCard({
 
   const handleHideAd = () => {
     setShowMenu(false);
-    toast.info('Ad dismissed. We will show you fewer ads like this.');
     onAdHidden(ad.id);
   };
+
+  const [isReporting, setIsReporting] = useState(false);
+  const handleReportAd = async () => {
+    setShowMenu(false);
+    if (!ad?.id || isReporting) return;
+    setIsReporting(true);
+    try {
+      await getMonetizationService().reportAd(ad.id, placement);
+      toast.success('Ad reported. Our team will review it.');
+    } catch (err) {
+      toast.error(err?.message || 'Could not report this ad.');
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
+  if (adState !== 'ready' || !ad) {
+    return (
+      <div className={cn(
+        "w-full rounded-2xl border my-4 px-4 py-3 text-xs",
+        isDark ? "bg-[#060B24]/60 border-white/10 text-gray-400" : "bg-white border-gray-200 text-gray-500"
+      )}>
+        {adState === 'loading' ? 'Loading sponsor…' : 'No sponsored content available.'}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -222,7 +234,7 @@ export default function SponsoredPostCard({
               title="Watch full ad to earn coins"
             >
               <Gift className="w-3 h-3 text-amber-400" />
-              <span>+{ad.rewardCoins || 5} Coins</span>
+              <span>+{AD_REWARD_COINS} Coins</span>
             </button>
 
             {/* Options Menu */}
@@ -392,7 +404,7 @@ export default function SponsoredPostCard({
                   )}
                 >
                   <Gift className="w-4 h-4" />
-                  <span>{isClaiming ? "Crediting..." : `Claim +${ad.rewardCoins || 5} Coins`}</span>
+                  <span>{isClaiming ? "Crediting..." : `Claim +${AD_REWARD_COINS} Coins`}</span>
                 </button>
               </div>
             </motion.div>

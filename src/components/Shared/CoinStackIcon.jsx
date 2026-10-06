@@ -1,4 +1,5 @@
-// src/components/Shared/CoinStackIcon.jsx - 3D GOLD COIN STACK ICON
+// src/components/Shared/CoinStackIcon.jsx
+
 import React, { memo } from 'react';
 import PropTypes from 'prop-types';
 

@@ -26,9 +26,19 @@ service cloud.firestore {
     function isMember(userId, participantIds) {
       return isSignedIn() && userId in (participantIds || []);
     }
+    // Supergroups rotate messages into monthly collections
+    // (`conversations/{id}/messages_YYYY_MM`) once they pass the participant
+    // threshold (MESSAGING_CONFIG.SUPERGROUP in src/services/messagesService.js).
+    // Firestore rules cannot match a wildcard mid-path (`messages_{year}_{month}`
+    // fails to compile), so the subcollection is matched as a single wildcard
+    // and validated here. Before this, the whole ruleset failed to deploy.
+    function isMessageShardCollection(collection) {
+      return collection == 'messages' ||
+        collection.matches('messages_[0-9]{4}_[0-9]{2}');
+    }
     // Fields only the server (Cloud Functions / Admin SDK) may ever change.
     // Mirrors SERVER_AUTHORITATIVE_FIELDS in src/config/profileContracts.js;
-    // a parity test in functionsContract.test.js keeps the two lists in step.
+    // a parity test in profilePiiBoundary.test.js keeps the two lists in step.
     // Clients that attempt to write any of these are rejected outright.
     function touchesServerAuthoritativeFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -51,25 +61,48 @@ service cloud.firestore {
       return request.resource.data[field] == uid();
     }
 
-    // Blueprint Section 91 & 60: Prevent client mutation of server-authoritative progression,
-    // reputation, economy, and verification fields.
-    function userModifiesAllowedProfileFields() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'xp', 'experience', 'experienceToNextLevel', 'level', 'levelBand',
-        'activeDays', 'activeStreak', 'longestStreak', 'lastActiveDate',
-        'reputation', 'reputationScore', 'reputationTier',
-        'influence', 'influenceScore', 'contribution', 'contributionScore',
-        'titles', 'activeTitle', 'achievements',
-        'creatorStatus', 'creatorTier', 'isCreator', 'monetizationEligible',
-        'coins', 'coinBalance', 'earnings', 'totalEarned',
-        'isVerified', 'accountStatus', 'roles', 'role', 'policyStanding'
+    // Fields that must never appear on the world-readable `users/{uid}` doc.
+    // They live in `users_private/{uid}` instead (owner/admin only). Mirrors
+    // PRIVATE_PROFILE_FIELDS in src/config/profileContracts.js.
+    function touchesPrivateProfileFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'email', 'phoneNumber', 'emailVerified', 'phoneVerified',
+        'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId'
       ]);
     }
 
     // ==================== USERS ====================
     match /users/{userId} {
-      allow read: if isSignedIn(); // app layer projects private profiles
-      allow create: if isOwner(userId);
+      // Public projection only: PII and Stripe identifiers live in
+      // users_private/{uid}. Field-level masking is impossible on a readable
+      // document, so the boundary is enforced by keeping those fields out.
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) &&
+        !request.resource.data.keys().hasAny([
+          'email', 'phoneNumber', 'emailVerified', 'phoneVerified',
+          'stripeCustomerId', 'stripeAccountId', 'stripeSubscriptionId'
+        ]) &&
+        // Economy/status fields are server-authoritative; on create they must be
+        // exactly the new-account defaults (NEW_USER_DEFAULTS in
+        // src/shared/levelConfig.cjs). Without this a client could mint itself
+        // coins, XP, a level, verification or a privileged role at signup.
+        request.resource.data.get('coins', null) == 100 &&
+        request.resource.data.get('level', null) == 1 &&
+        request.resource.data.get('experience', null) == 0 &&
+        request.resource.data.get('experienceToNextLevel', null) == 100 &&
+        request.resource.data.get('totalEarned', null) == 0 &&
+        request.resource.data.get('reputation', null) == 0 &&
+        request.resource.data.get('isVerified', null) == false &&
+        request.resource.data.get('isCreator', null) == false &&
+        request.resource.data.get('accountStatus', null) == 'active' &&
+        !request.resource.data.keys().hasAny([
+          'roles', 'role', 'policyStanding', 'creatorStatus', 'creatorTier',
+          'titles', 'activeTitle', 'achievements', 'monetizationEligible',
+          'levelBand', 'activeDays', 'activeDaysCount', 'activeStreak',
+          'longestStreak', 'lastActiveDate', 'lastActiveDay', 'coinBalance',
+          'earnings', 'reputationScore', 'reputationTier', 'influence',
+          'influenceScore', 'contribution', 'contributionScore'
+        ]);
       // Admins (admins/{uid} doc) may moderate via the applyUserAdminAction
       // callable; a direct admin write from the client is refused so every
       // privileged change leaves a server-side audit entry.
@@ -77,7 +110,25 @@ service cloud.firestore {
       // field (level, XP, coins, verification, status, roles, ...). Account
       // deletion goes through the deleteUserData callable.
       // Reference: allow update, delete: if isOwner(userId) || isAdmin();
-      allow update: if isOwner(userId) && !touchesServerAuthoritativeFields();
+      allow update: if isOwner(userId) && !touchesServerAuthoritativeFields() && !touchesPrivateProfileFields();
+      allow delete: if false;
+    }
+
+    // ==================== USERS PRIVATE (PII / payment ids) ====================
+    // email, phone, verification flags and Stripe identifiers. Never publicly
+    // readable. The owner may only write the contact/verification fields; the
+    // Stripe identifiers are server-written (admin SDK bypasses rules) so a
+    // client cannot forge a payment id that a webhook would then trust.
+    match /users_private/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(
+          ['uid', 'email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
+        );
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+          ['email', 'phoneNumber', 'emailVerified', 'phoneVerified', 'updatedAt']
+        );
       allow delete: if false;
     }
 
@@ -423,31 +474,20 @@ service cloud.firestore {
       //    id to receipt arrays — the update must touch ONLY those fields
       //    (spec §17/18: conversation-level read position is preferred; these
       //    arrays are the per-message fallback).
-      match /messages/{messageId} {
-        allow read: if isSignedIn() && uid() in convParticipants();
+      // Supergroups rotate into monthly shard collections
+      // (`messages_YYYY_MM`, 1000+ participants); the subcollection name is
+      // validated so both layouts get identical ownership rules.
+      match /{messageShardCollection}/{messageId} {
+        allow read: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants();
         allow create: if isSignedIn() &&
+          isMessageShardCollection(messageShardCollection) &&
           uid() in convParticipants() &&
           request.resource.data.senderId == uid();
-        allow update, delete: if isSignedIn() && uid() in convParticipants() && (
+        allow update, delete: if isSignedIn() && isMessageShardCollection(messageShardCollection) && uid() in convParticipants() && (
           resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
         );
         // Reactions are per-user docs — no message-doc rewrites (spec §26).
-        match /reactions/{userId} {
-          allow read: if isSignedIn() && uid() in convParticipants();
-          allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
-        }
-      }
-      // Supergroup monthly shards (1000+ participants) — same ownership rules.
-      match /messages_{year}_{month}/{messageId} {
-        allow read: if isSignedIn() && uid() in convParticipants();
-        allow create: if isSignedIn() &&
-          uid() in convParticipants() &&
-          request.resource.data.senderId == uid();
-        allow update, delete: if isSignedIn() && uid() in convParticipants() && (
-          resource.data.senderId == uid() || isConvModerator() || isAdmin() ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy', 'deliveredTo'])
-        );
         match /reactions/{userId} {
           allow read: if isSignedIn() && uid() in convParticipants();
           allow write: if isSignedIn() && userId == uid() && uid() in convParticipants();
@@ -628,9 +668,18 @@ service cloud.firestore {
       }
     }
     match /collaboration_invites/{inviteId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn();
+      // Invites carry the invitee's email address, so they are not a public
+      // feed: only the inviter and the invited address may read them.
+      allow read: if isSignedIn() && (
+        resource.data.invitedBy == uid() ||
+        (resource.data.email != null && resource.data.email == request.auth.token.email)
+      );
+      allow create: if isSignedIn() && request.resource.data.invitedBy == uid();
+      allow update, delete: if isSignedIn() && (
+        resource.data.invitedBy == uid() ||
+        (resource.data.email != null && resource.data.email == request.auth.token.email) ||
+        isAdmin()
+      );
     }
 
     // ==================== COLLECTIONS (saved posts) ====================
@@ -638,30 +687,38 @@ service cloud.firestore {
       allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       match /items/{itemId} {
-        allow read, write, delete: if isSignedIn();
+        // Items are bounded by the parent collection's ownership: only the
+        // collection owner (or an admin) may add/remove entries. The previous
+        // `if isSignedIn()` let any user write into anyone's collection.
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() &&
+          get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid();
+        allow update, delete: if isSignedIn() &&
+          (get(/databases/$(database)/documents/collections/$(collectionId)).data.userId == uid() || isAdmin());
       }
     }
 
     // ==================== ANALYTICS ====================
+    // Profile analytics (daily views/reach/engagement/coins) are private to the
+    // profile owner and admins. A signed-in visitor must not be able to read a
+    // creator's traffic, reach or earnings figures.
     match /profile_analytics/{userId} {
-      allow read: if isSignedIn();
-      // Allow signed-in users to initialize or record dailyStats for profile views;
-      // owners have full update access for non-authoritative stats
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        isOwner(userId) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dailyStats', 'lastUpdated'])
-      );
-      allow delete: if isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      // Views/reach are counted server-side by the trackProfileView callable,
+      // which owns the daily dedupe and the sharded totals. A client write here
+      // let any signed-in user inflate another creator's stats (audit N010).
+      allow write: if false;
     }
     match /post_analytics/{postId} {
       allow read: if true;
       // Aggregate post analytics are server-computed (sharded counters); never client-written.
       allow write: if false;
     }
+    // A profile view record is written by the trackProfileView callable and
+    // read back only by the profile owner (who is the subject) or an admin.
     match /profile_views/{viewId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.profileOwnerId == uid() || isAdmin());
+      allow write: if false;
     }
     // Sharded counters: rules defined once, above, under idempotency_ledger.
 
@@ -699,6 +756,13 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
       allow update, delete: if isAdmin();
     }
+    // Ad reports are written by the reportAd callable (Admin SDK) and read by
+    // the reporter or a moderator, matching the other report queues.
+    match /ad_reports/{reportId} {
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid();
+      allow update, delete: if isAdmin();
+    }
     match /moderation_logs/{logId} {
       allow read: if isAdmin();
       allow write: if false; // server-verified
@@ -713,7 +777,10 @@ service cloud.firestore {
     // ==================== MISC (bounded write surfaces) ====================
     match /shares/{shareId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      // A share record is immutable and must name the sharer as its author;
+      // `if isSignedIn()` let anyone rewrite or delete another user's shares.
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow update, delete: if isAdmin();
     }
     match /scheduled_messages/{messageId} {
       allow read, update, delete: if isSignedIn() && resource.data.userId == uid();
@@ -818,24 +885,19 @@ service cloud.firestore {
 
     // ==================== LEVEL SYSTEM (XP + coin rewards + active day ledger) ====================
     match /coin_ledger/{entryId} {
-      // Level-up rewards are credited by the client level system inside an
-      // atomic transaction with the user doc (coins increment + ledger entry).
-      // Entry ids are `${userId}_levelup_*`; read is owner-scoped, entries are
-      // append-only (no update/delete from clients).
+      // Legacy level-up reward ledger. Level-up coins are now credited by the
+      // server awardExperience function into `coin_transactions`, so this
+      // collection is server-only: an unauthenticated create here would let a
+      // client mint a "level_up_reward" entry.
       allow read: if isSignedIn() && resource.data.userId == uid();
-      allow create: if isSignedIn() &&
-        (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid()) &&
-        request.resource.data.type == 'level_up_reward';
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /active_days_ledger/{entryId} {
-      // Server-authoritative daily active day audit ledger
-      // Doc id: `${userId}_${YYYY-MM-DD}`
+      // Server-authoritative daily active-day ledger, written only by the
+      // recordActiveDay function. Doc id: `${userId}_${YYYY-MM-DD}`.
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
-      allow create: if isSignedIn() &&
-        (entryId.startsWith(uid() + '_') || request.resource.data.userId == uid());
-      allow update, delete: if false; // Append-only immutable ledger
+      allow create, update, delete: if false; // server-write-only
     }
 
     // ==================== SAVED SOUNDS ====================
@@ -1063,13 +1125,6 @@ service cloud.firestore {
     match /system_health/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
-    }
-
-    // ==================== API KEYS (owner-scoped) ====================
-    // Records store only a SHA-256 hash of the secret (never the raw key).
-    match /api_keys/{keyId} {
-      allow read, delete: if isOwner(resource.data.userId);
-      allow create, update: if isOwner(request.resource.data.userId);
     }
 
     // ==================== ACCOUNT DELETIONS (owner-scoped) ====================

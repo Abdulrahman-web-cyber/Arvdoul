@@ -1,4 +1,5 @@
-// src/services/titleService.js — ARVDOUL TITLES & PROVENANCE ENGINE (Part 2)
+// src/services/titleService.js
+//
 // Server-validated, multidimensional criteria, Zero Pay-to-Legitimacy.
 
 import { TITLES_CATALOG, ROYAL_ELIGIBILITY, getRoyalEligibility } from './levelSystemService.js';
@@ -104,39 +105,19 @@ class TitleService {
       const items = snap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
-        grantedAt: d.data().grantedAt?.toDate?.() || new Date(),
+        grantedAt: d.data().grantedAt?.toDate?.() || null,
       }));
 
-      // Every registered citizen inherently possesses the 'resident' title
-      const hasResident = items.some((t) => t.id === 'resident');
-      if (!hasResident) {
-        items.unshift({
-          id: 'resident',
-          titleId: 'resident',
-          domain: 'civic',
-          name: 'Resident',
-          icon: '🌱',
-          description: 'Registered platform resident of Arvdoul.',
-          status: 'active',
-          source: 'citizenship_foundation',
-        });
-      }
+      // No synthetic titles: the 'resident' title is part of the citizenship
+      // foundation and must be provisioned server-side, not injected here. A
+      // fabricated entitlement is indistinguishable from a real grant.
 
       this._cache.set(userId, { items, timestamp: Date.now() });
       return items;
     } catch (err) {
+      // Load failed - return nothing rather than a fabricated entitlement.
       logger.warn('[TitleService] Failed to load user titles:', { userId, error: err.message });
-      return [
-        {
-          id: 'resident',
-          titleId: 'resident',
-          domain: 'civic',
-          name: 'Resident',
-          icon: '🌱',
-          description: 'Registered platform resident of Arvdoul.',
-          status: 'active',
-        },
-      ];
+      return [];
     }
   }
 

@@ -1,4 +1,5 @@
-// src/components/search/SearchResults.jsx - ARVDOUL Search Results
+// src/components/search/SearchResults.jsx
+
 import React, { memo, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';

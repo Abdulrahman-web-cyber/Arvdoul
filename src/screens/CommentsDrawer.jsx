@@ -1,23 +1,4 @@
-// src/screens/CommentsDrawer.jsx – ARVDOUL v63.0 ULTRA PRO MAX
-// ✅ All store selectors memoised – zero unnecessary re‑renders
-// ✅ displayComments wrapped in useMemo – Virtuoso never thrashing
-// ✅ Replies rendered via stable childrenIds – only changes when own children change
-// ✅ VoiceRecorder callbacks stable – pointer capture released on unmount
-// ✅ Delete‑rollback triggers full reload to preserve subtree
-// ✅ Offline queue filters by postId before flushing
-// ✅ Subscription cleanup guaranteed – unsubscribeRef used synchronously
-// ✅ Deep‑link scroll respects Virtuoso lifecycle, auto‑expands thread
-// ✅ Stunning UI: dynamic gradients, glassmorphism, haptic micro‑interactions
-// ✅ Full accessibility labels, keyboard navigation support
-// ✅ Typing indicator, search, edit history, manual copy, report – all robust
-// ✅ Fully compatible with production‑ready commentService (nextCursor returned)
-// ✅ No infinite loops – initial load lock + fetch lock with timeout
-// ✅ Error boundary fallback with retry
-// ✅ Optimistic UI for both root comments and replies
-// ✅ Real‑time subscription merges correctly, preserves childrenIds
-// ✅ Load‑more replies merges childrenIds, never loses real‑time additions
-// ✅ Optimistic reply count handled gracefully
-// ✅ Billion‑user scale – ready for global deployment
+// src/screens/CommentsDrawer.jsx
 
 import React, {
   useState, useEffect, useCallback, useRef, useMemo, memo,
@@ -43,7 +24,7 @@ import userService from '../services/userService.js';
 import storageService from '../services/storageService.js';
 import { triggerHaptic } from '../utils/haptics';
 import { openDB } from 'idb';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import LoadingSpinner from '../components/Shared/LoadingSpinner.jsx';
 import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { create } from 'zustand';
@@ -411,7 +392,9 @@ async function flushOfflineQueue(postId, userId, onSuccess) {
   const db = await getOfflineDB();
   try {
     const all = await db.getAll('queue');
-    const items = all.filter(item => item.postId === postId);
+    // Scope the flush to the signed-in account so a queued comment authored by
+    // account A is never submitted under account B.
+    const items = all.filter(item => item.postId === postId && item.userId === userId);
     for (const item of items) {
       try {
         let mediaUrl = null;
@@ -1043,9 +1026,6 @@ const CommentItem = memo(({
   );
 });
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN DRAWER – ULTIMATE PRO MAX, ALL FIXES APPLIED
-   ═══════════════════════════════════════════════════════════ */
 export default function CommentsDrawer({ isOpen, onClose, post, currentUser, theme }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1251,12 +1231,13 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
 
   // ── Submit comment (optimistic) ─────────────────────
   const handleSubmitComment = useCallback(async (content, parentId = null, type = 'text', blob = null) => {
-    const activeUser = currentUser || {
-      uid: (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : 'local_user'),
-      displayName: 'You',
-      photoURL: null,
-      username: 'you'
-    };
+    // Identity must come from the live session only. Fabricating a 'local_user'
+    // fallback wrote comments under a phantom account.
+    if (!currentUser?.uid) {
+      toast.error('Please sign in to comment');
+      return;
+    }
+    const activeUser = currentUser;
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const optimistic = {
       id: tempId,
@@ -1281,7 +1262,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       if (parent) updateComment(postId, parentId, { repliesCount: (parent.repliesCount || 0) + 1 });
     }
 
-    if (!navigator.onLine || activeUser.uid === 'local_user') {
+    if (!navigator.onLine) {
       try {
         const key = `arvdoul_local_comments_${postId}`;
         const current = JSON.parse(localStorage.getItem(key) || '[]');
@@ -1487,8 +1468,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     if (!reportReason) return;
     reportLastTime.current = Date.now();
     try {
-      const reportFn = httpsCallable(getFunctions(), 'reportComment');
-      await reportFn({ commentId: comment.id, reporterId: currentUser.uid, reason: reportReason });
+      await callFunction(FUNCTIONS.REPORT_COMMENT, { commentId: comment.id, reporterId: currentUser.uid, reason: reportReason });
       toast.success('Report submitted');
     } catch (err) {
       toast.error('Report failed');

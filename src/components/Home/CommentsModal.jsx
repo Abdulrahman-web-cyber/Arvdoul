@@ -1,4 +1,5 @@
 // src/components/Home/CommentsModal.jsx
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,7 +28,7 @@ const normalizeComment = (c) => ({
   createdAt: c.createdAt,
   likes: c.likes || 0,
   likesBy: c.likesBy || [],
-  // Map service likes to the emoji reaction count for the ❤️ row
+  // Map service likes to the emoji reaction count for the  row
   reactions: (c.reactions || []).map((r) => (typeof r === "string" ? { emoji: r, userId: c.userId } : r)),
   replies: Array.isArray(c.replies) ? c.replies.map(normalizeComment) : [],
 });
@@ -35,7 +36,7 @@ const normalizeComment = (c) => ({
 export default function CommentsModal({ postId, onClose }) {
 const { user } = useAuth();
 
-// REAL engagement rewards through the monetization ledger (server-capped).
+// engagement rewards through the monetization ledger (server-capped).
 const awardCoins = async (uid, amount, reason, metadata = {}) => {
   try {
     const { getMonetizationService } = await import("../../services/monetizationService.js");
@@ -56,7 +57,6 @@ const [typingUsers, setTypingUsers] = useState([]);
 const commentsEndRef = useRef(null);
 const containerRef = useRef(null);
 
-// ---------------- Real-time initial comments ----------------
 useEffect(() => {
   let cancelled = false;
   let unsubscribe = () => {};
@@ -94,7 +94,6 @@ const scrollToBottom = () => {
 setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 };
 
-// ---------------- Post a new comment ----------------
 const handlePostComment = async () => {
 if (!newComment.trim() || !user) return;
 setPosting(true);
@@ -142,7 +141,6 @@ handlePostComment();
 }
 };
 
-// ---------------- Reactions (toggle + counts) ----------------
 const handleReaction = async (commentId, emoji) => {
   const comment = comments.find((c) => c.id === commentId);
   if (!comment || !user) return;
@@ -175,7 +173,6 @@ const handleReaction = async (commentId, emoji) => {
   }
 };
 
-// ---------------- Delete Comment ----------------
 const handleDelete = async (commentId) => {
   if (!window.confirm("Delete this comment?")) return;
   try {
@@ -187,7 +184,6 @@ const handleDelete = async (commentId) => {
   }
 };
 
-// ---------------- Edit Comment (inline) ----------------
 const handleEdit = async (commentId, newText) => {
   if (!newText.trim()) return;
   try {
@@ -199,7 +195,6 @@ const handleEdit = async (commentId, newText) => {
     toast.error("Failed to edit comment.");
   }
 };
-
 
 return createPortal(
 <AnimatePresence>

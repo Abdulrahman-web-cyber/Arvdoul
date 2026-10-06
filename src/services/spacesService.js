@@ -1,6 +1,4 @@
-// src/services/spacesService.js - ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES SERVICE - PRODUCTION READY v6.0
-// 🎙️ ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES SERVICE
-// Enterprise multi-user audio rooms with speaker stages, reactions, coin tipping, and Firestore synchronization.
+// src/services/spacesService.js
 
 import { svcLogger } from './ServiceKit.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
@@ -216,7 +214,7 @@ class SpacesService {
   }
 
   /**
-   * REAL coin tip: debits the sender via the server-authoritative coin ledger
+ * coin tip: debits the sender via the server-authoritative coin ledger
    * (spendCoins CF with atomic fallback) and credits the speaker, then
    * updates the space's running tip total (best-effort). Never lets a sender
    * tip coins they do not have.
@@ -232,7 +230,7 @@ class SpacesService {
     }
 
     try {
-      // 1. REAL double-entry transfer: sender → speaker.
+      // 1. double-entry transfer: sender → speaker.
       const { getMonetizationService } = await import('./monetizationService.js');
       const monetization = getMonetizationService();
       const transfer = await monetization.transferCoins(

@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileFeaturedSection.jsx - ARVDOUL Featured by Creator
- * 
  * Recreates the 'Featured by [Name]' section for Public Profile view:
  * - Header with Sparkles icon and 'See all >' button
  * - Grid / carousel of creator's featured media projects & sparks
@@ -98,7 +96,7 @@ const ProfileFeaturedSection = memo(({
               <div className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1 font-semibold text-rose-400">
                   <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
-                  {item.likes || 120}
+                  {item.likes || 0}
                 </span>
                 {item.type === 'video' && (
                   <span className="flex items-center gap-1 font-semibold text-amber-300">

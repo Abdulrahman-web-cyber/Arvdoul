@@ -1,4 +1,5 @@
-// src/components/Videos/VideoSpeedSelector.jsx - VIDEO SPEED SELECTOR
+// src/components/Videos/VideoSpeedSelector.jsx
+
 import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';

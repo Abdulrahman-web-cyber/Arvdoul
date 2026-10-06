@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileMetricsGrid.jsx - ARVDOUL Unified Metrics Strip
- * 
  * Replaces noisy floating glass boxes with an authoritative, high-contrast metric strip.
  * Features crisp typography, accessible touch targets, and zero blurry visual pollution.
  * 
@@ -34,8 +32,13 @@ const ProfileMetricsGrid = memo(({
   const followingCount = profile?.followingCount ?? 0;
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? 0;
   const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
-  const reputationScore = Number(profile?.reputationScore ?? profile?.reputation ?? 75);
-  const repBand = getReputationBand(reputationScore);
+  // Trust Standing is server-authoritative. When the profile has no reputation
+  // value (e.g. the document did not load) render an explicit unavailable
+  // state instead of inventing a 75.
+  const rawReputation = profile?.reputationScore ?? profile?.reputation;
+  const hasReputation = rawReputation !== undefined && rawReputation !== null;
+  const reputationScore = hasReputation ? Number(rawReputation) : null;
+  const repBand = hasReputation ? getReputationBand(reputationScore) : null;
 
   const canShowFollowers = capabilities?.canViewFollowers ?? true;
   const canShowFollowing = capabilities?.canViewFollowing ?? true;
@@ -70,8 +73,8 @@ const ProfileMetricsGrid = memo(({
     {
       key: 'reputation',
       label: 'Trust Standing',
-      value: `${reputationScore}`,
-      subtext: repBand.label,
+      value: hasReputation ? `${reputationScore}` : '—',
+      subtext: repBand?.label,
       clickable: false,
     },
     ...(isOwner ? [{

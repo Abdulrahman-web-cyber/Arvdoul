@@ -1,123 +1,50 @@
 // src/screens/AudioEditor/components/MultiTrackConsole.jsx
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+//
+// Timeline and mixer. The project starts with no tracks: a track appears when
+// the user adds one or when a real source is loaded. Clips are drawn from their
+// own sample peaks, and a clip with no decoded audio says so instead of drawing
+// an invented waveform.
+
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  Mic, Volume2, VolumeX, Lock, Unlock, Plus, Music, Radio,
-  Sliders, ZoomIn, ZoomOut, Maximize2, MoreHorizontal, Sparkles,
-  Guitar, Disc, Headphones, Eye
+  Mic, Lock, Unlock, Plus, Music, Radio,
+  ZoomIn, ZoomOut, Maximize2, Sparkles,
+  Guitar, Disc, Headphones
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 
-export const INITIAL_STUDIO_TRACKS = [
-  {
-    id: 'vocals',
-    name: 'Vocals',
-    icon: Mic,
-    color: '#8B1EF3',
-    volume: -3.2,
-    pan: 0,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c1', start: 15, duration: 45, name: 'Lead Verse 1', fadeStart: 2, fadeEnd: 3 },
-      { id: 'c2', start: 70, duration: 35, name: 'Lead Chorus', fadeStart: 1, fadeEnd: 2 },
-    ],
-  },
-  {
-    id: 'backing_vocals',
-    name: 'Backing Vocals',
-    icon: Headphones,
-    color: '#00C4FF',
-    volume: -6.1,
-    pan: -15,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c3', start: 25, duration: 35, name: 'Harmony High', fadeStart: 2, fadeEnd: 2 },
-      { id: 'c4', start: 70, duration: 35, name: 'Chorus Octaves', fadeStart: 2, fadeEnd: 3 },
-    ],
-  },
-  {
-    id: 'guitar',
-    name: 'Guitar',
-    icon: Music,
-    color: '#10B981',
-    volume: -8.3,
-    pan: 20,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c5', start: 0, duration: 60, name: 'Acoustic Riff', fadeStart: 0, fadeEnd: 2 },
-      { id: 'c6', start: 65, duration: 55, name: 'Electric Strum', fadeStart: 1, fadeEnd: 2 },
-    ],
-  },
-  {
-    id: 'bass',
-    name: 'Bass',
-    icon: Radio,
-    color: '#F59E0B',
-    volume: -5.4,
-    pan: 0,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c7', start: 10, duration: 110, name: 'Sub & Slap Bass', fadeStart: 1, fadeEnd: 1 },
-    ],
-  },
-  {
-    id: 'drums',
-    name: 'Drums',
-    icon: Disc,
-    color: '#EF4444',
-    volume: -4.7,
-    pan: 0,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c8', start: 0, duration: 120, name: 'Drum Kit & 808', fadeStart: 0, fadeEnd: 0 },
-    ],
-  },
-  {
-    id: 'piano',
-    name: 'Piano',
-    icon: Music,
-    color: '#EC4899',
-    volume: -7.0,
-    pan: -10,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c9', start: 15, duration: 75, name: 'Grand Chords', fadeStart: 1, fadeEnd: 2 },
-    ],
-  },
-  {
-    id: 'fx',
-    name: 'FX / Ambience',
-    icon: Sparkles,
-    color: '#6366F1',
-    volume: -12.0,
-    pan: 0,
-    muted: false,
-    solo: false,
-    locked: false,
-    clips: [
-      { id: 'c10', start: 0, duration: 30, name: 'Vinyl Dust & Rain', fadeStart: 3, fadeEnd: 3 },
-      { id: 'c11', start: 60, duration: 40, name: 'Sweep & Uplifter', fadeStart: 2, fadeEnd: 2 },
-    ],
-  },
-];
+const TRACK_COLORS = ['#00C4FF', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1'];
+
+export const TRACK_ICON_OPTIONS = [Music, Mic, Guitar, Disc, Headphones, Radio, Sparkles];
+
+/** Down-samples decoded channel data into per-pixel min/max peaks for drawing. */
+export function computePeaks(buffer, buckets = 48) {
+  if (!buffer || typeof buffer.getChannelData !== 'function') return null;
+  const data = buffer.getChannelData(0);
+  if (!data.length) return null;
+  const size = Math.max(1, Math.floor(data.length / buckets));
+  const peaks = [];
+  for (let b = 0; b < buckets; b += 1) {
+    let min = 1;
+    let max = -1;
+    const start = b * size;
+    const end = Math.min(start + size, data.length);
+    for (let i = start; i < end; i += 1) {
+      const v = data[i];
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    peaks.push({ min, max });
+  }
+  return peaks;
+}
 
 export default function MultiTrackConsole({
-  tracks,
+  tracks = [],
   setTracks,
   currentTime,
   setCurrentTime,
-  totalDuration = 120,
+  totalDuration = 0,
   isPlaying,
   isDark = true,
   onSelectClip,
@@ -125,28 +52,27 @@ export default function MultiTrackConsole({
 }) {
   const [zoom, setZoom] = useState(1.0);
   const [snapMode, setSnapMode] = useState('Bar');
-  const [timelineMode, setTimelineMode] = useState('Waveform');
   const timelineRef = useRef(null);
   const isDraggingPlayheadRef = useRef(false);
 
-  // Time ruler ticks (0 to 120s)
-  const rulerTicks = [0, 15, 30, 45, 60, 75, 90, 105, 120];
+  const duration = totalDuration > 0 ? totalDuration : 60;
+  const rulerTicks = [];
+  for (let t = 0; t <= duration; t += Math.max(5, duration / 8)) rulerTicks.push(Math.round(t));
 
   const formatSeconds = (sec) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    const ms = Math.floor((sec % 1) * 1000);
+    const safe = Number.isFinite(sec) ? Math.max(0, sec) : 0;
+    const m = Math.floor(safe / 60);
+    const s = Math.floor(safe % 60);
+    const ms = Math.floor((safe % 1) * 1000);
     return `${m}:${s < 10 ? '0' : ''}${s}.${ms < 100 ? (ms < 10 ? '00' : '0') : ''}${ms}`;
   };
 
   const handleSeek = (clientX) => {
     const el = timelineRef.current;
-    if (!el) return;
+    if (!el || totalDuration <= 0) return;
     const rect = el.getBoundingClientRect();
     const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const percent = x / rect.width;
-    const newTime = percent * totalDuration;
-    setCurrentTime(newTime);
+    setCurrentTime((x / rect.width) * totalDuration);
   };
 
   const handleTimelineMouseDown = (e) => {
@@ -159,40 +85,47 @@ export default function MultiTrackConsole({
       if (!isDraggingPlayheadRef.current) return;
       handleSeek(e.clientX);
     };
-    const handleMouseUp = () => {
-      isDraggingPlayheadRef.current = false;
-    };
+    const handleMouseUp = () => { isDraggingPlayheadRef.current = false; };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalDuration]);
 
-  // Track manipulation
-  const toggleMute = (trackId) => {
-    setTracks((prev) =>
-      prev.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t))
-    );
-  };
-
-  const toggleSolo = (trackId) => {
-    setTracks((prev) =>
-      prev.map((t) => (t.id === trackId ? { ...t, solo: !t.solo } : t))
-    );
-  };
-
-  const toggleLock = (trackId) => {
-    setTracks((prev) =>
-      prev.map((t) => (t.id === trackId ? { ...t, locked: !t.locked } : t))
-    );
+  const toggleField = (trackId, field) => {
+    setTracks((prev) => prev.map((t) => (t.id === trackId ? { ...t, [field]: !t[field] } : t)));
   };
 
   const updateTrackVolume = (trackId, vol) => {
-    setTracks((prev) =>
-      prev.map((t) => (t.id === trackId ? { ...t, volume: Number(vol) } : t))
-    );
+    setTracks((prev) => prev.map((t) => (t.id === trackId ? { ...t, volume: Number(vol) } : t)));
+  };
+
+  const updateTrackPan = (trackId, pan) => {
+    setTracks((prev) => prev.map((t) => (t.id === trackId ? { ...t, pan: Number(pan) } : t)));
+  };
+
+  const addTrack = () => {
+    setTracks((prev) => [
+      ...prev,
+      {
+        id: `track_${Date.now()}`,
+        name: `Track ${prev.length + 1}`,
+        color: TRACK_COLORS[prev.length % TRACK_COLORS.length],
+        volume: 0,
+        pan: 0,
+        muted: false,
+        solo: false,
+        locked: false,
+        clips: [],
+      },
+    ]);
+  };
+
+  const removeTrack = (trackId) => {
+    setTracks((prev) => prev.filter((t) => t.id !== trackId));
   };
 
   return (
@@ -200,13 +133,11 @@ export default function MultiTrackConsole({
       "rounded-2xl border overflow-hidden transition-colors",
       isDark ? "bg-[#03071B]/95 border-white/10" : "bg-white border-gray-200 shadow-sm"
     )}>
-      {/* Top Timeline Toolbar matching Image 1 */}
       <div className={cn(
         "flex items-center justify-between px-4 py-2.5 border-b text-xs",
         isDark ? "bg-white/5 border-white/10" : "bg-gray-50 border-gray-200"
       )}>
         <div className="flex items-center gap-3">
-          {/* Snap Mode */}
           <div className="flex items-center gap-1.5 font-medium">
             <span className="text-gray-400">Snap:</span>
             <select
@@ -224,27 +155,8 @@ export default function MultiTrackConsole({
               <option value="Off">Snap Off</option>
             </select>
           </div>
-
-          {/* Timeline Display Modes */}
-          <div className="hidden sm:flex items-center gap-1 border-l pl-3 border-inherit">
-            {['Waveform', 'Automation', 'MIDI', 'Regions'].map((m) => (
-              <button
-                key={m}
-                onClick={() => setTimelineMode(m)}
-                className={cn(
-                  "px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer",
-                  timelineMode === m
-                    ? "bg-purple-600 text-white shadow-sm"
-                    : isDark ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900"
-                )}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Zoom & Fit controls */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setZoom((z) => Math.max(0.5, z - 0.2))}
@@ -271,35 +183,15 @@ export default function MultiTrackConsole({
         </div>
       </div>
 
-      {/* Main Console: Left Track Controls, Right Timeline */}
       <div className="flex w-full overflow-hidden">
-        {/* Left Track Strip (Fixed Width ~ 220px) */}
         <div className={cn(
           "w-56 sm:w-64 flex-shrink-0 border-r border-inherit",
           isDark ? "bg-[#060B24]" : "bg-gray-50/70"
         )}>
-          {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-inherit h-8">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Tracks</span>
             <button
-              onClick={() => {
-                const newId = `track_${Date.now()}`;
-                setTracks((prev) => [
-                  ...prev,
-                  {
-                    id: newId,
-                    name: `Track ${prev.length + 1}`,
-                    icon: Music,
-                    color: '#00C4FF',
-                    volume: -6.0,
-                    pan: 0,
-                    muted: false,
-                    solo: false,
-                    locked: false,
-                    clips: [],
-                  },
-                ]);
-              }}
+              onClick={addTrack}
               className="w-5 h-5 rounded-full flex items-center justify-center bg-purple-600 hover:bg-purple-500 text-white cursor-pointer"
               title="Add New Track"
             >
@@ -307,24 +199,26 @@ export default function MultiTrackConsole({
             </button>
           </div>
 
-          {/* Track Headers */}
+          {tracks.length === 0 && (
+            <div className="p-4 text-xs text-gray-500">
+              No tracks yet. Add a track, or open a recording from Create Post.
+            </div>
+          )}
+
           <div className="divide-y divide-inherit">
             {tracks.map((t) => {
               const Icon = t.icon || Music;
               return (
-                <div key={t.id} className="p-2.5 h-16 flex flex-col justify-between select-none">
+                <div key={t.id} className="p-2.5 min-h-20 flex flex-col justify-between select-none">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                       <Icon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      <span className="text-xs font-bold truncate text-gray-200 dark:text-white">
-                        {t.name}
-                      </span>
+                      <span className="text-xs font-bold truncate text-gray-200 dark:text-white">{t.name}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      {/* Mute [M] */}
                       <button
-                        onClick={() => toggleMute(t.id)}
+                        onClick={() => toggleField(t.id, 'muted')}
                         className={cn(
                           "w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center cursor-pointer transition",
                           t.muted ? "bg-rose-500 text-white" : "bg-gray-700/40 text-gray-400 hover:text-white"
@@ -333,9 +227,8 @@ export default function MultiTrackConsole({
                       >
                         M
                       </button>
-                      {/* Solo [S] */}
                       <button
-                        onClick={() => toggleSolo(t.id)}
+                        onClick={() => toggleField(t.id, 'solo')}
                         className={cn(
                           "w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center cursor-pointer transition",
                           t.solo ? "bg-amber-500 text-white" : "bg-gray-700/40 text-gray-400 hover:text-white"
@@ -344,18 +237,23 @@ export default function MultiTrackConsole({
                       >
                         S
                       </button>
-                      {/* Lock */}
                       <button
-                        onClick={() => toggleLock(t.id)}
+                        onClick={() => toggleField(t.id, 'locked')}
                         className="text-gray-400 hover:text-white cursor-pointer"
                         title="Lock Track"
                       >
                         {t.locked ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3 opacity-40" />}
                       </button>
+                      <button
+                        onClick={() => removeTrack(t.id)}
+                        className="text-gray-500 hover:text-rose-400 cursor-pointer text-xs font-bold"
+                        title="Remove Track"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
 
-                  {/* Volume Slider & dB text */}
                   <div className="flex items-center gap-2 mt-1">
                     <input
                       type="range"
@@ -365,10 +263,25 @@ export default function MultiTrackConsole({
                       value={t.volume}
                       onChange={(e) => updateTrackVolume(t.id, e.target.value)}
                       className="w-full h-1 accent-purple-500 bg-gray-700 rounded-lg cursor-pointer"
+                      aria-label={`${t.name} volume`}
                     />
                     <span className="text-[10px] font-mono text-gray-400 w-12 text-right">
                       {t.volume > 0 ? `+${t.volume}` : t.volume} dB
                     </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-gray-500 w-6">Pan</span>
+                    <input
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="1"
+                      value={t.pan}
+                      onChange={(e) => updateTrackPan(t.id, e.target.value)}
+                      className="w-full h-1 accent-indigo-500 bg-gray-700 rounded-lg cursor-pointer"
+                      aria-label={`${t.name} pan`}
+                    />
                   </div>
                 </div>
               );
@@ -376,67 +289,70 @@ export default function MultiTrackConsole({
           </div>
         </div>
 
-        {/* Right Timeline Grid with Ruler & Waves */}
         <div className="flex-1 overflow-x-auto relative" ref={timelineRef} onMouseDown={handleTimelineMouseDown}>
-          {/* Top Time Ruler (h-8 matching track header) */}
           <div className={cn(
             "h-8 border-b border-inherit flex items-end relative select-none cursor-pointer",
             isDark ? "bg-[#060B24]" : "bg-gray-100/70"
           )}>
-            {rulerTicks.map((tick) => {
-              const leftPercent = (tick / totalDuration) * 100;
-              return (
-                <div
-                  key={tick}
-                  className="absolute bottom-0 border-l border-white/20 pl-1 pb-1"
-                  style={{ left: `${leftPercent}%` }}
-                >
-                  <span className="text-[10px] font-mono text-gray-400">
-                    {formatSeconds(tick)}
-                  </span>
-                </div>
-              );
-            })}
-
-            {/* Draggable Playhead marker on ruler */}
-            <div
-              className="absolute top-0 bottom-0 z-30 pointer-events-none"
-              style={{ left: `${(currentTime / totalDuration) * 100}%` }}
-            >
-              <div className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white text-[9px] font-mono font-bold -translate-x-1/2 shadow-lg">
-                {formatSeconds(currentTime)}
+            {rulerTicks.map((tick) => (
+              <div
+                key={tick}
+                className="absolute bottom-0 border-l border-white/20 pl-1 pb-1"
+                style={{ left: `${(tick / duration) * 100}%` }}
+              >
+                <span className="text-[10px] font-mono text-gray-400">{formatSeconds(tick)}</span>
               </div>
-            </div>
+            ))}
+
+            {totalDuration > 0 && (
+              <div
+                className="absolute top-0 bottom-0 z-30 pointer-events-none"
+                style={{ left: `${(currentTime / duration) * 100}%` }}
+              >
+                <div className="px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white text-[9px] font-mono font-bold -translate-x-1/2 shadow-lg">
+                  {formatSeconds(currentTime)}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Timeline Track Rows */}
           <div className="divide-y divide-inherit relative min-w-[600px]">
-            {/* Playhead vertical line passing through all tracks */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#C82BFF] to-[#055BFB] z-20 pointer-events-none shadow-[0_0_8px_#C82BFF]"
-              style={{ left: `${(currentTime / totalDuration) * 100}%` }}
-            />
+            {totalDuration > 0 && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#C82BFF] to-[#055BFB] z-20 pointer-events-none shadow-[0_0_8px_#C82BFF]"
+                style={{ left: `${(currentTime / duration) * 100}%` }}
+              />
+            )}
+
+            {tracks.length === 0 && (
+              <div className="h-32 flex items-center justify-center text-xs text-gray-500">
+                Timeline is empty — there is no audio in this session yet.
+              </div>
+            )}
 
             {tracks.map((t) => (
               <div
                 key={t.id}
                 className={cn(
-                  "h-16 relative flex items-center overflow-hidden transition-colors",
+                  "h-20 relative flex items-center overflow-hidden transition-colors",
                   isDark ? "bg-[#020514]/60 hover:bg-[#060B24]/40" : "bg-gray-50/30 hover:bg-gray-100/40"
                 )}
               >
-                {/* Horizontal Grid guidelines */}
                 <div className="absolute inset-0 grid grid-cols-8 pointer-events-none opacity-10">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <div key={i} className="border-r border-white" />
                   ))}
                 </div>
 
-                {/* Render Audio Clips */}
+                {t.clips.length === 0 && (
+                  <span className="pl-3 text-[10px] text-gray-600">Empty track</span>
+                )}
+
                 {t.clips.map((clip) => {
-                  const left = `${(clip.start / totalDuration) * 100}%`;
-                  const width = `${(clip.duration / totalDuration) * 100}%`;
+                  const left = `${(clip.start / duration) * 100}%`;
+                  const width = `${(clip.duration / duration) * 100}%`;
                   const isSelected = selectedClipId === clip.id;
+                  const peaks = clip.peaks;
 
                   return (
                     <div
@@ -446,42 +362,34 @@ export default function MultiTrackConsole({
                         onSelectClip?.(clip);
                       }}
                       className={cn(
-                        "absolute h-12 rounded-xl border p-1.5 flex flex-col justify-between shadow-md cursor-pointer transition-all overflow-hidden group",
+                        "absolute h-16 rounded-xl border p-1.5 flex flex-col justify-between shadow-md cursor-pointer transition-all overflow-hidden group",
                         isSelected ? "ring-2 ring-white scale-[1.01]" : "hover:brightness-110"
                       )}
-                      style={{
-                        left,
-                        width,
-                        backgroundColor: `${t.color}26`,
-                        borderColor: t.color,
-                      }}
+                      style={{ left, width, backgroundColor: `${t.color}26`, borderColor: t.color }}
                     >
                       <div className="flex items-center justify-between text-[10px] font-bold text-white z-10">
                         <span className="truncate drop-shadow">{clip.name}</span>
-                        <span className="text-[9px] font-mono opacity-75">{clip.duration}s</span>
+                        <span className="text-[9px] font-mono opacity-75">{clip.duration.toFixed(1)}s</span>
                       </div>
 
-                      {/* Stylized high-res waveform pattern inside clip */}
-                      <div className="w-full h-6 flex items-center gap-0.5 opacity-80">
-                        {Array.from({ length: 48 }).map((_, idx) => {
-                          const pseudoPeak = Math.sin(idx * 0.3) * 0.5 + Math.cos(idx * 0.7) * 0.5;
-                          const height = Math.max(3, Math.abs(pseudoPeak) * 22);
-                          return (
-                            <div
-                              key={idx}
-                              className="flex-1 rounded-full"
-                              style={{
-                                height: `${height}px`,
-                                backgroundColor: t.color,
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-
-                      {/* Fade Handles on Clip Edges */}
-                      <div className="absolute left-0 top-0 bottom-0 w-2 bg-white/20 opacity-0 group-hover:opacity-100 cursor-ew-resize" />
-                      <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/20 opacity-0 group-hover:opacity-100 cursor-ew-resize" />
+                      {peaks ? (
+                        <div className="w-full h-8 flex items-center gap-px opacity-80">
+                          {peaks.map((p, idx) => {
+                            const height = Math.max(2, Math.abs(p.max - p.min) * 28);
+                            return (
+                              <div
+                                key={idx}
+                                className="flex-1 rounded-full"
+                                style={{ height: `${height}px`, backgroundColor: t.color }}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span className="text-[9px] text-gray-300/70 z-10">
+                          Waveform unavailable
+                        </span>
+                      )}
                     </div>
                   );
                 })}

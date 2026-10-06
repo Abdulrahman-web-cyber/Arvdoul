@@ -1,4 +1,5 @@
-// src/screens/Creator/CreatorOnboardingScreen.jsx — ARVDOUL CREATOR ONBOARDING (Part 2)
+// src/screens/Creator/CreatorOnboardingScreen.jsx
+//
 // Gate check (Level >= 5, good standing), category selection, server submission.
 
 import React, { useState } from 'react';

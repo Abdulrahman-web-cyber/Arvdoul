@@ -1,9 +1,8 @@
-// src/screens/CreatePost/imageEffects.js - ARVDOUL Image Effects & Canvas Utilities
+// src/screens/CreatePost/imageEffects.js
+//
 // High-performance offscreen canvas image processing
 
 import { PERFORMANCE } from './editorConstants';
-
-// ==================== UTILITY FUNCTIONS ====================
 
 /**
  * Create a canvas element with the given dimensions
@@ -129,8 +128,6 @@ export function generateId() {
   return `layer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// ==================== ADJUSTMENT FUNCTIONS ====================
-
 /**
  * Build CSS filter string from adjustments
  */
@@ -235,8 +232,6 @@ export function applyAdjustmentsToCanvas(canvas, adjustments) {
   return canvas;
 }
 
-// ==================== FILTER FUNCTIONS ====================
-
 /**
  * Parse filter string and extract values
  */
@@ -284,8 +279,6 @@ export function applyFilterToCanvas(canvas, filterStr) {
     img.src = canvasToDataURL(tempCanvas);
   });
 }
-
-// ==================== CROP & TRANSFORM ====================
 
 /**
  * Crop canvas to specified area
@@ -365,8 +358,6 @@ export function resizeCanvas(canvas, width, height, quality = 'high') {
   return resizedCanvas;
 }
 
-// ==================== COMPOSITING ====================
-
 /**
  * Draw image with adjustments on canvas
  */
@@ -400,8 +391,6 @@ export function drawImageWithAdjustments(canvas, img, adjustments = {}, filterSt
   
   return canvas;
 }
-
-// ==================== EXPORT FUNCTIONS ====================
 
 /**
  * Export canvas as blob with quality settings
@@ -451,8 +440,6 @@ export async function downloadCanvas(canvas, filename = 'image.png', type = 'ima
   return blob;
 }
 
-// ==================== THUMBNAIL GENERATION ====================
-
 /**
  * Generate thumbnail from canvas
  */
@@ -488,8 +475,6 @@ export function generateFilterPreviews(canvas, filters, thumbnailSize = 80) {
   return Promise.all(promises);
 }
 
-// ==================== MEMORY CLEANUP ====================
-
 /**
  * Revoke object URL safely
  */
@@ -517,8 +502,6 @@ export function cleanupCanvas(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 }
-
-// ==================== TEXT ON PATH ====================
 
 /**
  * Draw curved text on canvas
@@ -553,8 +536,6 @@ export function drawCurvedText(ctx, text, path, font = '16px sans-serif') {
   
   ctx.restore();
 }
-
-// ==================== VIGNETTE & EFFECTS ====================
 
 /**
  * Apply vignette effect to canvas
@@ -619,8 +600,6 @@ export function applyFade(canvas, intensity = 50) {
   return canvas;
 }
 
-// ==================== COLOR UTILITIES ====================
-
 /**
  * Convert hex to rgb
  */
@@ -666,8 +645,6 @@ export function createGradient(ctx, colors, direction = 'horizontal') {
   
   return gradient;
 }
-
-// ==================== HIT TESTING ====================
 
 /**
  * Check if point is inside rectangle
@@ -717,8 +694,6 @@ export function pointNearLine(point, lineStart, lineEnd, threshold = 10) {
   
   return distance <= threshold;
 }
-
-// ==================== GEOMETRY UTILITIES ====================
 
 /**
  * Calculate distance between two points
@@ -805,8 +780,6 @@ export function snapAngle(angle, threshold = 5) {
   return angle;
 }
 
-// ==================== DEBOUNCE & THROTTLE ====================
-
 /**
  * Debounce function
  */
@@ -873,8 +846,6 @@ export function createCancellableDebounce(func, wait) {
   return debounced;
 }
 
-// ==================== COMPRESSION ====================
-
 /**
  * Compress image using browser-image-compression
  */
@@ -894,8 +865,6 @@ export async function compressImage(file, options = {}) {
     return file;
   }
 }
-
-// ==================== IMAGE METADATA ====================
 
 /**
  * Get image dimensions without loading full image

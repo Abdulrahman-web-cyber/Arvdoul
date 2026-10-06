@@ -1,6 +1,4 @@
 /**
- * src/services/metricsService.js - ARVDOUL TIME-SERIES METRICS & PERCENTILES COLLECTOR
- *
  * Implements:
  * 1. Counters, Gauges & Histograms: Records API latencies, query counts, memory allocations, and network payloads.
  * 2. Percentile Calculations: Computes p50, p90, p95, and p99 latency percentiles with reservoir sampling.

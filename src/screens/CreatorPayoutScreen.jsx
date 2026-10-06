@@ -1,4 +1,5 @@
-// src/screens/CreatorPayoutScreen.jsx - ARVDOUL CREATOR PAYOUT & EARNINGS DASHBOARD
+// src/screens/CreatorPayoutScreen.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -13,9 +14,11 @@ import {
 } from 'lucide-react';
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
+import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
 
-const MIN_PAYOUT_COINS = 5000;
-const COIN_TO_USD_RATE = 0.005; // 5000 coins = $25.00
+// Single-sourced with the payout server (functions/monetization.js) so the
+// estimate shown here can never diverge from what Stripe actually pays.
+const COIN_TO_USD_RATE = coinsToUsd(1);
 
 export default function CreatorPayoutScreen() {
   const navigate = useNavigate();
@@ -53,14 +56,14 @@ export default function CreatorPayoutScreen() {
         const b = balRes.value;
         setBalance(typeof b === 'number' ? b : Number(b?.coins || b?.balance || 0));
       }
-      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value)) {
-        setPayouts(histRes.value.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
+      if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
+        setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
       if (analyticsRes.status === 'fulfilled') {
         setAnalytics(analyticsRes.value);
       }
 
-      // REAL payout account status (never simulated).
+      // payout account status (never simulated).
       try {
         const settings = await monSvc.getPayoutSettings();
         const status = settings?.accountStatus || 'unconfigured';
@@ -87,7 +90,7 @@ export default function CreatorPayoutScreen() {
     }
     setConnectingStripe(true);
     try {
-      // REAL Stripe Express onboarding via the Cloud Function
+      // Stripe Express onboarding via the Cloud Function
       // (functions/monetization.js createPayoutAccount). No timers, no
       // simulated success — the account is only "connected" when the
       // server actually created it.
@@ -113,8 +116,8 @@ export default function CreatorPayoutScreen() {
   const handleRequestPayout = async (e) => {
     e.preventDefault();
     const amount = Number(withdrawAmount);
-    if (!amount || amount < MIN_PAYOUT_COINS) {
-      toast.error(`Minimum payout is ${MIN_PAYOUT_COINS.toLocaleString()} coins ($${(MIN_PAYOUT_COINS * COIN_TO_USD_RATE).toFixed(2)})`);
+    if (!amount || amount < MIN_WITHDRAWAL_COINS) {
+      toast.error(`Minimum payout is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${formatCoinsAsUsd(MIN_WITHDRAWAL_COINS)})`);
       return;
     }
     if (amount > balance) {
@@ -150,9 +153,9 @@ export default function CreatorPayoutScreen() {
     }
   };
 
-  const estimatedUsd = (balance * COIN_TO_USD_RATE).toFixed(2);
-  const eligibleForPayout = balance >= MIN_PAYOUT_COINS;
-  const progressPercent = Math.min(100, Math.round((balance / MIN_PAYOUT_COINS) * 100));
+  const estimatedUsd = coinsToUsd(balance).toFixed(2);
+  const eligibleForPayout = balance >= MIN_WITHDRAWAL_COINS;
+  const progressPercent = Math.min(100, Math.round((balance / MIN_WITHDRAWAL_COINS) * 100));
 
   return (
     <div className={cn(
@@ -237,7 +240,7 @@ export default function CreatorPayoutScreen() {
           {/* Threshold Progress */}
           <div className="mt-6 pt-4 border-t border-white/15">
             <div className="flex justify-between text-xs font-semibold mb-1.5">
-              <span>Payout Threshold ({MIN_PAYOUT_COINS.toLocaleString()} coins)</span>
+              <span>Payout Threshold ({MIN_WITHDRAWAL_COINS.toLocaleString()} coins)</span>
               <span>{progressPercent}% Complete</span>
             </div>
             <div className="w-full h-2 rounded-full bg-black/20 overflow-hidden">
@@ -335,7 +338,7 @@ export default function CreatorPayoutScreen() {
               <Wallet className="w-10 h-10 text-arvdoul-text-secondary mx-auto mb-2 opacity-50" />
               <p className="text-sm font-semibold">No withdrawals yet</p>
               <p className="text-xs text-arvdoul-text-secondary mt-1">
-                When your balance reaches {MIN_PAYOUT_COINS.toLocaleString()} coins, you can request a cash payout.
+                When your balance reaches {MIN_WITHDRAWAL_COINS.toLocaleString()} coins, you can request a cash payout.
               </p>
             </div>
           ) : (
@@ -438,11 +441,11 @@ export default function CreatorPayoutScreen() {
                   </label>
                   <input
                     type="number"
-                    min={MIN_PAYOUT_COINS}
+                    min={MIN_WITHDRAWAL_COINS}
                     max={balance}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
-                    placeholder={`Min: ${MIN_PAYOUT_COINS}`}
+                    placeholder={`Min: ${MIN_WITHDRAWAL_COINS}`}
                     className={cn(
                       "w-full px-3.5 py-2.5 rounded-arvdoul-sm text-xs border outline-none",
                       isDark ? "bg-black/30 border-arvdoul-border text-white" : "bg-slate-50 border-slate-300"
@@ -450,7 +453,7 @@ export default function CreatorPayoutScreen() {
                   />
                   {withdrawAmount && (
                     <p className="text-[11px] text-emerald-400 mt-1">
-                      Estimated payout: ${(Number(withdrawAmount) * COIN_TO_USD_RATE).toFixed(2)} USD
+                      Estimated payout: ${coinsToUsd(withdrawAmount).toFixed(2)} USD
                     </p>
                   )}
                 </div>

@@ -1,4 +1,5 @@
-// src/components/search/SearchSuggestions.jsx - ARVDOUL Search Suggestions
+// src/components/search/SearchSuggestions.jsx
+
 import React, { memo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Clock, TrendingUp, User, Video, FileText, Hash, X } from 'lucide-react';

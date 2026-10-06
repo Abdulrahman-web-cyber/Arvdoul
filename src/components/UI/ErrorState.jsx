@@ -1,6 +1,4 @@
-// src/components/UI/ErrorState.jsx - ARVDOUL WORLD-CLASS ERROR STATE
-// Futuristic error state with ARVDOUL DNA gradient accents
-// Surpasses TikTok, Instagram, YouTube with premium UI
+// src/components/UI/ErrorState.jsx
 
 import React, { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -8,15 +6,6 @@ import { useTheme } from '../../context/ThemeContext';
 import GlassButton from './GlassButton';
 
 /**
- * ErrorState - World-class error state component
- * 
- * Features:
- * - ARVDOUL DNA gradient accents
- * - Glassmorphism container
- * - Retry functionality
- * - Error details
- * - Full accessibility
- * 
  * @param {Object} props
  * @param {string} props.title - Error title
  * @param {string} props.message - Error description
@@ -217,8 +206,6 @@ const ErrorState = memo(({
 
 ErrorState.displayName = 'ErrorState';
 
-// ==================== REFRESH ICON ====================
-
 const RefreshIcon = ({ className }) => (
   <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -226,8 +213,6 @@ const RefreshIcon = ({ className }) => (
 );
 
 export default ErrorState;
-
-// ==================== PRESET ERROR STATES ====================
 
 /**
  * Preset: Network Error

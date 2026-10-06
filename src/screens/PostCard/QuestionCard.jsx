@@ -1,4 +1,5 @@
 // src/screens/PostCard/QuestionCard.jsx
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -11,9 +12,7 @@ import {
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ------------------------------------------------------------------
 // Helper: format relative time
-// ------------------------------------------------------------------
 function formatRelativeTime(date) {
   if (!date) return '';
   const now = new Date();
@@ -27,9 +26,7 @@ function formatRelativeTime(date) {
   return `${days}d ago`;
 }
 
-// ------------------------------------------------------------------
 // Helper: get reputation level badge
-// ------------------------------------------------------------------
 function getReputationLevel(reputation) {
   if (reputation >= 5000) return { label: 'Legend', color: '#fbbf24' };
   if (reputation >= 1000) return { label: 'Master', color: '#a855f7' };
@@ -38,9 +35,7 @@ function getReputationLevel(reputation) {
   return null;
 }
 
-// ------------------------------------------------------------------
 // Vote delta calculator (prevents desync)
-// ------------------------------------------------------------------
 function getVoteDelta(previousVote, newVote) {
   if (previousVote === newVote) return 0;
   if (!previousVote && newVote === 'up') return 1;
@@ -52,9 +47,7 @@ function getVoteDelta(previousVote, newVote) {
   return 0;
 }
 
-// ------------------------------------------------------------------
 // Expandable text component (resets expansion when text changes)
-// ------------------------------------------------------------------
 const ExpandableText = React.memo(({ text, maxLength = 200, tokens }) => {
   const [expanded, setExpanded] = useState(false);
   const safeText = text || '';
@@ -82,9 +75,7 @@ const ExpandableText = React.memo(({ text, maxLength = 200, tokens }) => {
   );
 });
 
-// ------------------------------------------------------------------
 // Single answer component (memoized with full content comparison)
-// ------------------------------------------------------------------
 const AnswerItem = React.memo(({
   answer,
   isAuthor,
@@ -262,9 +253,7 @@ const AnswerItem = React.memo(({
   );
 });
 
-// ------------------------------------------------------------------
 // MAIN COMPONENT
-// ------------------------------------------------------------------
 const QuestionCard = React.memo(({
   question,
   postId,
@@ -281,7 +270,6 @@ const QuestionCard = React.memo(({
   onReport,
   isClosed = false,
 }) => {
-  // ---------- All hooks called unconditionally ----------
   const [answerText, setAnswerText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);  // answers hidden by default

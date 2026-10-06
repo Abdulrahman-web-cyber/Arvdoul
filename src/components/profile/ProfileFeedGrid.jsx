@@ -33,7 +33,7 @@ const ProfileFeedGrid = memo(({
 
   // Handle 'about' tab
   if (activeTab === 'about') {
-    const perks = (typeof getPerksForLevel === 'function' ? getPerksForLevel(profile?.level || 1) : []) || [];
+    const perks = getPerksForLevel(profile?.level || 1) || [];
     return (
       <div className={cn(
         "w-full rounded-2xl p-5 sm:p-6 border transition-all shadow-sm space-y-6",
@@ -74,7 +74,7 @@ const ProfileFeedGrid = memo(({
 
           <div>
             <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">
-              Unlocked Perks (Level {profile?.level || 24})
+              Unlocked Perks (Level {profile?.level || 1})
             </h4>
             <div className="space-y-2">
               {perks.slice(0, 4).map((perk, i) => (

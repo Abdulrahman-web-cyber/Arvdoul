@@ -8,15 +8,9 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
+const { getUserIdFromContext } = require('./auth');
 
 const db = admin.firestore();
-
-function getUserIdFromContext(context) {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
-  }
-  return context.auth.uid;
-}
 
 exports.votePoll = functions.https.onCall(async (data, context) => {
   try {

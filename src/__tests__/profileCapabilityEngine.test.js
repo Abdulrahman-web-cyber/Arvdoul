@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { resolveCapabilities } from '../services/profileCapabilityEngine.js';
+import { resolveCapabilities, resolveRelationshipState, RELATIONSHIP_STATES } from '../services/profileCapabilityEngine.js';
 
 describe('profileCapabilityEngine (Digital Nation Identity Specification)', () => {
   const mockOwner = { uid: 'user-owner', username: 'alex', displayName: 'Alex' };
@@ -100,5 +100,41 @@ describe('profileCapabilityEngine (Digital Nation Identity Specification)', () =
     expect(caps.canViewContent).toBe(false);
     expect(caps.canFollow).toBe(false);
     expect(caps.canMessage).toBe(false);
+  });
+
+  it('honours the aggregate isBlocked flag when resolving the relationship state (N017)', () => {
+    expect(resolveRelationshipState({ isBlocked: true, isFollowing: true }))
+      .toBe(RELATIONSHIP_STATES.BLOCKED);
+  });
+
+  it('keeps MUTED above follow states so a mute survives a follow edge (N017)', () => {
+    expect(resolveRelationshipState({ isMuted: true, isFollowing: true, isFollower: true }))
+      .toBe(RELATIONSHIP_STATES.MUTED);
+  });
+
+  it('orders the safety states: blocked > blocked-by > restricted > muted (N017)', () => {
+    expect(resolveRelationshipState({ isBlocking: true, isBlockedBy: true, isRestricted: true, isMuted: true }))
+      .toBe(RELATIONSHIP_STATES.BLOCKED);
+    expect(resolveRelationshipState({ isBlockedBy: true, isRestricted: true, isMuted: true }))
+      .toBe(RELATIONSHIP_STATES.BLOCKED_BY);
+    expect(resolveRelationshipState({ isRestricted: true, isMuted: true }))
+      .toBe(RELATIONSHIP_STATES.RESTRICTED);
+    expect(resolveRelationshipState({ isFollower: true }))
+      .toBe(RELATIONSHIP_STATES.FOLLOWED_BY);
+  });
+
+  it('gates links/presence/economic on content visibility (N007)', () => {
+    const privateTarget = { ...mockTarget, isPrivate: true };
+    const visitor = { uid: 'user-visitor' };
+    const caps = resolveCapabilities({
+      viewer: visitor,
+      target: privateTarget,
+      relationship: { isFollowing: false, isMutualFriend: false },
+    });
+
+    expect(caps.canViewContent).toBe(false);
+    expect(caps.canViewLinks).toBe(false);
+    expect(caps.canViewPresence).toBe(false);
+    expect(caps.canViewEconomicStatus).toBe(false);
   });
 });

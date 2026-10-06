@@ -1,6 +1,4 @@
-// src/app/AppBootstrap.jsx - ULTIMATE REFACTORED VERSION - FIXED
-// 🏗️ Perfect architecture with clean imports
-// ⚡ No circular dependencies, perfect chunking
+// src/app/AppBootstrap.jsx
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { BrowserRouter } from 'react-router-dom';
@@ -37,7 +35,12 @@ const SystemInitializer = ({ onReady }) => {
         await Promise.allSettled([
           import('../services/authService.js'),
           import('../services/userService.js'),
-          import('../services/storageService.js')
+          import('../services/storageService.js'),
+          // Importing this module constructs the singleton, which attaches the
+          // window 'error' / 'unhandledrejection' listeners. Without it, errors
+          // thrown outside React's render path (event handlers, async work)
+          // were never captured anywhere.
+          import('../services/crashReportingService.js')
         ]);
         
         // Stage 2: Load Firebase in background (non-critical)
@@ -58,14 +61,17 @@ const SystemInitializer = ({ onReady }) => {
         // Don't await - let it run in background
         firebaseInit();
 
-        // Feature flags: pull Firebase Remote Config in the background. Until
-        // it resolves (or fails), the static defaults are active, so nothing
-        // blocks startup. Admin overrides (kill switches) are applied
-        // synchronously from localStorage by the service constructor.
+        // Feature flags: pull Firebase Remote Config in the background and
+        // subscribe to the server-governed `feature_flags` overrides so a kill
+        // switch applies to every signed-in user. Until either resolves (or
+        // fails), the static defaults are active, so nothing blocks startup.
         const featureFlagsInit = async () => {
           try {
             const { featureFlagService } = await import('../services/featureFlagService.js');
             await featureFlagService.init();
+            const { getFirestoreInstance } = await import('../firebase/firebase.js');
+            const firestore = await getFirestoreInstance();
+            await featureFlagService.attachFirestoreOverrides(firestore);
           } catch (error) {
             console.warn('⚠️ Feature flags init failed (defaults active):', error.message);
           }

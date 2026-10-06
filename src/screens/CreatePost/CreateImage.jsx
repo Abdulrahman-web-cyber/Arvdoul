@@ -1,8 +1,4 @@
 // src/screens/CreatePost/CreateImage.jsx
-// ARVDOUL IMAGE STUDIO – ULTIMATE PRODUCTION FINAL
-// ✅ All issues fixed: card width, arrows, toolbar spacing, delete payload
-// ✅ Draft saving comment, unused code removed, accessibility improved
-// ✅ Fully responsive, pixel‑perfect, production‑ready
 
 import React, {
   useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense,
@@ -18,7 +14,6 @@ import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 import { TopAppLoadingBanner } from "../../components/Navigation/RouteProgressBar.jsx";
 import { getStorageService } from "../../services/storageService";
 import { openDB } from "idb";
-import { getAuth } from "firebase/auth";
 
 const ImageEditor = lazy(() => import("./ImageEditor"));
 const Collage = lazy(() => import("../../components/Shared/Collage"));
@@ -188,17 +183,18 @@ class UploadManager {
     const controller = new AbortController();
     this._abortControllers.set(item.id, controller);
 
-    // The upload is REAL (Firebase Storage, see storage.uploadFileWithProgress
+    // The upload is (Firebase Storage, see storage.uploadFileWithProgress
     // below). When the SDK emits no progress events, the UI shows an honest
     // indeterminate state instead of fabricated percentages — progress shown
-    // to the user is always REAL upload progress.
+    // to the user is always upload progress.
     let fallbackInterval = null;
     let lastRealProgress = 0;
     let uploadTimeout = null;
 
-    // Auth check
-    const auth = getAuth();
-    if (!auth.currentUser) {
+    // Auth check (canonical auth service, no direct firebase/auth import)
+    const { getAuthService } = await import('../../services/authService.js');
+    const auth = await getAuthService().initialize();
+    if (!auth?.currentUser) {
       this._updateState(item.id, UPLOAD_STATES.ERROR, 0);
       if (this.onError) {
         this.onError(item.id, new Error("You must be signed in to upload"));
@@ -928,6 +924,24 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
     onChange(e);
   }, [onChange]);
 
+  // Inserts a token at the caret and keeps focus, so the hashtag/mention
+  // shortcuts are real editing actions instead of decoration.
+  const insertToken = useCallback((token) => {
+    const el = textareaRef.current;
+    const current = value || '';
+    const start = el?.selectionStart ?? current.length;
+    const end = el?.selectionEnd ?? current.length;
+    const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+    if (next.length > maxLength) return;
+    onChange({ target: { value: next } });
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const caret = start + token.length;
+      el.setSelectionRange(caret, caret);
+    });
+  }, [value, maxLength, onChange]);
+
   return (
     <div className="relative">
       <div
@@ -959,10 +973,20 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
             <div className="flex gap-3 text-xs text-gray-400">
               <span>{value.length} / {maxLength}</span>
               <div className="flex gap-2">
-                <button type="button" className="hover:text-purple-500 transition focus:ring-2 focus:ring-purple-500 rounded" aria-label="Insert hashtag">
+                <button
+                  type="button"
+                  onClick={() => insertToken('#')}
+                  className="hover:text-purple-500 transition focus:ring-2 focus:ring-purple-500 rounded"
+                  aria-label="Insert hashtag"
+                >
                   <Icons.Hash className="w-4 h-4" />
                 </button>
-                <button type="button" className="hover:text-purple-500 transition focus:ring-2 focus:ring-purple-500 rounded" aria-label="Mention user">
+                <button
+                  type="button"
+                  onClick={() => insertToken('@')}
+                  className="hover:text-purple-500 transition focus:ring-2 focus:ring-purple-500 rounded"
+                  aria-label="Mention user"
+                >
                   <Icons.AtSign className="w-4 h-4" />
                 </button>
               </div>
@@ -1278,8 +1302,8 @@ export default function CreateImage() {
   // ─── Authentication check ──────────────────────────────────────────
   const getAuthUser = useCallback(() => {
     try {
-      const auth = getAuth();
-      return auth.currentUser;
+      const { getAuthService } = require('../../services/authService.js');
+      return getAuthService().getCurrentUser();
     } catch {
       return null;
     }

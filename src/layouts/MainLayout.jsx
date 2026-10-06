@@ -1,4 +1,4 @@
-// src/layouts/MainLayout.jsx – ARVDOUL PERFECT LAYOUT (FULL MAX WIDTH & IMMERSIVE VIDEO SUPPORT)
+// src/layouts/MainLayout.jsx
 
 import { useLocation } from "react-router-dom";
 import { useTheme } from "@context/ThemeContext";

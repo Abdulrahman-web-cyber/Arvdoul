@@ -10,8 +10,13 @@
  */
 
 import { jest } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { observabilityService } from '../services/observabilityService.js';
 import { crashReportingService } from '../services/crashReportingService.js';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 describe('Phase 9: Enterprise Observability & Crash Reporting', () => {
   beforeEach(() => {
@@ -122,6 +127,18 @@ describe('Phase 9: Enterprise Observability & Crash Reporting', () => {
 
       expect(observabilityService.accumulatedDailyCost).toBeGreaterThan(0);
       expect(observabilityService.accumulatedDailyCost).toBeLessThan(observabilityService.dailyFirestoreCostLimit);
+    });
+  });
+
+  describe('crash reporter is actually wired into the app', () => {
+    test('AppBootstrap imports it so the global listeners attach', () => {
+      const src = fs.readFileSync(path.join(root, 'src/app/AppBootstrap.jsx'), 'utf8');
+      expect(src).toContain("import('../services/crashReportingService.js')");
+    });
+
+    test('GlobalErrorBoundary forwards render errors to it', () => {
+      const src = fs.readFileSync(path.join(root, 'src/app/GlobalErrorBoundary.jsx'), 'utf8');
+      expect(src).toContain('crashReportingService.captureException');
     });
   });
 });

@@ -1,6 +1,4 @@
-// src/data/countryCodes.js - ULTIMATE ENTERPRISE EDITION
-// 🌍 COMPLETE WORLD COVERAGE • EVERY COUNTRY • PRODUCTION READY
-// ✅ Perfect for international phone verification • Real Flag Emojis
+// src/data/countryCodes.js
 
 // Enhanced flag emoji generator with fallback
 const getFlagEmoji = (iso) => {
@@ -22,12 +20,10 @@ const getFlagEmoji = (iso) => {
 
 // COMPLETE COUNTRY DATABASE - EVERY COUNTRY & TERRITORY
 export const countryCodes = [
-  // ========== NORTH AMERICA ==========
   { iso: 'US', code: '+1', name: 'United States', region: 'North America', flag: getFlagEmoji('US'), dialCode: '+1' },
   { iso: 'CA', code: '+1', name: 'Canada', region: 'North America', flag: getFlagEmoji('CA'), dialCode: '+1' },
   { iso: 'MX', code: '+52', name: 'Mexico', region: 'North America', flag: getFlagEmoji('MX'), dialCode: '+52' },
   
-  // ========== CENTRAL AMERICA ==========
   { iso: 'BZ', code: '+501', name: 'Belize', region: 'Central America', flag: getFlagEmoji('BZ'), dialCode: '+501' },
   { iso: 'CR', code: '+506', name: 'Costa Rica', region: 'Central America', flag: getFlagEmoji('CR'), dialCode: '+506' },
   { iso: 'SV', code: '+503', name: 'El Salvador', region: 'Central America', flag: getFlagEmoji('SV'), dialCode: '+503' },
@@ -36,7 +32,6 @@ export const countryCodes = [
   { iso: 'NI', code: '+505', name: 'Nicaragua', region: 'Central America', flag: getFlagEmoji('NI'), dialCode: '+505' },
   { iso: 'PA', code: '+507', name: 'Panama', region: 'Central America', flag: getFlagEmoji('PA'), dialCode: '+507' },
   
-  // ========== CARIBBEAN ==========
   { iso: 'AG', code: '+1', name: 'Antigua and Barbuda', region: 'Caribbean', flag: getFlagEmoji('AG'), dialCode: '+1' },
   { iso: 'BS', code: '+1', name: 'Bahamas', region: 'Caribbean', flag: getFlagEmoji('BS'), dialCode: '+1' },
   { iso: 'BB', code: '+1', name: 'Barbados', region: 'Caribbean', flag: getFlagEmoji('BB'), dialCode: '+1' },
@@ -51,7 +46,6 @@ export const countryCodes = [
   { iso: 'VC', code: '+1', name: 'Saint Vincent and the Grenadines', region: 'Caribbean', flag: getFlagEmoji('VC'), dialCode: '+1' },
   { iso: 'TT', code: '+1', name: 'Trinidad and Tobago', region: 'Caribbean', flag: getFlagEmoji('TT'), dialCode: '+1' },
   
-  // ========== SOUTH AMERICA ==========
   { iso: 'AR', code: '+54', name: 'Argentina', region: 'South America', flag: getFlagEmoji('AR'), dialCode: '+54' },
   { iso: 'BO', code: '+591', name: 'Bolivia', region: 'South America', flag: getFlagEmoji('BO'), dialCode: '+591' },
   { iso: 'BR', code: '+55', name: 'Brazil', region: 'South America', flag: getFlagEmoji('BR'), dialCode: '+55' },
@@ -65,7 +59,6 @@ export const countryCodes = [
   { iso: 'UY', code: '+598', name: 'Uruguay', region: 'South America', flag: getFlagEmoji('UY'), dialCode: '+598' },
   { iso: 'VE', code: '+58', name: 'Venezuela', region: 'South America', flag: getFlagEmoji('VE'), dialCode: '+58' },
   
-  // ========== WESTERN EUROPE ==========
   { iso: 'AT', code: '+43', name: 'Austria', region: 'Europe', flag: getFlagEmoji('AT'), dialCode: '+43' },
   { iso: 'BE', code: '+32', name: 'Belgium', region: 'Europe', flag: getFlagEmoji('BE'), dialCode: '+32' },
   { iso: 'FR', code: '+33', name: 'France', region: 'Europe', flag: getFlagEmoji('FR'), dialCode: '+33' },
@@ -76,7 +69,6 @@ export const countryCodes = [
   { iso: 'NL', code: '+31', name: 'Netherlands', region: 'Europe', flag: getFlagEmoji('NL'), dialCode: '+31' },
   { iso: 'CH', code: '+41', name: 'Switzerland', region: 'Europe', flag: getFlagEmoji('CH'), dialCode: '+41' },
   
-  // ========== NORTHERN EUROPE ==========
   { iso: 'DK', code: '+45', name: 'Denmark', region: 'Europe', flag: getFlagEmoji('DK'), dialCode: '+45' },
   { iso: 'EE', code: '+372', name: 'Estonia', region: 'Europe', flag: getFlagEmoji('EE'), dialCode: '+372' },
   { iso: 'FI', code: '+358', name: 'Finland', region: 'Europe', flag: getFlagEmoji('FI'), dialCode: '+358' },
@@ -88,7 +80,6 @@ export const countryCodes = [
   { iso: 'SE', code: '+46', name: 'Sweden', region: 'Europe', flag: getFlagEmoji('SE'), dialCode: '+46' },
   { iso: 'GB', code: '+44', name: 'United Kingdom', region: 'Europe', flag: getFlagEmoji('GB'), dialCode: '+44' },
   
-  // ========== SOUTHERN EUROPE ==========
   { iso: 'AL', code: '+355', name: 'Albania', region: 'Europe', flag: getFlagEmoji('AL'), dialCode: '+355' },
   { iso: 'AD', code: '+376', name: 'Andorra', region: 'Europe', flag: getFlagEmoji('AD'), dialCode: '+376' },
   { iso: 'BA', code: '+387', name: 'Bosnia and Herzegovina', region: 'Europe', flag: getFlagEmoji('BA'), dialCode: '+387' },
@@ -106,7 +97,6 @@ export const countryCodes = [
   { iso: 'MK', code: '+389', name: 'North Macedonia', region: 'Europe', flag: getFlagEmoji('MK'), dialCode: '+389' },
   { iso: 'VA', code: '+379', name: 'Vatican City', region: 'Europe', flag: getFlagEmoji('VA'), dialCode: '+379' },
   
-  // ========== EASTERN EUROPE ==========
   { iso: 'BY', code: '+375', name: 'Belarus', region: 'Europe', flag: getFlagEmoji('BY'), dialCode: '+375' },
   { iso: 'BG', code: '+359', name: 'Bulgaria', region: 'Europe', flag: getFlagEmoji('BG'), dialCode: '+359' },
   { iso: 'CZ', code: '+420', name: 'Czech Republic', region: 'Europe', flag: getFlagEmoji('CZ'), dialCode: '+420' },
@@ -118,7 +108,6 @@ export const countryCodes = [
   { iso: 'SK', code: '+421', name: 'Slovakia', region: 'Europe', flag: getFlagEmoji('SK'), dialCode: '+421' },
   { iso: 'UA', code: '+380', name: 'Ukraine', region: 'Europe', flag: getFlagEmoji('UA'), dialCode: '+380' },
   
-  // ========== EAST ASIA ==========
   { iso: 'CN', code: '+86', name: 'China', region: 'Asia', flag: getFlagEmoji('CN'), dialCode: '+86' },
   { iso: 'HK', code: '+852', name: 'Hong Kong', region: 'Asia', flag: getFlagEmoji('HK'), dialCode: '+852' },
   { iso: 'JP', code: '+81', name: 'Japan', region: 'Asia', flag: getFlagEmoji('JP'), dialCode: '+81' },
@@ -128,7 +117,6 @@ export const countryCodes = [
   { iso: 'MN', code: '+976', name: 'Mongolia', region: 'Asia', flag: getFlagEmoji('MN'), dialCode: '+976' },
   { iso: 'TW', code: '+886', name: 'Taiwan', region: 'Asia', flag: getFlagEmoji('TW'), dialCode: '+886' },
   
-  // ========== SOUTHEAST ASIA ==========
   { iso: 'BN', code: '+673', name: 'Brunei', region: 'Asia', flag: getFlagEmoji('BN'), dialCode: '+673' },
   { iso: 'KH', code: '+855', name: 'Cambodia', region: 'Asia', flag: getFlagEmoji('KH'), dialCode: '+855' },
   { iso: 'ID', code: '+62', name: 'Indonesia', region: 'Asia', flag: getFlagEmoji('ID'), dialCode: '+62' },
@@ -141,7 +129,6 @@ export const countryCodes = [
   { iso: 'TL', code: '+670', name: 'Timor-Leste', region: 'Asia', flag: getFlagEmoji('TL'), dialCode: '+670' },
   { iso: 'VN', code: '+84', name: 'Vietnam', region: 'Asia', flag: getFlagEmoji('VN'), dialCode: '+84' },
   
-  // ========== SOUTH ASIA ==========
   { iso: 'AF', code: '+93', name: 'Afghanistan', region: 'Asia', flag: getFlagEmoji('AF'), dialCode: '+93' },
   { iso: 'BD', code: '+880', name: 'Bangladesh', region: 'Asia', flag: getFlagEmoji('BD'), dialCode: '+880' },
   { iso: 'BT', code: '+975', name: 'Bhutan', region: 'Asia', flag: getFlagEmoji('BT'), dialCode: '+975' },
@@ -152,14 +139,12 @@ export const countryCodes = [
   { iso: 'PK', code: '+92', name: 'Pakistan', region: 'Asia', flag: getFlagEmoji('PK'), dialCode: '+92' },
   { iso: 'LK', code: '+94', name: 'Sri Lanka', region: 'Asia', flag: getFlagEmoji('LK'), dialCode: '+94' },
   
-  // ========== CENTRAL ASIA ==========
   { iso: 'KZ', code: '+7', name: 'Kazakhstan', region: 'Asia', flag: getFlagEmoji('KZ'), dialCode: '+7' },
   { iso: 'KG', code: '+996', name: 'Kyrgyzstan', region: 'Asia', flag: getFlagEmoji('KG'), dialCode: '+996' },
   { iso: 'TJ', code: '+992', name: 'Tajikistan', region: 'Asia', flag: getFlagEmoji('TJ'), dialCode: '+992' },
   { iso: 'TM', code: '+993', name: 'Turkmenistan', region: 'Asia', flag: getFlagEmoji('TM'), dialCode: '+993' },
   { iso: 'UZ', code: '+998', name: 'Uzbekistan', region: 'Asia', flag: getFlagEmoji('UZ'), dialCode: '+998' },
   
-  // ========== MIDDLE EAST/WEST ASIA ==========
   { iso: 'AM', code: '+374', name: 'Armenia', region: 'Asia', flag: getFlagEmoji('AM'), dialCode: '+374' },
   { iso: 'AZ', code: '+994', name: 'Azerbaijan', region: 'Asia', flag: getFlagEmoji('AZ'), dialCode: '+994' },
   { iso: 'BH', code: '+973', name: 'Bahrain', region: 'Asia', flag: getFlagEmoji('BH'), dialCode: '+973' },
@@ -178,7 +163,6 @@ export const countryCodes = [
   { iso: 'AE', code: '+971', name: 'United Arab Emirates', region: 'Asia', flag: getFlagEmoji('AE'), dialCode: '+971' },
   { iso: 'YE', code: '+967', name: 'Yemen', region: 'Asia', flag: getFlagEmoji('YE'), dialCode: '+967' },
   
-  // ========== NORTH AFRICA ==========
   { iso: 'DZ', code: '+213', name: 'Algeria', region: 'Africa', flag: getFlagEmoji('DZ'), dialCode: '+213' },
   { iso: 'EG', code: '+20', name: 'Egypt', region: 'Africa', flag: getFlagEmoji('EG'), dialCode: '+20' },
   { iso: 'LY', code: '+218', name: 'Libya', region: 'Africa', flag: getFlagEmoji('LY'), dialCode: '+218' },
@@ -187,7 +171,6 @@ export const countryCodes = [
   { iso: 'TN', code: '+216', name: 'Tunisia', region: 'Africa', flag: getFlagEmoji('TN'), dialCode: '+216' },
   { iso: 'EH', code: '+212', name: 'Western Sahara', region: 'Africa', flag: getFlagEmoji('EH'), dialCode: '+212' },
   
-  // ========== WEST AFRICA ==========
   { iso: 'BJ', code: '+229', name: 'Benin', region: 'Africa', flag: getFlagEmoji('BJ'), dialCode: '+229' },
   { iso: 'BF', code: '+226', name: 'Burkina Faso', region: 'Africa', flag: getFlagEmoji('BF'), dialCode: '+226' },
   { iso: 'CV', code: '+238', name: 'Cabo Verde', region: 'Africa', flag: getFlagEmoji('CV'), dialCode: '+238' },
@@ -205,7 +188,6 @@ export const countryCodes = [
   { iso: 'SL', code: '+232', name: 'Sierra Leone', region: 'Africa', flag: getFlagEmoji('SL'), dialCode: '+232' },
   { iso: 'TG', code: '+228', name: 'Togo', region: 'Africa', flag: getFlagEmoji('TG'), dialCode: '+228' },
   
-  // ========== CENTRAL AFRICA ==========
   { iso: 'AO', code: '+244', name: 'Angola', region: 'Africa', flag: getFlagEmoji('AO'), dialCode: '+244' },
   { iso: 'CM', code: '+237', name: 'Cameroon', region: 'Africa', flag: getFlagEmoji('CM'), dialCode: '+237' },
   { iso: 'CF', code: '+236', name: 'Central African Republic', region: 'Africa', flag: getFlagEmoji('CF'), dialCode: '+236' },
@@ -216,7 +198,6 @@ export const countryCodes = [
   { iso: 'GA', code: '+241', name: 'Gabon', region: 'Africa', flag: getFlagEmoji('GA'), dialCode: '+241' },
   { iso: 'ST', code: '+239', name: 'São Tomé and Príncipe', region: 'Africa', flag: getFlagEmoji('ST'), dialCode: '+239' },
   
-  // ========== EAST AFRICA ==========
   { iso: 'BI', code: '+257', name: 'Burundi', region: 'Africa', flag: getFlagEmoji('BI'), dialCode: '+257' },
   { iso: 'KM', code: '+269', name: 'Comoros', region: 'Africa', flag: getFlagEmoji('KM'), dialCode: '+269' },
   { iso: 'DJ', code: '+253', name: 'Djibouti', region: 'Africa', flag: getFlagEmoji('DJ'), dialCode: '+253' },
@@ -236,31 +217,26 @@ export const countryCodes = [
   { iso: 'ZM', code: '+260', name: 'Zambia', region: 'Africa', flag: getFlagEmoji('ZM'), dialCode: '+260' },
   { iso: 'ZW', code: '+263', name: 'Zimbabwe', region: 'Africa', flag: getFlagEmoji('ZW'), dialCode: '+263' },
   
-  // ========== SOUTHERN AFRICA ==========
   { iso: 'BW', code: '+267', name: 'Botswana', region: 'Africa', flag: getFlagEmoji('BW'), dialCode: '+267' },
   { iso: 'LS', code: '+266', name: 'Lesotho', region: 'Africa', flag: getFlagEmoji('LS'), dialCode: '+266' },
   { iso: 'NA', code: '+264', name: 'Namibia', region: 'Africa', flag: getFlagEmoji('NA'), dialCode: '+264' },
   { iso: 'ZA', code: '+27', name: 'South Africa', region: 'Africa', flag: getFlagEmoji('ZA'), dialCode: '+27' },
   { iso: 'SZ', code: '+268', name: 'Eswatini', region: 'Africa', flag: getFlagEmoji('SZ'), dialCode: '+268' },
   
-  // ========== AUSTRALIA & NEW ZEALAND ==========
   { iso: 'AU', code: '+61', name: 'Australia', region: 'Oceania', flag: getFlagEmoji('AU'), dialCode: '+61' },
   { iso: 'NZ', code: '+64', name: 'New Zealand', region: 'Oceania', flag: getFlagEmoji('NZ'), dialCode: '+64' },
   
-  // ========== MELANESIA ==========
   { iso: 'FJ', code: '+679', name: 'Fiji', region: 'Oceania', flag: getFlagEmoji('FJ'), dialCode: '+679' },
   { iso: 'PG', code: '+675', name: 'Papua New Guinea', region: 'Oceania', flag: getFlagEmoji('PG'), dialCode: '+675' },
   { iso: 'SB', code: '+677', name: 'Solomon Islands', region: 'Oceania', flag: getFlagEmoji('SB'), dialCode: '+677' },
   { iso: 'VU', code: '+678', name: 'Vanuatu', region: 'Oceania', flag: getFlagEmoji('VU'), dialCode: '+678' },
   
-  // ========== MICRONESIA ==========
   { iso: 'FM', code: '+691', name: 'Micronesia', region: 'Oceania', flag: getFlagEmoji('FM'), dialCode: '+691' },
   { iso: 'KI', code: '+686', name: 'Kiribati', region: 'Oceania', flag: getFlagEmoji('KI'), dialCode: '+686' },
   { iso: 'MH', code: '+692', name: 'Marshall Islands', region: 'Oceania', flag: getFlagEmoji('MH'), dialCode: '+692' },
   { iso: 'NR', code: '+674', name: 'Nauru', region: 'Oceania', flag: getFlagEmoji('NR'), dialCode: '+674' },
   { iso: 'PW', code: '+680', name: 'Palau', region: 'Oceania', flag: getFlagEmoji('PW'), dialCode: '+680' },
   
-  // ========== POLYNESIA ==========
   { iso: 'AS', code: '+1', name: 'American Samoa', region: 'Oceania', flag: getFlagEmoji('AS'), dialCode: '+1' },
   { iso: 'CK', code: '+682', name: 'Cook Islands', region: 'Oceania', flag: getFlagEmoji('CK'), dialCode: '+682' },
   { iso: 'PF', code: '+689', name: 'French Polynesia', region: 'Oceania', flag: getFlagEmoji('PF'), dialCode: '+689' },
@@ -272,7 +248,6 @@ export const countryCodes = [
   { iso: 'TV', code: '+688', name: 'Tuvalu', region: 'Oceania', flag: getFlagEmoji('TV'), dialCode: '+688' },
   { iso: 'WF', code: '+681', name: 'Wallis and Futuna', region: 'Oceania', flag: getFlagEmoji('WF'), dialCode: '+681' },
   
-  // ========== OTHER TERRITORIES ==========
   { iso: 'AQ', code: '+672', name: 'Antarctica', region: 'Antarctica', flag: getFlagEmoji('AQ'), dialCode: '+672' },
   { iso: 'BV', code: '+47', name: 'Bouvet Island', region: 'Antarctica', flag: getFlagEmoji('BV'), dialCode: '+47' },
   { iso: 'IO', code: '+246', name: 'British Indian Ocean Territory', region: 'Indian Ocean', flag: getFlagEmoji('IO'), dialCode: '+246' },

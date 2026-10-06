@@ -1,6 +1,4 @@
 /**
- * src/services/complianceGovernanceService.js - ARVDOUL GLOBAL COMPLIANCE & PRIVACY GOVERNANCE v1.0
- * 
  * Production-grade data sovereignty & privacy compliance suite:
  * • GDPR Article 20 / CCPA Portability: Machine-readable cryptographic data export bundle
  * • GDPR Article 17 "Right to be Forgotten": Irreversible cascading erasure & anonymization
@@ -72,9 +70,14 @@ export class ComplianceGovernanceService {
   }
 
   /**
-   * Exports full portable user archive according to GDPR Article 20 / CCPA.
+   * Compiles a portable user archive according to GDPR Article 20 / CCPA.
+   *
+   * The caller supplies the real collected data (`dataSources`). This service
+   * holds no data access of its own, so it must never invent profile fields —
+   * an export with a fabricated email/username would be a false record of the
+   * subject's personal data.
    */
-  async exportUserData(userId, mockDataSources = {}) {
+  async exportUserData(userId, dataSources = {}) {
     if (!userId) throw new Error('userId is required for export');
 
     const timestamp = Date.now();
@@ -90,17 +93,11 @@ export class ComplianceGovernanceService {
         standard: COMPLIANCE_STANDARDS.GDPR,
         requestOrigin: 'SELF_SERVICE_PORTAL',
       },
-      profile: mockDataSources.profile || {
-        userId,
-        username: `user_${userId.slice(0, 6)}`,
-        createdAt: timestamp - 86400000 * 30,
-        email: 'user@example.com',
-        phone: null,
-      },
-      posts: mockDataSources.posts || [],
-      comments: mockDataSources.comments || [],
-      ledgerTransactions: mockDataSources.transactions || [],
-      conversationsMetadata: mockDataSources.conversations || [],
+      profile: dataSources.profile || { userId },
+      posts: dataSources.posts || [],
+      comments: dataSources.comments || [],
+      ledgerTransactions: dataSources.transactions || [],
+      conversationsMetadata: dataSources.conversations || [],
       consentHistory: this.getConsentPreferences(userId),
     };
 

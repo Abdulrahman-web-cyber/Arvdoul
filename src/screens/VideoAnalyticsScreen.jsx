@@ -1,6 +1,6 @@
-// src/screens/VideoAnalyticsScreen.jsx - ARVDOUL WORLD-CLASS VIDEO ANALYTICS SCREEN
+// src/screens/VideoAnalyticsScreen.jsx
+//
 // Creator dashboard with video performance metrics
-// Surpasses TikTok, Instagram, YouTube with futuristic analytics
 
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -25,7 +25,9 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { formatViewCount, formatDuration, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
+import { formatCoinsAsUsd } from '../shared/levelConfig.cjs';
 import { toast } from 'sonner';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import GlassCard from '../components/UI/GlassCard';
@@ -46,7 +48,7 @@ const VideoAnalyticsScreen = () => {
   const [analytics, setAnalytics] = useState(null);
   const { user } = useAuth();
 
-  // Load REAL analytics from analyticsService (Firestore-backed, sharded
+  // Load analytics from analyticsService (Firestore-backed, sharded
   // counters). Zero state until real data arrives - no fabricated numbers.
   useEffect(() => {
     let cancelled = false;
@@ -63,34 +65,40 @@ const VideoAnalyticsScreen = () => {
             viewsChange: data.changes?.views || 0,
             totalLikes: data.totalEngagement || 0,
             likesChange: data.changes?.engagement || 0,
-            totalComments: data.totalEngagement || 0,
-            commentsChange: 0,
-            totalShares: 0,
-            sharesChange: 0,
-            totalWatchTime: 0,
-            watchTimeChange: 0,
-            avgCompletionRate: 0,
-            completionChange: 0,
+            // Profile analytics tracks a single engagement total; there is no
+            // per-type comment/share/watch-time breakdown, so report those as
+            // unavailable (null) rather than duplicating the engagement number.
+            totalComments: null,
+            commentsChange: null,
+            totalShares: null,
+            sharesChange: null,
+            totalWatchTime: null,
+            watchTimeChange: null,
+            avgCompletionRate: null,
+            completionChange: null,
+            // Real per-day view series for the chart (empty when no data yet).
+            series: (data.dailyStats || []).map((d) => ({ date: d.date, views: d.views || 0 })),
+            hasData: Boolean(data.hasData),
           },
           revenue: {
             total: data.coinsEarned || 0,
-            tips: 0,
-            subscriptions: 0,
-            payPerView: 0,
-            gifts: 0,
+            tips: null,
+            subscriptions: null,
+            payPerView: null,
+            gifts: null,
             change: 0,
           },
           videos: (data.topPosts || []).map((p, i) => ({
             id: p.id || `v-${i}`,
             title: p.caption || p.content?.slice(0, 40) || `Video ${i + 1}`,
             thumbnail: (p.media && p.media[0]?.url) || p.mediaUrl || '/assets/default-profile.png',
-            views: p.views || p.likeCount || 0,
+            views: p.views || 0,
             likes: p.likeCount || 0,
             comments: p.commentCount || 0,
             shares: p.shareCount || 0,
-            watchTime: 0,
-            completionRate: 0,
-            earnings: 0,
+            watchTime: null,
+            completionRate: null,
+            earnings: null,
           })),
           audience: {
             demographics: {
@@ -111,7 +119,6 @@ const VideoAnalyticsScreen = () => {
     load();
     return () => { cancelled = true; };
   }, [user?.uid, timeRange]);
-
 
   
 
@@ -211,50 +218,57 @@ const OverviewTab = ({ analytics }) => {
 
   const { isDark } = useTheme();  const { overview } = analytics;
 
+  // null means the metric is not tracked by the data source - render "—".
+  const num = (v, fmt = formatViewCount) => (v === null || v === undefined ? '—' : fmt(v));
+
   const stats = [
     {
       label: 'Total Views',
-      value: formatViewCount(overview.totalViews),
+      value: num(overview.totalViews),
       change: overview.viewsChange,
       icon: Eye,
       gradient: 'from-blue-500 to-cyan-500',
     },
     {
       label: 'Total Likes',
-      value: formatViewCount(overview.totalLikes),
+      value: num(overview.totalLikes),
       change: overview.likesChange,
       icon: Heart,
       gradient: 'from-red-500 to-pink-500',
     },
     {
       label: 'Comments',
-      value: formatViewCount(overview.totalComments),
+      value: num(overview.totalComments),
       change: overview.commentsChange,
       icon: MessageCircle,
       gradient: 'from-purple-500 to-violet-500',
     },
     {
       label: 'Shares',
-      value: formatViewCount(overview.totalShares),
+      value: num(overview.totalShares),
       change: overview.sharesChange,
       icon: Share2,
       gradient: 'from-green-500 to-emerald-500',
     },
     {
       label: 'Watch Time',
-      value: formatWatchTime(overview.totalWatchTime),
+      value: num(overview.totalWatchTime, formatWatchTime),
       change: overview.watchTimeChange,
       icon: Clock,
       gradient: 'from-orange-500 to-amber-500',
     },
     {
       label: 'Avg. Completion',
-      value: `${overview.avgCompletionRate}%`,
+      value: num(overview.avgCompletionRate, (v) => `${v}%`),
       change: overview.completionChange,
       icon: Play,
       gradient: 'from-fuchsia-500 to-purple-500',
     },
   ];
+
+  // Real per-day view series; scale bar heights against the series max.
+  const series = overview.series || [];
+  const seriesMax = series.reduce((m, d) => Math.max(m, d.views || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -272,16 +286,18 @@ const OverviewTab = ({ analytics }) => {
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center`}>
                 <stat.icon className="w-5 h-5 text-white" />
               </div>
-              <div className={`flex items-center gap-1 text-sm ${
-                stat.change >= 0 ? 'text-green-400' : 'text-red-400'
-              }`}>
-                {stat.change >= 0 ? (
-                  <ArrowUpRight className="w-4 h-4" />
-                ) : (
-                  <ArrowDownRight className="w-4 h-4" />
-                )}
-                {Math.abs(stat.change)}%
-              </div>
+              {typeof stat.change === 'number' && (
+                <div className={`flex items-center gap-1 text-sm ${
+                  stat.change >= 0 ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {stat.change >= 0 ? (
+                    <ArrowUpRight className="w-4 h-4" />
+                  ) : (
+                    <ArrowDownRight className="w-4 h-4" />
+                  )}
+                  {Math.abs(stat.change)}%
+                </div>
+              )}
             </div>
             <p className="text-white/50 text-sm">{stat.label}</p>
             <p className="text-white text-2xl font-bold mt-1">{stat.value}</p>
@@ -289,7 +305,7 @@ const OverviewTab = ({ analytics }) => {
         ))}
       </div>
 
-      {/* Performance Chart Placeholder */}
+      {/* Views Over Time — real daily series only, never a fabricated curve */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -298,27 +314,30 @@ const OverviewTab = ({ analytics }) => {
       >
         <h3 className="text-lg font-bold text-white mb-4">Views Over Time</h3>
         <div className="h-48 flex items-end justify-between gap-2">
-          {[65, 78, 85, 72, 90, 95, 88, 92, 100, 95, 98, 105].map((value, i) => (
-            <motion.div
-              key={i}
-              initial={{ height: 0 }}
-              animate={{ height: `${value}%` }}
-              transition={{ delay: 0.3 + i * 0.02 }}
-              className="flex-1 rounded-t-lg"
-              style={{
-                background: ARVDOUL_GRADIENT,
-                opacity: 0.6 + (i / 12) * 0.4,
-              }}
-            />
-          ))}
+          {series.length === 0 ? (
+            <div className="w-full h-full flex items-center justify-center text-white/40 text-sm">
+              No daily view data yet
+            </div>
+          ) : (
+            series.map((d, i) => (
+              <motion.div
+                key={d.date}
+                initial={{ height: 0 }}
+                animate={{ height: seriesMax > 0 ? `${Math.round(((d.views || 0) / seriesMax) * 100)}%` : '2%' }}
+                transition={{ delay: 0.3 + i * 0.02 }}
+                className="flex-1 rounded-t-lg"
+                title={`${d.date}: ${d.views}`}
+                style={{
+                  background: ARVDOUL_GRADIENT,
+                  opacity: 0.6 + (i / Math.max(series.length, 1)) * 0.4,
+                }}
+              />
+            ))
+          )}
         </div>
         <div className="flex justify-between mt-2 text-white/40 text-xs">
-          <span>Jan</span>
-          <span>Feb</span>
-          <span>Mar</span>
-          <span>Apr</span>
-          <span>May</span>
-          <span>Jun</span>
+          <span>{series[0]?.date || ''}</span>
+          <span>{series[series.length - 1]?.date || ''}</span>
         </div>
       </motion.div>
     </div>
@@ -377,11 +396,11 @@ const VideosTab = ({ videos }) => {
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-white/50" />
                 <span className="text-white/50 text-xs">
-                  {formatWatchTime(video.watchTime)} watch time
+                  {video.watchTime == null ? 'Watch time not tracked' : `${formatWatchTime(video.watchTime)} watch time`}
                 </span>
               </div>
               <div className="text-green-400 text-sm font-medium">
-                ${video.earnings.toFixed(2)}
+                {video.earnings == null ? '—' : `$${video.earnings.toFixed(2)}`}
               </div>
             </div>
 
@@ -389,13 +408,15 @@ const VideosTab = ({ videos }) => {
             <div className="mt-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-white/50 text-xs">Completion</span>
-                <span className="text-white/80 text-xs">{video.completionRate}%</span>
+                <span className="text-white/80 text-xs">
+                  {video.completionRate == null ? '—' : `${video.completionRate}%`}
+                </span>
               </div>
               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${video.completionRate}%`,
+                    width: `${video.completionRate || 0}%`,
                     background: ARVDOUL_GRADIENT,
                   }}
                 />
@@ -486,11 +507,66 @@ const AudienceTab = ({ audience }) => {
 };
 
 /**
- * Revenue Tab - Earnings breakdown
+ * Revenue Tab - Earnings breakdown.
+ *
+ * Revenue figures come from the creator's real coin ledger (analytics
+ * coinsEarned) and their real payout account/withdrawal history from the
+ * monetization service. There is no fabricated breakdown: per-source splits
+ * (subscriptions/tips/PPV/gifts) are not tracked by the analytics document, so
+ * they are reported unavailable rather than invented.
  */
 const RevenueTab = ({ revenue }) => {
+  const { isDark } = useTheme();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [payout, setPayout] = useState({ loading: true, settings: null, pendingCoins: 0, lastPayoutCoins: null });
 
-  const { isDark } = useTheme();  const revenueItems = [
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!user?.uid) {
+        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+        return;
+      }
+      try {
+        const [{ default: walletService }, { default: monetizationService }] = await Promise.all([
+          import('../services/walletService.js'),
+          import('../services/monetizationService.js'),
+        ]);
+        const [settingsRes, walletRes, historyRes] = await Promise.allSettled([
+          monetizationService.getPayoutSettings(),
+          walletService.getWalletOverview(user.uid),
+          monetizationService.getTransactionHistory(user.uid, 100),
+        ]);
+        if (cancelled) return;
+
+        const settings = settingsRes.status === 'fulfilled' ? settingsRes.value : null;
+        const pendingCoins = walletRes.status === 'fulfilled' ? (walletRes.value?.pendingCoins || 0) : 0;
+
+        let lastPayoutCoins = null;
+        const historyItems = historyRes.status === 'fulfilled' ? historyRes.value?.items : null;
+        if (Array.isArray(historyItems)) {
+          const withdrawals = historyItems.filter(
+            (tx) => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')
+          );
+          if (withdrawals.length > 0) lastPayoutCoins = Number(withdrawals[0].amount) || 0;
+        }
+
+        setPayout({ loading: false, settings, pendingCoins, lastPayoutCoins });
+      } catch (err) {
+        if (!cancelled) setPayout({ loading: false, settings: null, pendingCoins: 0, lastPayoutCoins: null });
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  const formatUsd = formatCoinsAsUsd;
+
+  const accountStatus = payout.settings?.accountStatus || 'unconfigured';
+  const accountConnected = ['verified', 'active', 'enabled'].includes(accountStatus);
+
+  const revenueItems = [
     { label: 'Subscriptions', value: revenue.subscriptions, icon: Users },
     { label: 'Tips', value: revenue.tips, icon: Heart },
     { label: 'Pay Per View', value: revenue.payPerView, icon: Video },
@@ -505,23 +581,25 @@ const RevenueTab = ({ revenue }) => {
         animate={{ opacity: 1, scale: 1 }}
         className="p-8 rounded-3xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 backdrop-blur-xl text-center"
       >
-        <p className="text-white/60 mb-2">Total Earnings</p>
+        <p className="text-white/60 mb-2">Total Coins Earned</p>
         <p className="text-5xl font-bold text-white mb-2">
-          ${revenue.total.toFixed(2)}
+          {formatUsd(revenue.total)}
         </p>
-        <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
-          revenue.change >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        }`}>
-          {revenue.change >= 0 ? (
-            <ArrowUpRight className="w-4 h-4" />
-          ) : (
-            <ArrowDownRight className="w-4 h-4" />
-          )}
-          {Math.abs(revenue.change)}% vs last period
-        </div>
+        {typeof revenue.change === 'number' && (
+          <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
+            revenue.change >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+          }`}>
+            {revenue.change >= 0 ? (
+              <ArrowUpRight className="w-4 h-4" />
+            ) : (
+              <ArrowDownRight className="w-4 h-4" />
+            )}
+            {Math.abs(revenue.change)}% vs last period
+          </div>
+        )}
       </motion.div>
 
-      {/* Revenue Breakdown */}
+      {/* Revenue Breakdown - per-source splits are not tracked; show honest unavailable */}
       <div className="grid grid-cols-2 gap-4">
         {revenueItems.map((item, index) => (
           <motion.div
@@ -537,12 +615,14 @@ const RevenueTab = ({ revenue }) => {
               </div>
             </div>
             <p className="text-white/50 text-sm">{item.label}</p>
-            <p className="text-white text-xl font-bold">${item.value.toFixed(2)}</p>
+            <p className="text-white text-xl font-bold">
+              {item.value == null ? 'Not tracked' : formatUsd(item.value)}
+            </p>
           </motion.div>
         ))}
       </div>
 
-      {/* Payout Info */}
+      {/* Payout Info - real account status and withdrawal history */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -550,22 +630,29 @@ const RevenueTab = ({ revenue }) => {
         className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl"
       >
         <h3 className="text-lg font-bold text-white mb-4">Payout Info</h3>
-        <div className="space-y-3">
-          <div className="flex justify-between">
-            <span className="text-white/60">Pending Payout</span>
-            <span className="text-white font-semibold">$1,250.00</span>
+        {payout.loading ? (
+          <p className="text-white/50 text-sm">Loading payout status…</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-white/60">Payout Account</span>
+              <span className={`font-semibold ${accountConnected ? 'text-green-400' : 'text-amber-400'}`}>
+                {accountConnected ? 'Connected' : 'Not connected'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/60">Pending Payout</span>
+              <span className="text-white font-semibold">{formatUsd(payout.pendingCoins)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/60">Last Payout</span>
+              <span className="text-white font-semibold">{formatUsd(payout.lastPayoutCoins)}</span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-white/60">Last Payout</span>
-            <span className="text-white font-semibold">$2,300.00</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-white/60">Payout Schedule</span>
-            <span className="text-white">Monthly</span>
-          </div>
-        </div>
+        )}
         <motion.button
           whileTap={{ scale: 0.98 }}
+          onClick={() => navigate('/creator-payout')}
           className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
         >
           Manage Payouts

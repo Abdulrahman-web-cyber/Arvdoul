@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/HighlightsScreen.jsx - ARVDOUL Highlights Screen
- * 
  * Manage story highlights.
  * 
  * @component
@@ -26,7 +24,7 @@ export default function HighlightsScreen() {
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
-  const currentUser = storeUser || authUser;
+  const currentUser = authUser || storeUser;
   const currentUserId = currentUser?.uid || authUser?.uid || localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid');
   
   const [highlights, setHighlights] = useState([]);

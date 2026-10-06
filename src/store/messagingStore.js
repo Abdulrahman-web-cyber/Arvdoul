@@ -1,13 +1,10 @@
-// src/store/messagingStore.js - ARVDOUL MESSAGING STORE
-// 🎯 PRODUCTION-READY ZUSTAND STORE WITH IMMER
-// ✅ Optimistic updates, real-time subscriptions, offline support
+// src/store/messagingStore.js
 
 import { create } from 'zustand';
 import { produce } from 'immer';
 import messagingService from '../services/messagesService';
 
 export const useMessagingStore = create((set, get) => ({
-  // ===== CONVERSATIONS STATE =====
   conversations: [],
   conversationsLoading: false,
   conversationsHasMore: true,
@@ -16,24 +13,20 @@ export const useMessagingStore = create((set, get) => ({
   unreadCounts: {},
   totalUnreadCount: 0,
 
-  // ===== MESSAGES STATE (keyed by conversationId) =====
   messages: {}, // { [conversationId]: Message[] }
   messagesLoading: {}, // { [conversationId]: boolean }
   messagesHasMore: {}, // { [conversationId]: boolean }
   messagesNextCursor: {}, // { [conversationId]: any }
   messagesError: {}, // { [conversationId]: Error | null }
 
-  // ===== UI STATE =====
   selectedConversationId: null,
   typingUsers: {}, // { [conversationId]: { [userId]: { isTyping: boolean, timestamp: number } } }
   presence: {}, // { [userId]: { online: boolean, lastSeen: Date } }
   drafts: {}, // { [conversationId]: string }
 
-  // ===== SUBSCRIPTIONS =====
   activeSubscriptions: {}, // { [conversationId]: unsubscribe }
   presenceSubscription: null,
 
-  // ===== LOAD CONVERSATIONS =====
   loadConversations: async (userId, options = {}) => {
     const state = get();
     if (state.conversationsLoading) return;
@@ -72,7 +65,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== LOAD MESSAGES =====
   loadMessages: async (conversationId, options = {}) => {
     const state = get();
     if (state.messagesLoading[conversationId]) return;
@@ -131,7 +123,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== SEND MESSAGE =====
   sendMessage: async (conversationId, messageData, userId, displayName, photoURL, options = {}) => {
     const state = get();
 
@@ -223,7 +214,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== ADD MESSAGE (from subscription) =====
   addMessage: (conversationId, message) => {
     const state = get();
     const exists = state.messages[conversationId]?.some((m) => m.id === message.id);
@@ -248,7 +238,6 @@ export const useMessagingStore = create((set, get) => ({
     );
   },
 
-  // ===== REACT TO MESSAGE =====
   reactToMessage: async (conversationId, messageId, userId, reaction) => {
     set(
       produce((draft) => {
@@ -273,7 +262,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== DELETE MESSAGE =====
   deleteMessage: async (conversationId, messageId, userId, forEveryone = false) => {
     set(
       produce((draft) => {
@@ -299,7 +287,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== EDIT MESSAGE =====
   editMessage: async (conversationId, messageId, userId, newContent) => {
     set(
       produce((draft) => {
@@ -322,7 +309,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== MARK CONVERSATION AS READ =====
   markConversationAsRead: async (conversationId, userId) => {
     try {
       await messagingService.markConversationAsRead(conversationId, userId);
@@ -337,7 +323,6 @@ export const useMessagingStore = create((set, get) => ({
     }
   },
 
-  // ===== TYPING INDICATOR =====
   setTyping: (conversationId, userId, isTyping) => {
     set(
       produce((draft) => {
@@ -356,7 +341,6 @@ export const useMessagingStore = create((set, get) => ({
     );
   },
 
-  // ===== PRESENCE =====
   setPresence: (userId, presence) => {
     set(
       produce((draft) => {
@@ -365,7 +349,6 @@ export const useMessagingStore = create((set, get) => ({
     );
   },
 
-  // ===== DRAFTS =====
   saveDraft: (conversationId, content) => {
     set(
       produce((draft) => {
@@ -386,7 +369,6 @@ export const useMessagingStore = create((set, get) => ({
     );
   },
 
-  // ===== SELECT CONVERSATION =====
   selectConversation: (conversationId) => {
     set({ selectedConversationId: conversationId });
   },
@@ -395,7 +377,6 @@ export const useMessagingStore = create((set, get) => ({
     set({ selectedConversationId: null });
   },
 
-  // ===== CLEANUP =====
   clearConversation: (conversationId) => {
     set(
       produce((draft) => {

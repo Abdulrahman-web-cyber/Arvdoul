@@ -1,6 +1,8 @@
-// src/screens/LiveScreen.jsx - ARVDOUL LIVE (PRODUCTION)
+// src/screens/LiveScreen.jsx
+//
 // Real live streaming backed by liveService: start/end streams, real
 // viewer counts (sharded), real comments, real gifts (monetization).
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -54,7 +56,6 @@ export default function LiveScreen() {
 
   const svc = () => getLiveService();
 
-  // ---------- load active streams ----------
   const loadStreams = useCallback(async () => {
     try {
       const streams = await svc().getActiveLiveStreams({ limit: 30 });
@@ -70,12 +71,10 @@ export default function LiveScreen() {
   useEffect(() => { loadStreams(); }, [loadStreams]);
   useEffect(() => { const id = setInterval(loadStreams, 15000); return () => clearInterval(id); }, [loadStreams]);
 
-  // ---------- gift types ----------
   useEffect(() => {
     try { setGiftTypes(svc().getLiveConfig().GIFT_TYPES || []); } catch (e) { setGiftTypes([]); }
   }, []);
 
-  // ---------- start stream ----------
   const handleStartLive = async () => {
     if (!user?.uid) { toast.error('Sign in to go live.'); return; }
     if (!liveTitle.trim()) { toast.error('Give your stream a title.'); return; }
@@ -134,7 +133,6 @@ export default function LiveScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  // ---------- watch stream ----------
   const handleWatch = async (stream) => {
     if (!user?.uid) { toast.error('Sign in to watch.'); return; }
     setWatching(stream);
@@ -197,7 +195,6 @@ export default function LiveScreen() {
     }
   };
 
-  // ---------- helpers ----------
   const fmtDuration = (s) => {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
     return [h, m, sec].map((n) => String(n).padStart(2, '0')).join(':');

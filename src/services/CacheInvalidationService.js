@@ -1,6 +1,4 @@
 /**
- * src/services/CacheInvalidationService.js - ARVDOUL EVENT-BASED CACHE INVALIDATION ENGINE
- *
  * Implements:
  * 1. Targeted Event-Driven Invalidation: Listens to mutations across posts, comments, profiles, and relationships.
  * 2. Cross-Namespace Dependency Cascading: When a post is deleted, automatically purges related comment caches,

@@ -1,5 +1,5 @@
 // src/screens/Polls/PollsScreen.jsx
-// 📊 ARVDOUL POLLS & PREDICTION MARKETS
+//
 // Real-time community voting, coin prediction wagers, percentage animations, and creator opinion analytics
 
 import React, { useState, useEffect } from 'react';
@@ -101,7 +101,7 @@ export default function PollsScreen() {
 
   const handleConfirmWager = async () => {
     if (!wagerModalPoll || !selectedOptionId) return;
-    // REAL balance from the ledger — never a fabricated default.
+    // balance from the ledger — never a fabricated default.
     let currentCoins = null;
     try {
       const { getMonetizationService } = await import('../../services/monetizationService.js');

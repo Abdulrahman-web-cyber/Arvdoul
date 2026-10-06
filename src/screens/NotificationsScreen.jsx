@@ -1,5 +1,5 @@
-// src/screens/NotificationsScreen.jsx - ARVDOUL ULTIMATE NOTIFICATIONS SCREEN
-// Pixel-perfect replica of Arvdoul Luxury Design System with real-time Firestore synchronization
+// src/screens/NotificationsScreen.jsx
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -21,41 +21,9 @@ import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/ui/Dialog.jsx';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
-// Fallback high-fidelity sample notifications matching the exact Arvdoul design
-const CURATED_CREATORS = [
-  {
-    id: 'creator-sarah-luna',
-    displayName: 'Sarah Luna',
-    username: 'sarahluna',
-    bio: 'Digital artist & visual designer • Sparks & Stories 🎨✨',
-    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 'creator-marcus-vance',
-    displayName: 'Marcus Vance',
-    username: 'marcus_v',
-    bio: 'Web3 & AI Creator • Building the future on Arvdoul ⚡',
-    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 'creator-elena-rostova',
-    displayName: 'Elena Rostova',
-    username: 'elena_style',
-    bio: 'Luxury editorial, fashion aesthetics & travel journals 💎',
-    photoURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 'creator-arvdoul-team',
-    displayName: 'Arvdoul Studio',
-    username: 'arvdoul',
-    bio: 'Official Arvdoul Creator Studio & Network Updates 🚀',
-    photoURL: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&h=150&fit=crop',
-  },
-];
-
 const FILTERS = [
   { id: 'All', label: 'All' },
-  { id: 'Messages', label: 'Messages', badge: 8, icon: MessageCircle },
+  { id: 'Messages', label: 'Messages', icon: MessageCircle },
   { id: 'Friends', label: 'Friends', icon: Users },
   { id: 'Mentions', label: 'Mentions', icon: AtSign },
   { id: 'Stories', label: 'Stories', icon: Sparkles },
@@ -111,7 +79,7 @@ export default function NotificationsScreen() {
     setNetworkLoading(true);
     try {
       if (!user?.uid) {
-        setRecommended(CURATED_CREATORS);
+        setRecommended([]);
         setFollowers([]);
         setFollowing([]);
         setRequests([]);
@@ -126,15 +94,12 @@ export default function NotificationsScreen() {
         svc.getFriendRequests(user.uid, 'received'),
       ]);
       const recResult = await svc.getFriendRecommendations(user.uid, 6).catch(() => ({ success: false, recommendations: [] }));
-      const recs = recResult.recommendations && recResult.recommendations.length > 0
-        ? recResult.recommendations
-        : CURATED_CREATORS;
-      setRecommended(recs);
+      setRecommended(recResult.recommendations || []);
       setFollowers(f.status === 'fulfilled' ? f.value.followers || [] : []);
       setFollowing(g.status === 'fulfilled' ? g.value.following || [] : []);
       setRequests(r.status === 'fulfilled' ? (Array.isArray(r.value) ? r.value : r.value.requests || []) : []);
     } catch {
-      setRecommended(CURATED_CREATORS);
+      setRecommended([]);
     } finally {
       setNetworkLoading(false);
     }
@@ -267,6 +232,10 @@ export default function NotificationsScreen() {
                   verified: !!fn.senderVerified,
                 },
                 message: fn.body || fn.message || '',
+                // Real gift metadata only — never invent an amount. The gift
+                // modal hides the amount block when the payload omits it.
+                amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
+                giftType: fn.metadata?.giftType || null,
                 timestamp: ts,
                 unread: !fn.read,
               };
@@ -956,7 +925,10 @@ export default function NotificationsScreen() {
                 <Sparkles className="w-3.5 h-3.5 text-violet-400" />
                 Highlights
               </h2>
-              <button className="text-xs font-semibold text-violet-400 hover:text-violet-300 flex items-center gap-0.5">
+              <button
+                onClick={() => navigate('/profile/highlights')}
+                className="text-xs font-semibold text-violet-400 hover:text-violet-300 flex items-center gap-0.5"
+              >
                 View all <ChevronRight className="w-3 h-3" />
               </button>
             </div>
@@ -1259,17 +1231,22 @@ export default function NotificationsScreen() {
             <Gift className="w-8 h-8" aria-hidden="true" />
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {giftModal?.user?.name || 'A creator'} gifted you {giftModal?.amount || 250} ARVDOUL Coins.
+            {giftModal?.user?.name || 'A creator'}
+            {Number.isFinite(giftModal?.amount)
+              ? ` gifted you ${giftModal.amount} ARVDOUL Coins.`
+              : ' sent you a Creator Coin Gift.'}
           </p>
 
-          <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
-            <span className="text-3xl font-black text-amber-400 font-display">
-              +{giftModal?.amount || 250}
-            </span>
-            <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Coins
-            </span>
-          </div>
+          {Number.isFinite(giftModal?.amount) && (
+            <div className="my-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-violet-500/10 border border-amber-500/20 flex items-center justify-center gap-3">
+              <span className="text-3xl font-black text-amber-400 font-display">
+                +{giftModal.amount}
+              </span>
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Coins
+              </span>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button

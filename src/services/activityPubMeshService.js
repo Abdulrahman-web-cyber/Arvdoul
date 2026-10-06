@@ -1,6 +1,4 @@
 /**
- * src/services/activityPubMeshService.js - ARVDOUL FEDERATED ACTIVITYPUB MESH ENGINE v1.0
- * 
  * Production-grade open-web federation & cross-instance interoperability:
  * • ActivityStreams 2.0 / ActivityPub standard compliant actor schemas (Person, Note, Announce, Follow)
  * • WebFinger discovery protocol (RFC 7033) resolution

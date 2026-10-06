@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/EditProfileScreen.jsx - ARVDOUL Edit Profile Screen
- * 
  * Screen for editing user profile information.
  * 
  * @component
@@ -156,16 +154,10 @@ export default function EditProfileScreen() {
     try {
       const base = formData.displayName || userProfile?.displayName || userProfile?.email?.split('@')[0] || 'creator';
       const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'creator';
-      let uniqueUser = '';
-      if (userService?.generateUniqueUsername) {
-        uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
-        // Ensure no leftover user_ prefix
-        if (uniqueUser.startsWith('user_')) {
-          uniqueUser = uniqueUser.replace(/^user_/, `${cleanBase}_`);
-        }
-      } else {
-        const rand = Math.floor(1000 + Math.random() * 9000);
-        uniqueUser = `${cleanBase}_${rand}`;
+      let uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
+      // Ensure no leftover user_ prefix
+      if (uniqueUser.startsWith('user_')) {
+        uniqueUser = uniqueUser.replace(/^user_/, `${cleanBase}_`);
       }
       setFormData(prev => ({ ...prev, username: uniqueUser }));
       setUsernameAvailability('available');

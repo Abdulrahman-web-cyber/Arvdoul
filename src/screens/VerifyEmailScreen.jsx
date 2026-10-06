@@ -1,6 +1,4 @@
-// src/screens/VerifyEmailScreen.jsx – ARVDOUL SUPREMACY • FIXED VERIFICATION DETECTION
-// ✅ Waits for auth • Reads URL parameters • Immediate redirect on verified
-// 🔐 Perfect navigation to SetupProfile • No stale closures
+// src/screens/VerifyEmailScreen.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -14,7 +12,6 @@ import {
   Shield, X, Lock, UserCheck, Send
 } from "lucide-react";
 
-// ==================== CUSTOM CONFETTI (ZERO DEPENDENCIES) ====================
 const ConfettiBurst = ({ isActive }) => {
   const colors = useMemo(() => ["#6366f1", "#8b5cf6", "#a855f7", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"], []);
   const particles = useMemo(() => Array.from({ length: 60 }, (_, i) => {
@@ -56,7 +53,6 @@ const ConfettiBurst = ({ isActive }) => {
   );
 };
 
-// ==================== ANIMATED VERIFICATION SHIELD ====================
 const VerificationShield = ({ status }) => {
   const isChecking = status === "checking" || status === "sending";
   const isVerified = status === "verified";
@@ -99,7 +95,6 @@ const VerificationShield = ({ status }) => {
   );
 };
 
-// ==================== VERIFICATION STEPS ====================
 const VerificationSteps = ({ steps, isDark }) => (
   <div className="space-y-1.5">
     {steps.map((step, index) => (
@@ -140,7 +135,6 @@ const VerificationSteps = ({ steps, isDark }) => (
   </div>
 );
 
-// ==================== CIRCULAR PROGRESS RING ====================
 const CircularProgressRing = ({ progress, size = 52, strokeWidth = 4, isDark, children }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
@@ -167,7 +161,6 @@ const CircularProgressRing = ({ progress, size = 52, strokeWidth = 4, isDark, ch
   );
 };
 
-// ==================== MAIN COMPONENT (FIXED) ====================
 export default function EmailVerification() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -195,7 +188,6 @@ export default function EmailVerification() {
     return isDark ? "/logo/logo-dark.png" : "/logo/logo-light.png";
   }, [isDark]);
 
-  // ==================== PARSE URL QUERY PARAMETERS & APPLY OOB CODE ====================
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const urlUserId = params.get("userId");
@@ -212,12 +204,8 @@ export default function EmailVerification() {
       const applyVerificationCode = async () => {
         try {
           setVerificationStatus("checking");
-          const { getAuth, applyActionCode } = await import("firebase/auth");
-          const auth = getAuth();
-          await applyActionCode(auth, oobCode);
-          if (auth.currentUser) {
-            await auth.currentUser.reload();
-          }
+          const { getAuthService } = await import("../services/authService.js");
+          await getAuthService().applyEmailActionCode(oobCode);
           if (isMounted.current) {
             setVerificationStatus("verified");
             toast.success("Email successfully verified!");
@@ -232,7 +220,6 @@ export default function EmailVerification() {
     }
   }, [location.search, location.state]);
 
-  // ==================== WAIT FOR AUTH AND START CHECKS ====================
   useEffect(() => {
     // If user is already verified, navigate immediately
     if (user?.emailVerified) {
@@ -267,7 +254,6 @@ export default function EmailVerification() {
     };
   }, [authInitialized, authLoading, user]); // eslint-disable-line
 
-  // ==================== VERIFICATION LOGIC (USES LATEST CHECK FUNCTION) ====================
   const checkVerification = useCallback(async () => {
     if (!userId && !user?.uid) {
       setVerificationStatus("error");
@@ -339,7 +325,6 @@ export default function EmailVerification() {
     }, 1200);
   }, [email, userId, user, location.state, navigate]);
 
-  // ==================== RESEND EMAIL ====================
   const handleResendEmail = async () => {
     if (!canResend || loading) return;
     setLoading(true);
@@ -361,7 +346,6 @@ export default function EmailVerification() {
     }
   };
 
-  // ==================== MANUAL CHECK BUTTON ====================
   const handleManualCheck = async () => {
     if (verificationStatus === "verified") {
       triggerSuccess();
@@ -375,18 +359,15 @@ export default function EmailVerification() {
     }
   };
 
-  // ==================== CHANGE EMAIL (CANCEL SIGNUP) ====================
   const handleChangeEmail = async () => {
     if (!window.confirm("Use a different email? This will cancel your current signup.")) return;
     setLoading(true);
     try {
       if (userId || user?.uid) {
-        const { getAuth, deleteUser } = await import("firebase/auth");
-        const currentUser = getAuth().currentUser;
-        if (currentUser) {
-          await signOut();
-          await deleteUser(currentUser).catch(() => {});
-        }
+        const { getAuthService } = await import("../services/authService.js");
+        // Delete before signing out: deleteUser needs a current user.
+        await getAuthService().deleteCurrentUser().catch(() => {});
+        await signOut();
       }
       sessionStorage.clear();
       toast.info("Please sign up again with your new email.");
@@ -398,14 +379,12 @@ export default function EmailVerification() {
     }
   };
 
-  // ==================== COUNTDOWN ====================
   useEffect(() => {
     if (resendCooldown <= 0) { setCanResend(true); return; }
     const timer = setTimeout(() => setResendCooldown(prev => prev - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  // ==================== DERIVED STEPS ====================
   const steps = useMemo(() => [
     { key: "emailValid", label: "Email Validated", completed: !!email },
     { key: "emailSent", label: "Email Sent", completed: verificationStatus !== "sending" && verificationStatus !== "error" },
@@ -415,7 +394,6 @@ export default function EmailVerification() {
 
   const resendProgress = (resendCooldown / 60) * 100;
 
-  // ==================== RENDER ====================
   return (
     <div className={`h-[100dvh] flex flex-col overflow-hidden ${isDark ? "bg-[#03071B] text-white" : "bg-[#F6F8FC] text-gray-900"}`}>
       <ConfettiBurst isActive={showConfetti} />

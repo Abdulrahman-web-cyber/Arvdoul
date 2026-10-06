@@ -1,4 +1,5 @@
 // src/components/ui/BottomSheet.jsx
+
 /**
  * ARVDOUL DESIGN SYSTEM — ACCESSIBLE BOTTOM SHEET
  * Guide Part II: drag handle with spring physics, backdrop blur, reduced

@@ -1,6 +1,4 @@
 /**
- * src/screens/SavedScreen.jsx - ARVDOUL Ultimate Saved & Bookmarks Screen
- * 
  * Production-ready saved items manager with collection folders, filters,
  * multi-select batch actions, search, and rich media previews.
  */
@@ -35,7 +33,7 @@ export default function SavedScreen() {
 
   const [items, setItems] = useState([]);
   const [savedLoading, setSavedLoading] = useState(true);
-  // Load REAL saved posts from firestoreService
+  // Load saved posts from firestoreService
   useEffect(() => {
     let cancelled = false;
     const load = async () => {

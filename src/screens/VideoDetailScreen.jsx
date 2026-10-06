@@ -1,15 +1,15 @@
-// src/screens/VideoDetailScreen.jsx - ARVDOUL VIDEO DETAIL (PRODUCTION)
+// src/screens/VideoDetailScreen.jsx
+//
 // Loads a single video by id (or url param), plays it, shows creator info,
 // engagement rail (like/comment/share), and a comments sheet.
 // Route: /video/:videoId  (wired from SearchScreen + deep links).
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getFirestoreInstance } from '../firebase/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 import videoService from '../services/videoService';
 import VideoCreatorInfo from '../components/Videos/VideoCreatorInfo';
 import VideoActionRail from '../components/Videos/VideoActionRail';
@@ -36,7 +36,6 @@ export default function VideoDetailScreen() {
   const [likeCount, setLikeCount] = useState(0);
   const viewedRef = useRef(false);
 
-  // ---------- Load video + creator ----------
   useEffect(() => {
     const urlParam = searchParams.get('url');
     (async () => {
@@ -44,9 +43,10 @@ export default function VideoDetailScreen() {
       try {
         let data = null;
         if (videoId) {
-          const firestore = await getFirestoreInstance();
-          const snap = await getDoc(doc(firestore, 'videos', videoId));
-          if (snap.exists()) data = { id: snap.id, ...snap.data() };
+          // Go through videoService so visibility / pay-per-view / processing
+          // gates are enforced in one place, not re-implemented here.
+          const res = await videoService.getVideo(videoId);
+          if (res?.success && res.video) data = res.video;
         }
         if (!data && urlParam) {
           data = { id: videoId || 'external', url: urlParam, title: 'Video', userId: null };
@@ -87,7 +87,6 @@ export default function VideoDetailScreen() {
     })();
   }, [videoId, searchParams, user?.uid]);
 
-  // ---------- Like ----------
   const handleLike = async () => {
     if (!user?.uid) { toast.info('Sign in to like videos.'); return; }
     if (!video?.userId) { toast.info('External videos cannot be liked.'); return; }

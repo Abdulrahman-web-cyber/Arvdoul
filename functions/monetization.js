@@ -19,6 +19,8 @@ const functions = require('firebase-functions');
 const Stripe = require('stripe');
 const { v4: uuidv4 } = require('uuid');
 const { enqueuePush } = require('./pushQueue');
+const { getUserIdFromContext, getUserEmail } = require('./auth');
+const { settleWithdrawal } = require('./withdrawalSettlement');
 
 // ----------------------------------------------------------------------
 // CONSTANTS & ENVIRONMENT CONFIG
@@ -29,19 +31,13 @@ const MAX_DAILY_WITHDRAWAL_REQUESTS = functions.config().monetization?.max_daily
 const MANUAL_REVIEW_THRESHOLD = functions.config().monetization?.manual_review_threshold || 50000;
 const SUSPICIOUS_NEW_ACCOUNT_HOURS = 24;
 const GIFT_SELF_SEND_FLAG = true;
-const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || 1000;
+const COINS_PER_DOLLAR = functions.config().monetization?.coins_per_dollar || require('./levelConfig.cjs').COINS_PER_DOLLAR;
+const MIN_WITHDRAWAL_COINS = functions.config().monetization?.min_withdrawal_coins || require('./levelConfig.cjs').MIN_WITHDRAWAL_COINS;
 const NUM_RATE_SHARDS = 10; // increased from 3 for higher throughput
 
 // ----------------------------------------------------------------------
 // HELPERS
 // ----------------------------------------------------------------------
-const getUserIdFromContext = (context) => {
-  if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
-  }
-  return context.auth.uid;
-};
-
 const generateIdempotencyKey = (providedKey) =>
   (providedKey && typeof providedKey === 'string' && providedKey.length > 0) ? providedKey : uuidv4();
 
@@ -192,7 +188,7 @@ const getAvailableBalance = (userData) => {
 // ENVIRONMENT & STRIPE
 // ----------------------------------------------------------------------
 const stripe = new Stripe(functions.config().stripe?.secret_key, { apiVersion: '2023-10-16' });
-const DEFAULT_GIFT_TYPES = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
+const DEFAULT_GIFT_TYPES = require('./levelConfig.cjs').GIFT_VALUES;
 
 // ----------------------------------------------------------------------
 // 1. addCoins (credit) – double‑entry: credit user, debit system coin supply
@@ -201,16 +197,21 @@ const DEFAULT_GIFT_TYPES = { rose: 5, crown: 50, diamond: 100, rocket: 500 };
 // with per-reason daily caps. Everything else (purchases, ads, gifts, levels)
 // is minted through dedicated server-side functions; a generic client coin
 // faucet would be an exploit.
-const CLIENT_ADD_REASON_CAPS = {
-  post_created_bonus: 10,
-  reel_watch: 200,
-  reel_reaction: 50,
-  comment: 50,
-  like: 100,
-  watch_ad: 50,
-  feed_view: 200,
-  quiz_correct: 20,
-  profile_complete: 1,
+// Client-allowlisted reward reasons. Caps are expressed as BOTH a per-call
+// ceiling and a daily COIN-VOLUME ceiling — never as a transaction count.
+// Capping the number of calls while trusting a client-supplied `amount`
+// (bounded only by MAX_COIN_OPERATION) let a caller mint the maximum on every
+// call; the daily budget below is enforced on summed coin volume.
+const CLIENT_ADD_REASON_LIMITS = {
+  post_created_bonus: { perTx: 10, dailyCoins: 100 },
+  reel_watch: { perTx: 20, dailyCoins: 500 },
+  reel_reaction: { perTx: 5, dailyCoins: 200 },
+  comment: { perTx: 5, dailyCoins: 200 },
+  like: { perTx: 1, dailyCoins: 100 },
+  watch_ad: { perTx: 5, dailyCoins: 200 },
+  feed_view: { perTx: 5, dailyCoins: 500 },
+  quiz_correct: { perTx: 20, dailyCoins: 100 },
+  profile_complete: { perTx: 100, dailyCoins: 100 },
 };
 
 exports.addCoins = functions.https.onCall(async (data, context) => {
@@ -220,35 +221,44 @@ exports.addCoins = functions.https.onCall(async (data, context) => {
     if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION) {
       throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION}.`);
     }
-    const dailyCap = CLIENT_ADD_REASON_CAPS[reason];
-    if (!dailyCap) {
+    const dailyLimit = CLIENT_ADD_REASON_LIMITS[reason];
+    if (!dailyLimit) {
       throw new functions.https.HttpsError(
         'permission-denied',
         `Reason "${reason}" is not allowlisted for client addCoins. Use the dedicated server-side function for this credit.`
       );
     }
+    if (amount > dailyLimit.perTx) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        `Amount ${amount} exceeds the per-call ceiling of ${dailyLimit.perTx} for "${reason}".`
+      );
+    }
     await checkRateLimit(uid, 'addCoins', 10, 60000);
 
-    // Per-reason DAILY CAP: count today's credits for this reason.
+    // Per-reason DAILY COIN-VOLUME CAP: sum today's credited coins for this
+    // reason. Counting transactions (the previous behaviour) did not bound the
+    // value a caller could mint, because `amount` is client-supplied.
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     try {
-      const usedToday = await admin.firestore()
+      const todaysTx = await admin.firestore()
         .collection('coin_transactions')
         .where('userId', '==', uid)
         .where('reason', '==', reason)
         .where('createdAt', '>=', todayStart)
-        .count()
+        .select('amount')
         .get();
-      if (usedToday.data().count >= dailyCap) {
+      const creditedToday = todaysTx.docs.reduce((sum, d) => sum + (Number(d.data().amount) || 0), 0);
+      if (creditedToday + amount > dailyLimit.dailyCoins) {
         throw new functions.https.HttpsError(
           'resource-exhausted',
-          `Daily cap reached for "${reason}" rewards (${dailyCap}/day).`
+          `Daily coin budget reached for "${reason}" (${dailyLimit.dailyCoins} coins/day).`
         );
       }
     } catch (err) {
       if (err instanceof functions.https.HttpsError) throw err;
-      // Count query failed (index missing) — fail closed, never bypass the cap.
+      // Query failed (index missing) — fail closed, never bypass the cap.
       throw new functions.https.HttpsError('internal', 'Reward cap check failed: ' + err.message);
     }
 
@@ -655,6 +665,9 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     if (!amount || typeof amount !== 'number' || amount <= 0 || amount > MAX_COIN_OPERATION * 5) {
       throw new functions.https.HttpsError('invalid-argument', `amount must be between 1 and ${MAX_COIN_OPERATION * 5}.`);
     }
+    if (amount < MIN_WITHDRAWAL_COINS) {
+      throw new functions.https.HttpsError('invalid-argument', `Minimum withdrawal is ${MIN_WITHDRAWAL_COINS} coins.`);
+    }
     if (!paymentMethod || !paymentDetails) throw new functions.https.HttpsError('invalid-argument', 'paymentMethod and paymentDetails required.');
 
     const minLevel = functions.config().app?.withdrawal_min_level || LEVEL_GATES.withdrawals;
@@ -686,12 +699,16 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     const requiresReview = amount > MANUAL_REVIEW_THRESHOLD;
     const key = generateIdempotencyKey(idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
-    const ledgerSnap = await ledgerRef.get();
-    if (ledgerSnap.exists) return ledgerSnap.data().result;
-
     const withdrawalRef = admin.firestore().collection('withdrawal_requests').doc();
 
-    await createFirestoreTransaction(async (t) => {
+    // Lock the coins, write the request, the lock transaction and the
+    // idempotency record in ONE transaction. Previously the ledger was read
+    // before the lock and written after it, so a retried request re-locked the
+    // same coins (double lock, and a second withdrawal row for one intent).
+    const resultData = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) return ledgerSnap.data().result;
+
       const freshSnap = await t.get(userRef);
       const freshData = freshSnap.data();
       const freshAvailable = getAvailableBalance(freshData);
@@ -702,27 +719,28 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
         userId: uid, amount, paymentMethod, paymentDetails,
         status: requiresReview ? 'pending_review' : 'pending',
         idempotencyKey: key,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTS(),
       });
-    });
 
-    const lockTxRef = admin.firestore().collection('coin_transactions').doc();
-    await lockTxRef.set({
-      userId: uid, type: 'withdrawal_lock', amount, reason: 'withdrawal_request',
-      metadata: { withdrawalId: withdrawalRef.id },
-      idempotencyKey: key,
-      balanceAfter: userData.coins || 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-    });
+      const lockTxRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(lockTxRef, {
+        userId: uid, type: 'withdrawal_lock', amount, reason: 'withdrawal_request',
+        metadata: { withdrawalId: withdrawalRef.id },
+        idempotencyKey: key,
+        balanceAfter: freshData.coins || 0,
+        createdAt: serverTS(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
 
-    const resultData = { success: true, withdrawalId: withdrawalRef.id, requiresReview };
-    await ledgerRef.set({
-      function: 'requestWithdrawal',
-      userId: uid,
-      result: resultData,
-      processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      const res = { success: true, withdrawalId: withdrawalRef.id, requiresReview };
+      t.set(ledgerRef, {
+        function: 'requestWithdrawal',
+        userId: uid,
+        result: res,
+        processedAt: serverTS(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      return res;
     });
 
     await admin.firestore().collection('admin_notifications').add({
@@ -751,139 +769,32 @@ exports.processWithdrawal = functions.https.onRequest(async (req, res) => {
     return;
   }
 
+  const { withdrawalId, action } = req.body || {};
   try {
-    const { withdrawalId, action } = req.body;
-    if (!withdrawalId || !action) {
-      res.status(400).json({ error: 'withdrawalId and action (approve|reject) required.' });
-      return;
-    }
-
-    const withdrawalRef = admin.firestore().collection('withdrawal_requests').doc(withdrawalId);
-    const withdrawalSnap = await withdrawalRef.get();
-    if (!withdrawalSnap.exists) {
-      res.status(404).json({ error: 'Withdrawal request not found.' });
-      return;
-    }
-
-    const withdrawalData = withdrawalSnap.data();
-    const validStatus = withdrawalData.status === 'pending' || withdrawalData.status === 'pending_review';
-    if (!validStatus) {
-      res.status(409).json({ error: 'Withdrawal already processed.' });
-      return;
-    }
-
-    if (action === 'approve') {
-      const serverId = `worker-${Math.random().toString(36).substring(7)}`;
-      const lockExpiresAt = Date.now() + 5 * 60 * 1000;
-      const lockObtained = await admin.firestore().runTransaction(async (t) => {
-        const freshSnap = await t.get(withdrawalRef);
-        const curStatus = freshSnap.data().status;
-        if (curStatus !== 'pending' && curStatus !== 'pending_review') return false;
-        t.update(withdrawalRef, {
-          status: 'processing',
-          processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lockOwner: serverId,
-          lockExpiresAt: new Date(lockExpiresAt),
-        });
-        return true;
+    const result = await settleWithdrawal(
+      { stripe, createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+      withdrawalId,
+      action
+    );
+    if (result.status === 'completed') {
+      logEvent('withdrawal_approved', {
+        withdrawalId, amount: result.amount, usdAmount: result.usdAmount,
       });
-
-      if (!lockObtained) {
-        res.status(409).json({ error: 'Withdrawal is being processed by another request.' });
-        return;
-      }
-
-      const usdAmount = withdrawalData.amount / COINS_PER_DOLLAR;
-      const stripeAmount = Math.round(usdAmount * 100);
-      const stripeIdempotencyKey = `wd_${withdrawalId}`;
-      let payout;
-      try {
-        payout = await stripe.payouts.create(
-          { amount: stripeAmount, currency: 'usd', method: 'standard' },
-          { idempotencyKey: stripeIdempotencyKey, stripeAccount: withdrawalData.paymentDetails?.stripeAccountId }
-        );
-      } catch (stripeError) {
-        await withdrawalRef.update({
-          status: 'pending',
-          processingError: stripeError.message,
-          lockOwner: admin.firestore.FieldValue.delete(),
-          lockExpiresAt: admin.firestore.FieldValue.delete(),
-        });
-        res.status(502).json({ error: 'Stripe payout failed.', details: stripeError.message });
-        return;
-      }
-
-      await createFirestoreTransaction(async (t) => {
-        const finalSnap = await t.get(withdrawalRef);
-        if (finalSnap.data().status !== 'processing' || finalSnap.data().lockOwner !== serverId) {
-          throw new Error('Invalid lock state.');
-        }
-
-        const userRef = admin.firestore().collection('users').doc(withdrawalData.userId);
-        const userSnap = await t.get(userRef);
-        const currentBalance = userSnap.data().coins || 0;
-        const currentLocked = userSnap.data().lockedCoins || 0;
-
-        if (currentLocked < withdrawalData.amount || currentBalance < withdrawalData.amount) {
-          t.update(withdrawalRef, { status: 'failed', failureReason: 'Insufficient balance at finalization.' });
-          throw new Error('Insufficient balance.');
-        }
-
-        t.update(userRef, {
-          coins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
-          lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount),
-          lastWithdrawalCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        const finalTxRef = admin.firestore().collection('coin_transactions').doc();
-        t.set(finalTxRef, {
-          userId: withdrawalData.userId, type: 'debit', amount: withdrawalData.amount,
-          reason: 'withdrawal_completed',
-          metadata: { withdrawalId, stripePayoutId: payout.id, usdAmount },
-          balanceAfter: currentBalance - withdrawalData.amount,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-
-        createLedgerEntry(t, `users:${withdrawalData.userId}`, 'system:reserve', withdrawalData.amount, {
-          reason: 'withdrawal',
-          transactionId: finalTxRef.id,
-          payoutId: payout.id,
-        });
-
-        t.update(withdrawalRef, {
-          status: 'completed',
-          stripePayoutId: payout.id,
-          processedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lockOwner: admin.firestore.FieldValue.delete(),
-          lockExpiresAt: admin.firestore.FieldValue.delete(),
-        });
-      });
-
-      logEvent('withdrawal_approved', { withdrawalId, userId: withdrawalData.userId, amount: withdrawalData.amount, usdAmount });
-      res.json({ success: true, status: 'completed', payoutId: payout.id, usdAmount });
-    } else if (action === 'reject') {
-      const userRef = admin.firestore().collection('users').doc(withdrawalData.userId);
-      await admin.firestore().runTransaction(async (t) => {
-        const withdrawalSnap = await t.get(withdrawalRef);
-        if (withdrawalSnap.data().status !== 'pending' && withdrawalSnap.data().status !== 'pending_review') {
-          throw new Error('Invalid status for rejection.');
-        }
-        t.update(userRef, { lockedCoins: admin.firestore.FieldValue.increment(-withdrawalData.amount) });
-        const lockSnapshot = await t.get(
-          admin.firestore().collection('coin_transactions')
-            .where('metadata.withdrawalId', '==', withdrawalId)
-            .where('type', '==', 'withdrawal_lock')
-        );
-        lockSnapshot.forEach(doc => t.update(doc.ref, { status: 'cancelled', cancelledAt: admin.firestore.FieldValue.serverTimestamp() }));
-        t.update(withdrawalRef, { status: 'rejected', processedAt: admin.firestore.FieldValue.serverTimestamp() });
-      });
-      logEvent('withdrawal_rejected', { withdrawalId, userId: withdrawalData.userId });
-      res.json({ success: true, status: 'rejected' });
+      res.json({ success: true, ...result });
     } else {
-      res.status(400).json({ error: 'Invalid action. Use approve or reject.' });
+      logEvent('withdrawal_rejected', { withdrawalId });
+      res.json({ success: true, ...result });
     }
   } catch (err) {
+    if (err instanceof functions.https.HttpsError) {
+      const code = err.code === 'not-found' ? 404
+        : err.code === 'invalid-argument' ? 400
+        : err.code === 'failed-precondition' || err.code === 'aborted' ? 409
+        : err.code === 'unavailable' ? 502
+        : 500;
+      res.status(code).json({ error: err.message });
+      return;
+    }
     console.error('processWithdrawal error:', err);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
@@ -913,6 +824,48 @@ exports.recordAdImpression = functions.https.onCall(async (data, context) => {
     logEvent('ad_impression', { adId, userId: uid, placement });
     return { success: true };
   } catch (err) { throw handleError(err); }
+});
+
+// ----------------------------------------------------------------------
+// 8b. reportAd — a user flags a creative as misleading/offensive
+//
+//  Ads are server-written, so an ad report is stored server-side too. The
+//  document shape matches the other report queues (status/reporterId/reason)
+//  so the admin moderation queue can read it with no special casing.
+// ----------------------------------------------------------------------
+exports.reportAd = functions.https.onCall(async (data, context) => {
+  const uid = getUserIdFromContext(context);
+  const { adId, reason = '', details = '' } = data || {};
+  if (!adId) throw new functions.https.HttpsError('invalid-argument', 'adId is required.');
+
+  const cleanedReason = String(reason).replace(/<[^>]*>/g, '').trim().slice(0, 300) || 'unspecified';
+  await checkRateLimit(uid, 'reportAd', 10, 60000);
+
+  const reportRef = admin.firestore().collection('ad_reports').doc(`${uid}_${adId}`);
+  if ((await reportRef.get()).exists) {
+    throw new functions.https.HttpsError('already-exists', 'You have already reported this ad.');
+  }
+
+  const reporterSnap = await admin.firestore().doc(`users/${uid}`).get().catch(() => null);
+  const reporter = reporterSnap && reporterSnap.exists ? reporterSnap.data() : {};
+  const adSnap = await admin.firestore().doc(`ads/${adId}`).get().catch(() => null);
+  const ad = adSnap && adSnap.exists ? adSnap.data() : {};
+
+  await reportRef.set({
+    adId,
+    reporterId: uid,
+    reporterName: reporter.username || reporter.displayName || 'Arvdoul user',
+    reason: cleanedReason,
+    details: String(details).replace(/<[^>]*>/g, '').trim().slice(0, 1000),
+    content: ad.title || ad.brandName || '',
+    status: 'pending',
+    priority: 'normal',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    resolvedAt: null,
+    resolvedBy: null,
+  });
+
+  return { success: true, adId };
 });
 
 // ----------------------------------------------------------------------
@@ -1015,41 +968,71 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     case 'invoice.payment_succeeded':
       const invoice = event.data.object;
       const customerId = invoice.customer;
-      // Find user by stripeCustomerId
-      const userQuery = await db.collection('users').where('stripeCustomerId', '==', customerId).get();
+      // Find user by stripeCustomerId (stored on the private doc)
+      const userQuery = await db.collection('users_private').where('stripeCustomerId', '==', customerId).get();
       if (!userQuery.empty) {
         const userId = userQuery.docs[0].id;
         const subscriptionId = invoice.subscription;
-        // Update subscription status
-        await db.collection('subscriptions').doc(subscriptionId).set({
+        // `subscriptions` is keyed by uid (that is what the client and the
+        // callables read). Keying it by the Stripe subscription id here would
+        // create a phantom doc and leave the real one stale, so renewals would
+        // never find the tier and would silently grant 0 coins.
+        const subRef = db.collection('subscriptions').doc(userId);
+        const subSnap = await subRef.get();
+        const subData = subSnap.exists ? subSnap.data() : {};
+        // Ignore an invoice for a superseded Stripe subscription.
+        if (subData.stripeSubscriptionId && subscriptionId && subData.stripeSubscriptionId !== subscriptionId) {
+          break;
+        }
+        await subRef.set({
           status: 'active',
           latestInvoice: invoice.id,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
-        // Grant coins based on tier (read from config)
-        const subDoc = await db.collection('subscriptions').doc(subscriptionId).get();
-        const tier = subDoc.data().tier;
-        const configDoc = await db.collection('config').doc('monetization').get();
-        const coinAmount = configDoc.data()?.SUBSCRIPTION_TIERS?.[tier]?.coinsPerMonth || 0;
+        // The tier + monthly grant live on the subscription doc (written at
+        // subscribe time). Never read them from a `config/monetization` doc
+        // that nothing writes — that silently granted 0 coins.
+        const tier = subData.tier;
+        const coinAmount = SUBSCRIPTION_TIERS[tier]?.coinsPerMonth || subData.coinsPerMonth || 0;
         if (coinAmount > 0) {
-          // Call internal addCoins logic (or schedule a cloud task)
-          console.log(`Granting ${coinAmount} coins to ${userId} for subscription renewal`);
-          // Fire off a Cloud Function or queue a task to add coins idempotently
-          await enqueuePush(userId, {
-            title: 'Subscription renewed',
-            body: `You received ${coinAmount} coins!`,
-            type: 'subscription_renewal',
+          // Grant idempotently, keyed on the Stripe invoice id so redelivered
+          // webhook events can never double-credit.
+          const ledgerRef = db.collection('idempotency_ledger').doc(`webhook_${event.id}`);
+          const granted = await createFirestoreTransaction(async (t) => {
+            const ledgerSnap = await t.get(ledgerRef);
+            if (ledgerSnap.exists) return false;
+            await creditSubscriptionCoins(t, {
+              userId, tier, coinsPerMonth: coinAmount, idempotencyKey: `webhook_${event.id}`,
+            });
+            t.set(ledgerRef, {
+              function: 'stripeWebhook', userId, result: { success: true, coins: coinAmount },
+              processedAt: serverTS(), expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            });
+            return true;
           });
+          if (granted) {
+            await enqueuePush(userId, {
+              title: 'Subscription renewed',
+              body: `You received ${coinAmount} coins!`,
+              type: 'subscription_renewal',
+            });
+          }
         }
       }
       break;
 
     case 'customer.subscription.deleted':
       const subscription = event.data.object;
-      await db.collection('subscriptions').doc(subscription.id).update({
-        status: 'canceled',
-        endedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      // Resolve the uid-keyed doc (see the invoice case above).
+      const delQuery = await db.collection('users_private')
+        .where('stripeCustomerId', '==', subscription.customer).get();
+      if (!delQuery.empty) {
+        await db.collection('subscriptions').doc(delQuery.docs[0].id).set({
+          status: 'canceled',
+          endedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
       break;
 
     default:
@@ -1064,20 +1047,42 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 // ----------------------------------------------------------------------
 exports.auditCoins = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
   try {
-    // Instead of scanning all users, we compare the incremental total in 'system/coin_supply'
-    // with a running audit counter that is updated during each add/spend/transfer.
-    // This requires that every coin operation updates both totalCoins and auditCounter.
-    // For simplicity, we'll still do a sample check for now.
     const supplyDoc = await admin.firestore().collection('system').doc('coin_supply').get();
     const supplyTotal = supplyDoc.exists ? (supplyDoc.data().totalCoins || 0) : 0;
 
-    // To avoid full scan, we can use an approximate check: sum of a random sample of users.
-    // For 1B users, full scan is impossible. We'll rely on ledger reconciliation instead.
-    // For now, we log the supply total and trust the ledger.
-    console.log(`Coin audit: system supply = ${supplyTotal}`);
+    // Reconcile the incremental supply counter against the authoritative sum of
+    // every user balance. A server-side aggregate is a single index scan, so
+    // this stays O(1) in result size even at large user counts. If the counter
+    // drifts (a mint/burn path that forgot to bump it), the gap is reported
+    // instead of being logged and trusted.
+    if (typeof admin.firestore.AggregateField === 'undefined'
+        || typeof admin.firestore().collection('users').aggregate !== 'function') {
+      functions.logger.warn('Coin audit skipped: aggregate queries unavailable on this firebase-admin version.');
+      return null;
+    }
+
+    const agg = await admin.firestore().collection('users')
+      .aggregate({ total: admin.firestore.AggregateField.sum('coins') })
+      .get();
+    const balanceTotal = Number(agg.data().total) || 0;
+    const drift = supplyTotal - balanceTotal;
+
+    if (drift === 0) {
+      functions.logger.info(`Coin audit OK: supply = balances = ${supplyTotal}`);
+      return null;
+    }
+
+    functions.logger.error('Coin audit drift detected', { supplyTotal, balanceTotal, drift });
+    await admin.firestore().collection('admin_notifications').add({
+      type: 'coin_audit_drift',
+      supplyTotal,
+      balanceTotal,
+      drift,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     return null;
   } catch (err) {
-    console.error('Coin audit failed:', err);
+    functions.logger.error('Coin audit failed:', err);
     return null;
   }
 });
@@ -1114,33 +1119,54 @@ exports.recoverStuckWithdrawals = functions.pubsub.schedule('every 5 minutes').o
 //     (client-facing callables that were referenced but never deployed)
 // ======================================================================
 
-const COIN_PACKAGES = {
-  coins_100:  { coins: 100,  priceUsdCents: 99 },
-  coins_500:  { coins: 500,  priceUsdCents: 499 },
-  coins_1200: { coins: 1200, priceUsdCents: 999 },
-  coins_2500: { coins: 2500, priceUsdCents: 1999 },
-  coins_5000: { coins: 5000, priceUsdCents: 3999 },
-};
+// Coin packages and subscription tiers come from the shared levelConfig so the
+// store UI, this callable and the Stripe price creation can never disagree.
+const COIN_PACKAGES = require('./levelConfig.cjs').COIN_PACKAGES_BY_ID;
+const SUBSCRIPTION_TIERS = require('./levelConfig.cjs').SUBSCRIPTION_TIERS;
 
-const SUBSCRIPTION_TIERS = {
-  basic: { priceId: null,  coinsPerMonth: 500 },
-  pro:   { priceId: null,  coinsPerMonth: 2000 },
-  premium: { priceId: null, coinsPerMonth: 5000 },
-};
-
-const AD_REWARD_PER_30S = 2; // coins per 30 seconds watched
+const AD_REWARD_PER_30S = require('./levelConfig.cjs').AD_REWARD_COINS;
 const serverTS = () => admin.firestore.FieldValue.serverTimestamp();
+
+/**
+ * Credit a monthly subscription grant as a real double-entry transaction.
+ * Shared by createSubscription (first month) and the invoice.payment_succeeded
+ * webhook (renewals) so the ledger shape can never diverge between them.
+ * Must run inside a Firestore transaction; idempotencyKey makes retries safe.
+ */
+async function creditSubscriptionCoins(t, { userId, tier, coinsPerMonth, idempotencyKey }) {
+  if (!coinsPerMonth || coinsPerMonth <= 0) return null;
+  const userRef = admin.firestore().collection('users').doc(userId);
+  const userSnap = await t.get(userRef);
+  if (!userSnap.exists) return null;
+  const oldBalance = userSnap.data().coins || 0;
+  const newBalance = oldBalance + coinsPerMonth;
+  t.update(userRef, { coins: newBalance });
+
+  const txRef = admin.firestore().collection('coin_transactions').doc();
+  t.set(txRef, {
+    userId, type: 'credit', amount: coinsPerMonth, reason: 'subscription',
+    metadata: { tier }, idempotencyKey,
+    balanceAfter: newBalance, createdAt: serverTS(),
+    expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+  });
+  createLedgerEntry(t, 'system:coin_supply', `users:${userId}`, coinsPerMonth, {
+    reason: 'subscription', transactionId: txRef.id,
+  });
+  const supplyRef = admin.firestore().collection('system').doc('coin_supply');
+  t.set(supplyRef, { totalCoins: admin.firestore.FieldValue.increment(coinsPerMonth) }, { merge: true });
+  return newBalance;
+}
 
 async function getOrCreateStripeCustomer(uid) {
   const userRef = admin.firestore().collection('users').doc(uid);
-  const userSnap = await userRef.get();
+  const privateRef = admin.firestore().collection('users_private').doc(uid);
+  const [userSnap, privateSnap] = await Promise.all([userRef.get(), privateRef.get()]);
   if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
-  if (userSnap.data().stripeCustomerId) return { id: userSnap.data().stripeCustomerId };
-  const customer = await stripe.customers.create({
-    email: userSnap.data().email || undefined,
-    metadata: { userId: uid },
-  });
-  await userRef.update({ stripeCustomerId: customer.id });
+  if (privateSnap.data()?.stripeCustomerId) return { id: privateSnap.data().stripeCustomerId };
+  // PII lives on users_private; the helper falls back to the legacy public doc.
+  const email = await getUserEmail(uid);
+  const customer = await stripe.customers.create({ email, metadata: { userId: uid } });
+  await privateRef.set({ stripeCustomerId: customer.id }, { merge: true });
   return customer;
 }
 
@@ -1263,11 +1289,11 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
       const ledgerSnap = await t.get(ledgerRef);
       if (ledgerSnap.exists) return ledgerSnap.data().result;
 
-      // Real recurring subscription: create a monthly price per tier, attach the
-      // payment method, and set the default invoice to auto-charge it.
-      const tierPriceUsdCents = { basic: 499, pro: 999, premium: 1999 }[tier] || 999;
+      // Real recurring subscription: create a monthly price from the tier
+      // config, attach the payment method, and set the default invoice to
+      // auto-charge it.
       const price = await stripe.prices.create({
-        unit_amount: tierPriceUsdCents,
+        unit_amount: tierCfg.priceUsdCents,
         currency: 'usd',
         recurring: { interval: 'month' },
         product_data: { name: `Arvdoul ${tier.charAt(0).toUpperCase() + tier.slice(1)}` },
@@ -1292,19 +1318,9 @@ exports.createSubscription = functions.https.onCall(async (data, context) => {
       });
 
       // Credit first month coins (same double-entry path as purchases).
-      const userRef = admin.firestore().collection('users').doc(uid);
-      const userSnap = await t.get(userRef);
-      if (userSnap.exists) {
-        const oldBalance = userSnap.data().coins || 0;
-        const newBalance = oldBalance + tierCfg.coinsPerMonth;
-        t.update(userRef, { coins: newBalance });
-        const txRef = admin.firestore().collection('coin_transactions').doc();
-        t.set(txRef, {
-          userId: uid, type: 'credit', amount: tierCfg.coinsPerMonth, reason: 'subscription',
-          metadata: { tier }, idempotencyKey: `${key}_first`, balanceAfter: newBalance,
-          createdAt: serverTS(), expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        });
-      }
+      await creditSubscriptionCoins(t, {
+        userId: uid, tier, coinsPerMonth: tierCfg.coinsPerMonth, idempotencyKey: `${key}_first`,
+      });
 
       const resultData = { success: true, tier, stripeSubscriptionId };
       t.set(ledgerRef, {
@@ -1377,7 +1393,7 @@ exports.createPayoutAccount = functions.https.onCall(async (data, context) => {
     const account = await stripe.accounts.create({
       type: 'express',
       country: countryCode,
-      email: userSnap.data().email || undefined,
+      email: await getUserEmail(uid),
       capabilities: { transfers: { requested: true } },
     });
     const refreshUrl = returnUrl || 'https://arvdoul.app/payouts';
@@ -1449,7 +1465,23 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
     }
     await checkRateLimit(uid, 'watchAd', 20, 60000);
 
-    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchDurationSeconds / 30) * AD_REWARD_PER_30S);
+    // Rewarded ads must map to a real, active campaign. Without this check a
+    // client could mint coins by inventing an adId, since the reward below is
+    // granted unconditionally.
+    const adSnap = await admin.firestore().collection('ads').doc(adId).get();
+    const ad = adSnap.exists ? adSnap.data() : null;
+    const now = new Date();
+    const started = !ad?.startDate?.toDate || ad.startDate.toDate() <= now;
+    const notEnded = !ad?.endDate?.toDate || ad.endDate.toDate() >= now;
+    if (!ad || ad.active !== true || !started || !notEnded) {
+      throw new functions.https.HttpsError('not-found', 'Ad campaign not found or inactive.');
+    }
+
+    // Clamp the client-supplied watch time so a forged duration cannot inflate
+    // the reward beyond a real rewarded-ad session.
+    const MAX_AD_WATCH_SECONDS = 120;
+    const watchedSeconds = Math.min(Number(watchDurationSeconds), MAX_AD_WATCH_SECONDS);
+    const reward = Math.max(AD_REWARD_PER_30S, Math.floor(watchedSeconds / 30) * AD_REWARD_PER_30S);
     const key = generateIdempotencyKey(data.idempotencyKey);
     const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
 
@@ -1638,3 +1670,9 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
     return result;
   } catch (err) { throw handleError(err); }
 });
+
+// Shared internals exposed to sibling modules (admin.js) so the money-path
+// helpers exist exactly once: the single configured Stripe client and the
+// double-entry ledger writer. Not deployed as callables.
+module.exports.getMonetizationStripe = () => stripe;
+module.exports.createLedgerEntry = createLedgerEntry;

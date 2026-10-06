@@ -1,4 +1,5 @@
-// src/context/ThemeContext.jsx - ARVDOUL ENHANCED THEME CONTEXT
+// src/context/ThemeContext.jsx
+//
 // Re-exports from the new comprehensive ThemeProvider
 
 export {

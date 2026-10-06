@@ -1,5 +1,4 @@
 // src/components/messaging/MessageBubble.jsx
-// 🎯 Message bubble component with reactions, replies, etc.
 
 import React, { useState } from 'react';
 import { cn } from '../../lib/utils';

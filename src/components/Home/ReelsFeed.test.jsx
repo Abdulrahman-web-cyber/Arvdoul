@@ -1,4 +1,7 @@
+// src/components/Home/ReelsFeed.test.jsx
+//
 // Basic production sanity test for ReelsFeed — ensures component renders without crash
+
 import React from 'react';
 import { render } from '@testing-library/react';
 

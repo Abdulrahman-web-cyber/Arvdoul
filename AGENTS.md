@@ -26,6 +26,20 @@ are expected — only treat errors as failures.
 - **Profile sharing**: `src/utils/shareUtils.js` (`shareProfile`, `getProfileUrl`,
   `getProfileHandle`, `copyToClipboard`). All share entry points must use it so links resolve
   consistently. Do not rebuild `${origin}/profile/${id}` by hand — use `getProfileUrl`.
+- **Profile read model / capabilities**: `src/services/profileCapabilityEngine.js` decides
+  access (`resolveCapabilities`); `src/services/profileReadModel.js` owns the derivation every
+  profile surface needs — placeholder name/handle rejection (`pickHandle`, `pickDisplayName`,
+  `deriveHandle`), avatar fallback (`resolveAvatarUrl`), count/level coercion
+  (`resolveCount`, `resolveLevelValue`), creator/verified flags (`resolveCreatorFlag`,
+  `resolveVerifiedFlag`) — and applies the capability decision exactly once
+  (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
+  `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
+  `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
+  re-implement the `user_`/`creator` placeholder filter. `userService.getUserProfile` resolves
+  only the relation flags and delegates the decision to the engine + projection — it must not
+  call `canViewProfileSection` itself. `profileReadModel.test.js` and
+  `userServicePrivacyProjection.test.js` fail CI if any surface regresses; both are in the
+  hard-failing `guards` CI job.
 - **Friendship**: `userService.areFriends(a, b)` is canonical. `_areMutualFriends` only
   delegates to it; treat both names as one implementation, never fork the logic.
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
@@ -44,9 +58,54 @@ are expected — only treat errors as failures.
   (`getUserIdFromContext`, `isAdmin`, `checkIsAdmin`, `assertAdmin`). Do not re-declare
   `isAdmin` in a module — a divergent check means an account can be admin for one endpoint
   and not another.
+- **Feature flags**: `src/shared/featureFlagRegistry.cjs` is the canonical flag
+  list (synced to `functions/featureFlagRegistry.cjs`, guarded by
+  `sharedConfigSync.test.js`). Platform-wide overrides live in Firestore
+  `feature_flags/{flag}` and are written ONLY by the admin-gated
+  `setFeatureFlagOverride` callable (`functions/featureFlags.js`), which
+  validates the name against the registry and audits to `moderation_logs`.
+  `featureFlagService.setOverride()` is a device-local lever, not governance —
+  never present it as an audit record.
+- **Audit trail**: `functions/admin.js#writeAudit` appends to `moderation_logs`
+  (admin-readable, server-write-only). `AdminAuditLogsScreen` reads that
+  collection. `src/utils/AuditLogger.js` is a local IndexedDB queue and is not
+  a server-side audit trail.
+- **Admin gate**: `admins/{uid}` is not client-readable, so admin screens must
+  call `fetchAdminStatus()` rather than `getDoc(doc(firestore, 'admins', uid))`
+  (which always denies and silently shows the "no access" state).
 - **Callables from the client**: go through `src/services/callableService.js`
   (`callFunction`, `FUNCTIONS`) rather than inlining `httpsCallable(getFunctions(), ...)`,
   so app binding and error normalisation stay consistent.
+- **Profile view analytics**: `functions/analytics.js` (`trackProfileView`) is the only
+  writer of `profile_views` / `profile_analytics`; rules deny all client writes. Its
+  shard key must stay byte-identical to `hashString()` in
+  `src/utils/CountersManager.js` (the client sums `counter_shards` on read).
+
+## Admin mutations are server-authoritative
+An admin screen may read a collection directly only when the rules already grant
+admins that read. Anything that *changes* state — or reads a collection that is
+not admin-readable — goes through a callable in `functions/admin.js` that calls
+`assertAdmin`, rate-limits, and writes `moderation_logs` via `writeAudit`:
+
+- `adminListSupportTickets` / `adminResolveSupportTicket` — the support queue and
+  agent replies (`support_tickets` is user-owned, so a client query cannot see
+  every customer's ticket).
+- `adminListModerationReports` — one server-side read over every collection in
+  `REPORT_TARGETS`, so the queue cannot drift from the report routing table.
+- `resolveUserReport` — report decisions (post/story/ad report types included).
+
+Never add a second report collection without adding it to both
+`functions/moderation.js` `REPORT_TARGETS` and `functions/admin.js`
+`REPORT_COLLECTIONS`, and never log an admin action with the client-side
+`AuditLogger` (it writes to a local IndexedDB queue, not to the server trail).
+
+## Audio Studio
+`src/screens/AudioEditor/` is a real Web Audio editor: `audioEngine.js` owns the
+graph (clip sources → track gain/pan → EQ biquads → master → analyser), and the
+transport, meters, spectrum and EQ curve all read from it. The project starts
+empty — it only has clips once a decoded source is passed in route state. Do not
+seed demo tracks, animate meters with `Math.random`, or claim an export succeeded
+before `MediaRecorder` produced a blob.
 
 ## Owner / admin bootstrap
 `admins/{uid}` is server-write-only, so the first admin must be claimed:
@@ -65,6 +124,13 @@ method that is not defined on the service. Run it after adding/renaming service 
   `profile.privacy.*` scopes) — not in the settings document.
 - Never reset a form from an effect keyed on the whole profile object; key on `uid` so
   in-progress edits are not discarded by realtime snapshots.
+- **No client-side security theatre (§11).** A browser cannot be a WAF, a CSRF
+  authority, a DDoS scrubber, an API-key issuer, or a rate limiter that an attacker
+  must obey. Real controls are `firestore.rules`, `functions/rateLimit.js`, App Check,
+  and Cloud Functions. `src/__tests__/securityServices.test.js` bans reintroducing the
+  removed theatre services; classify any new client-side "infra-control" service as
+  REAL CLIENT CONTROL / UX-ONLY / FALSE SECURITY before wiring it up. The ledger lives
+  in `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` §10.
 
 ## Level system — single source of truth
 The level curve, reward tables, XP rules, rank bands, unlock gates and royal
@@ -82,6 +148,115 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
 - Never re-declare a level curve, level name, coin reward or gate threshold in a
   component or service. Read `LEVEL_GATES` / `getLevelInfo` / `getRankTitle`
   from the shared config. A literal like `LEVEL >= 10` in JSX is a bug.
+- The shared config also owns the economy constants: `COINS_PER_DOLLAR` and
+  `MIN_WITHDRAWAL_COINS`. The wallet/payout screens read them and
+  `functions/monetization.js` `requestWithdrawal` enforces
+  `MIN_WITHDRAWAL_COINS` server-side — never hardcode a payout rate or minimum.
+- `NEW_USER_DEFAULTS` is the only place the new-account economy/status values
+  live (`coins`, `level`, `experience`, `reputation`, `isVerified`, ...).
+  `userService.createUserProfile` seeds from it and `firestore.rules` pins the
+  `users/{uid}` create to exactly those values, so a client cannot mint coins,
+  XP, a level, verification or a role at signup. `sharedConfigSync.test.js`
+  guards both the sync and the rules parity.
+- `GIFT_CATALOG` / `GIFT_VALUES` own the virtual-gift types and prices. Every
+  picker (`src/data/videoData.js` `VIRTUAL_GIFTS`, `GiftScreen`, `PostOptionsDrawer`,
+  `liveService.GIFT_TYPES`, `monetizationService.GIFTS`) derives from them, and
+  the server prices gifts from `GIFT_VALUES` (`functions/monetization.js`
+  `DEFAULT_GIFT_TYPES`). A gift id or price literal anywhere else is a bug.
+- `COIN_PACKAGES` / `COIN_PACKAGES_BY_ID`, `SUBSCRIPTION_TIERS` and
+  `AD_REWARD_COINS` own store pricing, the monthly subscription grant and the
+  rewarded-ad payout. `functions/monetization.js` (`purchaseCoins`,
+  `createSubscription`), `functions/index.js` (`verifyPurchase`) and the store
+  screens (`CoinsScreen`, `Economy/WalletScreen`) all read these tables. Never
+  re-declare a package id, price or coin amount in a screen or a function.
+- Coin -> USD is display-only: use `coinsToUsd` / `formatCoinsAsUsd` from the
+  shared config. Dividing by `COINS_PER_DOLLAR` by hand (or deriving a
+  `1 / COINS_PER_DOLLAR` rate) in a screen is a bug — it re-implements the
+  rounding policy and drifts from the payout server.
 - Rank bands, perks and royal eligibility follow the Profile System blueprint
   (sections 21-22 and 31-32); `getRoyalEligibility` requires every dimension, so
   level alone can never grant a royal title.
+
+## Offline queue — one instance, one owner
+`src/utils/OfflineQueue.js` exports the single `offlineQueue` singleton.
+`src/offline/syncEngine.js` re-exports it; never construct a second
+`OfflineQueue` (the in-memory fallback and drain state would diverge, so
+service-layer ops could never drain). Every queued op carries an `ownerUid`;
+enqueues without an explicit owner bind to the live session
+(`window._arvdoul_auth`), drains are scoped with `syncQueue({ ownerUid })`, and
+`purgeQueueForOwner(uid)` runs on sign-out/account switch.
+
+## No fabricated standing
+A missing `level`/`xp` renders as unavailable (null), never as `Level 1` /
+`Citizen`. Do not add `|| 1` level defaults or `() => 'Citizen'` fallbacks in
+profile components — `src/__tests__/noFabricatedData.test.js` guards this.
+
+## Cloud Functions deploy path — merge, don't just require
+Firebase publishes exactly what `functions/index.js` exports. `require('./x.js')`
+runs a module but does NOT deploy its functions — every module's exports must be
+merged (`merge(require('./x.js'))`). Requiring without merging once dropped ~130
+of 141 functions (only the 11 defined inline deployed), so every callable the app
+depends on returned "not found". `src/__tests__/deployIntegrity.test.js` loads the
+real `index.js` and fails if any client-called callable is not exported, and if
+any `functions/*.js` requires a package not declared in `functions/package.json`
+(`firebase deploy` installs only declared deps, so an undeclared require aborts
+the whole deploy). `auth.js` / `pushQueue.js` are helper-only (no triggers).
+
+## firestore.rules must compile — no wildcards mixed with literals
+A `match` path segment is either `{var}`, `{var=**}` or a literal. A segment that
+mixes a wildcard with text (e.g. `messages_{year}_{month}`) makes the ENTIRE
+ruleset fail to compile, so `firebase deploy` rejects it and the previous rules
+stay live. Match the subcollection as one wildcard and validate the name instead
+(`isMessageShardCollection`). `src/__tests__/firestoreRulesCompile.test.js`
+guards this (syntax, plus emulator-backed adversarial checks when the emulator
+runs).
+
+## No client-side security theatre
+A browser cannot be a WAF, a CSRF authority, a DDoS scrubbing layer, or an
+impossible-travel engine. `WAFService`, `CSRFService`, `DDoSProtectionService`,
+`sessionSecurityService`, `CSPService`, `SecureHeadersService`,
+`challengeService`, `botProtectionService` and `userIntegrityService` were inert
+(imported only by their own tests) and have been removed. Real controls: `firestore.rules` (authorization),
+`functions/rateLimit.js` (per-user sharded server limits), Firebase App Check
+(bot/abuse), the `index.html` meta CSP and the `firebase.json` headers.
+`src/__tests__/securityServices.test.js` fails if any is reintroduced.
+
+## UI reaches the backend only through services
+Screens/components must not import `firebase/*` directly — direct SDK use
+bypasses cache scoping, authorization helpers and error normalisation.
+`src/__tests__/architectureBoundaries.test.js` enforces this with an allowlist
+that is now **empty** (all offenders migrated): callables go through
+`src/services/callableService.js` (`callFunction` + `FUNCTIONS`), post
+mutations through `firestoreService`, and follows/mutes/profile through
+`userService`. Do not re-add direct SDK imports in UI — add a service method
+and a `FUNCTIONS` key instead. Never add an allowlist entry.
+
+## Reconstruction deliverable
+`docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/
+duplication/cost/route/dependency reconstruction and the AUDIT V3 finding-status
+ledger. Update it when a finding closes.
+
+## Firebase cost is enforced in CI
+A new unbounded Firestore read, a new realtime listener, or a new runtime
+dependency is a billing change, not a detail. `scripts/firebaseCostAnalyzer.cjs`
+measures unbounded `getDocs` (no `limit`, one local-variable hop resolved,
+single-document reads ignored) and `onSnapshot` counts per file;
+`scripts/firebaseCostBaseline.json` freezes them;
+`src/__tests__/firebaseCostGuard.test.js` fails when a count or the runtime
+dependency count exceeds the baseline. The baseline may only shrink — bound the
+query, delete the listener, or drop the dependency and lower the number in the
+same change. Do not raise a baseline to make a test pass.
+
+## Architecture layering
+Lower layers never import higher ones: `src/services|store|hooks|utils|context`
+must not import `screens/components` (an upward import creates a cycle and drags
+JSX into modules the Functions runtime or a service test loads). Enforced by
+`architectureBoundaries.test.js`; the only documented exception is
+`src/utils/routePrefetcher.js`, whose dynamic `../screens/*` imports are its job.
+
+## CI enforcement jobs must fail, not advise
+The `lint`/`test` jobs in `.github/workflows/ci.yml` use `continue-on-error: true`
+(advisory). The `guards` job is deliberately hard-failing and runs the invariant
+suites: architecture boundaries, Firebase cost, security-services, deploy
+integrity, shared-config sync, and Firestore rules compile. Add new invariant
+suites to that job.

@@ -1,12 +1,11 @@
-// This file must reflect: 'everything should be more extremely advanced, styled, ultra pro max professional creation and robust also production ready and working perfectly smooth'
-// src/screens/SignupStep1Personal.jsx – ARVDOUL TRANSFORMED ULTIMATE VERSION
+// src/screens/SignupStep1Personal.jsx
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext";
 
-// ==================== FLOATING LABEL INPUT (Arvdoul‑level) ====================
 const FloatingLabelInput = React.memo(React.forwardRef(({ 
   label, 
   value, 
@@ -142,7 +141,6 @@ const FloatingLabelInput = React.memo(React.forwardRef(({
 }));
 FloatingLabelInput.displayName = 'FloatingLabelInput';
 
-// ==================== GENDER CHIPS (Male/Female with ♂/♀ icons) ====================
 const GenderChips = React.memo(({ value, onChange, error, theme }) => {
   const options = [
     { value: "Male", label: "Male", icon: "♂️" },
@@ -222,7 +220,6 @@ const GenderChips = React.memo(({ value, onChange, error, theme }) => {
 });
 GenderChips.displayName = 'GenderChips';
 
-// ==================== MOBILE-OPTIMIZED SELECT (used for Date of Birth) ====================
 const MobileOptimizedSelect = React.memo(({ 
   label, 
   value, 
@@ -323,7 +320,6 @@ const MobileOptimizedSelect = React.memo(({
 });
 MobileOptimizedSelect.displayName = 'MobileOptimizedSelect';
 
-// ==================== DATE OF BIRTH SELECTOR (unchanged from original) ====================
 const MobileDateOfBirthSelector = React.memo(({ value, onChange, error, theme }) => {
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
   const months = [
@@ -421,7 +417,6 @@ const MobileDateOfBirthSelector = React.memo(({ value, onChange, error, theme })
 });
 MobileDateOfBirthSelector.displayName = 'MobileDateOfBirthSelector';
 
-// ==================== STEP INDICATOR (matching SetupProfile/SignupStep2) ====================
 const StepIndicator = React.memo(({ currentStep, theme }) => {
   const steps = [
     { number: 1, label: "Personal" },
@@ -465,7 +460,6 @@ const StepIndicator = React.memo(({ currentStep, theme }) => {
 });
 StepIndicator.displayName = 'StepIndicator';
 
-// ==================== MAIN COMPONENT (Arvdoul Ultimate) ====================
 export default function SignupStep1Personal() {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -664,7 +658,7 @@ export default function SignupStep1Personal() {
                 />
               </div>
 
-              {/* Gender chips with ♂/♀ icons */}
+              {/* Gender chips with / icons */}
               <GenderChips
                 value={formData.gender}
                 onChange={(gender) => setFormData(prev => ({ ...prev, gender }))}

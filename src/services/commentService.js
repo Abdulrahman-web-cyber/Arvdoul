@@ -1,8 +1,4 @@
-// src/services/commentService.js - ULTIMATE PRODUCTION V10 - BILLION‑USER SCALE
-// 💬 REAL-TIME COMMENTS • ADVANCED THREADING • MENTION SYSTEM • SPAM PROTECTION
-// 🏢 SHARDED COUNTERS • CHUNKED MENTIONS • OPTIMISED BATCH DELETE • FULL ERROR MAPPING
-// 🚀 SCALABLE TO 1B+ USERS • MINIMAL FIRESTORE COST • 100% BACKWARD COMPATIBLE
-// Upgrades: Comment edit history, comment pinning, comment locking.
+// src/services/commentService.js
 
 const COMMENTS_CONFIG = {
   MAX_DEPTH: 6,
@@ -53,14 +49,12 @@ class UltimateCommentService {
 
     // Auto-initialize
     this.initialize().catch(err => {
-//       logger.warn('Comment service initialization warning:', err.message);
     });
 
     // Periodic cleanup
     this.cleanupInterval = setInterval(() => this.cleanupStaleData(), 60 * 1000);
   }
 
-  // ==================== INITIALIZATION ====================
   async initialize() {
     if (this.initialized) return this.firestore;
 
@@ -116,7 +110,6 @@ class UltimateCommentService {
         });
         logger.warn('// Comment service persistence enabled');
       } catch (persistenceError) {
-//         logger.warn('⚠️ Comment service persistence warning:', persistenceError.message);
       }
 
       this.initialized = true;
@@ -136,7 +129,6 @@ class UltimateCommentService {
     return this.firestore;
   }
 
-  // ==================== COMMENT CREATION ====================
   async createComment(postId, userId, content, options = {}) {
     const startTime = Date.now();
     const operationId = `comment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -287,7 +279,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== COMMENT RETRIEVAL ====================
   async getCommentsByPost(postId, options = {}) {
     const startTime = Date.now();
     const cacheKey = `post_comments_${postId}_${JSON.stringify(options)}`;
@@ -452,7 +443,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== COMMENT UPDATES ====================
   async updateComment(commentId, userId, updates) {
     try {
       await this._ensureInitialized();
@@ -559,7 +549,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== COMMENT ENGAGEMENT ====================
   async likeComment(commentId, userId) {
     try {
       await this._ensureInitialized();
@@ -698,7 +687,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== REPLY SYSTEM ====================
   async replyToComment(parentCommentId, userId, content, options = {}) {
     try {
       await this._ensureInitialized();
@@ -806,7 +794,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== REAL-TIME UPDATES ====================
   subscribeToPostComments(postId, callback, options = {}) {
     const subscriptionId = `post_${postId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -905,7 +892,6 @@ class UltimateCommentService {
     return false;
   }
 
-  // ==================== MODERATION & ADMIN ====================
   async reportComment(commentId, userId, reason, details = '') {
     try {
       await this._ensureInitialized();
@@ -999,7 +985,6 @@ class UltimateCommentService {
     }
   }
 
-  // ==================== UTILITY METHODS ====================
   _validateComment(content, userId) {
     const errors = [];
     const warnings = [];

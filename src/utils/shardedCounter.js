@@ -1,6 +1,4 @@
 /**
- * src/utils/shardedCounter.js - ARVDOUL Distributed Sharded Counter Engine
- * 
  * Solves Firestore's ~1 write/sec single-document limitation by distributing
  * high-velocity writes across N discrete shard documents.
  * Crucial for viral feeds, likes, views, followers, and creator tip counters.

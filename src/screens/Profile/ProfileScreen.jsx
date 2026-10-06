@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/ProfileScreen.jsx - ARVDOUL Master Profile Screen Controller
- * 
  * Central controller that dynamically renders ProfileMyScreen for the profile owner
  * or ProfilePublicScreen for visitors and creators.
  * 

@@ -1,5 +1,4 @@
 /**
- * src/components/profile/AvatarUploadModal.jsx - ARVDOUL Avatar Upload & Cropping Modal
  * Features:
  * - react-easy-crop 1:1 circular crop
  * - Interactive zoom slider (1x - 3x)

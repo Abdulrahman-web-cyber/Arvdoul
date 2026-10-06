@@ -1,5 +1,4 @@
-// src/screens/ForgotPasswordScreen.jsx – PRODUCTION READY
-// ✅ Real Firebase email sending • Offline banner • Glass card • Shake on error
+// src/screens/ForgotPassword.jsx
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -168,7 +167,7 @@ export default function ForgotPasswordScreen() {
     setLoading(true);
     setError("");
     try {
-      // ✅ Real Firebase password reset email
+      // Real Firebase password reset email
       const result = await sendPasswordResetEmail(email);
       if (result.success) {
         setIsSubmitted(true);

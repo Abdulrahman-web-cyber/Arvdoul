@@ -1,4 +1,5 @@
-// src/screens/SplashScreen.jsx - ULTIMATE PROFESSIONAL PRODUCTION VERSION
+// src/screens/SplashScreen.jsx
+
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,13 +17,9 @@ export default function SplashScreen() {
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Initializing");
-  const [isReady, setIsReady] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
   
   const mountedRef = useRef(true);
-  const progressIntervalRef = useRef(null);
-  const statusTimeoutRef = useRef(null);
-  const completeTimerRef = useRef(null);
 
   // Perfect theme configuration
   const themeConfig = useMemo(() => {
@@ -33,7 +30,7 @@ export default function SplashScreen() {
     return {
       isDark: resolvedTheme === 'dark',
       logo: resolvedTheme === 'dark' ? '/logo/logo-dark.png' : '/logo/logo-light.png',
-      fallbackLogo: resolvedTheme === 'dark' ? '/logo/logo-default.png' : '/logo/logo-default.png',
+      fallbackLogo: '/logo/logo-default.png',
       background: resolvedTheme === 'dark'
         ? '#03071B'
         : '#F6F8FC',
@@ -43,16 +40,6 @@ export default function SplashScreen() {
       spinnerColor: '#8B1EF3'
     };
   }, [theme]);
-
-  // Advanced status sequence
-  const statusSequence = useMemo(() => [
-    { text: "Initializing", progress: 10 },
-    { text: "Loading Assets", progress: 25 },
-    { text: "Preparing UI", progress: 45 },
-    { text: "Connecting Services", progress: 65 },
-    { text: "Securing Connection", progress: 80 },
-    { text: "Ready", progress: 95 }
-  ], []);
 
   // Preload logo with perfect error handling
   const preloadLogo = useCallback(() => {
@@ -117,36 +104,31 @@ export default function SplashScreen() {
     });
   }, [themeConfig]);
 
-  // Smooth realistic splash progress animation matching user expectations
+  // Progress reflects real milestones only: the logo preload and the auth
+  // session resolving. There is no timer that invents progress.
   useEffect(() => {
     mountedRef.current = true;
     preloadLogo();
-
-    let currentProgress = 8;
-    setProgress(currentProgress);
-
-    const interval = setInterval(() => {
-      if (!mountedRef.current) return;
-      currentProgress += Math.random() * 8 + 5;
-      if (currentProgress >= 96) {
-        currentProgress = 96;
-        clearInterval(interval);
-      }
-      setProgress(Math.min(96, Math.round(currentProgress)));
-
-      // Update status text according to statusSequence
-      for (let i = statusSequence.length - 1; i >= 0; i--) {
-        if (currentProgress >= statusSequence[i].progress) {
-          setStatus(statusSequence[i].text);
-          break;
-        }
-      }
-    }, 120);
-
     return () => {
-      clearInterval(interval);
+      mountedRef.current = false;
     };
-  }, [preloadLogo, statusSequence]);
+  }, [preloadLogo]);
+
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    if (!logoLoaded) {
+      setProgress(15);
+      setStatus('Loading Assets');
+      return;
+    }
+    if (!authInitialized) {
+      setProgress(65);
+      setStatus('Connecting Services');
+      return;
+    }
+    setProgress(90);
+    setStatus('Securing Connection');
+  }, [logoLoaded, authInitialized]);
 
   // When auth initializes (or safety timeout expires), complete to 100% and navigate cleanly
   useEffect(() => {

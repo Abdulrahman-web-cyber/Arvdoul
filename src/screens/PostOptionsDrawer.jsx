@@ -1,13 +1,4 @@
-// src/screens/PostOptionsDrawer.jsx – ARVDOUL ULTIMATE (PRODUCTION‑READY – FIXED)
-// ✅ All bugs fixed, UI perfected, offline queue solid, accessibility enhanced
-// ✅ Boost only visible to author
-// ✅ Edit / Analytics navigation fixed
-// ✅ Drawer stays open after non‑destructive actions
-// ✅ Delete timer only removes post locally, no forced navigation
-// ✅ Follow state refreshes on drawer open
-// ✅ Mounted checks prevent async state updates after unmount
-// ✅ Safety section UI flawless (no cracks / scratches)
-// ✅ Modals race‑safe, analytics flushed on unmount
+// src/screens/PostOptionsDrawer.jsx
 
 import React, {
   useState, useCallback, useEffect, useRef, useMemo, useReducer
@@ -22,18 +13,16 @@ import {
   Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck
 } from 'lucide-react';
 import { triggerHaptic } from '../utils/haptics';
+import { VIRTUAL_GIFTS } from '../data/videoData';
 import firestoreService from '../services/firestoreService.js';
 import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
 import feedService from '../services/feedService.js';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getFirestore, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { increment } from 'firebase/firestore';
+import { callFunction, FUNCTIONS } from '../services/callableService.js';
 import { openDB } from 'idb';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ========== SHADOW DEFINITIONS ==========
 const shadows = {
   soft: '0 4px 12px rgba(0,0,0,0.08)',
   mid: '0 8px 24px rgba(0,0,0,0.12)',
@@ -42,11 +31,9 @@ const shadows = {
   hover: '0 8px 20px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.05)',
 };
 
-// ============================= AUTHOR METADATA CACHE =============================
 const authorMetaCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
-// ============================= OFFLINE QUEUE (FIXED) =============================
 let dbPromise = null;
 const MAX_QUEUE_ITEMS = 100;
 const QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -98,16 +85,18 @@ async function addToOfflineQueue(action, data) {
     const oldestCursor = await db.transaction('queue', 'readwrite').store.index('timestamp').openCursor();
     if (oldestCursor) await oldestCursor.delete();
   }
-  await db.add('queue', { action, data, timestamp: Date.now(), retries: 0 });
+  // ownerUid partitions the queue by account so a later session cannot replay
+  // this user's pending writes.
+  await db.add('queue', { action, data, ownerUid: data.userId || null, timestamp: Date.now(), retries: 0 });
 }
 
-async function replayOfflineQueue() {
+async function replayOfflineQueue(currentUid = null) {
   if (replayLock) return;
   if (!navigator.onLine) return;
   if (typeof navigator !== 'undefined' && navigator.locks) {
     await navigator.locks.request('arvdoul_offline_replay', { ifAvailable: true }, async () => {
       replayLock = true;
-      try { await doReplay(); } finally { replayLock = false; }
+      try { await doReplay(currentUid); } finally { replayLock = false; }
     });
   } else {
     replayLock = true;
@@ -115,10 +104,12 @@ async function replayOfflineQueue() {
   }
 }
 
-async function doReplay() {
+async function doReplay(currentUid = null) {
   const db = await getOfflineDB();
   const tx = db.transaction('queue', 'readonly');
-  const items = await tx.store.getAll();
+  const all = await tx.store.getAll();
+  // Only replay ops owned by the signed-in account.
+  const items = currentUid ? all.filter((item) => item.ownerUid === currentUid) : [];
   if (!items.length) return;
   items.sort((a, b) => a.timestamp - b.timestamp);
   const BATCH_SIZE = 10;
@@ -147,7 +138,6 @@ async function doReplay() {
   }
 }
 
-// ============================= HELPERS =============================
 async function downloadFile(url, filename, maxSizeMB = 50) {
   try {
     const response = await fetch(url);
@@ -176,7 +166,6 @@ async function callWithRetry(fn, maxRetries = 3) {
   }
 }
 
-// ============================= REDUCER FOR UI STATE =============================
 const initialState = {
   saved: false, saving: false,
   pinned: false, pinning: false,
@@ -203,7 +192,6 @@ function uiReducer(state, action) {
   }
 }
 
-// ============================= MAIN DRAWER =============================
 export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, theme, onAnalytics }) {
   const navigate = useNavigate();
   const safePost = post || {};
@@ -367,14 +355,14 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     }
   }, [modal, currentUser]);
 
-  // Offline queue listener
+  // Offline queue listener (re-bound on account switch)
   useEffect(() => {
     const handler = async () => {
-      await replayOfflineQueue();
+      await replayOfflineQueue(currentUser?.uid || null);
     };
     window.addEventListener('online', handler);
     return () => window.removeEventListener('online', handler);
-  }, []);
+  }, [currentUser?.uid]);
 
   // Scroll lock & focus trap
   useEffect(() => {
@@ -427,7 +415,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     };
   }, [flushAnalytics]);
 
-  // ========== ACTION HANDLERS ==========
   const requireAuth = (fn) => (...args) => {
     if (!currentUser) { toast.error('Please sign in'); return; }
     fn(...args);
@@ -457,7 +444,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
         shared = true;
       }
       if (shared) {
-        await callWithRetry(() => firestoreService.updatePost(post.id, { 'stats.shares': increment(1) })).catch(() => {});
+        await callWithRetry(() => firestoreService.sharePost(post.id, currentUser.uid)).catch(() => {});
         debouncedAnalytics('post_option_click', { action: 'share', postId: post.id });
       }
     } catch (err) {
@@ -531,7 +518,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('delete', 3000)) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'delete' });
     try {
-      await callWithRetry(() => firestoreService.updatePost(post.id, { isDeleted: true, deletedAt: serverTimestamp() }));
+      await callWithRetry(() => firestoreService.deletePost(post.id, currentUser.uid));
       if (!mountedRef.current) return;
       toast.success('Post hidden (undo 10s) – tap Undo', {
         duration: 10000,
@@ -539,7 +526,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
           label: 'Undo',
           onClick: () => {
             clearDeleteTimer();
-            firestoreService.updatePost(post.id, { isDeleted: false, deletedAt: null })
+            firestoreService.restorePost(post.id, currentUser.uid)
               .then(() => { if (mountedRef.current) toast.success('Restored'); });
             closeModal();
           },
@@ -562,8 +549,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('report', 5000)) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'report' });
     try {
-      const reportFn = httpsCallable(getFunctions(), 'reportPost');
-      await callWithRetry(() => reportFn({ postId: post.id, reason: reportReason }));
+      await callWithRetry(() => callFunction(FUNCTIONS.REPORT_POST, { postId: post.id, reason: reportReason }));
       if (!mountedRef.current) return;
       toast.success('Report submitted');
       debouncedAnalytics('post_option_click', { action: 'report', postId: post.id, reason: reportReason });
@@ -589,8 +575,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     if (!checkRateLimit('mute', 2000)) return;
     dispatchUI({ type: 'SET_LOADING_ACTION', payload: 'mute' });
     try {
-      const db = getFirestore();
-      await callWithRetry(() => setDoc(doc(db, 'users', currentUser.uid, 'mutes', ownerId), { mutedUserId: ownerId, createdAt: serverTimestamp() }));
+      await callWithRetry(() => userService.muteUser(currentUser.uid, ownerId));
       if (!mountedRef.current) return;
       toast.success(`Muted @${post.authorUsername}`);
       debouncedAnalytics('post_option_click', { action: 'mute', postId: post.id, targetId: ownerId });
@@ -706,8 +691,7 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       let url = mediaUrl, filename = `arvdoul_${post.id}.`, maxSize = 50;
       if (mediaType === 'video') {
         if (post.muxPlaybackId) {
-          const fn = httpsCallable(getFunctions(), 'getMuxPlaybackUrl');
-          const { data } = await callWithRetry(() => fn({ playbackId: post.muxPlaybackId, videoId: post.id }));
+          const data = await callWithRetry(() => callFunction(FUNCTIONS.GET_MUX_PLAYBACK_URL, { playbackId: post.muxPlaybackId, videoId: post.id }));
           url = data.url;
         } else if (mediaUrl && (mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.mov'))) {
           url = mediaUrl;
@@ -811,7 +795,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     }
   });
 
-  // ========== ACTION ROWS ==========
   const primaryRow = useMemo(() => [
     { id: 'share', icon: Share2, label: 'Share', onClick: handleShare, primary: true, wide: true },
     { id: 'save', icon: uiState.saved ? BookmarkCheck : Bookmark, label: uiState.saved ? 'Saved' : 'Save', onClick: handleSaveToggle, disabled: uiState.saving, primary: true, wide: true },
@@ -846,7 +829,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
     return actions;
   }, [isAuthor, openModal]);
 
-  // ========== RENDER ==========
   return (
     <AnimatePresence>
       {isOpen && post && (
@@ -1239,7 +1221,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
   );
 }
 
-// ========== MODAL COMPONENTS ==========
 const ConfirmModal = ({ title, message, confirmText, danger, onConfirm, onCancel, loading, theme }) => {
   const isDark = theme === 'dark';
   return (
@@ -1311,12 +1292,9 @@ const TipModal = ({ onSelectAmount, onCancel, loading, coinBalance, theme }) => 
 };
 
 const GiftModal = ({ onSelectGift, onCancel, loading, coinBalance, theme }) => {
-  const gifts = [
-    { name: 'Rose', value: 'rose', coins: 5, icon: '🌹' },
-    { name: 'Crown', value: 'crown', coins: 50, icon: '👑' },
-    { name: 'Diamond', value: 'diamond', coins: 100, icon: '💎' },
-    { name: 'Rocket', value: 'rocket', coins: 500, icon: '🚀' },
-  ];
+  const gifts = VIRTUAL_GIFTS.map((g) => ({
+    name: g.name, value: g.type, coins: g.coins, icon: g.emoji,
+  }));
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={onCancel} />

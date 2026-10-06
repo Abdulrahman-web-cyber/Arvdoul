@@ -1,7 +1,4 @@
-// src/screens/Event/EventDetailScreen.jsx - ARVDOUL EVENT DETAIL
-// ✅ View event info, schedule, attendees
-// ✅ Register/Unregister for event
-// ✅ Real-time updates
+// src/screens/Event/EventDetailScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -14,6 +11,7 @@ import {
 } from 'lucide-react';
 import { getEventService } from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
+import { copyToClipboard } from '../../utils/shareUtils';
 import { format, formatDistanceToNow, isPast, isFuture, isToday } from 'date-fns';
 
 const EventDetailScreen = () => {
@@ -114,6 +112,30 @@ const EventDetailScreen = () => {
       toast.error(error.message || 'Failed to cancel registration');
     }
   }, [eventId, user?.uid, eventService, loadEvent]);
+
+  // Copy a canonical link to this event so "Copy Event Link" / "Share Event"
+  // actually hand the user a working URL.
+  const handleCopyEventLink = useCallback(async () => {
+    try {
+      await copyToClipboard(`${window.location.origin}/event/${eventId}`);
+      toast.success('Event link copied');
+    } catch {
+      toast.error('Could not copy link');
+    }
+  }, [eventId]);
+
+  const handleShareEvent = useCallback(async () => {
+    const url = `${window.location.origin}/event/${eventId}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: event?.title || 'Arvdoul event', url });
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    handleCopyEventLink();
+  }, [eventId, event?.title, handleCopyEventLink]);
 
   // Check registration status
   const isRegistered = event?.attendees?.[user?.uid]?.status === 'registered';
@@ -447,7 +469,10 @@ const EventDetailScreen = () => {
                   </button>
                   <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                     <p className="text-sm text-gray-500 mb-2">Share your event</p>
-                    <button className="w-full py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm flex items-center justify-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                    <button
+                      onClick={handleCopyEventLink}
+                      className="w-full py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm flex items-center justify-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    >
                       <Share2 className="w-4 h-4" />
                       Copy Event Link
                     </button>
@@ -548,7 +573,10 @@ const EventDetailScreen = () => {
               )}
 
               {/* Share */}
-              <button className="w-full mt-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 text-sm flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+              <button
+                onClick={handleShareEvent}
+                className="w-full mt-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 text-sm flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
                 <Share2 className="w-4 h-4" />
                 Share Event
               </button>

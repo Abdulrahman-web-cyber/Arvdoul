@@ -1,6 +1,4 @@
 /**
- * src/services/misinformationService.js - ARVDOUL MISINFORMATION & FACT-CHECKING ENGINE
- *
  * Implements:
  * 1. Disputed Claims Registry: Checks viral posts against database of debunked civic, election, and health claims.
  * 2. Fact-Check Attribution Labels: Injects neutral contextual fact-checking badges with authoritative source references.
@@ -58,7 +56,7 @@ class MisinformationService {
         logger.info('[MisinformationService] Disputed claim matched in text; attaching contextual banner.');
 
         // Trigger reach score demotion on feedService (Pillar 36, 50, 91)
-        if (postId && userId && feedService && typeof feedService.demotePost === 'function') {
+        if (postId && userId) {
           feedService.demotePost(userId, postId, 'misinformation_flagged').catch(() => {});
         }
 
@@ -89,7 +87,7 @@ class MisinformationService {
               if (review) {
                 const isFalse = /false|misleading|debunked/i.test(review.textualRating);
                 if (isFalse) {
-                  if (postId && userId && feedService && typeof feedService.demotePost === 'function') {
+                  if (postId && userId) {
                     feedService.demotePost(userId, postId, 'misinformation_flagged').catch(() => {});
                   }
                   return {

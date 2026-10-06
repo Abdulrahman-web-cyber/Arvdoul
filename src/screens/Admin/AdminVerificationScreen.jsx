@@ -1,133 +1,43 @@
-// src/screens/Admin/AdminVerificationScreen.jsx - ARVDOUL CREATOR VERIFICATION OVERSIGHT
-// ✅ Review creator verification requests & identity credentials
-// ✅ Citizenship status, follower threshold, and strike history validation
-// ✅ Approve/Reject with server-side audit trail and notification triggers
+// src/screens/Admin/AdminVerificationScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
   CheckCircle2,
-  XCircle,
-  Clock,
   ShieldCheck,
   Search,
-  Filter,
   UserCheck,
-  Award,
   AlertTriangle,
   ExternalLink,
-  Phone,
-  Mail,
-  Users,
-  Sparkles,
-  FileText,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { auditLogger } from '../../utils/AuditLogger.js';
+import { callFunction, FUNCTIONS } from '../../services/callableService.js';
+import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
+import { getRankTitle } from '../../services/levelSystemService.js';
 
 const AdminVerificationScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending'); // 'all' | 'pending' | 'approved' | 'rejected'
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedApplicant, setSelectedApplicant] = useState(null);
 
-  // Applicants queue
-  const [applicants, setApplicants] = useState([
-    {
-      id: 'verif-201',
-      userId: 'usr_sarah_craft',
-      displayName: 'Sarah Jenkins',
-      handle: '@sarahcraft',
-      category: 'Design & Visual Arts',
-      citizenshipTier: 'Chancellor',
-      level: 48,
-      followerCount: 14200,
-      strikesCount: 0,
-      phoneVerified: true,
-      emailVerified: true,
-      submittedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-      portfolioUrl: 'https://sarahjenkins.design',
-      bio: 'Digital artist and community tutorial host. Creating 3D visuals and spatial assets.',
-      status: 'pending',
-    },
-    {
-      id: 'verif-202',
-      userId: 'usr_dev_marcus',
-      displayName: 'Marcus Brody',
-      handle: '@marcusbrody',
-      category: 'Software & Tech',
-      citizenshipTier: 'Senator',
-      level: 35,
-      followerCount: 5400,
-      strikesCount: 0,
-      phoneVerified: true,
-      emailVerified: true,
-      submittedAt: new Date(Date.now() - 3600000 * 36).toISOString(),
-      portfolioUrl: 'https://github.com/marcusbrody',
-      bio: 'Fullstack engineer streaming system architecture breakdown and open-source tooling.',
-      status: 'pending',
-    },
-    {
-      id: 'verif-203',
-      userId: 'usr_speedy_vids',
-      displayName: 'Speedy Clips',
-      handle: '@speedyclips',
-      category: 'Gaming & Memes',
-      citizenshipTier: 'Resident',
-      level: 8,
-      followerCount: 840,
-      strikesCount: 2,
-      phoneVerified: false,
-      emailVerified: true,
-      submittedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      portfolioUrl: '',
-      bio: 'Daily game highlights and speedruns.',
-      status: 'pending',
-    },
-    {
-      id: 'verif-204',
-      userId: 'usr_elena_sound',
-      displayName: 'Elena Rostova',
-      handle: '@elenarostova',
-      category: 'Music & Production',
-      citizenshipTier: 'Chancellor',
-      level: 62,
-      followerCount: 28900,
-      strikesCount: 0,
-      phoneVerified: true,
-      emailVerified: true,
-      submittedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-      portfolioUrl: 'https://elenarostova.music',
-      bio: 'Composer and audio engineer producing cinematic synthesizers.',
-      status: 'approved',
-    },
-  ]);
+  // Real verification queue — populated only from Firestore.
+  const [applicants, setApplicants] = useState([]);
 
-  // Load applications from Firestore if available
+  // Load the real verification queue. creator_verifications is readable by
+  // admins; an empty collection is an honest empty state, not a seeded list.
   useEffect(() => {
     const loadApplications = async () => {
+      setLoading(true);
       try {
-        const { collection, getDocs, query, limit, orderBy } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        try {
-          const snap = await getDocs(
-            query(collection(firestore, 'creator_verifications'), orderBy('submittedAt', 'desc'), limit(50))
-          );
-          if (!snap.empty) {
-            setApplicants(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          }
-        } catch (e) {
-          // Keep initialized baseline
-        }
-      } catch (err) {
+        const { getAdminService } = await import('../../services/adminService.js');
+        const rows = await getAdminService().listVerificationApplications(50);
+        setApplicants(rows);
+      } catch {
         toast.error('Could not load creator verification applications.');
+        setApplicants([]);
       } finally {
         setLoading(false);
       }
@@ -135,89 +45,34 @@ const AdminVerificationScreen = () => {
     loadApplications();
   }, []);
 
-  // Approve verification
-  const handleApprove = async applicant => {
+  // Decisions go through applyVerificationDecision: the callable writes the
+  // application, flips the user's badge, and audits — all server-side.
+  const decide = async (applicant, decision, reason) => {
     try {
-      setApplicants(prev =>
-        prev.map(a => (a.id === applicant.id ? { ...a, status: 'approved', approvedAt: new Date().toISOString() } : a))
-      );
-
-      // Audit log entry
-      await auditLogger.log(user?.uid || 'admin', 'CREATOR_VERIFICATION_APPROVED', {
-        applicantId: applicant.id,
-        applicantUserId: applicant.userId,
-        actorEmail: user?.email,
-        timestamp: Date.now(),
+      await callFunction(FUNCTIONS.APPLY_VERIFICATION_DECISION, {
+        applicationId: applicant.id,
+        decision,
+        reason: reason || '',
       });
-
-      // Update user doc in Firestore
-      try {
-        const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        await updateDoc(doc(firestore, 'users', applicant.userId), {
-          isVerified: true,
-          isCreator: true,
-          verifiedAt: serverTimestamp(),
-          verifiedBy: user?.uid,
-        });
-
-        await updateDoc(doc(firestore, 'creator_verifications', applicant.id), {
-          status: 'approved',
-          reviewedBy: user?.uid,
-          reviewedAt: serverTimestamp(),
-        });
-      } catch (e) {
-        // Handled
-      }
-
-      toast.success(`Creator badge granted to ${applicant.displayName} (@${applicant.handle})`);
-      setSelectedApplicant(null);
-    } catch (err) {
-      toast.error('Failed to approve application');
+      setApplicants(prev =>
+        prev.map(a => (a.id === applicant.id ? { ...a, status: decision } : a))
+      );
+      toast.success(
+        decision === 'approved'
+          ? `Creator badge granted to ${applicant.displayName || applicant.handle || applicant.userId}.`
+          : `Application ${applicant.id} declined.`
+      );
+    } catch {
+      toast.error(`Could not record the ${decision} decision.`);
     }
   };
 
-  // Reject verification
-  const handleReject = async applicant => {
+  const handleApprove = applicant => decide(applicant, 'approved');
+
+  const handleReject = applicant => {
     const reason = window.prompt('Specify reason for verification decline:');
     if (!reason) return;
-
-    try {
-      setApplicants(prev =>
-        prev.map(a =>
-          a.id === applicant.id ? { ...a, status: 'rejected', rejectionReason: reason, rejectedAt: new Date().toISOString() } : a
-        )
-      );
-
-      await auditLogger.log(user?.uid || 'admin', 'CREATOR_VERIFICATION_REJECTED', {
-        applicantId: applicant.id,
-        applicantUserId: applicant.userId,
-        reason,
-        actorEmail: user?.email,
-      });
-
-      try {
-        const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        await updateDoc(doc(firestore, 'creator_verifications', applicant.id), {
-          status: 'rejected',
-          rejectionReason: reason,
-          reviewedBy: user?.uid,
-          reviewedAt: serverTimestamp(),
-        });
-      } catch (e) {
-        // Handled
-      }
-
-      toast.info(`Application for @${applicant.handle} rejected: ${reason}`);
-      setSelectedApplicant(null);
-    } catch (err) {
-      toast.error('Failed to reject application');
-    }
+    decide(applicant, 'rejected', reason);
   };
 
   const filteredApplicants = applicants.filter(a => {
@@ -225,9 +80,9 @@ const AdminVerificationScreen = () => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      a.displayName.toLowerCase().includes(q) ||
-      a.handle.toLowerCase().includes(q) ||
-      a.category.toLowerCase().includes(q)
+      String(a.displayName || '').toLowerCase().includes(q) ||
+      String(a.handle || '').toLowerCase().includes(q) ||
+      String(a.category || '').toLowerCase().includes(q)
     );
   });
 
@@ -291,16 +146,29 @@ const AdminVerificationScreen = () => {
             />
           </div>
           <div className="text-xs text-gray-500 font-medium">
-            Showing {filteredApplicants.length} applicants
+            {loading ? 'Loading applicants…' : `Showing ${filteredApplicants.length} applicants`}
           </div>
         </div>
 
         {/* Applicants Grid */}
+        {!loading && filteredApplicants.length === 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+            {applicants.length === 0
+              ? 'No verification applications have been submitted yet.'
+              : 'No applications match this filter.'}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredApplicants.map(applicant => {
-            const meetsFollowers = applicant.followerCount >= 1000;
-            const meetsStrikes = applicant.strikesCount === 0;
-            const meetsVerification = applicant.phoneVerified && applicant.emailVerified;
+            const followerCount = Number(applicant.followerCount ?? applicant.followersCount ?? 0);
+            const strikesCount = Number(applicant.strikesCount ?? 0);
+            const emailVerified = Boolean(applicant.emailVerified);
+            const phoneVerified = Boolean(applicant.phoneVerified);
+            const meetsFollowers = followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
+            const meetsStrikes = strikesCount <= CREATOR_VERIFICATION_REQUIREMENTS.MAX_STRIKES;
+            const meetsVerification =
+              (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED || emailVerified) &&
+              (!CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_PHONE_VERIFIED || phoneVerified);
             const isFullyEligible = meetsFollowers && meetsStrikes && meetsVerification;
 
             return (
@@ -312,12 +180,12 @@ const AdminVerificationScreen = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <h3 className="font-bold text-base text-gray-900 dark:text-white">{applicant.displayName}</h3>
+                        <h3 className="font-bold text-base text-gray-900 dark:text-white">{applicant.displayName || applicant.userId}</h3>
                         {applicant.status === 'approved' && (
                           <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500 text-white" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-500">{applicant.handle}</p>
+                      <p className="text-xs text-gray-500">{applicant.handle || applicant.userId}</p>
                     </div>
                     <span
                       className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize ${
@@ -332,12 +200,22 @@ const AdminVerificationScreen = () => {
                     </span>
                   </div>
 
+                  {/* Eligibility verdict from the shared requirements contract */}
+                  <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${
+                    isFullyEligible
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                  }`}>
+                    {isFullyEligible ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                    {isFullyEligible ? 'Meets every badge requirement' : 'Does not meet all badge requirements'}
+                  </div>
+
                   {/* Bio & Category */}
                   <div className="mb-4">
                     <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mb-2">
-                      {applicant.category}
+                      {applicant.category || 'Uncategorised'}
                     </span>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{applicant.bio}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{applicant.bio || 'No bio provided.'}</p>
                   </div>
 
                   {/* Standing Checklist */}
@@ -345,32 +223,32 @@ const AdminVerificationScreen = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Citizenship:</span>
                       <span className="font-bold text-violet-600 dark:text-violet-400">
-                        {applicant.citizenshipTier} (Lvl {applicant.level})
+                        {applicant.citizenshipTier || getRankTitle(applicant.level || 0)} (Lvl {applicant.level ?? '—'})
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Followers:</span>
                       <span className={`font-semibold ${meetsFollowers ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {applicant.followerCount.toLocaleString()} {meetsFollowers ? '✓' : '(Min 1,000)'}
+                        {followerCount.toLocaleString()} {meetsFollowers ? '✓' : `(Min ${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()})`}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Policy Strikes:</span>
                       <span className={`font-semibold ${meetsStrikes ? 'text-emerald-600' : 'text-red-600 font-bold'}`}>
-                        {applicant.strikesCount} strikes {meetsStrikes ? '✓' : '⚠️ Strike Active'}
+                        {strikesCount} strikes {meetsStrikes ? '✓' : '⚠️ Strike Active'}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Identity Security:</span>
                       <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${applicant.emailVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                          Email {applicant.emailVerified ? '✓' : '✗'}
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${emailVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                          Email {emailVerified ? '✓' : '✗'}
                         </span>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${applicant.phoneVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                          SMS {applicant.phoneVerified ? '✓' : '✗'}
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${phoneVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                          SMS {phoneVerified ? '✓' : '✗'}
                         </span>
                       </div>
                     </div>

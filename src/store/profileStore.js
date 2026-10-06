@@ -1,6 +1,4 @@
 /**
- * src/store/profileStore.js - ARVDOUL Profile Store
- * 
  * Zustand store with Immer for profile state management.
  * Manages profile data, posts, follow status, and more.
  * 
@@ -21,7 +19,6 @@ import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
 
-// ==================== INITIAL STATE ====================
 const initialState = {
   // Profile data
   profile: null,
@@ -75,14 +72,33 @@ const initialState = {
   // UI state
   activeTab: 'posts',
   refreshKey: 0,
+  // Monotonic request token. Every loadProfile call takes a new value and any
+  // in-flight response whose token is stale is discarded, so a slow response
+  // for a previous account or route cannot overwrite current state.
+  requestSeq: 0,
+  // Per-loader tokens for the same guard on the secondary profile loaders
+  // (posts, highlights, saved, stories, level, balance, position). Without
+  // these, switching accounts while one of them is in flight lets the old
+  // account's data land in the new account's store (audit §26).
+  loadSeq: {},
 };
 
-// ==================== STORE ====================
 export const useProfileStore = create(
   immer((set, get) => ({
     ...initialState,
+
+    // Take a fresh token for a named loader. Any response that resolves after a
+    // newer load started (or after clear()) sees a mismatched token and is
+    // discarded, so a slow account-A response can never populate account B.
+    _startLoad: (key) => {
+      const seq = (get().loadSeq?.[key] || 0) + 1;
+      set((state) => {
+        state.loadSeq[key] = seq;
+      });
+      return seq;
+    },
+    _isLoadCurrent: (key, seq) => get().loadSeq?.[key] === seq,
     
-    // ==================== PROFILE ACTIONS ====================
     /**
      * Load user profile with all related data
      * @param {string} userId - User ID to load
@@ -91,8 +107,10 @@ export const useProfileStore = create(
      */
     loadProfile: async (userId, currentUserId, options = {}) => {
       if (!userId) return;
-      
+
+      const requestId = get().requestSeq + 1;
       set((state) => {
+        state.requestSeq = requestId;
         state.loading = true;
         state.error = null;
       });
@@ -170,28 +188,26 @@ export const useProfileStore = create(
             ? profile.username
             : fallbackUsername,
         } : {
-          id: userId || effectiveUid || 'creator',
-          uid: userId || effectiveUid || 'creator',
+          // No profile document was returned. Never invent standing: omit
+          // coins/level/reputation and deny every viewer-gated section rather
+          // than rendering fabricated values as real.
+          id: userId || effectiveUid || null,
+          uid: userId || effectiveUid || null,
           username: fallbackUsername,
           displayName: fallbackDisplayName,
           bio: typeof appCurrentUser?.bio === 'string' ? appCurrentUser.bio : '',
           photoURL: appCurrentUser?.photoURL || null,
-          followerCount: Number(appCurrentUser?.followerCount || appCurrentUser?.followersCount || 0),
-          followingCount: Number(appCurrentUser?.followingCount || 0),
-          postCount: 0,
-          likesReceived: 0,
-          friendCount: 0,
-          coins: isOwner ? (balance || Number(appCurrentUser?.coins) || 100) : 0,
-          level: level || Number(appCurrentUser?.level) || 1,
-          reputation: 100,
-          isVerified: Boolean(appCurrentUser?.isVerified),
-          isCreator: Boolean(appCurrentUser?.isCreator),
-          canViewActivity: true,
-          canViewAchievements: true,
-          canViewTitles: true,
-          canViewFollowersList: true,
-          canViewFollowingList: true,
+          isVerified: false,
+          isCreator: false,
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false,
+          canViewFollowersList: false,
+          canViewFollowingList: false,
         };
+
+        // Drop a stale response (account switch / newer navigation) — N013.
+        if (get().requestSeq !== requestId) return;
 
         set((state) => {
           state.profile = resolvedProfile;
@@ -200,7 +216,7 @@ export const useProfileStore = create(
           state.isOwner = isOwner;
           state.followStatus = followStatus;
           state.mutualFriends = mutualFriends;
-          state.level = level || resolvedProfile.level || 1;
+          state.level = resolvedProfile.level ?? level ?? null;
           state.balance = balance;
           state.position = position;
         });
@@ -226,36 +242,32 @@ export const useProfileStore = create(
           : (typeof userId === 'string' && userId.startsWith('user_') ? userId : `user_${(typeof userId === 'string' ? userId : 'creator').slice(0, 7)}`);
 
         const fallbackProfile = {
-          id: userId || effectiveUid || 'creator',
-          uid: userId || effectiveUid || 'creator',
+          // Load failed: surface a not-found state instead of inventing
+          // coins/level/reputation or granting viewer-gated sections.
+          id: userId || effectiveUid || null,
+          uid: userId || effectiveUid || null,
           username: fallbackUsername,
           displayName: fallbackDisplayName,
           bio: typeof localAuth.bio === 'string' ? localAuth.bio : '',
           photoURL: localAuth.photoURL || null,
-          followerCount: Number(localAuth.followerCount) || 0,
-          followingCount: Number(localAuth.followingCount) || 0,
-          postCount: 0,
-          likesReceived: 0,
-          friendCount: 0,
-          coins: isOwner ? (Number(localAuth.coins) || 100) : 0,
-          isVerified: Boolean(isOwner && localAuth.isVerified),
-          isCreator: Boolean(isOwner && localAuth.isCreator),
-          level: isOwner ? (Number(localAuth.level) || 1) : 1,
-          balance: isOwner ? (Number(localAuth.coins) || 0) : 0,
-          canViewActivity: true,
-          canViewAchievements: true,
-          canViewTitles: true,
-          canViewFollowersList: true,
-          canViewFollowingList: true,
+          isVerified: false,
+          isCreator: false,
+          canViewActivity: false,
+          canViewAchievements: false,
+          canViewTitles: false,
+          canViewFollowersList: false,
+          canViewFollowingList: false,
         };
+
+        if (get().requestSeq !== requestId) return;
 
         set((state) => {
           state.profile = fallbackProfile;
           state.loading = false;
-          state.error = null;
+          state.error = error?.message || 'Profile unavailable';
           state.isOwner = isOwner;
-          state.balance = fallbackProfile.coins;
-          state.level = fallbackProfile.level;
+          state.balance = null;
+          state.level = null;
         });
       }
     },
@@ -336,7 +348,6 @@ export const useProfileStore = create(
       }
     },
 
-    // ==================== POSTS ACTIONS ====================
     /**
      * Load user posts
      * @param {string} userId - User ID
@@ -344,7 +355,7 @@ export const useProfileStore = create(
      */
     loadPosts: async (userId, options = {}) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('posts');      
       set((state) => {
         state.postsLoading = true;
         state.postsError = null;
@@ -375,6 +386,7 @@ export const useProfileStore = create(
           }
         } catch {}
         
+        if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
           state.posts = userPosts;
           state.postsLoading = false;
@@ -383,6 +395,7 @@ export const useProfileStore = create(
         });
       } catch (error) {
         console.error('❌ Load posts failed:', error);
+        if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
           state.postsLoading = false;
           state.postsError = error.message || 'Failed to load posts';
@@ -426,14 +439,13 @@ export const useProfileStore = create(
       }
     },
     
-    // ==================== HIGHLIGHTS ACTIONS ====================
     /**
      * Load user highlights
      * @param {string} userId - User ID
      */
     loadHighlights: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('highlights');      
       set((state) => {
         state.highlightsLoading = true;
       });
@@ -442,12 +454,14 @@ export const useProfileStore = create(
         const storyService = (await import('../services/storyService.js')).getStoryService();
         const highlights = await storyService.getHighlights(userId);
         
+        if (!get()._isLoadCurrent('highlights', __seq)) return;
         set((state) => {
           state.highlights = highlights || [];
           state.highlightsLoading = false;
         });
       } catch (error) {
         console.error('❌ Load highlights failed:', error);
+        if (!get()._isLoadCurrent('highlights', __seq)) return;
         set((state) => {
           state.highlightsLoading = false;
         });
@@ -460,6 +474,7 @@ export const useProfileStore = create(
      */
     loadSavedPosts: async (userId) => {
       if (!userId) return;
+      const __seq = get()._startLoad('saved');
       set((state) => {
         state.savedLoading = true;
       });
@@ -467,12 +482,14 @@ export const useProfileStore = create(
         const { getFirestoreService } = await import('../services/firestoreService.js');
         const res = await getFirestoreService().getSavedPosts(userId);
         const posts = Array.isArray(res) ? res : res?.posts || [];
+        if (!get()._isLoadCurrent('saved', __seq)) return;
         set((state) => {
           state.savedPosts = posts;
           state.savedLoading = false;
         });
       } catch (error) {
         console.error('❌ Load saved posts failed:', error);
+        if (!get()._isLoadCurrent('saved', __seq)) return;
         set((state) => {
           state.savedLoading = false;
         });
@@ -484,32 +501,34 @@ export const useProfileStore = create(
      * @param {string} [userId] - Creator user ID
      */
     loadShopItems: async (userId) => {
+      const __seq = get()._startLoad('shop');
       set((state) => {
         state.shopLoading = true;
       });
       try {
         const { marketplaceService } = await import('../services/marketplaceService.js');
         const items = await marketplaceService.getProducts();
+        if (!get()._isLoadCurrent('shop', __seq)) return;
         set((state) => {
           state.shopItems = items || [];
           state.shopLoading = false;
         });
       } catch (error) {
         console.error('❌ Load shop items failed:', error);
+        if (!get()._isLoadCurrent('shop', __seq)) return;
         set((state) => {
           state.shopLoading = false;
         });
       }
     },
     
-    // ==================== STORIES ACTIONS ====================
     /**
      * Load user stories
      * @param {string} userId - User ID
      */
     loadStories: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('stories');      
       set((state) => {
         state.storiesLoading = true;
       });
@@ -520,26 +539,27 @@ export const useProfileStore = create(
         
         const userStories = storiesFeed?.filter(s => s.userId === userId) || [];
         
+        if (!get()._isLoadCurrent('stories', __seq)) return;
         set((state) => {
           state.stories = userStories;
           state.storiesLoading = false;
         });
       } catch (error) {
         console.error('❌ Load stories failed:', error);
+        if (!get()._isLoadCurrent('stories', __seq)) return;
         set((state) => {
           state.storiesLoading = false;
         });
       }
     },
     
-    // ==================== LEVEL ACTIONS ====================
     /**
      * Load user level
      * @param {string} userId - User ID
      */
     loadLevel: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('level');      
       set((state) => {
         state.levelLoading = true;
       });
@@ -548,26 +568,30 @@ export const useProfileStore = create(
         const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
         const levelData = await monetizationService.getUserLevel(userId);
         
+        if (!get()._isLoadCurrent('level', __seq)) return;
         set((state) => {
-          state.level = levelData?.level || 1;
+          // Absent progression data stays null (honest unavailable state); a
+          // fabricated `|| 1` here would mis-state standing through
+          // ProfileMyScreen's creator gate.
+          state.level = levelData?.level ?? null;
           state.levelLoading = false;
         });
       } catch (error) {
         console.error('❌ Load level failed:', error);
+        if (!get()._isLoadCurrent('level', __seq)) return;
         set((state) => {
           state.levelLoading = false;
         });
       }
     },
     
-    // ==================== BALANCE ACTIONS ====================
     /**
      * Load user balance
      * @param {string} userId - User ID
      */
     loadBalance: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('balance');      
       set((state) => {
         state.balanceLoading = true;
       });
@@ -576,26 +600,27 @@ export const useProfileStore = create(
         const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
         const balanceData = await monetizationService.getBalance(userId);
         
+        if (!get()._isLoadCurrent('balance', __seq)) return;
         set((state) => {
           state.balance = balanceData?.coins || 0;
           state.balanceLoading = false;
         });
       } catch (error) {
         console.error('❌ Load balance failed:', error);
+        if (!get()._isLoadCurrent('balance', __seq)) return;
         set((state) => {
           state.balanceLoading = false;
         });
       }
     },
     
-    // ==================== POSITION ACTIONS ====================
     /**
      * Load user position
      * @param {string} userId - User ID
      */
     loadPosition: async (userId) => {
       if (!userId) return;
-      
+      const __seq = get()._startLoad('position');      
       set((state) => {
         state.positionLoading = true;
       });
@@ -604,19 +629,20 @@ export const useProfileStore = create(
         const monetizationService = (await import('../services/monetizationService.js')).getMonetizationService();
         const positionData = await monetizationService.getUserPosition(userId);
         
+        if (!get()._isLoadCurrent('position', __seq)) return;
         set((state) => {
           state.position = positionData;
           state.positionLoading = false;
         });
       } catch (error) {
         console.error('❌ Load position failed:', error);
+        if (!get()._isLoadCurrent('position', __seq)) return;
         set((state) => {
           state.positionLoading = false;
         });
       }
     },
     
-    // ==================== FOLLOW ACTIONS ====================
     /**
      * Load follow status
      * @param {string} followerId - Follower user ID
@@ -624,11 +650,12 @@ export const useProfileStore = create(
      */
     loadFollowStatus: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
+      const __seq = get()._startLoad('followStatus');
       
       try {
         const userService = (await import('../services/userService.js')).getUserService();
         const followStatus = await userService.getFollowStatus(followerId, followingId);
-        
+        if (!get()._isLoadCurrent('followStatus', __seq)) return;
         set((state) => {
           state.followStatus = followStatus;
         });
@@ -644,6 +671,7 @@ export const useProfileStore = create(
      */
     loadMutualFriends: async (userId, otherUserId) => {
       if (!userId || !otherUserId) return;
+      const __seq = get()._startLoad('mutualFriends');
       
       set((state) => {
         state.mutualFriendsLoading = true;
@@ -652,13 +680,14 @@ export const useProfileStore = create(
       try {
         const userService = (await import('../services/userService.js')).getUserService();
         const result = await userService.getMutualFriends(userId, otherUserId);
-        
+        if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
           state.mutualFriends = result?.users?.slice(0, 5) || [];
           state.mutualFriendsLoading = false;
         });
       } catch (error) {
         console.error('❌ Load mutual friends failed:', error);
+        if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
           state.mutualFriendsLoading = false;
         });
@@ -672,7 +701,15 @@ export const useProfileStore = create(
      */
     follow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
-      
+      // Idempotent: a double-tap while already following must not increment
+      // the optimistic counter a second time.
+      if (get().followStatus?.isFollowing === true) return;
+
+      // Snapshot before the optimistic write so rollback restores the
+      // real previous state instead of a hard-coded guess.
+      const previousFollowStatus = get().followStatus;
+      const previousFollowerCount = get().profile?.followerCount || 0;
+
       // Optimistic update
       set((state) => {
         state.followLoading = true;
@@ -697,14 +734,12 @@ export const useProfileStore = create(
       } catch (error) {
         console.error('❌ Follow failed:', error);
         
-        // Rollback
+        // Rollback to the captured snapshot.
         set((state) => {
           state.followLoading = false;
-          if (state.followStatus) {
-            state.followStatus.isFollowing = false;
-          }
+          state.followStatus = previousFollowStatus;
           if (state.profile) {
-            state.profile.followerCount = Math.max(0, (state.profile.followerCount || 1) - 1);
+            state.profile.followerCount = previousFollowerCount;
           }
         });
         
@@ -719,6 +754,9 @@ export const useProfileStore = create(
      */
     unfollow: async (followerId, followingId) => {
       if (!followerId || !followingId) return;
+      // Idempotent: a double-tap while not following must not decrement the
+      // optimistic counter a second time.
+      if (get().followStatus?.isFollowing === false) return;
       
       // Store previous state for rollback
       const previousFollowStatus = get().followStatus;
@@ -769,19 +807,21 @@ export const useProfileStore = create(
      */
     updateFollowStatus: (followerId, followingId, isFollowing) => {
       set((state) => {
+        // Idempotent: only adjust the counter on an actual transition,
+        // so repeated calls with the same state cannot double-count (N012).
+        const wasFollowing = state.followStatus?.isFollowing === true;
         state.followStatus = {
           ...state.followStatus,
           isFollowing,
         };
-        if (state.profile) {
+        if (state.profile && wasFollowing !== Boolean(isFollowing)) {
           state.profile.followerCount = isFollowing
             ? (state.profile.followerCount || 0) + 1
-            : Math.max(0, (state.profile.followerCount || 1) - 1);
+            : Math.max(0, (state.profile.followerCount || 0) - 1);
         }
       });
     },
     
-    // ==================== UI ACTIONS ====================
     /**
      * Set active tab
      * @param {string} tab - Tab name
@@ -792,13 +832,19 @@ export const useProfileStore = create(
       });
     },
     
-    // ==================== RESET ACTIONS ====================
     /**
      * Clear all profile state
      */
     clear: () => {
       set((state) => {
+        const nextSeq = (state.requestSeq || 0) + 1;
+        const nextLoads = {};
+        for (const k of Object.keys(state.loadSeq || {})) nextLoads[k] = (state.loadSeq[k] || 0) + 1;
         Object.assign(state, initialState);
+        // Keep the bumped tokens so any in-flight load for the previous account
+        // is discarded when it resolves.
+        state.requestSeq = nextSeq;
+        state.loadSeq = nextLoads;
       });
     },
     
@@ -811,7 +857,6 @@ export const useProfileStore = create(
   }))
 );
 
-// ==================== SELECTORS ====================
 export const selectProfile = (state) => state.profile;
 export const selectIsOwner = (state) => state.isOwner;
 export const selectFollowStatus = (state) => state.followStatus;

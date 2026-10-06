@@ -1,8 +1,6 @@
-// src/screens/Admin/AdminSupportTicketsScreen.jsx - ARVDOUL SUPPORT & TRIAGE CENTER
-// ✅ AI & human hybrid ticket triage (integrated with supportAutomationService)
-// ✅ Categorization, canned responses, status workflows, and resolution audit
+// src/screens/Admin/AdminSupportTicketsScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -22,104 +20,30 @@ import {
   X,
   Mail,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { supportAutomationService } from '../../services/supportAutomationService.js';
-import { auditLogger } from '../../utils/AuditLogger.js';
+import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 
 const AdminSupportTicketsScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('open'); // 'all' | 'open' | 'in_progress' | 'resolved'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [replyMessage, setReplyMessage] = useState('');
 
-  // Baseline support tickets
-  const [tickets, setTickets] = useState([
-    {
-      id: 'tkt-701',
-      userId: 'usr_sarah_craft',
-      userEmail: 'sarah.jenkins@example.com',
-      userName: 'Sarah Jenkins',
-      subject: 'Coins not showing in wallet after Stripe checkout',
-      category: 'billing_coins',
-      priority: 'high',
-      autoResolved: false,
-      aiTriageCategory: 'billing_coins',
-      status: 'open',
-      createdAt: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-      messages: [
-        {
-          sender: 'user',
-          text: 'Hi, I purchased 2,500 coins about 20 minutes ago. Stripe gave me receipt #ch_89231 but my wallet balance is still 0. Please help!',
-          timestamp: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-        },
-      ],
-    },
-    {
-      id: 'tkt-702',
-      userId: 'usr_marcus_dev',
-      userEmail: 'marcus.brody@example.com',
-      userName: 'Marcus Brody',
-      subject: 'How do I obtain the creator blue badge?',
-      category: 'creator_verification',
-      priority: 'normal',
-      autoResolved: true,
-      aiTriageCategory: 'creator_verification',
-      status: 'resolved',
-      createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      messages: [
-        {
-          sender: 'user',
-          text: 'I reached Senator rank and have over 5,000 followers. What are the requirements for blue badge verification?',
-          timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-        },
-        {
-          sender: 'ai_bot',
-          text: 'Creator verification requires: 1) Verified phone and email, 2) At least 1,000 followers, 3) 0 community strikes in the last 90 days. Apply in Settings > Creator Verification.',
-          timestamp: new Date(Date.now() - 3600000 * 4 + 1000).toISOString(),
-        },
-      ],
-    },
-    {
-      id: 'tkt-703',
-      userId: 'usr_clara_w',
-      userEmail: 'clara.w@example.com',
-      userName: 'Clara Waters',
-      subject: 'Unable to login via Google OAuth on secondary device',
-      category: 'auth_recovery',
-      priority: 'high',
-      autoResolved: false,
-      aiTriageCategory: 'auth_recovery',
-      status: 'in_progress',
-      createdAt: new Date(Date.now() - 3600000 * 14).toISOString(),
-      messages: [
-        {
-          sender: 'user',
-          text: 'Keep seeing popup blocked on my tablet when signing in with Google. Is there an alternate passkey sign-in?',
-          timestamp: new Date(Date.now() - 3600000 * 14).toISOString(),
-        },
-      ],
-    },
-  ]);
+  // Live tickets only; the collection is the source of truth.
+  const [tickets, setTickets] = useState([]);
 
-  // Load live tickets if collection exists
+  // The queue is read through the admin callable: support_tickets is
+  // user-owned, so a plain client query cannot see every customer's ticket.
   useEffect(() => {
     const loadTickets = async () => {
       try {
-        const { collection, getDocs, query, orderBy, limit } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-
-        const snap = await getDocs(
-          query(collection(firestore, 'support_tickets'), orderBy('createdAt', 'desc'), limit(50))
-        );
-        if (!snap.empty) {
-          setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
-      } catch (e) {
-        // Fallback
+        const res = await callFunction(FUNCTIONS.ADMIN_LIST_SUPPORT_TICKETS, { limit: 50 });
+        setTickets(Array.isArray(res?.tickets) ? res.tickets : []);
+      } catch {
+        toast.error('Could not load the support queue.');
+        setTickets([]);
       } finally {
         setLoading(false);
       }
@@ -127,34 +51,32 @@ const AdminSupportTicketsScreen = () => {
     loadTickets();
   }, []);
 
-  // Send agent reply
+  // Send agent reply — the callable re-verifies admin, appends the message and
+  // records the status change in moderation_logs. No client-side privileged write.
   const handleSendReply = async () => {
     if (!replyMessage.trim() || !selectedTicket) return;
 
-    const newMsg = {
-      sender: 'agent',
-      text: replyMessage.trim(),
-      timestamp: new Date().toISOString(),
-      agentEmail: user?.email || 'admin@arvdoul.platform',
-    };
+    const reply = replyMessage.trim();
+    try {
+      await callFunction(FUNCTIONS.ADMIN_RESOLVE_SUPPORT_TICKET, {
+        ticketId: selectedTicket.id,
+        reply,
+        status: 'resolved',
+      });
 
-    const updated = {
-      ...selectedTicket,
-      status: 'resolved',
-      messages: [...(selectedTicket.messages || []), newMsg],
-    };
+      const messages = [
+        ...(selectedTicket.messages || []),
+        { sender: 'agent', text: reply, timestamp: new Date().toISOString() },
+      ];
+      const updated = { ...selectedTicket, status: 'resolved', messages };
+      setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updated : t)));
+      setSelectedTicket(updated);
+      setReplyMessage('');
 
-    setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updated : t)));
-    setSelectedTicket(updated);
-    setReplyMessage('');
-
-    await auditLogger.log(user?.uid || 'admin', 'SUPPORT_TICKET_RESOLVED', {
-      ticketId: selectedTicket.id,
-      userEmail: selectedTicket.userEmail,
-      agentEmail: user?.email,
-    });
-
-    toast.success('Reply dispatched. Ticket marked as resolved.');
+      toast.success('Reply dispatched. Ticket marked as resolved.');
+    } catch {
+      toast.error('Could not save the reply.');
+    }
   };
 
   // Quick auto-resolution helper
@@ -171,10 +93,10 @@ const AdminSupportTicketsScreen = () => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      t.subject.toLowerCase().includes(q) ||
-      t.userName.toLowerCase().includes(q) ||
-      t.userEmail.toLowerCase().includes(q) ||
-      t.id.toLowerCase().includes(q)
+      String(t.subject || '').toLowerCase().includes(q) ||
+      String(t.userName || '').toLowerCase().includes(q) ||
+      String(t.userEmail || '').toLowerCase().includes(q) ||
+      String(t.id || '').toLowerCase().includes(q)
     );
   });
 
@@ -245,6 +167,13 @@ const AdminSupportTicketsScreen = () => {
         {/* Tickets List */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {!loading && filteredTickets.length === 0 && (
+              <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                {tickets.length === 0
+                  ? 'No support tickets have been submitted yet.'
+                  : 'No tickets match this filter.'}
+              </div>
+            )}
             {filteredTickets.map(tkt => (
               <div
                 key={tkt.id}
@@ -274,7 +203,7 @@ const AdminSupportTicketsScreen = () => {
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2">
                       <span>{tkt.userName} ({tkt.userEmail})</span>
                       <span>•</span>
-                      <span>Category: <b className="text-gray-700 dark:text-gray-300 capitalize">{tkt.category.replace('_', ' ')}</b></span>
+                      <span>Category: <b className="text-gray-700 dark:text-gray-300 capitalize">{String(tkt.category || 'uncategorised').replace('_', ' ')}</b></span>
                     </p>
                   </div>
                 </div>
@@ -345,7 +274,7 @@ const AdminSupportTicketsScreen = () => {
                     ) : msg.sender === 'agent' ? (
                       <>
                         <User className="w-3.5 h-3.5" />
-                        <span>Support Specialist ({msg.agentEmail})</span>
+                        <span>Support Specialist</span>
                       </>
                     ) : (
                       <span>{selectedTicket.userName}</span>

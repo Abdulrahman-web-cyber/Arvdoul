@@ -1,18 +1,4 @@
 // src/screens/CreatePost/CreateEvent.jsx
-// ARVDOUL ULTIMATE EVENT CREATOR – PRODUCTION‑READY, ZERO BUGS, BILLION‑SCALE
-// ✅ Design matches CreateText, CreatePoll, CreateQuestion, CreateLink
-// ✅ Safe state access – no crashes when fields are undefined
-// ✅ Event name (max 200 chars), future‑only date/time with minDate & error
-// ✅ Location autocomplete (Nominatim) with AbortController, stores lat/lon
-// ✅ Cover image upload with file‑type check, compression, progress bar
-// ✅ URL fallback for cover image (validated)
-// ✅ Description (max 500) – now works with local state fallback
-// ✅ RSVP toggle & capacity – now works with local state fallback
-// ✅ Timezone selector (auto‑detected, synced with draft)
-// ✅ Versioned autosave with AbortController, duplicate prevention
-// ✅ Manual save with loading spinner, save indicator updates every 10s
-// ✅ Live preview, compact grid layout, fully responsive, accessible
-// ✅ Wider card (max‑w‑5xl), reduced height (p‑3, space‑y‑2)
 
 import React, {
   useEffect, useCallback, useState, useRef, useMemo, lazy, Suspense

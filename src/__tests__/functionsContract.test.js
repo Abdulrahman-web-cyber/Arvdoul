@@ -27,8 +27,11 @@ function read(p) {
 function listFiles(dir) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) out.push(...listFiles(path.join(dir, entry.name)));
-    else if (/\.(js|jsx)$/.test(entry.name)) out.push(path.join(dir, entry.name));
+    if (entry.isDirectory()) {
+      // Vendored dependencies are not deployable function modules.
+      if (entry.name === 'node_modules') continue;
+      out.push(...listFiles(path.join(dir, entry.name)));
+    } else if (/\.(js|jsx)$/.test(entry.name)) out.push(path.join(dir, entry.name));
   }
   return out;
 }
@@ -78,9 +81,11 @@ describe('Cloud Functions deploy contract', () => {
     // userDelete.js is intentionally not required: its deleteUserData is a
     // duplicate of the complete cascade implementation in user.js - requiring
     // both would crash deployment with a duplicate-export error.
-    // rateLimit.js is a shared utility module (no exports.* functions) —
-    // required by the modules that use it, never deployed standalone.
-    const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && m !== 'rateLimit.js');
+    // rateLimit.js and withdrawalSettlement.js are shared utility modules (no
+    // exports.* functions) — required by the modules that use them, never
+    // deployed standalone.
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js']);
+    const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.
     expect(read(path.join(functionsDir, 'monetization.js'))).toContain("require('./rateLimit')");
@@ -135,3 +140,98 @@ describe('Firestore rules coverage contract', () => {
     expect(rules.slice(defaultDeny)).toContain('allow read, write: if false;');
   });
 });
+
+describe('Monetization server invariants (ledger + idempotency)', () => {
+  const monetization = fs.readFileSync(
+    path.join(root, 'functions', 'monetization.js'), 'utf8'
+  );
+
+  test('subscription grants share one double-entry credit path', () => {
+    // createSubscription and the renewal webhook must not hand-roll two
+    // different ledger shapes for the same monthly grant.
+    expect(monetization).toContain('async function creditSubscriptionCoins(');
+    expect(monetization).toContain('await creditSubscriptionCoins(t, {');
+    expect(monetization.match(/creditSubscriptionCoins\(/g).length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('the renewal webhook credits real coins, idempotent on the Stripe event', () => {
+    // It used to read tiers from an unwritten config doc (granting 0) and only
+    // sent a push. It must now write the ledger, keyed on the event id.
+    expect(monetization).toContain('const coinAmount = SUBSCRIPTION_TIERS[tier]?.coinsPerMonth || subData.coinsPerMonth || 0;');
+    expect(monetization).toContain('idempotency_ledger\').doc(`webhook_${event.id}`)');
+    expect(monetization).not.toContain("configDoc.data()?.SUBSCRIPTION_TIERS");
+    expect(monetization).not.toContain("console.log(`Granting ${coinAmount} coins");
+  });
+
+  test('subscription docs are keyed by uid everywhere', () => {
+    // The client and the callables read `subscriptions/{uid}`. Keying the
+    // webhook by the Stripe subscription id would write a phantom doc, leave
+    // the real one stale, and make every renewal grant 0 coins.
+    expect(monetization).toContain("const subRef = db.collection('subscriptions').doc(userId);");
+    expect(monetization).not.toContain("db.collection('subscriptions').doc(subscriptionId)");
+    expect(monetization).not.toContain("db.collection('subscriptions').doc(subscription.id).update");
+  });
+
+  test('requestWithdrawal locks coins and records idempotency in one transaction', () => {
+    const body = monetization.slice(monetization.indexOf('exports.requestWithdrawal'));
+    const txStart = body.indexOf('const resultData = await createFirestoreTransaction');
+    const txEnd = body.indexOf('await admin.firestore().collection(\'admin_notifications\')');
+    expect(txStart).toBeGreaterThan(-1);
+    expect(txEnd).toBeGreaterThan(txStart);
+    const tx = body.slice(txStart, txEnd);
+    expect(tx).toContain('lockedCoins: admin.firestore.FieldValue.increment(amount)');
+    expect(tx).toContain('t.set(ledgerRef, {');
+    expect(tx).toContain("t.set(lockTxRef, {");
+    // No pre-transaction ledger read that would let a retry double-lock.
+    expect(body).not.toContain('const ledgerSnap = await ledgerRef.get();');
+  });
+
+  test('the settlement path converts coins at the shared rate, not a shadow copy', () => {
+    const settlement = fs.readFileSync(
+      path.join(root, 'functions', 'withdrawalSettlement.js'), 'utf8'
+    );
+    // It used to hardcode `... : 200`, a shadow rate that would drift if
+    // COINS_PER_DOLLAR ever changed.
+    expect(settlement).toContain("require('./levelConfig.cjs')");
+    expect(settlement).toContain('COINS_PER_DOLLAR');
+    expect(settlement).toContain('coinsToUsd(withdrawalData.amount)');
+    expect(settlement).not.toMatch(/coinsPerDollar\s*\)\s*:\s*200\b/);
+  });
+
+  test('level-up coin rewards land in the wallet ledger and supply counter', () => {
+    const levelSystem = fs.readFileSync(
+      path.join(root, 'functions', 'levelSystem.js'), 'utf8'
+    );
+    // Rewards used to go to a coin_ledger collection nothing reads and skipped
+    // the supply counter, so the wallet never showed them and the ledger and
+    // supply totals disagreed.
+    expect(levelSystem).toContain("db.collection('coin_transactions').doc()");
+    expect(levelSystem).toContain("reason: 'level_up_reward'");
+    expect(levelSystem).toContain("doc('coin_supply')");
+    expect(levelSystem).not.toContain('coin_ledger/${uid}_levelup');
+  });
+
+  test('the level ledgers are server-write-only in the rules', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    for (const collection of ['coin_ledger', 'active_days_ledger']) {
+      const start = rules.indexOf(`match /${collection}/`);
+      expect(start).toBeGreaterThan(-1);
+      // Slice to the next match block (a naive indexOf('}') would stop at the
+      // `{entryId}` wildcard brace).
+      const next = rules.indexOf('match /', start + 1);
+      const block = rules.slice(start, next === -1 ? undefined : next);
+      // A client create rule would let a user mint their own reward/streak entry.
+      expect(block).toContain('allow create, update, delete: if false;');
+      expect(block).not.toMatch(/allow create: if isSignedIn/);
+    }
+  });
+
+  test('the coin audit reconciles the supply counter instead of trusting it', () => {
+    // It used to log the counter and return ("we'll still do a sample check for
+    // now"), so a mint/burn path that forgot to bump the counter went unnoticed.
+    expect(monetization).not.toContain('sample check for now');
+    expect(monetization).toContain("aggregate({ total: admin.firestore.AggregateField.sum('coins') })");
+    expect(monetization).toContain('coin_audit_drift');
+  });
+});
+

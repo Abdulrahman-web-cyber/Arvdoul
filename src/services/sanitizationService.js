@@ -1,6 +1,4 @@
 /**
- * src/services/sanitizationService.js - ARVDOUL HTML SANITIZATION & XSS PREVENTION ENGINE
- *
  * Implements:
  * 1. Safe HTML Sanitization: Cleans rich text and user-generated markdown without stripping harmless formatting.
  * 2. Strict Entity Encoding: Encodes special characters (`<`, `>`, `&`, `"`, `'`) for safe direct DOM rendering.

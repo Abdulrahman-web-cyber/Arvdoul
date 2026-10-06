@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { XP_RULES } from '../shared/levelConfig.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
@@ -34,15 +35,6 @@ describe('videoService - no mock feed fallback', () => {
   test('never references INITIAL_VIDEOS', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
     expect(src).not.toContain('INITIAL_VIDEOS');
-  });
-});
-
-describe('Composer - no stale-balance coin overwrite', () => {
-  test('does not write coins: (user.coins || 0) + N (stale balance destroyer)', () => {
-    const src = fs.readFileSync(path.join(root, 'src/components/Home/Composer.jsx'), 'utf8');
-    expect(src).not.toMatch(/coins:\s*\(user\.coins/);
-    // The safe path uses the monetization service
-    expect(src).toContain('getMonetizationService()');
   });
 });
 
@@ -108,12 +100,14 @@ describe('videoUtils - no fake thumbnail service', () => {
 });
 
 describe('CSP headers - no placeholder image hosts', () => {
-  test('CSP img-src allowlists no longer permit unsplash/picsum', () => {
-    const csp = fs.readFileSync(path.join(root, 'src/services/CSPService.js'), 'utf8');
-    expect(csp).not.toContain('images.unsplash.com');
-    const sh = fs.readFileSync(path.join(root, 'src/services/securityHeadersService.js'), 'utf8');
-    expect(sh).not.toContain('images.unsplash.com');
-    expect(sh).not.toContain('picsum.photos');
+  test('the shipped CSP does not permit unsplash/picsum', () => {
+    // The enforced policy is the meta tag in index.html (that CSP builder was dead
+    // code that was never applied, so asserting against it proved nothing).
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const cspMatch = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]*)"/);
+    expect(cspMatch).toBeTruthy();
+    expect(cspMatch[1]).not.toContain('images.unsplash.com');
+    expect(cspMatch[1]).not.toContain('picsum.photos');
   });
 });
 
@@ -180,7 +174,7 @@ describe('ConflictResolutionScreen - real queued operations only', () => {
 
   test('OfflineQueue exposes real getPending/remove for the conflict UI', () => {
     const src = fs.readFileSync(path.join(root, 'src/utils/OfflineQueue.js'), 'utf8');
-    expect(src).toContain('async getPending()');
+    expect(src).toContain('async getPending(');
     expect(src).toContain('async remove(id)');
   });
 });
@@ -202,7 +196,9 @@ describe('DataUsageScreen - real storage, cache and GDPR export', () => {
     expect(src).not.toContain('You\'ll receive an email when ready');
     expect(src).toContain('navigator.storage?.estimate'); // REAL storage numbers
     expect(src).toContain('settingsService.clearApplicationCache'); // REAL cache clearing
-    expect(src).toContain("'exportUserData'"); // REAL GDPR Cloud Function
+    expect(src).toContain('FUNCTIONS.EXPORT_USER_DATA'); // REAL GDPR Cloud Function
+    const callables = fs.readFileSync(path.join(root, 'src/services/callableService.js'), 'utf8');
+    expect(callables).toContain("EXPORT_USER_DATA: 'exportUserData'");
   });
 });
 
@@ -403,12 +399,15 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
     expect(src).not.toContain("coins: admin.firestore.FieldValue.increment(1)");
   });
 
-  test('addCoins is allowlisted per reason with daily caps (no coin faucet)', () => {
+  test('addCoins is allowlisted per reason with daily COIN-VOLUME caps (no coin faucet)', () => {
     const src = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
-    expect(src).toContain('CLIENT_ADD_REASON_CAPS');
-    expect(src).toContain('post_created_bonus: 10');
+    expect(src).toContain('CLIENT_ADD_REASON_LIMITS');
+    // Caps must bound coin volume, not merely the number of calls.
+    expect(src).toContain('dailyCoins');
+    expect(src).toContain('perTx');
     expect(src).toContain("is not allowlisted for client addCoins");
-    expect(src).toContain('Daily cap reached');
+    expect(src).toContain('Daily coin budget reached');
+    expect(src).toContain("select('amount')");
   });
 
   test('video processing endpoints are onCall', () => {
@@ -419,10 +418,11 @@ describe('Cloud functions - no fake email/IAP/video processing', () => {
 });
 
 describe('Level gate - aligned with the real 15-level curve', () => {
-  test('no "Level 25" monetization gate (max level is 15)', () => {
+  test('no hardcoded monetization gate literal (max level is 15)', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/Shared/QuickAccessPanel.jsx'), 'utf8');
     expect(src).not.toContain('Level 25');
-    expect(src).toContain('MONETIZATION_MIN_LEVEL = 10');
+    // The gate must come from the shared config, not a literal.
+    expect(src).toContain('MONETIZATION_MIN_LEVEL = LEVEL_GATES.withdrawals');
   });
 });
 
@@ -460,12 +460,9 @@ describe('Engagement coin rewards - wired to the real ledger', () => {
   test('components no longer destructure undefined addCoins/followUser from useAuth', () => {
     const feed = fs.readFileSync(path.join(root, 'src/components/Home/ReelsFeed.jsx'), 'utf8');
     const modal = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
-    const card = fs.readFileSync(path.join(root, 'src/components/Home/PostCard.jsx'), 'utf8');
     expect(feed).not.toContain('addCoins, followUser } = useAuth');
     expect(modal).not.toContain('addCoins } = useAuth');
-    expect(card).not.toContain('addCoins } = useAuth');
     expect(feed).toContain('getUserService().followUser(user.uid, uid)');
-    expect(card).toContain('"like"');
   });
 });
 
@@ -636,7 +633,13 @@ describe('Messaging master-spec: security rules', () => {
 
   test('supergroup monthly shards are covered by rules', () => {
     const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
-    expect(rules).toContain('match /messages_{year}_{month}/{messageId}');
+    // A wildcard cannot share a path segment with literal text:
+    // `match /messages_{year}_{month}/{messageId}` made the entire ruleset
+    // fail to compile (so `firebase deploy` rejected it and the old rules
+    // stayed live). The subcollection is matched as a single wildcard and
+    // validated by name instead.
+    expect(rules).toMatch(/match\s+\/\{messageShardCollection\}\/\{messageId\}/);
+    expect(rules).toContain("collection.matches('messages_[0-9]{4}_[0-9]{2}')");
   });
 
   test('last_messages writes are participant-scoped (no spoofing)', () => {
@@ -775,15 +778,12 @@ describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
 });
 
 describe('Vibes master-spec: one canonical viewer (spec §99)', () => {
-  test('duplicate viewers are deleted, VibeStrip navigates to /stories', () => {
+  test('duplicate viewers are deleted and the feed no longer ships a shadow strip', () => {
     for (const dead of ['src/components/Stories/StoryViewer.jsx', 'src/components/Stories/StoryList.jsx',
-                        'src/components/Stories/StoriesCarousel.jsx', 'src/components/Home/Stories.jsx']) {
+                        'src/components/Stories/StoriesCarousel.jsx', 'src/components/Home/Stories.jsx',
+                        'src/components/feed/VibeStrip.jsx']) {
       expect(fs.existsSync(path.join(root, dead))).toBe(false);
     }
-    const strip = fs.readFileSync(path.join(root, 'src/components/feed/VibeStrip.jsx'), 'utf8');
-    expect(strip).not.toContain('StoryViewer');
-    expect(strip).toContain("navigate('/stories', { state: { vibeUserId: userId } })");
-    expect(strip).toContain('feedData?.groups'); // correct feed shape
   });
 
   test('StoriesScreen consumes deep-link state and clears it', () => {
@@ -961,3 +961,740 @@ describe('CreateStory honest offline state (spec §53)', () => {
     expect(src).toContain("visibility: 'public'");
   });
 });
+
+describe('Account isolation (audit N002) - persisted identity cannot bleed accounts', () => {
+  test('appStore never persists currentUser and migrates stale blobs', () => {
+    const src = fs.readFileSync(path.join(root, 'src/store/appStore.js'), 'utf8');
+    const persistBlock = src.slice(src.indexOf("name: 'arvdoul-app-store'"));
+    expect(persistBlock).not.toContain('currentUser: state.currentUser');
+    expect(persistBlock).toContain('version: 2');
+    expect(persistBlock).toContain('migrate:');
+  });
+
+  test('getStoredUser refuses a cached user blob from a different session uid', () => {
+    const src = fs.readFileSync(path.join(root, 'src/utils/security.js'), 'utf8');
+    expect(src).toContain("localStorage.getItem('arvdoul_uid')");
+    expect(src).toContain('parsed.uid !== sessionUid');
+  });
+
+  test('profile screens prefer the live auth user over the store mirror', () => {
+    for (const rel of [
+      'src/screens/Profile/FollowersScreen.jsx',
+      'src/screens/Profile/FollowingScreen.jsx',
+      'src/screens/Profile/FriendsScreen.jsx',
+      'src/screens/Profile/HighlightsScreen.jsx',
+      'src/screens/Profile/CreatorDashboardScreen.jsx',
+    ]) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).toContain('const currentUser = authUser || storeUser;');
+      expect(src).not.toContain('const currentUser = storeUser || authUser;');
+    }
+  });
+});
+
+describe('Compliance export - no fabricated personal data', () => {
+  test('exportUserData never invents an email/username/createdAt for the subject', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/complianceGovernanceService.js'), 'utf8');
+    expect(src).not.toContain("email: 'user@example.com'");
+    expect(src).not.toContain('timestamp - 86400000 * 30');
+    expect(src).toContain('async exportUserData(userId, dataSources = {})');
+  });
+});
+
+describe('Auth - signup never grants fabricated coins/levels', () => {
+  test('authService creates profiles without a hardcoded starting balance', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/authService.js'), 'utf8');
+    expect(src).not.toContain('coins: 50');
+    expect(src).not.toContain('coins: profile.coins || 50');
+    expect(src).not.toContain('coins: profile?.coins || 50');
+    expect(src).not.toContain('coins: profile.coins || 0');
+  });
+});
+
+describe('Monetization - canonical level curve (no duplicated drift)', () => {
+  test('monetizationService reads LEVELS from the shared levelConfig', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG } from '../shared/levelConfig.cjs';");
+    expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
+    expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
+  });
+});
+
+describe('Wallet - real purchase + canonical economics', () => {
+  test('WalletScreen wires the real PaymentModal contract and purchaseCoins', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Economy/WalletScreen.jsx'), 'utf8');
+    expect(src).toContain('monetizationService.purchaseCoins(paymentPkg.id, paymentMethodId)');
+    expect(src).toContain('onConfirm={confirmPurchase}');
+    expect(src).not.toContain('onSuccess={() => {');
+  });
+
+  test('WalletScreen withdrawal threshold derives from the shared coin->USD helper', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Economy/WalletScreen.jsx'), 'utf8');
+    expect(src).toContain('const MIN_WITHDRAWAL_USD = coinsToUsd(MIN_WITHDRAWAL_COINS).toFixed(2);');
+    expect(src).not.toContain('placeholder="Coins to withdraw (min 5,000)"');
+  });
+});
+
+describe('Video service - no synthetic creator identity', () => {
+  test('videoService never invents an author name/handle/title', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/videoService.js'), 'utf8');
+    expect(src).not.toContain("'Arvdoul Creator'");
+    expect(src).not.toContain("'ARVDOUL Video'");
+    expect(src).not.toContain("username: item.authorUsername || 'creator'");
+  });
+
+  test('VideoCard no longer hardcodes a person name as the avatar alt', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/Videos/VideoCard.jsx'), 'utf8');
+    expect(src).not.toContain("'Abdulrahman'");
+  });
+});
+
+describe('Passport - no synthetic holder identity', () => {
+  test('passportService reports an absent displayName as null', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/passportService.js'), 'utf8');
+    expect(src).not.toContain("'Citizen of Arvdoul'");
+    expect(src).toContain('pickDisplayName([profile.displayName, profile.name], { fallback: null })');
+  });
+});
+
+describe('PostCard / CommentsDrawer - live-session identity only', () => {
+  test('no fabricated local_user identity is written from localStorage', () => {
+    const card = fs.readFileSync(path.join(root, 'src/screens/PostCard.jsx'), 'utf8');
+    expect(card).not.toContain("'local_user'");
+    expect(card).toContain('const userId = currentUser?.uid || null;');
+
+    const drawer = fs.readFileSync(path.join(root, 'src/screens/CommentsDrawer.jsx'), 'utf8');
+    expect(drawer).not.toContain("displayName: 'You'");
+    expect(drawer).toContain("toast.error('Please sign in to comment');");
+  });
+});
+
+describe('VideoAnalytics RevenueTab - real payout wiring', () => {
+  test('uses walletService for balances and monetizationService for payout settings', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/VideoAnalyticsScreen.jsx'), 'utf8');
+    expect(src).toContain("import('../services/walletService.js')");
+    expect(src).toContain("import('../services/monetizationService.js')");
+    expect(src).toContain('walletService.getWalletOverview(user.uid)');
+    expect(src).not.toContain('monSvc.getWalletOverview');
+  });
+});
+
+
+describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
+  test('ProfileHeroSection does not invent a level or rank when none is stored', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileHeroSection.jsx'), 'utf8');
+    expect(src).not.toContain('|| 1;');
+    expect(src).not.toMatch(/return \{ level: 1, title: 'Citizen'/);
+    expect(src).not.toMatch(/\(\) => 'Citizen'/);
+  });
+
+  test('ProfilePublicScreen does not default a missing level to 1', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ProfilePublicScreen.jsx'), 'utf8');
+    expect(src).not.toContain('Number(profileData.level) || 1');
+    expect(src).not.toContain('effectiveProfile.level || 1');
+  });
+});
+
+describe('Analytics view dedupe is transactional and server-authoritative (N019/N010)', () => {
+  test('client trackProfileView delegates to the callable, never writes Firestore', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/analyticsService.js'), 'utf8');
+    const body = src.slice(src.indexOf('async trackProfileView'), src.indexOf('async getCreatorRanking'));
+    expect(body).toContain('FUNCTIONS.TRACK_PROFILE_VIEW');
+    // The client must not touch the analytics collections directly.
+    expect(body).not.toContain("'profile_views'");
+    expect(body).not.toContain("'profile_analytics'");
+  });
+
+  test('rules deny all client writes to profile_views and profile_analytics', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    const blockFor = (name) => {
+      const start = rules.indexOf(`match /${name}/`);
+      return rules.slice(start, rules.indexOf('match /', start + 10));
+    };
+    for (const name of ['profile_views', 'profile_analytics']) {
+      const block = blockFor(name);
+      expect(block).toContain('allow write: if false;');
+      expect(block).not.toMatch(/allow create:\s*if isSignedIn/);
+    }
+  });
+
+  test('trackProfileView callable owns the dedupe transaction and the counter shards', () => {
+    const src = fs.readFileSync(path.join(root, 'functions/analytics.js'), 'utf8');
+    expect(src).toContain('db.runTransaction');
+    expect(src).toContain('getUserIdFromContext');
+    expect(src).toContain('checkRateLimit');
+    // Shard key must match CountersManager.hashString (same algorithm).
+    expect(src).toContain('5381');
+    expect(src).toContain("'counter_shards'");
+    const index = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+    expect(index).toContain("require('./analytics.js')");
+  });
+});
+
+describe('Offline sync - single canonical queue instance (N014)', () => {
+  test('syncEngine re-exports the shared queue instead of constructing its own', () => {
+    const src = fs.readFileSync(path.join(root, 'src/offline/syncEngine.js'), 'utf8');
+    expect(src).not.toContain('new OfflineQueue()');
+    expect(src).toContain("from '../utils/OfflineQueue'");
+  });
+});
+
+describe('Audit logging - real action + metadata (not a swapped signature)', () => {
+  test('every auditLogger.log call passes the action string first', () => {
+    const walk = (dir) => {
+      let out = [];
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) out = out.concat(walk(full));
+        else if (/\.(js|jsx)$/.test(entry.name)) out.push(full);
+      }
+      return out;
+    };
+    const offenders = [];
+    for (const file of walk(path.join(root, 'src'))) {
+      const src = fs.readFileSync(file, 'utf8');
+      const re = /auditLogger\.log\(\s*([^\n]*)/g;
+      let m;
+      while ((m = re.exec(src))) {
+        const firstArg = m[1].trim();
+        if (!/^['"]/.test(firstArg)) {
+          offenders.push(`${path.relative(root, file)}: ${firstArg.slice(0, 40)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('admin screens no longer pass an actor email into audit metadata', () => {
+    const adminDir = path.join(root, 'src/screens/Admin');
+    for (const file of fs.readdirSync(adminDir)) {
+      const src = fs.readFileSync(path.join(adminDir, file), 'utf8');
+      expect(src).not.toMatch(/actorEmail:/);
+    }
+  });
+});
+
+describe('Admin economy - real data, server-side settlement', () => {
+  const screen = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminEconomyScreen.jsx'), 'utf8');
+
+  test('renders no seeded treasury figures or fake creators', () => {
+    const src = screen();
+    for (const seed of ['4825900', '144777', 'usr_sarah_craft', 'leo.sound@example.com', 'payout-101', 'tx-901']) {
+      expect(src).not.toContain(seed);
+    }
+  });
+
+  test('never writes a payout status directly from the client', () => {
+    const src = screen();
+    expect(src).not.toMatch(/updateDoc\(\s*doc\([^)]*payout_requests/);
+    expect(src).not.toContain("'payout_requests'");
+    const adminSvc = fs.readFileSync(path.join(root, 'src/services/adminService.js'), 'utf8');
+    expect(adminSvc).toContain("'withdrawal_requests'");
+  });
+
+  test('approve/reject go through the admin settlement callable', () => {
+    const src = screen();
+    expect(src).toContain('FUNCTIONS.ADMIN_DECIDE_WITHDRAWAL');
+    expect(src).toContain('FUNCTIONS.GET_ECONOMY_SUMMARY');
+  });
+
+  test('the Stripe settlement path exists exactly once', () => {
+    const settlement = fs.readFileSync(path.join(root, 'functions/withdrawalSettlement.js'), 'utf8');
+    expect(settlement).toContain('stripe.payouts.create');
+    const monetization = fs.readFileSync(path.join(root, 'functions/monetization.js'), 'utf8');
+    expect(monetization).not.toContain('stripe.payouts.create');
+    expect(monetization).toContain("require('./withdrawalSettlement')");
+  });
+
+  test('admin callables for the economy are exported', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
+    expect(admin).toContain('exports.getEconomySummary =');
+    expect(admin).toContain('exports.adminDecideWithdrawal =');
+  });
+});
+
+describe('Admin system health - measured telemetry only', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminSystemHealthScreen.jsx'), 'utf8');
+
+  test('no hardcoded uptime or latency figures', () => {
+    const s = src();
+    for (const seed of ['99.98%', '99.95%', '99.90%', '99.99%', 'latency: 42', 'latency: 28', 'latency: 85']) {
+      expect(s).not.toContain(seed);
+    }
+    expect(s).not.toContain('All Systems Operational');
+  });
+
+  test('no random latency estimates', () => {
+    const s = src();
+    expect(s).not.toMatch(/Math\.random\(\)\s*\*\s*20/);
+    expect(s).not.toMatch(/s\.latency \* \(0\.9/);
+  });
+
+  test('uses the RUM service for real web vitals', () => {
+    expect(src()).toContain('rumService.getWebVitals()');
+  });
+});
+
+describe('Admin community governance - live directory, server-authoritative', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminCommunityManagementScreen.jsx'), 'utf8');
+
+  test('renders no seeded community directory', () => {
+    const s = src();
+    for (const seed of ['comm-101', 'comm-102', 'comm-103', 'comm-104', 'usr_crypto_bot', 'quick-arbitrage-alerts']) {
+      expect(s).not.toContain(seed);
+    }
+  });
+
+  test('reads and mutates through the admin callables, never direct writes', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.ADMIN_LIST_COMMUNITIES');
+    expect(s).toContain('FUNCTIONS.ADMIN_SET_COMMUNITY_VERIFIED');
+    expect(s).toContain('FUNCTIONS.ADMIN_ISSUE_COMMUNITY_STRIKE');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'communities'/);
+  });
+
+  test('community governance callables are exported server-side', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminListCommunities =');
+    expect(admin).toContain('exports.adminSetCommunityVerified =');
+    expect(admin).toContain('exports.adminIssueCommunityStrike =');
+  });
+});
+
+describe('Admin creator verification - live queue, server-authoritative', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminVerificationScreen.jsx'), 'utf8');
+
+  test('renders no seeded applicant queue', () => {
+    const s = src();
+    for (const seed of ['verif-201', 'verif-202', 'verif-203', 'verif-204', 'usr_sarah_craft', '@sarahcraft']) {
+      expect(s).not.toContain(seed);
+    }
+  });
+
+  test('decisions go through applyVerificationDecision, not direct user writes', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.APPLY_VERIFICATION_DECISION');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'users'/);
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'creator_verifications'/);
+  });
+
+  test('requirements come from the shared profile contract', () => {
+    expect(src()).toContain('CREATOR_VERIFICATION_REQUIREMENTS');
+  });
+});
+
+describe('Admin support tickets - persisted replies only', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminSupportTicketsScreen.jsx'), 'utf8');
+
+  test('agent replies go through the admin callable, not a client write', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.ADMIN_RESOLVE_SUPPORT_TICKET');
+    expect(s).toContain('FUNCTIONS.ADMIN_LIST_SUPPORT_TICKETS');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\([^)]*'support_tickets'/);
+    expect(s).not.toContain("utils/AuditLogger.js");
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('adminResolveSupportTicket');
+    expect(admin).toContain("writeAudit(actorUid, 'support_ticket_updated'");
+  });
+});
+
+describe('Admin audit logs - real server-written trail', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminAuditLogsScreen.jsx'), 'utf8');
+
+  test('reads the collection the server actually writes to', () => {
+    const adminSvc = fs.readFileSync(path.join(root, 'src/services/adminService.js'), 'utf8');
+    expect(adminSvc).toContain("_readCollection('moderation_logs'");
+    expect(adminSvc).not.toContain("'audit_logs'");
+    const admin = fs.readFileSync(path.join(root, 'functions/admin.js'), 'utf8');
+    expect(admin).toContain("db.collection('moderation_logs').add(");
+  });
+});
+
+describe('Admin screens - server-authoritative admin gate', () => {
+  test('admin screens never read the unreadable admins collection', () => {
+    for (const file of [
+      'AdminDashboardScreen.jsx',
+      'AdminContentManagementScreen.jsx',
+      'AdminModerationQueueScreen.jsx',
+    ]) {
+      const s = fs.readFileSync(path.join(root, 'src/screens/Admin', file), 'utf8');
+      expect(s).not.toMatch(/getDoc\(\s*doc\(firestore, 'admins'/);
+      expect(s).toContain('fetchAdminStatus');
+    }
+  });
+
+  test('moderation decisions go through the resolve callable', () => {
+    const s = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminModerationQueueScreen.jsx'), 'utf8');
+    expect(s).toContain('FUNCTIONS.RESOLVE_USER_REPORT');
+    expect(s).not.toMatch(/updateDoc\(\s*doc\(firestore, collectionName/);
+  });
+});
+
+describe('Admin feature flags - platform-wide, server-authoritative', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/screens/Admin/AdminFeatureFlagsScreen.jsx'), 'utf8');
+
+  test('platform toggles go through the governance callable', () => {
+    const s = src();
+    expect(s).toContain('FUNCTIONS.SET_FEATURE_FLAG_OVERRIDE');
+    expect(s).toContain('FUNCTIONS.GET_FEATURE_FLAG_OVERRIDES');
+    expect(s).not.toContain("from '../../utils/AuditLogger.js'");
+  });
+
+  test('the flag registry lives in the shared module only', () => {
+    const service = fs.readFileSync(path.join(root, 'src', 'services', 'featureFlagService.js'), 'utf8');
+    expect(service).toContain("from '../shared/featureFlagRegistry.cjs'");
+    expect(service).not.toContain("'feed.ml_ranking': {");
+    const server = fs.readFileSync(path.join(root, 'functions', 'featureFlags.js'), 'utf8');
+    expect(server).toContain("require('./featureFlagRegistry.cjs')");
+    expect(server).toContain('isKnownFlag');
+  });
+
+  test('the server module is required by index.js and audited', () => {
+    const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
+    expect(index).toContain("require('./featureFlags.js')");
+    // Flag governance reuses the canonical admin helper and audit writer
+    // instead of re-declaring an isAdmin check or a second audit collection.
+    const server = fs.readFileSync(path.join(root, 'functions', 'featureFlags.js'), 'utf8');
+    expect(server).toContain("require('./auth')");
+    expect(server).toContain("require('./admin')");
+    expect(server).not.toContain("collection('admins')");
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('module.exports.writeAudit = writeAudit');
+  });
+});
+
+describe('Audio Studio - real graph, no invented signal', () => {
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+  test('the engine meters and positions come from the AudioContext, not Math.random', () => {
+    const engine = read('src/screens/AudioEditor/audioEngine.js');
+    expect(engine).not.toContain('Math.random');
+    expect(engine).toContain('createBiquadFilter');
+    expect(engine).toContain('getFloatTimeDomainData');
+    expect(engine).toContain('createStereoPanner');
+    expect(engine).toContain('getPosition()');
+  });
+
+  test('the studio starts empty instead of seeding demo tracks', () => {
+    const screen = read('src/screens/AudioEditor/AudioEditorScreen.jsx');
+    expect(screen).not.toContain('INITIAL_STUDIO_TRACKS');
+    expect(screen).toContain('audioStudioEngine');
+    for (const seed of ['Lead Verse 1', 'Grand Chords', 'Drum Kit & 808', 'Sub & Slap Bass']) {
+      expect(screen).not.toContain(seed);
+    }
+  });
+
+  test('the console draws real peaks and reports a missing waveform honestly', () => {
+    const consoleSrc = read('src/screens/AudioEditor/components/MultiTrackConsole.jsx');
+    expect(consoleSrc).toContain('computePeaks');
+    expect(consoleSrc).toContain('Waveform unavailable');
+    expect(consoleSrc).not.toContain('Math.sin(idx');
+    expect(consoleSrc).not.toContain('INITIAL_STUDIO_TRACKS');
+  });
+
+  test('meters and spectrum read the engine rather than animating randomly', () => {
+    const transport = read('src/screens/AudioEditor/components/TransportBar.jsx');
+    const eq = read('src/screens/AudioEditor/components/EqualizerModule.jsx');
+    const inspector = read('src/screens/AudioEditor/components/ClipInspectorModule.jsx');
+    for (const src of [transport, eq, inspector]) {
+      expect(src).not.toContain('Math.random');
+      expect(src).toContain('audioStudioEngine');
+    }
+    expect(transport).toContain('getMeter');
+    expect(eq).toContain('getPresetBands');
+  });
+
+  test('the header never claims an export succeeded on a timer', () => {
+    const header = read('src/screens/AudioEditor/components/StudioHeader.jsx');
+    expect(header).not.toContain('setTimeout');
+    expect(header).not.toContain('exported successfully');
+    expect(header).toContain('isExporting');
+  });
+
+  test('EQ presets live in one shared table', () => {
+    const presets = read('src/screens/AudioEditor/audioPresets.js');
+    expect(presets).toContain('export const EQ_PRESET_NAMES');
+    expect(presets).toContain('export function getPresetBands');
+  });
+});
+
+describe('Admin support desk - server-authoritative', () => {
+  test('support list/reply callables exist and are wired into the callable service', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminListSupportTickets');
+    expect(admin).toContain('exports.adminResolveSupportTicket');
+    const svc = fs.readFileSync(path.join(root, 'src/services/callableService.js'), 'utf8');
+    expect(svc).toContain("ADMIN_LIST_SUPPORT_TICKETS: 'adminListSupportTickets'");
+    expect(svc).toContain("ADMIN_RESOLVE_SUPPORT_TICKET: 'adminResolveSupportTicket'");
+  });
+});
+
+describe('Admin moderation queue - reads the whole routing table', () => {
+  test('the server lists every report collection including post/story/ad', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminListModerationReports');
+    for (const collection of ['post_reports', 'story_reports', 'ad_reports']) {
+      expect(admin).toContain(`${collection}`);
+    }
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminModerationQueueScreen.jsx'), 'utf8');
+    expect(screen).toContain('FUNCTIONS.ADMIN_LIST_MODERATION_REPORTS');
+  });
+
+  test('content removal goes through the callable, not a direct posts write', () => {
+    const admin = fs.readFileSync(path.join(root, 'functions', 'admin.js'), 'utf8');
+    expect(admin).toContain('exports.adminModerateContent');
+    expect(admin).toContain("post: 'posts'");
+    const screen = fs.readFileSync(path.join(root, 'src/screens/Admin/AdminContentManagementScreen.jsx'), 'utf8');
+    expect(screen).toContain('FUNCTIONS.ADMIN_MODERATE_CONTENT');
+    expect(screen).not.toContain('updateDoc');
+  });
+});
+
+describe('Sponsored ads - no fabricated advertisers', () => {
+  const src = () => fs.readFileSync(path.join(root, 'src/components/Ads/SponsoredPostCard.jsx'), 'utf8');
+
+  test('no hardcoded sponsor catalogue and no random fallback', () => {
+    const s = src();
+    expect(s).not.toContain('VERIFIED_SPONSORS');
+    expect(s).not.toContain('Math.random');
+    expect(s).toContain("adState === 'loading'");
+  });
+
+  test('reporting an ad goes through the server callable', () => {
+    expect(src()).toContain('reportAd');
+    const svc = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
+    expect(svc).toContain('async reportAd(');
+    expect(svc).toContain("httpsCallable(functions, 'reportAd')");
+    expect(svc).not.toMatch(/addDoc\(collection\(this\.db, 'ad_impressions'/);
+    const server = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+    expect(server).toContain('exports.reportAd');
+  });
+
+  test('ad_reports is covered by firestore rules', () => {
+    const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+    expect(rules).toContain('match /ad_reports/{reportId}');
+  });
+});
+
+describe('Curated sample content - removed in favour of real data', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('in-feed stories render only real story groups', () => {
+    const s = read('src/components/feed/InFeedStoriesModule.jsx');
+    expect(s).not.toContain('DEFAULT_STORY_CREATORS');
+    expect(s).not.toContain('images.unsplash.com');
+  });
+
+  test('notifications suggestions have no fabricated creators or badge counts', () => {
+    const s = read('src/screens/NotificationsScreen.jsx');
+    expect(s).not.toContain('CURATED_CREATORS');
+    expect(s).not.toContain('images.unsplash.com');
+    expect(s).not.toMatch(/id: 'Messages', label: 'Messages', badge:/);
+  });
+
+  test('story composer has no fabricated default track or "Drafts (5)" strip', () => {
+    const s = read('src/screens/CreateStory.jsx');
+    expect(s).not.toContain('Lost in the City');
+    expect(s).not.toContain('SAMPLE_DRAFTS');
+    expect(s).not.toContain('Drafts (5)');
+    expect(s).toContain('soundService.getTrendingSounds');
+  });
+
+  test('reels have no starter sparks and no hardcoded like count', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).not.toContain('STARTER_SPARKS');
+    expect(s).not.toContain('128.4K');
+    expect(s).not.toContain('images.unsplash.com');
+  });
+
+  test('splash progress is milestone-driven, not random', () => {
+    const s = read('src/screens/SplashScreen.jsx');
+    expect(s).not.toContain('Math.random');
+    expect(s).not.toContain('statusSequence');
+  });
+
+  test('voice recorder meter reads the real microphone, not random bars', () => {
+    const s = read('src/screens/VideoEditor/components/RecordVoiceModal.jsx');
+    expect(s).not.toContain('Math.random');
+    expect(s).toContain('createAnalyser');
+  });
+
+  test('edit profile has no random username fallback', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).not.toContain('Math.floor(1000 + Math.random()');
+  });
+});
+
+describe('Reels - canonical service ownership, no direct Firestore', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ReelsFeed reads the feed through videoService and never writes Firestore directly', () => {
+    const s = read('src/components/Home/ReelsFeed.jsx');
+    expect(s).not.toContain("from 'firebase/firestore'");
+    expect(s).not.toContain('collection(db');
+    expect(s).not.toContain('updateDoc(');
+    expect(s).toContain('videoService.getVideoFeed');
+    // Likes/shares are server-authoritative through the service callables.
+    expect(s).toContain('videoService.likeVideo');
+    expect(s).toContain('videoService.shareVideo');
+  });
+});
+
+describe('CreateStory - creative tools write real payload fields', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('story payload carries stickers, link, location and tagged users', () => {
+    const s = read('src/screens/CreateStory.jsx');
+    expect(s).toContain('linkUrl:');
+    expect(s).toContain('location:');
+    expect(s).toContain('taggedUsers:');
+    expect(s).toContain('buildStickers');
+    // The dead Draw tool (no compositing pipeline) must not be advertised.
+    expect(s).not.toContain("id: 'draw'");
+    // Flash drives the real camera torch instead of a cosmetic toast.
+    expect(s).toContain('applyConstraints');
+    expect(s).toContain('getCapabilities');
+  });
+});
+
+describe('Action wiring - buttons call the real service signature', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('draft cloud sync uses the real firestoreService signature', () => {
+    const s = read('src/screens/CreatePost.jsx');
+    // saveDraft(draftId, userId, draftData); get/deleteDraft(draftId).
+    expect(s).toContain('saveDraft(draft.id, userRef.current.uid, draft)');
+    expect(s).toContain('getDraft(draftId)');
+    expect(s).toContain('deleteDraft(draftId)');
+    // The old calls passed (userId, draft) / (userId, draftId) and were silently
+    // swallowed, so drafts never synced.
+    expect(s).not.toContain('saveDraft(userRef.current.uid, draft)');
+    expect(s).not.toContain("typeof services.current.firestore.saveDraft === 'function'");
+  });
+
+  test('ad reporting calls reportAd directly instead of gating on a typeof check', () => {
+    const s = read('src/components/Ads/SponsoredPostCard.jsx');
+    expect(s).toContain('getMonetizationService().reportAd(ad.id, placement)');
+    expect(s).not.toContain('Reporting is unavailable right now.');
+  });
+
+  test('username generation calls the service without a dead capability guard', () => {
+    const s = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(s).toContain('userService.generateUniqueUsername(cleanBase, userProfile?.uid)');
+    expect(s).not.toContain('Username generation is unavailable right now.');
+  });
+});
+
+
+describe('Watch XP - the milestone award is real and server-authoritative', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('VideoCard awards through the level service, not an unpassed callback', () => {
+    const s = read('src/screens/PostCard/VideoCard.jsx');
+    // The component used to call onXpEarned?.() with hardcoded xp values, but
+    // PostCard never passed the prop, so watching a video awarded nothing.
+    expect(s).not.toContain('onXpEarned');
+    expect(s).toContain("action: 'video_watched'");
+    expect(s).toContain('levelSystemService.awardExperience({ userId: currentUser.uid');
+    // No hardcoded XP amounts may remain in the card.
+    expect(s).not.toMatch(/reason: 'watch_\d+', xp: \d+/);
+  });
+
+  test('video_watched resolves to a shared XP rule, never a component literal', () => {
+    const rule = XP_RULES.video_watched;
+    expect(rule).toBeDefined();
+    expect(rule.xp).toBeGreaterThan(0);
+    expect(rule.dailyCap).toBeGreaterThanOrEqual(rule.xp);
+  });
+});
+
+describe('Rewarded ads - real inventory only, no invented sponsor or reward', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('monetizationService.getAd never fabricates a default campaign', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).not.toContain('Discover Arvdoul Premium');
+    expect(s).not.toContain("ad_${placement}_default");
+    // No inventory means null, and the fallback query is placement-scoped.
+    expect(s).toContain('return null;');
+    expect(s).toContain("where('placements', 'array-contains', placement)");
+  });
+
+  test('watchAd credits a reward only for a real, active campaign', () => {
+    const s = read('functions/monetization.js');
+    expect(s).toContain("collection('ads').doc(adId).get()");
+    expect(s).toContain("ad.active !== true");
+    expect(s).toContain('MAX_AD_WATCH_SECONDS');
+    expect(s).toContain('Math.min(Number(watchDurationSeconds), MAX_AD_WATCH_SECONDS)');
+  });
+
+  test('HomeScreen resolves a real ad and never claims a hardcoded ad id', () => {
+    const s = read('src/screens/HomeScreen.jsx');
+    expect(s).not.toContain("watchAd('feed_reward', 'rewarded_ad'");
+    expect(s).toContain("watchAd('home', rewardAd.id");
+    expect(s).toContain('+{AD_REWARD_COINS}');
+    expect(s).not.toContain('+15 Free Coins');
+    expect(s).not.toContain('Arvdoul Creator Rewards');
+  });
+
+  test('SponsoredPostCard renders real creative fields and the shared reward', () => {
+    const s = read('src/components/Ads/SponsoredPostCard.jsx');
+    expect(s).not.toContain('ad.rewardCoins || 5');
+    expect(s).toContain('AD_REWARD_COINS');
+    expect(s).toContain('adMediaUrl');
+    expect(s).toContain('adClickUrl');
+  });
+
+  test('sponsored stories claim no coin reward and track a real impression', () => {
+    const s = read('src/screens/StoriesScreen.jsx');
+    // There is no server story-reward path, so the UI must not promise coins
+    // nor call a monetization method that does not exist.
+    expect(s).not.toContain('rewardCoins');
+    expect(s).not.toContain('recordAdClick');
+    expect(s).not.toContain('ARVDOUL Coins credited');
+    expect(s).toContain("recordAdImpression(currentStory.id, 'stories_click')");
+  });
+
+  test('story ad impressions go through the server-authoritative callable', () => {
+    const s = read('src/services/storyService.js');
+    expect(s).toContain("getMonetizationService().recordAdImpression(adId, 'stories'");
+    // ad_impressions is server-write-only: no direct client addDoc/updateDoc.
+    expect(s).not.toContain("collection(this.firestore, 'ad_impressions')");
+    expect(s).not.toContain('_logSponsoredStory');
+    expect(s).not.toContain('lastAdImpression: serverTimestamp()');
+  });
+
+  test('feed/conversation ads use the real creative shape and no random ids', () => {
+    const feed = read('src/services/feedService.js');
+    expect(feed).toContain("ad.media?.url");
+    expect(feed).not.toContain("ad.title || 'Sponsored'");
+    const msgs = read('src/services/messagesService.js');
+    expect(msgs).toContain('ad.title || adName');
+    expect(msgs).not.toContain('impressionId: `imp_');
+    expect(msgs).not.toContain('AD_REWARD_COINS: 2');
+  });
+
+  test('monetizationService defines no shadow subscription/ad reward tables', () => {
+    const s = read('src/services/monetizationService.js');
+    // The canonical tiers live in shared/levelConfig.cjs; a second table here
+    // (PREMIUM/CREATOR/ENTERPRISE) contradicted the shared config.
+    expect(s).not.toContain('SUBSCRIPTION_TIERS: {');
+    expect(s).not.toContain('AD_REWARD_COINS: {');
+  });
+
+  test('progression is never fabricated as Level 1 when absent', () => {
+    // Audit N005/U-4: a missing level must render as unavailable, not as a
+    // plausible-but-false "Level 1". `|| 1` / `Number(x) || 1` re-introduce it.
+    const store = read('src/store/profileStore.js');
+    expect(store).not.toContain('levelData?.level || 1');
+    expect(store).toContain('levelData?.level ?? null');
+
+    const myScreen = read('src/screens/Profile/ProfileMyScreen.jsx');
+    expect(myScreen).not.toContain("currentUser?.level) || 1");
+    expect(myScreen).not.toContain('effectiveProfile?.level || 1');
+
+    const dashboard = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    expect(dashboard).not.toContain('Number(userLevel) || 1');
+  });
+});
+

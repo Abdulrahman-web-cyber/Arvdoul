@@ -11,35 +11,58 @@ const db = admin.firestore();
 
 // ==================== FEATURE MODULES ====================
 // Each module self-registers its https.onCall / trigger exports with
-// firebase-functions. Requiring them guarantees every export deploys.
-// (Duplicate names between index.js and the modules were removed below.)
-require('./user.js');
-require('./feed.js');
-require('./comments.js');
-require('./stories.js');
-require('./video.js');
-require('./notifications.js');
-require('./messaging.js');
-require('./search.js');
-require('./monetization.js');
-require('./polls.js');
-// GDPR compliance exports - MUST be required or they never deploy
+// firebase-functions. `require`-ing them only guarantees the module body runs;
+// it does NOT publish their functions. Firebase deploys whatever this file
+// exports, so every module's exports must be merged onto `exports` or the
+// function is built and never deployed. Requiring without merging silently
+// dropped ~130 of ~141 functions (only the 11 defined below deployed);
+// src/__tests__/deployIntegrity.test.js guards this.
+const merge = (mod) => {
+  for (const [name, value] of Object.entries(mod)) {
+    // Only real callable/trigger exports become deployed functions; plain
+    // helpers (e.g. auth.js's assertAdmin) are skipped.
+    if (typeof value === 'function' && (value.__trigger || value.__endpoint)) {
+      exports[name] = value;
+    }
+  }
+};
+
+merge(require('./user.js'));
+merge(require('./feed.js'));
+merge(require('./comments.js'));
+merge(require('./stories.js'));
+merge(require('./video.js'));
+merge(require('./notifications.js'));
+merge(require('./messaging.js'));
+merge(require('./search.js'));
+merge(require('./monetization.js'));
+merge(require('./polls.js'));
+// GDPR compliance exports - MUST be merged or they never deploy
 // (deleteUserData lives in user.js; exportUserData lives in userExport.js).
-require('./userExport.js');
+merge(require('./userExport.js'));
 // AI gateway (client aiStudioService calls this via VITE_AI_GATEWAY_URL).
-require('./ai.js');
+merge(require('./ai.js'));
 // SAML assertion verification (client samlService requires
 // VITE_SAML_VERIFY_URL and fails closed without it).
-require('./saml.js');
+merge(require('./saml.js'));
 // Level system (server-authoritative XP; client prefers this callable).
-require('./levelSystem.js');
+merge(require('./levelSystem.js'));
 // Moderation, reporting, AI authoring and post-performance prediction.
-require('./moderation.js');
+merge(require('./moderation.js'));
+// Server-authoritative feature-flag governance (platform-wide kill switches).
+merge(require('./featureFlags.js'));
 // Server-authoritative admin actions (ban/suspend/verify, user directory,
 // report resolution). The client never writes privileged user fields directly.
-require('./admin.js');
+merge(require('./admin.js'));
+// auth.js / pushQueue.js are helper-only modules (no triggers); requiring them
+// registers nothing, but their side effects (queue config) are still loaded.
 require('./auth.js');
 require('./pushQueue.js');
+// Server-authoritative profile view analytics (trackProfileView callable).
+merge(require('./analytics.js'));
+// PII boundary backfill: moves legacy contact/verification/Stripe fields off
+// the world-readable users/{uid} doc into users_private/{uid}.
+merge(require('./privacyMigration.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -306,10 +329,9 @@ exports.verifyPurchase = functions.https.onCall(async (data, context) => {
 
   // Real platform-specific validation would call the Apple/Google servers
   // here (JWS receipt payload -> App Store Server API, or Play Developer
-  // API purchases.products.get). The product-to-coin mapping only runs AFTER
-  // a verified receipt:
-  const coinMap = { coins_100: 100, coins_500: 500, coins_1000: 1000 };
-  const coinAmount = coinMap[productId];
+  // API purchases.products.get). The product-to-coin mapping is the canonical
+  // shared catalog, so IAP cannot grant a different amount than the web store.
+  const coinAmount = require('./levelConfig.cjs').COIN_PACKAGES_BY_ID[productId]?.coins;
   if (!coinAmount) throw new functions.https.HttpsError('invalid-argument', 'Invalid product');
 
   await db.runTransaction(async (transaction) => {

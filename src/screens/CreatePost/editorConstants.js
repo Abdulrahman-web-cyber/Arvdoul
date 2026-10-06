@@ -1,12 +1,9 @@
-// src/screens/CreatePost/editorConstants.js - ARVDOUL Image Editor Design Tokens & Constants
-// World-class design system following ARVDOUL Design DNA
+// src/screens/CreatePost/editorConstants.js
 
-// ==================== ARVDOUL DNA GRADIENT ====================
 export const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
 export const ARVDOUL_SHADOW = '0 12px 40px rgba(135,47,226,.35)';
 export const ARVDOUL_GLOW = '0 0 30px rgba(147,51,234,0.25)';
 
-// ==================== DESIGN TOKENS ====================
 export const TOKENS = {
   // Border Radius
   radius: {
@@ -42,7 +39,6 @@ export const TOKENS = {
   },
 };
 
-// ==================== THEME TOKENS ====================
 export const THEME_TOKENS = {
   light: {
     bg: '#F0F2F6',
@@ -110,7 +106,6 @@ export const THEME_TOKENS = {
   },
 };
 
-// ==================== TOOL TYPES ====================
 export const TOOLS = {
   SELECT: 'select',
   ADJUST: 'adjust',
@@ -123,7 +118,6 @@ export const TOOLS = {
   AI: 'ai',
 };
 
-// ==================== ADJUSTMENT SETTINGS ====================
 export const ADJUSTMENTS = [
   { key: 'brightness', label: 'Brightness', min: 0, max: 200, default: 100 },
   { key: 'contrast', label: 'Contrast', min: 0, max: 200, default: 100 },
@@ -144,7 +138,6 @@ export const ADJUSTMENTS = [
   { key: 'gamma', label: 'Gamma', min: 50, max: 150, default: 100 },
 ];
 
-// ==================== FILTER PRESETS ====================
 export const FILTERS = [
   { name: 'Original', value: 'none', category: 'basic' },
   { name: 'Grayscale', value: 'grayscale(100%)', category: 'basic' },
@@ -170,7 +163,6 @@ export const FILTERS = [
 
 export const FILTER_CATEGORIES = ['basic', 'creative', 'other'];
 
-// ==================== ASPECT RATIOS ====================
 export const ASPECT_RATIOS = [
   { label: 'Free', value: undefined, icon: 'maximize' },
   { label: '1:1', value: 1 / 1, icon: 'square' },
@@ -181,7 +173,6 @@ export const ASPECT_RATIOS = [
   { label: '2:3', value: 2 / 3, icon: 'portrait-alt' },
 ];
 
-// ==================== CANVAS SETTINGS ====================
 export const CANVAS = {
   MIN_ZOOM: 0.1,
   MAX_ZOOM: 10,
@@ -193,14 +184,12 @@ export const CANVAS = {
   SAFE_AREA: { width: 4000, height: 4000 },
 };
 
-// ==================== HISTORY SETTINGS ====================
 export const HISTORY = {
   MAX_SNAPSHOTS: 100,
   AUTO_SAVE_INTERVAL: 10000, // 10 seconds
   DEBOUNCE_DELAY: 100, // ms for slider debounce
 };
 
-// ==================== LAYER TYPES ====================
 export const LAYER_TYPES = {
   IMAGE: 'image',
   TEXT: 'text',
@@ -212,7 +201,6 @@ export const LAYER_TYPES = {
   MASK: 'mask',
 };
 
-// ==================== BLEND MODES ====================
 export const BLEND_MODES = [
   'normal',
   'multiply',
@@ -232,7 +220,6 @@ export const BLEND_MODES = [
   'luminosity',
 ];
 
-// ==================== AI TOOLS ====================
 export const AI_TOOLS = [
   { id: 'remove-bg', title: 'Remove Background', description: 'Remove the background from your image', icon: 'scissors', credits: 1 },
   { id: 'magic-eraser', title: 'Magic Eraser', description: 'Remove unwanted objects', icon: 'eraser', credits: 2 },
@@ -245,7 +232,6 @@ export const AI_TOOLS = [
   { id: 'portrait', title: 'Portrait Mode', description: 'Add portrait lighting effect', icon: 'user', credits: 1 },
 ];
 
-// ==================== FONT FAMILIES ====================
 export const GOOGLE_FONTS = [
   'Poppins',
   'Inter',
@@ -269,7 +255,6 @@ export const GOOGLE_FONTS = [
   'Abril Fatface',
 ];
 
-// ==================== KEYBOARD SHORTCUTS ====================
 export const SHORTCUTS = {
   UNDO: { key: 'z', ctrl: true },
   REDO: { key: 'z', ctrl: true, shift: true },
@@ -290,7 +275,6 @@ export const SHORTCUTS = {
   PAN: { key: 'Space', ctrl: false },
 };
 
-// ==================== ANIMATION CONFIG ====================
 export const ANIMATION = {
   spring: {
     damping: 25,
@@ -315,7 +299,6 @@ export const ANIMATION = {
   easing: [0.175, 0.885, 0.32, 1.275],
 };
 
-// ==================== LAYOUT METRICS ====================
 export const LAYOUT = {
   topBar: { height: 72, padding: 24 },
   closeButton: { size: 24, hitArea: 44 },
@@ -327,7 +310,6 @@ export const LAYOUT = {
   modal: { maxWidth: 1360, padding: 24 },
 };
 
-// ==================== PERFORMANCE SETTINGS ====================
 export const PERFORMANCE = {
   DEBOUNCE_SLIDERS: 100,
   THROTTLE_DRAG: 16,
@@ -339,7 +321,6 @@ export const PERFORMANCE = {
   MAX_ZOOM_CACHE: 5,
 };
 
-// ==================== ERROR MESSAGES ====================
 export const ERRORS = {
   IMAGE_LOAD: 'Failed to load image. Please try again.',
   IMAGE_DECODE: 'Failed to decode image. The file may be corrupted.',
@@ -350,7 +331,6 @@ export const ERRORS = {
   UNKNOWN: 'An unexpected error occurred.',
 };
 
-// ==================== OFFSCREEN CANVAS WORKER MESSAGES ====================
 export const WORKER_MESSAGES = {
   APPLY_ADJUSTMENTS: 'APPLY_ADJUSTMENTS',
   APPLY_FILTER: 'APPLY_FILTER',
@@ -360,8 +340,6 @@ export const WORKER_MESSAGES = {
   COMPOSITE_LAYERS: 'COMPOSITE_LAYERS',
   EXPORT_IMAGE: 'EXPORT_IMAGE',
 };
-
-// ==================== UTILITY FUNCTIONS ====================
 
 /**
  * Generate unique ID for layers and other elements

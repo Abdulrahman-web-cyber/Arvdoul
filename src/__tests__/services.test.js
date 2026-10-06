@@ -4,7 +4,6 @@
 import { IdempotencyStore } from '../utils/IdempotencyKey';
 import { safeSearchService } from '../services/safeSearchService.js';
 import { scamDetectionService } from '../services/scamDetectionService.js';
-import { searchAbuseService } from '../services/searchAbuseService.js';
 import { searchIndexingService } from '../services/searchIndexingService.js';
 import { audioModerationService } from '../services/audioModerationService.js';
 import { childSafetyService } from '../services/childSafetyService.js';
@@ -22,7 +21,6 @@ import { logAggregationService } from '../services/logAggregationService.js';
 import { tracingService } from '../services/tracingService.js';
 import { manipulatedMediaService } from '../services/manipulatedMediaService.js';
 import { phishingDetectionService } from '../services/phishingDetectionService.js';
-import { userIntegrityService } from '../services/userIntegrityService.js';
 import { vendorManagementService } from '../services/vendorManagementService.js';
 import { viralPredictionService } from '../services/viralPredictionService.js';
 
@@ -457,36 +455,6 @@ describe('Service Layer Tests', () => {
     });
   });
 
-  describe('SearchAbuseService Upgrades (v8.0)', () => {
-    test('enforces query length restriction limits', () => {
-      const longQuery = 'a'.repeat(200);
-      const res = searchAbuseService.validateSearchRequest('user123', longQuery);
-      expect(res.allowed).toBe(false);
-      expect(res.requiresCaptcha).toBe(true);
-    });
-
-    test('blocks sliding window search rate spikes', () => {
-      searchAbuseService.resetAbuseCounters('user_temp');
-      for (let i = 0; i < 30; i++) {
-        const check = searchAbuseService.validateSearchRequest('user_temp', `Query ${i}`);
-        expect(check.allowed).toBe(true);
-      }
-      const overLimit = searchAbuseService.validateSearchRequest('user_temp', 'One more search');
-      expect(overLimit.allowed).toBe(false);
-    });
-
-    test('detects dictionary sequential letter sweeps and triggers captcha', () => {
-      searchAbuseService.resetAbuseCounters('sweep_user');
-      // alphabetical sequence sweeps
-      searchAbuseService.validateSearchRequest('sweep_user', 'aaa');
-      searchAbuseService.validateSearchRequest('sweep_user', 'aab');
-      searchAbuseService.validateSearchRequest('sweep_user', 'aac');
-      const sweepCheck = searchAbuseService.validateSearchRequest('sweep_user', 'aad');
-      expect(sweepCheck.allowed).toBe(false);
-      expect(sweepCheck.requiresCaptcha).toBe(true);
-    });
-  });
-
   describe('SearchIndexingService Upgrades (v8.0)', () => {
     test('generates edge n-grams for prefix matching', () => {
       const ngrams = searchIndexingService.generateNGrams('arvdoul');
@@ -666,19 +634,6 @@ describe('Service Layer Tests', () => {
       const res = phishingDetectionService.evaluateURL('https://arvd0ul.com/login');
       expect(res.safe).toBe(false);
       expect(res.risk).toBe('critical');
-    });
-  });
-
-  describe('UserIntegrityService Upgrades (v8.0)', () => {
-    test('evaluates dynamic multi-dimensional trust score', () => {
-      const profile = {
-        isVerifiedCreator: true,
-        emailVerified: true,
-        phoneNumber: '1234567890',
-        strikesCount: 0
-      };
-      const score = userIntegrityService.calculateTrustScore(profile);
-      expect(score).toBeGreaterThan(60);
     });
   });
 

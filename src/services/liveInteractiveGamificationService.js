@@ -1,6 +1,4 @@
 /**
- * src/services/liveInteractiveGamificationService.js - ARVDOUL LIVE STREAM GAMIFICATION & INTERACTION v1.0
- * 
  * Production-grade live broadcast engagement:
  * • Sub-second audience live micro-polls with percentage distribution computation
  * • Collaborative stream goals (e.g. tip milestones, like counters) with unlocked reward states
@@ -15,8 +13,6 @@ export class LiveInteractiveGamificationService {
     this.sessionGoals = new Map(); // sessionId -> Map(goalId -> goal)
     this.sessionQA = new Map();    // sessionId -> Map(questionId -> question)
   }
-
-  // ==================== LIVE MICRO-POLLS ====================
 
   /**
    * Launches a live micro-poll in an active livestream or audio space.
@@ -90,8 +86,6 @@ export class LiveInteractiveGamificationService {
     return this._formatPoll(poll);
   }
 
-  // ==================== STREAM GOALS & MILESTONES ====================
-
   /**
    * Registers a collective stream goal (e.g. 500 coins for acoustic encore).
    */
@@ -145,8 +139,6 @@ export class LiveInteractiveGamificationService {
 
     return { ...goal };
   }
-
-  // ==================== UPVOTABLE Q&A QUEUE ====================
 
   /**
    * Submits a question into the audience Q&A queue.

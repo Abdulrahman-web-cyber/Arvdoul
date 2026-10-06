@@ -1,11 +1,9 @@
-// src/screens/Admin/AdminContentManagementScreen.jsx - ARVDOUL CONTENT MANAGEMENT
-// ✅ List and search content
-// ✅ Moderate content
-// ✅ Delete/Hide content
+// src/screens/Admin/AdminContentManagementScreen.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
@@ -25,14 +23,11 @@ const AdminContentManagementScreen = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const { collection, query, orderBy, limit, getDocs, doc, getDoc } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
         if (!user?.uid) { setLoading(false); return; }
-        const adminSnap = await getDoc(doc(firestore, 'admins', user.uid));
-        if (!adminSnap.exists()) { setLoading(false); return; }
-        const snap = await getDocs(query(collection(firestore, 'posts'), orderBy('createdAt', 'desc'), limit(100)));
-        setContent(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        if (!(await fetchAdminStatus())) { setLoading(false); return; }
+        const { getAdminService } = await import('../../services/adminService.js');
+        const rows = await getAdminService().listContent(100);
+        setContent(rows);
       } catch (err) {
         toast.error('Could not load content.');
       } finally {
@@ -51,22 +46,19 @@ const AdminContentManagementScreen = () => {
            c.authorName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // Moderation decisions are server-authoritative: the callable re-checks
+  // admins/{uid}, updates the document and writes the audit entry.
   const handleContentAction = async (contentId, action) => {
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-      const ref = doc(firestore, 'posts', contentId);
-      await updateDoc(ref, {
-        isDeleted: action === 'remove',
-        moderationStatus: action === 'remove' ? 'removed' : 'approved',
-        updatedAt: serverTimestamp(),
-        moderatedBy: user?.uid || null,
+      await callFunction(FUNCTIONS.ADMIN_MODERATE_CONTENT, {
+        contentType: 'post',
+        contentId,
+        action,
       });
       setContent(prev => prev.map(c => (c.id === contentId ? { ...c, isDeleted: action === 'remove' } : c)));
       toast.success(action === 'remove' ? 'Content removed.' : 'Content restored.');
     } catch (error) {
-      toast.error('Action failed.');
+      toast.error(error?.message || 'Action failed.');
     }
   };
 

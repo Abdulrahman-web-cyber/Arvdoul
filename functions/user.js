@@ -161,6 +161,7 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
 
   try {
     const userDocRef = db.collection('users').doc(userId);
+    const privateDocRef = db.collection('users_private').doc(userId);
     const userSnap = await userDocRef.get();
     const username = userSnap.exists ? userSnap.data().username : null;
 
@@ -317,6 +318,7 @@ exports.deleteUserData = functions.https.onCall(async (data, context) => {
     // Core profile documents
     await db.collection('user_settings').doc(userId).delete().catch(() => {});
     await db.collection('user_preferences').doc(userId).delete().catch(() => {});
+    await privateDocRef.delete().catch(() => {});
     await userDocRef.delete();
 
     // Remove from user recommendations (collection group)

@@ -2,8 +2,8 @@
  * functions/levelSystem.js - ARVDOUL LEVEL SYSTEM (server-authoritative)
  *
  * Server-side XP awarding so XP cannot be farmed by editing client code.
- * The client levelSystemService prefers this callable and falls back to its
- * local transaction only when the function is unreachable (offline/dev).
+ * The client levelSystemService calls this callable and has no local fallback:
+ * if it is unreachable the award is refused rather than applied client-side.
  *
  * The curve, reward tables, XP rules and gating thresholds are NOT defined
  * here: they are required from ./levelConfig.cjs, a byte-identical copy of the
@@ -12,8 +12,8 @@
  * `npm run sync:shared` and the `predeploy` hook) keeps the copy in step, and
  * src/__tests__/sharedConfigSync.test.js fails CI if they ever diverge.
  *
- * Atomic transaction: XP +=, level recompute, coin reward + coin_ledger
- * entry, idempotency by action+source+date, per-action daily caps.
+ * Atomic transaction: XP +=, level recompute, coin reward into coin_transactions
+ * + supply counter, idempotency by action+source+date, per-action daily caps.
  */
 
 const functions = require('firebase-functions');
@@ -104,13 +104,23 @@ exports.awardExperience = functions
         tx.set(userRef, patch, { merge: true });
 
         if (coinReward > 0) {
-          tx.set(db.doc(`coin_ledger/${uid}_levelup_${after.level}_${Date.now()}`), {
+          // The reward is a real coin credit, so it lands in the same
+          // coin_transactions ledger the wallet reads (the old coin_ledger
+          // collection was never surfaced to the user) and increments the
+          // system supply, keeping the ledger and supply counters consistent.
+          const rewardTxRef = db.collection('coin_transactions').doc();
+          tx.set(rewardTxRef, {
             userId: uid,
+            type: 'credit',
             amount: coinReward,
-            type: 'level_up_reward',
-            reason: `Level ${after.level} reward`,
+            reason: 'level_up_reward',
+            metadata: { level: after.level },
+            balanceAfter: (dataDoc.coins || 0) + coinReward,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           });
+          tx.set(db.collection('system').doc('coin_supply'),
+            { totalCoins: admin.firestore.FieldValue.increment(coinReward) }, { merge: true });
           tx.set(userRef, { coins: admin.firestore.FieldValue.increment(coinReward) }, { merge: true });
         }
 

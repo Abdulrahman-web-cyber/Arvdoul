@@ -1,4 +1,5 @@
 // src/screens/PostCard/LinkCard.jsx
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -8,9 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ------------------------------------------------------------------
 // 1. IndexedDB cache (simple, with LRU eviction)
-// ------------------------------------------------------------------
 let dbPromise = null;
 if (typeof window !== 'undefined' && window.indexedDB) {
   dbPromise = new Promise((resolve, reject) => {
@@ -69,9 +68,7 @@ const setCachedMetadata = async (url, data) => {
   await store.put({ url, data, timestamp: Date.now() });
 };
 
-// ------------------------------------------------------------------
 // 2. Helpers
-// ------------------------------------------------------------------
 const getHostname = (url) => {
   try { return new URL(url).hostname; } catch { return ''; }
 };
@@ -83,9 +80,7 @@ const readingTime = (text) => {
   return `${minutes} min read`;
 };
 
-// ------------------------------------------------------------------
 // 3. Video ID extraction (supports youtube, youtu.be, vimeo, tiktok)
-// ------------------------------------------------------------------
 const getVideoId = (url) => {
   try {
     const u = new URL(url);
@@ -108,9 +103,7 @@ const getEmbedUrl = (url) => {
   return null;
 };
 
-// ------------------------------------------------------------------
 // 4. MAIN COMPONENT
-// ------------------------------------------------------------------
 const LinkCard = React.memo(({
   link,                     // { url, title?, description?, image?, engagement?: { views, clicks, saves, shares, tips } }
   tokens,
@@ -124,7 +117,6 @@ const LinkCard = React.memo(({
   currentUser,
   postId,
 }) => {
-  // ----- State -----
   const [metadata, setMetadata] = useState(null);
   const [linkType, setLinkType] = useState('link');
   const [safety, setSafety] = useState({ score: 100, warnings: [] });
@@ -145,7 +137,6 @@ const LinkCard = React.memo(({
   const isProduct = linkType === 'product';
   const isArticle = linkType === 'article' || linkType === 'news';
 
-  // ----- Load all intelligence (cached) -----
   useEffect(() => {
     if (!link?.url) {
       setLoading(false);
@@ -210,7 +201,6 @@ const LinkCard = React.memo(({
     load();
   }, [link?.url, link?.title, link?.description, link?.image, onFetchMetadata, onClassifyLink, onGetSafetyScore, hostname]);
 
-  // ----- Analytics on view (once) -----
   const viewedRef = useRef(false);
   useEffect(() => {
     if (!loading && !error && !viewedRef.current && link?.url) {
@@ -220,7 +210,6 @@ const LinkCard = React.memo(({
     }
   }, [loading, error, onAnalytics, postId, link?.url, linkType]);
 
-  // ----- Handlers -----
   const handleClick = () => {
     onAnalytics?.('link_click', { postId, url: link.url });
     setEngagement(prev => ({ ...prev, clicks: prev.clicks + 1 }));
@@ -259,7 +248,6 @@ const LinkCard = React.memo(({
     }
   };
 
-  // ----- Domain reputation badge -----
   const ReputationBadge = () => {
     const score = safety.score;
     if (score >= 80) return <CheckCircle className="w-4 h-4 text-green-400" title="Trusted domain" />;
@@ -267,18 +255,14 @@ const LinkCard = React.memo(({
     return <AlertTriangle className="w-4 h-4 text-red-400" title="Potentially unsafe" />;
   };
 
-  // ----- Safety warning -----
   const safetyWarning = safety.warnings?.length ? safety.warnings[0] : null;
 
-  // ----- Reading time (if article) -----
   const readTime = isArticle && metadata?.description ? readingTime(metadata.description) : null;
 
-  // ----- Trending badge -----
   const isTrending = metadata?.trending || engagement.views > 1000;
 
   if (!link?.url) return null;
 
-  // ----- Loading skeleton -----
   if (loading) {
     return (
       <div className="px-4 py-3 mx-4 my-2 rounded-xl animate-pulse" style={{ backgroundColor: tokens.actionBarBg }}>
@@ -293,7 +277,6 @@ const LinkCard = React.memo(({
     );
   }
 
-  // ----- Error fallback -----
   if (error || !metadata) {
     return (
       <div className="px-4 py-3 mx-4 my-2 rounded-xl border" style={{ backgroundColor: tokens.cardBgAlt, borderColor: tokens.border }}>

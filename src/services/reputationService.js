@@ -1,13 +1,11 @@
-// src/services/reputationService.js — ARVDOUL REPUTATION, INFLUENCE & CONTRIBUTION ENGINE (Part 2)
+// src/services/reputationService.js
+//
 // Measures genuine trust, impact, and ecosystem value. Zero Pay-to-Legitimacy.
 
 import {
   getReputationBand,
   getInfluenceBand,
   getContributionBand,
-  REPUTATION_BANDS,
-  INFLUENCE_BANDS,
-  CONTRIBUTION_BANDS,
 } from './levelSystemService.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { doc, getDoc } from 'firebase/firestore';
@@ -22,9 +20,13 @@ class ReputationService {
   /**
    * Evaluates user profile attributes and calculates unified standing breakdown.
    * Safe public representation with zero exposure of internal anti-abuse heuristics.
+   *
+   * Every dimension is derived from a stored, server-authoritative field. When a
+   * dimension is absent the service reports it as unavailable (`null` score,
+   * `available: false`) instead of inventing a plausible-but-false baseline.
    */
   async getReputationProfile(userId, fallbackData = null) {
-    if (!userId) return this._getDefaultProfile();
+    if (!userId) return this._getUnavailableProfile();
 
     const cached = this._cache.get(userId);
     if (cached && Date.now() - cached.timestamp < this.TTL_MS) {
@@ -39,15 +41,32 @@ class ReputationService {
         data = snap.exists() ? snap.data() : {};
       }
 
-      const repScore = Math.max(0, Math.min(100, Number(data.reputationScore || data.reputation || 50)));
-      const infScore = Math.max(0, Math.min(100, Number(data.influenceScore || data.influence || 20)));
-      const conScore = Math.max(0, Math.min(100, Number(data.contributionScore || data.contribution || 25)));
+      const readScore = (...candidates) => {
+        for (const value of candidates) {
+          if (value !== undefined && value !== null && value !== '') {
+            const num = Number(value);
+            if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
+          }
+        }
+        return null;
+      };
 
-      const repBand = getReputationBand(repScore);
-      const infBand = getInfluenceBand(infScore);
-      const conBand = getContributionBand(conScore);
+      const repScore = readScore(data.reputationScore, data.reputation);
+      const infScore = readScore(data.influenceScore, data.influence);
+      const conScore = readScore(data.contributionScore, data.contribution);
 
-      // Trust factors (audit items safe for display)
+      const dimension = (score, bandFn) => (
+        score === null
+          ? { score: null, band: null, color: null, description: null, available: false }
+          : { score, band: bandFn(score).label, color: bandFn(score).color, description: bandFn(score).description, available: true }
+      );
+
+      const reputation = dimension(repScore, getReputationBand);
+      const influence = dimension(infScore, getInfluenceBand);
+      const contribution = dimension(conScore, getContributionBand);
+
+      // Trust factors (audit items safe for display). Only positive, evidence-backed
+      // signals; never a synthetic "Good Standing" placeholder.
       const trustFactors = [];
       if (data.isVerified) {
         trustFactors.push({ id: 'verified', label: 'Identity Verified', icon: 'ShieldCheck', positive: true });
@@ -55,7 +74,7 @@ class ReputationService {
       if ((data.activeDaysCount || 0) >= 7) {
         trustFactors.push({ id: 'active', label: 'Consistent Citizen', icon: 'Flame', positive: true });
       }
-      if (data.policyStanding === 'good' || !data.policyStanding) {
+      if (data.policyStanding === 'good') {
         trustFactors.push({ id: 'standing', label: 'Good Policy Standing', icon: 'CheckCircle', positive: true });
       }
       if ((data.commentsCount || 0) >= 10 || (data.postsCount || 0) >= 5) {
@@ -67,48 +86,35 @@ class ReputationService {
 
       const profile = {
         userId,
-        reputation: {
-          score: repScore,
-          band: repBand.label,
-          color: repBand.color,
-          description: repBand.description,
-        },
-        influence: {
-          score: infScore,
-          band: infBand.label,
-          color: infBand.color,
-        },
-        contribution: {
-          score: conScore,
-          band: conBand.label,
-          color: conBand.color,
-        },
+        available: reputation.available || influence.available || contribution.available,
+        reputation,
+        influence,
+        contribution,
         trustFactors,
-        activeDaysCount: Number(data.activeDaysCount) || 1,
-        activeStreak: Number(data.activeStreak) || 1,
-        level: Number(data.level) || 1,
+        activeDaysCount: Number(data.activeDaysCount) || null,
+        activeStreak: Number(data.activeStreak) || null,
+        level: Number(data.level) || null,
       };
 
       this._cache.set(userId, { profile, timestamp: Date.now() });
       return profile;
     } catch (err) {
       logger.warn('[ReputationService] Failed to load reputation profile:', { userId, error: err.message });
-      return this._getDefaultProfile();
+      return this._getUnavailableProfile();
     }
   }
 
-  _getDefaultProfile() {
-    const repBand = getReputationBand(50);
-    const infBand = getInfluenceBand(20);
-    const conBand = getContributionBand(20);
+  _getUnavailableProfile() {
+    const unavailable = { score: null, band: null, color: null, description: null, available: false };
     return {
-      reputation: { score: 50, band: repBand.label, color: repBand.color, description: repBand.description },
-      influence: { score: 20, band: infBand.label, color: infBand.color },
-      contribution: { score: 20, band: conBand.label, color: conBand.color },
-      trustFactors: [{ id: 'standing', label: 'Good Standing', icon: 'CheckCircle', positive: true }],
-      activeDaysCount: 1,
-      activeStreak: 1,
-      level: 1,
+      available: false,
+      reputation: unavailable,
+      influence: unavailable,
+      contribution: unavailable,
+      trustFactors: [],
+      activeDaysCount: null,
+      activeStreak: null,
+      level: null,
     };
   }
 

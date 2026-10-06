@@ -1083,7 +1083,7 @@ function BottomNav() {
     };
   }, [unreadCounts]);
 
-  const coinBalance = currentUser?.coins ?? 0;
+  const coinBalance = effectiveUser?.coins ?? 0;
 
   const activeId = useMemo(() => {
     const pathname = location.pathname;

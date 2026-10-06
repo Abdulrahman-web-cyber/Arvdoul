@@ -1,6 +1,4 @@
 /**
- * src/utils/CountersManager.js - ARVDOUL Sharded Counters Manager
- *
  * Replaces direct `increment()` on hot documents (likes, follows, views,
  * saves, gifts) with sharded counters. Each logical counter is spread over
  * N shard documents; writes hit a random shard (spreading write contention),

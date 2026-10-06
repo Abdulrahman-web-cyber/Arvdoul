@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileCreatorDashboard.jsx - ARVDOUL Creator Dashboard Component
- * 
  * Recreates the Creator Dashboard section from the uploaded designs:
  * - Header with BarChart2 icon and timeframe dropdown
  * - 5 metric cards:
@@ -62,7 +60,7 @@ const Sparkline = ({ color = '#a855f7', data = [0, 0] }) => {
 const ProfileCreatorDashboard = memo(({
   analytics,
   ranking,
-  userLevel = 1,
+  userLevel = null,
   userXp = 0,
   isCreator = false,
   theme = 'light',
@@ -73,13 +71,22 @@ const ProfileCreatorDashboard = memo(({
   const isDark = theme === 'dark';
   const [selectedTimeframe, setSelectedTimeframe] = useState(timeframe);
 
-  // Gating check: User must be Level 5+ (LEVEL_GATES.creatorProfile) or have creator status
-  const effectiveLevel = Number(userLevel) || 1;
-  const isEligibleCreator = isCreator || effectiveLevel >= LEVEL_GATES.creatorProfile;
+  // Only a stored level is real; absent progression must not be shown as
+  // "Level 1". Null keeps the gate closed without inventing
+  // a standing, and `isCreator` still unlocks the dashboard for real creators.
+  const explicitLevel = Number(userLevel);
+  const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
+  const effectiveLevel = hasLevel ? explicitLevel : null;
+  const isEligibleCreator = isCreator || (hasLevel && effectiveLevel >= LEVEL_GATES.creatorProfile);
 
   if (!isEligibleCreator) {
     const requiredLevel = LEVEL_GATES.creatorProfile;
-    const progressPercent = Math.min(100, Math.max(10, Math.round((effectiveLevel / requiredLevel) * 100)));
+    // When there is no stored level we do not invent progress; the bar is
+    // shown empty and the copy states the standing is unavailable.
+    const progressPercent = hasLevel
+      ? Math.min(100, Math.max(10, Math.round((effectiveLevel / requiredLevel) * 100)))
+      : 0;
+    const remainingLevels = hasLevel ? Math.max(0, requiredLevel - effectiveLevel) : null;
 
     return (
       <div className={cn(
@@ -115,7 +122,9 @@ const ProfileCreatorDashboard = memo(({
             <div className="pt-2 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-500 dark:text-slate-400">Current Standing</span>
-                <span className="text-purple-600 dark:text-purple-400">Level {effectiveLevel} of {LEVEL_GATES.creatorProfile}</span>
+                <span className="text-purple-600 dark:text-purple-400">
+                  {hasLevel ? `Level ${effectiveLevel} of ${LEVEL_GATES.creatorProfile}` : 'Unavailable'}
+                </span>
               </div>
 
               <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden p-0.5">
@@ -127,7 +136,11 @@ const ProfileCreatorDashboard = memo(({
 
               <div className="flex items-center justify-between text-[11px] text-slate-400">
                 <span>🌱 Citizen Status</span>
-                <span>⭐ {Math.max(0, LEVEL_GATES.creatorProfile - effectiveLevel)} more {LEVEL_GATES.creatorProfile - effectiveLevel === 1 ? 'level' : 'levels'} to Creator</span>
+                <span>
+                  {hasLevel
+                    ? `⭐ ${remainingLevels} more ${remainingLevels === 1 ? 'level' : 'levels'} to Creator`
+                    : '⭐ Standing unavailable'}
+                </span>
               </div>
             </div>
           </div>
@@ -199,9 +212,13 @@ const ProfileCreatorDashboard = memo(({
     );
   };
 
-  // Rank info
-  const standingPercentile = ranking?.percentile ? `Top ${ranking.percentile}%` : 'Active';
-  const standingLabel = ranking?.rank ? `Rank #${ranking.rank} Global` : (ranking?.tier || 'Creator');
+  // Rank info. The ranking object comes from analyticsService.getCreatorRanking
+  // (position/percentile/label); `rank`/`tier` are accepted as aliases.
+  const standingRank = ranking?.position ?? ranking?.rank ?? null;
+  const standingPercentile = ranking?.percentile
+    ? `Top ${Math.round(ranking.percentile)}%`
+    : (ranking?.label || 'Unranked');
+  const standingLabel = standingRank ? `Rank #${standingRank} Global` : (ranking?.label || 'Creator');
 
   return (
     <div className={cn(

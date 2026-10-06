@@ -1,4 +1,5 @@
-// src/screens/ResetPasswordScreen.jsx
+// src/screens/ResetPassword.jsx
+
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";

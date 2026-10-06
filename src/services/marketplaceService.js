@@ -1,5 +1,5 @@
 // src/services/marketplaceService.js
-// 🛍️ ARVDOUL CREATOR MARKETPLACE & COMMERCE SERVICE
+//
 // Digital assets, presets, sound packs, creator merchandise, and real Firestore transactions.
 
 import { svcLogger } from './ServiceKit.js';
@@ -97,7 +97,7 @@ class MarketplaceService {
       throw new Error('Sign in to purchase items.');
     }
 
-    // REAL server-authoritative purchase: the purchaseMarketplaceItem Cloud
+    // server-authoritative purchase: the purchaseMarketplaceItem Cloud
     // Function atomically debits the coins (double-entry ledger), decrements
     // stock and creates the order. Client-side writes to marketplace_items
     // are denied by rules (buyer != creator), so there is no client fallback

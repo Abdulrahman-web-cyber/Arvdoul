@@ -1,13 +1,14 @@
 /**
- * src/offline/syncEngine.js - High-Performance Offline Synchronization Engine.
  * Coordinates between IndexedDB (OfflineQueue), online network transitions,
  * server APIs, and reactive UI sync status indicators.
  */
 
-import { OfflineQueue } from '../utils/OfflineQueue';
+import { offlineQueue } from '../utils/OfflineQueue';
 
-// Singleton queue instance
-export const offlineQueue = new OfflineQueue();
+// Re-export the canonical queue singleton. A second OfflineQueue instance
+// would keep its own in-memory fallback and drain state, so operations queued
+// through the service layer could never be drained by this engine.
+export { offlineQueue };
 
 let isSyncing = false;
 let currentSyncPromise = null;
@@ -86,30 +87,33 @@ registerSyncHandler('post.unlike', async (payload) => {
 });
 
 registerSyncHandler('user.follow', async (payload) => {
-  const { followService } = await import('../services/followService');
-  return followService.followUser(payload.followerId, payload.targetUserId);
+  // Canonical follow implementation lives on userService; the previous
+  // `followService` module never existed and the payload key was wrong, so the
+  // queued op could not be replayed at all.
+  const { getUserService } = await import('../services/userService');
+  return getUserService().followUser(payload.followerId, payload.followingId);
 });
 
 registerSyncHandler('user.unfollow', async (payload) => {
-  const { followService } = await import('../services/followService');
-  return followService.unfollowUser(payload.followerId, payload.targetUserId);
+  const { getUserService } = await import('../services/userService');
+  return getUserService().unfollowUser(payload.followerId, payload.followingId);
 });
 
 registerSyncHandler('message.send', async (payload) => {
-  const { messageService } = await import('../services/messageService');
-  return messageService.sendMessage(payload.conversationId, payload.message);
+  const { default: messagesService } = await import('../services/messagesService');
+  return messagesService.sendMessage(payload.conversationId, payload.message, payload.options || {});
 });
 
 registerSyncHandler('notification.markRead', async (payload) => {
-  const { notificationsService } = await import('../services/notificationsService');
-  return notificationsService.markAsRead(payload.notificationId);
+  const { getNotificationsService } = await import('../services/notificationsService');
+  return getNotificationsService().markNotificationAsRead(payload.notificationId, payload.userId);
 });
 
 /**
  * Drains the offline queue by executing pending operations against their handlers.
  * Includes conflict resolution, exponential backoff, and retry handling.
  */
-export async function syncQueue() {
+export async function syncQueue({ ownerUid = null } = {}) {
   if (currentSyncPromise) {
     return currentSyncPromise;
   }
@@ -143,7 +147,7 @@ export async function syncQueue() {
         }
 
         return await handler(op.payload);
-      });
+      }, { ownerUid });
 
       lastSyncTime = Date.now();
     } catch (err) {
@@ -162,7 +166,7 @@ export async function syncQueue() {
  * Enqueues an action for guaranteed delivery (optimistic + persistent).
  * Immediately attempts to drain if online.
  */
-export async function enqueueAction({ type, payload = {}, priority = 'medium', idempotencyKey = null }) {
+export async function enqueueAction({ type, payload = {}, priority = 'medium', idempotencyKey = null, ownerUid = null }) {
   const opId = await offlineQueue.enqueue({
     type,
     payload: {
@@ -171,30 +175,49 @@ export async function enqueueAction({ type, payload = {}, priority = 'medium', i
     },
     priority,
     idempotencyKey,
+    ownerUid,
   });
 
   notifyListeners(await getQueueStatus());
 
-  // If online, trigger background drain
+  // If online, trigger a background drain scoped to the owning account so a
+  // queued op is never executed on behalf of a different session.
   if (typeof navigator !== 'undefined' && navigator.onLine) {
-    // Non-blocking drain
-    syncQueue().catch(() => {});
+    syncQueue({ ownerUid }).catch(() => {});
   }
 
   return opId;
 }
 
+const sessionOwnerUid = () =>
+  (typeof window !== 'undefined' ? window._arvdoul_auth?.currentUser?.uid || null : null);
+
 // Auto-wire online/offline listeners
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
+    const uid = sessionOwnerUid();
+    // Only drain the signed-in account's queue; never replay another
+    // account's pending writes.
+    if (!uid) return;
     console.info('🌐 App went online. Draining offline mutation queue...');
-    syncQueue();
+    syncQueue({ ownerUid: uid });
   });
 
   window.addEventListener('offline', () => {
     console.info('📴 App went offline. Operations will be queued in IndexedDB.');
     getQueueStatus().then(notifyListeners);
   });
+}
+
+/**
+ * Purge queued operations on account change. Ops owned by the departing
+ * account are dropped so a later session cannot replay them.
+ * @param {string|null} uid
+ */
+export async function purgeQueueForOwner(uid) {
+  const removed = await offlineQueue.purgeOwner(uid);
+  notifyListeners(await getQueueStatus());
+  return removed;
 }
 
 export default {
@@ -204,4 +227,5 @@ export default {
   getQueueStatus,
   subscribeSyncStatus,
   registerSyncHandler,
+  purgeQueueForOwner,
 };

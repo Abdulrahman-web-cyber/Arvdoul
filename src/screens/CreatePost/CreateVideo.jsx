@@ -1,12 +1,4 @@
 // src/screens/CreatePost/CreateVideo.jsx
-// ARVDOUL ULTIMATE VIDEO CREATOR – PRODUCTION READY, BILLION-SCALE
-// ✅ Matches CreateImage.tsx feature set with video-specific optimizations
-// ✅ Glassmorphism, ARVDOUL design tokens, responsive
-// ✅ Drag‑and‑drop upload, filmstrip with thumbnails, reorder, delete
-// ✅ Real upload progress, offline queue, draft recovery
-// ✅ Edit button (opens VideoEditor)
-// ✅ TipTap caption with mentions, hashtags
-// ✅ Keyboard shortcuts, accessibility
 
 import React, {
   useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense

@@ -1,5 +1,4 @@
 /**
- * src/design-system/tokens.js
  * ARVDOUL DESIGN TOKENS — SINGLE SOURCE OF TRUTH
  *
  * Every visual decision in the app must come from these tokens. The values

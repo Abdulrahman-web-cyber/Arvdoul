@@ -1,4 +1,5 @@
-// src/services/creatorService.js — ARVDOUL CREATOR SYSTEM (Part 2)
+// src/services/creatorService.js
+//
 // Capability-based, professional workspace, gated onboarding.
 
 import {

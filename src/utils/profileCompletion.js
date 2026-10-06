@@ -1,6 +1,4 @@
 /**
- * src/utils/profileCompletion.js
- *
  * Single source of truth for post-auth routing:
  *   Splash + existing session  → /home
  *   Splash + no session        → /intro

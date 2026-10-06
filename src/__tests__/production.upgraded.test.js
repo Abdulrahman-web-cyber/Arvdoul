@@ -44,11 +44,9 @@ if (typeof globalThis.IDBRequest === 'undefined') {
 import { getMessagingService } from '../services/messagesService.js';
 import { activeActiveService } from '../services/activeActiveService.js';
 import { samlService } from '../services/samlService.js';
-import { apiSecurityGatewayService } from '../services/apiSecurityGatewayService.js';
 import { childSafetyService } from '../services/childSafetyService.js';
 import { metricsService } from '../services/metricsService.js';
 import { alertingService } from '../services/alertingService.js';
-import { billingService } from '../services/billingService.js';
 import { disasterRecoveryService } from '../services/disasterRecoveryService.js';
 import { misinformationService } from '../services/misinformationService.js';
 import { costMonitoringService } from '../services/costMonitoringService.js';
@@ -146,40 +144,6 @@ describe('Upgraded Production Services Integration Tests', () => {
           })
         })
       );
-    });
-  });
-
-  describe('botProtectionService (Biometrics & Trajectory Analysis)', () => {
-    let botService;
-
-    beforeAll(async () => {
-      const mod = await import('../services/botProtectionService.js');
-      botService = mod.botProtectionService || mod.default;
-    });
-
-    test('flags simulated headless browser environments instantly', () => {
-      // Mock navigator.webdriver
-      const originalWebdriver = globalThis.navigator.webdriver;
-      Object.defineProperty(globalThis.navigator, 'webdriver', { value: true, configurable: true });
-
-      const score = botService.calculateHumanConfidence();
-      expect(score).toBeLessThan(0.10);
-
-      // Restore
-      Object.defineProperty(globalThis.navigator, 'webdriver', { value: originalWebdriver, configurable: true });
-    });
-
-    test('detects keyboard flight-time scripting variance breaches', () => {
-      botService.keyEvents = [
-        { time: 1000, type: 'down', key: 'a' },
-        { time: 1010, type: 'down', key: 'b' },
-        { time: 1020, type: 'down', key: 'c' },
-        { time: 1030, type: 'down', key: 'd' }
-      ];
-
-      const score = botService.calculateHumanConfidence();
-      expect(score).toBeLessThan(0.30); // flagged as scripted typing
-      botService.keyEvents = [];
     });
   });
 
@@ -296,38 +260,6 @@ describe('Upgraded Production Services Integration Tests', () => {
     });
   });
 
-  describe('APISecurityGatewayService (Persistent Key Verification & Quotas)', () => {
-    test('generates raw secrets and successfully verifies hashed key', async () => {
-      const keyResult = await apiSecurityGatewayService.generateAPIKey('dev_user_123', 'My API Key', ['read:posts']);
-      expect(keyResult.keyId).toBeDefined();
-      expect(keyResult.rawKeySecret).toBeDefined();
-
-      const isValid = await apiSecurityGatewayService.validateAPIKeySecret(
-        keyResult.keyId,
-        keyResult.rawKeySecret,
-        'read:posts'
-      );
-      expect(isValid).toBe(true);
-    });
-
-    test('blocks verification when request exceeds key daily quotas', async () => {
-      const keyResult = await apiSecurityGatewayService.generateAPIKey('dev_user_456', 'Overlimit Key', ['read:posts']);
-
-      // Force limit breach
-      const localKey = apiSecurityGatewayService._localKeysStore.get(keyResult.keyId);
-      if (localKey) {
-        localKey.requestCount = apiSecurityGatewayService.quotaLimit + 1;
-      }
-
-      const isValid = await apiSecurityGatewayService.validateAPIKeySecret(
-        keyResult.keyId,
-        keyResult.rawKeySecret,
-        'read:posts'
-      );
-      expect(isValid).toBe(false);
-    });
-  });
-
   describe('ChildSafetyService (PhotoDNA & Azure AI Content Safety)', () => {
     test('blocks media signatures present in known CSAM photoDnaDirectory', async () => {
       const bannedHash = '31a788cb99120ff9c0d1e576572a11b9'; // CSAM signature
@@ -424,19 +356,18 @@ describe('Upgraded Production Services Integration Tests', () => {
     });
   });
 
-  describe('BillingService (VAT & Invoice Generation)', () => {
-    test('correctly calculates subtotal and tax amounts for line items', () => {
-      const bundle = { coins: 1000, priceUSD: 8.99 };
-      const profile = { displayName: 'John Doe', email: 'john@doe.com' };
-
-      const invoice = billingService.generateInvoice('tx_strip_123', profile, bundle, 'card', 0.20);
-
-      expect(invoice.invoiceNumber).toContain('INV-');
-      expect(invoice.pricing.totalUSD).toBe(8.99);
-      // subtotal + vat = 8.99, subtotal * 1.20 = 8.99 => subtotal = 7.49, vat = 1.50
-      expect(invoice.pricing.subtotal).toBe(7.49);
-      expect(invoice.pricing.vatAmount).toBe(1.50);
-      expect(invoice.htmlInvoiceTemplate).toContain('ARVDOUL PLATFORM');
+  describe('Coin package catalog (server-authoritative pricing)', () => {
+    test('the server prices coin packages and subscription tiers', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const { fileURLToPath } = await import('node:url');
+      const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+      const src = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
+      expect(src).toContain("require('./levelConfig.cjs').COIN_PACKAGES_BY_ID");
+      expect(src).toContain("require('./levelConfig.cjs').SUBSCRIPTION_TIERS");
+      // The removed client billingService duplicated this catalog with
+      // different prices; the client must never declare its own pricing.
+      expect(fs.existsSync(path.join(root, 'src', 'services', 'billingService.js'))).toBe(false);
     });
   });
 

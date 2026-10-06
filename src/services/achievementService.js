@@ -1,4 +1,5 @@
-// src/services/achievementService.js — ARVDOUL ACHIEVEMENTS ENGINE (Part 2)
+// src/services/achievementService.js
+//
 // Server-validated, idempotent, categorized, auditable, and persistent.
 
 import { ACHIEVEMENTS_CATALOG } from './levelSystemService.js';
@@ -54,7 +55,7 @@ class AchievementService {
       const items = snap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
-        earnedAt: d.data().earnedAt?.toDate?.() || new Date(),
+        earnedAt: d.data().earnedAt?.toDate?.() || null,
       }));
 
       this._cache.set(userId, { items, timestamp: Date.now() });

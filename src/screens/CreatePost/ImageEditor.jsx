@@ -1,13 +1,4 @@
-// src/screens/CreatePost/ImageEditor.jsx – ARVDOUL Creator Studio
-// 
-// Fully functional, production‑ready image editor.
-// • Image fits perfectly, respecting viewport & safe zones
-// • Unified document + history (undo/redo) with correct snapshots
-// • Real‑time adjustments & filters via Konva (preview) + full‑res export
-// • Text with font picker, shapes, drawing, layers, crop, export, guides
-// • Left/right floating panels, auto‑hide during drawing
-// • Dark/light theme support using ThemeContext
-// • Zero stubs, zero placeholders, every feature works
+// src/screens/CreatePost/ImageEditor.jsx
 
 import React, {
   useCallback,
@@ -40,7 +31,9 @@ import useMediaQuery from '../../hooks/useMediaQuery';
 import Konva from 'konva';
 import { useGesture } from '@use-gesture/react';
 import { v4 as uuidv4 } from 'uuid';
-import imageCompression from 'browser-image-compression';
+// NOTE: browser-image-compression is loaded on demand inside imageEffects.js
+// (compressImage). A static import here would also pull it into the initial
+// ImageEditor chunk, defeating that lazy load (audit build warning).
 import FocusTrap from 'focus-trap-react';
 import clamp from 'lodash-es/clamp';
 import { cn } from '../../lib/utils';
@@ -53,7 +46,6 @@ import DrawingTool from '../../components/Shared/DrawingTool';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
 
-// ==================== DESIGN TOKENS (ARVDOUL DNA) ====================
 const DARK = {
   bg: '#03071B',
   surface: 'rgba(255,255,255,0.06)',
@@ -104,7 +96,6 @@ const EXPORT_PRESETS = {
   FULL_HD: { width: 1920, height: 1080, label: 'Full HD' },
 };
 
-// ==================== UNIFIED REDUCER WITH CORRECT HISTORY ====================
 const HISTORY_LIMIT = 30;
 
 // Deep-clone helper for history snapshots (simplified; use structuredClone if available)
@@ -261,7 +252,6 @@ function documentReducer(state, action) {
   }
 }
 
-// ==================== IMAGE PROCESSING PIPELINE ====================
 const applyImageProcessing = (imageElement, adjustments, filter, filterIntensity, outputWidth, outputHeight) => {
   if (!imageElement) return null;
   const width = outputWidth || imageElement.width;
@@ -341,8 +331,6 @@ const applyImageProcessing = (imageElement, adjustments, filter, filterIntensity
 
   return canvas;
 };
-
-// ==================== SUB‑COMPONENTS ====================
 
 const ToolButton = memo(({ icon: Icon, label, active, onClick, disabled, tokens }) => {
   const [hover, setHover] = useState(false);
@@ -483,7 +471,6 @@ const ExportDialog = memo(({ onClose, onExport, canvasWidth, canvasHeight, token
   );
 });
 
-// ==================== MAIN EDITOR ====================
 const ImageEditor = forwardRef(({ media, onClose, onSave, additionalMedia = [] }, ref) => {
   const { isDark, toggleTheme, theme } = useTheme();
   const tokens = isDark ? DARK : LIGHT;

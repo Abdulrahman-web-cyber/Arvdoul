@@ -1,4 +1,5 @@
-// src/screens/Titles/TitlesScreen.jsx — ARVDOUL TITLES & PROVENANCE ENGINE (Part 2)
+// src/screens/Titles/TitlesScreen.jsx
+//
 // Server-validated, multidimensional criteria, Zero Pay-to-Legitimacy.
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';

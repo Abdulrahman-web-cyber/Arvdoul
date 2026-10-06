@@ -90,6 +90,23 @@ describe('Firestore nested rule coverage', () => {
     expect([...new Set(missing)].sort()).toEqual([]);
   });
 
+  // Top-level collections too: a missing match falls through to the deny-all
+  // catch-all, so a client read/write silently fails.
+  test('every client top-level collection has a matching rule', () => {
+    const referenced = new Set();
+    for (const file of walk(path.join(ROOT, 'src'))) {
+      const src = fs.readFileSync(file, 'utf8');
+      const re = /(?:collection|doc)\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'/g;
+      let m;
+      while ((m = re.exec(src))) referenced.add(m[1]);
+    }
+    const declaredTop = new Set(
+      [...rules.matchAll(/match\s+\/([A-Za-z_][\w]*)/g)].map((m) => m[1])
+    );
+    const missing = [...referenced].filter((c) => !declaredTop.has(c)).sort();
+    expect(missing).toEqual([]);
+  });
+
   test('rules are brace balanced', () => {
     const stripped = rules.replace(/\/\/[^\n]*/g, '').replace(/'[^']*'/g, '""');
     let depth = 0;

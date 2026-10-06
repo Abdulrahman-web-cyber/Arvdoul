@@ -1,18 +1,4 @@
 // src/screens/CreatePost/CreateLink.jsx
-// ARVDOUL ULTIMATE LINK CREATOR – PRODUCTION‑READY, ZERO BUGS, BILLION‑SCALE
-// ✅ Design matches CreateText, CreatePoll, CreateQuestion
-// ✅ URL trimmed and validated (http/https only)
-// ✅ Metadata scraping with request‑deduplication, persistent storage (url‑bound)
-// ✅ Prevents redundant scrapes – metadata is tied to the scraped URL
-// ✅ Live preview card with lazy‑loaded, referrer‑safe image
-// ✅ Custom title, custom description, custom thumbnail (validated)
-// ✅ Title auto‑fill only when empty; cleared on URL change when metadata invalid
-// ✅ Character limits with live counters
-// ✅ Versioned autosave, duplicate‑prevention, manual save clears pending autosave
-// ✅ Cleanup of all timers on unmount
-// ✅ Relative save timestamps, loading spinners, ARIA labels
-// ✅ Wider card (max‑w‑4xl) with reduced height (p‑4, space‑y‑3)
-// ✅ Zero stubs, zero placeholders, fully responsive
 
 import React, {
   useEffect, useCallback, useState, useRef, useMemo
@@ -20,7 +6,7 @@ import React, {
 import { useCreatePostState, useCreatePostServices } from "../CreatePost";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { callFunction, FUNCTIONS } from "../../services/callableService.js";
 import * as Icons from "lucide-react";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 
@@ -122,11 +108,9 @@ export default function CreateLink() {
     const currentId = ++requestIdRef.current;
     setScraping(true);
     try {
-      const func = httpsCallable(getFunctions(), "scrapeLink");
-      const result = await func({ url });
+      const data = (await callFunction(FUNCTIONS.SCRAPE_LINK, { url })) ?? {};
       if (currentId !== requestIdRef.current) return;
       if (urlRef.current !== url) return;
-      const data = result?.data ?? {};
       const meta = {
         url,                   // bind metadata to the scraped URL
         title: data.title || "",

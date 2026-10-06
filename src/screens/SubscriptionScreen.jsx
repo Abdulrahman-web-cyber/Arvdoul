@@ -1,7 +1,7 @@
-// src/screens/SubscriptionScreen.jsx - ARVDOUL SUBSCRIPTION TIERS
-// Per Constitution v5.0 - Premium/Creator/Enterprise tiers
+// src/screens/SubscriptionScreen.jsx
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
@@ -313,9 +313,9 @@ export default function SubscriptionScreen() {
         )}
       >
         Questions?{' '}
-        <a href="#" className="text-arvdoul-blue hover:underline">
+        <Link to="/help" className="text-arvdoul-blue hover:underline">
           Contact Support
-        </a>
+        </Link>
       </motion.p>
     </div>
   );

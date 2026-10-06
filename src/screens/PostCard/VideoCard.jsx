@@ -1,5 +1,4 @@
-// src/screens/PostCard/VideoCard.jsx – Arvdoul Ultimate Engine (999999999999/20)
-// All critical issues fixed: no polling, proper cleanup, session recovery, XP milestones, drag seek, network recovery.
+// src/screens/PostCard/VideoCard.jsx
 
 import React, {
   useState, useEffect, useRef, useCallback, useReducer, useMemo
@@ -10,10 +9,9 @@ import {
   Loader2, Share2, Info, ArrowUp, ArrowDown, Heart, FastForward
 } from 'lucide-react';
 import { FaHeart } from 'react-icons/fa6';
+import levelSystemService from '../../services/levelSystemService';
 
-// ------------------------------------------------------------------
 // 1. GLOBAL FEED SCHEDULER (event‑driven, no polling, with cleanup)
-// ------------------------------------------------------------------
 class FeedEventBus {
   constructor() {
     this.listeners = new Map();
@@ -224,9 +222,7 @@ class FeedScheduler {
 
 const feedScheduler = new FeedScheduler();
 
-// ------------------------------------------------------------------
 // 2. GLOBAL GESTURE MANAGER (respects active card, with cleanup)
-// ------------------------------------------------------------------
 class GestureOrchestrator {
   constructor() {
     if (GestureOrchestrator.instance) return GestureOrchestrator.instance;
@@ -276,9 +272,7 @@ class GestureOrchestrator {
 
 const gestureOrchestrator = new GestureOrchestrator();
 
-// ------------------------------------------------------------------
 // 3. HELPERS & CONSTANTS (moved outside component)
-// ------------------------------------------------------------------
 const formatTime = (sec) => {
   if (!sec || isNaN(sec)) return '0:00';
   const m = Math.floor(sec / 60);
@@ -326,9 +320,7 @@ const GestureHint = ({ type }) => {
   );
 };
 
-// ------------------------------------------------------------------
 // 4. MAIN COMPONENT
-// ------------------------------------------------------------------
 const VideoCard = React.memo(({
   src,
   qualities = [],
@@ -343,7 +335,7 @@ const VideoCard = React.memo(({
   nextVideoUrls = [],
   prevVideoUrl = null,
   onAnalytics,
-  onXpEarned,
+  currentUser,
   index = 0,
 }) => {
   // DOM refs
@@ -397,9 +389,7 @@ const VideoCard = React.memo(({
   const telemetryRef = useRef({ startupDelay: 0, droppedFrames: 0, bufferingEvents: 0 });
   const isPlayingLock = useRef(false);
 
-  // ------------------------------------------------------------------
   // Session recovery (after metadata loaded)
-  // ------------------------------------------------------------------
   const restoreSession = useCallback(() => {
     if (!videoRef.current) return;
     const saved = sessionStorage.getItem(sessionKey);
@@ -415,9 +405,7 @@ const VideoCard = React.memo(({
     }
   }, [sessionKey]);
 
-  // ------------------------------------------------------------------
   // Analytics batching + memory limit
-  // ------------------------------------------------------------------
   const pushAnalytics = useCallback((event, data) => {
     analyticsQueue.current.push({ event, data, timestamp: Date.now() });
     if (analyticsQueue.current.length > analyticsMaxSize) analyticsQueue.current.shift();
@@ -459,9 +447,7 @@ const VideoCard = React.memo(({
     }
   }, [postId]);
 
-  // ------------------------------------------------------------------
   // Lifecycle: subscriptions & cleanup
-  // ------------------------------------------------------------------
   useEffect(() => {
     const unsubActive = feedScheduler.subscribe('activeChanged', (id) => setIsActive(id === postId));
     const unsubMute = feedScheduler.subscribe('muteChanged', (muted) => {
@@ -483,9 +469,7 @@ const VideoCard = React.memo(({
     };
   }, [postId, visibilityHandler, onlineHandler]);
 
-  // ------------------------------------------------------------------
   // Register with scheduler
-  // ------------------------------------------------------------------
   useEffect(() => {
     if (!postId || !videoRef.current || !containerRef.current) return;
     const urls = [...nextVideoUrls];
@@ -496,9 +480,7 @@ const VideoCard = React.memo(({
     return () => feedScheduler.unregister(postId);
   }, [postId, nextVideoUrls, prevVideoUrl]);
 
-  // ------------------------------------------------------------------
   // Gesture registration
-  // ------------------------------------------------------------------
   const gestureCallbacks = useMemo(() => ({
     onTouchStart: (e) => {
       const touch = e.touches[0];
@@ -559,9 +541,7 @@ const VideoCard = React.memo(({
     return () => gestureOrchestrator.unregister(postId);
   }, [postId, gestureCallbacks]);
 
-  // ------------------------------------------------------------------
   // Video event handlers (no duplicate play, proper state)
-  // ------------------------------------------------------------------
   const handlePlay = useCallback(() => {
     if (isPlayingLock.current) return;
     isPlayingLock.current = true;
@@ -584,26 +564,29 @@ const VideoCard = React.memo(({
     }
     const dur = videoRef.current.duration;
     if (dur && isFinite(dur)) setDuration(dur);
-    // milestones (XP only once per milestone)
+    // watch milestones — fire once per milestone per session
     const progress = (videoRef.current.currentTime / dur) * 100;
     if (progress >= 25 && lastWatchMilestone.current < 25) {
       lastWatchMilestone.current = 25;
-      onXpEarned?.({ postId, reason: 'watch_25', xp: 2 });
       pushAnalytics('micro_reaction', { postId, type: 'quarter' });
     } else if (progress >= 50 && lastWatchMilestone.current < 50) {
       lastWatchMilestone.current = 50;
-      onXpEarned?.({ postId, reason: 'watch_50', xp: 3 });
       pushAnalytics('micro_reaction', { postId, type: 'half' });
     } else if (progress >= 75 && lastWatchMilestone.current < 75) {
       lastWatchMilestone.current = 75;
-      onXpEarned?.({ postId, reason: 'watch_75', xp: 5 });
       pushAnalytics('micro_reaction', { postId, type: 'three_quarters' });
     } else if (progress >= 100 && lastWatchMilestone.current < 100) {
       lastWatchMilestone.current = 100;
-      onXpEarned?.({ postId, reason: 'watch_100', xp: 10 });
       pushAnalytics('micro_reaction', { postId, type: 'complete' });
+      // XP is server-authoritative. The postId is the idempotency source, so a
+      // rewatch cannot farm XP and the award amount comes from the shared
+      // XP_RULES table on the server, never from this component.
+      if (currentUser?.uid && postId) {
+        levelSystemService.awardExperience({ userId: currentUser.uid, action: 'video_watched', source: postId })
+          .catch((err) => console.warn('[VideoCard] XP award deferred:', err?.message));
+      }
     }
-  }, [postId, pushAnalytics, onXpEarned]);
+  }, [postId, pushAnalytics, currentUser]);
   const lastTimeUpdate = useRef(0);
 
   const handleWaiting = () => {
@@ -634,9 +617,7 @@ const VideoCard = React.memo(({
     restoreSession();
   };
 
-  // ------------------------------------------------------------------
   // Quality switching with validation
-  // ------------------------------------------------------------------
   const handleQualityChange = useCallback((label, qualitySrc) => {
     if (!videoRef.current || !qualitySrc) return;
     if (qualitySwitchTimeoutId.current) return;
@@ -657,9 +638,7 @@ const VideoCard = React.memo(({
     qualitySwitchTimeoutId.current = setTimeout(() => { qualitySwitchTimeoutId.current = null; }, 15000);
   }, [videoState, postId, pushAnalytics]);
 
-  // ------------------------------------------------------------------
   // Play/pause (single call, no duplicate)
-  // ------------------------------------------------------------------
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;
     if (videoRef.current.paused) {
@@ -672,9 +651,7 @@ const VideoCard = React.memo(({
     haptic(5);
   }, [postId]);
 
-  // ------------------------------------------------------------------
   // Mute
-  // ------------------------------------------------------------------
   const toggleMute = useCallback(() => {
     const newMuted = !videoRef.current.muted;
     videoRef.current.muted = newMuted;
@@ -684,9 +661,7 @@ const VideoCard = React.memo(({
     haptic(5);
   }, [postId, pushAnalytics]);
 
-  // ------------------------------------------------------------------
   // Seek (click + drag)
-  // ------------------------------------------------------------------
   const handleSeekStart = useCallback((e) => {
     setIsDraggingSeek(true);
     const rect = e.currentTarget.getBoundingClientRect();
@@ -721,9 +696,7 @@ const VideoCard = React.memo(({
     pushAnalytics('video_seek_end', { postId });
   }, [postId, pushAnalytics]);
 
-  // ------------------------------------------------------------------
   // Fullscreen (with catch)
-  // ------------------------------------------------------------------
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
@@ -739,9 +712,7 @@ const VideoCard = React.memo(({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // ------------------------------------------------------------------
   // Speed
-  // ------------------------------------------------------------------
   const cycleSpeed = useCallback(() => {
     const nextIndex = (SPEEDS.indexOf(playbackSpeed) + 1) % SPEEDS.length;
     const newSpeed = SPEEDS[nextIndex];
@@ -751,9 +722,7 @@ const VideoCard = React.memo(({
     haptic(5);
   }, [playbackSpeed, postId, pushAnalytics]);
 
-  // ------------------------------------------------------------------
   // Double‑tap like (custom detection)
-  // ------------------------------------------------------------------
   const lastTap = useRef(0);
   const handleContainerClick = useCallback((e) => {
     const now = Date.now();
@@ -771,18 +740,14 @@ const VideoCard = React.memo(({
     revealControls();
   }, [onDoubleTap, pushAnalytics, postId]);
 
-  // ------------------------------------------------------------------
   // Controls visibility
-  // ------------------------------------------------------------------
   const revealControls = useCallback(() => {
     setShowControls(true);
     clearTimeout(controlsTimer.current);
     controlsTimer.current = setTimeout(() => setShowControls(false), 2000);
   }, []);
 
-  // ------------------------------------------------------------------
   // Render
-  // ------------------------------------------------------------------
   const progress = isDraggingSeek ? dragProgress * 100 : (duration ? (currentTime / duration) * 100 : 0);
   const currentQualityObj = qualities?.find(q => q.label === selectedQuality);
   const currentSrc = currentQualityObj?.src || src;

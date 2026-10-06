@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileQRCodeModal.jsx - ARVDOUL Profile QR Code Modal
- * 
  * Generates an actual, scannable unique high-resolution QR code for the user's
  * Arvdoul profile using `qrcode`. Supports instant PNG download, copy link,
  * and native device sharing.
@@ -273,5 +271,4 @@ const ProfileQRCodeModal = memo(({
 ProfileQRCodeModal.displayName = 'ProfileQRCodeModal';
 
 export default ProfileQRCodeModal;
-
 

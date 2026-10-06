@@ -1,5 +1,7 @@
-// src/screens/Collaboration/ProjectDashboardScreen.jsx - ARVDOUL PROJECT DASHBOARD
+// src/screens/Collaboration/ProjectDashboardScreen.jsx
+//
 // Per Constitution v5.0 - Grid of collaboration projects
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -24,6 +26,7 @@ export default function ProjectDashboardScreen() {
   const isDark = theme === 'dark';
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -113,12 +116,39 @@ export default function ProjectDashboardScreen() {
               className="flex-1 bg-transparent text-white placeholder:text-arvdoul-text-secondary outline-none"
             />
           </div>
-          <button className={cn(
-            "p-3 rounded-arvdoul-md",
-            "bg-arvdoul-surface border border-arvdoul-border"
-          )}>
-            <Filter className="w-5 h-5" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowFilterMenu(v => !v)}
+              aria-label="Filter projects by status"
+              aria-expanded={showFilterMenu}
+              className={cn(
+                "p-3 rounded-arvdoul-md",
+                "bg-arvdoul-surface border border-arvdoul-border",
+                statusFilter !== 'all' && "ring-1 ring-arvdoul-purple"
+              )}
+            >
+              <Filter className="w-5 h-5" />
+            </button>
+            {showFilterMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowFilterMenu(false)} />
+                <div className="absolute right-0 mt-2 z-50 w-44 rounded-arvdoul-md bg-arvdoul-surface border border-arvdoul-border shadow-xl overflow-hidden">
+                  {[{ id: 'all', label: 'All statuses' }, ...Object.entries(STATUS_COLORS).map(([id, cfg]) => ({ id, label: cfg.label }))].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => { setStatusFilter(opt.id); setShowFilterMenu(false); }}
+                      className={cn(
+                        "w-full text-left px-4 py-2.5 text-sm transition-colors",
+                        statusFilter === opt.id ? "text-arvdoul-purple font-semibold" : "text-arvdoul-text-secondary hover:text-white"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </motion.div>
 

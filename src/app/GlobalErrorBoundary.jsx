@@ -1,5 +1,4 @@
-// 🛡️ ARVDOUL GLOBAL ERROR BOUNDARY v3
-// Theme-aware + Neon system + production-grade crash UI
+// src/app/GlobalErrorBoundary.jsx
 
 import React, { Component, createRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
@@ -58,6 +57,19 @@ class GlobalErrorBoundaryBase extends Component {
     } catch {}
 
     console.error("💥 ARVDOUL CRASH:", error, errorInfo);
+
+    // React render errors do not reach the window 'error' listener, so forward
+    // them to the crash reporter explicitly. It is dynamically imported to keep
+    // the service out of the initial chunk; captureException is a safe no-op if
+    // the import fails.
+    try {
+      import('../services/crashReportingService.js').then(({ crashReportingService }) => {
+        crashReportingService.captureException(error, {
+          source: 'GlobalErrorBoundary',
+          componentStack: errorInfo?.componentStack,
+        });
+      }).catch(() => {});
+    } catch {}
   }
 
   // A failed dynamic import() — "Failed to fetch dynamically imported module",
@@ -160,7 +172,7 @@ class GlobalErrorBoundaryBase extends Component {
     setTimeout(() => this.setState({ copied: false }), 1500);
   };
 
-  // 🎨 REAL NEON SYSTEM (theme-aware)
+  // NEON SYSTEM (theme-aware)
   getGlow(type) {
     const theme = this.props.theme?.resolvedTheme;
 

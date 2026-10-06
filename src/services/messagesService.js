@@ -1,21 +1,9 @@
-// src/services/messagesService.js – ARVDOUL MESSAGING v41 (BILLION‑SCALE FINAL)
-// 💬 WORLD-CLASS • E2EE (X25519 + AES‑GCM) • FULLY IMPLEMENTED
-// 📢 CHANNELS, EPHEMERAL TIMERS, POLLS, FULL GROUP CONTROLS
-// 🎞️ CROSS-SHARD MEDIA GALLERY • EDIT HISTORY • READ RECEIPT TOGGLES
-// 📞 1:1 & GROUP CALLING (WebRTC signaling via Firestore)
-// 🧠 FULL OFFLINE QUEUE • INBOX FAN-OUT READY • PUSH TOKEN REGISTRATION
-// ✅ EVERY FUNCTION IS COMPLETE – NO /* ... */ PLACEHOLDERS
-// 🛡️ FIREBASE SECURITY RULES TEMPLATE INCLUDED
-// ✅ Fixed: searchMessagesAlgolia now calls deployed Cloud Function
-// ✅ Fixed: ephemeral message timer implemented (client-side auto-delete)
-// ✅ Fixed: conversation list ads now fetch from monetization service
+// src/services/messagesService.js
 
-// ===================== SERVER‑SIDE REQUIRED (deploy separately) =====================
 // 1. Firestore Security Rules (template at end of file).
 // 2. Cloud Functions in messaging.js (searchMessages, scheduledMessageDispatcher, etc.)
 // 3. STUN/TURN servers for WebRTC (configured via your signaling service).
 // 4. Firestore TTL policies on `message_dedupe`, `rate_limits`, `calls/*/signals`.
-// =================================================================================
 
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
@@ -34,9 +22,6 @@ import { getAuth } from 'firebase/auth';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase';
 import { openDB } from 'idb';
 
-// ----------------------------------------------------------------------
-//  ULTIMATE CONFIGURATION
-// ----------------------------------------------------------------------
 const MESSAGING_CONFIG = {
   FREE: {
     IMAGE_MAX_SIZE: 5 * 1024 * 1024,
@@ -63,8 +48,6 @@ const MESSAGING_CONFIG = {
   MONETIZATION: {
     ADS_ENABLED: true,
     CONVERSATION_LIST_AD_INTERVAL: 5,
-    AD_REWARD_COINS: 2,
-    AD_TYPES: ['native', 'banner', 'sponsored_conversation'],
   },
   PRIVACY: {
     MESSAGE_PERMISSIONS: {
@@ -178,9 +161,7 @@ const MESSAGING_CONFIG = {
   ],
 };
 
-// ----------------------------------------------------------------------
 //  CRYPTO HELPERS (FULL IMPLEMENTATION)
-// ----------------------------------------------------------------------
 async function generateKeyPair() {
   const keyPair = await crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256' },
@@ -245,9 +226,7 @@ async function decryptWithSharedSecret(sharedSecret, encryptedObj) {
   return new TextDecoder().decode(decrypted);
 }
 
-// ----------------------------------------------------------------------
 //  ERROR ENHANCER
-// ----------------------------------------------------------------------
 function enhanceError(error, defaultMessage) {
   const code = error?.code || 'unknown';
   const message = {
@@ -277,9 +256,7 @@ function enhanceError(error, defaultMessage) {
   return err;
 }
 
-// ----------------------------------------------------------------------
 //  LRU CACHE, TTLMap, SHA256, OfflineMessageQueue
-// ----------------------------------------------------------------------
 class LRUCache {
   constructor(maxSize = 100, ttl = 5 * 60 * 1000) {
     this.maxSize = maxSize;
@@ -511,9 +488,7 @@ class SecureSessionKeyMap {
   }
 }
 
-// ----------------------------------------------------------------------
 //  MAIN SERVICE CLASS
-// ----------------------------------------------------------------------
 class UltimateMessagingService {
   constructor() {
     this.firestore = null;
@@ -563,7 +538,6 @@ class UltimateMessagingService {
       this.typingTimers.forEach(timer => clearTimeout(timer));
       this.typingTimers.clear();
     });
-//     logger.warn('[Messaging] Supreme V41 (Complete) instantiated');
   }
 
   async ensureInitialized() {
@@ -572,7 +546,6 @@ class UltimateMessagingService {
 
     this.initPromise = (async () => {
       try {
-//         logger.warn('[Messaging] Initializing...');
 
         this.firestore = await getFirestoreInstance();
         this.storage = getStorage();
@@ -583,7 +556,6 @@ class UltimateMessagingService {
         try {
           await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
         } catch (err) {
-//           if (err.code !== 'failed-precondition') logger.warn('[Messaging] Persistence:', err.message);
         }
 
         this.fs = {
@@ -600,7 +572,6 @@ class UltimateMessagingService {
         await this.offlineQueue.sync();
 
         this.initialized = true;
-//         logger.warn('[Messaging] ✅ Initialized');
       } catch (err) {
         logger.error('[Messaging] ❌ Init failed', err);
         this.initPromise = null;
@@ -643,7 +614,6 @@ class UltimateMessagingService {
     return this._notificationsServicePromise;
   }
 
-  // ========== E2EE KEY MANAGEMENT ==========
   async generateUserKeys(userId, password) {
     await this.ensureInitialized();
     if (!password) throw new Error('Password required to protect private key');
@@ -676,7 +646,6 @@ class UltimateMessagingService {
     await this.fs.setDoc(userSettingsRef, { publicKey }, { merge: true });
 
     this.unlockedPrivateKeys.set(userId, privateKey);
-//     logger.warn('[E2EE] Keys generated and stored securely');
     return { success: true };
   }
 
@@ -733,7 +702,6 @@ class UltimateMessagingService {
     return hash; // Display as numeric blocks for verification
   }
 
-  // ========== PRESENCE & TYPING ==========
   async setUserOnline(userId, isOnline = true) {
     await this.ensureInitialized();
     const presenceRef = this.rt.ref(this.rtdb, `${MESSAGING_CONFIG.RTDB_PATHS.PRESENCE}/${userId}`);
@@ -804,7 +772,6 @@ class UltimateMessagingService {
     return () => this.rtdbListeners.get(`typing_${conversationId}`)?.();
   }
 
-  // ========== PRIVACY & BLOCKING ==========
   async getUserPrivacySettings(userId) {
     const cacheKey = `privacy_${userId}`;
     const cached = this.profileCache.get(cacheKey);
@@ -894,7 +861,6 @@ class UltimateMessagingService {
     return snap.docs.map(d => d.data().blockedId);
   }
 
-  // ========== FRIEND REQUESTS & REPORTING ==========
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }
   async acceptFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.acceptFriendRequest(uid, reqId); }
   async rejectFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.rejectFriendRequest(uid, reqId); }
@@ -908,7 +874,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== CONVERSATION MANAGEMENT ==========
   async createConversation(participants, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -1072,7 +1037,6 @@ class UltimateMessagingService {
     return result;
   }
 
-  // ========== SEND MESSAGE (channel restrictions, ephemeral, E2EE, auto‑delete) ==========
   async sendMessage(conversationId, messageData, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -1145,7 +1109,6 @@ class UltimateMessagingService {
 
     const ttlExpiresAt = new Date(Date.now() + MESSAGING_CONFIG.MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-    // ---- TRUE E2EE ----
     let encryptedPayload = null;
     if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
       const plaintext = validated.content;
@@ -1240,7 +1203,6 @@ class UltimateMessagingService {
     // Ephemeral auto‑delete timer
     if (conv.conversation.ephemeral && conv.conversation.disappearAfter) {
       setTimeout(() => {
-//         this.deleteMessage(idempotencyKey, conversationId, currentUser.uid, true).catch(console.warn);
       }, conv.conversation.disappearAfter * 1000);
     }
 
@@ -1250,7 +1212,6 @@ class UltimateMessagingService {
     recipients.forEach(async uid => {
       if (!conv.conversation.mutedBy?.includes(uid) && await this._shouldSendPushNotification(uid)) {
         if (mentionedIds.length === 0 || mentionedIds.includes(uid)) {
-//           this._sendPushNotification(idempotencyKey, conversationId, uid, message).catch(console.warn);
         }
       }
     });
@@ -1272,7 +1233,6 @@ class UltimateMessagingService {
     } catch { /* best-effort */ }
   }
 
-  // ========== MENTIONS & THREAD DEPTH ==========
   async _resolveMentions(text, participantIds) {
     const mentions = [];
     const regex = /@(\w+)/g;
@@ -1311,7 +1271,6 @@ class UltimateMessagingService {
     }
   }
 
-  // ========== SCHEDULED MESSAGE ==========
   async _scheduleMessage(conversationId, messageData, options) {
     const currentUser = this.auth.currentUser;
     const scheduleId = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1337,7 +1296,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== GET MESSAGES ==========
   async getMessages(conversationId, options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -1436,7 +1394,6 @@ class UltimateMessagingService {
     return result;
   }
 
-  // ========== MARK AS READ (respects disableReadReceipts) ==========
   async markConversationAsRead(conversationId, userId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -1480,7 +1437,6 @@ class UltimateMessagingService {
     }
   }
 
-  // ========== REAL‑TIME SUBSCRIPTIONS ==========
   subscribeToConversation(conversationId, userId, callback, options = {}) {
     let unsubscribeMessages, unsubscribeConversation, unsubscribeTyping, unsubscribePresence;
 
@@ -1554,7 +1510,6 @@ class UltimateMessagingService {
     };
   }
 
-  // ========== MESSAGE ACTIONS ==========
   async reactToMessage(conversationId, messageId, userId, reaction) {
     if (!MESSAGING_CONFIG.REACTION_TYPES.includes(reaction)) throw new Error('Invalid reaction');
     await this.ensureInitialized();
@@ -1730,7 +1685,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== POLLS ==========
   async createPoll(conversationId, question, options, userId, anonymousVotes = true) {
     const messageData = {
       type: MESSAGING_CONFIG.MESSAGE_TYPES.POLL,
@@ -1808,7 +1762,6 @@ class UltimateMessagingService {
     };
   }
 
-  // ========== CONVERSATION CONTROLS ==========
   async muteConversation(conversationId, userId) {
     await this.ensureInitialized();
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
@@ -1829,6 +1782,22 @@ class UltimateMessagingService {
     await this.ensureInitialized();
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
     await this.fs.updateDoc(convRef, { archivedBy: arrayUnion(userId), updatedAt: this.fs.serverTimestamp() });
+    this.conversationsCache.delete(conversationId);
+    return { success: true };
+  }
+
+  async pinConversation(conversationId, userId) {
+    await this.ensureInitialized();
+    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
+    await this.fs.updateDoc(convRef, { pinnedBy: arrayUnion(userId), updatedAt: this.fs.serverTimestamp() });
+    this.conversationsCache.delete(conversationId);
+    return { success: true };
+  }
+
+  async unpinConversation(conversationId, userId) {
+    await this.ensureInitialized();
+    const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
+    await this.fs.updateDoc(convRef, { pinnedBy: arrayRemove(userId), updatedAt: this.fs.serverTimestamp() });
     this.conversationsCache.delete(conversationId);
     return { success: true };
   }
@@ -1896,7 +1865,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== GROUP MANAGEMENT ==========
   async addParticipants(conversationId, userIds, adminId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -2084,7 +2052,6 @@ class UltimateMessagingService {
       'groupSettings.joinRequests': arrayUnion(userId),
       updatedAt: this.fs.serverTimestamp(),
     });
-//     this._notifyAdmins(conversationId, 'join_request', { userId }).catch(console.warn);
     return { success: true, message: 'Join request sent' };
   }
 
@@ -2212,7 +2179,6 @@ class UltimateMessagingService {
     return { success: true, conversationId: inviteData.conversationId };
   }
 
-  // ========== PIN MESSAGES ==========
   async pinMessage(conversationId, messageId, userId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -2245,7 +2211,6 @@ class UltimateMessagingService {
     return { success: true, pinnedMessageIds: conv.conversation.pinnedMessages || [] };
   }
 
-  // ========== MESSAGE STATUS ==========
   async markMessageAsRead(messageId, conversationId, userId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -2266,7 +2231,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== GROUP STATISTICS ==========
   async getGroupStats(conversationId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -2299,7 +2263,6 @@ class UltimateMessagingService {
     };
   }
 
-  // ========== SEARCH & QR ==========
   async searchMessagesAlgolia(conversationId, query, options = {}) {
     if (!MESSAGING_CONFIG.SEARCH_INDEXING.ENABLED) throw new Error('Search indexing not enabled');
     const searchMessages = this.fn.httpsCallable(this.functions, 'searchMessages');
@@ -2318,7 +2281,6 @@ class UltimateMessagingService {
     return { success: true, inviteUrl, conversationId: invite.conversationId || null, code: inviteId };
   }
 
-  // ========== DRAFTS ==========
   async saveDraft(conversationId, userId, content) {
     const db = await openDB('drafts', 1, { upgrade(db) { db.createObjectStore('drafts'); } });
     await db.put('drafts', { content, updatedAt: Date.now() }, conversationId);
@@ -2334,7 +2296,6 @@ class UltimateMessagingService {
     await db.delete('drafts', conversationId);
   }
 
-  // ========== STICKER / GIF SEARCH ==========
   async searchStickers(query) {
     if (MESSAGING_CONFIG.GIPHY_API_KEY) {
       const resp = await fetch(`https://api.giphy.com/v1/stickers/search?api_key=${MESSAGING_CONFIG.GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=20`);
@@ -2367,7 +2328,6 @@ class UltimateMessagingService {
     return [];
   }
 
-  // ========== MEDIA GALLERY ==========
   async getConversationMedia(conversationId, options = {}) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -2398,7 +2358,6 @@ class UltimateMessagingService {
     return { success: true, media };
   }
 
-  // ========== MESSAGE EDIT HISTORY ==========
   async getMessageHistory(conversationId, messageId) {
     await this.ensureInitialized();
     const conv = await this.getConversation(conversationId);
@@ -2410,7 +2369,6 @@ class UltimateMessagingService {
     return { success: true, history: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
   }
 
-  // ========== MESSAGE REQUESTS (spec §35) ==========
   // When a privacy rule blocks a direct message, the sender can request a
   // conversation instead. The request id is deterministic
   // (`${recipientId}_${senderId}`) so retries/offline never duplicate it.
@@ -2484,7 +2442,6 @@ class UltimateMessagingService {
     return { success: true, accepted: false };
   }
 
-  // ========== SAVED MESSAGES (spec §33) ==========
   // References to original messages — never duplicated content. If the
   // original message is deleted, the saved reference stays but the snapshot
   // shows 'Message no longer available' (the reference itself is inert).
@@ -2542,7 +2499,6 @@ class UltimateMessagingService {
     return { success: true, messages: items };
   }
 
-  // ========== PUSH TOKEN REGISTRATION ==========
   async registerPushToken(userId, token) {
     await this.ensureInitialized();
     const settingsRef = this.fs.doc(this.firestore, 'user_settings', userId);
@@ -2550,7 +2506,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== CALLING (WebRTC signaling via Firestore) ==========
   async startCall(conversationId, callType = 'audio') {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -2597,7 +2552,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  // ========== PRIVATE HELPERS ==========
   async _findExistingConversation(participants) {
     const [uid1, uid2] = participants.sort();
     const id = `direct_${uid1}_${uid2}`;
@@ -2628,7 +2582,6 @@ class UltimateMessagingService {
 
   async _getMessage(conversationId, messageId, timestamp = new Date()) {
     if (!conversationId) {
-//       logger.warn('_getMessage called without conversationId');
       return null;
     }
     const conv = await this.getConversation(conversationId);
@@ -3042,7 +2995,6 @@ class UltimateMessagingService {
         return { sent: true, result: result.data };
       } catch (err) {
         if (i === maxRetries - 1) {
-//           logger.warn(`Push notification failed after ${maxRetries} attempts. Is the Cloud Function deployed?`);
           return { sent: false, error: err };
         }
         const delay = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.INITIAL_DELAY_MS *
@@ -3105,7 +3057,6 @@ class UltimateMessagingService {
     });
   }
 
-  // ========== ADS INJECTION ==========
   async _injectConversationListAds(conversations, userId, options) {
     if (!conversations.length) return conversations;
     const { getMonetizationService } = await import('./monetizationService.js');
@@ -3113,13 +3064,13 @@ class UltimateMessagingService {
     const interval = MESSAGING_CONFIG.MONETIZATION.CONVERSATION_LIST_AD_INTERVAL;
 
     const result = [];
-    let convIndex = 0, adIndex = 0;
+    let convIndex = 0;
     for (let i = 0; i < conversations.length; i++) {
       result.push(conversations[i]);
       convIndex++;
       if (convIndex % interval === 0) {
-        const ad = await this._fetchConversationListAd(monetization, userId, adIndex);
-        if (ad) { result.push(ad); adIndex++; }
+        const ad = await this._fetchConversationListAd(monetization, userId, result.length);
+        if (ad) result.push(ad);
       }
     }
     return result;
@@ -3129,38 +3080,36 @@ class UltimateMessagingService {
     try {
       const ad = await monetization.getAd('conversation_list', userId, { position });
       if (!ad) return null;
+      const adName = ad.advertiserName || ad.advertiser || ad.advertiserId || ad.title || 'Sponsored';
       return {
-        id: `ad_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: `ad_${ad.id}`,
         type: 'ad',
         adType: ad.type || 'sponsored',
-        name: ad.title || 'Sponsored',
-        photoURL: ad.imageUrl || ad.image || '/assets/sponsored-default.png',
+        name: ad.title || adName,
+        photoURL: ad.media?.url || ad.imageUrl || ad.image || ad.mediaUrl || '/assets/sponsored-default.png',
         lastMessage: {
-          text: ad.description || ad.content || 'Earn coins – tap to learn more',
+          text: ad.description || ad.content || ad.title || '',
           senderId: 'system',
           timestamp: new Date().toISOString(),
         },
         unreadCounts: { [userId]: 0 },
         participantDetails: [{
-          displayName: ad.advertiser || 'Sponsor',
-          photoURL: ad.imageUrl || null,
+          displayName: adName,
+          photoURL: ad.imageUrl || ad.mediaUrl || ad.media?.url || null,
         }],
         isAd: true,
         _adData: {
           adId: ad.id,
           placement: 'conversation_list',
-          impressionId: `imp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         },
         createdAt: new Date().toISOString(),
         lastActivity: new Date().toISOString(),
       };
     } catch (err) {
-//       logger.warn('[Messaging] Failed to fetch conversation list ad:', err);
       return null;
     }
   }
 
-  // ========== STATS & DESTROY ==========
   getStats() {
     return {
       cache: {
@@ -3186,7 +3135,6 @@ class UltimateMessagingService {
     this.notificationSettingsCache.clear();
     this.dedupeMemoryCache.clear();
     this.messageKeysByConversation.clear();
-//     logger.warn('[Messaging] Cache cleared');
   }
 
   destroy() {
@@ -3196,13 +3144,10 @@ class UltimateMessagingService {
     this.clearCache();
     this.initialized = false;
     this.initPromise = null;
-//     logger.warn('[Messaging] Destroyed');
   }
 }
 
-// ----------------------------------------------------------------------
 //  FIRESTORE SECURITY RULES TEMPLATE (deploy these in Firebase Console)
-// ----------------------------------------------------------------------
 /*
 rules_version = '2';
 service cloud.firestore {
@@ -3255,9 +3200,7 @@ service cloud.firestore {
 }
 */
 
-// ----------------------------------------------------------------------
 //  SINGLETON EXPORT
-// ----------------------------------------------------------------------
 let instance = null;
 function getMessagingService() {
   if (!instance) instance = new UltimateMessagingService();
@@ -3308,6 +3251,8 @@ const messagingService = {
   unmuteConversation: (cid, uid) => getMessagingService().unmuteConversation(cid, uid),
   archiveConversation: (cid, uid) => getMessagingService().archiveConversation(cid, uid),
   unarchiveConversation: (cid, uid) => getMessagingService().unarchiveConversation(cid, uid),
+  pinConversation: (cid, uid) => getMessagingService().pinConversation(cid, uid),
+  unpinConversation: (cid, uid) => getMessagingService().unpinConversation(cid, uid),
   hideConversation: (cid, uid) => getMessagingService().hideConversation(cid, uid),
   unhideConversation: (cid, uid) => getMessagingService().unhideConversation(cid, uid),
   leaveGroup: (cid, uid) => getMessagingService().leaveGroup(cid, uid),

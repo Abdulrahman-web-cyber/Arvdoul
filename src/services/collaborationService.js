@@ -1,8 +1,4 @@
-// src/services/collaborationService.js – ARVDOUL COLLABORATION SERVICE V1
-// 🤝 Content Collaboration with Roles, Permissions, Review Workflow
-// ✅ Invite System • Role Management • Permission Evaluation • Review Workflow
-// ✅ Added: Last-Write-Wins (LWW) conflict resolution and version logs (v8.0)
-// ✅ Added: Content locks prevention
+// src/services/collaborationService.js
 
 import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
@@ -23,7 +19,6 @@ import {
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
-// ==================== CONFIGURATION ====================
 export const COLLABORATION_CONFIG = {
   ROLES: {
     OWNER: {
@@ -92,7 +87,6 @@ export const COLLABORATION_CONFIG = {
   },
 };
 
-// ==================== CUSTOM ERROR ====================
 export class CollaborationError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -103,7 +97,6 @@ export class CollaborationError extends Error {
   }
 }
 
-// ==================== COLLABORATION SERVICE ====================
 class CollaborationService {
   constructor() {
     this.firestore = null;
@@ -134,7 +127,6 @@ class CollaborationService {
     if (!this.initialized) await this.initialize();
   }
 
-  // ==================== CONTENT LOCKS ====================
   /**
    * Tries to acquire a secure lock on a content file.
    */
@@ -156,7 +148,6 @@ class CollaborationService {
     return { success: true };
   }
 
-  // ==================== PERMISSION CHECKS ====================
   hasPermission(userRole, permission) {
     const role = COLLABORATION_CONFIG.ROLES[userRole?.toUpperCase() || 'VIEWER'];
     if (!role) return false;
@@ -181,7 +172,6 @@ class CollaborationService {
     return this.hasPermission(userRole, 'content.review');
   }
 
-  // ==================== PROJECT MANAGEMENT ====================
   async createProject(projectData) {
     await this.ensureInitialized();
 
@@ -266,7 +256,6 @@ class CollaborationService {
     return true;
   }
 
-  // ==================== TEAM MANAGEMENT ====================
   async addTeamMember(projectId, userId, role, inviterId = null) {
     await this.ensureInitialized();
 
@@ -368,7 +357,6 @@ class CollaborationService {
     return true;
   }
 
-  // ==================== INVITE MANAGEMENT ====================
   async createInvite(projectId, email, role, inviterId) {
     await this.ensureInitialized();
 
@@ -455,7 +443,6 @@ class CollaborationService {
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
 
-  // ==================== CONTENT VERSION MANAGEMENT ====================
   async createContentVersion(projectId, contentData, userId, userRole) {
     await this.ensureInitialized();
 
@@ -570,7 +557,6 @@ class CollaborationService {
     return { id: versionId, state: COLLABORATION_CONFIG.REVIEW_STATES.PUBLISHED };
   }
 
-  // ==================== SERVICE MANAGEMENT ====================
   /**
    * Real dashboard stats: loads the user's collaboration projects from
    * Firestore. Never returns fabricated sample projects — an empty array is
@@ -633,7 +619,6 @@ class CollaborationService {
   }
 }
 
-// ==================== SINGLETON EXPORT ====================
 let instance = null;
 export function getCollaborationService() {
   if (!instance) instance = new CollaborationService();
@@ -670,7 +655,7 @@ const collaborationService = {
   publishContent: (pid, vid, pid2, pr) => getCollaborationService().publishContent(pid, vid, pid2, pr),
   acquireLock: (cid, uid, ttl) => getCollaborationService().acquireLock(cid, uid, ttl),
   releaseLock: (cid, uid) => getCollaborationService().releaseLock(cid, uid),
-  getStats: () => getCollaborationService().getStats(),
+  getStats: (uid) => getCollaborationService().getStats(uid),
   destroy: () => getCollaborationService().destroy(),
   getService: getCollaborationService,
 };

@@ -1,6 +1,4 @@
 /**
- * src/services/RedisCacheManager.js - ARVDOUL DISTRIBUTED CACHING ENGINE
- *
  * Implements a high-throughput multi-tier caching architecture combining:
  * 1. L1 Micro-Cache: In-memory LRU with sub-millisecond lookups
  * 2. L2 Distributed Cache: Cloud Memorystore / Upstash Redis HTTP API with auto-fallback

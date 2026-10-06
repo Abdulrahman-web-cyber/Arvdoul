@@ -1,43 +1,43 @@
 // src/screens/AudioEditor/components/EqualizerModule.jsx
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Power, RotateCcw, RotateCw, Sliders, ChevronDown } from 'lucide-react';
-import { cn } from '../../../lib/utils';
+//
+// Parametric EQ. Bands are controlled state, presets come from the shared
+// preset table, and the curve is computed from the same band values that are
+// applied to the live BiquadFilterNodes in the audio engine. The loudness meter
+// reads the engine's measured output — it is never animated with random values.
 
-export default function EqualizerModule({ isDark = true, isPlaying = false }) {
-  const [eqEnabled, setEqEnabled] = useState(true);
-  const [selectedPreset, setSelectedPreset] = useState('Vocal Clarity');
-  const [bands, setBands] = useState([
-    { id: 1, type: 'HPF', freq: 80, gain: 0, q: 0.7, color: '#8B1EF3' },
-    { id: 2, type: 'Bell', freq: 250, gain: -2.1, q: 1.2, color: '#00C4FF' },
-    { id: 3, type: 'Bell', freq: 1200, gain: 3.4, q: 1.0, color: '#10B981' },
-    { id: 4, type: 'Bell', freq: 4500, gain: -1.6, q: 1.4, color: '#F59E0B' },
-    { id: 5, type: 'LPF', freq: 16000, gain: 0, q: 0.7, color: '#EF4444' },
-  ]);
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Power, ChevronDown } from 'lucide-react';
+import { cn } from '../../../lib/utils';
+import { audioStudioEngine } from '../audioEngine';
+import { EQ_PRESET_NAMES, getPresetBands, EQ_RANGES } from '../audioPresets';
+
+const { minFreq, maxFreq, minGain, maxGain } = EQ_RANGES;
+
+export default function EqualizerModule({
+  isDark = true,
+  isPlaying = false,
+  bands,
+  setBands,
+  eqEnabled,
+  setEqEnabled,
+}) {
+  const [presetName, setPresetName] = useState('Flat');
+  const [showPresets, setShowPresets] = useState(false);
   const [activeBandIndex, setActiveBandIndex] = useState(2);
-  const [activeTab, setActiveTab] = useState('EQ');
+  const [meter, setMeter] = useState({ peakDb: -Infinity, momentaryLufs: null });
 
   const canvasRef = useRef(null);
   const isDraggingRef = useRef(false);
   const dragBandIndexRef = useRef(null);
 
-  // Meter levels
-  const [leftLUFS, setLeftLUFS] = useState(-14.2);
-  const [rightLUFS, setRightLUFS] = useState(-13.8);
-
   useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setLeftLUFS(-14.2 + (Math.random() * 4 - 2));
-      setRightLUFS(-13.8 + (Math.random() * 4 - 2));
-    }, 150);
+    if (!isPlaying) {
+      setMeter({ peakDb: -Infinity, momentaryLufs: null });
+      return undefined;
+    }
+    const interval = setInterval(() => setMeter(audioStudioEngine.getMeter()), 150);
     return () => clearInterval(interval);
   }, [isPlaying]);
-
-  // Logarithmic mapping helpers
-  const minFreq = 20;
-  const maxFreq = 20000;
-  const minGain = -15;
-  const maxGain = 15;
 
   const freqToX = useCallback((freq, width) => {
     const minLog = Math.log10(minFreq);
@@ -60,11 +60,9 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
 
   const yToGain = useCallback((y, height) => {
     const normalized = (height - y) / height;
-    const g = minGain + normalized * (maxGain - minGain);
-    return Math.round(g * 10) / 10;
+    return Math.round((minGain + normalized * (maxGain - minGain)) * 10) / 10;
   }, []);
 
-  // Draw EQ Curve on Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -74,11 +72,9 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
 
     ctx.clearRect(0, 0, width, height);
 
-    // Grid lines
     ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
     ctx.lineWidth = 1;
 
-    // Freq grid markers
     const freqMarkers = [50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
     ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.4)';
     ctx.font = '9px monospace';
@@ -89,13 +85,10 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, height);
       ctx.stroke();
-      const label = f >= 1000 ? `${f / 1000}k` : `${f}`;
-      ctx.fillText(label, x + 2, height - 6);
+      ctx.fillText(f >= 1000 ? `${f / 1000}k` : `${f}`, x + 2, height - 6);
     });
 
-    // dB grid markers
-    const dBMarkers = [12, 6, 0, -6, -12];
-    dBMarkers.forEach((g) => {
+    [12, 6, 0, -6, -12].forEach((g) => {
       const y = gainToY(g, height);
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -106,17 +99,7 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
 
     if (!eqEnabled) return;
 
-    // Draw Smooth EQ Spline
-    ctx.beginPath();
-    ctx.strokeStyle = '#8B1EF3';
-    ctx.lineWidth = 2.5;
-
-    const points = bands.map((b) => ({
-      x: freqToX(b.freq, width),
-      y: gainToY(b.gain, height),
-    }));
-
-    // Gradient fill under curve
+    // Gradient fill under the curve.
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
     gradient.addColorStop(0, 'rgba(139, 30, 243, 0.25)');
     gradient.addColorStop(0.5, 'rgba(68, 49, 247, 0.12)');
@@ -124,40 +107,32 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
 
     ctx.beginPath();
     ctx.moveTo(0, gainToY(0, height));
-
     for (let i = 0; i < width; i += 3) {
       const f = xToFreq(i, width);
-      // Calculate composite gain at frequency f
       let totalGain = 0;
       bands.forEach((b) => {
         if (b.type === 'Bell') {
           const octDiff = Math.log2(f / b.freq);
-          const bell = Math.exp(-Math.pow(octDiff * b.q, 2));
-          totalGain += b.gain * bell;
+          totalGain += b.gain * Math.exp(-Math.pow(octDiff * b.q, 2));
         } else if (b.type === 'HPF') {
-          if (f < b.freq) {
-            totalGain += Math.max(-24, (f / b.freq - 1) * 18);
-          }
+          if (f < b.freq) totalGain += Math.max(-24, (f / b.freq - 1) * 18);
         } else if (b.type === 'LPF') {
-          if (f > b.freq) {
-            totalGain += Math.max(-24, (1 - f / b.freq) * 18);
-          }
+          if (f > b.freq) totalGain += Math.max(-24, (1 - f / b.freq) * 18);
         }
       });
       const y = gainToY(totalGain, height);
       if (i === 0) ctx.moveTo(i, y);
       else ctx.lineTo(i, y);
     }
-
+    ctx.strokeStyle = '#8B1EF3';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Draw draggable interactive band handles
     bands.forEach((b, idx) => {
       const x = freqToX(b.freq, width);
       const y = gainToY(b.gain, height);
       const isSelected = idx === activeBandIndex;
 
-      // Glow circle
       ctx.beginPath();
       ctx.arc(x, y, isSelected ? 12 : 9, 0, Math.PI * 2);
       ctx.fillStyle = b.color;
@@ -166,7 +141,6 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
       ctx.strokeStyle = '#FFFFFF';
       ctx.stroke();
 
-      // Band number label
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
@@ -175,7 +149,6 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
     });
   }, [bands, eqEnabled, activeBandIndex, isDark, freqToX, gainToY, xToFreq]);
 
-  // Handle Dragging Band on Canvas
   const handleCanvasMouseDown = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -183,13 +156,10 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
     const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
     const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
 
-    // Find nearest band
     let nearestIdx = -1;
     let minDist = 24;
     bands.forEach((b, idx) => {
-      const bx = freqToX(b.freq, canvas.width);
-      const by = gainToY(b.gain, canvas.height);
-      const dist = Math.hypot(x - bx, y - by);
+      const dist = Math.hypot(x - freqToX(b.freq, canvas.width), y - gainToY(b.gain, canvas.height));
       if (dist < minDist) {
         minDist = dist;
         nearestIdx = idx;
@@ -231,43 +201,56 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
     dragBandIndexRef.current = null;
   };
 
-  const currentActiveBand = bands[activeBandIndex] || bands[0];
+  const applyPreset = (name) => {
+    setPresetName(name);
+    setBands(getPresetBands(name));
+    setShowPresets(false);
+  };
+
+  const lufsLabel = meter.momentaryLufs === null ? '—' : meter.momentaryLufs.toFixed(1);
+  const peakLabel = Number.isFinite(meter.peakDb) ? meter.peakDb.toFixed(1) : '—';
+  const meterPercent = meter.momentaryLufs === null
+    ? 0
+    : Math.min(100, Math.max(0, (meter.momentaryLufs + 30) * 4));
 
   return (
     <div className={cn(
       "rounded-2xl border p-4 transition-colors",
       isDark ? "bg-[#03071B]/90 border-white/10" : "bg-white border-gray-200 shadow-sm"
     )}>
-      {/* Upper sub-tabs matching Image 1: Audio, EQ, Dynamics, Reverb, Delay, Modulation, Utility, AI Tools, More */}
       <div className="flex items-center justify-between gap-2 border-b pb-3 mb-4 overflow-x-auto scrollbar-hide border-inherit">
-        <div className="flex items-center gap-1.5">
-          {['Audio', 'EQ', 'Dynamics', 'Reverb', 'Delay', 'Modulation', 'Utility', 'AI Tools'].map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                activeTab === tab
-                  ? "bg-gradient-to-r from-[#8B1EF3] to-[#055BFB] text-white shadow-md"
-                  : isDark
-                  ? "text-gray-400 hover:text-white hover:bg-white/5"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-              )}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          Parametric EQ · {bands.length} bands
         </div>
 
-        {/* Preset & Power Switch */}
-        <div className="flex items-center gap-2">
-          <div className={cn(
-            "flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-medium cursor-pointer",
-            isDark ? "bg-white/5 border-white/10 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"
-          )}>
-            <span>Preset: {selectedPreset}</span>
+        <div className="flex items-center gap-2 relative">
+          <button
+            onClick={() => setShowPresets((s) => !s)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-medium cursor-pointer",
+              isDark ? "bg-white/5 border-white/10 text-gray-300" : "bg-gray-50 border-gray-200 text-gray-700"
+            )}
+          >
+            <span>Preset: {presetName}</span>
             <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-          </div>
+          </button>
+
+          {showPresets && (
+            <div className={cn(
+              "absolute right-0 top-full mt-1 w-44 rounded-xl border p-1.5 shadow-2xl z-40",
+              isDark ? "bg-[#060B24]/95 border-white/10 text-white" : "bg-white border-gray-200 text-gray-900"
+            )}>
+              {EQ_PRESET_NAMES.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => applyPreset(name)}
+                  className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-purple-600/20 cursor-pointer"
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button
             onClick={() => setEqEnabled(!eqEnabled)}
@@ -284,9 +267,7 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
         </div>
       </div>
 
-      {/* Grid: Left EQ Canvas & Controls, Right Loudness Meter */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* EQ Curve Canvas & Draggable Nodes (3 cols) */}
         <div className="lg:col-span-3 space-y-3">
           <div className={cn(
             "relative w-full h-44 rounded-xl overflow-hidden border",
@@ -304,7 +285,6 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
             />
           </div>
 
-          {/* 5 Draggable Band Parameter Cards */}
           <div className="grid grid-cols-5 gap-2">
             {bands.map((b, idx) => {
               const isSel = idx === activeBandIndex;
@@ -342,7 +322,6 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
           </div>
         </div>
 
-        {/* Right Loudness / LUFS & True Peak Meter (1 col) */}
         <div className={cn(
           "p-4 rounded-xl border flex flex-col justify-between",
           isDark ? "bg-white/5 border-white/10" : "bg-gray-50 border-gray-200"
@@ -350,34 +329,21 @@ export default function EqualizerModule({ isDark = true, isPlaying = false }) {
           <div>
             <div className="text-xs font-bold tracking-wider uppercase mb-1 text-gray-400">Master Loudness</div>
             <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-              <span>True Peak: <strong className="text-white">-0.8 dB</strong></span>
-              <span>LRA: <strong className="text-white">6.4 LU</strong></span>
+              <span>True Peak: <strong className="text-white">{peakLabel} dB</strong></span>
             </div>
 
-            {/* Stereo Dual Vertical Meter Bars */}
             <div className="flex items-end justify-center gap-4 h-32 py-2">
-              {/* Left Channel */}
+              {/* One meter: an AnalyserNode downmixes to mono, so showing two
+                  identical L/R bars would imply a separation we do not measure. */}
               <div className="flex flex-col items-center gap-1">
-                <div className="w-4 h-24 rounded-full bg-gray-700/40 overflow-hidden relative flex flex-col justify-end p-0.5">
+                <div className="w-6 h-24 rounded-full bg-gray-700/40 overflow-hidden relative flex flex-col justify-end p-0.5">
                   <div
                     className="w-full rounded-full transition-all duration-100 bg-gradient-to-t from-emerald-500 via-amber-400 to-rose-500"
-                    style={{ height: `${Math.min(100, Math.max(10, (leftLUFS + 30) * 4))}%` }}
+                    style={{ height: `${Math.max(2, meterPercent)}%` }}
                   />
                 </div>
-                <span className="text-[10px] font-mono text-gray-400">L</span>
-                <span className="text-[10px] font-mono font-bold text-white">{leftLUFS.toFixed(1)}</span>
-              </div>
-
-              {/* Right Channel */}
-              <div className="flex flex-col items-center gap-1">
-                <div className="w-4 h-24 rounded-full bg-gray-700/40 overflow-hidden relative flex flex-col justify-end p-0.5">
-                  <div
-                    className="w-full rounded-full transition-all duration-100 bg-gradient-to-t from-emerald-500 via-amber-400 to-rose-500"
-                    style={{ height: `${Math.min(100, Math.max(10, (rightLUFS + 30) * 4))}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-mono text-gray-400">R</span>
-                <span className="text-[10px] font-mono font-bold text-white">{rightLUFS.toFixed(1)}</span>
+                <span className="text-[10px] font-mono text-gray-400">Master</span>
+                <span className="text-[10px] font-mono font-bold text-white">{lufsLabel}</span>
               </div>
             </div>
           </div>

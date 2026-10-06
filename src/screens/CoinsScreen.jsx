@@ -1,6 +1,8 @@
-// src/screens/CoinsScreen.jsx - ARVDOUL COINS & MONETIZATION (PRODUCTION)
+// src/screens/CoinsScreen.jsx
+//
 // Real flows only: live balance, CF-verified purchases, ad-earn rewards,
 // transaction history and withdrawal requests. No demo/simulated paths.
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,6 +10,7 @@ import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import { MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL, AD_REWARD_COINS as AD_REWARD_COINS_CANONICAL } from '../shared/levelConfig.cjs';
 
 import {
   Coins, CreditCard, Wallet, Crown, Zap, Rocket, Star,
@@ -18,18 +21,25 @@ import PaymentModal from '../components/Shared/PaymentModal';
 import CoinStackIcon from '../components/Shared/CoinStackIcon';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
-// Package ids MUST match the Cloud Function COIN_PACKAGES contract
-// (functions/monetization.js). Prices are the USD cents charged server-side.
-const COIN_PACKAGES = [
-  { id: 'coins_100',  coins: 100,  price: '$0.99',  bonus: 0,   popular: false, icon: Coins,   color: 'from-amber-500 to-yellow-500' },
-  { id: 'coins_500',  coins: 500,  price: '$4.99',  bonus: 50,  popular: true,  icon: Crown,   color: 'from-purple-500 to-pink-500' },
-  { id: 'coins_1200', coins: 1200, price: '$9.99',  bonus: 200, popular: false, icon: Star,    color: 'from-blue-500 to-cyan-500' },
-  { id: 'coins_2500', coins: 2500, price: '$19.99', bonus: 500, popular: false, icon: Rocket,  color: 'from-orange-500 to-red-500' },
-  { id: 'coins_5000', coins: 5000, price: '$39.99', bonus: 1500, popular: false, icon: Zap,    color: 'from-green-500 to-emerald-500' },
-];
+// Presentation-only icon/color, keyed by the canonical package id. Amounts and
+// prices come from COIN_PACKAGES in the shared levelConfig (same table the
+// server prices from), so the client can never advertise a price or coin amount
+// the server will not honour.
+const PACKAGE_STYLE = {
+  coins_100:  { icon: Coins,   color: 'from-amber-500 to-yellow-500' },
+  coins_500:  { icon: Crown,   color: 'from-purple-500 to-pink-500', popular: true },
+  coins_1200: { icon: Star,    color: 'from-blue-500 to-cyan-500' },
+  coins_2500: { icon: Rocket,  color: 'from-orange-500 to-red-500' },
+  coins_5000: { icon: Zap,     color: 'from-green-500 to-emerald-500' },
+};
+const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg) => ({
+  ...pkg,
+  ...(PACKAGE_STYLE[pkg.id] || {}),
+  price: `$${(pkg.priceUsdCents / 100).toFixed(2)}`,
+}));
 
-const WITHDRAWAL_MIN_COINS = 5000;
-const AD_REWARD_COINS = 2; // coins per 30s (matches functions/monetization.js AD_REWARD_PER_30S)
+// Ad reward comes from the shared config (server AD_REWARD_PER_30S).
+const AD_REWARD_COINS = AD_REWARD_COINS_CANONICAL;
 
 export default function CoinsScreen() {
   const navigate = useNavigate();
@@ -41,6 +51,8 @@ export default function CoinsScreen() {
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsCursor, setTransactionsCursor] = useState(null);
+  const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
 
   const [selectedPackage, setSelectedPackage] = useState('coins_500');
   const [purchasing, setPurchasing] = useState(null); // package id in flight
@@ -57,11 +69,13 @@ export default function CoinsScreen() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [currentSub, setCurrentSub] = useState(null);
 
+  // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names, perks
+  // and popularity are presentation.
   const SUBSCRIPTION_TIERS = [
-    { id: 'basic', name: 'Basic', coinsPerMonth: 500, price: '$4.99/mo', perks: ['500 coins monthly', 'Ad-free browsing', 'Priority support'] },
-    { id: 'pro', name: 'Pro', coinsPerMonth: 2000, price: '$9.99/mo', popular: true, perks: ['2,000 coins monthly', 'Creator badge', 'Advanced analytics', 'Boost discounts'] },
-    { id: 'premium', name: 'Premium', coinsPerMonth: 5000, price: '$19.99/mo', perks: ['5,000 coins monthly', 'Verified badge', 'Early features', 'Top support'] },
-  ];
+    { id: 'basic', name: 'Basic', ...SUBSCRIPTION_TIERS_CANONICAL.basic, perks: ['500 coins monthly', 'Ad-free browsing', 'Priority support'] },
+    { id: 'pro', name: 'Pro', ...SUBSCRIPTION_TIERS_CANONICAL.pro, popular: true, perks: ['2,000 coins monthly', 'Creator badge', 'Advanced analytics', 'Boost discounts'] },
+    { id: 'premium', name: 'Premium', ...SUBSCRIPTION_TIERS_CANONICAL.premium, perks: ['5,000 coins monthly', 'Verified badge', 'Early features', 'Top support'] },
+  ].map((t) => ({ ...t, price: `$${(t.priceUsdCents / 100).toFixed(2)}/mo` }));
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawEmail, setWithdrawEmail] = useState('');
@@ -94,15 +108,33 @@ export default function CoinsScreen() {
     if (!user?.uid) return;
     try {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
-      const txs = await svc.getTransactionHistory(user.uid, 15);
-      setTransactions(Array.isArray(txs) ? txs : []);
+      const page = await svc.getTransactionHistory(user.uid, 15);
+      setTransactions(Array.isArray(page?.items) ? page.items : []);
+      setTransactionsCursor(page?.nextCursor ?? null);
     } catch (err) {
       // Non-fatal: history may be gated by rules until the P0 rules deploy.
       setTransactions([]);
+      setTransactionsCursor(null);
     } finally {
       setTransactionsLoading(false);
     }
   }, [user?.uid, monetization]);
+
+  const loadMoreTransactions = useCallback(async () => {
+    if (!user?.uid || !transactionsCursor || transactionsLoadingMore) return;
+    setTransactionsLoadingMore(true);
+    try {
+      const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
+      const page = await svc.getTransactionHistory(user.uid, 15, transactionsCursor);
+      const items = Array.isArray(page?.items) ? page.items : [];
+      setTransactions((prev) => [...prev, ...items]);
+      setTransactionsCursor(page?.nextCursor ?? null);
+    } catch (err) {
+      toast.error('Could not load more transactions.');
+    } finally {
+      setTransactionsLoadingMore(false);
+    }
+  }, [user?.uid, monetization, transactionsCursor, transactionsLoadingMore]);
 
   useEffect(() => { loadBalance(); }, [loadBalance]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
@@ -124,7 +156,7 @@ export default function CoinsScreen() {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const res = await svc.purchaseCoins(paymentPkg.id, paymentMethodId);
       if (res?.success) {
-        toast.success(`+${paymentPkg.coins + paymentPkg.bonus} coins added to your account`);
+        toast.success(`+${res?.coinsAdded ?? paymentPkg.coins} coins added to your account`);
         await loadBalance();
         await loadTransactions();
       } else if (res?.offlineQueued) {
@@ -175,15 +207,14 @@ export default function CoinsScreen() {
     })();
   }, [user?.uid, monetization]);
 
-  // ==================== AD EARNING (real getAd/watchAd flow) ====================
   const fetchAd = async () => {
     if (!user?.uid) return;
     setAdLoading(true);
     try {
       const svc = monetization || (await import('../services/monetizationService.js')).getMonetizationService();
       const result = await svc.getAd('feed', user.uid, {});
-      setAd(result?.ad || null);
-      if (!result?.ad) toast.info('No ads available right now — check back soon.');
+      setAd(result || null);
+      if (!result) toast.info('No ads available right now — check back soon.');
     } catch (err) {
       setAd(null);
     } finally {
@@ -226,12 +257,11 @@ export default function CoinsScreen() {
     }
   };
 
-  // ==================== WITHDRAWAL (real requestWithdrawal CF) ====================
   const handleWithdraw = async () => {
     if (!user?.uid || withdrawing) return;
     const amount = Number(withdrawAmount);
-    if (!amount || amount < WITHDRAWAL_MIN_COINS) {
-      toast.error(`Minimum withdrawal is ${WITHDRAWAL_MIN_COINS.toLocaleString()} coins.`);
+    if (!amount || amount < MIN_WITHDRAWAL_COINS) {
+      toast.error(`Minimum withdrawal is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins.`);
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(withdrawEmail)) {
@@ -326,7 +356,7 @@ export default function CoinsScreen() {
                 <div className={cn("text-sm", colors.secondary)}>Coins per ad</div>
               </div>
               <div className={cn("p-4 rounded-xl text-center", colors.card, colors.border, "border")}>
-                <div className="text-2xl font-bold text-purple-500">{WITHDRAWAL_MIN_COINS.toLocaleString()}+</div>
+                <div className="text-2xl font-bold text-purple-500">{MIN_WITHDRAWAL_COINS.toLocaleString()}+</div>
                 <div className={cn("text-sm", colors.secondary)}>Withdrawal minimum</div>
               </div>
             </div>
@@ -382,11 +412,6 @@ export default function CoinsScreen() {
                     </div>
                     <div className="text-3xl font-bold mb-1">{pkg.coins.toLocaleString()}</div>
                     <div className={cn("text-sm mb-2", colors.secondary)}>Coins</div>
-                    {pkg.bonus > 0 && (
-                      <div className="px-3 py-1 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-500 text-sm font-bold">
-                        +{pkg.bonus} Bonus
-                      </div>
-                    )}
                   </div>
 
                   <div className="text-center">
@@ -500,14 +525,14 @@ export default function CoinsScreen() {
             <Banknote className="w-5 h-5 text-purple-500" /> Withdraw Earnings
           </h2>
           <p className={cn("text-sm mb-4", colors.secondary)}>
-            Request a payout (min {WITHDRAWAL_MIN_COINS.toLocaleString()} coins). Requests are reviewed and paid out via the
+            Request a payout (min {MIN_WITHDRAWAL_COINS.toLocaleString()} coins). Requests are reviewed and paid out via the
             secure payout pipeline.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <input
               type="number"
-              min={WITHDRAWAL_MIN_COINS}
-              placeholder={`Amount (min ${WITHDRAWAL_MIN_COINS.toLocaleString()})`}
+              min={MIN_WITHDRAWAL_COINS}
+              placeholder={`Amount (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value)}
               className={cn("px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-purple-500", colors.card, colors.border, colors.text)}
@@ -564,6 +589,19 @@ export default function CoinsScreen() {
                 </div>
               ))}
             </div>
+          )}
+          {!transactionsLoading && transactionsCursor && (
+            <button
+              type="button"
+              onClick={loadMoreTransactions}
+              disabled={transactionsLoadingMore}
+              className={cn(
+                "mt-3 w-full py-2.5 rounded-xl text-sm font-semibold border transition-all disabled:opacity-60",
+                colors.border, colors.secondary, "hover:opacity-80"
+              )}
+            >
+              {transactionsLoadingMore ? 'Loading…' : 'Load more'}
+            </button>
           )}
         </div>
 

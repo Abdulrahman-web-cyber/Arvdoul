@@ -1,6 +1,4 @@
 /**
- * src/utils/OfflineQueue.js - ARVDOUL Persistent Offline Queue (hardened)
- *
  * IndexedDB-backed operation queue with exponential backoff retry and
  * online-event draining. Used for critical writes (messages, follows,
  * likes, uploads) so they survive network drops.
@@ -77,15 +75,24 @@ class OfflineQueue {
    * @param {Object} [op.payload]
    * @param {string} [op.idempotencyKey] - de-duplicates identical pending ops
    * @param {'high'|'medium'|'low'} [op.priority='medium']
+   * @param {string|null} [op.ownerUid] - account the op belongs to
    * @returns {Promise<number>} queued id (or existing id when de-duplicated)
    */
-  async enqueue({ type, payload = {}, idempotencyKey = null, priority = 'medium' }) {
+  async enqueue({ type, payload = {}, idempotencyKey = null, priority = 'medium', ownerUid = null }) {
     if (!PRIORITY_RANK[priority]) priority = 'medium';
+    // Partition key: queued writes are scoped to the account that created
+    // them so a drained queue can never replay account A's actions as B. When a
+    // caller does not name an owner, bind the op to the live Firebase session
+    // rather than leaving it unowned (an unowned op would be skipped by every
+    // scoped drain and never delivered).
+    const sessionUid =
+      typeof window !== 'undefined' ? window._arvdoul_auth?.currentUser?.uid || null : null;
     const entry = {
       type,
       payload,
       idempotencyKey,
       priority,
+      ownerUid: ownerUid || sessionUid,
       attempts: 0,
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -149,16 +156,23 @@ class OfflineQueue {
    * order, concurrent batches), removing on success and retrying with backoff
    * on failure. Only one tab drains at a time (TTL claim).
    * @param {(op: Object) => Promise<any>} handler
-   * @returns {Promise<{processed: number, failed: number}>}
+   * @param {{ownerUid?: string|null}} [opts] - when `ownerUid` is given, ops
+   *   explicitly owned by a different account are skipped and left pending
+   *   instead of being replayed. Unowned ops (no session at
+   *   enqueue time) are still attempted.
+   * @returns {Promise<{processed: number, failed: number, skipped: number}>}
    */
-  async process(handler) {
-    if (this._draining) return { processed: 0, failed: 0 };
+  async process(handler, { ownerUid = null } = {}) {
+    if (this._draining) return { processed: 0, failed: 0, skipped: 0 };
     const db = await this._db();
-    if (!(await this._tryClaim(db))) return { processed: 0, failed: 0 };
+    if (!(await this._tryClaim(db))) return { processed: 0, failed: 0, skipped: 0 };
+
+    const belongsToSession = (op) => !ownerUid || !op.ownerUid || op.ownerUid === ownerUid;
 
     this._draining = true;
     let processed = 0;
     let failed = 0;
+    let skipped = 0;
     try {
       const pending = db
         ? await db.getAllFromIndex(QUEUE_STORE, 'status', 'pending')
@@ -173,6 +187,10 @@ class OfflineQueue {
         const batch = pending.slice(i, i + DRAIN_CONCURRENCY);
         await Promise.all(
           batch.map(async (op) => {
+            if (!belongsToSession(op)) {
+              skipped++;
+              return;
+            }
             try {
               await handler(op);
               if (db) await db.delete(QUEUE_STORE, op.id);
@@ -200,31 +218,33 @@ class OfflineQueue {
       await this._releaseClaim(db);
     }
     if (this._channel) this._channel.postMessage({ type: 'drained' });
-    return { processed, failed };
+    return { processed, failed, skipped };
   }
 
-  /** Number of pending operations. */
-  async length() {
+  /** Number of pending operations (optionally for a single account). */
+  async length({ ownerUid = null } = {}) {
     const db = await this._db();
-    if (db) {
-      const all = await db.getAllFromIndex(QUEUE_STORE, 'status', 'pending');
-      return all.length;
-    }
-    return this._memory.filter((o) => o.status === 'pending').length;
+    const all = db
+      ? await db.getAllFromIndex(QUEUE_STORE, 'status', 'pending')
+      : this._memory.filter((o) => o.status === 'pending');
+    return ownerUid ? all.filter((o) => o.ownerUid === ownerUid).length : all.length;
   }
 
   /** Alias for length() */
-  async getPendingCount() {
-    return this.length();
+  async getPendingCount(opts = {}) {
+    return this.length(opts);
   }
 
   /** Alias for process() */
-  async drain(handler) {
-    return this.process(handler);
+  async drain(handler, opts = {}) {
+    return this.process(handler, opts);
   }
 
-  /** All pending operations (real unsynced local changes), newest first. */
-  async getPending() {
+  /**
+   * All pending operations (real unsynced local changes), newest first.
+   * Pass `ownerUid` to scope the result to one account.
+   */
+  async getPending({ ownerUid = null } = {}) {
     const db = await this._db();
     let all = [];
     if (db) {
@@ -232,8 +252,32 @@ class OfflineQueue {
     } else {
       all = this._memory.filter((o) => o.status === 'pending');
     }
+    if (ownerUid) all = all.filter((o) => o.ownerUid === ownerUid);
     all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     return all;
+  }
+
+  /**
+   * Drop every queued op owned by `uid`. Called on account change so the next
+   * session cannot drain the previous account's pending writes.
+   */
+  async purgeOwner(uid) {
+    if (!uid) return 0;
+    const db = await this._db();
+    if (db) {
+      const all = await db.getAllFromIndex(QUEUE_STORE, 'status', 'pending');
+      const owned = all.filter((o) => o.ownerUid === uid);
+      await Promise.all(owned.map((o) => db.delete(QUEUE_STORE, o.id)));
+      return owned.length;
+    }
+    const before = this._memory.length;
+    this._memory = this._memory.filter((o) => o.ownerUid !== uid);
+    return before - this._memory.length;
+  }
+
+  /** Drop every queued op regardless of owner (full sign-out reset). */
+  async purgeAll() {
+    return this.clear();
   }
 
   /** Remove a single queued operation by id (e.g. user chose to discard it). */
@@ -261,7 +305,11 @@ class OfflineQueue {
   onOnline(handler) {
     if (typeof window === 'undefined') return () => {};
     const run = () => {
-      this.process(handler).catch(() => {});
+      // Scope the drain to the signed-in account so a reconnect cannot replay
+      // another account's pending writes.
+      const ownerUid = window._arvdoul_auth?.currentUser?.uid || null;
+      if (!ownerUid) return;
+      this.process(handler, { ownerUid }).catch(() => {});
     };
     this._onlineHandler = run;
     window.addEventListener('online', run);

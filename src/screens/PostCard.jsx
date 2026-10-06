@@ -1,4 +1,5 @@
-// src/screens/PostCard.jsx – ARVDOUL ULTIMATE POST CARD (FINAL PERFECT)
+// src/screens/PostCard.jsx
+//
 // Perfect rounded edges, compact height, larger avatar, bubble counts, all bugs fixed.
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
@@ -31,12 +32,11 @@ import PollCard from './PostCard/PollCard';
 import QuestionCard from './PostCard/QuestionCard';
 import EventCard from './PostCard/EventCard';
 import LinkCard from './PostCard/LinkCard';
+import { VIRTUAL_GIFTS } from '../data/videoData';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ------------------------------------------------------------------
 // 1. DESIGN TOKENS – Perfectly rounded, compact, neon purple
-// ------------------------------------------------------------------
 const getDesignTokens = (theme) => {
   const isDark = theme === 'dark';
   return {
@@ -63,36 +63,7 @@ const getDesignTokens = (theme) => {
   };
 };
 
-// ------------------------------------------------------------------
-// 2. INTERNAL EVENT BUS (with cleanup)
-// ------------------------------------------------------------------
-let globalEventBus = null;
-const getEventBus = () => {
-  if (!globalEventBus) {
-    globalEventBus = {
-      listeners: new Map(),
-      emit(event, detail) {
-        this.listeners.get(event)?.forEach(fn => fn(detail));
-      },
-      on(event, fn) {
-        if (!this.listeners.has(event)) this.listeners.set(event, []);
-        this.listeners.get(event).push(fn);
-      },
-      off(event, fn) {
-        const arr = this.listeners.get(event);
-        if (arr) this.listeners.set(event, arr.filter(f => f !== fn));
-      },
-      clear() {
-        this.listeners.clear();
-      },
-    };
-  }
-  return globalEventBus;
-};
-
-// ------------------------------------------------------------------
 // 3. OFFLINE QUEUE (safe, with crypto‑strong IDs, collapse by action)
-// ------------------------------------------------------------------
 let offlineQueueDB = null;
 let offlineQueueInitPromise = null;
 
@@ -129,11 +100,13 @@ async function addToOfflineQueue(action, data) {
   const id = typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${data.postId}_${data.userId}_${action}_${Date.now()}_${Math.random().toString(36)}`;
-  const request = store.put({ id, action, data, timestamp: Date.now() });
+  // ownerUid partitions the queue by account so a later session cannot replay
+  // this user's pending writes.
+  const request = store.put({ id, action, data, ownerUid: data.userId || null, timestamp: Date.now() });
   await idbRequestPromise(request);
 }
 
-async function replayOfflineQueue() {
+async function replayOfflineQueue(currentUid = null) {
   if (!navigator.onLine) return;
   const db = await openOfflineQueue();
   const tx = db.transaction('actions', 'readonly');
@@ -145,6 +118,8 @@ async function replayOfflineQueue() {
   const deleteStore = deleteTx.objectStore('actions');
   for (const item of items) {
     const { action, data } = item;
+    // Never replay another account's queued action.
+    if (!currentUid || item.ownerUid !== currentUid || data.userId !== currentUid) continue;
     try {
       if (action === 'like') {
         await firestoreService.likePost?.(data.postId, data.userId);
@@ -166,9 +141,7 @@ async function replayOfflineQueue() {
   }
 }
 
-// ------------------------------------------------------------------
 // 4. ERROR BOUNDARY (dev/prod friendly)
-// ------------------------------------------------------------------
 class PostErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -198,10 +171,8 @@ class PostErrorBoundary extends React.Component {
   }
 }
 
-// ------------------------------------------------------------------
 // 5. SHARE SHEET (tap outside / ESC, download only if hasMedia)
-// ------------------------------------------------------------------
-const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia }) => {
+const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, postData, isCreator, hasMedia, navigate, currentUser }) => {
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
 
@@ -233,21 +204,30 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
   const repost = useCallback(async () => {
     if (!postId) return;
     try {
-      await firestoreService.repostPost?.(postId);
-      toast.success('Reposted!');
+      const res = await firestoreService.repostPost?.(postId);
+      if (res?.alreadyReposted) {
+        toast.info('You already reposted this');
+      } else {
+        toast.success('Reposted to your profile! 🔁');
+      }
     } catch { toast.error('Failed to repost'); }
     onClose();
   }, [postId, onClose]);
 
   const quotePost = useCallback(() => {
-    getEventBus().emit('quote-post', { postId, postData });
+    if (!postId || !navigate) return;
+    const snippet = (postData?.content || postData?.title || '').slice(0, 180);
+    const params = new URLSearchParams();
+    if (snippet) params.set('quote', snippet);
+    navigate(`/create-post?${params.toString()}`);
     onClose();
-  }, [postId, postData, onClose]);
+  }, [postId, postData, navigate, onClose]);
 
   const sendToFriends = useCallback(() => {
-    toast.info('Send to friends modal (implement)');
+    if (!postId || !navigate) return;
+    navigate(`/messages/new?sharePost=${encodeURIComponent(postId)}`);
     onClose();
-  }, [onClose]);
+  }, [postId, navigate, onClose]);
 
   const downloadMedia = useCallback(async () => {
     if (!postData?.media?.length) {
@@ -276,15 +256,81 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
     onClose();
   }, [postData, onClose]);
 
-  const addToStory = useCallback(() => {
-    toast.info('Add to Story (implement)');
+  // Add the real post image as a story through storyService.
+  const addToStory = useCallback(async () => {
+    const imageUrl = postData?.media?.find((m) => m.type === 'image')?.url;
+    if (!currentUser?.uid) {
+      toast.error('Sign in to add to your story');
+      onClose();
+      return;
+    }
+    if (!imageUrl) {
+      toast.error('This post has no image to add to a story');
+      onClose();
+      return;
+    }
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const file = new File([blob], `story_${postId}.jpg`, { type: blob.type || 'image/jpeg' });
+      const { getStoryService } = await import('../services/storyService.js');
+      const res = await getStoryService().createStory({
+        type: 'image',
+        content: (postData?.content || '').slice(0, 100),
+        mediaFile: file,
+        backgroundColor: '#000000',
+        textColor: '#FFFFFF',
+        visibility: 'public',
+      });
+      if (res?.success) {
+        toast.success('Added to your story! ✨');
+        if (navigate) navigate('/stories');
+      } else if (res?.queued) {
+        toast.info('Offline — story queued and will publish when you reconnect.');
+      } else {
+        toast.error(res?.error || 'Could not add to story');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not add to story');
+    }
     onClose();
-  }, [onClose]);
+  }, [postData, postId, currentUser, navigate, onClose]);
 
-  const promotePost = useCallback(() => {
-    toast.info('Promotion panel (implement)');
+  // Promote this post with real coins through the boostPost ledger callable.
+  // The server owns the daily rate and balance check; the client never guesses
+  // the price or writes boost state itself.
+  const promotePost = useCallback(async () => {
+    if (!currentUser?.uid || !postId) {
+      toast.error('Sign in to promote this post');
+      onClose();
+      return;
+    }
+    try {
+      const [{ boostPost }, { default: postService }] = await Promise.all([
+        import('../services/monetizationService.js'),
+        import('../services/postService.js'),
+      ]);
+      const post = await postService.getPost(postId);
+      if (post?.boostData?.isBoosted) {
+        toast.info('This post is already promoted');
+        onClose();
+        return;
+      }
+      const days = 7;
+      await boostPost(currentUser.uid, postId, days);
+      toast.success(`Post promoted for ${days} days! 🚀`);
+    } catch (err) {
+      const msg = err?.message || 'Promotion failed';
+      if (/insufficient/i.test(msg)) {
+        toast.error('Not enough coins to promote this post.');
+        if (navigate) navigate('/coins');
+      } else {
+        toast.error(msg);
+      }
+    }
     onClose();
-  }, [onClose]);
+  }, [currentUser, postId, navigate, onClose]);
 
   return (
     <motion.div
@@ -331,9 +377,7 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
   );
 });
 
-// ------------------------------------------------------------------
 // 6. REACTIONS PICKER (tap outside / ESC)
-// ------------------------------------------------------------------
 const REACTIONS = [
   { emoji: '👍', label: 'Like' }, { emoji: '❤️', label: 'Love' }, { emoji: '😂', label: 'Haha' },
   { emoji: '😮', label: 'Wow' }, { emoji: '😢', label: 'Sad' }, { emoji: '😡', label: 'Angry' },
@@ -410,9 +454,7 @@ const CardReactionsPicker = React.memo(({ onSelect, onClose, tokens, targetRect 
   );
 });
 
-// ------------------------------------------------------------------
 // 7. DOUBLE TAP HEART (reduced motion)
-// ------------------------------------------------------------------
 const DoubleTapHeart = React.memo(({ position, onFinish, prefersReducedMotion }) => {
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -431,9 +473,7 @@ const DoubleTapHeart = React.memo(({ position, onFinish, prefersReducedMotion })
   );
 });
 
-// ------------------------------------------------------------------
 // 8. INLINE COMMENT PREVIEW (abort controller only, no mounted flag)
-// ------------------------------------------------------------------
 const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible, tokens }) => {
   const [preview, setPreview] = useState([]);
   const abortRef = useRef(null);
@@ -464,9 +504,7 @@ const InlineComments = React.memo(({ postId, totalComments, onViewAll, isVisible
   );
 });
 
-// ------------------------------------------------------------------
 // 9. MAIN POST CARD – perfect rounded edges, compact, bubble counts
-// ------------------------------------------------------------------
 // Engagement reducer (unified state management)
 const engagementReducer = (state, action) => {
   switch (action.type) {
@@ -550,6 +588,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     showHeartBurst: false,
     tapPosition: { x: 0, y: 0 },
     giftLoading: false,
+    showGiftPicker: false,
+    giftBalance: null,
   });
   const [isActiveForSubs, setIsActiveForSubs] = useState(isVisible);
 
@@ -574,6 +614,21 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     }
   }, [currentUser?.uid, post.authorId, isAuthor]);
 
+  // Real coin balance (ledger) whenever the gift picker opens.
+  useEffect(() => {
+    if (!ui.showGiftPicker || !currentUser?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const bal = await monetizationService.getBalance(currentUser.uid);
+        if (!cancelled) setUi(prev => ({ ...prev, giftBalance: typeof bal === 'number' ? bal : Number(bal?.coins ?? 0) }));
+      } catch {
+        if (!cancelled) setUi(prev => ({ ...prev, giftBalance: null }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ui.showGiftPicker, currentUser?.uid]);
+
   // Real‑time stats (only if visible)
   useEffect(() => {
     if (!post.id || !isActiveForSubs) return;
@@ -591,12 +646,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // Pause subscriptions when card not visible
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
 
-  // Online listener for offline queue
+  // Online listener for offline queue. Keyed on uid so an account switch
+  // re-binds the handler to the current session.
   useEffect(() => {
-    const onlineHandler = () => replayOfflineQueue();
+    const onlineHandler = () => replayOfflineQueue(currentUser?.uid || null);
     window.addEventListener('online', onlineHandler);
     return () => window.removeEventListener('online', onlineHandler);
-  }, []);
+  }, [currentUser?.uid]);
 
   // Cleanup timers
   useEffect(() => {
@@ -615,11 +671,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     };
   }, []);
 
-  // ------------------------------------------------------------------
   // HANDLERS with snapshot rollback, separate debounces, lock
-  // ------------------------------------------------------------------
   const handleLikeClick = useCallback(() => {
-    const userId = currentUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : null);
+    // Identity comes from the live session only; a localStorage uid can belong
+    // to a previous account on a shared device.
+    const userId = currentUser?.uid || null;
     if (!userId) {
       toast.error('Please sign in to like posts');
       return;
@@ -644,7 +700,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (debounceLikeRef.current) clearTimeout(debounceLikeRef.current);
     debounceLikeRef.current = setTimeout(async () => {
       try {
-        if (navigator.onLine && userId !== 'local_user') {
+        if (navigator.onLine) {
           if (newLiked) {
             await firestoreService.likePost?.(post.id, userId);
           } else {
@@ -666,7 +722,11 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, [currentUser, post.id, post.authorId, takeSnapshot]);
 
   const handleReaction = useCallback((reaction) => {
-    const effectiveUserId = currentUser?.uid || (typeof window !== 'undefined' ? (localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') || 'local_user') : 'local_user');
+    const effectiveUserId = currentUser?.uid || null;
+    if (!effectiveUserId) {
+      toast.error('Please sign in to react to posts');
+      return;
+    }
     const snapshot = takeSnapshot();
     const emoji = typeof reaction === 'string' ? reaction : reaction.emoji;
     const newReaction = snapshot.reaction === emoji ? null : emoji;
@@ -686,7 +746,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (debounceReactionRef.current) clearTimeout(debounceReactionRef.current);
     debounceReactionRef.current = setTimeout(async () => {
       try {
-        if (navigator.onLine && effectiveUserId !== 'local_user') {
+        if (navigator.onLine) {
           if (newReaction) {
             await firestoreService.addReaction?.(post.id, effectiveUserId, newReaction);
           } else {
@@ -753,22 +813,31 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     setUi(prev => ({ ...prev, showShareSheet: true }));
   }, [currentUser]);
 
-  const handleSendGift = useCallback(async (giftType = 'rose', value = 5) => {
+  const handleSendGift = useCallback(async (giftType = 'rose') => {
     if (!currentUser) return toast.error('Sign in');
     if (ui.giftLoading) return;
     setUi(prev => ({ ...prev, giftLoading: true }));
     triggerHaptic('medium');
     try {
-      await monetizationService.sendGift?.(currentUser.uid, post.id, giftType, value);
-      dispatch({ type: 'UPDATE_STATS', payload: { gifts: engagement.giftCount + 1 } });
-      toast.success(`Sent ${giftType}!`);
+      // Signature is (senderId, postId, giftType, idempotencyKey). The coin
+      // value is resolved server-side from the gift catalog — passing it here
+      // would land in the idempotency-key slot and silently no-op every
+      // repeat gift. Omitting the key lets the service mint a fresh one.
+      const res = await monetizationService.sendGift(currentUser.uid, post.id, giftType);
+      if (res?.success) {
+        dispatch({ type: 'UPDATE_STATS', payload: { gifts: engagementRef.current.giftCount + 1 } });
+        toast.success(`Sent ${giftType}!`);
+        setUi(prev => ({ ...prev, showGiftPicker: false }));
+      } else {
+        toast.error(res?.message || 'Gift could not be sent');
+      }
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err?.message || 'Gift could not be sent');
       if (process.env.NODE_ENV === 'development') console.error(err);
     } finally {
       setUi(prev => ({ ...prev, giftLoading: false }));
     }
-  }, [currentUser, post.id, ui.giftLoading, engagement.giftCount]);
+  }, [currentUser, post.id, ui.giftLoading]);
 
   // Double‑tap detection (with lock)
   const handleContainerClick = useCallback((e) => {
@@ -935,7 +1004,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
         </div>
       )}
-      {isImage && <ImageCard images={post.media} onDoubleTap={() => {}} currentUser={currentUser} postId={post.id} />}
+      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} />}
       {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} />}
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
       {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} />}
@@ -1061,9 +1130,14 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
             <span className="text-xs">Save</span>
           </button>
 
-          {/* Gift button (creator only) */}
+          {/* Gift button (creator only) — opens the real gift picker */}
           {isCreator && !isAuthor && (
-            <button onClick={() => handleSendGift('rose', 5)} disabled={ui.giftLoading} className="flex items-center gap-1.5 text-sm text-pink-300 hover:text-pink-200 transition disabled:opacity-50" aria-label="Send gift">
+            <button
+              onClick={() => setUi(prev => ({ ...prev, showGiftPicker: true }))}
+              disabled={ui.giftLoading}
+              className="flex items-center gap-1.5 text-sm text-pink-300 hover:text-pink-200 transition disabled:opacity-50"
+              aria-label="Send gift"
+            >
               <Gift className="w-4 h-4" />
               <span className="text-xs">Gift</span>
             </button>
@@ -1075,11 +1149,79 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       <AnimatePresence>
         {ui.showHeartBurst && <DoubleTapHeart position={ui.tapPosition} onFinish={() => setUi(prev => ({ ...prev, showHeartBurst: false }))} prefersReducedMotion={prefersReducedMotion} />}
         {ui.showReactionsPicker && <CardReactionsPicker onSelect={handleReactionSelect} onClose={closeReactionsPicker} tokens={tokens} targetRect={reactionsTargetRect} />}
-        {ui.showShareSheet && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}/post/${post.id}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} />}
+        {ui.showShareSheet && <CardShareSheet url={`${typeof window !== 'undefined' ? window.location.origin : ''}/post/${post.id}`} content={post.content?.substring(0, 100) || 'Check out this post'} onClose={() => setUi(prev => ({ ...prev, showShareSheet: false }))} tokens={tokens} postId={post.id} postData={post} isCreator={isCreator} hasMedia={hasMedia} navigate={navigate} currentUser={currentUser} />}
+        {ui.showGiftPicker && (
+          <CardGiftPicker
+            tokens={tokens}
+            balance={ui.giftBalance}
+            sending={ui.giftLoading}
+            onClose={() => setUi(prev => ({ ...prev, showGiftPicker: false }))}
+            onSelect={(giftType) => handleSendGift(giftType)}
+          />
+        )}
       </AnimatePresence>
     </motion.div>
   );
 }
+
+// Gift picker — real coin amounts, server-validated via sendGift
+const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
+  const [selected, setSelected] = useState(VIRTUAL_GIFTS[0]);
+  const canAfford = balance == null || balance >= selected.coins;
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={sending ? undefined : onClose}
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 border"
+        style={{ backgroundColor: tokens.cardBg, borderColor: tokens.border }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold" style={{ color: tokens.text }}>Send a Gift</h3>
+          <button onClick={onClose} disabled={sending} className="p-1" style={{ color: tokens.textSecondary }} aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex items-center justify-between mb-4 text-sm">
+          <span style={{ color: tokens.textSecondary }}>Your balance</span>
+          <span className="font-bold text-amber-500 flex items-center gap-1">
+            <Coins className="w-4 h-4" /> {balance == null ? '—' : balance.toLocaleString()}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          {VIRTUAL_GIFTS.map((gift) => (
+            <button
+              key={gift.type}
+              type="button"
+              onClick={() => setSelected(gift)}
+              className="rounded-2xl p-3 border text-center transition-colors"
+              style={{
+                borderColor: selected.type === gift.type ? '#8B5CF6' : tokens.border,
+                backgroundColor: selected.type === gift.type ? 'rgba(139,92,246,0.15)' : 'transparent',
+              }}
+            >
+              <div className="text-2xl mb-1">{gift.emoji}</div>
+              <div className="text-xs font-semibold truncate" style={{ color: tokens.text }}>{gift.name}</div>
+              <div className="text-xs font-bold text-amber-500">{gift.coins} 🪙</div>
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={sending || !canAfford}
+          onClick={() => onSelect(selected.type)}
+          className="w-full py-3 rounded-2xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-95 disabled:opacity-50"
+        >
+          {sending ? 'Sending…' : canAfford ? `Send ${selected.name}` : 'Not enough coins'}
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+};
 
 function getRandomTextBg(postId, userId) {
   const palette = [

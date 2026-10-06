@@ -1,6 +1,4 @@
-// src/screens/Collaboration/CollaborationScreen.jsx – ARVDOUL COLLABORATION SCREEN V1
-// 🤝 Content Collaboration with Roles, Permissions, Review Workflow
-// ✅ WCAG 2.1 AA Compliant • Keyboard Navigation • Screen Reader Support
+// src/screens/Collaboration/CollaborationScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
@@ -14,7 +12,6 @@ import {
 import { COLLABORATION_CONFIG } from '../../services/collaborationService.js';
 import collaborationService from '../../services/collaborationService.js';
 
-// ==================== UTILITY COMPONENTS ====================
 const IconButton = ({ icon: Icon, onClick, disabled, variant = 'default', className = '', title, ariaLabel }) => {
   const variants = {
     default: 'bg-gray-700 hover:bg-gray-600 text-white',
@@ -196,7 +193,6 @@ const ContentVersionCard = ({ version, onReview, canReview }) => {
   );
 };
 
-// ==================== MAIN COLLABORATION SCREEN ====================
 export default function CollaborationScreen() {
   const { theme, isDark } = useTheme();
   const navigate = useNavigate();

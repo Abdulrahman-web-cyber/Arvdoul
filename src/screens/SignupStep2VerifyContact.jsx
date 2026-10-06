@@ -1,8 +1,4 @@
-// This file must reflect: 'everything should be more extremely advanced, styled, ultra pro max professional creation and robust also production ready and working perfectly smooth'
-
-// src/screens/SignupStep2VerifyContact.jsx – ARVDOUL SUPREMACY • FINAL NON‑SCROLLABLE
-// ✅ Original phone dropdown • Email strength checklist • Google (original styling)
-// ✅ NO scroll • Perfect responsive • Billions‑ready
+// src/screens/SignupStep2VerifyContact.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -12,7 +8,6 @@ import { useAuth } from "@context/AuthContext.jsx";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
 
-// ---------- ORIGINAL PHONE INPUT ----------
 const UltimatePhoneInput = React.memo(({
   value,
   onChange,
@@ -233,7 +228,6 @@ const UltimatePhoneInput = React.memo(({
 });
 UltimatePhoneInput.displayName = 'UltimatePhoneInput';
 
-// ---------- INVISIBLE RECAPTCHA ----------
 const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
   const { theme } = useTheme();
   const { createRecaptchaVerifier, cleanupRecaptchaVerifier } = useAuth();
@@ -328,7 +322,6 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
 });
 InvisibleRecaptcha.displayName = 'InvisibleRecaptcha';
 
-// ---------- EMAIL FORM WITH STRENGTH BAR & CHECKLIST ----------
 const UltimateEmailForm = React.memo(({ formData, onChange, errors, loading = false }) => {
   const { theme } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
@@ -515,7 +508,6 @@ const UltimateEmailForm = React.memo(({ formData, onChange, errors, loading = fa
 });
 UltimateEmailForm.displayName = 'UltimateEmailForm';
 
-// ---------- ORIGINAL GOOGLE AUTH ----------
 const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) => {
   const { theme } = useTheme();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -629,7 +621,6 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
 });
 UltimateGoogleAuth.displayName = 'UltimateGoogleAuth';
 
-// ---------- ORIGINAL METHOD TOGGLE (UNCHANGED LOGIC) ----------
 const UltimateMethodToggle = React.memo(({ method, onToggle, disabled = false }) => {
   const { theme } = useTheme();
   const resolvedTheme = theme === 'system'
@@ -718,7 +709,6 @@ const UltimateMethodToggle = React.memo(({ method, onToggle, disabled = false })
 });
 UltimateMethodToggle.displayName = 'UltimateMethodToggle';
 
-// ---------- MAIN COMPONENT (NON-SCROLLABLE) ----------
 export default function SignupStep2VerifyContact() {
   const navigate = useNavigate();
   const location = useLocation();

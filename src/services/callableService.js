@@ -1,4 +1,5 @@
 // src/services/callableService.js
+//
 // Canonical entry point for invoking Firebase Cloud Functions callables from client.
 // Ensures consistent error handling, app instance binding, and admin status retrieval.
 
@@ -10,6 +11,7 @@ export const FUNCTIONS = {
   GRANT_ADMIN: 'grantAdmin',
   REVOKE_ADMIN: 'revokeAdmin',
   LIST_ADMINS: 'listAdmins',
+  LIST_USERS: 'listUsers',
   APPLY_USER_ADMIN_ACTION: 'applyUserAdminAction',
   RESOLVE_USER_REPORT: 'resolveUserReport',
   DELETE_USER_DATA: 'deleteUserData',
@@ -19,6 +21,28 @@ export const FUNCTIONS = {
   CLAIM_TITLE: 'claimTitle',
   SET_ACTIVE_TITLE: 'setActiveTitle',
   APPLY_FOR_CREATOR: 'applyForCreator',
+  APPLY_VERIFICATION_DECISION: 'applyVerificationDecision',
+  GET_ECONOMY_SUMMARY: 'getEconomySummary',
+  ADMIN_DECIDE_WITHDRAWAL: 'adminDecideWithdrawal',
+  ADMIN_LIST_COMMUNITIES: 'adminListCommunities',
+  ADMIN_SET_COMMUNITY_VERIFIED: 'adminSetCommunityVerified',
+  ADMIN_ISSUE_COMMUNITY_STRIKE: 'adminIssueCommunityStrike',
+  ADMIN_MODERATE_CONTENT: 'adminModerateContent',
+  ADMIN_LIST_MODERATION_REPORTS: 'adminListModerationReports',
+  ADMIN_LIST_SUPPORT_TICKETS: 'adminListSupportTickets',
+  ADMIN_RESOLVE_SUPPORT_TICKET: 'adminResolveSupportTicket',
+  GET_FEATURE_FLAG_OVERRIDES: 'getFeatureFlagOverrides',
+  SET_FEATURE_FLAG_OVERRIDE: 'setFeatureFlagOverride',
+  TRACK_PROFILE_VIEW: 'trackProfileView',
+  EXPORT_USER_DATA: 'exportUserData',
+  REPORT_COMMENT: 'reportComment',
+  REPORT_POST: 'reportPost',
+  GET_MUX_PLAYBACK_URL: 'getMuxPlaybackUrl',
+  GENERATE_AI_CAPTION: 'generateAICaption',
+  GENERATE_AI_HASHTAGS: 'generateAIHashtags',
+  MODERATE_POST: 'moderatePost',
+  PREDICT_POST_PERFORMANCE: 'predictPostPerformance',
+  SCRAPE_LINK: 'scrapeLink',
 };
 
 /**
@@ -83,6 +107,21 @@ export async function listAdmins() {
   return callFunction(FUNCTIONS.LIST_ADMINS);
 }
 
+/**
+ * Admin directory: users with contact email merged from users_private.
+ */
+export async function listUsers(limit = 50) {
+  return callFunction(FUNCTIONS.LIST_USERS, { limit });
+}
+
+/**
+ * Admin moderation: ban / suspend / unban / restore / verify / unverify.
+ * Server-authoritative and audit-logged; never a direct Firestore write.
+ */
+export async function applyUserAdminAction(userId, action) {
+  return callFunction(FUNCTIONS.APPLY_USER_ADMIN_ACTION, { userId, action });
+}
+
 export default {
   FUNCTIONS,
   callFunction,
@@ -91,4 +130,6 @@ export default {
   grantAdmin,
   revokeAdmin,
   listAdmins,
+  listUsers,
+  applyUserAdminAction,
 };

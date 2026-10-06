@@ -12,6 +12,9 @@ const admin = require('firebase-admin');
 const functions = require('firebase-functions');
 const { checkRateLimit } = require('./rateLimit');
 const { assertAdmin, isAdmin, getUserIdFromContext } = require('./auth');
+const { settleWithdrawal } = require('./withdrawalSettlement');
+const { COINS_PER_DOLLAR, getRankTitle } = require('./levelConfig.cjs');
+const { getMonetizationStripe } = require('./monetization');
 
 const db = admin.firestore();
 
@@ -26,17 +29,21 @@ const ADMIN_USER_ACTIONS = {
   unverify: { isVerified: false },
 };
 
-async function writeAudit(actorUid, action, targetId, details = {}) {
+async function writeAudit(actorUid, action, targetId, details = {}, targetType = 'user') {
   await db.collection('moderation_logs').add({
     actorId: actorUid,
     actorUid,
     action,
     targetId,
-    targetType: 'user',
+    targetType,
     details,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
+
+// Shared with the flag-governance module so every admin intervention lands in
+// one audit collection with one schema.
+module.exports.writeAudit = writeAudit;
 
 // ----------------------------------------------------------------------
 //  applyUserAdminAction — ban / suspend / restore / verify (admin only)
@@ -144,28 +151,49 @@ exports.listUsers = functions.https.onCall(async (data, context) => {
     .limit(limitCount)
     .get();
 
+  // Contact email lives on users_private; admins need it for the directory
+  // search, so merge it here (the callable already asserted admin).
+  const privateSnaps = await Promise.all(
+    snap.docs.map((d) => db.collection('users_private').doc(d.id).get().catch(() => null))
+  );
+
   return {
     success: true,
-    users: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    users: snap.docs.map((d, i) => ({
+      id: d.id,
+      ...d.data(),
+      email: privateSnaps[i]?.data()?.email || d.data().email || '',
+    })),
   };
 });
 
 // ----------------------------------------------------------------------
 //  resolveUserReport — moderation queue resolution (admin only)
 // ----------------------------------------------------------------------
+const REPORT_COLLECTIONS = {
+  user: 'user_reports',
+  comment: 'comment_reports',
+  video: 'video_reports',
+  post: 'post_reports',
+  story: 'story_reports',
+  ad: 'ad_reports',
+};
+
 exports.resolveUserReport = functions.https.onCall(async (data, context) => {
   const actorUid = await assertAdmin(context);
   await checkRateLimit(actorUid, 'resolveUserReport', 60, 60000);
 
-  const { reportId, action, reason = '' } = data || {};
-  if (!reportId || !['resolved', 'dismissed', 'escalated'].includes(action)) {
+  const { reportId, action, reportType = 'user', reason = '' } = data || {};
+  const collectionName = REPORT_COLLECTIONS[reportType];
+  const MODERATION_ACTIONS = ['resolved', 'dismissed', 'escalated', 'warned', 'removed'];
+  if (!reportId || !collectionName || !MODERATION_ACTIONS.includes(action)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
-      'reportId and action (resolved|dismissed|escalated) are required.'
+      `reportId, a known reportType and action (${MODERATION_ACTIONS.join('|')}) are required.`
     );
   }
 
-  const reportRef = db.doc(`user_reports/${reportId}`);
+  const reportRef = db.doc(`${collectionName}/${reportId}`);
   const snap = await reportRef.get();
   if (!snap.exists) {
     throw new functions.https.HttpsError('not-found', 'Report not found.');
@@ -177,9 +205,146 @@ exports.resolveUserReport = functions.https.onCall(async (data, context) => {
     resolvedBy: actorUid,
     resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  await writeAudit(actorUid, 'resolve_report', reportId, { action });
+  await writeAudit(actorUid, 'resolve_report', reportId, { action, reportType });
 
-  return { success: true, reportId, status: action };
+  return { success: true, reportId, status: action, reportType };
+});
+
+// ----------------------------------------------------------------------
+//  adminModerateContent — remove/restore reported content (admin only)
+//
+//  The console previously wrote `posts/{id}` directly. That only works while
+//  the rules happen to grant admins update, and it skipped the audit trail.
+//  Routing it here keeps the decision and its audit entry on the server.
+// ----------------------------------------------------------------------
+const MODERATABLE_CONTENT = {
+  post: 'posts',
+  video: 'videos',
+  comment: 'comments',
+  story: 'stories',
+};
+
+exports.adminModerateContent = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminModerateContent', 60, 60000);
+
+  const { contentType = 'post', contentId, action } = data || {};
+  const collectionName = MODERATABLE_CONTENT[contentType];
+  if (!contentId || !collectionName || !['remove', 'restore'].includes(action)) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'contentId, a known contentType and action (remove|restore) are required.'
+    );
+  }
+
+  const removed = action === 'remove';
+  await db.doc(`${collectionName}/${contentId}`).update({
+    isDeleted: removed,
+    moderationStatus: removed ? 'removed' : 'approved',
+    moderatedBy: actorUid,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await writeAudit(actorUid, `content_${action}`, contentId, { contentType }, contentType);
+
+  return { success: true, contentId, action, contentType };
+});
+
+// ----------------------------------------------------------------------
+//  adminListModerationReports — one server-side read for the whole queue
+//
+//  The report collections are admin-readable, but a client-side fan-out means
+//  the queue silently misses any collection it forgot to query (it previously
+//  omitted post and story reports entirely). Reading them here keeps the queue
+//  and REPORT_TARGETS in step.
+// ----------------------------------------------------------------------
+exports.adminListModerationReports = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminListModerationReports', 60, 60000);
+
+  const limitCount = Math.min(Math.max(Number(data?.limit) || 100, 1), 200);
+  const entries = Object.entries(REPORT_COLLECTIONS);
+
+  const snapshots = await Promise.all(entries.map(([, collection]) => (
+    db.collection(collection).orderBy('createdAt', 'desc').limit(limitCount).get().catch(() => null)
+  )));
+
+  const reports = [];
+  snapshots.forEach((snap, i) => {
+    if (!snap) return;
+    const [type] = entries[i];
+    snap.docs.forEach((d) => {
+      const doc = d.data();
+      reports.push({
+        id: d.id,
+        type,
+        status: doc.status || 'pending',
+        ...doc,
+        createdAt: doc.createdAt?.toDate?.()?.toISOString?.() || null,
+      });
+    });
+  });
+
+  reports.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  return { success: true, reports };
+});
+
+// ----------------------------------------------------------------------
+//  Support desk — the queue and the reply are server-authoritative
+//
+//  A support ticket is user-owned, but an *agent reply* and the resulting
+//  status change are administrative acts. They run here so the actor is
+//  re-verified and the change is audited, rather than trusting a client write
+//  to `support_tickets` that could just as easily be forged.
+// ----------------------------------------------------------------------
+exports.adminListSupportTickets = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminListSupportTickets', 60, 60000);
+
+  const limitCount = Math.min(Math.max(Number(data?.limit) || 50, 1), 100);
+  const snap = await db.collection('support_tickets')
+    .orderBy('createdAt', 'desc')
+    .limit(limitCount)
+    .get();
+
+  return {
+    success: true,
+    tickets: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
+  };
+});
+
+exports.adminResolveSupportTicket = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminResolveSupportTicket', 60, 60000);
+
+  const { ticketId, reply, status = 'resolved' } = data || {};
+  if (!ticketId) {
+    throw new functions.https.HttpsError('invalid-argument', 'ticketId is required.');
+  }
+  if (!['open', 'in_progress', 'resolved'].includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Unknown ticket status.');
+  }
+  const replyText = String(reply || '').slice(0, 4000).trim();
+
+  const ref = db.doc(`support_tickets/${ticketId}`);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Ticket not found.');
+  }
+
+  const messages = Array.isArray(snap.data().messages) ? snap.data().messages : [];
+  if (replyText) {
+    messages.push({ sender: 'agent', text: replyText, timestamp: new Date().toISOString() });
+  }
+
+  await ref.update({
+    status,
+    messages,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    resolvedBy: status === 'resolved' ? actorUid : null,
+  });
+  await writeAudit(actorUid, 'support_ticket_updated', ticketId, { status, replied: Boolean(replyText) });
+
+  return { success: true, ticketId, status };
 });
 
 // ----------------------------------------------------------------------
@@ -304,6 +469,198 @@ exports.listAdmins = functions.https.onCall(async (data, context) => {
     success: true,
     admins: snap.docs.map((d) => ({ uid: d.id, ...d.data() })),
   };
+});
+
+// ----------------------------------------------------------------------
+//  Economy oversight (admin only)
+//
+//  The console used to render seeded treasury numbers and "approve" a payout
+//  by writing status: 'completed' straight to Firestore - a payout that was
+//  never sent and coins that were never debited. Both now go through the
+//  server: `getEconomySummary` reads real aggregates and
+//  `adminDecideWithdrawal` runs the same settlement path as the Stripe worker.
+// ----------------------------------------------------------------------
+
+exports.getEconomySummary = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'getEconomySummary', 30, 60000);
+
+  // AggregateField is present in firebase-admin >= 11; guard so an older
+  // deployment degrades to an explicit null instead of throwing.
+  const canAggregate = typeof admin.firestore.AggregateField !== 'undefined'
+    && typeof db.collection('users').count === 'function';
+
+  const now = Date.now();
+  const monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const pendingWithdrawals = await db.collection('withdrawal_requests')
+    .where('status', 'in', ['pending', 'pending_review', 'processing'])
+    .limit(500)
+    .get();
+  const pendingAmountCoins = pendingWithdrawals.docs
+    .reduce((sum, d) => sum + Number(d.data().amount || 0), 0);
+
+  let circulatingCoins = null;
+  if (canAggregate) {
+    try {
+      const agg = await db.collection('users').aggregate({ total: admin.firestore.AggregateField.sum('coins') }).get();
+      circulatingCoins = Number(agg.data().total) || 0;
+    } catch {
+      circulatingCoins = null;
+    }
+  }
+
+  let monthlyVolumeCoins = null;
+  if (canAggregate) {
+    try {
+      const agg = await db.collection('coin_transactions')
+        .where('createdAt', '>=', monthAgo)
+        .aggregate({ total: admin.firestore.AggregateField.sum('amount') }).get();
+      monthlyVolumeCoins = Number(agg.data().total) || 0;
+    } catch {
+      monthlyVolumeCoins = null;
+    }
+  }
+
+  const completedThisMonth = await db.collection('withdrawal_requests')
+    .where('status', '==', 'completed')
+    .where('processedAt', '>=', monthAgo)
+    .limit(500)
+    .get();
+  const completedPayoutCoins = completedThisMonth.docs
+    .reduce((sum, d) => sum + Number(d.data().amount || 0), 0);
+
+  return {
+    success: true,
+    coinsPerDollar: COINS_PER_DOLLAR,
+    circulatingCoins,
+    pendingPayoutCoins: pendingAmountCoins,
+    pendingPayoutCount: pendingWithdrawals.size,
+    completedPayoutCoins,
+    completedPayoutCount: completedThisMonth.size,
+    monthlyVolumeCoins,
+    treasuryReserveUsd: circulatingCoins === null ? null : circulatingCoins / COINS_PER_DOLLAR,
+    generatedAt: new Date().toISOString(),
+  };
+});
+
+exports.adminDecideWithdrawal = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminDecideWithdrawal', 60, 60000);
+
+  const { withdrawalId, action, reason = '' } = data || {};
+  const result = await settleWithdrawal(
+    { stripe: getMonetizationStripe(), createLedgerEntry: require('./monetization').createLedgerEntry, coinsPerDollar: COINS_PER_DOLLAR },
+    withdrawalId,
+    action
+  );
+  await writeAudit(actorUid, `withdrawal_${result.status}`, withdrawalId, {
+    action,
+    amount: result.amount,
+    usdAmount: result.usdAmount || null,
+    reason: String(reason || '').slice(0, 500),
+  });
+  return { success: true, ...result };
+});
+
+// ----------------------------------------------------------------------
+//  Community governance (admin only)
+//
+//  Hub verification and policy strikes are server-authoritative: the client
+//  admin console reads the directory but never writes governance fields.
+// ----------------------------------------------------------------------
+
+exports.adminListCommunities = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminListCommunities', 30, 60000);
+
+  const { limit: rawLimit = 50 } = data || {};
+  const pageSize = Math.min(Math.max(Number(rawLimit) || 50, 1), 100);
+
+  const snap = await db
+    .collection('communities')
+    .orderBy('stats.memberCount', 'desc')
+    .limit(pageSize)
+    .get();
+
+  const communities = snap.docs
+    .filter((d) => d.data().isDeleted !== true)
+    .map((d) => ({ id: d.id, ...d.data() }));
+
+  return { success: true, communities };
+});
+
+exports.adminSetCommunityVerified = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminSetCommunityVerified', 60, 60000);
+
+  const { communityId, verified } = data || {};
+  if (!communityId || typeof verified !== 'boolean') {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'communityId and verified (boolean) are required.'
+    );
+  }
+
+  const ref = db.doc(`communities/${communityId}`);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Community not found.');
+  }
+
+  await ref.update({
+    isVerified: verified,
+    verifiedBy: verified ? actorUid : null,
+    verifiedAt: verified ? admin.firestore.FieldValue.serverTimestamp() : null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await writeAudit(
+    actorUid,
+    verified ? 'community_verified' : 'community_unverified',
+    communityId,
+    { communityName: snap.data().name || null },
+    'community'
+  );
+
+  return { success: true, communityId, isVerified: verified };
+});
+
+exports.adminIssueCommunityStrike = functions.https.onCall(async (data, context) => {
+  const actorUid = await assertAdmin(context);
+  await checkRateLimit(actorUid, 'adminIssueCommunityStrike', 30, 60000);
+
+  const { communityId, reason = '' } = data || {};
+  const trimmedReason = String(reason || '').trim();
+  if (!communityId || !trimmedReason) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'communityId and reason are required.'
+    );
+  }
+
+  const ref = db.doc(`communities/${communityId}`);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Community not found.');
+  }
+
+  await ref.update({
+    strikesCount: admin.firestore.FieldValue.increment(1),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await db.collection('communities').doc(communityId).collection('strikes').add({
+    reason: trimmedReason.slice(0, 500),
+    issuedBy: actorUid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await writeAudit(
+    actorUid,
+    'community_strike_issued',
+    communityId,
+    { communityName: snap.data().name || null, reason: trimmedReason.slice(0, 500) },
+    'community'
+  );
+
+  return { success: true, communityId, reason: trimmedReason };
 });
 
 // ----------------------------------------------------------------------

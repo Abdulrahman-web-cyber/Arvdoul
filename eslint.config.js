@@ -20,7 +20,9 @@ export default [
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
-      ecmaVersion: 2022,
+      // 2025 needed for JSON import attributes (`import x from './x.json' with
+      // { type: 'json' }`) which the i18n bundle and its test use.
+      ecmaVersion: 2025,
       sourceType: 'module',
       globals: {
         ...globals.browser,

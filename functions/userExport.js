@@ -44,6 +44,7 @@ exports.exportUserData = functions
 
     try {
       const userSnap = await db.collection('users').doc(uid).get().catch(() => null);
+      const privateSnap = await db.collection('users_private').doc(uid).get().catch(() => null);
       const settingsSnap = await db.collection('user_settings').doc(uid).get().catch(() => null);
 
       const [
@@ -69,6 +70,8 @@ exports.exportUserData = functions
         exportedAt: new Date().toISOString(),
         data: {
           profile: userSnap && userSnap.exists ? { id: uid, ...userSnap.data() } : null,
+          // Contact details / payment ids live on users_private.
+          privateProfile: privateSnap && privateSnap.exists ? privateSnap.data() : null,
           settings: settingsSnap && settingsSnap.exists ? settingsSnap.data() : null,
           posts,
           videos,

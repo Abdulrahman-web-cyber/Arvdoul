@@ -1,17 +1,16 @@
-// src/main.jsx - ULTIMATE FIXED VERSION
+// src/main.jsx
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import AppBootstrap from './app/AppBootstrap.jsx';
 import './styles/tailwind.css';
 
-// ---------------------------------------------------------------------------
 // CRITICAL POLYFILL: window.matchMedia
 // Framer Motion's useReducedMotion, ThemeProvider and useMediaQuery call
 // window.matchMedia unconditionally. Some embedded webviews / preview iframes
 // do not implement it - which previously crashed the Intro screen into its
 // error boundary ("Temporary Glitch") on every launch. The index.html inline
 // script covers first paint; this covers HMR / any import-order edge case.
-// ---------------------------------------------------------------------------
 if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   window.matchMedia = function (query) {
     return {
@@ -29,7 +28,6 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   };
 }
 
-// ---------------------------------------------------------------------------
 // PWA SERVICE WORKER LIFECYCLE
 // Production: register the SW after first paint (network-first shell + cached
 // versioned assets only — see public/sw.js). Dev: never register; instead
@@ -37,7 +35,6 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
 // dev module URLs (/src/**) served stale modules after source rewrites, which
 // broke every lazy route with "Failed to fetch dynamically imported module".
 // This self-heals browsers that still have the poisoned SW installed.
-// ---------------------------------------------------------------------------
 function setupServiceWorker() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 

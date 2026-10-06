@@ -1,4 +1,5 @@
-// src/utils/videoUtils.js - ARVDOUL VIDEO UTILITIES
+// src/utils/videoUtils.js
+//
 // Comprehensive utilities for video formatting, validation, and manipulation
 
 /**
@@ -212,7 +213,7 @@ export const formatFileSize = (bytes) => {
  */
 export const generateShareUrl = (videoId, baseUrl = window.location.origin) => {
   if (!videoId) return baseUrl;
-  return `${baseUrl}/videos/${videoId}`;
+  return `${baseUrl}/video/${videoId}`;
 };
 
 /**

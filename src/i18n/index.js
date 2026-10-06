@@ -1,6 +1,4 @@
 /**
- * src/i18n/index.js - ARVDOUL INTERNATIONALIZATION (i18n) BOOTSTRAP
- *
  * Initializes i18next with:
  *  - SYNCHRONOUS, FAILURE-PROOF base init at module load: `initReactI18next`
  *    is registered before any component renders, so `useTranslation()` can
@@ -29,13 +27,13 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import React from 'react';
 
-import en from './locales/en.json';
-import es from './locales/es.json';
-import fr from './locales/fr.json';
-import de from './locales/de.json';
-import pt from './locales/pt.json';
-import hi from './locales/hi.json';
-import ar from './locales/ar.json';
+import en from './locales/en.json' with { type: 'json' };
+import es from './locales/es.json' with { type: 'json' };
+import fr from './locales/fr.json' with { type: 'json' };
+import de from './locales/de.json' with { type: 'json' };
+import pt from './locales/pt.json' with { type: 'json' };
+import hi from './locales/hi.json' with { type: 'json' };
+import ar from './locales/ar.json' with { type: 'json' };
 
 export const SUPPORTED_LOCALES = [
   { code: 'en', label: 'English', rtl: false },

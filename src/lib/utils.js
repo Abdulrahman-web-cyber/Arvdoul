@@ -1,5 +1,7 @@
 // src/lib/utils.js
+//
 // Arvdoul-level utilities: small, well-tested helpers used across the app.
+
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 

@@ -1,6 +1,4 @@
 /**
- * src/screens/Profile/FollowersScreen.jsx - ARVDOUL Followers Screen
- * 
  * Displays list of followers with follow/unfollow functionality.
  * 
  * @component
@@ -28,7 +26,7 @@ export default function FollowersScreen() {
   const { theme } = useTheme();
   const { user: authUser } = useAuth();
   const storeUser = useAppStore(state => state.currentUser);
-  const currentUser = storeUser || authUser;
+  const currentUser = authUser || storeUser;
   const currentUserId = currentUser?.uid || authUser?.uid || getStoredUid();
   const { follow, unfollow, followLoading } = useProfileStore();
   

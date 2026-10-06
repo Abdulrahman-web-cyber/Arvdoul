@@ -1,5 +1,5 @@
 // src/screens/Spaces/SpacesScreen.jsx
-// 🎙️ ARVDOUL LIVE AUDIO SPACES & VOICE LOUNGES
+//
 // Real-time audio stages, speaker hand raising, super coin tipping, and interactive reactions
 
 import React, { useState, useEffect } from 'react';
@@ -87,12 +87,19 @@ export default function SpacesScreen() {
     toast.success(`Joined "${space.title}" 🎧`);
   };
 
-  const handleToggleHand = () => {
-    setIsHandRaised(!isHandRaised);
-    if (!isHandRaised) {
-      toast.info('Raised hand to speak! ✋ The host was notified.');
-    } else {
-      toast.info('Lowered hand.');
+  const handleToggleHand = async () => {
+    if (!activeSpace?.id || !user?.uid) {
+      toast.error('Join a space to raise your hand.');
+      return;
+    }
+    const raising = !isHandRaised;
+    setIsHandRaised(raising);
+    try {
+      await spacesService.toggleRaisedHand(activeSpace.id, user, raising);
+      toast.info(raising ? 'Hand raised ✋' : 'Hand lowered');
+    } catch {
+      setIsHandRaised(!raising);
+      toast.error('Could not update your hand state.');
     }
   };
 
@@ -116,13 +123,13 @@ export default function SpacesScreen() {
     }
 
     try {
-      // REAL server-side debit+credit; the service rejects insufficient coins.
+      // server-side debit+credit; the service rejects insufficient coins.
       const result = await spacesService.sendTip(activeSpace.id, tipAmount, tipModalSpeaker.id, user.uid);
       if (!result?.success) {
         toast.error(result?.error || 'Tip could not be sent');
         return;
       }
-      // Refresh the user's REAL balance from the ledger.
+      // Refresh the user's balance from the ledger.
       try {
         const { getMonetizationService } = await import('../../services/monetizationService.js');
         const bal = await getMonetizationService().getBalance(user.uid);

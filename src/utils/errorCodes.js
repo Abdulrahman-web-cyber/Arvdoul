@@ -1,4 +1,7 @@
+// src/utils/errorCodes.js
+//
 // Error taxonomy (Pillar 17) — used by GlobalErrorBoundary and services
+
 export const ERROR_CODES = {
   // Validation 1000-1999
   VALIDATION_ERROR: 1000,

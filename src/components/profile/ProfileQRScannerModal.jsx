@@ -1,6 +1,4 @@
 /**
- * src/components/profile/ProfileQRScannerModal.jsx - ARVDOUL QR Scanner Modal
- * 
  * High-performance, robust QR Code scanner that allows a user to scan another
  * user's unique Arvdoul QR code and navigate directly to their real profile.
  * 

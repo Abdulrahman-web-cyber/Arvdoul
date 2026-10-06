@@ -79,6 +79,10 @@ describe('level curve (pure math)', () => {
       expect(typeof action).toBe('string');
     }
   });
+
+  test('video_watched is a registered action so watch XP cannot be refused', () => {
+    expect(XP_RULES.video_watched).toEqual({ xp: 1, dailyCap: 50 });
+  });
 });
 
 describe('awardExperience contract (server-authoritative)', () => {

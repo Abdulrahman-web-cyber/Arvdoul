@@ -1,22 +1,4 @@
-// src/screens/HomeScreen.jsx – ARVDOUL ULTIMATE FEED v33.0 (FINAL – ENTERPRISE ULTRA PRO MAX)
-// ✅ All critical issues from deep audit fixed:
-//   - Retry closure captures correct reset/skipCache parameters
-//   - feedRef used instead of feedStateRef for cache logic
-//   - MediaPreloader counters reset properly per batch
-//   - SessionEngine sliding window (no aggressive full reset)
-//   - VisibilityProvider root condition fixed (null = not ready)
-//   - useMemo dependencies corrected
-//   - Consolidated feedRuntimeRef (single source of truth)
-//   - pendingRequestPromises cleanup with .finally()
-//   - Session token (sessionId) prevents stale async updates
-//   - IntersectionObserver disconnects before recreate
-//   - insertNewPosts sorts new posts by createdAt desc
-//   - Set rebuild optimized (only on length change)
-//   - Offline fallback prioritises cache over error state
-//   - hasMore uses consistent logic (nextCursor priority)
-// ✅ Extreme styling – Arvdoul purple gradient, glassmorphism, smooth animations
-// ✅ Production‑ready, surpasses TikTok/Instagram/Facebook feed architecture
-// ✅ No file splitting – single unified screen
+// src/screens/HomeScreen.jsx
 
 import React, { useState, useEffect, useCallback, useRef, useReducer, useContext, createContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -31,7 +13,8 @@ import {
 import { Virtuoso } from 'react-virtuoso';
 import feedService from '../services/feedService';
 import userService from '../services/userService';
-import { getBalance, addCoins } from '../services/monetizationService.js';
+import { getBalance, watchAd, getAd } from '../services/monetizationService.js';
+import { AD_REWARD_COINS } from '../shared/levelConfig.cjs';
 import PostCard from './PostCard';
 import CommentsDrawer from './CommentsDrawer';
 import PostOptionsDrawer from './PostOptionsDrawer';
@@ -47,7 +30,6 @@ import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-// ==================== CONSTANTS ====================
 const FEED_PAGE_SIZE = 15;
 const RETRY_MAX = 3;
 const RETRY_BASE_DELAY = 1000;
@@ -57,6 +39,9 @@ const WARM_FEED_LIMIT = 500;
 const MAX_PENDING_NEW_POSTS = 50;
 const PENDING_POSTS_TTL_MS = 30000;
 const PREDICTIVE_PRELOAD_SCROLL_RATIO = 0.6;
+// Reward-ad watch duration. Must be >= 5 (server minimum) and a whole number of
+// 30s blocks so the server's AD_REWARD_PER_30S formula credits exactly one block.
+const AD_WATCH_SECONDS = 30;
 const DB_VERSION = 4;
 const CACHE_VERSION = 6;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -81,7 +66,6 @@ const STATUS = {
   PRELOADING: 'preloading',
 };
 
-// ==================== DEVICE PERFORMANCE TIERING ====================
 function getDevicePerformanceTier() {
   if (typeof navigator === 'undefined') return 'mid';
   const memory = navigator.deviceMemory || 4;
@@ -91,7 +75,6 @@ function getDevicePerformanceTier() {
   return 'mid';
 }
 
-// ==================== SAFE IDLE CALLBACK ====================
 const safeRequestIdleCallback = (callback, options) => {
   if (typeof window !== 'undefined' && window.requestIdleCallback) {
     return window.requestIdleCallback(callback, options);
@@ -106,14 +89,12 @@ const safeCancelIdleCallback = (id) => {
   }
 };
 
-// ==================== TRUE EXPONENTIAL BACKOFF ====================
 function getRetryDelay(attempt) {
   const base = RETRY_BASE_DELAY * Math.pow(2, attempt - 1);
   const jitter = Math.random() * 200;
   return Math.min(base + jitter, 30000);
 }
 
-// ==================== INDEXEDDB CACHE WITH MIGRATION ====================
 let dbInstance = null;
 async function getCacheDB() {
   if (dbInstance) return dbInstance;
@@ -215,7 +196,6 @@ async function getScrollPosition(userId) {
   } catch { return null; }
 }
 
-// ==================== OPTIMISTIC QUEUE (persisted) ====================
 let optimisticQueue = [];
 let isProcessingQueue = false;
 let queueLoaded = false;
@@ -287,7 +267,6 @@ async function processOptimisticQueue(userId) {
   isProcessingQueue = false;
 }
 
-// ==================== NORMALIZED FEED STORE (active memory) ====================
 const feedReducer = (state, action) => {
   switch (action.type) {
     case 'SET_FEED': {
@@ -317,7 +296,7 @@ const feedReducer = (state, action) => {
     case 'PREPEND_FEED': {
       const newById = { ...state.byId };
       const existingIds = new Set(state.order);
-      // ✅ sort new posts before insertion
+      // sort new posts before insertion
       const sortedNew = [...action.payload].sort((a, b) => {
         const aTime = a.createdAt?.getTime?.() || a.createdAt?.toDate?.()?.getTime() || 0;
         const bTime = b.createdAt?.getTime?.() || b.createdAt?.toDate?.()?.getTime() || 0;
@@ -349,7 +328,6 @@ const feedReducer = (state, action) => {
   }
 };
 
-// ==================== FEED SESSION ENGINE (sliding window, no full reset) ====================
 class FeedSessionEngine {
   constructor() {
     this.history = []; // stores { postId, authorId, type, timestamp }
@@ -391,7 +369,6 @@ class FeedSessionEngine {
   }
 }
 
-// ==================== FEED HYDRATION ====================
 function hydratePost(post) {
   const authorName = post.authorName || 'Arvdoul User';
   const authorId = post.authorId || post.userId || '';
@@ -407,7 +384,6 @@ function hydratePost(post) {
   };
 }
 
-// ==================== MEDIA PRELOAD COORDINATOR (LRU, batch counters) ====================
 class MediaPreloader {
   constructor() {
     this.loadedUrls = new Map();
@@ -478,7 +454,6 @@ class MediaPreloader {
   }
 }
 
-// ==================== FEED TELEMETRY ====================
 class FeedTelemetry {
   constructor() {
     this.metrics = { feedLoadStart: 0, feedLoadEnd: 0, firstPostRender: 0 };
@@ -494,7 +469,6 @@ class FeedTelemetry {
   }
 }
 
-// ==================== VISIBILITY PROVIDER (fixed root condition, disconnect observer) ====================
 const VisibilityContext = createContext({
   register: () => {},
   unregister: () => {},
@@ -596,7 +570,6 @@ function VisibilityProvider({ children, scrollerRef }) {
   );
 }
 
-// ==================== POST CARD WRAPPER ====================
 const MemoizedPostCard = React.memo(PostCard);
 
 const PostWithTracking = React.memo(({
@@ -643,12 +616,10 @@ const PostWithTracking = React.memo(({
   );
 });
 
-// ==================== NON-BLOCKING TOP BANNER ====================
 const FeedLoadingBanner = () => (
   <TopAppLoadingBanner isAnimating={true} label="Refreshing feed in background..." />
 );
 
-// ==================== MAIN HOMESCREEN ====================
 export default function HomeScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -724,6 +695,8 @@ export default function HomeScreen() {
   const [isRewardAdOpen, setIsRewardAdOpen] = useState(false);
   const [adWatchSeconds, setAdWatchSeconds] = useState(0);
   const [isClaimingCoins, setIsClaimingCoins] = useState(false);
+  const [rewardAd, setRewardAd] = useState(null);
+  const [rewardAdLoading, setRewardAdLoading] = useState(false);
 
   const FEED_CATEGORIES = useMemo(() => [
     { id: 'foryou', label: '✨ For You', desc: 'Recommended posts tailored to you' },
@@ -764,9 +737,22 @@ export default function HomeScreen() {
     return () => { isMounted = false; };
   }, [user?.uid]);
 
-  const handleOpenRewardAd = useCallback(() => {
+  const handleOpenRewardAd = useCallback(async () => {
+    if (!user?.uid) return;
     setIsRewardAdOpen(true);
-    setAdWatchSeconds(5);
+    setRewardAdLoading(true);
+    setAdWatchSeconds(AD_WATCH_SECONDS);
+    // Resolve a real campaign before counting down; a rewarded ad that the
+    // server cannot match must not be watchable, since the claim would fail.
+    try {
+      const ad = await getAd('home', user.uid, {});
+      setRewardAd(ad || null);
+      if (!ad) toast.info('No sponsored ads available right now.');
+    } catch {
+      setRewardAd(null);
+    } finally {
+      setRewardAdLoading(false);
+    }
     const interval = setInterval(() => {
       setAdWatchSeconds((prev) => {
         if (prev <= 1) {
@@ -776,33 +762,35 @@ export default function HomeScreen() {
         return prev - 1;
       });
     }, 1000);
-  }, []);
+  }, [user?.uid]);
 
   const handleClaimReward = useCallback(async () => {
-    if (isClaimingCoins) return;
+    if (isClaimingCoins || adWatchSeconds > 0) return;
     setIsClaimingCoins(true);
     try {
-      const uid = user?.uid || 'local_creator';
-      if (user?.uid) {
-        await addCoins(uid, 15, 'reward_ad');
+      if (!user?.uid) {
+        throw new Error('Sign in to claim ad rewards');
       }
-      const newBal = userCoins + 15;
-      setUserCoins(newBal);
-      localStorage.setItem(`arvdoul_coins_${uid}`, String(newBal));
+      if (!rewardAd?.id) {
+        throw new Error('No ad available to credit');
+      }
+      // Server-verified reward: the client never credits coins locally.
+      const result = await watchAd('home', rewardAd.id, AD_WATCH_SECONDS, {});
+      if (typeof result?.newBalance === 'number') {
+        setUserCoins(result.newBalance);
+        try { localStorage.setItem(`arvdoul_coins_${user.uid}`, String(result.newBalance)); } catch {}
+      }
       triggerHaptic('success');
-      toast.success('🎉 Claimed +15 Coins from Sponsored Ad!');
+      toast.success(`🎉 Claimed +${result?.coinsAdded ?? 0} Coins from Sponsored Ad!`);
       setIsRewardAdOpen(false);
-    } catch {
-      const uid = user?.uid || 'local_creator';
-      const newBal = userCoins + 15;
-      setUserCoins(newBal);
-      localStorage.setItem(`arvdoul_coins_${uid}`, String(newBal));
-      toast.success('🎉 +15 Coins added to balance!');
-      setIsRewardAdOpen(false);
+      setRewardAd(null);
+    } catch (err) {
+      toast.error('Could not credit the reward. Please try again.');
+      console.warn('[HomeScreen] ad reward failed:', err?.message);
     } finally {
       setIsClaimingCoins(false);
     }
-  }, [user?.uid, userCoins, isClaimingCoins]);
+  }, [user?.uid, isClaimingCoins, adWatchSeconds]);
 
   const virtuosoRef = useRef(null);
   const scrollerRef = useRef(null);
@@ -999,7 +987,7 @@ export default function HomeScreen() {
                 }, CACHE_WRITE_DEBOUNCE_MS);
               }
             }
-            // ✅ hasMore: prioritise nextCursor
+            // hasMore: prioritise nextCursor
             const more = result.nextCursor ? true : (result.hasMore === true);
             setHasMore(more);
             nextCursorRef.current = result.nextCursor || null;
@@ -1060,7 +1048,7 @@ export default function HomeScreen() {
         }
       })();
 
-      // ✅ promise cleanup in .finally
+      // promise cleanup in .finally
       const wrappedPromise = promise.finally(() => {
         if (pendingRequestPromisesRef.current.get(requestKey) === wrappedPromise) {
           pendingRequestPromisesRef.current.delete(requestKey);
@@ -1145,7 +1133,7 @@ export default function HomeScreen() {
     let newPosts = pendingNewPostIdsRef.current
       .map(id => pendingNewPostsMapRef.current.get(id)?.post)
       .filter(Boolean);
-    // ✅ sort before insertion
+    // sort before insertion
     newPosts.sort((a, b) => {
       const aTime = a.createdAt?.getTime?.() || a.createdAt?.toDate?.()?.getTime() || 0;
       const bTime = b.createdAt?.getTime?.() || b.createdAt?.toDate?.()?.getTime() || 0;
@@ -1474,7 +1462,7 @@ export default function HomeScreen() {
                               title="Watch Sponsored Ad for Free Coins"
                             >
                               <Gift className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">+15</span>
+                              <span className="hidden sm:inline">+{AD_REWARD_COINS}</span>
                             </button>
                           </div>
                         </div>
@@ -1593,20 +1581,26 @@ export default function HomeScreen() {
                   <Coins className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Sponsored Partner Ad</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">{rewardAd?.title || 'Sponsored Partner Ad'}</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Watch this quick sponsor showcase to earn <span className="font-bold text-amber-500">+15 Free Coins</span> for tips and post boosts!
+                    {rewardAdLoading
+                      ? 'Loading sponsor…'
+                      : rewardAd
+                        ? <>Watch this sponsor to earn <span className="font-bold text-amber-500">+{AD_REWARD_COINS} Coins</span> for tips and post boosts!</>
+                        : 'No sponsored ads are available right now. Please check back soon.'}
                   </p>
                 </div>
-                <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-left space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-purple-700 dark:text-purple-300">Arvdoul Creator Rewards</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 font-bold">SPONSORED</span>
+                {rewardAd && (
+                  <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 text-left space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-purple-700 dark:text-purple-300">{rewardAd.advertiserId || rewardAd.title || 'Arvdoul Sponsor'}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-900 dark:text-purple-100 font-bold">SPONSORED</span>
+                    </div>
+                    {rewardAd.description && (
+                      <p className="text-xs text-gray-600 dark:text-gray-300">{rewardAd.description}</p>
+                    )}
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-300">
-                    Empowering creators globally with zero-commission tipping and instant revenue sharing.
-                  </p>
-                </div>
+                )}
                 <div className="pt-2 flex items-center justify-center gap-3">
                   {adWatchSeconds > 0 ? (
                     <div className="w-full py-2.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 font-bold text-xs flex items-center justify-center gap-2">
@@ -1616,11 +1610,11 @@ export default function HomeScreen() {
                   ) : (
                     <button
                       onClick={handleClaimReward}
-                      disabled={isClaimingCoins}
-                      className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2"
+                      disabled={isClaimingCoins || !rewardAd}
+                      className="w-full py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-xs shadow-lg shadow-purple-500/30 hover:opacity-95 transition-opacity cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Gift className="w-4 h-4" />
-                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim +15 Coins Now 🎉'}
+                      {isClaimingCoins ? 'Crediting Coins...' : 'Claim Coins Now 🎉'}
                     </button>
                   )}
                 </div>

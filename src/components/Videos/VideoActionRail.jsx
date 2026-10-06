@@ -1,4 +1,5 @@
-// src/components/Videos/VideoActionRail.jsx - RIGHT ACTION RAIL
+// src/components/Videos/VideoActionRail.jsx
+
 import React, { memo } from 'react';
 import { motion } from 'framer-motion';
 import {

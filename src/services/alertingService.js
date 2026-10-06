@@ -1,6 +1,4 @@
 /**
- * src/services/alertingService.js - ARVDOUL THRESHOLD ALERTING & ANOMALY TRIGGER v8.0
- *
  * Implements:
  * 1. Multi-Condition Threshold Alerting:
  *    - Error rate > 1.0% over 5-minute window -> P1 Alert

@@ -1,6 +1,4 @@
 /**
- * src/utils/ErrorHandler.js - ARVDOUL Error Handler
- *
  * Consistent error taxonomy and enhancement across the service layer.
  * Error code ranges (per refactoring program):
  *   1000-1999 validation, 2000-2999 auth, 3000-3999 permission,

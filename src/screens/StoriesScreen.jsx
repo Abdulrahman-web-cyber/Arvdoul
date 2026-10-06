@@ -1,5 +1,5 @@
-// src/screens/StoriesScreen.jsx - ARVDOUL STORIES & VIBES IMMERSIVE SCREEN
-// 100% Pixel-perfect replica of Arvdoul Stories Grid & Interactive Viewer from user design specs
+// src/screens/StoriesScreen.jsx
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -28,6 +28,24 @@ const CATEGORY_TABS = [
 
 const QUICK_EMOJIS = ['❤️', '🔥', '👏', '😮', '😂', '💎'];
 
+// Real relative time from a Firestore Timestamp/Date/ISO string. Returns null
+// when the story carries no creation time so the UI can omit it rather than
+// claim every story was posted "Recently".
+function relativeTime(createdAt) {
+  if (!createdAt) return null;
+  const ms = typeof createdAt.toDate === 'function'
+    ? createdAt.toDate().getTime()
+    : new Date(createdAt).getTime();
+  if (!Number.isFinite(ms)) return null;
+  const diff = Date.now() - ms;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function StoriesScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +73,7 @@ export default function StoriesScreen() {
 
   const progressIntervalRef = useRef(null);
 
-  // Load REAL stories from storyService (Firestore-backed feed)
+  // Load stories from storyService (Firestore-backed feed)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -68,7 +86,7 @@ export default function StoriesScreen() {
           const author = storiesArr[0]?.authorName || g.userId;
           const authorPhoto = storiesArr[0]?.authorPhoto || '/assets/default-profile.png';
           return {
-            id: g.userId || `g-${Math.random().toString(36).slice(2, 7)}`,
+            id: g.userId,
             user: {
               id: g.userId,
               name: author,
@@ -79,7 +97,7 @@ export default function StoriesScreen() {
               isCloseFriend: false,
               isLive: false,
             },
-            timeAgo: 'Recently',
+            timeAgo: relativeTime(storiesArr[0]?.createdAt),
             itemsCount: storiesArr.length,
             activeItemIndex: 0,
             mediaType: storiesArr[0]?.type || 'image',
@@ -88,7 +106,6 @@ export default function StoriesScreen() {
             caption: storiesArr[0]?.content || '',
             viewsCount: String(storiesArr[0]?.stats?.views || 0),
             isSponsored: Boolean(storiesArr[0]?.isSponsored || g.isSponsored),
-            rewardCoins: storiesArr[0]?.rewardCoins || 0,
             ctaText: storiesArr[0]?.ctaText || '',
             ctaUrl: storiesArr[0]?.ctaUrl || '',
             items: storiesArr.map((st) => ({
@@ -99,7 +116,6 @@ export default function StoriesScreen() {
               duration: st.duration || 5,
               ctaText: st.ctaText || '',
               ctaUrl: st.ctaUrl || '',
-              rewardCoins: st.rewardCoins || 0,
             })),
           };
         });
@@ -190,7 +206,7 @@ export default function StoriesScreen() {
     progressIntervalRef.current = setInterval(() => {
       setStoryProgress((prev) => {
         if (prev + step >= 100) {
-          // REAL completion event (spec §23/58): the item was watched to the
+          // completion event (spec §23/58): the item was watched to the
           // end — buffered server-side, never a per-frame write.
           if (currentItem?.id) {
             getStoryService().reportStoryCompletion(currentItem.id).catch(() => {});
@@ -223,7 +239,7 @@ export default function StoriesScreen() {
     const x = e.clientX - rect.left;
     const isRight = x > rect.width / 2;
 
-    // REAL tap analytics (spec §58) — buffered, never per-tap doc writes.
+    // tap analytics (spec §58) — buffered, never per-tap doc writes.
     const svc = getStoryService();
     if (isRight) {
       if (currentItem?.id) svc.trackStoryAnalytics(currentItem.id, 'forward').catch(() => {});
@@ -292,7 +308,7 @@ export default function StoriesScreen() {
   }, [activeStoryIndex, activeItemIndex, currentStory, filteredStories.length]);
 
   // Handle quick emoji reaction with particle explosion
-  // REAL reaction via reactToStory (spec §22) — particle is the visual
+  // reaction via reactToStory (spec §22) — particle is the visual
   // confirmation, the service call is the actual interaction.
   const [reactingId, setReactingId] = useState(null);
   const handleSendReaction = async (emoji) => {
@@ -315,7 +331,7 @@ export default function StoriesScreen() {
   // Handle gift coins
   const [gifting, setGifting] = useState(false);
 
-  // REAL coin gift via the double-entry ledger (spec — no free coins).
+  // coin gift via the double-entry ledger (spec — no free coins).
   const handleGiftCoin = async () => {
     if (!user?.uid || gifting) return;
     const storyUserId = currentStory?.user?.id || currentStory?.userId;
@@ -340,7 +356,7 @@ export default function StoriesScreen() {
     }
   };
 
-  // Handle story reply — REAL: replyToStory creates a direct conversation
+  // Handle story reply — replyToStory creates a direct conversation
   // with the creator carrying the vibe reference (spec §21/65).
   const [replying, setReplying] = useState(false);
   const handleSendReply = async (e) => {
@@ -741,7 +757,9 @@ export default function StoriesScreen() {
                     {currentStory.user.verified && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400" />
                     )}
-                    <span className="text-xs text-white/70">• {currentStory.timeAgo}</span>
+                    {currentStory.timeAgo && (
+                      <span className="text-xs text-white/70">• {currentStory.timeAgo}</span>
+                    )}
                   </div>
                   {currentStory.caption && (
                     <span className="text-xs text-white/90 truncate max-w-[200px] drop-shadow">
@@ -828,7 +846,7 @@ export default function StoriesScreen() {
 
             {/* Bottom Action Rail: Reply Bar, Emojis, Gift */}
             <div className="absolute bottom-0 left-0 right-0 z-30 p-4 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col gap-3">
-              {/* Sponsored CTA Banner & Coin Reward */}
+              {/* Sponsored CTA Banner */}
               {currentStory?.isSponsored && (
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-purple-900/80 via-indigo-900/80 to-blue-900/80 border border-purple-400/40 backdrop-blur-xl shadow-xl">
                   <div className="flex items-center gap-2.5">
@@ -838,35 +856,34 @@ export default function StoriesScreen() {
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-bold text-white">Sponsored Partner</span>
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                          +{currentStory.rewardCoins || 5} Coins
-                        </span>
                       </div>
                       <span className="text-[11px] text-white/80 line-clamp-1">
-                        {currentStory.caption || 'Tap CTA below to visit and claim reward'}
+                        {currentStory.caption || 'Tap CTA below to visit the sponsor'}
                       </span>
                     </div>
                   </div>
-                  <a
-                    href={currentStory.ctaUrl || 'https://arvdoul.com'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const svc = getMonetizationService();
-                        if (user?.uid) {
-                          await svc.recordAdClick(currentStory.id, 'stories', user.uid);
-                        }
-                        toast.success(`🎁 +${currentStory.rewardCoins || 5} ARVDOUL Coins credited!`);
-                      } catch {
-                        toast.success('🎁 Reward claimed!');
-                      }
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] to-[#0EA3E6] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
-                  >
-                    {currentStory.ctaText || 'Learn More'}
-                  </a>
+                  {currentStory.ctaUrl ? (
+                    <a
+                      href={currentStory.ctaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Real server-side click tracking; no coins are minted
+                        // client-side (there is no server story-reward path).
+                        try {
+                          getMonetizationService().recordAdImpression(currentStory.id, 'stories_click');
+                        } catch {}
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] to-[#0EA3E6] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                    >
+                      {currentStory.ctaText || 'Learn More'}
+                    </a>
+                  ) : (
+                    <span className="px-3.5 py-2 rounded-xl bg-white/10 text-white/70 text-xs font-bold whitespace-nowrap">
+                      {currentStory.ctaText || 'Sponsored'}
+                    </span>
+                  )}
                 </div>
               )}
 

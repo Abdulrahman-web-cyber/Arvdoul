@@ -1,4 +1,5 @@
-// src/screens/Economy/WalletScreen.jsx — ARVDOUL CITIZEN WALLET & ECONOMIC LEDGER (Part 2)
+// src/screens/Economy/WalletScreen.jsx
+//
 // Double-entry, ledger-backed, multi-state transactions.
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -23,13 +24,19 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL } from '../../shared/levelConfig.cjs';
 
-const COIN_PACKAGES = [
-  { id: 'coins_100',  coins: 100,  price: '$0.99',  bonus: 0 },
-  { id: 'coins_500',  coins: 500,  price: '$4.99',  bonus: 50, popular: true },
-  { id: 'coins_1200', coins: 1200, price: '$9.99',  bonus: 200 },
-  { id: 'coins_2500', coins: 2500, price: '$19.99', bonus: 500 },
-];
+// Package amounts/prices come from the shared COIN_PACKAGES (the same table the
+// server prices from). The server credits `coins` exactly, so no bonus is
+// advertised here.
+const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg, i) => ({
+  id: pkg.id,
+  coins: pkg.coins,
+  popular: i === 1,
+  price: `$${(pkg.priceUsdCents / 100).toFixed(2)}`,
+}));
+
+const MIN_WITHDRAWAL_USD = coinsToUsd(MIN_WITHDRAWAL_COINS).toFixed(2);
 
 export default function WalletScreen() {
   const navigate = useNavigate();
@@ -43,6 +50,7 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // all | in | out
   const [paymentPkg, setPaymentPkg] = useState(null);
+  const [purchasing, setPurchasing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
 
@@ -66,11 +74,35 @@ export default function WalletScreen() {
     loadWallet();
   }, [loadWallet]);
 
+  // Real Stripe purchase: the modal hands back a PaymentMethod id which is
+  // verified server-side by the purchaseCoins callable. No free-coin path.
+  const confirmPurchase = useCallback(async (paymentMethodId) => {
+    if (!paymentPkg || purchasing) return;
+    setPurchasing(true);
+    try {
+      const res = await monetizationService.purchaseCoins(paymentPkg.id, paymentMethodId);
+      if (res?.success) {
+        toast.success(`+${res?.coinsAdded ?? paymentPkg.coins} coins added to your wallet.`);
+        setPaymentPkg(null);
+        await loadWallet();
+      } else if (res?.offlineQueued) {
+        toast.info('Purchase queued — it will complete when you are back online.');
+        setPaymentPkg(null);
+      } else {
+        toast.error(res?.error || 'Purchase could not be completed.');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Purchase failed.');
+    } finally {
+      setPurchasing(false);
+    }
+  }, [paymentPkg, purchasing, loadWallet]);
+
   const handleWithdrawal = async (e) => {
     e.preventDefault();
     const amount = Number(withdrawAmount);
-    if (!amount || amount < 5000) {
-      toast.error('Minimum withdrawal amount is 5,000 coins ($50.00 USD).');
+    if (!amount || amount < MIN_WITHDRAWAL_COINS) {
+      toast.error(`Minimum withdrawal amount is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins ($${MIN_WITHDRAWAL_USD} USD).`);
       return;
     }
     if (amount > (wallet?.availableCoins || 0)) {
@@ -178,6 +210,9 @@ export default function WalletScreen() {
               <span className="font-semibold text-emerald-400 mt-0.5 block">
                 {(wallet?.totalEarned || 0).toLocaleString()} Coins
               </span>
+              <span className="text-[10px] text-gray-500 block">
+                ${formatCoinsAsUsd(wallet?.totalEarned || 0)} USD
+              </span>
             </div>
             <div>
               <span className="text-gray-500 block">Lifetime Spent</span>
@@ -204,7 +239,7 @@ export default function WalletScreen() {
               >
                 <div>
                   <span className="text-lg font-bold">{pkg.coins}</span>
-                  <span className="text-xs text-gray-500 block">+{pkg.bonus} bonus</span>
+                  <span className="text-xs text-gray-500 block">Coins</span>
                 </div>
                 <div className="mt-4 pt-2 border-t border-gray-800/40 flex items-center justify-between">
                   <span className="text-xs font-semibold text-indigo-400">{pkg.price}</span>
@@ -223,15 +258,15 @@ export default function WalletScreen() {
               <span>Creator Payouts</span>
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Convert earned creator revenue into fiat currency via Stripe Connect. Minimum threshold: 5,000 coins ($50 USD).
+              Convert earned creator revenue into fiat currency via Stripe Connect. Minimum threshold: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${MIN_WITHDRAWAL_USD} USD).
             </p>
 
             <form onSubmit={handleWithdrawal} className="mt-4 flex items-center space-x-2">
               <input
                 type="number"
-                min="5000"
+                min={MIN_WITHDRAWAL_COINS}
                 step="100"
-                placeholder="Coins to withdraw (min 5,000)"
+                placeholder={`Coins to withdraw (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 className={`p-2.5 rounded-xl border text-xs flex-1 outline-none ${
@@ -313,18 +348,14 @@ export default function WalletScreen() {
         </section>
       </main>
 
-      {/* Payment Modal */}
-      {paymentPkg && (
-        <PaymentModal
-          pkg={paymentPkg}
-          onSuccess={() => {
-            setPaymentPkg(null);
-            toast.success('Coins credited to reserve successfully!');
-            loadWallet();
-          }}
-          onCancel={() => setPaymentPkg(null)}
-        />
-      )}
+      {/* Payment Modal — real Stripe checkout */}
+      <PaymentModal
+        open={!!paymentPkg}
+        title={paymentPkg ? `Buy ${paymentPkg.coins.toLocaleString()} Coins` : 'Buy Coins'}
+        amountLabel={paymentPkg ? paymentPkg.price : ''}
+        onConfirm={confirmPurchase}
+        onClose={() => setPaymentPkg(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,4 @@
 /**
- * src/services/incidentService.js - ARVDOUL INCIDENT MANAGEMENT & POSTMORTEM ENGINE v8.0
- *
  * Implements:
  * 1. P0-P3 Incident Lifecycle: Tracks incident declaration, incident commander assignment, status updates, and resolution.
  * 2. SLA Timeline Tracking: Measures Mean-Time-To-Detect (MTTD) and Mean-Time-To-Resolve (MTTR).

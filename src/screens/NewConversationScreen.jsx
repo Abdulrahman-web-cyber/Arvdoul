@@ -1,8 +1,7 @@
 // src/screens/NewConversationScreen.jsx
-// 🎯 Create new conversation screen (Web version - React Router)
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import messagingService from '../services/messagesService';
@@ -15,9 +14,14 @@ import { X, Search, UserPlus, Loader2, ArrowLeft } from 'lucide-react';
 
 const NewConversationScreen = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { theme, isDark } = useTheme();
   const { loadConversations } = useMessagingStore();
+
+  // Post shared from PostCard ("Send to Friends"): we hold the id and send it as
+  // a real message after a conversation is created.
+  const sharePostId = searchParams.get('sharePost');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery] = useDebounce(searchQuery, 300);
@@ -108,10 +112,24 @@ const NewConversationScreen = () => {
       }
 
       const result = await messagingService.createConversation(participants, options);
-      
+
       if (result.success) {
+        // If we arrived from "Send to Friends", deliver the post as a real
+        // message in the new conversation.
+        if (sharePostId) {
+          try {
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            await messagingService.sendMessage(result.conversation.id, {
+              type: 'text',
+              content: `Check out this post on ARVDOUL: ${origin}/post/${sharePostId}`,
+            });
+            toast.success('Post sent');
+          } catch (shareErr) {
+            toast.error('Conversation created, but the post could not be sent');
+          }
+        }
         await loadConversations(user.uid);
-        toast.success('Conversation created');
+        if (!sharePostId) toast.success('Conversation created');
         navigate(`/messages/${result.conversation.id}`);
       } else {
         toast.error('Failed to create conversation');

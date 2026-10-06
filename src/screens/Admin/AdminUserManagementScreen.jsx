@@ -1,22 +1,28 @@
-// src/screens/Admin/AdminUserManagementScreen.jsx - ARVDOUL USER MANAGEMENT
-// ✅ List and search users
-// ✅ View user details
-// ✅ Suspend/Ban/Verify/Roles
+// src/screens/Admin/AdminUserManagementScreen.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { 
-  ArrowLeft, Search, Filter, MoreVertical, Shield,
-  Ban, CheckCircle, AlertTriangle, Eye, X, User,
-  ChevronRight, ShieldCheck, XCircle, Clock
+  ArrowLeft, Search, MoreVertical,
+  Ban, CheckCircle, Eye, User,
+  ShieldCheck, XCircle, Clock
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { listUsers, applyUserAdminAction } from '../../services/callableService.js';
+
+// Callable responses serialise Firestore timestamps as {_seconds} or ISO
+// strings depending on runtime; render only real values, never "Invalid Date".
+const formatJoined = (createdAt) => {
+  if (!createdAt) return '-';
+  if (typeof createdAt?.toDate === 'function') return createdAt.toDate().toLocaleDateString();
+  const seconds = createdAt?._seconds ?? (typeof createdAt === 'number' ? createdAt : null);
+  const date = seconds != null ? new Date(seconds * 1000) : new Date(createdAt);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
+};
 
 const AdminUserManagementScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,15 +30,13 @@ const AdminUserManagementScreen = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
 
-  // Load users from Firestore (paged)
+  // Load users through the admin callable (merges users_private email, and the
+  // collection itself is admin-only). A direct client read cannot see users_private.
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
-        const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-        const firestore = await getFirestoreInstance();
-        const snap = await getDocs(query(collection(firestore, 'users'), orderBy('createdAt', 'desc'), limit(100)));
-        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const res = await listUsers(100);
+        setUsers(Array.isArray(res?.users) ? res.users : []);
       } catch (error) {
         toast.error('Could not load users.');
       } finally {
@@ -56,26 +60,22 @@ const AdminUserManagementScreen = () => {
            u.username?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // User action — real Firestore updates (ban/suspend/verify/restore)
+  // User action — server-authoritative, admin-gated and audit-logged. A direct
+  // client write to accountStatus/isVerified is (correctly) denied by rules.
   const handleUserAction = async (userId, action) => {
     try {
-      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-      const { getFirestoreInstance } = await import('../../firebase/firebase.js');
-      const firestore = await getFirestoreInstance();
-      const ref = doc(firestore, 'users', userId);
-      const payload = { updatedAt: serverTimestamp() };
-      switch (action) {
-        case 'ban': payload.accountStatus = 'banned'; break;
-        case 'suspend': payload.accountStatus = 'suspended'; break;
-        case 'unban':
-        case 'restore': payload.accountStatus = 'active'; break;
-        case 'verify': payload.isVerified = true; break;
-        case 'unverify': payload.isVerified = false; break;
-        default: break;
-      }
-      await updateDoc(ref, payload);
-      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...payload } : u)));
-      toast.success(`User ${action.replace(/([A-Z])/g, ' $1').toLowerCase()}d`);
+      await applyUserAdminAction(userId, action);
+      const patch = action === 'verify' ? { isVerified: true }
+        : action === 'unverify' ? { isVerified: false }
+        : action === 'ban' ? { accountStatus: 'banned' }
+        : action === 'suspend' ? { accountStatus: 'suspended' }
+        : { accountStatus: 'active' };
+      const labels = {
+        verify: 'verified', unverify: 'unverified', ban: 'banned',
+        suspend: 'suspended', unban: 'unbanned', restore: 'restored',
+      };
+      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...patch } : u)));
+      toast.success(`User ${labels[action] || action}`);
       setShowUserModal(false);
     } catch (error) {
       toast.error('Action failed — check admin permissions.');
@@ -202,7 +202,7 @@ const AdminUserManagementScreen = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-gray-500 text-sm">
-                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}
+                      {formatJoined(u.createdAt)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -231,12 +231,17 @@ const AdminUserManagementScreen = () => {
             </table>
           </div>
 
-          {filteredUsers.length === 0 && (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="w-8 h-8 mx-auto mb-3 border-2 border-gray-300 border-t-indigo-600 rounded-full animate-spin" />
+              <p className="text-gray-500">Loading users…</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
             <div className="text-center py-12">
               <User className="w-12 h-12 mx-auto text-gray-400 mb-3" />
               <p className="text-gray-500">No users found</p>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -278,14 +283,6 @@ const AdminUserManagementScreen = () => {
               >
                 <Ban className="w-5 h-5 text-red-600" />
                 <span className="text-red-700 dark:text-red-300">Ban User</span>
-              </button>
-
-              <button
-                onClick={() => handleUserAction(selectedUser.id, 'view_analytics')}
-                className="w-full flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-xl text-left"
-              >
-                <Eye className="w-5 h-5 text-gray-600" />
-                <span className="text-gray-700 dark:text-gray-300">View Analytics</span>
               </button>
             </div>
 

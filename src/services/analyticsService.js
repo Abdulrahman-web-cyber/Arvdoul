@@ -8,7 +8,6 @@ import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 
-// ==================== CONFIGURATION ====================
 const ANALYTICS_CONFIG = {
   CACHE_TTL: 5 * 60 * 1000, // 5 minutes cache TTL
   MAX_DAILY_STATS: 365, // Store up to 1 year of daily stats
@@ -28,7 +27,6 @@ const ANALYTICS_CONFIG = {
   SNAPSHOT_COLLECTION: 'user_daily_stats', // follower-count snapshots (migration: REFACTOR_PROGRESS.md)
 };
 
-// ==================== LRU CACHE ====================
 class LRUCache {
   constructor(maxSize = 100, ttl = ANALYTICS_CONFIG.CACHE_TTL) {
     this.maxSize = maxSize;
@@ -65,7 +63,6 @@ class LRUCache {
   }
 }
 
-// ==================== ENHANCED ERROR HANDLER ====================
 function enhanceError(error, defaultMessage) {
   const errorMap = {
     'permission-denied': 'You do not have permission to access analytics.',
@@ -89,7 +86,6 @@ function enhanceError(error, defaultMessage) {
   return enhanced;
 }
 
-// ==================== ANALYTICS SERVICE CLASS ====================
 class UltimateAnalyticsService {
   constructor() {
     this.firestore = null;
@@ -103,10 +99,8 @@ class UltimateAnalyticsService {
       this._cacheCleanupInterval = setInterval(() => this.clearExpiredCache(), 5 * 60 * 1000);
     }
 
-//     this.initialize().catch(err => logger.warn('Analytics service init warning:', err.message));
   }
 
-  // ==================== INITIALIZATION ====================
   async initialize() {
     if (this.initialized && this.firestore) return this.firestore;
 
@@ -120,7 +114,6 @@ class UltimateAnalyticsService {
         await enableIndexedDbPersistence(this.firestore);
         // Analytics persistence enabled
       } catch (e) {
-//         logger.warn('⚠️ Analytics persistence not available:', e.message);
       }
 
       this.initialized = true;
@@ -136,7 +129,6 @@ class UltimateAnalyticsService {
     return this.firestore;
   }
 
-  // ==================== HELPER FUNCTIONS ====================
   _getDateString(date = new Date()) {
     return date.toISOString().split('T')[0];
   }
@@ -151,11 +143,6 @@ class UltimateAnalyticsService {
     return map[timeframe] || 30;
   }
 
-  _generateDocId(...parts) {
-    return parts.join('_');
-  }
-
-  // ==================== PROFILE ANALYTICS ====================
   /**
    * Get comprehensive user analytics for a given timeframe
    * @param {string} userId - User ID
@@ -179,6 +166,7 @@ class UltimateAnalyticsService {
       let analytics = {
         userId,
         timeframe,
+        hasData: false,
         totalViews: 0,
         totalReach: 0,
         totalEngagement: 0,
@@ -218,6 +206,7 @@ class UltimateAnalyticsService {
 
         analytics = {
           ...analytics,
+          hasData: true,
           totalViews,
           totalReach,
           totalEngagement: data.totalEngagement || 0,
@@ -263,6 +252,7 @@ class UltimateAnalyticsService {
       const fallbackAnalytics = {
         userId,
         timeframe,
+        hasData: false,
         totalViews: 0,
         totalReach: 0,
         totalEngagement: 0,
@@ -270,7 +260,7 @@ class UltimateAnalyticsService {
         dailyStats: [],
         topPosts: [],
         growthRate: 0,
-        activeDays: 1,
+        activeDays: 0,
         demographics: { ageGroups: {}, gender: {}, locations: {}, interests: {} },
         ranking: { rank: null, totalCreators: 0, percentile: null },
         changes: { views: 0, reach: 0, engagement: 0, coins: 0 },
@@ -307,79 +297,26 @@ class UltimateAnalyticsService {
   async trackProfileView(viewerId, profileOwnerId) {
     if (!viewerId || viewerId === profileOwnerId) return; // Don't track self-views
 
-    // Client-side UX guard against view-write storms (server rules enforce the real boundary).
+    // Client-side UX guard against view-write storms (the callable enforces the
+    // real server-side rate limit).
     const rl = rateLimiter.checkAndHit(`analytics:view:${viewerId}`, { max: ANALYTICS_CONFIG.RATE_LIMITS.TRACK_VIEW_MAX, windowMs: 60000 });
     if (!rl.allowed) return; // silently drop excess view events
 
     try {
-      await this._ensureInitialized();
+      // Counting is server-authoritative: the daily marker, the owner's daily
+      // stats and the sharded totals are written by the trackProfileView
+      // callable in one transaction. The client no longer writes
+      // profile_views/profile_analytics (rules deny those writes).
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const result = await callFunction(FUNCTIONS.TRACK_PROFILE_VIEW, { profileOwnerId });
 
-      const { doc, getDoc, setDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
-      const today = this._getDateString();
-      const viewDocId = this._generateDocId(viewerId, profileOwnerId, today);
-
-      // Dedupe: one analytics write per (viewer, owner, day) - no per-view hot writes.
-      const viewRef = doc(this.firestore, 'profile_views', viewDocId);
-      const existingView = await getDoc(viewRef);
-      if (existingView.exists()) return;
-
-      // Record the view
-      await setDoc(viewRef, {
-        viewerId,
-        profileOwnerId,
-        viewedAt: serverTimestamp(),
-        date: today,
-      });
-
-      // Sharded counters for totalViews/totalReach (no hot profile_analytics doc).
-      const docPath = `profile_analytics/${profileOwnerId}`;
-      await countersManager.increment({ docPath, field: 'totalViews' });
-      await countersManager.increment({ docPath, field: 'totalReach' });
-
-      // Daily stats: bounded map (365 days), written at most once per viewer per day.
-      const analyticsRef = doc(this.firestore, 'profile_analytics', profileOwnerId);
-      await runTransaction(this.firestore, async (transaction) => {
-        const analyticsDoc = await transaction.get(analyticsRef);
-
-        if (!analyticsDoc.exists()) {
-          transaction.set(analyticsRef, {
-            totalEngagement: 0,
-            coinsEarned: 0,
-            dailyStats: {
-              [today]: { views: 1, reach: 1, engagement: 0, coins: 0 },
-            },
-            topPosts: [],
-            growthRate: 0,
-            activeDays: 1,
-            demographics: {
-              ageGroups: {},
-              gender: {},
-              locations: {},
-              interests: {},
-            },
-            lastUpdated: serverTimestamp(),
-          });
-        } else {
-          const data = analyticsDoc.data();
-          const dailyStats = data.dailyStats || {};
-          const todayStats = dailyStats[today] || { views: 0, reach: 0, engagement: 0, coins: 0 };
-
-          transaction.update(analyticsRef, {
-            [`dailyStats.${today}`]: {
-              views: (todayStats.views || 0) + 1,
-              reach: (todayStats.reach || 0) + 1,
-              engagement: todayStats.engagement || 0,
-              coins: todayStats.coins || 0,
-            },
-            lastUpdated: serverTimestamp(),
-          });
-        }
-      });
-
-      // Invalidate cache (centralized CacheManager)
-      this.cache.invalidatePattern(`analytics_${profileOwnerId}_*`);
-      countersManager.invalidate({ docPath, field: 'totalViews' });
-      countersManager.invalidate({ docPath, field: 'totalReach' });
+      if (result?.counted) {
+        // Invalidate cache (centralized CacheManager)
+        this.cache.invalidatePattern(`analytics_${profileOwnerId}_*`);
+        const docPath = `profile_analytics/${profileOwnerId}`;
+        countersManager.invalidate({ docPath, field: 'totalViews' });
+        countersManager.invalidate({ docPath, field: 'totalReach' });
+      }
     } catch (error) {
       logger.warn('Track profile view failed', { error: error.message, profileOwnerId });
       // Don't throw - this is a non-critical operation
@@ -431,7 +368,6 @@ class UltimateAnalyticsService {
       
       return ranking;
     } catch (error) {
-//       logger.warn('⚠️ Get creator ranking failed:', error);
       return {
         position: null,
         percentile: null,
@@ -441,7 +377,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== POST ANALYTICS ====================
   /**
    * Track post analytics event
    * @param {string} postId - Post ID
@@ -513,7 +448,6 @@ class UltimateAnalyticsService {
       });
       countersManager.invalidate({ docPath, field: totalField });
     } catch (error) {
-//       logger.warn('⚠️ Track post analytics failed:', error);
     }
   }
 
@@ -579,7 +513,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== DEMOGRAPHICS ====================
   /**
    * Get audience demographics for a user
    * @param {string} userId - User ID
@@ -615,7 +548,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== GROWTH METRICS ====================
   /**
    * Get follower growth data
    * @param {string} userId - User ID
@@ -733,7 +665,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== COIN ANALYTICS ====================
   /**
    * Get coin earning history
    * @param {string} userId - User ID
@@ -917,7 +848,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== CACHE MANAGEMENT ====================
   clearExpiredCache() {
     const now = Date.now();
     for (const [key, entry] of cacheManager.getStore().entries()) {
@@ -936,7 +866,6 @@ class UltimateAnalyticsService {
     }
   }
 
-  // ==================== CLEANUP ====================
   destroy() {
     if (this._cacheCleanupInterval) {
       clearInterval(this._cacheCleanupInterval);
@@ -955,7 +884,6 @@ class UltimateAnalyticsService {
   }
 }
 
-// ==================== SINGLETON & EXPORTS ====================
 let serviceInstance = null;
 
 export function getAnalyticsService() {

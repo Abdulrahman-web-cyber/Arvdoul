@@ -1,4 +1,5 @@
-// src/components/Videos/VideoQualitySelector.jsx - VIDEO QUALITY SELECTOR
+// src/components/Videos/VideoQualitySelector.jsx
+
 import React, { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';

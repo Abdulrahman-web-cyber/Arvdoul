@@ -1,13 +1,11 @@
-// src/context/AuthContext.jsx - ULTIMATE PRODUCTION V33 - NO BLINK, STABLE LOADING
-// 🎯 SINGLE SOURCE OF TRUTH (ZUSTAND) • REALTIME PROFILE SYNC • MULTI-TAB COORDINATION
-// 🔧 FIXED: Removed `user` dependency from auth listener – prevents re-subscription on every profile change
-// 🔧 ADDED: `initialProfileLoaded` flag to avoid loading flicker after first load
-// ✅ NO BLINKING • SMOOTH AUTH TRANSITIONS
+// src/context/AuthContext.jsx
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAppStore } from "../store/appStore";
+import { useProfileStore } from "../store/profileStore";
+import { useAnalyticsStore } from "../store/analyticsStore";
 import {
   computeProfileComplete,
   needsOnboarding as computeNeedsOnboarding,
@@ -17,10 +15,11 @@ import {
   isReturningAuthUser,
 } from "../utils/profileCompletion.js";
 import { getSafeAvatarUrl } from "../utils/avatarUtils.js";
+import { cacheManager } from "../utils/CacheManager.js";
+import { PRIVATE_PROFILE_FIELDS } from "../config/profileContracts.js";
 
 const AuthContext = createContext(null);
 
-// ==================== ENHANCED STORAGE MANAGER ====================
 const AuthStorageManager = {
   clearAll() {
     const sessionItems = [
@@ -41,6 +40,10 @@ const AuthStorageManager = {
     ];
     sessionItems.forEach(key => sessionStorage.removeItem(key));
     localItems.forEach(key => localStorage.removeItem(key));
+    // Stored identity / cached balance must not outlive the session; the `user`
+    // key is written by profile screens and would otherwise resolve to the
+    // previous account on a shared browser.
+    ['user', 'arvdoul_uid', 'uid', 'arvdoul_has_session'].forEach(key => localStorage.removeItem(key));
     console.log('🧹 Auth storage cleared completely');
   },
   
@@ -106,7 +109,6 @@ const AuthStorageManager = {
   }
 };
 
-// ==================== TOAST DEBOUNCER ====================
 let lastToastTime = 0;
 const debouncedToast = (message, type = 'error') => {
   const now = Date.now();
@@ -119,7 +121,6 @@ const debouncedToast = (message, type = 'error') => {
   }
 };
 
-// ==================== ERROR NORMALIZATION ====================
 const normalizeFirebaseError = (error) => {
   const code = error?.code || 'unknown';
   const commonMap = {
@@ -155,7 +156,6 @@ const normalizeFirebaseError = (error) => {
   return commonMap[code] || error?.message || 'Authentication failed. Please try again.';
 };
 
-// ==================== AUTH STATE MACHINE ====================
 const AuthState = {
   BOOTING: 'booting',
   AUTHENTICATED: 'authenticated',
@@ -166,7 +166,6 @@ const AuthState = {
   ERROR: 'error',
 };
 
-// ==================== SYNC HELPER ====================
 const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   if (!user) {
     setCurrentUser(null);
@@ -212,7 +211,6 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   return userData;
 };
 
-// ==================== OPERATION DEDUPLICATOR ====================
 const pendingOperations = new Map();
 const CLEANUP_INTERVAL = 60000;
 if (typeof window !== 'undefined') {
@@ -234,7 +232,6 @@ const runOnce = async (key, fn) => {
   }
 };
 
-// ==================== PERFECT AUTH PROVIDER ====================
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -273,6 +270,29 @@ export function AuthProvider({ children }) {
   const isLoggingOutRef = useRef(false);
   const prevProfileRef = useRef(null);
   const unsubscribeProfileRef = useRef(null);
+  // Monotonic token that invalidates an in-flight profile listener setup.
+  // `setupRealtimeProfile` awaits `userService.initialize()` and a dynamic
+  // B) left A's listener alive and let A's snapshot overwrite B's session.
+  const profileListenerGenerationRef = useRef(0);
+  // The uid whose profile we last hydrated; used to detect account switches.
+  const lastProfileUidRef = useRef(null);
+
+  // Wipes every account-scoped store. Called on sign-out, token expiry, unmount
+  // and sign-in so a previous account's profile/analytics cannot render in the
+  // next session on the same device.
+  const clearSessionStores = useCallback(() => {
+    useProfileStore.getState().clear();
+    useAnalyticsStore.getState().clear();
+    clearUserDataRef.current();
+    // Drop the in-memory service cache too. Firestore/feed/video/counter reads
+    // are cached by uid; without this a signed-out session (or the next account
+    // on a shared device) could be served the previous user's cached documents.
+    try {
+      cacheManager.clear();
+    } catch (cacheError) {
+      console.warn('Cache clear on session reset failed:', cacheError?.message);
+    }
+  }, []);
   const unsubscribeAuthRef = useRef(null);
   const unsubscribeIdTokenRef = useRef(null);
   const broadcastRef = useRef(null);
@@ -281,7 +301,6 @@ export function AuthProvider({ children }) {
   // Guard to prevent loading flicker after initial profile load
   const initialProfileLoaded = useRef(false);
   
-  // ========== MULTI‑TAB BROADCAST ==========
   useEffect(() => {
     let channel;
     let storageHandler;
@@ -331,19 +350,20 @@ export function AuthProvider({ children }) {
     };
   }, [authService]);
 
-  // ========== CLEANUP ==========
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
+      profileListenerGenerationRef.current++;
       if (unsubscribeAuthRef.current) unsubscribeAuthRef.current();
       if (unsubscribeIdTokenRef.current) unsubscribeIdTokenRef.current();
       if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
+      useProfileStore.getState().clear();
+      useAnalyticsStore.getState().clear();
       console.log('🧹 AuthContext cleanup completed');
     };
   }, []);
 
-  // ========== SERVICE INITIALIZATION ==========
   useEffect(() => {
     const abortController = new AbortController();
     let mounted = true;
@@ -385,19 +405,23 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // ========== REALTIME PROFILE LISTENER (SAFE, NO UNNECESSARY LOADING TOGGLES) ==========
   const setupRealtimeProfile = useCallback(async (uid, firebaseUser) => {
     if (!userService || !uid || !firebaseUser) return;
-    
-    // Clean up previous listener
+
+    // Invalidate any in-flight setup and tear down the current listener BEFORE
+    // awaiting, so a concurrent sign-in cannot resurrect a stale subscription.
+    const generation = ++profileListenerGenerationRef.current;
     if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
-    
+
     try {
       // Ensure Firestore is initialized
       await userService.initialize();
       const { doc, onSnapshot } = await import('firebase/firestore');
       const firestore = userService.firestore;
       if (!firestore) throw new Error('Firestore not ready');
+
+      // A newer setup started while we were awaiting - abandon this one.
+      if (generation !== profileListenerGenerationRef.current) return;
       
       const userDocRef = doc(firestore, 'users', uid);
       let isFirstSnapshot = true;
@@ -417,9 +441,10 @@ export function AuthProvider({ children }) {
         }
       }, 2500);
       
-      const unsubscribe = onSnapshot(userDocRef, 
+      const unsubscribe = onSnapshot(userDocRef,
         (snap) => {
-          if (!isMounted.current) return;
+          // Ignore snapshots from a superseded listener (account switch).
+          if (!isMounted.current || generation !== profileListenerGenerationRef.current) return;
           
           if (fallbackTimer) {
             clearTimeout(fallbackTimer);
@@ -435,6 +460,18 @@ export function AuthProvider({ children }) {
               prevProfileRef.current = profile;
               setUserProfile(profile);
               syncUserWithAppStore(firebaseUser, profile, setCurrentUserRef.current);
+              // Contact/PII fields live on users_private (owner-only). Merge them
+              // asynchronously; the public doc never carries them.
+              userService.getPrivateProfile(uid).then((privateData) => {
+                if (!privateData || generation !== profileListenerGenerationRef.current) return;
+                const merged = { ...profile };
+                for (const key of PRIVATE_PROFILE_FIELDS) {
+                  if (privateData[key] !== undefined) merged[key] = privateData[key];
+                }
+                prevProfileRef.current = merged;
+                setUserProfile(merged);
+                syncUserWithAppStore(firebaseUser, merged, setCurrentUserRef.current);
+              }).catch(() => { /* private merge is best-effort */ });
             }
 
             if (isFirstSnapshot) {
@@ -533,8 +570,15 @@ export function AuthProvider({ children }) {
         }
       );
       
-      unsubscribeProfileRef.current = unsubscribe;
+
+      // Only the current generation may own the unsubscribe handle.
+      if (generation === profileListenerGenerationRef.current) {
+        unsubscribeProfileRef.current = unsubscribe;
+      } else {
+        unsubscribe();
+      }
     } catch (err) {
+      if (generation !== profileListenerGenerationRef.current) return;
       console.error('Failed to setup realtime profile:', err);
       if (!initialProfileLoaded.current) {
         setUserProfile(null);
@@ -546,7 +590,6 @@ export function AuthProvider({ children }) {
     }
   }, [userService, authService]);
 
-  // ========== AUTH STATE LISTENER (NO `user` DEPENDENCY – PREVENTS BLINK) ==========
   useEffect(() => {
     if (!authService || listenerSetUp.current || !isMounted.current) return;
     
@@ -576,6 +619,26 @@ export function AuthProvider({ children }) {
           
           if (firebaseUser) {
             isLoggingOutRef.current = false;
+            // A different uid than the one we last loaded means the user
+            // switched accounts (not a token refresh). Wipe the previous
+            // account's stores before hydrating the new one.
+            if (lastProfileUidRef.current && lastProfileUidRef.current !== firebaseUser.uid) {
+              useProfileStore.getState().clear();
+              useAnalyticsStore.getState().clear();
+              // The in-memory service cache is keyed by uid; a leftover entry
+              // from the departing account would be served to the new one.
+              try {
+                cacheManager.clear();
+              } catch (cacheError) {
+                console.warn('Cache clear on account switch failed:', cacheError?.message);
+              }
+              // Drop the departing account's queued offline writes so they
+              // cannot drain into this session.
+              import('../offline/syncEngine.js')
+                .then(({ purgeQueueForOwner }) => purgeQueueForOwner(lastProfileUidRef.current))
+                .catch(() => {});
+            }
+            lastProfileUidRef.current = firebaseUser.uid;
             try {
               localStorage.setItem('arvdoul_has_session', 'true');
               localStorage.setItem('arvdoul_uid', firebaseUser.uid);
@@ -610,6 +673,14 @@ export function AuthProvider({ children }) {
             
           } else {
             isLoggingOutRef.current = true;
+            // Clear the signed-out account's queued offline writes.
+            const departingUid = lastProfileUidRef.current;
+            if (departingUid) {
+              import('../offline/syncEngine.js')
+                .then(({ purgeQueueForOwner }) => purgeQueueForOwner(departingUid))
+                .catch(() => {});
+            }
+            lastProfileUidRef.current = null;
             try {
               localStorage.removeItem('arvdoul_has_session');
               localStorage.removeItem('arvdoul_uid');
@@ -620,8 +691,9 @@ export function AuthProvider({ children }) {
             setUser(null);
             setUserProfile(null);
             prevProfileRef.current = null;
+            profileListenerGenerationRef.current++;
             if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
-            clearUserDataRef.current();
+            clearSessionStores();
             AuthStorageManager.clearAll();
             clearOnboardingRequired();
             setAuthState(AuthState.UNAUTHENTICATED);
@@ -652,8 +724,9 @@ export function AuthProvider({ children }) {
             initialProfileLoaded.current = false;
             setUser(null);
             setUserProfile(null);
+            profileListenerGenerationRef.current++;
             if (unsubscribeProfileRef.current) unsubscribeProfileRef.current();
-            clearUserDataRef.current();
+            clearSessionStores();
             AuthStorageManager.clearAll();
             debouncedToast('Session expired. Please sign in again.', 'info');
             setAuthState(AuthState.UNAUTHENTICATED);
@@ -695,10 +768,9 @@ export function AuthProvider({ children }) {
       unsubscribeProfileRef.current = null;
       listenerSetUp.current = false;
     };
-    // ✅ CRITICAL: `user` is NOT in dependencies – prevents re‑subscription on every profile change
+    // `user` is NOT in dependencies – prevents re‑subscription on every profile change
   }, [authService, navigate, setupRealtimeProfile]);
 
-  // ========== AUTH METHODS (unchanged, all stable) ==========
   const signUpWithEmailPassword = useCallback(async (email, password, profileData = {}) => {
     return runOnce(`signup_${email}`, async () => {
       if (!authService) throw new Error('Auth service not ready');

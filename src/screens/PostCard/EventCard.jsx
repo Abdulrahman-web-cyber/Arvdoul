@@ -1,4 +1,5 @@
 // src/screens/PostCard/EventCard.jsx
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -8,9 +9,7 @@ import {
 } from 'lucide-react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 
-// ------------------------------------------------------------------
 // Safe date normalizer
-// ------------------------------------------------------------------
 const toDate = (dateish) => {
   if (!dateish) return null;
   if (dateish.toDate) return dateish.toDate();
@@ -18,9 +17,7 @@ const toDate = (dateish) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-// ------------------------------------------------------------------
 // Word‑safe truncation (avoids cutting emojis/mid‑word)
-// ------------------------------------------------------------------
 const truncateSafe = (str, maxLen) => {
   if (!str || str.length <= maxLen) return str;
   const trimmed = str.slice(0, maxLen);
@@ -28,9 +25,7 @@ const truncateSafe = (str, maxLen) => {
   return lastSpace > 0 ? trimmed.slice(0, lastSpace) + '…' : trimmed + '…';
 };
 
-// ------------------------------------------------------------------
 // Helpers
-// ------------------------------------------------------------------
 function getCountdownDetails(startDate) {
   if (!startDate) return { text: 'TBD', urgent: false };
   const now = new Date();
@@ -54,9 +49,7 @@ function getGravityLevel(gravity) {
   return 'low';
 }
 
-// ------------------------------------------------------------------
 // MAIN COMPONENT
-// ------------------------------------------------------------------
 const EventCard = React.memo(({
   event,
   currentUser,

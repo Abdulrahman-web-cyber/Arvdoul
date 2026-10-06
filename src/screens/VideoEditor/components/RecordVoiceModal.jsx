@@ -1,4 +1,5 @@
 // src/screens/VideoEditor/components/RecordVoiceModal.jsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';
@@ -20,10 +21,15 @@ export default function RecordVoiceModal({
   const [mediaStream, setMediaStream] = useState(null);
   const [permissionError, setPermissionError] = useState(null);
 
+  const [levels, setLevels] = useState(() => new Array(16).fill(0));
+
   const videoPreviewRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const timerRef = useRef(null);
   const chunksRef = useRef([]);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const meterRafRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -51,6 +57,7 @@ export default function RecordVoiceModal({
       if (videoPreviewRef.current && mode === 'record') {
         videoPreviewRef.current.srcObject = stream;
       }
+      attachAnalyser(stream);
     } catch (err) {
       console.warn('Camera/Mic permission access not granted:', err);
       setPermissionError('Camera or microphone access was not granted or is not available.');
@@ -58,10 +65,57 @@ export default function RecordVoiceModal({
   };
 
   const stopCameraStream = () => {
+    stopMeter();
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+    }
     if (mediaStream) {
       mediaStream.getTracks().forEach((track) => track.stop());
       setMediaStream(null);
     }
+  };
+
+  // The level meter reads the live microphone via an AnalyserNode. Without a
+  // granted stream there is nothing to visualise, so the bars stay flat.
+  const attachAnalyser = (stream) => {
+    if (!stream.getAudioTracks().length || typeof AudioContext === 'undefined') return;
+    try {
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+    } catch (err) {
+      console.warn('Audio analyser unavailable:', err);
+    }
+  };
+
+  const stopMeter = () => {
+    if (meterRafRef.current) cancelAnimationFrame(meterRafRef.current);
+    meterRafRef.current = null;
+    setLevels(new Array(16).fill(0));
+  };
+
+  const startMeter = () => {
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      const step = Math.max(1, Math.floor(data.length / 16));
+      const next = Array.from({ length: 16 }, (_, i) => {
+        let sum = 0;
+        for (let j = 0; j < step; j++) sum += data[i * step + j] || 0;
+        return sum / step;
+      });
+      setLevels(next);
+      meterRafRef.current = requestAnimationFrame(tick);
+    };
+    meterRafRef.current = requestAnimationFrame(tick);
   };
 
   const startRecording = () => {
@@ -96,6 +150,7 @@ export default function RecordVoiceModal({
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
+      startMeter();
 
       timerRef.current = setInterval(() => {
         setRecordDuration((prev) => prev + 1);
@@ -108,6 +163,7 @@ export default function RecordVoiceModal({
 
   const stopRecording = () => {
     setIsRecording(false);
+    stopMeter();
     if (timerRef.current) clearInterval(timerRef.current);
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -175,14 +231,11 @@ export default function RecordVoiceModal({
                 <Mic className="w-10 h-10" />
               </div>
               <div className="flex items-center gap-1 h-8">
-                {Array.from({ length: 16 }).map((_, i) => (
+                {levels.map((level, i) => (
                   <div
                     key={i}
-                    className={`w-1 rounded-full bg-blue-400 ${isRecording ? 'animate-bounce' : 'h-2 opacity-30'}`}
-                    style={{
-                      height: isRecording ? `${Math.floor(Math.random() * 24) + 6}px` : '6px',
-                      animationDelay: `${i * 0.05}s`
-                    }}
+                    className="w-1 rounded-full bg-blue-400 transition-[height] duration-75"
+                    style={{ height: `${Math.max(6, Math.round((level / 255) * 30))}px` }}
                   />
                 ))}
               </div>
