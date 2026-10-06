@@ -52,6 +52,33 @@ jest.mock('../../utils/CacheManager', () => ({
   }
 }));
 
+jest.mock('../Ads/SponsoredPostCard', () => () => <div data-testid="sponsored-card" />);
+jest.mock('../../services/monetizationService', () => ({
+  monetizationService: {},
+  trackAdImpression: jest.fn(),
+  recordMonetizationEvent: jest.fn()
+}));
+
+jest.mock('../../services/videoService', () => ({
+  __esModule: true,
+  default: {
+    getVideoFeed: jest.fn(async () => ({ feed: [], hasMore: false })),
+    likeVideo: jest.fn(async () => ({})),
+    shareVideo: jest.fn(async () => ({}))
+  }
+}));
+
+jest.mock('../../services/userService', () => ({
+  getUserService: () => ({
+    isFollowing: jest.fn(async () => false),
+    followUser: jest.fn(async () => ({})),
+    unfollowUser: jest.fn(async () => ({}))
+  }),
+  userService: {
+    isFollowing: jest.fn(async () => false)
+  }
+}));
+
 jest.mock('../../services/commentService.js', () => ({
   getCommentService: () => ({
     getCommentsByPost: jest.fn(async () => ({ success: true, comments: [] })),

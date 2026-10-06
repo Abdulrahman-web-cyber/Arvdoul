@@ -21,17 +21,18 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const rulesPath = path.join(root, 'firestore.rules');
 const rules = fs.readFileSync(rulesPath, 'utf8');
 
-const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
 
-function emulatorReachable() {
-  const [host, port] = emulatorHost.split(':');
-  return new Promise((resolve) => {
-    const socket = net.connect({ host, port: Number(port) });
-    socket.setTimeout(500);
-    socket.on('connect', () => { socket.destroy(); resolve(true); });
-    socket.on('timeout', () => { socket.destroy(); resolve(false); });
-    socket.on('error', () => resolve(false));
-  });
+async function emulatorReachable() {
+  if (!emulatorHost) return false;
+  try {
+    const res = await fetch(`http://${emulatorHost}/`);
+    const serverHeader = res.headers.get('server') || '';
+    if (serverHeader.toLowerCase().includes('nginx')) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe('firestore.rules syntax', () => {

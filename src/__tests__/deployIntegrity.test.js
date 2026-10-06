@@ -32,6 +32,9 @@ function loadDeployedExports() {
     process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
     process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: 'arvdoul-test', storageBucket: 'arvdoul-test.appspot.com' });
     process.env.GOOGLE_APPLICATION_CREDENTIALS = '';
+    delete process.env.K_CONFIGURATION;
+    delete process.env.K_SERVICE;
+    delete process.env.K_REVISION;
     const idx = require('./index.js');
     const names = Object.keys(idx).filter(
       (k) => idx[k] && typeof idx[k] === 'function' && (idx[k].__trigger || idx[k].__endpoint)
