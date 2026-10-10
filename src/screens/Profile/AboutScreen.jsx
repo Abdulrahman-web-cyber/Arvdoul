@@ -62,25 +62,38 @@ export default function AboutScreen() {
     };
   }, [storeProfile, storeUser, authUser, targetId, isActualOwner]);
 
+  const hasStanding = effectiveProfile?.level != null || effectiveProfile?.experience != null || effectiveProfile?.xp != null;
+
   const levelInfo = useMemo(() => {
+    if (!hasStanding) return null;
     try {
-      return getLevelInfo(Number(effectiveProfile?.experience || effectiveProfile?.xp || 0));
+      const xp = effectiveProfile?.experience ?? effectiveProfile?.xp;
+      if (xp != null) return getLevelInfo(Number(xp));
+      if (effectiveProfile?.level != null) {
+        return {
+          level: effectiveProfile.level,
+          title: getRankTitle(effectiveProfile.level) || 'Citizen',
+        };
+      }
+      return null;
     } catch {
-      return { level: effectiveProfile?.level || 1, title: 'Citizen' };
+      return null;
     }
-  }, [effectiveProfile]);
+  }, [effectiveProfile, hasStanding]);
 
   const rankTitle = useMemo(() => {
+    if (effectiveProfile?.level == null) return null;
     try {
-      return getRankTitle(effectiveProfile?.level || 1);
+      return getRankTitle(effectiveProfile.level);
     } catch {
-      return 'Citizen';
+      return null;
     }
   }, [effectiveProfile?.level]);
 
   const perks = useMemo(() => {
+    if (effectiveProfile?.level == null) return [];
     try {
-      return getPerksForLevel(effectiveProfile?.level || 1) || [];
+      return getPerksForLevel(effectiveProfile.level) || [];
     } catch {
       return [];
     }
@@ -161,7 +174,11 @@ export default function AboutScreen() {
                   Citizen Standing & Privileges
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Rank: <span className="font-semibold text-purple-500">{rankTitle}</span> · Level {effectiveProfile.level}
+                  {effectiveProfile?.level != null ? (
+                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || 'Citizen'}</span> · Level {effectiveProfile.level}</>
+                  ) : (
+                    <span>Standing unavailable</span>
+                  )}
                 </p>
               </div>
             </div>

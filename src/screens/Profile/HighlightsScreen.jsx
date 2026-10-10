@@ -9,7 +9,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
 
@@ -37,6 +37,44 @@ export default function HighlightsScreen() {
   const [editingHighlight, setEditingHighlight] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [userStories, setUserStories] = useState([]);
+  const [selectedStoryIds, setSelectedStoryIds] = useState([]);
+  const [loadingStories, setLoadingStories] = useState(false);
+
+  // Load user stories when create modal opens
+  useEffect(() => {
+    if (!showCreate || !currentUserId) return;
+    let isMounted = true;
+    const fetchUserStories = async () => {
+      setLoadingStories(true);
+      try {
+        const { getStoryService } = await import('../../services/storyService.js');
+        const svc = getStoryService();
+        const [activeRes, archiveRes] = await Promise.allSettled([
+          svc.getUserStories(currentUserId),
+          svc.getArchivedStories(currentUserId),
+        ]);
+        const activeList = activeRes.status === 'fulfilled' ? (activeRes.value || []) : [];
+        const archiveList = archiveRes.status === 'fulfilled' ? (archiveRes.value?.stories || archiveRes.value || []) : [];
+        const combined = [...activeList, ...archiveList];
+        const unique = [];
+        const seen = new Set();
+        for (const item of combined) {
+          if (item && item.id && !seen.has(item.id)) {
+            seen.add(item.id);
+            unique.push(item);
+          }
+        }
+        if (isMounted) setUserStories(unique);
+      } catch (e) {
+        console.warn('Failed to load stories for highlight creation:', e);
+      } finally {
+        if (isMounted) setLoadingStories(false);
+      }
+    };
+    fetchUserStories();
+    return () => { isMounted = false; };
+  }, [showCreate, currentUserId]);
   
   // Load highlights
   useEffect(() => {
@@ -340,10 +378,90 @@ export default function HighlightsScreen() {
               />
             </div>
 
+            {/* Select Stories */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 block">
+                  Select Stories ({selectedStoryIds.length})
+                </label>
+                {selectedStoryIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStoryIds([])}
+                    className="text-[11px] text-purple-500 hover:underline"
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
+
+              {loadingStories ? (
+                <div className="flex items-center justify-center py-6 text-gray-400">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                </div>
+              ) : userStories.length === 0 ? (
+                <div className="text-center py-3 px-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 text-xs text-gray-400">
+                  No published or archived stories yet. You can still create this highlight now and add stories anytime.
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {userStories.map((s) => {
+                    const isSelected = selectedStoryIds.includes(s.id);
+                    const mediaUrl = s.media?.url || s.mediaUrl;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStoryIds((prev) =>
+                            isSelected ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                          );
+                        }}
+                        className={cn(
+                          'relative aspect-square rounded-xl overflow-hidden border-2 transition-all',
+                          isSelected
+                            ? 'border-purple-600 ring-2 ring-purple-400 scale-95'
+                            : 'border-transparent hover:opacity-80'
+                        )}
+                      >
+                        {mediaUrl ? (
+                          <img
+                            src={mediaUrl}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-[10px] p-1 text-center font-medium"
+                            style={{
+                              backgroundColor: s.backgroundColor || '#6366f1',
+                              color: s.textColor || '#ffffff',
+                            }}
+                          >
+                            <span className="line-clamp-2">{s.content || 'Story'}</span>
+                          </div>
+                        )}
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-purple-600/40 flex items-center justify-center">
+                            <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setShowCreate(false)}
+                onClick={() => {
+                  setShowCreate(false);
+                  setSelectedStoryIds([]);
+                }}
                 className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition"
               >
                 Cancel
@@ -355,12 +473,21 @@ export default function HighlightsScreen() {
                   setCreating(true);
                   try {
                     const { getStoryService } = await import('../../services/storyService.js');
-                    await getStoryService().createHighlight(currentUserId, highlightName.trim().slice(0, 30), [], {
-                      emoji: selectedEmoji,
-                    });
-                    toast.success('Highlight created! Add stories to it from your profile.');
+                    const firstSelected = userStories.find(s => selectedStoryIds.includes(s.id));
+                    const coverUrl = firstSelected?.media?.url || firstSelected?.mediaUrl || null;
+                    await getStoryService().createHighlight(
+                      currentUserId,
+                      highlightName.trim().slice(0, 30),
+                      selectedStoryIds,
+                      {
+                        emoji: selectedEmoji,
+                        coverUrl,
+                      }
+                    );
+                    toast.success('Highlight created successfully!');
                     setShowCreate(false); 
                     setHighlightName('');
+                    setSelectedStoryIds([]);
                     // reload highlights
                     const { getStoryService: s2 } = await import('../../services/storyService.js');
                     const res = await s2().getHighlights(currentUserId);

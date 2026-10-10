@@ -530,9 +530,10 @@ export default function ProfilePublicScreen() {
             analytics={analytics}
             capabilities={capabilities}
             onMetricPress={(key) => {
-              if (key === 'followers') navigate(`/profile/${userId}/followers`);
-              else if (key === 'following') navigate(`/profile/${userId}/following`);
-              else if (key === 'friends') navigate(`/profile/${userId}/friends`);
+              const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;
+              if (key === 'followers') navigate(`/profile/${targetId}/followers`);
+              else if (key === 'following') navigate(`/profile/${targetId}/following`);
+              else if (key === 'friends') navigate(`/profile/${targetId}/friends`);
             }}
           />
 

@@ -983,7 +983,7 @@ class UltimateStoryService {
     return { success: true, stories };
   }
 
-  async createHighlight(userId, name, storyIds = []) {
+  async createHighlight(userId, name, storyIds = [], options = {}) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
     if (!currentUser || currentUser.uid !== userId) throw enhanceError({ code: 'permission-denied' }, 'You can only create your own highlights');
@@ -993,7 +993,15 @@ class UltimateStoryService {
     const now = serverTimestamp();
 
     await this.fs.setDoc(this.fs.doc(this.firestore, 'highlights', highlightId), {
-      id: highlightId, userId, name, createdAt: now, updatedAt: now, storyCount: 0,
+      id: highlightId,
+      userId,
+      name,
+      title: name,
+      emoji: options.emoji || null,
+      coverUrl: options.coverUrl || null,
+      createdAt: now,
+      updatedAt: now,
+      storyCount: 0,
     });
     if (storyIds.length) {
       for (const sid of storyIds) await this.addToHighlight(highlightId, sid);
@@ -1172,7 +1180,6 @@ class UltimateStoryService {
     const highlightRef = this.fs.doc(this.firestore, 'highlights', highlightId);
     const highlightSnap = await this.fs.getDoc(highlightRef);
     if (!highlightSnap.exists()) throw new Error('Highlight not found');
-    if (highlightSnap.data().userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'You can only view your own highlights');
 
     const q = this.fs.query(
       this.fs.collection(this.firestore, 'highlights', highlightId, 'highlightStories'),

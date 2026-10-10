@@ -376,7 +376,7 @@ export default function ProfileMyScreen() {
                 userId={currentUserId}
                 isOwner={viewAs === 'owner'}
                 theme={theme}
-                onAddHighlight={() => navigate('/create-story')}
+                onAddHighlight={() => navigate('/profile/highlights?create=true')}
               />
 
               {/* 5. Creator Dashboard Analytics (with Level Gating) */}

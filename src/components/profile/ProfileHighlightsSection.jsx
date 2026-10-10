@@ -165,6 +165,7 @@ const ProfileHighlightsSection = memo(({
             key={item.id}
             onClick={() => {
               if (onHighlightPress) onHighlightPress(item);
+              else if (item.isHighlight) navigate(`/highlight/${item.id}`);
               else navigate(`/stories?vibe=${item.id}`);
             }}
             className="relative w-24 sm:w-28 h-36 sm:h-40 rounded-xl overflow-hidden shrink-0 group cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all border border-slate-200 dark:border-slate-800 bg-slate-900"

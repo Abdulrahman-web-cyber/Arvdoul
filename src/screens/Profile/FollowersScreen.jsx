@@ -46,11 +46,15 @@ export default function FollowersScreen() {
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
         if (targetUserId) {
+          let resolvedTargetId = targetUserId;
           if (currentUser?.uid && targetUserId !== currentUser.uid) {
             const [targetProfile, rel] = await Promise.all([
               userService.getUserProfile(targetUserId, currentUser.uid).catch(() => null),
               userService.getRelationshipState(currentUser.uid, targetUserId).catch(() => null)
             ]);
+            if (targetProfile?.id || targetProfile?.uid) {
+              resolvedTargetId = targetProfile.id || targetProfile.uid;
+            }
             const caps = resolveCapabilities({
               viewer: currentUser,
               target: targetProfile,
@@ -66,7 +70,7 @@ export default function FollowersScreen() {
             }
           }
 
-          const result = await userService.getFollowers(targetUserId);
+          const result = await userService.getFollowers(resolvedTargetId);
           if (isMounted) setFollowers(result.followers || []);
         } else {
           if (isMounted) setFollowers([]);

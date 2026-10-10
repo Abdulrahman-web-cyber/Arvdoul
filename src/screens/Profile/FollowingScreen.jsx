@@ -46,11 +46,15 @@ export default function FollowingScreen() {
       try {
         const userService = (await import('../../services/userService.js')).getUserService();
         if (targetUserId) {
+          let resolvedTargetId = targetUserId;
           if (currentUser?.uid && targetUserId !== currentUser.uid) {
             const [targetProfile, rel] = await Promise.all([
               userService.getUserProfile(targetUserId, currentUser.uid).catch(() => null),
               userService.getRelationshipState(currentUser.uid, targetUserId).catch(() => null)
             ]);
+            if (targetProfile?.id || targetProfile?.uid) {
+              resolvedTargetId = targetProfile.id || targetProfile.uid;
+            }
             const caps = resolveCapabilities({
               viewer: currentUser,
               target: targetProfile,
@@ -66,7 +70,7 @@ export default function FollowingScreen() {
             }
           }
 
-          const result = await userService.getFollowing(targetUserId);
+          const result = await userService.getFollowing(resolvedTargetId);
           if (isMounted) setFollowing(result.following || result.friends || []);
         } else {
           if (isMounted) setFollowing([]);

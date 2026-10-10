@@ -47,11 +47,15 @@ export default function FriendsScreen() {
           const result = await userService.getMutualFriends(currentUser.uid, userId);
           if (isMounted) setFriends(result?.mutualFriends || []);
         } else if (targetId) {
+          let resolvedTargetId = targetId;
           if (currentUser?.uid && targetId !== currentUser.uid) {
             const [targetProfile, rel] = await Promise.all([
               userService.getUserProfile(targetId, currentUser.uid).catch(() => null),
               userService.getRelationshipState(currentUser.uid, targetId).catch(() => null)
             ]);
+            if (targetProfile?.id || targetProfile?.uid) {
+              resolvedTargetId = targetProfile.id || targetProfile.uid;
+            }
             const caps = resolveCapabilities({
               viewer: currentUser,
               target: targetProfile,
@@ -66,7 +70,7 @@ export default function FriendsScreen() {
               return;
             }
           }
-          const result = await userService.getFriends(targetId);
+          const result = await userService.getFriends(resolvedTargetId);
           if (isMounted) setFriends(result?.friends || []);
         } else {
           if (isMounted) setFriends([]);
