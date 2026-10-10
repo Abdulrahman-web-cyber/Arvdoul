@@ -13,9 +13,13 @@ const ProfilePinnedPosts = memo(({
   const navigate = useNavigate();
   const isDark = theme === 'dark';
 
-  const pinnedItems = (posts && posts.filter(p => p.isPinned).length > 0)
+  const pinnedItems = Array.isArray(posts) && posts.filter(p => p.isPinned).length > 0
     ? posts.filter(p => p.isPinned).slice(0, 3)
-    : posts.slice(0, 3);
+    : [];
+
+  if (pinnedItems.length === 0) {
+    return null;
+  }
 
   return (
     <div className={cn(

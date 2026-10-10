@@ -72,7 +72,7 @@ export default function AboutScreen() {
       if (effectiveProfile?.level != null) {
         return {
           level: effectiveProfile.level,
-          title: getRankTitle(effectiveProfile.level) || 'Citizen',
+          title: getRankTitle(effectiveProfile.level) || null,
         };
       }
       return null;

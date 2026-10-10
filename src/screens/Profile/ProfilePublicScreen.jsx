@@ -35,6 +35,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
+import ProfileProgression from '../../components/profile/ProfileProgression';
 import ProfileMutualFriends from '../../components/profile/ProfileMutualFriends';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
@@ -521,6 +522,17 @@ export default function ProfilePublicScreen() {
             onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
           />
+
+          {/* 1b. Civic Progression Showcase */}
+          {effectiveProfile?.level && (
+            <ProfileProgression
+              level={effectiveProfile.level}
+              experience={effectiveProfile?.experience || 0}
+              streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
+              isOwner={false}
+              theme={theme}
+            />
+          )}
 
           {/* 2. Key Metrics Strip */}
           <ProfileMetricsGrid

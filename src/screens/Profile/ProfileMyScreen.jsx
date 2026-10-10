@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
+import ProfileProgression from '../../components/profile/ProfileProgression';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
@@ -339,7 +340,16 @@ export default function ProfileMyScreen() {
             onInsightsPress={() => navigate('/profile/analytics')}
           />
 
-          {/* 2. Key Metric Grid */}
+          {/* 2. Civic Progression & Level XP Curve */}
+          <ProfileProgression
+            level={level || effectiveProfile?.level}
+            experience={effectiveProfile?.experience || 0}
+            streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
+            isOwner={true}
+            theme={theme}
+          />
+
+          {/* 3. Key Metric Grid */}
           <ProfileMetricsGrid
             isOwner={capabilities.isOwner}
             theme={theme}

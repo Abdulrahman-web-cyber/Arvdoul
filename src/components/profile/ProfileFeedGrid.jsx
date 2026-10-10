@@ -117,8 +117,23 @@ const ProfileFeedGrid = memo(({
   return (
     <div className="w-full">
       {displayItems.length === 0 ? (
-        <div className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
-          {activeTab === 'saved' ? 'No saved posts yet.' : 'No posts yet.'}
+        <div className={cn(
+          "py-16 px-4 text-center rounded-2xl border space-y-3.5 my-2",
+          isDark ? "bg-[#0B0F19]/60 border-slate-800/80 text-white" : "bg-white/60 border-slate-200/80 text-slate-900"
+        )}>
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+            {activeTab === 'saved' ? <Bookmark className="w-6 h-6" /> : <Layers className="w-6 h-6" />}
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold">
+              {activeTab === 'saved' ? 'No Saved Posts Yet' : 'No Posts in this Category'}
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+              {activeTab === 'saved'
+                ? 'Bookmarks and saved items will be gathered here for quick private access.'
+                : 'Creations, thoughts, and media will appear here once published to Arvdoul.'}
+            </p>
+          </div>
         </div>
       ) : (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
