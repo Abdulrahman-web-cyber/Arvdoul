@@ -1,19 +1,18 @@
 /**
  * Production-grade digital nation identity header.
- * High contrast, razor-sharp typography, immersive panoramic civic banner,
+ * High contrast, razor-sharp typography, immersive civic presence,
  * layered 3D avatar with live presence, and unified action controls.
  * 
  * Supports modular dual-column rendering:
- * - variant="banner": Renders the panoramic cinematic marquee banner with glass controls.
- * - variant="identity": Renders the sticky identity hub card with avatar, name, bio, CTAs, and live social stats.
- * - default: Renders the unified header for standalone screens.
+ * - variant="identity": Renders the elevated top identity card containing the profile picture with avatar, name, bio, CTAs, and live social stats.
+ * - variant="banner": Lightweight backwards-compatible banner.
+ * - default: Renders the elevated top identity card containing the profile picture.
  * 
  * Adheres strictly to Zero-Pill discipline and anti-slop principles.
  * Never fabricates citizen standing (absent level remains null/unavailable).
  * 
  * @component
  */
-
 import React, { memo, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -40,6 +39,7 @@ import {
   Check,
   Sparkles,
   Users,
+  Eye,
   FileText,
   HeartHandshake,
   ShieldCheck
@@ -64,7 +64,7 @@ const formatStatNumber = (num) => {
 };
 
 /**
- * 1. Panoramic Cinematic Marquee Banner
+ * 1. Lightweight Banner for legacy or preview usage
  */
 export const ProfileBanner = memo(({
   bannerImage = null,
@@ -77,113 +77,13 @@ export const ProfileBanner = memo(({
   onOpenOptions,
   navigate,
 }) => {
-  return (
-    <div className="relative w-full h-44 sm:h-52 md:h-60 lg:h-64 rounded-3xl overflow-hidden select-none border border-slate-200/60 dark:border-white/10 shadow-sm">
-      {bannerImage ? (
-        <img 
-          src={bannerImage} 
-          alt="Profile cover banner" 
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-full h-full bg-gradient-to-r from-[#110022] via-[#0B0F2A] to-[#00172B] relative">
-          {/* Civic grid and aurora ambient lighting */}
-          <div 
-            className="absolute inset-0 opacity-25"
-            style={{
-              backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.18) 1px, transparent 0)`,
-              backgroundSize: '24px 24px'
-            }}
-          />
-          <div 
-            className="absolute -right-10 -top-10 w-96 h-96 rounded-full blur-3xl opacity-35"
-            style={{ backgroundColor: levelColor }}
-          />
-          <div className="absolute -left-12 -bottom-12 w-80 h-80 bg-cyan-600/25 rounded-full blur-3xl" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/25" />
-        </div>
-      )}
-
-      {/* Floating Frosted Glass Navigation Bar on Banner */}
-      <div className="absolute top-3.5 inset-x-3.5 sm:inset-x-5 flex items-center justify-between z-20">
-        {/* Left: Back button (visitor) or Clean badge (owner) */}
-        {!isOwner ? (
-          <button
-            type="button"
-            onClick={onBack || (() => navigate(-1))}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all text-xs font-semibold cursor-pointer shadow-sm active:scale-95"
-            aria-label="Go Back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/45 backdrop-blur-md border border-white/15 text-white/90 text-xs font-mono font-medium">
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-            <span>@{username}</span>
-          </div>
-        )}
-
-        {/* Right: Glass Quick Actions */}
-        <div className="flex items-center gap-2">
-          {onOpenQrCode && (
-            <button
-              type="button"
-              onClick={onOpenQrCode}
-              className="p-2 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="View Identity QR Code"
-              aria-label="Identity QR Code"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-          )}
-
-          {onShare && (
-            <button
-              type="button"
-              onClick={onShare}
-              className="p-2 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Share Profile Link"
-              aria-label="Share Profile"
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
-          )}
-
-          {isOwner ? (
-            <button
-              type="button"
-              onClick={() => navigate('/settings')}
-              className="p-2 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Account Settings"
-              aria-label="Account Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          ) : (
-            onOpenOptions && (
-              <button
-                type="button"
-                onClick={onOpenOptions}
-                className="p-2 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 text-white hover:bg-black/60 transition-all cursor-pointer shadow-sm active:scale-95"
-                title="Profile Options"
-                aria-label="Profile Options"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            )
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 });
 
 ProfileBanner.displayName = 'ProfileBanner';
 
 /**
- * 2. Sticky Master Identity Rail Card
+ * 2. Master Top Card Containing Profile Picture & Full Identity Suite
  */
 export const ProfileIdentityCard = memo(({
   profile,
@@ -204,6 +104,10 @@ export const ProfileIdentityCard = memo(({
   onEditProfile,
   onOpenLocationSetup,
   onInsightsPress,
+  onOpenQrCode,
+  onShare,
+  onOpenPerspective,
+  onOpenOptions,
   isFollowing = false,
   followLoading = false,
   onFollowToggle,
@@ -235,7 +139,6 @@ export const ProfileIdentityCard = memo(({
   const followersCount = profile?.followerCount ?? profile?.followersCount ?? 0;
   const followingCount = profile?.followingCount ?? 0;
   const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? 0;
-
   const rawReputation = profile?.reputationScore ?? profile?.reputation;
   const hasReputation = rawReputation !== undefined && rawReputation !== null;
   const reputationScore = hasReputation ? Number(rawReputation) : null;
@@ -246,23 +149,140 @@ export const ProfileIdentityCard = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-3xl border transition-all shadow-sm relative overflow-hidden",
+      "w-full rounded-3xl border transition-all shadow-md relative overflow-hidden",
       isDark
         ? "bg-[#0B0F19] border-slate-800 text-white"
         : "bg-white border-slate-200 text-slate-900"
     )}>
-      {/* Decorative ambient corner glow */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+      {/* Decorative Top Horizon Strip with Glass Action Controls */}
+      <div className="relative w-full h-24 sm:h-28 overflow-hidden bg-gradient-to-r from-purple-900/40 via-indigo-900/30 to-blue-900/40 border-b border-white/5">
+        {/* Civic grid and aurora accent lighting */}
+        <div 
+          className="absolute inset-0 opacity-20 pointer-events-none"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.2) 1px, transparent 0)`,
+            backgroundSize: '20px 20px'
+          }}
+        />
+        <div className="absolute -right-8 -top-8 w-48 h-48 bg-purple-500/20 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -left-8 -bottom-8 w-48 h-48 bg-cyan-500/15 rounded-full blur-2xl pointer-events-none" />
 
-      <div className="p-5 sm:p-6 space-y-5">
-        {/* Top: Avatar & Action Buttons */}
-        <div className="flex items-start justify-between gap-3">
-          {/* Avatar with Presence Ring */}
+        {/* Floating Quick Action Icons on Top-Right */}
+        <div className="absolute top-3 right-3 sm:top-3.5 sm:right-4 flex items-center gap-1.5 sm:gap-2 z-10">
+          {isOwner ? (
+            <>
+              {onOpenPerspective && (
+                <button
+                  type="button"
+                  onClick={onOpenPerspective}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="View Profile As Perspective"
+                  aria-label="View Profile As"
+                >
+                  <Eye className="w-4 h-4 text-amber-300" />
+                </button>
+              )}
+              {onOpenQrCode && (
+                <button
+                  type="button"
+                  onClick={onOpenQrCode}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="View Identity QR Code"
+                  aria-label="Identity QR Code"
+                >
+                  <QrCode className="w-4 h-4 text-purple-200" />
+                </button>
+              )}
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={onShare}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="Share Profile"
+                  aria-label="Share Profile"
+                >
+                  <Share2 className="w-4 h-4 text-cyan-200" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate('/passport')}
+                className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-amber-400 transition-all cursor-pointer shadow-sm active:scale-95"
+                title="Official Digital Passport"
+                aria-label="Digital Passport"
+              >
+                <Crown className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/settings')}
+                className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                title="Account Settings"
+                aria-label="Account Settings"
+              >
+                <Settings className="w-4 h-4 text-slate-200" />
+              </button>
+              {onOpenOptions && (
+                <button
+                  type="button"
+                  onClick={onOpenOptions}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="More Options"
+                  aria-label="More Options"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={onShare}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="Share Profile"
+                  aria-label="Share Profile"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+              )}
+              {onOpenQrCode && (
+                <button
+                  type="button"
+                  onClick={onOpenQrCode}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="Identity QR Code"
+                  aria-label="Identity QR Code"
+                >
+                  <QrCode className="w-4 h-4" />
+                </button>
+              )}
+              {onOpenOptions && (
+                <button
+                  type="button"
+                  onClick={onOpenOptions}
+                  className="p-2 rounded-xl bg-black/40 hover:bg-black/60 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md border border-white/15 text-white transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="Profile Options"
+                  aria-label="Profile Options"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="px-5 sm:px-6 pb-6 pt-0 space-y-4">
+        {/* Avatar Overlap Row with Primary Action CTA */}
+        <div className="flex items-end justify-between -mt-12 sm:-mt-14 mb-2">
+          {/* Layered Profile Picture (Avatar) */}
           <div className="relative shrink-0 group">
             <button
               type="button"
               onClick={onAvatarClick}
-              className="relative block w-20 h-20 sm:w-24 sm:h-24 rounded-full p-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-lg hover:scale-[1.03] active:scale-[0.98] transition-transform cursor-pointer"
+              className="relative block w-20 h-20 sm:w-24 sm:h-24 rounded-full p-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-transform cursor-pointer"
               title={isOwner ? "Change profile photo" : "View avatar"}
             >
               <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-white dark:ring-[#0B0F19] relative">
@@ -274,15 +294,14 @@ export const ProfileIdentityCard = memo(({
                 />
                 {/* Camera icon overlay for owner */}
                 {isOwner && (
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-0.5">
+                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-0.5">
                     <Camera className="w-4 h-4" />
                     <span>Edit</span>
                   </div>
                 )}
               </div>
             </button>
-
-            {/* Online Presence Status Dot */}
+            {/* Live Presence Status Dot */}
             <div 
               className={cn(
                 "absolute bottom-1 right-1 w-4 h-4 rounded-full ring-3 ring-white dark:ring-[#0B0F19]",
@@ -292,42 +311,26 @@ export const ProfileIdentityCard = memo(({
             />
           </div>
 
-          {/* Quick Action Buttons for Owner / Visitor */}
-          <div className="flex items-center gap-2 flex-wrap justify-end pt-1">
+          {/* Primary Action Button (Right side of Avatar) */}
+          <div className="flex items-center gap-2 pt-1">
             {isOwner ? (
-              <>
-                <button
-                  type="button"
-                  onClick={onEditProfile || (() => navigate('/profile/edit'))}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-all cursor-pointer active:scale-95"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit Profile</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => navigate('/passport')}
-                  className={cn(
-                    "p-2 rounded-xl border transition-all cursor-pointer active:scale-95 text-amber-500",
-                    isDark
-                      ? "bg-slate-900/90 border-slate-700 hover:bg-slate-800"
-                      : "bg-white border-slate-200 hover:bg-slate-50 shadow-sm"
-                  )}
-                  title="View Official Digital Passport"
-                >
-                  <Crown className="w-4 h-4" />
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={onEditProfile || (() => navigate('/profile/edit'))}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md hover:shadow-indigo-500/20 transition-all cursor-pointer active:scale-95"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Profile</span>
+              </button>
             ) : (
-              <>
+              <div className="flex items-center gap-2">
                 {friendshipStatus && friendshipStatus !== 'none' ? (
                   <button
                     type="button"
                     onClick={onFriendRequestToggle}
                     disabled={friendRequestLoading}
                     className={cn(
-                      "inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95",
+                      "inline-flex items-center justify-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-95",
                       friendshipStatus === 'friends'
                         ? (isDark ? "bg-slate-800 text-slate-200 border border-slate-700" : "bg-slate-100 text-slate-800 border border-slate-200")
                         : (isDark ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-amber-50 text-amber-800 border border-amber-200")
@@ -352,7 +355,7 @@ export const ProfileIdentityCard = memo(({
                     type="button"
                     onClick={onFriendRequestToggle}
                     disabled={friendRequestLoading}
-                    className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-all cursor-pointer active:scale-95"
+                    className="inline-flex items-center justify-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-all cursor-pointer active:scale-95"
                   >
                     {friendRequestLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                     <span>Add Friend</span>
@@ -363,7 +366,7 @@ export const ProfileIdentityCard = memo(({
                     onClick={onFollowToggle}
                     disabled={followLoading}
                     className={cn(
-                      "inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition-all cursor-pointer active:scale-95",
+                      "inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-95",
                       isFollowing
                         ? (isDark
                             ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
@@ -416,12 +419,12 @@ export const ProfileIdentityCard = memo(({
                     <Coins className="w-4 h-4" />
                   </button>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Identity Information */}
+        {/* Identity Information Suite */}
         <div className="space-y-1.5">
           {/* Display Name + Verified Badge */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -436,13 +439,13 @@ export const ProfileIdentityCard = memo(({
             )}
           </div>
 
-          {/* Handle & Civic Rank (Unboxed clean text with bullet separators) */}
+          {/* Unique Username by UserService (with instant copy feedback) */}
           <div className="flex items-center gap-2 flex-wrap text-xs sm:text-sm text-slate-500 dark:text-slate-400">
             <button
               type="button"
               onClick={handleCopyHandle}
-              className="font-mono hover:text-indigo-500 transition-colors inline-flex items-center gap-1 cursor-pointer"
-              title="Click to copy handle"
+              className="font-mono text-xs sm:text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+              title="Click to copy unique username"
             >
               <span>@{username}</span>
               {copiedHandle ? (
@@ -454,7 +457,7 @@ export const ProfileIdentityCard = memo(({
 
             {rankLabel && (
               <>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="opacity-40">·</span>
                 <button
                   type="button"
                   onClick={() => navigate(isOwner ? '/titles' : `/passport/${profileUid}`)}
@@ -468,7 +471,7 @@ export const ProfileIdentityCard = memo(({
 
             {hasLevel && (
               <>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="opacity-40">·</span>
                 <span className="font-semibold text-indigo-600 dark:text-indigo-400">
                   Level {effectiveLevel}
                 </span>
@@ -477,7 +480,7 @@ export const ProfileIdentityCard = memo(({
 
             {profile?.pronouns && (
               <>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true" className="opacity-40">·</span>
                 <span className="text-slate-400">{profile.pronouns}</span>
               </>
             )}
@@ -538,9 +541,15 @@ export const ProfileIdentityCard = memo(({
         </div>
 
         {/* Core Social & Civic Metrics Strip (Zero-Pill Discipline) */}
-        <div className="pt-3 border-t border-slate-100 dark:border-white/10 grid grid-cols-4 gap-2 text-center select-none">
+        <div className="pt-3.5 border-t border-slate-100 dark:border-white/10 grid grid-cols-4 gap-2 text-center select-none">
           {/* Creations */}
-          <div className="space-y-0.5">
+          <div 
+            onClick={() => onMetricPress?.('posts')}
+            className={cn(
+              "space-y-0.5 transition-colors",
+              onMetricPress ? "cursor-pointer hover:opacity-80" : ""
+            )}
+          >
             <div className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white">
               {formatStatNumber(postsCount)}
             </div>
@@ -581,19 +590,19 @@ export const ProfileIdentityCard = memo(({
             </div>
           </div>
 
-          {/* Mutuals / Trust */}
+          {/* Reputation / Mutual Friends */}
           <div 
-            onClick={() => onMetricPress?.('friends')}
+            onClick={() => onMetricPress?.('reputation')}
             className={cn(
               "space-y-0.5 transition-colors",
               onMetricPress ? "cursor-pointer hover:opacity-80" : ""
             )}
           >
-            <div className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white">
-              {friendsCount > 0 ? formatStatNumber(friendsCount) : (hasReputation ? `${reputationScore}` : '—')}
+            <div className="text-sm sm:text-base font-black tracking-tight text-purple-600 dark:text-purple-400">
+              {hasReputation ? formatStatNumber(reputationScore) : (friendsCount > 0 ? formatStatNumber(friendsCount) : '—')}
             </div>
             <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              {friendsCount > 0 ? 'Mutuals' : 'Trust'}
+              {hasReputation ? (repBand?.name || 'Reputation') : 'Friends'}
             </div>
           </div>
         </div>
@@ -608,20 +617,23 @@ ProfileIdentityCard.displayName = 'ProfileIdentityCard';
  * 3. Unified ProfileHeroSection (Backwards compatible & modular)
  */
 const ProfileHeroSection = memo(({
-  variant, // 'banner' | 'identity' | undefined (renders both)
   profile,
   isOwner = false,
   level = null,
   position = null,
   theme = 'light',
-  onBack,
+  variant = 'identity', // 'identity' is now default top card
   onOpenQrCode,
   onOpenQrScanner,
   onOpenLocationSetup,
+  onOpenNotifications,
+  onOpenMessages,
   onOpenOptions,
+  onOpenPerspective,
   onAvatarClick,
   onShare,
   onEditProfile,
+  onInsightsPress,
   isFollowing = false,
   followLoading = false,
   onFollowToggle,
@@ -629,205 +641,105 @@ const ProfileHeroSection = memo(({
   friendRequestLoading = false,
   onFriendRequestToggle,
   onOpenTipModal,
-  onOpenMessages,
-  onInsightsPress,
   capabilities,
-  analytics,
   onMetricPress,
+  onBack,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
 
-  // Only a stored level is real. Never invent "Level 1"/"Citizen" for a profile
-  // that has no progression data: absent data renders as unavailable.
-  const explicitLevel = Number(level || profile?.level);
-  const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
-  const effectiveLevel = hasLevel ? explicitLevel : null;
+  const effectiveLevel = useMemo(() => {
+    const raw = level ?? profile?.level;
+    if (raw === undefined || raw === null || raw === '') return null;
+    const n = Number(raw);
+    return !Number.isNaN(n) && n > 0 ? n : null;
+  }, [level, profile?.level]);
 
-  const rankTitle = useMemo(() => {
-    if (!hasLevel) return null;
-    try {
-      return getRankTitle(effectiveLevel);
-    } catch {
-      return null;
-    }
-  }, [hasLevel, effectiveLevel]);
+  const hasLevel = effectiveLevel !== null;
 
-  const citizenStanding = useMemo(() => {
+  const rankLabel = useMemo(() => {
     if (!hasLevel) return null;
-    try {
-      return getCitizenTier(effectiveLevel, Number(profile?.activeDaysCount) || 0);
-    } catch {
-      return null;
-    }
-  }, [hasLevel, effectiveLevel, profile?.activeDaysCount]);
+    return getRankTitle(effectiveLevel);
+  }, [effectiveLevel, hasLevel]);
 
   const levelColor = useMemo(() => {
     if (!hasLevel) return '#8B5CF6';
-    try {
-      return getLevelBandColor(effectiveLevel);
-    } catch {
-      return '#8B5CF6';
-    }
-  }, [hasLevel, effectiveLevel]);
+    return getLevelBandColor(effectiveLevel);
+  }, [effectiveLevel, hasLevel]);
 
-  const rankLabel = profile?.primaryTitle || profile?.activeTitle?.name || rankTitle || citizenStanding?.tier || null;
-
-  // Safe display strings
   const displayName = useMemo(() => {
-    const raw = profile?.displayName || profile?.name;
-    if (typeof raw === 'string' && raw.trim() && raw.trim() !== 'User' && raw.trim() !== 'Creator') {
-      return raw.trim();
-    }
-    return isOwner ? 'Arvdoul Citizen' : 'Creator';
-  }, [profile?.displayName, profile?.name, isOwner]);
+    return profile?.displayName || profile?.name || 'Citizen';
+  }, [profile?.displayName, profile?.name]);
 
-  // Derive genuine unique username
   const username = useMemo(() => {
-    try {
-      const rawUser = profile?.username;
-      if (typeof rawUser === 'string' && rawUser.trim() && !rawUser.startsWith('user_') && rawUser !== 'user' && rawUser !== 'creator') {
-        return rawUser.trim();
-      }
-      const rawEmail = typeof profile?.email === 'string' ? profile.email : '';
-      const rawName = typeof profile?.displayName === 'string' ? profile.displayName : (typeof profile?.name === 'string' ? profile.name : '');
-      const base = (rawName || rawEmail.split('@')[0] || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9_]/g, '')
-        .slice(0, 16);
-      if (base && base !== 'user' && base !== 'creator') {
-        return base;
-      }
-      return (typeof rawUser === 'string' && !rawUser.startsWith('user_')) ? rawUser : (isOwner ? 'citizen' : 'creator');
-    } catch {
-      return isOwner ? 'citizen' : 'creator';
-    }
-  }, [profile?.username, profile?.displayName, profile?.name, profile?.email, isOwner]);
+    return (
+      profile?.username ||
+      'citizen'
+    );
+  }, [profile?.username]);
 
-  const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid);
-  const bio = typeof profile?.bio === 'string' ? profile.bio.trim() : '';
-  const location = typeof profile?.location === 'string' ? profile.location : (typeof profile?.city === 'string' ? profile.city : '');
-  const website = typeof profile?.website === 'string' ? profile.website : (typeof profile?.link === 'string' ? profile.link : '');
-  const bannerImage = profile?.bannerUrl || profile?.coverPhoto || profile?.coverURL || null;
-  const isOnline = Boolean(profile?.presence?.isOnline || profile?.isOnline);
+  const avatarUrl = useMemo(() => {
+    return getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid || '');
+  }, [profile?.photoURL, displayName, profile?.id, profile?.uid]);
 
+  const bio = profile?.bio || '';
+  const location = profile?.location || '';
+  const website = profile?.website || '';
   const joinedDate = useMemo(() => {
-    if (profile?.createdAt) {
-      try {
-        const date = profile.createdAt?.toDate ? profile.createdAt.toDate() : new Date(profile.createdAt);
-        if (date && !isNaN(date.getTime())) {
-          return `Citizen since ${date.toLocaleString('en-US', { month: 'short', year: 'numeric' })}`;
-        }
-      } catch {
-        return '';
-      }
+    if (!profile?.createdAt) return '';
+    try {
+      const d = profile.createdAt?.toDate ? profile.createdAt.toDate() : new Date(profile.createdAt);
+      if (Number.isNaN(d.getTime())) return '';
+      return `Joined ${d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`;
+    } catch {
+      return '';
     }
-    return '';
   }, [profile?.createdAt]);
 
+  const isOnline = Boolean(profile?.presence?.isOnline || profile?.isOnline);
+
   if (variant === 'banner') {
-    return (
-      <ProfileBanner
-        bannerImage={bannerImage}
-        levelColor={levelColor}
-        isOwner={isOwner}
-        username={username}
-        onBack={onBack}
-        onOpenQrCode={onOpenQrCode}
-        onShare={onShare}
-        onOpenOptions={onOpenOptions}
-        navigate={navigate}
-      />
-    );
+    return null;
   }
 
-  if (variant === 'identity') {
-    return (
-      <ProfileIdentityCard
-        profile={profile}
-        isOwner={isOwner}
-        effectiveLevel={effectiveLevel}
-        hasLevel={hasLevel}
-        rankLabel={rankLabel}
-        displayName={displayName}
-        username={username}
-        avatarUrl={avatarUrl}
-        bio={bio}
-        location={location}
-        website={website}
-        joinedDate={joinedDate}
-        isOnline={isOnline}
-        isDark={isDark}
-        onAvatarClick={onAvatarClick}
-        onEditProfile={onEditProfile}
-        onOpenLocationSetup={onOpenLocationSetup}
-        onInsightsPress={onInsightsPress}
-        isFollowing={isFollowing}
-        followLoading={followLoading}
-        onFollowToggle={onFollowToggle}
-        friendshipStatus={friendshipStatus}
-        friendRequestLoading={friendRequestLoading}
-        onFriendRequestToggle={onFriendRequestToggle}
-        onOpenTipModal={onOpenTipModal}
-        onOpenMessages={onOpenMessages}
-        capabilities={capabilities}
-        onMetricPress={onMetricPress}
-        navigate={navigate}
-      />
-    );
-  }
-
-  // Default: Unified layout for single-column/preview usage
   return (
-    <div className="w-full space-y-4">
-      <ProfileBanner
-        bannerImage={bannerImage}
-        levelColor={levelColor}
-        isOwner={isOwner}
-        username={username}
-        onBack={onBack}
-        onOpenQrCode={onOpenQrCode}
-        onShare={onShare}
-        onOpenOptions={onOpenOptions}
-        navigate={navigate}
-      />
-      <div className="-mt-16 sm:-mt-20 px-2 sm:px-4 relative z-10">
-        <ProfileIdentityCard
-          profile={profile}
-          isOwner={isOwner}
-          effectiveLevel={effectiveLevel}
-          hasLevel={hasLevel}
-          rankLabel={rankLabel}
-          displayName={displayName}
-          username={username}
-          avatarUrl={avatarUrl}
-          bio={bio}
-          location={location}
-          website={website}
-          joinedDate={joinedDate}
-          isOnline={isOnline}
-          isDark={isDark}
-          onAvatarClick={onAvatarClick}
-          onEditProfile={onEditProfile}
-          onOpenLocationSetup={onOpenLocationSetup}
-          onInsightsPress={onInsightsPress}
-          isFollowing={isFollowing}
-          followLoading={followLoading}
-          onFollowToggle={onFollowToggle}
-          friendshipStatus={friendshipStatus}
-          friendRequestLoading={friendRequestLoading}
-          onFriendRequestToggle={onFriendRequestToggle}
-          onOpenTipModal={onOpenTipModal}
-          onOpenMessages={onOpenMessages}
-          capabilities={capabilities}
-          onMetricPress={onMetricPress}
-          navigate={navigate}
-        />
-      </div>
-    </div>
+    <ProfileIdentityCard
+      profile={profile}
+      isOwner={isOwner}
+      effectiveLevel={effectiveLevel}
+      hasLevel={hasLevel}
+      rankLabel={rankLabel}
+      displayName={displayName}
+      username={username}
+      avatarUrl={avatarUrl}
+      bio={bio}
+      location={location}
+      website={website}
+      joinedDate={joinedDate}
+      isOnline={isOnline}
+      isDark={isDark}
+      onAvatarClick={onAvatarClick}
+      onEditProfile={onEditProfile}
+      onOpenLocationSetup={onOpenLocationSetup}
+      onInsightsPress={onInsightsPress}
+      onOpenQrCode={onOpenQrCode}
+      onShare={onShare}
+      onOpenPerspective={onOpenPerspective}
+      onOpenOptions={onOpenOptions}
+      isFollowing={isFollowing}
+      followLoading={followLoading}
+      onFollowToggle={onFollowToggle}
+      friendshipStatus={friendshipStatus}
+      friendRequestLoading={friendRequestLoading}
+      onFriendRequestToggle={onFriendRequestToggle}
+      onOpenTipModal={onOpenTipModal}
+      onOpenMessages={onOpenMessages}
+      capabilities={capabilities}
+      onMetricPress={onMetricPress}
+      navigate={navigate}
+    />
   );
 });
 
 ProfileHeroSection.displayName = 'ProfileHeroSection';
-
 export default ProfileHeroSection;

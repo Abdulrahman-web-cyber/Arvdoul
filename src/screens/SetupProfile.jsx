@@ -766,19 +766,6 @@ export default function SetupProfile() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Sign‑up Method</label>
-              <div className={`w-full px-3 py-2 rounded-lg border flex items-center gap-2 ${resolvedTheme === "dark" ? "bg-gray-800/50 border-gray-600 text-gray-300" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
-                {authMethodIcon}
-                <span className="capitalize font-medium">{authProvider}</span>
-                {identifier && (
-                  <span className={`text-xs ml-auto max-w-[150px] truncate ${resolvedTheme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    {identifier}
-                  </span>
-                )}
-              </div>
-            </div>
-
             <SmartUsernameGenerator username={username} onChange={setUsername} theme={theme} loading={loading} displayName={displayName} userId={user?.uid} />
 
             <div>

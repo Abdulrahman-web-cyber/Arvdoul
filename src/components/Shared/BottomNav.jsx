@@ -476,9 +476,7 @@ const NavigationItem = memo(function NavigationItem({
 
   const isProfile = item.id === "profile";
   const userAvatar = isProfile && user ? getSafeAvatarUrl(user.photoURL, user.displayName || user.username || 'You', user.id || user.uid) : null;
-  const labelText = isProfile && (user?.displayName || user?.username)
-    ? (user.displayName || user.username).split(' ')[0].slice(0, 8)
-    : item.label;
+  const labelText = item.label;
 
   return (
     <motion.button

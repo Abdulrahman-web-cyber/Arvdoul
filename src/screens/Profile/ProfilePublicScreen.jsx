@@ -513,37 +513,13 @@ export default function ProfilePublicScreen() {
           : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
       )}>
         {/* Outer responsive frame matching design specifications */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-6">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-2 sm:py-4 space-y-4">
           
-          {/* 1. Panoramic Cinematic Marquee Banner */}
-          <ProfileHeroSection
-            variant="banner"
-            profile={effectiveProfile}
-            isOwner={false}
-            level={effectiveProfile.level}
-            theme={theme}
-            onBack={() => navigate(-1)}
-            onOpenQrCode={() => setShowQrModal(true)}
-            onOpenQrScanner={() => setShowScannerModal(true)}
-            onOpenNotifications={() => navigate('/notifications')}
-            onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
-            onOpenOptions={() => setShowOptionsMenu(true)}
-            onAvatarClick={() => setShowQrModal(true)}
-            onShare={handleShare}
-            onFollowToggle={handleFollowToggle}
-            isFollowing={isFollowing}
-            followLoading={followLoading}
-            friendshipStatus={friendshipStatus}
-            friendRequestLoading={friendRequestLoading}
-            onFriendRequestToggle={handleFriendRequestToggle}
-            onOpenTipModal={() => setShowTipModal(true)}
-          />
-
           {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
-          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start -mt-16 sm:-mt-20">
-            {/* Left Column: Civic Prestige & Identity Command Rail (lg:col-span-4, sticky) */}
+          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start">
+            {/* Left Column: Command Rail (lg:col-span-4, sticky) */}
             <div className="lg:col-span-4 lg:sticky lg:top-4 space-y-4 relative z-10">
-              {/* 2. Elevated Master Identity Card with Avatar & Social Counters */}
+              {/* TOP CARD: Elevated Master Identity Card with Avatar & Social Counters */}
               <ProfileHeroSection
                 variant="identity"
                 profile={effectiveProfile}

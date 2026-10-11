@@ -25,8 +25,15 @@ import {
   Check,
   SlidersHorizontal,
   Share2,
+  QrCode,
+  Eye,
+  Settings,
+  Sparkles,
 } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
+import { useAuth } from "../../context/AuthContext";
+import { useProfileStore } from "../../store/profileStore";
+import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 
 /* ========================================================================== */
@@ -339,6 +346,17 @@ export const TopAppBar = ({
     }
   };
 
+  const { user: authUser } = useAuth();
+  const appStoreUser = useAppStore((state) => state.currentUser);
+  const profileStoreProfile = useProfileStore((state) => state.profile);
+  const effectiveUser = profileStoreProfile || appStoreUser || authUser;
+  const rawUsername = effectiveUser?.username || '';
+  const cleanUsername = rawUsername && !rawUsername.startsWith('user_')
+    ? rawUsername
+    : (effectiveUser?.displayName?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'citizen');
+  const userDisplayName = effectiveUser?.displayName || 'Citizen';
+  const userAvatarUrl = getSafeAvatarUrl(effectiveUser?.photoURL, userDisplayName, effectiveUser?.uid || '');
+
   // Determine mode
   const currentMode = useMemo(() => {
     if (propMode) return propMode;
@@ -351,8 +369,15 @@ export const TopAppBar = ({
       path.startsWith("/image-editor")
     )
       return "composer";
-    if (path.startsWith("/profile/") || path.startsWith("/user/"))
-      return "detail";
+    if (path === "/profile" || path === "/profile/me")
+      return "profile_me";
+    if (path.startsWith("/profile/") || path.startsWith("/user/")) {
+      const sub = path.replace("/profile/", "").toLowerCase().split("/")[0];
+      if (['edit', 'analytics', 'highlights', 'followers', 'following', 'friends', 'about', 'preview', 'wallet', 'progress', 'achievements', 'titles', 'passport'].includes(sub)) {
+        return "contextual";
+      }
+      return "profile_visitor";
+    }
     return "contextual";
   }, [location.pathname, propMode]);
 
@@ -360,6 +385,16 @@ export const TopAppBar = ({
   const contextualTitle = useMemo(() => {
     if (propTitle) return propTitle;
     const path = location.pathname;
+    if (path === "/profile" || path === "/profile/me") return `@${cleanUsername}`;
+    if (path.startsWith("/profile/edit")) return "Edit Profile";
+    if (path.startsWith("/profile/analytics")) return "Creator Analytics";
+    if (path.startsWith("/profile/highlights")) return "Highlights Studio";
+    if (path.includes("/followers")) return "Followers";
+    if (path.includes("/following")) return "Following";
+    if (path.includes("/friends")) return "Friends";
+    if (path.startsWith("/passport")) return "Digital Passport";
+    if (path.startsWith("/titles")) return "Civic Titles & Provenance";
+    if (path.startsWith("/reputation")) return "Reputation & Standing";
     if (path.startsWith("/notifications")) return "Notifications";
     if (path.startsWith("/network")) return "Network & Friends";
     if (path.startsWith("/coins")) return "Coins & Wallet";
@@ -370,8 +405,12 @@ export const TopAppBar = ({
     if (path.startsWith("/badges")) return "Badges & Rewards";
     if (path.startsWith("/create-post")) return "Create Post";
     if (path.startsWith("/image-editor")) return "Image Studio";
+    if (path.startsWith("/profile/") || path.startsWith("/user/")) {
+      const target = path.split("/").pop();
+      return target ? `@${target.replace(/^@/, '')}` : "Profile";
+    }
     return "Arvdoul";
-  }, [location.pathname, propTitle]);
+  }, [location.pathname, propTitle, cleanUsername]);
 
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -581,7 +620,75 @@ export const TopAppBar = ({
                 </div>
               )}
 
-              {currentMode === "detail" && (
+              {currentMode === "profile_me" && (
+                <div className="flex items-center justify-between gap-2 sm:gap-3">
+                  <div
+                    onClick={() => {
+                      if (scrollContainerRef?.current) {
+                        scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+                      } else {
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }
+                    }}
+                    className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group min-w-0"
+                  >
+                    <div className="relative shrink-0">
+                      <img
+                        src={userAvatarUrl}
+                        alt={userDisplayName}
+                        className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-500/50 group-hover:scale-105 transition-transform"
+                      />
+                      {Boolean(effectiveUser?.isVerified) && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center text-white text-[8px] font-bold">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span
+                          className="text-sm sm:text-base font-black truncate leading-tight tracking-tight font-mono text-purple-600 dark:text-purple-300"
+                        >
+                          @{cleanUsername}
+                        </span>
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      </div>
+                      <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-none">
+                        Profile
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <CircularButton
+                      icon={Eye}
+                      label="View As Perspective"
+                      theme={theme}
+                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:open_perspective_modal"))}
+                    />
+                    <CircularButton
+                      icon={QrCode}
+                      label="Identity QR Code"
+                      theme={theme}
+                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:open_qr_code"))}
+                    />
+                    <CircularButton
+                      icon={Share2}
+                      label="Share Profile"
+                      theme={theme}
+                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:share_profile"))}
+                    />
+                    <CircularButton
+                      icon={Settings}
+                      label="Account Settings"
+                      theme={theme}
+                      onClick={() => navigate("/settings")}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(currentMode === "profile_visitor" || currentMode === "detail") && (
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <CircularButton
@@ -591,8 +698,8 @@ export const TopAppBar = ({
                       onClick={handleBack}
                     />
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                        {contextualTitle.charAt(0)}
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+                        {contextualTitle.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span
@@ -603,7 +710,7 @@ export const TopAppBar = ({
                         </span>
                         <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>Active now</span>
+                          <span>Citizen Profile</span>
                         </div>
                       </div>
                     </div>
@@ -613,24 +720,13 @@ export const TopAppBar = ({
                       icon={Share2}
                       label="Share"
                       theme={theme}
-                      onClick={async () => {
-                        try {
-                          if (navigator.share) {
-                            await navigator.share({
-                              title: contextualTitle,
-                              url: window.location.href,
-                            });
-                          }
-                        } catch (error) {
-                          // handle cancellation or fallback
-                        }
-                      }}
+                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:share_profile"))}
                     />
                     <CircularButton
                       icon={MoreVertical}
                       label="Options"
                       theme={theme}
-                      onClick={onAction}
+                      onClick={onAction || (() => window.dispatchEvent(new CustomEvent("arvdoul:open_profile_options")))}
                     />
                   </div>
                 </div>

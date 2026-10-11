@@ -6,7 +6,6 @@
  * 
  * @component
  */
-
 import React, { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, ShieldCheck, X, Lock } from 'lucide-react';
@@ -29,6 +28,7 @@ import {
   resolveLevelValue,
   resolveCreatorFlag,
   resolveVerifiedFlag,
+  isPlaceholderHandle,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { toast } from 'sonner';
@@ -46,6 +46,7 @@ import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
 import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
+import ProfilePerspectiveModal from '../../components/profile/ProfilePerspectiveModal';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 // Modals & Extras
@@ -63,8 +64,10 @@ export default function ProfileMyScreen() {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showPerspectiveModal, setShowPerspectiveModal] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [viewAs, setViewAs] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
+
   const [viewMode, setViewMode] = useState(() => {
     try {
       return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
@@ -80,9 +83,7 @@ export default function ProfileMyScreen() {
     } catch {}
   }, []);
 
-  // Authenticated user. Live Firebase Auth identity wins over the persisted
-  // store: `arvdoul-app-store` survives sign-out, so preferring it could resolve
-  // a previous account's uid before the new session hydrates.
+  // Authenticated user identity
   const { user: authContextUser } = useAuth();
   const authStoreUser = useAppStore((state) => state.currentUser);
   const currentUser = authContextUser || authStoreUser;
@@ -117,23 +118,48 @@ export default function ProfileMyScreen() {
   const ranking = useAnalyticsStore((state) => state.ranking);
   const setTimeframe = useAnalyticsStore((state) => state.setTimeframe);
 
-  // Fallback username if Firestore is yet to populate
-  const cleanUsername = useMemo(() => (
-    pickHandle([profile?.username, currentUser?.username])
-    || deriveHandle(currentUser?.email)
-    || deriveHandle(profile?.email)
-    || deriveHandle(currentUser?.displayName)
-    || deriveHandle(profile?.displayName)
-    || 'creator'
-  ), [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
+  // Auto-generate and ensure a unique username via userService if user document has none
+  useEffect(() => {
+    if (!currentUserId) return;
+    let cancelled = false;
+    const ensureUniqueUser = async () => {
+      try {
+        const storedHandle = profile?.username;
+        if (storedHandle && !isPlaceholderHandle(storedHandle)) return;
+        const userServiceModule = await import('../../services/userService.js');
+        const userService = userServiceModule.getUserService();
+        const base = currentUser?.displayName || profile?.displayName || 'citizen';
+        const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'citizen';
+        const generated = await userService.generateUniqueUsername(cleanBase, currentUserId);
+        if (!cancelled && generated) {
+          await userService.updateUserProfile(currentUserId, { username: generated });
+          useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+        }
+      } catch (err) {
+        console.warn('Auto username generation note:', err);
+      }
+    };
+    ensureUniqueUser();
+    return () => { cancelled = true; };
+  }, [currentUserId, profile?.username, currentUser?.displayName, profile?.displayName]);
+
+  // Clean unique username by userService (never displaying signing method name)
+  const cleanUsername = useMemo(() => {
+    const candidate = pickHandle([profile?.username, currentUser?.username]);
+    if (candidate) return candidate;
+    const fromDisplay = deriveHandle(currentUser?.displayName || profile?.displayName);
+    if (fromDisplay && !isPlaceholderHandle(fromDisplay)) return fromDisplay;
+    const fromEmail = deriveHandle(currentUser?.email || profile?.email);
+    if (fromEmail && !isPlaceholderHandle(fromEmail)) return fromEmail;
+    return 'citizen';
+  }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
 
   // Server-authoritative composite profile
   const effectiveProfile = useMemo(() => {
     const safeDisplayName = pickDisplayName(
       [currentUser?.displayName, currentUser?.name, profile?.displayName, profile?.name],
-      { fallback: deriveHandle(currentUser?.email) || 'Creator' }
+      { fallback: deriveHandle(currentUser?.email) || 'Citizen' }
     );
-
     const safeBio = (typeof profile?.bio === 'string' ? profile.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
     const safeLocation = typeof profile?.location === 'string' ? profile.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
     const safeWebsite = typeof profile?.website === 'string' ? profile.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
@@ -194,20 +220,17 @@ export default function ProfileMyScreen() {
     });
   }, [currentUser, effectiveProfile, viewAs]);
 
-  // Load user data on mount without thrashing or clearing cache
+  // Load user data on mount
   useEffect(() => {
     if (!currentUserId) return;
-
     const profileStore = useProfileStore.getState();
     const analyticsStore = useAnalyticsStore.getState();
-
     profileStore.loadProfile(currentUserId, currentUserId);
     profileStore.loadHighlights(currentUserId);
     profileStore.loadLevel(currentUserId);
     profileStore.loadBalance(currentUserId);
     profileStore.loadPosition(currentUserId);
     profileStore.loadPosts(currentUserId);
-
     analyticsStore.loadAnalytics(currentUserId, timeframe);
   }, [currentUserId, timeframe]);
 
@@ -252,6 +275,26 @@ export default function ProfileMyScreen() {
     }
   }, [effectiveProfile, currentUserId, cleanUsername]);
 
+  // Cross-component event listeners for TopAppBar & Header actions
+  useEffect(() => {
+    const handleQrEvent = () => setShowQrModal(true);
+    const handlePerspectiveEvent = () => setShowPerspectiveModal(true);
+    const handleShareEvent = () => handleShare();
+    const handleOptionsEvent = () => setShowOptionsMenu(true);
+
+    window.addEventListener('arvdoul:open_qr_code', handleQrEvent);
+    window.addEventListener('arvdoul:open_perspective_modal', handlePerspectiveEvent);
+    window.addEventListener('arvdoul:share_profile', handleShareEvent);
+    window.addEventListener('arvdoul:open_profile_options', handleOptionsEvent);
+
+    return () => {
+      window.removeEventListener('arvdoul:open_qr_code', handleQrEvent);
+      window.removeEventListener('arvdoul:open_perspective_modal', handlePerspectiveEvent);
+      window.removeEventListener('arvdoul:share_profile', handleShareEvent);
+      window.removeEventListener('arvdoul:open_profile_options', handleOptionsEvent);
+    };
+  }, [handleShare]);
+
   const isDark = theme === 'dark';
 
   if (loading && !profile && !currentUser) {
@@ -280,6 +323,7 @@ export default function ProfileMyScreen() {
         {loading && !profile && (
           <TopAppLoadingBanner isAnimating={true} label="Syncing profile..." />
         )}
+
         {/* Top Refreshing Pill */}
         {isRefreshing && (
           <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-600 text-white text-xs font-bold shadow-lg animate-pulse">
@@ -287,80 +331,16 @@ export default function ProfileMyScreen() {
           </div>
         )}
 
-        {/* Outer responsive frame matching design specifications */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-6">
+        {/* Outer responsive frame - Top Card is the Profile Pic Card */}
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-2 sm:py-4 space-y-4">
           
-          {/* View As Mode Control */}
-          <div className={cn(
-            "rounded-2xl p-3 border flex flex-col sm:flex-row items-center justify-between gap-3 transition-all shadow-sm",
-            isDark ? "bg-[#0d1424] border-purple-500/20" : "bg-white border-purple-100"
-          )}>
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500">
-                <Eye className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <span>View As Perspective</span>
-                  {viewAs !== 'owner' && (
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">
-                      Simulating {viewAs}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Preview how visitors, followers, and connections experience your identity & privacy.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-xl w-full sm:w-auto justify-center">
-              {[
-                { id: 'owner', label: 'Owner' },
-                { id: 'public', label: 'Public' },
-                { id: 'follower', label: 'Follower' },
-                { id: 'connection', label: 'Connection' }
-              ].map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => handleViewAsChange(item.id)}
-                  className={cn(
-                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer",
-                    viewAs === item.id
-                      ? "bg-purple-600 text-white shadow-sm"
-                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 1. Panoramic Cinematic Marquee Banner */}
-          <ProfileHeroSection
-            variant="banner"
-            profile={effectiveProfile}
-            isOwner={true}
-            level={level || effectiveProfile.level}
-            position={position}
-            theme={theme}
-            onOpenQrCode={() => setShowQrModal(true)}
-            onOpenQrScanner={() => setShowScannerModal(true)}
-            onOpenLocationSetup={() => setShowLocationModal(true)}
-            onOpenNotifications={() => navigate('/notifications')}
-            onOpenOptions={() => setShowOptionsMenu(true)}
-            onAvatarClick={() => setShowAvatarModal(true)}
-            onShare={handleShare}
-            onEditProfile={() => navigate('/profile/edit')}
-            onInsightsPress={() => navigate('/profile/analytics')}
-          />
-
           {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
-          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start -mt-16 sm:-mt-20">
-            {/* Left Column: Civic Prestige & Identity Command Rail (lg:col-span-4, sticky) */}
+          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start">
+            
+            {/* Left Column: Command Rail (lg:col-span-4, sticky) */}
             <div className="lg:col-span-4 lg:sticky lg:top-4 space-y-4 relative z-10">
-              {/* 2. Elevated Master Identity Card with Avatar & Social Counters */}
+              
+              {/* TOP CARD: Elevated Master Identity Card with Profile Picture */}
               <ProfileHeroSection
                 variant="identity"
                 profile={effectiveProfile}
@@ -369,7 +349,10 @@ export default function ProfileMyScreen() {
                 position={position}
                 theme={theme}
                 onOpenQrCode={() => setShowQrModal(true)}
+                onOpenQrScanner={() => setShowScannerModal(true)}
                 onOpenLocationSetup={() => setShowLocationModal(true)}
+                onOpenPerspective={() => setShowPerspectiveModal(true)}
+                onOpenOptions={() => setShowOptionsMenu(true)}
                 onAvatarClick={() => setShowAvatarModal(true)}
                 onShare={handleShare}
                 onEditProfile={() => navigate('/profile/edit')}
@@ -381,11 +364,12 @@ export default function ProfileMyScreen() {
                   else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
                   else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
                   else if (key === 'coins') navigate('/coins');
-                  else if (key === 'views') navigate('/profile/analytics');
+                  else if (key === 'posts') setActiveTab('posts');
+                  else if (key === 'reputation') navigate('/passport');
                 }}
               />
 
-              {/* 3. Embedded Civic Prestige Card */}
+              {/* 2. Embedded Civic Prestige Card */}
               <ProfileCivicCard
                 level={level || effectiveProfile?.level}
                 experience={effectiveProfile?.experience || 0}
@@ -396,7 +380,7 @@ export default function ProfileMyScreen() {
                 theme={theme}
               />
 
-              {/* 4. Creator Analytics Dashboard (if owner) */}
+              {/* 3. Creator Analytics Dashboard (if owner) */}
               {viewAs === 'owner' && (
                 <ProfileCreatorDashboard
                   analytics={analytics}
@@ -475,8 +459,30 @@ export default function ProfileMyScreen() {
               )}
             </div>
           </div>
-
         </div>
+
+        {/* Floating Perspective Preview Bar when simulating visitor view */}
+        {viewAs !== 'owner' && (
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 rounded-full bg-slate-900/90 dark:bg-white/10 text-white backdrop-blur-xl border border-purple-500/30 shadow-2xl text-xs font-semibold animate-in fade-in slide-in-from-bottom-4">
+            <Eye className="w-3.5 h-3.5 text-amber-400" />
+            <span>Simulating <strong>{viewAs.toUpperCase()}</strong> view</span>
+            <button
+              onClick={() => handleViewAsChange('owner')}
+              className="ml-1.5 px-2.5 py-0.5 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] transition cursor-pointer shadow-sm"
+            >
+              Exit Preview
+            </button>
+          </div>
+        )}
+
+        {/* Perspective Switcher Modal */}
+        <ProfilePerspectiveModal
+          isOpen={showPerspectiveModal}
+          onClose={() => setShowPerspectiveModal(false)}
+          currentPerspective={viewAs}
+          onSelectPerspective={handleViewAsChange}
+          theme={theme}
+        />
 
         {/* QR Code Modal */}
         <ProfileQRCodeModal

@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
-  Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus
+  Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus,
+  Eye, QrCode, Crown, Settings
 } from 'lucide-react';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
 
@@ -186,6 +187,48 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
         <button className={itemCls} onClick={handleCopy}>
           <Link2 className="w-4 h-4 text-cyan-500" /> Copy Link
         </button>
+
+        {isOwner && (
+          <>
+            <div className={cn("mx-4 my-1 h-px", isDark ? "bg-gray-700" : "bg-gray-100")} />
+            <button
+              className={itemCls}
+              onClick={() => {
+                onClose?.();
+                window.dispatchEvent(new CustomEvent('arvdoul:open_perspective_modal'));
+              }}
+            >
+              <Eye className="w-4 h-4 text-amber-500" /> View Profile As...
+            </button>
+            <button
+              className={itemCls}
+              onClick={() => {
+                onClose?.();
+                window.dispatchEvent(new CustomEvent('arvdoul:open_qr_code'));
+              }}
+            >
+              <QrCode className="w-4 h-4 text-purple-500" /> Identity QR Code
+            </button>
+            <button
+              className={itemCls}
+              onClick={() => {
+                onClose?.();
+                window.location.href = '/passport';
+              }}
+            >
+              <Crown className="w-4 h-4 text-amber-400" /> Digital Passport
+            </button>
+            <button
+              className={itemCls}
+              onClick={() => {
+                onClose?.();
+                window.location.href = '/settings';
+              }}
+            >
+              <Settings className="w-4 h-4 text-slate-400" /> Account Settings
+            </button>
+          </>
+        )}
 
         {!isOwner && (
           <>
