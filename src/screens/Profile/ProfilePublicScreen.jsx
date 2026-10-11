@@ -36,6 +36,7 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileProgression from '../../components/profile/ProfileProgression';
+import ProfileCivicCard from '../../components/profile/ProfileCivicCard';
 import ProfileMutualFriends from '../../components/profile/ProfileMutualFriends';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
@@ -71,6 +72,20 @@ export default function ProfilePublicScreen() {
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [relationship, setRelationship] = useState(null);
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleViewModeChange = useCallback((mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('arvdoul_profile_view_mode', mode);
+    } catch {}
+  }, []);
   
   // Modals
   const [showTipModal, setShowTipModal] = useState(false);
@@ -497,11 +512,12 @@ export default function ProfilePublicScreen() {
           ? "bg-[#060816] text-white selection:bg-purple-500/30"
           : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
       )}>
-        {/* Outer responsive frame matching design images */}
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-5">
+        {/* Outer responsive frame matching design specifications */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-6">
           
-          {/* 1. Hero Section with Top Back/Action Sub-bar */}
+          {/* 1. Panoramic Cinematic Marquee Banner */}
           <ProfileHeroSection
+            variant="banner"
             profile={effectiveProfile}
             isOwner={false}
             level={effectiveProfile.level}
@@ -523,115 +539,145 @@ export default function ProfilePublicScreen() {
             onOpenTipModal={() => setShowTipModal(true)}
           />
 
-          {/* 1b. Civic Progression Showcase */}
-          {effectiveProfile?.level && (
-            <ProfileProgression
-              level={effectiveProfile.level}
-              experience={effectiveProfile?.experience || 0}
-              streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
-              isOwner={false}
-              theme={theme}
-            />
-          )}
-
-          {/* 2. Key Metrics Strip */}
-          <ProfileMetricsGrid
-            isOwner={false}
-            theme={theme}
-            profile={effectiveProfile}
-            analytics={analytics}
-            capabilities={capabilities}
-            onMetricPress={(key) => {
-              const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;
-              if (key === 'followers') navigate(`/profile/${targetId}/followers`);
-              else if (key === 'following') navigate(`/profile/${targetId}/following`);
-              else if (key === 'friends') navigate(`/profile/${targetId}/friends`);
-            }}
-          />
-
-          {/* 2b. Mutual Friends Line */}
-          {mutualFriends && mutualFriends.length > 0 && (
-            <ProfileMutualFriends
-              mutualFriends={mutualFriends}
-              theme={theme}
-              onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
-            />
-          )}
-
-          {!capabilities.canViewContent ? (
-            /* Restricted / Private Account Access Gate */
-            <div className={cn(
-              "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-6",
-              isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
-            )}>
-              <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                <Lock className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                  Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
-                </p>
-              </div>
-              <div className="pt-2 flex justify-center">
-                <button
-                  onClick={handleFollowToggle}
-                  className="px-6 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* 5. Highlights / Vibes Carousel */}
-              <ProfileHighlightsSection
-                highlights={effectiveProfile?.highlights || []}
-                userId={userId}
-                isOwner={false}
-                theme={theme}
-              />
-
-              {/* 6. Featured by Creator Section */}
-              <ProfileFeaturedSection
+          {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
+          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start -mt-16 sm:-mt-20">
+            {/* Left Column: Civic Prestige & Identity Command Rail (lg:col-span-4, sticky) */}
+            <div className="lg:col-span-4 lg:sticky lg:top-4 space-y-4 relative z-10">
+              {/* 2. Elevated Master Identity Card with Avatar & Social Counters */}
+              <ProfileHeroSection
+                variant="identity"
                 profile={effectiveProfile}
-                posts={posts}
+                isOwner={false}
+                level={effectiveProfile.level}
                 theme={theme}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
+                onBack={() => navigate(-1)}
+                onOpenQrCode={() => setShowQrModal(true)}
+                onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
+                onOpenOptions={() => setShowOptionsMenu(true)}
+                onAvatarClick={() => setShowQrModal(true)}
+                onShare={handleShare}
+                onFollowToggle={handleFollowToggle}
+                isFollowing={isFollowing}
+                followLoading={followLoading}
+                friendshipStatus={friendshipStatus}
+                friendRequestLoading={friendRequestLoading}
+                onFriendRequestToggle={handleFriendRequestToggle}
+                onOpenTipModal={() => setShowTipModal(true)}
+                capabilities={capabilities}
+                analytics={analytics}
+                onMetricPress={(key) => {
+                  const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;
+                  if (key === 'followers') navigate(`/profile/${targetId}/followers`);
+                  else if (key === 'following') navigate(`/profile/${targetId}/following`);
+                  else if (key === 'friends') navigate(`/profile/${targetId}/friends`);
+                }}
               />
 
-              {/* 7. Multi-Tab Navigation Bar */}
-              <div className="sticky top-2 z-30 pt-1">
-                <ProfileTabsBar
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
+              {/* 3. Embedded Civic Prestige Card */}
+              {effectiveProfile?.level && (
+                <ProfileCivicCard
+                  level={effectiveProfile.level}
+                  experience={effectiveProfile?.experience || 0}
+                  streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
+                  reputation={Number(effectiveProfile?.reputation) || 0}
+                  profile={effectiveProfile}
                   isOwner={false}
                   theme={theme}
-                  counts={{
-                    posts: posts?.length || 0,
-                  }}
                 />
-              </div>
+              )}
 
-              {/* 8. Pinned Posts Section */}
-              <ProfilePinnedPosts
-                posts={posts}
-                theme={theme}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
-              />
+              {/* 4. Mutual Friends Line */}
+              {mutualFriends && mutualFriends.length > 0 && (
+                <ProfileMutualFriends
+                  mutualFriends={mutualFriends}
+                  theme={theme}
+                  onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+                />
+              )}
+            </div>
 
-              {/* 9. Media Feed Grid */}
-              <ProfileFeedGrid
-                posts={posts}
-                activeTab={activeTab}
-                loading={loading}
-                theme={theme}
-                profile={effectiveProfile}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
-              />
-            </>
-          )}
+            {/* Right Column: Active Feed & Content Hub (lg:col-span-8) */}
+            <div className="lg:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
+              {!capabilities.canViewContent ? (
+                /* Restricted / Private Account Access Gate */
+                <div className={cn(
+                  "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-2",
+                  isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
+                )}>
+                  <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                      Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
+                    </p>
+                  </div>
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      onClick={handleFollowToggle}
+                      className="px-6 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Highlights / Vibes Carousel */}
+                  <ProfileHighlightsSection
+                    highlights={effectiveProfile?.highlights || []}
+                    userId={userId}
+                    isOwner={false}
+                    theme={theme}
+                  />
+
+                  {/* Featured by Creator Section */}
+                  <ProfileFeaturedSection
+                    profile={effectiveProfile}
+                    posts={posts}
+                    theme={theme}
+                    onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  />
+
+                  {/* Pinned Posts Section */}
+                  <ProfilePinnedPosts
+                    posts={posts}
+                    theme={theme}
+                    onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  />
+
+                  {/* Multi-Tab Navigation Bar with Multi-View Switcher */}
+                  <div className="sticky top-2 z-30 pt-1">
+                    <ProfileTabsBar
+                      activeTab={activeTab}
+                      onTabChange={setActiveTab}
+                      viewMode={viewMode}
+                      onViewModeChange={handleViewModeChange}
+                      isOwner={false}
+                      theme={theme}
+                      counts={{
+                        posts: posts?.length || 0,
+                      }}
+                    />
+                  </div>
+
+                  {/* Media Feed Grid with Multi-View Mode */}
+                  <ProfileFeedGrid
+                    posts={posts}
+                    activeTab={activeTab}
+                    viewMode={viewMode}
+                    loading={loading}
+                    theme={theme}
+                    profile={effectiveProfile}
+                    onPostClick={(post) => navigate(`/post/${post.id}`)}
+                    onOpenTipModal={() => setShowTipModal(true)}
+                  />
+                </>
+              )}
+            </div>
+          </div>
 
         </div>
 

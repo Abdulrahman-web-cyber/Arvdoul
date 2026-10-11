@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileProgression from '../../components/profile/ProfileProgression';
+import ProfileCivicCard from '../../components/profile/ProfileCivicCard';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
@@ -64,6 +65,20 @@ export default function ProfileMyScreen() {
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
   const [viewAs, setViewAs] = useState('owner'); // 'owner' | 'public' | 'follower' | 'connection'
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('arvdoul_profile_view_mode') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleViewModeChange = useCallback((mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('arvdoul_profile_view_mode', mode);
+    } catch {}
+  }, []);
 
   // Authenticated user. Live Firebase Auth identity wins over the persisted
   // store: `arvdoul-app-store` survives sign-out, so preferring it could resolve
@@ -272,8 +287,8 @@ export default function ProfileMyScreen() {
           </div>
         )}
 
-        {/* Outer responsive frame matching design images */}
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-5">
+        {/* Outer responsive frame matching design specifications */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 space-y-4 sm:space-y-6">
           
           {/* View As Mode Control */}
           <div className={cn(
@@ -310,7 +325,7 @@ export default function ProfileMyScreen() {
                   key={item.id}
                   onClick={() => handleViewAsChange(item.id)}
                   className={cn(
-                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                    "px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer",
                     viewAs === item.id
                       ? "bg-purple-600 text-white shadow-sm"
                       : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
@@ -322,8 +337,9 @@ export default function ProfileMyScreen() {
             </div>
           </div>
 
-          {/* 1. Hero Identity & Level Section */}
+          {/* 1. Panoramic Cinematic Marquee Banner */}
           <ProfileHeroSection
+            variant="banner"
             profile={effectiveProfile}
             isOwner={true}
             level={level || effectiveProfile.level}
@@ -340,56 +356,47 @@ export default function ProfileMyScreen() {
             onInsightsPress={() => navigate('/profile/analytics')}
           />
 
-          {/* 2. Civic Progression & Level XP Curve */}
-          <ProfileProgression
-            level={level || effectiveProfile?.level}
-            experience={effectiveProfile?.experience || 0}
-            streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
-            isOwner={true}
-            theme={theme}
-          />
-
-          {/* 3. Key Metric Grid */}
-          <ProfileMetricsGrid
-            isOwner={capabilities.isOwner}
-            theme={theme}
-            profile={effectiveProfile}
-            analytics={analytics}
-            capabilities={capabilities}
-            onMetricPress={(key) => {
-              if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
-              else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
-              else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
-              else if (key === 'coins') navigate('/coins');
-              else if (key === 'views') navigate('/profile/analytics');
-            }}
-          />
-
-          {/* 4. Story Highlights / Vibes Carousel */}
-          {viewAs !== 'owner' && !capabilities.canViewContent ? (
-            <div className={cn(
-              "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
-              isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
-            )}>
-              <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                <Lock className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private to {viewAs === 'public' ? 'Public Visitors' : viewAs}</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                Because your profile visibility is set to Private, visitors in {viewAs} perspective cannot view your highlights, pinned posts, or media gallery.
-              </p>
-            </div>
-          ) : (
-            <>
-              <ProfileHighlightsSection
-                highlights={highlights}
-                userId={currentUserId}
+          {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
+          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start -mt-16 sm:-mt-20">
+            {/* Left Column: Civic Prestige & Identity Command Rail (lg:col-span-4, sticky) */}
+            <div className="lg:col-span-4 lg:sticky lg:top-4 space-y-4 relative z-10">
+              {/* 2. Elevated Master Identity Card with Avatar & Social Counters */}
+              <ProfileHeroSection
+                variant="identity"
+                profile={effectiveProfile}
                 isOwner={viewAs === 'owner'}
+                level={level || effectiveProfile.level}
+                position={position}
                 theme={theme}
-                onAddHighlight={() => navigate('/profile/highlights?create=true')}
+                onOpenQrCode={() => setShowQrModal(true)}
+                onOpenLocationSetup={() => setShowLocationModal(true)}
+                onAvatarClick={() => setShowAvatarModal(true)}
+                onShare={handleShare}
+                onEditProfile={() => navigate('/profile/edit')}
+                onInsightsPress={() => navigate('/profile/analytics')}
+                capabilities={capabilities}
+                analytics={analytics}
+                onMetricPress={(key) => {
+                  if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
+                  else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
+                  else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
+                  else if (key === 'coins') navigate('/coins');
+                  else if (key === 'views') navigate('/profile/analytics');
+                }}
               />
 
-              {/* 5. Creator Dashboard Analytics (with Level Gating) */}
+              {/* 3. Embedded Civic Prestige Card */}
+              <ProfileCivicCard
+                level={level || effectiveProfile?.level}
+                experience={effectiveProfile?.experience || 0}
+                streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
+                reputation={Number(effectiveProfile?.reputation) || 0}
+                profile={effectiveProfile}
+                isOwner={true}
+                theme={theme}
+              />
+
+              {/* 4. Creator Analytics Dashboard (if owner) */}
               {viewAs === 'owner' && (
                 <ProfileCreatorDashboard
                   analytics={analytics}
@@ -402,40 +409,72 @@ export default function ProfileMyScreen() {
                   onTimeframeChange={setTimeframe}
                 />
               )}
+            </div>
 
-              {/* 6. Pinned Posts Section */}
-              <ProfilePinnedPosts
-                posts={posts}
-                theme={theme}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
-              />
+            {/* Right Column: Active Feed & Content Hub (lg:col-span-8) */}
+            <div className="lg:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
+              {viewAs !== 'owner' && !capabilities.canViewContent ? (
+                <div className={cn(
+                  "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
+                  isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+                )}>
+                  <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private to {viewAs === 'public' ? 'Public Visitors' : viewAs}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                    Because your profile visibility is set to Private, visitors in {viewAs} perspective cannot view your highlights, pinned posts, or media gallery.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Story Highlights */}
+                  <ProfileHighlightsSection
+                    highlights={highlights}
+                    userId={currentUserId}
+                    isOwner={viewAs === 'owner'}
+                    theme={theme}
+                    onAddHighlight={() => navigate('/profile/highlights?create=true')}
+                  />
 
-              {/* 7. Multi-Tab Navigation Bar */}
-              <div className="sticky top-2 z-30 pt-1">
-                <ProfileTabsBar
-                  activeTab={activeTab}
-                  onTabChange={handleTabChange}
-                  isOwner={viewAs === 'owner'}
-                  theme={theme}
-                  counts={{
-                    posts: posts?.length,
-                    saved: savedPosts?.length,
-                  }}
-                />
-              </div>
+                  {/* Pinned Posts Section */}
+                  <ProfilePinnedPosts
+                    posts={posts}
+                    theme={theme}
+                    onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  />
 
-              {/* 8. Media Posts & Creations Grid */}
-              <ProfileFeedGrid
-                posts={posts}
-                savedPosts={savedPosts}
-                activeTab={activeTab}
-                loading={postsLoading || savedLoading}
-                theme={theme}
-                profile={effectiveProfile}
-                onPostClick={(post) => navigate(`/post/${post.id}`)}
-              />
-            </>
-          )}
+                  {/* Multi-Tab Navigation Bar with Multi-View Switcher */}
+                  <div className="sticky top-2 z-30 pt-1">
+                    <ProfileTabsBar
+                      activeTab={activeTab}
+                      onTabChange={handleTabChange}
+                      viewMode={viewMode}
+                      onViewModeChange={handleViewModeChange}
+                      isOwner={viewAs === 'owner'}
+                      theme={theme}
+                      counts={{
+                        posts: posts?.length,
+                        saved: savedPosts?.length,
+                      }}
+                    />
+                  </div>
+
+                  {/* Multi-View Media & Posts Grid */}
+                  <ProfileFeedGrid
+                    posts={posts}
+                    savedPosts={savedPosts}
+                    activeTab={activeTab}
+                    viewMode={viewMode}
+                    loading={postsLoading || savedLoading}
+                    theme={theme}
+                    profile={effectiveProfile}
+                    onPostClick={(post) => navigate(`/post/${post.id}`)}
+                  />
+                </>
+              )}
+            </div>
+          </div>
 
         </div>
 
