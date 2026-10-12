@@ -50,8 +50,8 @@ import ProfilePerspectiveModal from '../../components/profile/ProfilePerspective
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 // Modals & Extras
+import ProfileOptionsMenu from '../../components/profile/ProfileOptionsMenu';
 const AvatarUploadModal = lazy(() => import('../../components/profile/AvatarUploadModal'));
-const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
 
 export default function ProfileMyScreen() {
   const navigate = useNavigate();
@@ -303,7 +303,6 @@ export default function ProfileMyScreen() {
         'min-h-screen pb-20',
         isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
       )}>
-        <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
         <ProfileSkeleton theme={theme} />
       </div>
     );
@@ -320,9 +319,6 @@ export default function ProfileMyScreen() {
             : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
         )}
       >
-        {loading && !profile && (
-          <TopAppLoadingBanner isAnimating={true} label="Syncing profile..." />
-        )}
 
         {/* Top Refreshing Pill */}
         {isRefreshing && (
@@ -517,18 +513,12 @@ export default function ProfileMyScreen() {
 
         {/* Options Menu Dialog */}
         {showOptionsMenu && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl">
-              <Suspense fallback={null}>
-                <ProfileOptionsMenu
-                  profile={effectiveProfile}
-                  isOwner={true}
-                  theme={theme}
-                  onClose={() => setShowOptionsMenu(false)}
-                />
-              </Suspense>
-            </div>
-          </div>
+          <ProfileOptionsMenu
+            profile={effectiveProfile}
+            isOwner={true}
+            theme={theme}
+            onClose={() => setShowOptionsMenu(false)}
+          />
         )}
 
         {/* Avatar Upload Modal */}

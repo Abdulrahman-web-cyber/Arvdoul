@@ -8,6 +8,7 @@ import {
   resolvePostAuthDestination,
   safeReturnPath,
 } from "../utils/profileCompletion.js";
+import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 
 export default function AppStateGuard({ children }) {
   const location = useLocation();
@@ -79,19 +80,20 @@ export default function AppStateGuard({ children }) {
       return children;
     }
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-[#03071B] text-gray-900 dark:text-white">
-        <div className="w-10 h-10 border-3 border-violet-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-xs font-medium text-gray-400">Loading Arvdoul...</p>
-      </div>
+      <>
+        <RouteProgressBar isAnimating={true} />
+        {children}
+      </>
     );
   }
 
-  // If redirecting, render a clean transition state instead of an empty white void
+  // If redirecting, render ambient top progress line while route updates smoothly
   if (decision.destination && !decision.wait) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-[#03071B] text-gray-900 dark:text-white">
-        <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <>
+        <RouteProgressBar isAnimating={true} />
+        {children}
+      </>
     );
   }
 

@@ -152,46 +152,26 @@ export default function HighlightsScreen() {
       'min-h-screen pb-20',
       theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
     )}>
-      {/* Header */}
-      <div className={cn(
-        'sticky top-0 z-20',
-        'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-        'border-b border-gray-200 dark:border-gray-800'
-      )}>
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className={cn(
-                'p-2 rounded-xl',
-                'hover:bg-gray-100 dark:hover:bg-gray-800',
-                'transition-colors'
-              )}
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            </button>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Highlights
-            </h1>
+      {/* Content */}
+      <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        <div className="flex items-center justify-between pb-2">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Story Highlights</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Curate your best memories on your profile</p>
           </div>
-          
           <button
             onClick={handleCreateHighlight}
             className={cn(
-              'px-4 py-2 rounded-xl font-medium text-sm',
+              'px-4 py-2 rounded-2xl font-bold text-xs',
               'bg-gradient-to-r from-purple-500 to-blue-500',
-              'text-white hover:opacity-90 transition-opacity',
-              'flex items-center gap-2'
+              'text-white hover:opacity-90 shadow-md transition-opacity',
+              'flex items-center gap-1.5 cursor-pointer'
             )}
           >
-            <Plus className="w-4 h-4" />
-            New
+            <Plus className="w-3.5 h-3.5" />
+            New Highlight
           </button>
         </div>
-      </div>
-      
-      {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 py-4">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />

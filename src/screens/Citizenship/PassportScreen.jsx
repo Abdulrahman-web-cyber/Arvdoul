@@ -108,48 +108,33 @@ export default function PassportScreen() {
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
-        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
-      }`}>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+      <main className="max-w-xl mx-auto px-4 py-4 sm:py-6 space-y-4">
+        {/* Top Action Bar */}
+        <div className="flex items-center justify-between pb-1">
           <div>
-            <h1 className="text-lg font-bold tracking-tight">Digital Passport</h1>
-            <p className="text-xs text-gray-500">{passport.citizenId}</p>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Institutional Passport</h2>
+            <p className="text-xs text-gray-500 font-mono">{passport.citizenId}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowQR(true)}
+              aria-label="Show QR credentials"
+              className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                isDark ? 'border-gray-800 hover:bg-gray-800 text-gray-300' : 'border-gray-200 hover:bg-gray-100 text-gray-700'
+              }`}
+            >
+              <QrCode className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleShare}
+              aria-label="Share passport"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share</span>
+            </button>
           </div>
         </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowQR(true)}
-            aria-label="Show QR credentials"
-            className={`p-2 rounded-lg border transition-colors ${
-              isDark ? 'border-gray-800 hover:bg-gray-800 text-gray-300' : 'border-gray-200 hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            <QrCode className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleShare}
-            aria-label="Share passport"
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>Share</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
         {/* The Institutional Passport Artifact */}
         <div
           className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden transition-all shadow-2xl ${

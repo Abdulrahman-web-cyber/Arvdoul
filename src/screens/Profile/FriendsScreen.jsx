@@ -99,45 +99,20 @@ export default function FriendsScreen() {
         ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
         : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
     )}>
-      {/* Header */}
-      <div className={cn(
-        'sticky top-0 z-20 backdrop-blur-xl',
-        'bg-white/80 dark:bg-gray-900/80',
-        'border-b border-gray-200/60 dark:border-gray-800/60'
-      )}>
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => navigate(-1)}
-            className={cn(
-              'p-2 rounded-xl',
-              'hover:bg-gray-100 dark:hover:bg-gray-800',
-              'transition-colors'
-            )}
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Friends
-          </h1>
-        </div>
-        
-        {/* Search */}
-        <div className="px-4 pb-3">
-          <div className={cn(
-            'flex items-center gap-2 px-3 py-2 rounded-2xl',
-            'bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-md border',
-            'border-gray-200/60 dark:border-gray-700/60 shadow-sm'
-          )}>
-            <Search className="w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search friends..."
-              className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
-            />
-          </div>
+      {/* In-page Search Bar */}
+      <div className="max-w-2xl mx-auto px-4 pt-3 pb-2">
+        <div className={cn(
+          'flex items-center gap-2 px-3 py-2 rounded-2xl border',
+          theme === 'dark' ? 'bg-white/[0.05] border-white/10' : 'bg-slate-100 border-slate-200'
+        )}>
+          <Search className="w-4 h-4 text-gray-400 shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search friends..."
+            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
+          />
         </div>
       </div>
       

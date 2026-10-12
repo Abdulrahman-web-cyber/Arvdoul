@@ -50,7 +50,7 @@ import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModa
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 // Modals
-const ProfileOptionsMenu = lazy(() => import('../../components/profile/ProfileOptionsMenu'));
+import ProfileOptionsMenu from '../../components/profile/ProfileOptionsMenu';
 
 export default function ProfilePublicScreen() {
   const { userId } = useParams();
@@ -390,13 +390,27 @@ export default function ProfilePublicScreen() {
     }
   }, [effectiveProfile, userId, profileData?.username]);
 
+  // Cross-component event listeners for TopAppBar & Header actions
+  useEffect(() => {
+    const handleQrEvent = () => setShowQrModal(true);
+    const handleShareEvent = () => handleShare();
+    const handleOptionsEvent = () => setShowOptionsMenu(true);
+    window.addEventListener('arvdoul:open_qr_code', handleQrEvent);
+    window.addEventListener('arvdoul:share_profile', handleShareEvent);
+    window.addEventListener('arvdoul:open_profile_options', handleOptionsEvent);
+    return () => {
+      window.removeEventListener('arvdoul:open_qr_code', handleQrEvent);
+      window.removeEventListener('arvdoul:share_profile', handleShareEvent);
+      window.removeEventListener('arvdoul:open_profile_options', handleOptionsEvent);
+    };
+  }, [handleShare]);
+
   if (loading && !profileData) {
     return (
       <div className={cn(
         'min-h-screen pb-20',
         isDark ? 'bg-[#060816]' : 'bg-[#f0f4fa]'
       )}>
-        <TopAppLoadingBanner isAnimating={true} label="Loading Profile..." />
         <ProfileSkeleton theme={theme} />
       </div>
     );
@@ -690,19 +704,13 @@ export default function ProfilePublicScreen() {
 
         {/* Options Menu */}
         {showOptionsMenu && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl">
-              <Suspense fallback={null}>
-                <ProfileOptionsMenu
-                  profile={effectiveProfile}
-                  isOwner={false}
-                  theme={theme}
-                  capabilities={capabilities}
-                  onClose={() => setShowOptionsMenu(false)}
-                />
-              </Suspense>
-            </div>
-          </div>
+          <ProfileOptionsMenu
+            profile={effectiveProfile}
+            isOwner={false}
+            theme={theme}
+            capabilities={capabilities}
+            onClose={() => setShowOptionsMenu(false)}
+          />
         )}
       </div>
     </ErrorBoundary>

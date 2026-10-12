@@ -137,12 +137,9 @@ import {
 } from "../components/ErrorBoundary/SectionErrorBoundary.jsx";
 import { RouteProgressBar, RouteSkeletonShell } from "../components/Navigation/RouteProgressBar.jsx";
 
-// Non-blocking route transition fallback (ambient skeleton + top glow line + minimal spinner)
-const RouteLoadingFallback = ({ variant = "default" }) => (
-  <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-50 dark:bg-[#03071B] text-gray-900 dark:text-white">
-    <RouteSkeletonShell variant={variant} />
-    <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-  </div>
+// Seamless, non-blocking route transition fallback (ambient top progress line)
+const RouteLoadingFallback = () => (
+  <RouteProgressBar isAnimating={true} />
 );
 const RouteFallback = RouteLoadingFallback;
 

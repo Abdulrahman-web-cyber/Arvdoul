@@ -45,8 +45,11 @@ export default function ReputationScreen() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-black text-gray-400' : 'bg-gray-50 text-gray-600'}`}>
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className={`min-h-screen p-4 ${isDark ? 'bg-black text-gray-400' : 'bg-gray-50 text-gray-600'}`}>
+        <div className="max-w-2xl mx-auto space-y-4 pt-6">
+          <div className="h-28 rounded-2xl bg-white/[0.04] animate-pulse" />
+          <div className="h-28 rounded-2xl bg-white/[0.04] animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -62,35 +65,19 @@ export default function ReputationScreen() {
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
-        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
-      }`}>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+      <main className="max-w-2xl mx-auto px-4 py-4 sm:py-6 space-y-4">
+        <div className="flex items-center justify-between pb-1">
           <div>
-            <h1 className="text-lg font-bold tracking-tight">Trust & Standing</h1>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Trust & Standing</h2>
             <p className="text-xs text-gray-500">Multidimensional Civic Standing</p>
           </div>
+          <button
+            onClick={() => navigate(`/passport/${userId}`)}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors cursor-pointer"
+          >
+            Digital Passport
+          </button>
         </div>
-
-        <button
-          onClick={() => navigate(`/passport/${userId}`)}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-        >
-          View Passport
-        </button>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Dimension 1: Trust Standing (Reputation) */}
         <section
           aria-labelledby="trust-heading"

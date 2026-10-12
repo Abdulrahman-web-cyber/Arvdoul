@@ -106,37 +106,20 @@ export default function TitlesScreen() {
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
-        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
-      }`}>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+      <main className="max-w-4xl mx-auto px-4 py-4 sm:py-6 space-y-6">
+        {/* Top Summary Strip */}
+        <div className="flex items-center justify-between pb-1">
           <div>
-            <h1 className="text-lg font-bold tracking-tight">Titles & Standing</h1>
-            <p className="text-xs text-gray-500">
-              Active: {user?.primaryTitle || 'Resident'} · {earnedTitles.length} Earned
-            </p>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Titles & Provenance</h2>
+            <p className="text-xs text-gray-500">Active: {user?.primaryTitle || 'Resident'} · {earnedTitles.length} Earned</p>
           </div>
+          <button
+            onClick={() => navigate('/passport')}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors cursor-pointer"
+          >
+            Digital Passport
+          </button>
         </div>
-
-        <button
-          onClick={() => navigate('/passport')}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-        >
-          Passport
-        </button>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Active Title Banner */}
         <section
           aria-labelledby="active-title-heading"

@@ -19,16 +19,7 @@ import {
   Menu,
   X,
   ChevronLeft,
-  MoreVertical,
-  WifiOff,
-  RefreshCw,
-  Check,
   SlidersHorizontal,
-  Share2,
-  QrCode,
-  Eye,
-  Settings,
-  Sparkles,
 } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
@@ -385,7 +376,7 @@ export const TopAppBar = ({
   const contextualTitle = useMemo(() => {
     if (propTitle) return propTitle;
     const path = location.pathname;
-    if (path === "/profile" || path === "/profile/me") return `@${cleanUsername}`;
+    if (path === "/profile" || path === "/profile/me") return "Profile";
     if (path.startsWith("/profile/edit")) return "Edit Profile";
     if (path.startsWith("/profile/analytics")) return "Creator Analytics";
     if (path.startsWith("/profile/highlights")) return "Highlights Studio";
@@ -397,20 +388,41 @@ export const TopAppBar = ({
     if (path.startsWith("/reputation")) return "Reputation & Standing";
     if (path.startsWith("/notifications")) return "Notifications";
     if (path.startsWith("/network")) return "Network & Friends";
-    if (path.startsWith("/coins")) return "Coins & Wallet";
+    if (path.startsWith("/coins") || path.startsWith("/wallet")) return "Coins & Wallet";
     if (path.startsWith("/saved")) return "Saved Items";
+    if (path.startsWith("/collections")) return "Collections";
+    if (path.startsWith("/settings/data-usage")) return "Data Usage";
     if (path.startsWith("/settings")) return "Settings";
     if (path.startsWith("/community")) return "Communities";
     if (path.startsWith("/rankings")) return "Rankings";
     if (path.startsWith("/badges")) return "Badges & Rewards";
+    if (path.startsWith("/progress")) return "Progression & Perks";
+    if (path.startsWith("/achievements")) return "Achievements";
     if (path.startsWith("/create-post")) return "Create Post";
-    if (path.startsWith("/image-editor")) return "Image Studio";
+    if (path.startsWith("/create-story")) return "Create Story";
+    if (path.startsWith("/image-editor") || path.startsWith("/image-studio")) return "Image Studio";
+    if (path.startsWith("/video-editor")) return "Video Studio";
+    if (path.startsWith("/audio-editor")) return "Audio Studio";
+    if (path.startsWith("/thumbnail-designer")) return "Thumbnail Designer";
+    if (path.startsWith("/marketplace") || path.startsWith("/store") || path.startsWith("/shop")) return "Marketplace";
+    if (path.startsWith("/spaces")) return "Audio Spaces";
+    if (path.startsWith("/sounds")) return "Sounds & Music";
+    if (path.startsWith("/help")) return "Help Center";
+    if (path.startsWith("/search")) return "Search";
+    if (path.startsWith("/vibes")) return "Vibes";
+    if (path.startsWith("/menu")) return "Menu";
+    if (path.startsWith("/admin/users")) return "Admin - Users";
+    if (path.startsWith("/admin/content")) return "Admin - Content";
+    if (path.startsWith("/admin/moderation")) return "Admin - Moderation";
+    if (path.startsWith("/admin/economy")) return "Admin - Economy";
+    if (path.startsWith("/admin/audit-logs")) return "Admin - Audit Logs";
+    if (path.startsWith("/admin/access")) return "Admin - Access Control";
+    if (path.startsWith("/admin")) return "Admin Console";
     if (path.startsWith("/profile/") || path.startsWith("/user/")) {
-      const target = path.split("/").pop();
-      return target ? `@${target.replace(/^@/, '')}` : "Profile";
+      return "Profile";
     }
     return "Arvdoul";
-  }, [location.pathname, propTitle, cleanUsername]);
+  }, [location.pathname, propTitle]);
 
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -630,7 +642,7 @@ export const TopAppBar = ({
                         window.scrollTo({ top: 0, behavior: "smooth" });
                       }
                     }}
-                    className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group min-w-0"
+                    className="flex items-center gap-2.5 cursor-pointer select-none group min-w-0"
                   >
                     <div className="relative shrink-0">
                       <img
@@ -645,44 +657,38 @@ export const TopAppBar = ({
                       )}
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span
-                          className="text-sm sm:text-base font-black truncate leading-tight tracking-tight font-mono text-purple-600 dark:text-purple-300"
-                        >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <h2 className="text-base sm:text-lg font-black truncate leading-tight tracking-tight">
+                          Profile
+                        </h2>
+                        <span className="font-mono text-xs font-semibold text-purple-600 dark:text-purple-300 truncate">
                           @{cleanUsername}
                         </span>
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                       </div>
-                      <span className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-none">
-                        Profile
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">
+                        Citizen Dashboard
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 sm:gap-1.5">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <CircularButton
-                      icon={Eye}
-                      label="View As Perspective"
+                      icon={Search}
+                      label="Search"
                       theme={theme}
-                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:open_perspective_modal"))}
+                      onClick={() => {
+                        if (onSearch) onSearch();
+                        else navigate(ROUTES.search);
+                      }}
                     />
                     <CircularButton
-                      icon={QrCode}
-                      label="Identity QR Code"
+                      icon={Menu}
+                      label="Menu"
                       theme={theme}
-                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:open_qr_code"))}
-                    />
-                    <CircularButton
-                      icon={Share2}
-                      label="Share Profile"
-                      theme={theme}
-                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:share_profile"))}
-                    />
-                    <CircularButton
-                      icon={Settings}
-                      label="Account Settings"
-                      theme={theme}
-                      onClick={() => navigate("/settings")}
+                      onClick={() => {
+                        if (onOpenMenu) onOpenMenu();
+                        else navigate(ROUTES.menu);
+                      }}
                     />
                   </div>
                 </div>
@@ -703,7 +709,7 @@ export const TopAppBar = ({
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span
-                          className="text-sm font-bold truncate leading-tight"
+                          className="text-sm sm:text-base font-bold truncate leading-tight"
                           style={{ color: tokens.textPrimary }}
                         >
                           {contextualTitle}
@@ -715,18 +721,24 @@ export const TopAppBar = ({
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <CircularButton
-                      icon={Share2}
-                      label="Share"
+                      icon={Search}
+                      label="Search"
                       theme={theme}
-                      onClick={() => window.dispatchEvent(new CustomEvent("arvdoul:share_profile"))}
+                      onClick={() => {
+                        if (onSearch) onSearch();
+                        else navigate(ROUTES.search);
+                      }}
                     />
                     <CircularButton
-                      icon={MoreVertical}
-                      label="Options"
+                      icon={Menu}
+                      label="Menu"
                       theme={theme}
-                      onClick={onAction || (() => window.dispatchEvent(new CustomEvent("arvdoul:open_profile_options")))}
+                      onClick={() => {
+                        if (onOpenMenu) onOpenMenu();
+                        else navigate(ROUTES.menu);
+                      }}
                     />
                   </div>
                 </div>

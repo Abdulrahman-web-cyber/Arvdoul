@@ -253,26 +253,7 @@ export default function SettingsScreen() {
 
   return (
     <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
-      {/* Header */}
-      <header className={cn('sticky top-0 z-40 backdrop-blur-xl border-b transition-colors', isDark ? 'bg-[#0B0F17]/85 border-white/10' : 'bg-white/85 border-gray-200')}>
-        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              aria-label={t('common.back') || 'Back'}
-              className={cn('p-2 rounded-full transition-all', isDark ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-700')}
-            >
-              <ArrowLeft className="w-5 h-5" aria-hidden="true" />
-            </button>
-            <div className="flex items-center gap-2">
-              <Sliders className="w-5 h-5 text-purple-400" aria-hidden="true" />
-              <h1 className="font-bold text-lg">{t('settings.title')}</h1>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 pt-6 space-y-6">
+      <main className="max-w-3xl mx-auto px-4 pt-4 sm:pt-6 space-y-6">
         {/* ============ LEVEL & PROGRESS ============ */}
         {levelInfo && (
           <section className="rounded-3xl p-5 border shadow-sm bg-gradient-to-br from-purple-600/15 via-indigo-600/10 to-transparent border-purple-500/20">
