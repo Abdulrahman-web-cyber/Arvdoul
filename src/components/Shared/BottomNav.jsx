@@ -16,6 +16,7 @@ import { useAuth } from "@context/AuthContext";
 import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useAppStore } from "../../store/appStore";
+import { useProfileStore } from "../../store/profileStore";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
 
@@ -849,7 +850,8 @@ function BottomNav() {
 
   const { user: authUser, userProfile } = useAuth();
   const currentUser = useAppStore((state) => state.currentUser);
-  const effectiveUser = userProfile || currentUser || authUser;
+  const profileStoreProfile = useProfileStore((state) => state.profile);
+  const effectiveUser = profileStoreProfile || userProfile || currentUser || authUser;
   const unreadCounts = useAppStore((state) => state.unreadCounts);
 
   const reducedMotion = useReducedMotion();

@@ -1,52 +1,72 @@
 /**
- * Screen for editing user profile information.
+ * Production-grade Arvdoul Edit Profile Screen.
+ * 
+ * Specifically designed for Arvdoul:
+ * - NO background/cover images (Arvdoul does not support background images).
+ * - Full alignment with Arvdoul design tokens (arvdoul-gradient, arvdoul-surface, arvdoul-border).
+ * - Integrated unique username generation & live availability checker via userService.
+ * - Interactive Avatar Studio with 1:1 circular crop and live presence aura.
+ * - Granular Privacy & Audience Governance adhering to profileContracts.js.
+ * - Interactive Location Modal & Civic Coordinates.
  * 
  * @component
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { 
-  ArrowLeft, 
+  ChevronLeft, 
   Camera, 
   Save, 
-  X, 
   User, 
-  Mail, 
-  Phone,
-  MapPin,
+  MapPin, 
+  Globe, 
+  Shield, 
+  Plus, 
+  Trash2, 
+  ExternalLink, 
+  Lock, 
+  Eye, 
+  Check, 
+  Sparkles, 
+  RefreshCw, 
+  CheckCircle2, 
+  AlertCircle,
   Link as LinkIcon,
-  Calendar,
-  Globe,
-  Shield,
-  Plus,
-  Trash2,
-  ExternalLink,
-  Lock,
-  Eye,
-  Check,
-  Navigation,
-  Sparkles,
-  RefreshCw,
-  CheckCircle2,
-  AlertCircle
+  HelpCircle,
+  Star,
+  AtSign
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
-import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../../config/profileContracts.js';
+import { useProfileStore } from '../../store/profileStore';
+import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY, PROFILE_CONSTRAINTS } from '../../config/profileContracts.js';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
+import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 
-/**
- * EditProfileScreen Component
- */
+const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
+
+const PLATFORM_PRESETS = [
+  { id: 'website', label: 'Website' },
+  { id: 'twitter', label: 'X / Twitter' },
+  { id: 'github', label: 'GitHub' },
+  { id: 'instagram', label: 'Instagram' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'discord', label: 'Discord' },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'custom', label: 'Custom Link' },
+];
+
 export default function EditProfileScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { userProfile, updateUserProfile, userService } = useAuth();
-  
+  const isDark = theme === 'dark';
+  const { user, userProfile, updateUserProfile, userService } = useAuth();
+  const loadStoreProfile = useProfileStore((state) => state.loadProfile);
+
   // Form state
   const [formData, setFormData] = useState({
     displayName: '',
@@ -55,10 +75,7 @@ export default function EditProfileScreen() {
     location: '',
     website: '',
     pronouns: '',
-    gender: '',
     profession: '',
-    education: '',
-    language: 'English',
     isPrivate: false,
     links: [],
     privacy: {
@@ -69,8 +86,7 @@ export default function EditProfileScreen() {
       economicStatus: DEFAULT_PROFILE_PRIVACY.economicStatus,
     },
   });
-  
-  const [loading, setLoading] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -79,30 +95,32 @@ export default function EditProfileScreen() {
   const [usernameAvailability, setUsernameAvailability] = useState(null); // 'checking' | 'available' | 'taken' | 'invalid' | 'current'
   const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
 
-  // Load current profile data
+  // Effective user reference
+  const currentUid = userProfile?.uid || userProfile?.id || user?.uid;
+
+  // Initialize form data from profile
   useEffect(() => {
-    if (userProfile) {
-      const p = userProfile.privacy || {};
-      let initialUsername = userProfile.username || '';
+    if (userProfile || user) {
+      const src = userProfile || user;
+      const p = src.privacy || {};
+      
+      let initialUsername = src.username || '';
       if (!initialUsername || initialUsername.startsWith('user_') || initialUsername === 'user' || initialUsername === 'creator') {
-        const fromEmail = userProfile.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9._]/g, '');
-        const fromName = userProfile.displayName?.toLowerCase().replace(/[^a-z0-9._]/g, '');
+        const fromEmail = src.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9._]/g, '');
+        const fromName = src.displayName?.toLowerCase().replace(/[^a-z0-9._]/g, '');
         initialUsername = fromEmail || fromName || '';
       }
 
       setFormData({
-        displayName: userProfile.displayName || '',
+        displayName: src.displayName || '',
         username: initialUsername,
-        bio: userProfile.bio || '',
-        location: userProfile.location || '',
-        website: userProfile.website || '',
-        pronouns: userProfile.pronouns || '',
-        gender: userProfile.gender || '',
-        profession: userProfile.profession || '',
-        education: userProfile.education || '',
-        language: userProfile.language || 'English',
-        isPrivate: Boolean(userProfile.isPrivate),
-        links: Array.isArray(userProfile.links) ? userProfile.links : [],
+        bio: src.bio || '',
+        location: src.location || '',
+        website: src.website || '',
+        pronouns: src.pronouns || '',
+        profession: src.profession || '',
+        isPrivate: Boolean(src.isPrivate),
+        links: Array.isArray(src.links) ? src.links : [],
         privacy: {
           profileInfo: p.profileInfo || (p.profileVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.profileVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
           presence: p.presence || (p.onlinePresence === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.onlinePresence === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : p.onlinePresence === 'public' ? VISIBILITY_SCOPES.EVERYONE : VISIBILITY_SCOPES.FOLLOWERS),
@@ -111,9 +129,11 @@ export default function EditProfileScreen() {
           economicStatus: p.economicStatus || VISIBILITY_SCOPES.ONLY_ME,
         },
       });
-      setAvatarPreview(userProfile.photoURL);
+
+      const safePhoto = getSafeAvatarUrl(src.photoURL, src.displayName, currentUid);
+      setAvatarPreview(safePhoto);
     }
-  }, [userProfile?.uid]);
+  }, [userProfile, user, currentUid]);
 
   // Live username availability check with debounce
   useEffect(() => {
@@ -122,7 +142,7 @@ export default function EditProfileScreen() {
       setUsernameAvailability(null);
       return;
     }
-    if (raw === userProfile?.username) {
+    if (raw === (userProfile?.username || user?.username)) {
       setUsernameAvailability('current');
       return;
     }
@@ -130,7 +150,6 @@ export default function EditProfileScreen() {
       setUsernameAvailability('invalid');
       return;
     }
-
     setUsernameAvailability('checking');
     const timer = setTimeout(async () => {
       try {
@@ -144,33 +163,33 @@ export default function EditProfileScreen() {
         setUsernameAvailability(null);
       }
     }, 400);
-
     return () => clearTimeout(timer);
-  }, [formData.username, userProfile?.username, userService]);
+  }, [formData.username, userProfile?.username, user?.username, userService]);
 
   // Unique generated username handler using userService
   const handleGenerateUsername = useCallback(async () => {
     setIsGeneratingUsername(true);
     try {
-      const base = formData.displayName || userProfile?.displayName || userProfile?.email?.split('@')[0] || 'creator';
+      const base = formData.displayName || userProfile?.displayName || user?.email?.split('@')[0] || 'creator';
       const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'creator';
       let uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
-      // Ensure no leftover user_ prefix
+      
+      // Ensure no leftover placeholder prefix
       if (uniqueUser.startsWith('user_')) {
         uniqueUser = uniqueUser.replace(/^user_/, `${cleanBase}_`);
       }
       setFormData(prev => ({ ...prev, username: uniqueUser }));
       setUsernameAvailability('available');
-      toast.success(`Generated: @${uniqueUser}`);
+      toast.success(`Generated unique handle: @${uniqueUser}`);
     } catch (e) {
       console.warn('Generate username err:', e);
       toast.error('Could not generate unique username');
     } finally {
       setIsGeneratingUsername(false);
     }
-  }, [formData.displayName, userProfile, userService]);
-  
-  // Handlers
+  }, [formData.displayName, userProfile, user, currentUid, userService]);
+
+  // Input Handlers
   const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
@@ -185,16 +204,17 @@ export default function EditProfileScreen() {
     }));
   }, []);
 
+  // Links Handlers
   const handleAddLink = useCallback(() => {
     if (formData.links.length >= 10) {
-      toast.error('Maximum 10 links allowed');
+      toast.error('Maximum 10 custom links allowed');
       return;
     }
     const newLink = {
       id: Date.now().toString(),
       title: '',
       url: '',
-      platform: 'custom',
+      platform: 'website',
       isPrimary: formData.links.length === 0,
     };
     setFormData(prev => ({
@@ -227,7 +247,8 @@ export default function EditProfileScreen() {
       return { ...prev, links: updated };
     });
   }, []);
-  
+
+  // Avatar Handlers
   const handleAvatarCropped = useCallback(async (file) => {
     if (!file) return;
     setAvatarFile(file);
@@ -236,18 +257,17 @@ export default function EditProfileScreen() {
   }, []);
 
   const handleRemoveAvatar = useCallback(async () => {
-    if (!userProfile?.uid) return;
-    const defaultAvatar = userService?.getAvatarUrl
-      ? userService.getAvatarUrl(userProfile.uid, formData.displayName || 'Creator', null)
-      : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(formData.displayName || 'Creator')}&backgroundColor=6366f1`;
-
+    if (!currentUid) return;
+    const defaultAvatar = getSafeAvatarUrl(null, formData.displayName || 'Citizen', currentUid);
     setAvatarFile(null);
     setAvatarPreview(defaultAvatar);
     if (userService?.updateUserProfile) {
-      await userService.updateUserProfile(userProfile.uid, { photoURL: defaultAvatar });
+      await userService.updateUserProfile(currentUid, { photoURL: defaultAvatar });
     }
-  }, [userProfile?.uid, formData.displayName, userService]);
+    toast.success('Avatar reset to default citizen monogram');
+  }, [currentUid, formData.displayName, userService]);
 
+  // Save changes handler
   const handleSave = useCallback(async () => {
     const rawUser = formData.username?.trim().toLowerCase();
     if (!rawUser) {
@@ -259,678 +279,861 @@ export default function EditProfileScreen() {
       return;
     }
 
+    if (usernameAvailability === 'taken') {
+      toast.error(`@${rawUser} is taken. Please choose another or click Auto-Generate.`);
+      return;
+    }
+
     setSaving(true);
-    
     try {
       if (rawUser !== userProfile?.username && userService?.checkUsernameAvailability) {
         const check = await userService.checkUsernameAvailability(rawUser);
         if (!check.available) {
-          toast.error(`@${rawUser} is already taken. Please choose another or click Auto-Generate.`);
+          toast.error(`@${rawUser} is already taken. Please choose another.`);
           setSaving(false);
           return;
         }
       }
 
       // Upload avatar if changed
-      if (avatarFile && userProfile?.uid) {
-        await userService.uploadAvatar(userProfile.uid, avatarFile);
+      if (avatarFile && currentUid && userService?.uploadAvatar) {
+        await userService.uploadAvatar(currentUid, avatarFile);
       }
-      
+
       // Clean links
-      const cleanedData = {
-        ...formData,
+      const cleanedLinks = (formData.links || [])
+        .filter(l => l.url && l.url.trim().length > 0)
+        .map(l => ({
+          ...l,
+          url: l.url.trim().startsWith('http') ? l.url.trim() : `https://${l.url.trim()}`,
+          title: (l.title || 'Link').trim().slice(0, 30),
+        }));
+
+      // Sanitize website
+      let cleanWebsite = formData.website?.trim() || '';
+      if (cleanWebsite && !cleanWebsite.startsWith('http')) {
+        cleanWebsite = `https://${cleanWebsite}`;
+      }
+
+      const updates = {
+        displayName: formData.displayName.trim().slice(0, PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH),
         username: rawUser,
-        links: (formData.links || []).filter(l => l.url && l.url.trim().length > 0),
+        bio: formData.bio.trim().slice(0, PROFILE_CONSTRAINTS.BIO.MAX_LENGTH),
+        location: formData.location.trim().slice(0, PROFILE_CONSTRAINTS.LOCATION.MAX_LENGTH),
+        website: cleanWebsite,
+        pronouns: formData.pronouns.trim().slice(0, PROFILE_CONSTRAINTS.PRONOUNS.MAX_LENGTH),
+        profession: formData.profession.trim().slice(0, PROFILE_CONSTRAINTS.PROFESSION.MAX_LENGTH),
+        isPrivate: Boolean(formData.isPrivate),
+        links: cleanedLinks,
+        privacy: formData.privacy,
       };
-      
-      // Update profile
-      await updateUserProfile(cleanedData);
-      
+
+      if (updateUserProfile) {
+        await updateUserProfile(updates);
+      } else if (userService?.updateUserProfile && currentUid) {
+        await userService.updateUserProfile(currentUid, updates);
+      }
+
+      // Refresh store profile
+      if (currentUid && loadStoreProfile) {
+        await loadStoreProfile(currentUid, currentUid);
+      }
+
       toast.success('Profile updated successfully!');
-      navigate(-1);
+      navigate('/profile/me');
     } catch (error) {
       console.error('Failed to update profile:', error);
       toast.error(error.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
-  }, [formData, avatarFile, updateUserProfile, navigate, userProfile, userService]);
-  
+  }, [formData, usernameAvailability, avatarFile, currentUid, userService, updateUserProfile, loadStoreProfile, navigate, userProfile?.username]);
+
   const handleCancel = useCallback(() => {
     navigate(-1);
   }, [navigate]);
-  
-  // Input field component
-  const InputField = ({ icon: Icon, label, field, type = 'text', placeholder }) => (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-        {Icon && <Icon className="w-4 h-4 text-gray-400" />}
-        {label}
-      </label>
-      <input
-        type={type}
-        value={formData[field]}
-        onChange={(e) => handleInputChange(field, e.target.value)}
-        placeholder={placeholder}
-        className={cn(
-          'w-full px-4 py-2.5 rounded-xl',
-          'bg-gray-50 dark:bg-gray-800',
-          'border border-gray-200 dark:border-gray-700',
-          'text-gray-900 dark:text-white',
-          'placeholder-gray-400 dark:placeholder-gray-500',
-          'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-          'transition-colors'
-        )}
-      />
-    </div>
-  );
-  
+
   return (
     <div className={cn(
-      'min-h-screen pb-20',
-      theme === 'dark'
-          ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]'
-          : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
+      "min-h-screen pb-32 transition-colors duration-200 relative",
+      isDark 
+        ? "bg-[#03071B] text-white selection:bg-[#8B1EF3]/30" 
+        : "bg-[#f0f4fa] text-slate-900 selection:bg-[#8B1EF3]/20"
     )}>
-      {/* Header */}
-      <div className={cn(
-        'sticky top-0 z-20',
-        'bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl',
-        'border-b border-gray-200/60 dark:border-gray-800/60'
+      {/* Top Ambient Optical Hairline Highlight */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 h-[2px] z-30"
+        style={{
+          background: "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
+        }}
+      />
+
+      {/* Ambient background glow orbs */}
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none fixed -top-32 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 z-0"
+        style={{
+          background: "radial-gradient(circle, #8B1EF3 0%, #4431F7 60%, transparent 100%)"
+        }}
+      />
+      <div 
+        aria-hidden="true" 
+        className="pointer-events-none fixed top-1/2 -left-32 w-80 h-80 rounded-full blur-3xl opacity-15 z-0"
+        style={{
+          background: "radial-gradient(circle, #055BFB 0%, #4431F7 60%, transparent 100%)"
+        }}
+      />
+
+      {/* Sticky Header Bar */}
+      <header className={cn(
+        "sticky top-0 z-20 backdrop-blur-2xl border-b transition-colors duration-200",
+        isDark 
+          ? "bg-[#03071B]/85 border-white/[0.08]" 
+          : "bg-white/85 border-slate-200/90 shadow-sm"
       )}>
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={handleCancel}
-            className={cn(
-              'p-2 rounded-xl',
-              'hover:bg-gray-100 dark:hover:bg-gray-800',
-              'transition-colors'
-            )}
-          >
-            <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-          </button>
-          
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Edit Profile
-          </h1>
-          
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={cn(
-              'px-4 py-2 rounded-xl font-medium text-sm',
-              'bg-gradient-to-r from-purple-500 to-blue-500',
-              'text-white hover:opacity-90 transition-opacity',
-              'disabled:opacity-50',
-              'flex items-center gap-2'
-            )}
-          >
-            {saving ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            Save
-          </button>
-        </div>
-      </div>
-      
-      {/* Form */}
-      <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {/* 1. Avatar Photo Card */}
-        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                Profile Photo
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Crop and customize your public identity avatar (1:1 circular)
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={cn(
+                "p-2 rounded-2xl border transition-all cursor-pointer active:scale-95",
+                isDark 
+                  ? "bg-white/[0.05] hover:bg-white/[0.1] border-white/10 text-white" 
+                  : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800 shadow-sm"
+              )}
+              title="Back to profile"
+              aria-label="Back"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-black tracking-tight leading-none truncate">
+                Edit Profile
+              </h1>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight mt-0.5 truncate">
+                Citizen Identity & Governance
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-5 pt-2">
-            <div className="relative group cursor-pointer" onClick={() => setShowAvatarModal(true)}>
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1 bg-gradient-to-tr from-[#B416DB] via-[#4B6BFF] to-[#0EA3E6] shadow-lg">
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
-                  {avatarPreview ? (
-                    <img
-                      src={avatarPreview}
-                      alt="Avatar"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <User className="w-10 h-10 text-gray-400" />
-                  )}
-                </div>
-              </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={cn(
+                "px-3.5 py-2 rounded-2xl text-xs font-semibold transition-colors cursor-pointer",
+                isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || usernameAvailability === 'taken'}
+              className="inline-flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-[0_4px_16px_rgba(68,49,247,0.35)] hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)"
+              }}
+            >
+              {saving ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span>Save</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
-              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Camera className="w-6 h-6 text-white" />
+      {/* Main Content Form */}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 relative z-10">
+
+        {/* 1. CITIZEN AVATAR STUDIO (Arvdoul does NOT support background images) */}
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 relative overflow-hidden",
+          isDark
+            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            
+            {/* Circular Avatar Preview with Arvdoul Radiant Aura */}
+            <div className="relative group shrink-0">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#055BFB] shadow-[0_8px_24px_rgba(139,30,243,0.35)]">
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-[#03071B] dark:ring-[#03071B] relative">
+                  <img
+                    src={avatarPreview}
+                    alt={formData.displayName || "Avatar"}
+                    className="w-full h-full object-cover"
+                  />
+                  <div 
+                    onClick={() => setShowAvatarModal(true)}
+                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
+                  >
+                    <Camera className="w-4 h-4 text-purple-200" />
+                    <span>Change</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2 text-center sm:text-left">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+            {/* Avatar Details & Controls */}
+            <div className="flex-1 space-y-3 text-center sm:text-left">
+              <div>
+                <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+                  Citizen Avatar
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Arvdoul uses a unified circular avatar for your citizen presence across all feeds, spaces, and passport credentials. Background cover images are not supported.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowAvatarModal(true)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 shadow-md shadow-purple-500/20 transition-all flex items-center gap-1.5"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-bold text-white shadow-md shadow-purple-500/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                  style={{
+                    background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 100%)"
+                  }}
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  <span>Change Photo</span>
+                  <span>Upload / Crop Photo</span>
                 </button>
 
                 {avatarPreview && (
                   <button
                     type="button"
                     onClick={handleRemoveAvatar}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 transition-colors flex items-center gap-1.5"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold border transition-all cursor-pointer active:scale-95",
+                      isDark 
+                        ? "border-white/10 hover:bg-white/[0.05] text-slate-300" 
+                        : "border-slate-200 hover:bg-slate-100 text-slate-700 shadow-sm"
+                    )}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Reset to Default</span>
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Reset Avatar</span>
                   </button>
                 )}
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                1:1 aspect ratio with interactive zoom & crop. WebP compressed.
-              </p>
             </div>
+
           </div>
-        </div>
-        
-        {/* 2. Basic Information Card */}
-        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
-          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-              Basic Information
+        </section>
+
+        {/* 2. UNIQUE USERNAME & CIVIC IDENTITY */}
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
+          isDark
+            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div>
+            <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+              Civic Identity & Unique Handle
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Your public identity and display details
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Your unique Arvdoul username powers your profile URL, mentions, payments, and citizen registry.
             </p>
           </div>
-          
-          <InputField
-            icon={User}
-            label="Display Name"
-            field="displayName"
-            placeholder="Your display name"
-          />
-          
-          {/* Username Field with Live Checker and Auto-Generator */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <User className="w-4 h-4 text-purple-400" />
-                <span>Username</span>
-              </label>
 
-              {/* Live Status Badge */}
-              <div className="flex items-center gap-2">
-                {usernameAvailability === 'checking' && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-500 animate-pulse">
-                    <RefreshCw className="w-3 h-3 animate-spin" />
-                    Checking...
-                  </span>
-                )}
-                {usernameAvailability === 'available' && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Available
-                  </span>
-                )}
-                {usernameAvailability === 'current' && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-500/10 px-2 py-0.5 rounded-full">
-                    Current Handle
-                  </span>
-                )}
-                {usernameAvailability === 'taken' && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
-                    <AlertCircle className="w-3 h-3" />
-                    Handle Taken
-                  </span>
-                )}
-                {usernameAvailability === 'invalid' && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                    3-30 chars (letters, numbers, dots, _)
-                  </span>
-                )}
+          <div className="space-y-4">
+            
+            {/* Unique Username Field with Live Availability Status & Auto-Generator */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <AtSign className="w-4 h-4 text-[#8B1EF3]" />
+                  <span>Unique Username</span>
+                </label>
 
-                {/* Auto-Generate Unique Username Button */}
-                <button
-                  type="button"
-                  onClick={handleGenerateUsername}
-                  disabled={isGeneratingUsername}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-500/15 to-blue-500/15 hover:from-purple-500/25 hover:to-blue-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/20 transition-all cursor-pointer disabled:opacity-50"
-                  title="Generate a unique clean username without raw UID"
-                >
-                  <Sparkles className={cn("w-3 h-3", isGeneratingUsername && "animate-spin")} />
-                  <span>{isGeneratingUsername ? 'Generating...' : 'Auto-Generate'}</span>
-                </button>
+                {/* Status Indicator */}
+                <div className="flex items-center gap-2">
+                  {usernameAvailability === 'checking' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-400 animate-pulse">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Checking...
+                    </span>
+                  )}
+                  {usernameAvailability === 'available' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Available
+                    </span>
+                  )}
+                  {usernameAvailability === 'current' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 bg-slate-500/10 px-2.5 py-0.5 rounded-full border border-slate-500/20">
+                      Current Handle
+                    </span>
+                  )}
+                  {usernameAvailability === 'taken' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20">
+                      <AlertCircle className="w-3 h-3" />
+                      Handle Taken
+                    </span>
+                  )}
+                  {usernameAvailability === 'invalid' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400">
+                      3-30 alphanumeric characters
+                    </span>
+                  )}
+
+                  {/* Auto-Generate Unique Username Button */}
+                  <button
+                    type="button"
+                    onClick={handleGenerateUsername}
+                    disabled={isGeneratingUsername}
+                    className={cn(
+                      "inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95",
+                      isDark 
+                        ? "bg-[#8B1EF3]/20 hover:bg-[#8B1EF3]/30 text-[#B978FF] border border-[#8B1EF3]/30" 
+                        : "bg-purple-100 hover:bg-purple-200 text-purple-700 border border-purple-200"
+                    )}
+                    title="Generate a guaranteed unique username via userService"
+                  >
+                    <Sparkles className={cn("w-3 h-3", isGeneratingUsername && "animate-spin")} />
+                    <span>Auto-Generate</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Input with @ prefix */}
+              <div className="relative flex items-center">
+                <span className="absolute left-3.5 font-mono text-sm font-bold text-[#8B1EF3] dark:text-[#B978FF] select-none pointer-events-none">
+                  @
+                </span>
+                <input
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
+                  placeholder="your_handle"
+                  maxLength={30}
+                  className={cn(
+                    "w-full pl-8 pr-4 py-2.5 rounded-2xl text-sm font-mono font-medium outline-none transition-all border",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-[#8B1EF3] focus:ring-2 focus:ring-[#8B1EF3]/20"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-[#8B1EF3] focus:ring-2 focus:ring-[#8B1EF3]/20"
+                  )}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Letters, numbers, periods, and underscores. 3 to 30 characters.
+              </p>
             </div>
 
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
-                @
-              </span>
+            {/* Display Name Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-indigo-400" />
+                  <span>Display Name</span>
+                </label>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {formData.displayName.length}/{PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
+                </span>
+              </div>
               <input
                 type="text"
-                value={formData.username}
-                onChange={(e) => handleInputChange('username', e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ''))}
-                placeholder="your_unique_username"
+                value={formData.displayName}
+                onChange={(e) => handleInputChange('displayName', e.target.value)}
+                placeholder="Citizen Name"
+                maxLength={PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH}
                 className={cn(
-                  'w-full pl-8 pr-4 py-2.5 rounded-xl text-sm font-medium',
-                  'bg-gray-50 dark:bg-gray-800/80',
-                  'border border-gray-200 dark:border-gray-700',
-                  'text-gray-900 dark:text-white',
-                  'placeholder-gray-400 dark:placeholder-gray-500',
-                  'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-                  'transition-colors'
+                  "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                  isDark
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 )}
               />
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Only letters, numbers, and underscores. This becomes your unique Arvdoul profile link.
+
+            {/* Bio Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Bio & Civic Manifesto
+                </label>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {formData.bio.length}/{PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
+                </span>
+              </div>
+              <textarea
+                value={formData.bio}
+                onChange={(e) => handleInputChange('bio', e.target.value)}
+                placeholder="Introduce yourself to the Arvdoul community..."
+                rows={3}
+                maxLength={PROFILE_CONSTRAINTS.BIO.MAX_LENGTH}
+                className={cn(
+                  "w-full px-4 py-2.5 rounded-2xl text-sm font-normal outline-none transition-all border resize-none leading-relaxed",
+                  isDark
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                )}
+              />
+            </div>
+
+            {/* Pronouns & Category/Profession Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Pronouns
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {PRONOUN_PRESETS.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handleInputChange('pronouns', p === 'other' ? '' : p)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                        formData.pronouns === p
+                          ? "bg-purple-500/20 border-purple-500 text-purple-300 font-bold"
+                          : isDark
+                          ? "bg-white/[0.03] border-white/10 text-slate-400 hover:text-white"
+                          : "bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900"
+                      )}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={formData.pronouns}
+                  onChange={(e) => handleInputChange('pronouns', e.target.value)}
+                  placeholder="e.g. they/them"
+                  maxLength={PROFILE_CONSTRAINTS.PRONOUNS.MAX_LENGTH}
+                  className={cn(
+                    "w-full px-4 py-2 rounded-2xl text-xs outline-none transition-all border mt-1.5",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500"
+                  )}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Profession / Role
+                </label>
+                <input
+                  type="text"
+                  value={formData.profession}
+                  onChange={(e) => handleInputChange('profession', e.target.value)}
+                  placeholder="e.g. Creator, Builder, Artist"
+                  maxLength={PROFILE_CONSTRAINTS.PROFESSION.MAX_LENGTH}
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                  )}
+                />
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* 3. CIVIC COORDINATES & LOCATION */}
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
+          isDark
+            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div>
+            <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+              Civic Coordinates & Website
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Connect your digital nation passport with your geographic territory and digital flagship.
             </p>
           </div>
-          
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <Shield className="w-4 h-4 text-gray-400" />
-                Bio
-              </label>
-              <span className={cn(
-                "text-xs font-mono",
-                formData.bio.length > 500 ? "text-red-500 font-bold" : "text-gray-400"
-              )}>
-                {formData.bio.length} / 500
-              </span>
-            </div>
-            <textarea
-              value={formData.bio}
-              onChange={(e) => handleInputChange('bio', e.target.value)}
-              placeholder="Tell others what you do, build, or share..."
-              rows={3}
-              maxLength={500}
-              className={cn(
-                'w-full px-4 py-2.5 rounded-xl resize-none text-sm',
-                'bg-gray-50 dark:bg-gray-800/80',
-                'border border-gray-200 dark:border-gray-700',
-                'text-gray-900 dark:text-white',
-                'placeholder-gray-400 dark:placeholder-gray-500',
-                'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-                'transition-colors'
-              )}
-            />
-          </div>
-        </div>
 
-        {/* 3. Links Manager Card */}
-        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/60">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            {/* Location with Interactive Modal Trigger */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-emerald-400" />
+                  <span>Location</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowLocationModal(true)}
+                  className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline cursor-pointer"
+                >
+                  Interactive Map
+                </button>
+              </label>
+
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => handleInputChange('location', e.target.value)}
+                  placeholder="e.g. Neo Tokyo, Global, London"
+                  maxLength={PROFILE_CONSTRAINTS.LOCATION.MAX_LENGTH}
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-emerald-500"
+                      : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-emerald-500"
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Official Website */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Globe className="w-4 h-4 text-cyan-400" />
+                <span>Website</span>
+              </label>
+              <input
+                type="text"
+                value={formData.website}
+                onChange={(e) => handleInputChange('website', e.target.value)}
+                placeholder="https://yourdomain.com"
+                className={cn(
+                  "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                  isDark
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-cyan-500"
+                    : "bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-cyan-500"
+                )}
+              />
+            </div>
+
+          </div>
+        </section>
+
+        {/* 4. CUSTOM SOCIAL LINKS HUB (Up to 10) */}
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
+          isDark
+            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <LinkIcon className="w-4 h-4 text-purple-400" />
-                Profile Links
+              <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+                Custom Links Hub
               </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Add verified external links, portfolio, or socials (up to 10)
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Curate up to 10 links for your personal ecosystem.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleAddLink}
-              disabled={formData.links.length >= 10}
-              className={cn(
-                'px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all',
-                'bg-purple-600 hover:bg-purple-700 text-white shadow-sm disabled:opacity-50'
-              )}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Link
-            </button>
+            {formData.links.length < 10 && (
+              <button
+                type="button"
+                onClick={handleAddLink}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-bold transition-all cursor-pointer active:scale-95",
+                  isDark 
+                    ? "bg-white/10 hover:bg-white/15 text-white border border-white/10" 
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200"
+                )}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Link</span>
+              </button>
+            )}
           </div>
 
           {formData.links.length === 0 ? (
-            <div className="p-5 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-center text-xs text-gray-500 dark:text-gray-400">
-              No custom links added yet. Click &quot;Add Link&quot; to showcase your websites or projects.
+            <div className={cn(
+              "p-6 rounded-2xl border border-dashed text-center space-y-2",
+              isDark ? "border-white/10 text-slate-400" : "border-slate-200 text-slate-500"
+            )}>
+              <LinkIcon className="w-6 h-6 mx-auto opacity-40" />
+              <p className="text-xs">No links added yet. Add your portfolio, channels, or projects.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {formData.links.map((link, idx) => (
-                <div
+                <div 
                   key={link.id || idx}
-                  className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-700/80 bg-gray-50/50 dark:bg-gray-800/40 space-y-2.5"
+                  className={cn(
+                    "p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-stretch sm:items-center gap-3",
+                    isDark ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-200"
+                  )}
                 >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={link.title}
-                      onChange={(e) => handleUpdateLink(idx, 'title', e.target.value)}
-                      placeholder="Title (e.g. My Portfolio, Twitter, YouTube)"
-                      className="flex-1 px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
-                    />
-                    <select
-                      value={link.platform || 'custom'}
-                      onChange={(e) => handleUpdateLink(idx, 'platform', e.target.value)}
-                      className="px-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 focus:outline-none"
-                    >
-                      <option value="custom">Custom</option>
-                      <option value="twitter">X / Twitter</option>
-                      <option value="instagram">Instagram</option>
-                      <option value="youtube">YouTube</option>
-                      <option value="github">GitHub</option>
-                      <option value="linkedin">LinkedIn</option>
-                      <option value="discord">Discord</option>
-                    </select>
+                  <select
+                    value={link.platform || 'website'}
+                    onChange={(e) => handleUpdateLink(idx, 'platform', e.target.value)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                      isDark 
+                        ? "bg-slate-900 border-white/10 text-white" 
+                        : "bg-white border-slate-200 text-slate-800"
+                    )}
+                  >
+                    {PLATFORM_PRESETS.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="text"
+                    value={link.title || ''}
+                    onChange={(e) => handleUpdateLink(idx, 'title', e.target.value)}
+                    placeholder="Link Title (e.g. My GitHub)"
+                    className={cn(
+                      "sm:w-44 px-3 py-1.5 rounded-xl text-xs font-medium outline-none border",
+                      isDark 
+                        ? "bg-black/30 border-white/10 text-white" 
+                        : "bg-white border-slate-200 text-slate-800"
+                    )}
+                  />
+
+                  <input
+                    type="text"
+                    value={link.url || ''}
+                    onChange={(e) => handleUpdateLink(idx, 'url', e.target.value)}
+                    placeholder="https://..."
+                    className={cn(
+                      "flex-1 px-3 py-1.5 rounded-xl text-xs font-mono outline-none border",
+                      isDark 
+                        ? "bg-black/30 border-white/10 text-white" 
+                        : "bg-white border-slate-200 text-slate-800"
+                    )}
+                  />
+
+                  <div className="flex items-center gap-1 justify-end">
                     <button
                       type="button"
                       onClick={() => handleTogglePrimaryLink(idx)}
-                      title={link.isPrimary ? "Primary Link" : "Make Primary Link"}
                       className={cn(
-                        "p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all",
-                        link.isPrimary
-                          ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
-                          : "text-gray-400 hover:text-amber-500"
+                        "p-2 rounded-xl transition-all cursor-pointer",
+                        link.isPrimary 
+                          ? "text-amber-400 bg-amber-400/10" 
+                          : "text-slate-400 hover:text-amber-400"
                       )}
+                      title={link.isPrimary ? "Primary Link" : "Make Primary"}
                     >
-                      <Check className="w-3.5 h-3.5" />
+                      <Star className="w-3.5 h-3.5" fill={link.isPrimary ? "currentColor" : "none"} />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleRemoveLink(idx)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                      title="Remove link"
+                      className="p-2 rounded-xl text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                      title="Remove Link"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <ExternalLink className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                    <input
-                      type="url"
-                      value={link.url}
-                      onChange={(e) => handleUpdateLink(idx, 'url', e.target.value)}
-                      placeholder="https://example.com"
-                      className="w-full px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
-                    />
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
-        
-        {/* 4. Personal Information Card */}
-        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
-          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-              Personal Information
+        </section>
+
+        {/* 5. PRIVACY & AUDIENCE GOVERNANCE */}
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
+          isDark
+            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div>
+            <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+              Privacy & Audience Permissions
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Location, demographics, and contact details
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Control which sections of your profile are visible to the public, mutual connections, or kept private.
             </p>
           </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-purple-400" />
-                  Location
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowLocationModal(true)}
-                  className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1 transition-colors"
-                >
-                  <Navigation className="w-3 h-3" />
-                  <span>GPS / Select</span>
-                </button>
+
+          <div className="space-y-4">
+            
+            {/* Master Private Account Switch */}
+            <label className={cn(
+              "flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer",
+              formData.isPrivate
+                ? isDark 
+                  ? "bg-purple-900/20 border-purple-500/40" 
+                  : "bg-purple-50 border-purple-200"
+                : isDark
+                ? "bg-black/20 border-white/10"
+                : "bg-slate-50 border-slate-200"
+            )}>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Lock className={cn("w-4 h-4", formData.isPrivate ? "text-[#8B1EF3]" : "text-slate-400")} />
+                  <span className="text-sm font-bold">Private Account</span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  When enabled, only approved connections can view your feed creations and highlights.
+                </p>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => handleInputChange('location', e.target.value)}
-                  placeholder="City, Country"
+              <input
+                type="checkbox"
+                checked={formData.isPrivate}
+                onChange={(e) => handleInputChange('isPrivate', e.target.checked)}
+                className="w-5 h-5 accent-[#8B1EF3] rounded cursor-pointer"
+              />
+            </label>
+
+            {/* Granular Scope Selectors */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Audience Scopes
+              </h3>
+
+              {/* Profile Discovery */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Profile Discovery</div>
+                  <div className="text-[11px] text-slate-400">Who can view your profile info</div>
+                </div>
+                <select
+                  value={formData.privacy.profileInfo}
+                  onChange={(e) => handlePrivacyChange('profileInfo', e.target.value)}
                   className={cn(
-                    'w-full px-4 py-2.5 rounded-xl pr-10 text-sm',
-                    'bg-gray-50 dark:bg-gray-800/80',
-                    'border border-gray-200 dark:border-gray-700',
-                    'text-gray-900 dark:text-white',
-                    'placeholder-gray-400 dark:placeholder-gray-500',
-                    'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent',
-                    'transition-colors'
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
                   )}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowLocationModal(true)}
-                  title="Detect or choose location"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
                 >
-                  <MapPin className="w-4 h-4" />
-                </button>
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+                </select>
               </div>
-            </div>
-            
-            <InputField
-              icon={Globe}
-              label="Website"
-              field="website"
-              type="url"
-              placeholder="https://example.com"
-            />
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <InputField
-              label="Pronouns"
-              field="pronouns"
-              placeholder="e.g., they/them"
-            />
-            
-            <InputField
-              label="Gender"
-              field="gender"
-              placeholder="Optional"
-            />
-          </div>
-        </div>
-        
-        {/* 5. Professional Information Card */}
-        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
-          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-              Professional Information
-            </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Work history, discipline, and education credentials
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InputField
-              icon={Shield}
-              label="Profession"
-              field="profession"
-              placeholder="What do you do?"
-            />
-            
-            <InputField
-              icon={Globe}
-              label="Education"
-              field="education"
-              placeholder="Where did you study?"
-            />
-          </div>
-        </div>
-        
-        {/* 6. Privacy & Permissions Card */}
-        <div className="bg-white dark:bg-[#0d1527]/90 rounded-2xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-sm space-y-4">
-          <div className="pb-2 border-b border-slate-100 dark:border-slate-800/60">
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Lock className="w-4 h-4 text-purple-400" />
-              Privacy & Permissions
-            </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Control who can interact with your profile and view your content
-            </p>
-          </div>
-          
-          <label className={cn(
-            'flex items-center justify-between p-4 rounded-xl',
-            'bg-gray-50 dark:bg-gray-800/60',
-            'border border-gray-200 dark:border-gray-700',
-            'cursor-pointer'
-          )}>
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                Private Account
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Only approved followers can see your posts and media
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={formData.isPrivate}
-              onChange={(e) => handleInputChange('isPrivate', e.target.checked)}
-              className="w-5 h-5 text-purple-500 rounded focus:ring-purple-500 cursor-pointer"
-            />
-          </label>
 
-          {/* Granular Privacy Scopes */}
-          <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40 space-y-3.5">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Audience Permissions
-            </p>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Profile Visibility</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Who can discover and view your profile</p>
+              {/* Presence */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Live Presence</div>
+                  <div className="text-[11px] text-slate-400">Who can see when you are online</div>
+                </div>
+                <select
+                  value={formData.privacy.presence}
+                  onChange={(e) => handlePrivacyChange('presence', e.target.value)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Nobody</option>
+                </select>
               </div>
-              <select
-                value={formData.privacy.profileInfo}
-                onChange={(e) => handlePrivacyChange('profileInfo', e.target.value)}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
-                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
-                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
-              </select>
+
+              {/* Followers List */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Social Graph</div>
+                  <div className="text-[11px] text-slate-400">Who can view your followers/following lists</div>
+                </div>
+                <select
+                  value={formData.privacy.followersList}
+                  onChange={(e) => {
+                    handlePrivacyChange('followersList', e.target.value);
+                    handlePrivacyChange('followingList', e.target.value);
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+                </select>
+              </div>
+
+              {/* Activity & Badges */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Civic Standing & Badges</div>
+                  <div className="text-[11px] text-slate-400">Who can view your badges and achievements</div>
+                </div>
+                <select
+                  value={formData.privacy.activity}
+                  onChange={(e) => {
+                    handlePrivacyChange('activity', e.target.value);
+                    handlePrivacyChange('achievements', e.target.value);
+                  }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                  <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+                </select>
+              </div>
+
+              {/* Coins & Economic Status */}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs sm:text-sm font-semibold">Financial & Coin Standing</div>
+                  <div className="text-[11px] text-slate-400">Visibility of coin balance and tipping revenue</div>
+                </div>
+                <select
+                  value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
+                  onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                  )}
+                >
+                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me (Private)</option>
+                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                </select>
+              </div>
+
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Online Presence</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Who can see when you are active</p>
-              </div>
-              <select
-                value={formData.privacy.presence}
-                onChange={(e) => handlePrivacyChange('presence', e.target.value)}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
-                <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
-                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Mutual Connections</option>
-                <option value={VISIBILITY_SCOPES.ONLY_ME}>Nobody</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Followers / Following List</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Who can browse your social graph</p>
-              </div>
-              <select
-                value={formData.privacy.followersList}
-                onChange={(e) => {
-                  handlePrivacyChange('followersList', e.target.value);
-                  handlePrivacyChange('followingList', e.target.value);
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
-                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
-                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Achievements & Activity</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Who can view your achievements and citizenship rank</p>
-              </div>
-              <select
-                value={formData.privacy.activity}
-                onChange={(e) => {
-                  handlePrivacyChange('activity', e.target.value);
-                  handlePrivacyChange('achievements', e.target.value);
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
-                <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
-                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
-                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Financial Stats & Earnings</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Visibility of coin balance and tipping revenue</p>
-              </div>
-              <select
-                value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
-                onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
-                className="px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me (Private)</option>
-                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Mutual Connections</option>
-                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
-              </select>
-            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Bottom Sticky Action Bar */}
-        <div className="flex items-center justify-end gap-3 pt-2">
+        {/* Bottom Save Action Bar */}
+        <div className="flex items-center justify-end gap-3 pt-4">
           <button
             type="button"
             onClick={handleCancel}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className={cn(
+              "px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer",
+              isDark ? "hover:bg-white/[0.05] text-slate-300" : "hover:bg-slate-200 text-slate-700"
+            )}
           >
             Cancel
           </button>
+
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
-            className={cn(
-              'px-6 py-2.5 rounded-xl font-semibold text-sm',
-              'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600',
-              'text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:opacity-95 transition-all',
-              'disabled:opacity-50 flex items-center gap-2 cursor-pointer'
-            )}
+            disabled={saving || usernameAvailability === 'taken'}
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-[0_4px_16px_rgba(68,49,247,0.35)] hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)"
+            }}
           >
             {saving ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <Save className="w-4 h-4" />
             )}
-            Save Changes
+            <span>Save Changes</span>
           </button>
         </div>
-      </div>
 
-      {/* Avatar Upload & Crop Modal */}
+      </main>
+
+      {/* Avatar Upload Modal */}
       {showAvatarModal && (
         <AvatarUploadModal
           isOpen={showAvatarModal}
@@ -948,7 +1151,7 @@ export default function EditProfileScreen() {
           isOpen={showLocationModal}
           onClose={() => setShowLocationModal(false)}
           currentLocation={formData.location}
-          userId={userProfile?.id || userProfile?.uid}
+          userId={currentUid}
           theme={theme}
           onLocationUpdated={(newLoc) => {
             setFormData(prev => ({ ...prev, location: newLoc }));
