@@ -34,6 +34,8 @@ import {
   COINS_PER_DOLLAR,
   MIN_WITHDRAWAL_COINS,
   NEW_USER_DEFAULTS,
+  coinsToUsd,
+  formatCoinsAsUsd,
 } from '../shared/levelConfig.cjs';
 
 // The curve, reward tables, XP rules and gating thresholds live in ONE place:
@@ -73,6 +75,8 @@ export {
   COINS_PER_DOLLAR,
   MIN_WITHDRAWAL_COINS,
   NEW_USER_DEFAULTS,
+  coinsToUsd,
+  formatCoinsAsUsd,
 };
 
 class LevelSystemService {

@@ -177,15 +177,15 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
         className={cn(
-          "w-full max-w-sm rounded-[28px] overflow-hidden shadow-2xl border transition-all relative z-[10000]",
+          "w-full max-w-sm max-sm:rounded-b-none max-sm:rounded-t-[30px] sm:rounded-[28px] overflow-hidden shadow-2xl border transition-all relative z-[10000]",
           isDark
-            ? "bg-[#070D27] border-white/[0.12] text-white shadow-[0_24px_64px_rgba(0,0,0,0.8)]"
-            : "bg-white border-slate-200 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.18)]"
+            ? "bg-[#070D27] border-white/[0.15] text-white shadow-[0_24px_64px_rgba(0,0,0,0.9)]"
+            : "bg-white border-slate-200 text-slate-900 shadow-[0_20px_50px_rgba(15,23,42,0.22)]"
         )}
         onClick={(e) => e.stopPropagation()}
       >
