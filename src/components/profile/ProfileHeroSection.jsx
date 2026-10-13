@@ -91,14 +91,27 @@ export const ProfileLevelProgressCard = memo(({
   navigate
 }) => {
   const levelInfo = useMemo(() => {
-    if (experience === null || experience === undefined) {
-      if (level === null || level === undefined) return null;
-      // Derive approximate info from level if experience isn't directly passed
-      const xpReq = LevelModule.LEVELS?.[level - 1]?.xpRequired ?? (level * 500);
+    const rawLvl = level !== null && level !== undefined ? Number(level) : null;
+    const rawXp = experience !== null && experience !== undefined ? Number(experience) : null;
+
+    if (rawLvl === null && rawXp === null) return null;
+
+    if (rawXp !== null && !Number.isNaN(rawXp) && rawXp > 0) {
+      const derived = getLevelInfo(rawXp);
+      if (rawLvl && rawLvl > derived.level) {
+        const lvlObj = LevelModule.LEVELS?.[rawLvl - 1];
+        if (lvlObj) return getLevelInfo(lvlObj.xpRequired);
+      }
+      return derived;
+    }
+
+    if (rawLvl && !Number.isNaN(rawLvl) && rawLvl > 0) {
+      const lvlObj = LevelModule.LEVELS?.[rawLvl - 1];
+      const xpReq = lvlObj?.xpRequired ?? (50 * rawLvl * (rawLvl - 1));
       return getLevelInfo(xpReq);
     }
-    const n = Number(experience);
-    return !Number.isNaN(n) ? getLevelInfo(n) : null;
+
+    return null;
   }, [experience, level]);
 
   if (!levelInfo) {
@@ -268,6 +281,8 @@ export const ProfileIdentityCard = memo(({
   onMetricPress,
   navigate,
 }) => {
+  const localNavigate = useNavigate();
+  const nav = navigate || localNavigate;
   const [copiedHandle, setCopiedHandle] = useState(false);
 
   const handleCopyHandle = useCallback((e) => {
@@ -454,7 +469,7 @@ export const ProfileIdentityCard = memo(({
               {rankLabel && (
                 <button
                   type="button"
-                  onClick={() => navigate?.(isOwner ? '/titles' : `/passport/${profileUid}`)}
+                  onClick={() => nav(isOwner ? '/titles' : `/passport/${profileUid}`)}
                   className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[11px] font-bold bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 hover:underline cursor-pointer"
                   title="Civic Rank Title"
                 >
@@ -466,81 +481,81 @@ export const ProfileIdentityCard = memo(({
           </div>
         </div>
 
-        {/* 2. The 9 Action Buttons Moved Below the Names on Liquid Glass in 2 Rows */}
-        <div className="relative rounded-2xl sm:rounded-3xl p-3 sm:p-4 bg-white/10 dark:bg-white/[0.04] backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.18)] overflow-hidden space-y-2 sm:space-y-2.5">
-          {/* Liquid glass light specular reflection */}
+        {/* 2. The 9 Action Buttons Dock on Liquid Glass in 2 Rows with Hierarchical Sizing */}
+        <div className="relative rounded-[26px] sm:rounded-[30px] p-3 sm:p-4.5 bg-white/10 dark:bg-white/[0.04] backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.2)] overflow-hidden space-y-2.5">
+          {/* Liquid glass specular reflection hairline */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/50 dark:via-white/25 to-transparent"
+            className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/60 dark:via-white/30 to-transparent"
           />
 
           {isOwner ? (
             <>
-              {/* Row 1: 5 Primary Action Buttons */}
+              {/* Row 1: Primary Feature Actions (4 buttons across 5 columns: 1 Hero col-span-2 + 3 Companion col-span-1) */}
               <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {/* 1. Edit Profile - Elevated Primary Action */}
+                {/* 1. Edit Profile - Hero Primary Action (col-span-2, taller tactile height, vibrant gradient) */}
                 <button
                   type="button"
-                  onClick={onEditProfile || (() => navigate('/profile/edit'))}
-                  className="h-12 sm:h-13 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-md bg-purple-500/20 hover:bg-purple-500/30 border-purple-500/35 text-purple-200 group"
+                  onClick={onEditProfile || (() => nav('/profile/edit'))}
+                  className="col-span-2 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-95 shadow-md shadow-purple-500/25 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-purple-400/30 text-white group"
                   title="Edit Profile"
                   aria-label="Edit Profile"
                 >
-                  <Edit3 className="w-4.5 h-4.5 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform text-purple-300" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Edit</span>
+                  <Edit3 className="w-5 h-5 group-hover:scale-110 transition-transform text-white shrink-0" />
+                  <span className="text-xs sm:text-sm font-black tracking-tight truncate">Edit Profile</span>
                 </button>
 
-                {/* 2. View As Perspective */}
+                {/* 2. View As Perspective (col-span-1) */}
                 <button
                   type="button"
                   onClick={onOpenPerspective}
-                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300 group"
+                  className="col-span-1 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300 group"
                   title="View Profile As Perspective"
                   aria-label="View Profile As"
                 >
-                  <Eye className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">View As</span>
+                  <Eye className="w-4.5 h-4.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">View As</span>
                 </button>
 
-                {/* 3. Identity QR Code */}
+                {/* 3. Identity QR Code (col-span-1) */}
                 <button
                   type="button"
                   onClick={onOpenQrCode}
-                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/30 text-fuchsia-300 group"
+                  className="col-span-1 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/30 text-fuchsia-300 group"
                   title="Identity QR Code"
                   aria-label="Identity QR Code"
                 >
-                  <QrCode className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">QR Code</span>
+                  <QrCode className="w-4.5 h-4.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">QR Code</span>
                 </button>
 
-                {/* 4. Share Profile */}
+                {/* 4. Share Profile (col-span-1) */}
                 <button
                   type="button"
                   onClick={onShare}
-                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/30 text-cyan-300 group"
+                  className="col-span-1 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/30 text-cyan-300 group"
                   title="Share Profile"
                   aria-label="Share Profile"
                 >
-                  <Share2 className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Share</span>
+                  <Share2 className="w-4.5 h-4.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">Share</span>
                 </button>
+              </div>
 
+              {/* Row 2: Secondary Utility & Governance Actions (5 buttons across 5 columns: 1 col each) */}
+              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
                 {/* 5. Digital Passport */}
                 <button
                   type="button"
-                  onClick={() => navigate('/passport')}
+                  onClick={() => nav('/passport')}
                   className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300 group"
                   title="Digital Passport"
                   aria-label="Digital Passport"
                 >
-                  <Crown className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+                  <Crown className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Passport</span>
                 </button>
-              </div>
 
-              {/* Row 2: 4 Utility & Governance Action Buttons */}
-              <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
                 {/* 6. Location Setup */}
                 <button
                   type="button"
@@ -549,31 +564,31 @@ export const ProfileIdentityCard = memo(({
                   title="Civic Location"
                   aria-label="Civic Location"
                 >
-                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+                  <MapPin className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Location</span>
                 </button>
 
                 {/* 7. Account Settings */}
                 <button
                   type="button"
-                  onClick={() => navigate('/settings')}
+                  onClick={() => nav('/settings')}
                   className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-slate-500/15 hover:bg-slate-500/25 border-slate-500/30 text-slate-300 group"
                   title="Account Settings"
                   aria-label="Account Settings"
                 >
-                  <Settings className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+                  <Settings className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Settings</span>
                 </button>
 
                 {/* 8. Civic Titles */}
                 <button
                   type="button"
-                  onClick={() => navigate('/titles')}
+                  onClick={() => nav('/titles')}
                   className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/30 text-rose-300 group"
                   title="Civic Titles & Provenance"
                   aria-label="Civic Titles"
                 >
-                  <Award className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+                  <Award className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Titles</span>
                 </button>
 
@@ -588,90 +603,90 @@ export const ProfileIdentityCard = memo(({
                   title="More Options"
                   aria-label="More Options"
                 >
-                  <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+                  <MoreHorizontal className="w-4 h-4 group-hover:scale-110 transition-transform" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">More</span>
                 </button>
               </div>
             </>
           ) : (
             <>
-              {/* Visitor Row 1: 5 Actions (No Coins Icon) */}
+              {/* Visitor Row 1: Primary Feature Actions (4 buttons across 5 columns: 1 Hero col-span-2 + 3 Companion col-span-1) */}
               <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {/* 1. Follow / Unfollow - Elevated Primary Action */}
+                {/* 1. Follow / Unfollow - Hero Primary Action (col-span-2) */}
                 {capabilities?.canFollow !== false ? (
                   <button
                     type="button"
                     onClick={onFollowToggle}
                     disabled={followLoading}
                     className={cn(
-                      "h-12 sm:h-13 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-md",
+                      "col-span-2 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-95 shadow-md",
                       isFollowing
                         ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                        : "bg-gradient-to-tr from-[#8B1EF3] to-[#4431F7] text-white border-transparent"
+                        : "bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-transparent text-white shadow-purple-500/25"
                     )}
                     title={isFollowing ? "Following" : "Follow"}
                     aria-label={isFollowing ? "Following" : "Follow"}
                   >
-                    {isFollowing ? <UserCheck className="w-4.5 h-4.5 sm:w-5 sm:h-5" /> : <UserPlus className="w-4.5 h-4.5 sm:w-5 sm:h-5" />}
-                    <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">
+                    {isFollowing ? <UserCheck className="w-5 h-5 shrink-0" /> : <UserPlus className="w-5 h-5 shrink-0" />}
+                    <span className="text-xs sm:text-sm font-black tracking-tight truncate">
                       {isFollowing ? "Following" : "Follow"}
                     </span>
                   </button>
                 ) : (
-                  <div className="h-12 sm:h-13" />
+                  <div className="col-span-2 h-13 sm:h-14" />
                 )}
 
-                {/* 2. Direct Message */}
+                {/* 2. Direct Message (col-span-1) */}
                 <button
                   type="button"
-                  onClick={onOpenMessages || (() => navigate(`/messages/new?to=${profileUid}`))}
-                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300"
+                  onClick={onOpenMessages || (() => nav(`/messages/new?to=${profileUid}`))}
+                  className="col-span-1 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300"
                   title="Direct Message"
                   aria-label="Direct Message"
                 >
-                  <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Message</span>
+                  <MessageCircle className="w-4.5 h-4.5" />
+                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">Message</span>
                 </button>
 
-                {/* 3. Share Profile */}
+                {/* 3. Share Profile (col-span-1) */}
                 <button
                   type="button"
                   onClick={onShare}
-                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/30 text-cyan-300"
+                  className="col-span-1 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/30 text-cyan-300"
                   title="Share Profile"
                   aria-label="Share Profile"
                 >
-                  <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Share</span>
+                  <Share2 className="w-4.5 h-4.5" />
+                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">Share</span>
                 </button>
 
-                {/* 4. Identity QR Code */}
+                {/* 4. Identity QR Code (col-span-1) */}
                 <button
                   type="button"
                   onClick={onOpenQrCode}
-                  className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/30 text-fuchsia-300"
+                  className="col-span-1 h-13 sm:h-14 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/30 text-fuchsia-300"
                   title="Identity QR Code"
                   aria-label="Identity QR Code"
                 >
-                  <QrCode className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">QR</span>
+                  <QrCode className="w-4.5 h-4.5" />
+                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">QR Code</span>
                 </button>
+              </div>
 
+              {/* Visitor Row 2: Secondary Actions (5 buttons across 5 columns: 1 col each) */}
+              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
                 {/* 5. Digital Passport */}
                 <button
                   type="button"
-                  onClick={() => navigate(`/passport/${profileUid}`)}
+                  onClick={() => nav(`/passport/${profileUid}`)}
                   className="h-11 sm:h-12 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300"
                   title="Digital Passport"
                   aria-label="Digital Passport"
                 >
-                  <Crown className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Crown className="w-4 h-4" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Passport</span>
                 </button>
-              </div>
 
-              {/* Visitor Row 2: 4 Actions */}
-              <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
                 {/* 6. Friend Status / Add Friend */}
                 {friendshipStatus ? (
                   <button
@@ -687,7 +702,7 @@ export const ProfileIdentityCard = memo(({
                     title={friendshipStatus === 'friends' ? "Friends" : "Add Friend"}
                     aria-label="Friend Status"
                   >
-                    <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <UserCheck className="w-4 h-4" />
                     <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">
                       {friendshipStatus === 'friends' ? "Friends" : "Friend"}
                     </span>
@@ -704,7 +719,7 @@ export const ProfileIdentityCard = memo(({
                   title="Civic Location"
                   aria-label="Civic Location"
                 >
-                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <MapPin className="w-4 h-4" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Location</span>
                 </button>
 
@@ -719,7 +734,7 @@ export const ProfileIdentityCard = memo(({
                   title="Block or Restrict"
                   aria-label="Block or Restrict"
                 >
-                  <UserX className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <UserX className="w-4 h-4" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Restrict</span>
                 </button>
 
@@ -734,7 +749,7 @@ export const ProfileIdentityCard = memo(({
                   title="Profile Options"
                   aria-label="Profile Options"
                 >
-                  <MoreHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <MoreHorizontal className="w-4 h-4" />
                   <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">More</span>
                 </button>
               </div>
@@ -744,9 +759,9 @@ export const ProfileIdentityCard = memo(({
 
         {/* 3. Large Coin Balance Display (Public or Private based on user choice) */}
         <div className={cn(
-          "rounded-2xl sm:rounded-3xl p-4 sm:p-5 border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl shadow-xl",
+          "rounded-2xl sm:rounded-3xl p-4 sm:p-5 border transition-all duration-300 relative overflow-hidden backdrop-blur-3xl shadow-xl",
           isDark
-            ? "bg-gradient-to-r from-amber-500/15 via-[#03071B]/95 to-purple-500/15 border-amber-500/30 shadow-[0_12px_36px_rgba(245,158,11,0.12)] text-white"
+            ? "bg-gradient-to-r from-amber-500/15 via-[#03071B]/95 to-purple-500/15 border-amber-500/35 shadow-[0_16px_40px_rgba(245,158,11,0.15)] text-white"
             : "bg-gradient-to-r from-amber-50/90 via-white/95 to-purple-50/90 border-amber-200 text-slate-900 shadow-[0_8px_24px_rgba(245,158,11,0.08)]"
         )}>
           {/* Liquid gold specular reflection highlight */}
@@ -761,29 +776,42 @@ export const ProfileIdentityCard = memo(({
           <div className="flex items-center justify-between gap-4 flex-wrap relative z-10">
             {canViewCoins && coinsAmount !== null ? (
               <>
-                <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 text-white flex items-center justify-center shadow-lg shadow-amber-500/30 shrink-0">
-                    <Coins className="w-6 h-6 sm:w-7 sm:h-7" />
+                <div className="flex items-center gap-3.5 sm:gap-4.5 min-w-0">
+                  <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 text-white flex items-center justify-center shadow-xl shadow-amber-500/30 shrink-0 ring-2 ring-amber-400/40">
+                    <Coins className="w-7 h-7 sm:w-8 sm:h-8 drop-shadow" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-2 sm:gap-2.5 flex-wrap">
-                      <span className="text-2xl sm:text-3xl md:text-4xl font-black text-amber-500 dark:text-amber-400 tracking-tight leading-none">
+                      <span className="text-3xl sm:text-4xl md:text-5xl font-black text-amber-500 dark:text-amber-400 tracking-tight leading-none font-mono drop-shadow-sm">
                         {coinsAmount.toLocaleString()}
                       </span>
-                      <span className="text-sm sm:text-base font-bold text-slate-700 dark:text-slate-300">
+                      <span className="text-base sm:text-lg font-black text-slate-700 dark:text-slate-200">
                         Coins
                       </span>
-                      <span className="text-xs sm:text-sm font-semibold text-slate-400">
+                      <span className="text-xs sm:text-sm font-bold text-slate-400">
                         ({formatCoinsAsUsd(coinsAmount)})
                       </span>
                     </div>
-                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium mt-1 truncate">
-                      {isOwner 
-                        ? (profile?.privacy?.economicStatus === 'ONLY_ME'
-                            ? "Your active treasury · Private to you"
-                            : "Your active treasury · Publicly visible to citizens")
-                        : "Citizen Treasury Balance"}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                        {isOwner 
+                          ? (profile?.privacy?.economicStatus === 'ONLY_ME'
+                              ? "🔒 Private Treasury · Confidential to you"
+                              : "🌐 Public Treasury · Visible to all Arvdoul citizens")
+                          : "🏛️ Citizen Treasury Balance"}
+                      </p>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => nav('/profile/edit')}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-400 hover:underline cursor-pointer transition-colors"
+                          title="Manage Treasury Privacy in Edit Profile"
+                        >
+                          <span>{profile?.privacy?.economicStatus === 'ONLY_ME' ? 'Switch to Public' : 'Switch to Private'}</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -791,8 +819,8 @@ export const ProfileIdentityCard = memo(({
                   {isOwner ? (
                     <button
                       type="button"
-                      onClick={() => navigate?.('/coins')}
-                      className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-amber-500/25 cursor-pointer flex items-center gap-1.5"
+                      onClick={() => nav('/coins')}
+                      className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-amber-500/25 cursor-pointer flex items-center gap-1.5"
                     >
                       <Coins className="w-4 h-4" />
                       <span>Wallet</span>
@@ -802,7 +830,7 @@ export const ProfileIdentityCard = memo(({
                       <button
                         type="button"
                         onClick={onOpenTipModal}
-                        className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-amber-500/25 cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-amber-500/25 cursor-pointer flex items-center gap-1.5"
                       >
                         <Coins className="w-4 h-4" />
                         <span>Send Tip</span>
@@ -814,8 +842,8 @@ export const ProfileIdentityCard = memo(({
             ) : (
               <div className="flex items-center justify-between w-full gap-3 flex-wrap">
                 <div className="flex items-center gap-3.5">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-500/10 text-slate-400 flex items-center justify-center shrink-0 border border-slate-500/20">
-                    <Lock className="w-5 h-5 text-amber-400" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-slate-500/10 text-slate-400 flex items-center justify-center shrink-0 border border-slate-500/20">
+                    <Lock className="w-6 h-6 text-amber-400" />
                   </div>
                   <div>
                     <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-200">
@@ -831,7 +859,7 @@ export const ProfileIdentityCard = memo(({
                   {isOwner ? (
                     <button
                       type="button"
-                      onClick={() => navigate?.('/coins')}
+                      onClick={() => nav('/coins')}
                       className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-400 hover:underline cursor-pointer"
                     >
                       Manage Wallet →
@@ -841,9 +869,9 @@ export const ProfileIdentityCard = memo(({
                       <button
                         type="button"
                         onClick={onOpenTipModal}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 transition-all shadow-md cursor-pointer flex items-center gap-1.5"
                       >
-                        <Coins className="w-3.5 h-3.5" />
+                        <Coins className="w-4 h-4" />
                         <span>Send Tip</span>
                       </button>
                     )
@@ -919,84 +947,96 @@ export const ProfileIdentityCard = memo(({
           )}
         </div>
 
-        {/* 6. Core Social & Civic Metrics Strip with Dedicated Icons */}
-        <div className="pt-3 border-t border-slate-100 dark:border-white/[0.08] grid grid-cols-4 gap-2 text-center select-none">
-          {/* Creations (if creator) / Posts (if citizen) */}
+        {/* 6. Core Social & Civic Metrics Strip with Dedicated Liquid Glass Tiles */}
+        <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center select-none">
+          {/* Tile 1: Creations (if creator) / Posts (if citizen) */}
           <div 
             onClick={() => onMetricPress?.('posts')}
             className={cn(
-              "p-2 rounded-2xl transition-all",
-              onMetricPress ? "cursor-pointer hover:bg-slate-100/60 dark:hover:bg-white/[0.04]" : ""
+              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
+              isDark
+                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-purple-500/40 text-white"
+                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-purple-300 text-slate-900 shadow-sm",
+              onMetricPress ? "cursor-pointer active:scale-95" : ""
             )}
           >
-            <div className="flex items-center justify-center gap-1 mb-0.5">
+            <div className="flex items-center justify-center gap-1.5 mb-1">
               {isCreator ? (
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <Sparkles className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
               ) : (
-                <Layers className="w-3.5 h-3.5 text-blue-400" />
+                <Layers className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
               )}
-              <span className="text-base sm:text-lg font-black tracking-tight leading-tight">
+              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
                 {formatStatNumber(postsCount)}
               </span>
             </div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               {isCreator ? "Creations" : "Posts"}
             </div>
           </div>
 
-          {/* Followers */}
+          {/* Tile 2: Followers */}
           <div 
             onClick={() => canShowFollowers && onMetricPress?.('followers')}
             className={cn(
-              "p-2 rounded-2xl transition-all",
-              canShowFollowers && onMetricPress ? "cursor-pointer hover:bg-slate-100/60 dark:hover:bg-white/[0.04]" : "opacity-50"
+              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
+              isDark
+                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-cyan-500/40 text-white"
+                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-cyan-300 text-slate-900 shadow-sm",
+              canShowFollowers && onMetricPress ? "cursor-pointer active:scale-95" : "opacity-50"
             )}
           >
-            <div className="flex items-center justify-center gap-1 mb-0.5">
-              <Users className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-base sm:text-lg font-black tracking-tight leading-tight">
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <Users className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
                 {canShowFollowers ? formatStatNumber(followersCount) : '—'}
               </span>
             </div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Followers
             </div>
           </div>
 
-          {/* Following */}
+          {/* Tile 3: Following */}
           <div 
             onClick={() => canShowFollowing && onMetricPress?.('following')}
             className={cn(
-              "p-2 rounded-2xl transition-all",
-              canShowFollowing && onMetricPress ? "cursor-pointer hover:bg-slate-100/60 dark:hover:bg-white/[0.04]" : "opacity-50"
+              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
+              isDark
+                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-emerald-500/40 text-white"
+                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-emerald-300 text-slate-900 shadow-sm",
+              canShowFollowing && onMetricPress ? "cursor-pointer active:scale-95" : "opacity-50"
             )}
           >
-            <div className="flex items-center justify-center gap-1 mb-0.5">
-              <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-base sm:text-lg font-black tracking-tight leading-tight">
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <UserCheck className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
                 {canShowFollowing ? formatStatNumber(followingCount) : '—'}
               </span>
             </div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Following
             </div>
           </div>
 
-          {/* Civic Standing / Reputation */}
+          {/* Tile 4: Civic Standing / Reputation */}
           <div 
             onClick={() => onMetricPress?.('reputation')}
             className={cn(
-              "p-2 rounded-2xl transition-all",
-              onMetricPress ? "cursor-pointer hover:bg-slate-100/60 dark:hover:bg-white/[0.04]" : ""
+              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
+              isDark
+                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-amber-500/40 text-white"
+                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-amber-300 text-slate-900 shadow-sm",
+              onMetricPress ? "cursor-pointer active:scale-95" : ""
             )}
           >
-            <div className="flex items-center justify-center gap-1 mb-0.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-base sm:text-lg font-black tracking-tight leading-tight">
-                {hasReputation ? `${reputationScore}` : (hasLevel ? `${effectiveLevel}` : '—')}
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <ShieldCheck className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
+                {hasReputation ? formatStatNumber(reputationScore) : '—'}
               </span>
             </div>
-            <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Reputation
             </div>
           </div>

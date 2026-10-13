@@ -37,7 +37,9 @@ import {
   Link as LinkIcon,
   HelpCircle,
   Star,
-  AtSign
+  AtSign,
+  Coins,
+  ArrowRight
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -94,6 +96,23 @@ export default function EditProfileScreen() {
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [usernameAvailability, setUsernameAvailability] = useState(null); // 'checking' | 'available' | 'taken' | 'invalid' | 'current'
   const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
+  const [activeSection, setActiveSection] = useState('all'); // 'all' | 'identity' | 'coordinates' | 'links' | 'privacy'
+
+  // Profile completeness calculation
+  const completeness = useMemo(() => {
+    let score = 0;
+    const checks = [
+      { id: 'avatar', label: 'Citizen Avatar', completed: Boolean(avatarPreview && !avatarPreview.includes('default') && !avatarPreview.includes('placeholder')), weight: 20 },
+      { id: 'displayName', label: 'Display Name', completed: Boolean(formData.displayName?.trim()), weight: 20 },
+      { id: 'username', label: 'Unique Handle', completed: Boolean(formData.username?.trim() && !formData.username.startsWith('user_')), weight: 20 },
+      { id: 'bio', label: 'Civic Bio', completed: Boolean(formData.bio?.trim()), weight: 20 },
+      { id: 'details', label: 'Coordinates or Links', completed: Boolean(formData.location?.trim() || formData.website?.trim() || formData.links?.length > 0), weight: 20 },
+    ];
+    checks.forEach(c => {
+      if (c.completed) score += c.weight;
+    });
+    return { score, checks };
+  }, [avatarPreview, formData.displayName, formData.username, formData.bio, formData.location, formData.website, formData.links]);
 
   // Effective user reference
   const currentUid = userProfile?.uid || userProfile?.id || user?.uid;
@@ -385,10 +404,153 @@ export default function EditProfileScreen() {
         }}
       />
 
+      {/* Sticky Header Navigation */}
+      <header className={cn(
+        "sticky top-0 z-40 w-full backdrop-blur-2xl border-b transition-colors",
+        isDark
+          ? "bg-[#03071B]/90 border-white/[0.08] shadow-[0_4px_24px_rgba(0,0,0,0.5)]"
+          : "bg-white/90 border-slate-200/90 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
+      )}>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center border transition-all cursor-pointer active:scale-95 shrink-0",
+                isDark
+                  ? "bg-white/[0.05] border-white/10 hover:bg-white/10 text-white"
+                  : "bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-800"
+              )}
+              title="Back to profile"
+              aria-label="Back to profile"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight truncate">
+                Edit Profile
+              </h1>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                <span className="font-mono text-purple-400 truncate">@{formData.username || 'citizen'}</span>
+                <span>·</span>
+                <span className="text-emerald-500 font-semibold shrink-0">{completeness.score}% complete</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate('/profile/me')}
+              className={cn(
+                "hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer active:scale-95",
+                isDark
+                  ? "bg-white/[0.03] border-white/10 text-slate-300 hover:bg-white/10"
+                  : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
+              )}
+              title="View current profile"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Preview</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || usernameAvailability === 'taken'}
+              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md shadow-purple-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)"
+              }}
+            >
+              {saving ? (
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              <span>Save</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Section Navigation Tabs */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {[
+            { id: 'all', label: 'All Sections' },
+            { id: 'identity', label: 'Identity & Handle' },
+            { id: 'coordinates', label: 'Coordinates & Web' },
+            { id: 'links', label: 'Custom Links' },
+            { id: 'privacy', label: 'Privacy & Scopes' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveSection(tab.id)}
+              className={cn(
+                "px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer",
+                activeSection === tab.id
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : isDark
+                  ? "bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]"
+                  : "bg-slate-200/60 text-slate-600 hover:text-slate-900 hover:bg-slate-200"
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
       {/* Main Content Form */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6 relative z-10">
 
+        {/* Profile Completeness Card */}
+        <div className={cn(
+          "rounded-[22px] border p-4 sm:p-5 backdrop-blur-2xl transition-all relative overflow-hidden",
+          isDark
+            ? "bg-[#070D27]/80 border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
+            : "bg-white/90 border-slate-200/90 shadow-[0_4px_20px_rgba(15,23,42,0.04)]"
+        )}>
+          <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#8B1EF3]" />
+              <span className="text-xs sm:text-sm font-black tracking-tight">Citizen Presence Completeness</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-purple-400">{completeness.score}%</span>
+          </div>
+
+          <div className="relative w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/[0.08]">
+            <div 
+              className="h-full rounded-full transition-all duration-500 ease-out"
+              style={{
+                width: `${completeness.score}%`,
+                background: "linear-gradient(90deg, #8B1EF3 0%, #4431F7 50%, #00F0FF 100%)"
+              }}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap mt-3 pt-1 border-t border-slate-100 dark:border-white/[0.04]">
+            {completeness.checks.map((chk) => (
+              <div 
+                key={chk.id}
+                className={cn(
+                  "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-lg border",
+                  chk.completed
+                    ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-500 dark:text-emerald-400"
+                    : "bg-slate-500/10 border-slate-500/20 text-slate-400"
+                )}
+              >
+                {chk.completed ? <CheckCircle2 className="w-3 h-3 text-emerald-500" /> : <AlertCircle className="w-3 h-3 text-slate-400" />}
+                <span>{chk.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* 1. CITIZEN AVATAR STUDIO (Arvdoul does NOT support background images) */}
+        {(activeSection === 'all' || activeSection === 'identity') && (
+        <>
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 relative overflow-hidden",
           isDark
@@ -675,8 +837,11 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
+        </>
+        )}
 
         {/* 3. CIVIC COORDINATES & LOCATION */}
+        {(activeSection === 'all' || activeSection === 'coordinates') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -749,8 +914,10 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
+        )}
 
         {/* 4. CUSTOM SOCIAL LINKS HUB (Up to 10) */}
+        {(activeSection === 'all' || activeSection === 'links') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -870,8 +1037,10 @@ export default function EditProfileScreen() {
             </div>
           )}
         </section>
+        )}
 
         {/* 5. PRIVACY & AUDIENCE GOVERNANCE */}
+        {(activeSection === 'all' || activeSection === 'privacy') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -1011,30 +1180,57 @@ export default function EditProfileScreen() {
                 </select>
               </div>
 
-              {/* Coins & Economic Status */}
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs sm:text-sm font-semibold">Financial & Coin Standing</div>
-                  <div className="text-[11px] text-slate-400">Visibility of coin balance and tipping revenue</div>
+              {/* Large Coin Treasury Privacy Card */}
+              <div className={cn(
+                "p-4 rounded-2xl border space-y-3 transition-all",
+                isDark ? "bg-amber-500/[0.06] border-amber-500/25" : "bg-amber-50/70 border-amber-200"
+              )}>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-white flex items-center justify-center shadow-md shrink-0">
+                      <Coins className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                        Large Coin Treasury Card Display
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        Controls whether your total Arvdoul coin treasury is proudly showcased as a large balance card on your profile, or kept strictly confidential to you.
+                      </div>
+                    </div>
+                  </div>
+
+                  <select
+                    value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
+                    onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-bold outline-none border cursor-pointer",
+                      isDark ? "bg-slate-900 border-amber-500/40 text-amber-300" : "bg-white border-amber-300 text-amber-900"
+                    )}
+                  >
+                    <option value={VISIBILITY_SCOPES.ONLY_ME}>🔒 Only Me (Private Treasury)</option>
+                    <option value={VISIBILITY_SCOPES.CONNECTIONS}>👥 Connections Only</option>
+                    <option value={VISIBILITY_SCOPES.EVERYONE}>🌐 Everyone (Public Treasury)</option>
+                  </select>
                 </div>
-                <select
-                  value={formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME}
-                  onChange={(e) => handlePrivacyChange('economicStatus', e.target.value)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
-                    isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
-                  )}
-                >
-                  <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me (Private)</option>
-                  <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
-                  <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
-                </select>
+
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 pt-1 border-t border-amber-500/10 flex-wrap">
+                  <span className="font-semibold text-amber-500">Live Profile State:</span>
+                  <span>
+                    {(formData.privacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME) === VISIBILITY_SCOPES.ONLY_ME
+                      ? "Visitors see a confidential private treasury badge with a Send Tip button."
+                      : (formData.privacy.economicStatus === VISIBILITY_SCOPES.CONNECTIONS
+                          ? "Only mutual connections see your actual coin count; others see confidential private badge."
+                          : "Actual coin balance and USD value are publicly showcased on your profile.")}
+                  </span>
+                </div>
               </div>
 
             </div>
 
           </div>
         </section>
+        )}
 
         {/* Bottom Save Action Bar */}
         <div className="flex items-center justify-end gap-3 pt-4">
