@@ -264,27 +264,11 @@ export default function RankingsScreen() {
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
-      {/* Header */}
-      <header className={`border-b px-4 py-4 backdrop-blur-xl ${isDark ? 'bg-gray-800/80 border-gray-700/60' : 'bg-white/80 border-gray-200/60'}`}>
+      {/* Sub-Tabs Toolbar (TopAppBar handles main app title and back navigation) */}
+      <div className={`border-b px-4 py-3 backdrop-blur-xl ${isDark ? 'bg-gray-800/80 border-gray-700/60' : 'bg-white/80 border-gray-200/60'}`}>
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(-1)}
-                className="p-2 hover:bg-gray-700 rounded-lg"
-                aria-label="Go back"
-              >
-                <FaChevronLeft />
-              </button>
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <FaTrophy className="text-yellow-400" />
-                Leaderboards
-              </h1>
-            </div>
-          </div>
-
           {/* Main tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             <TabButton
               active={activeTab === 'creators'}
               onClick={() => setActiveTab('creators')}
@@ -322,7 +306,7 @@ export default function RankingsScreen() {
             </TabButton>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Content */}
       <main className="max-w-4xl mx-auto p-4">

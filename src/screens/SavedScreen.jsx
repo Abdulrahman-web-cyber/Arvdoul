@@ -134,37 +134,23 @@ export default function SavedScreen() {
       "min-h-screen pb-24 transition-colors duration-200",
       isDark ? "bg-[#0B0F17] text-white" : "bg-gray-50 text-gray-900"
     )}>
-      {/* Top Header */}
-      <header className={cn(
-        "sticky top-0 z-40 backdrop-blur-xl border-b transition-colors",
-        isDark ? "bg-[#0B0F17]/85 border-white/10" : "bg-white/85 border-gray-200"
-      )}>
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              aria-label="Go back"
-              className={cn(
-                "p-2 rounded-full transition-all",
-                isDark ? "hover:bg-white/10 text-gray-300" : "hover:bg-gray-100 text-gray-700"
-              )}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2">
-              <Bookmark className="w-5 h-5 text-purple-400 fill-purple-400/20" />
-              <h1 className="font-bold text-lg">Saved & Bookmarks</h1>
-              <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold">
-                {items.length}
-              </span>
-            </div>
+      {/* Main Container */}
+      <main className="max-w-5xl mx-auto px-4 pt-2">
+        {/* In-page toolbar (TopAppBar handles main app title and back navigation) */}
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Bookmark className="w-5 h-5 text-purple-400 fill-purple-400/20" />
+            <span className="font-bold text-sm text-slate-700 dark:text-slate-200">Saved Items</span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold">
+              {items.length}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/collections')}
               className={cn(
-                "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs border transition-all",
+                "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs border transition-all cursor-pointer",
                 isDark ? "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300" : "bg-white border-gray-200 hover:bg-gray-100 text-gray-700"
               )}
             >
@@ -178,7 +164,7 @@ export default function SavedScreen() {
                 setSelectedIds([]);
               }}
               className={cn(
-                "px-3 py-1.5 rounded-xl font-semibold text-xs border transition-all",
+                "px-3 py-1.5 rounded-xl font-semibold text-xs border transition-all cursor-pointer",
                 isSelectMode
                   ? "bg-purple-600 border-purple-500 text-white"
                   : isDark ? "bg-white/5 border-white/10 text-gray-300" : "bg-white border-gray-200 text-gray-700"
@@ -193,7 +179,7 @@ export default function SavedScreen() {
                 aria-pressed={viewMode === 'grid'}
                 aria-label="Grid view"
                 className={cn(
-                  "p-1.5 rounded-lg transition-all",
+                  "p-1.5 rounded-lg transition-all cursor-pointer",
                   viewMode === 'grid' ? "bg-purple-600 text-white" : "text-gray-400"
                 )}
                 title="Grid View"
@@ -205,7 +191,7 @@ export default function SavedScreen() {
                 aria-pressed={viewMode === 'list'}
                 aria-label="List view"
                 className={cn(
-                  "p-1.5 rounded-lg transition-all",
+                  "p-1.5 rounded-lg transition-all cursor-pointer",
                   viewMode === 'list' ? "bg-purple-600 text-white" : "text-gray-400"
                 )}
                 title="List View"
@@ -215,10 +201,6 @@ export default function SavedScreen() {
             </div>
           </div>
         </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-5xl mx-auto px-4 pt-4">
         {/* Search & Type Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1">

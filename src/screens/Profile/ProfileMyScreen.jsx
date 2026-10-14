@@ -36,7 +36,6 @@ import { toast } from 'sonner';
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileProgression from '../../components/profile/ProfileProgression';
-import ProfileCivicCard from '../../components/profile/ProfileCivicCard';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
 import ProfileCreatorDashboard from '../../components/profile/ProfileCreatorDashboard';
@@ -365,18 +364,7 @@ export default function ProfileMyScreen() {
                 }}
               />
 
-              {/* 2. Embedded Civic Prestige Card */}
-              <ProfileCivicCard
-                level={level || effectiveProfile?.level}
-                experience={effectiveProfile?.experience || 0}
-                streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
-                reputation={Number(effectiveProfile?.reputation) || 0}
-                profile={effectiveProfile}
-                isOwner={true}
-                theme={theme}
-              />
-
-              {/* 3. Creator Analytics Dashboard (if owner) */}
+              {/* 2. Creator Analytics Dashboard (if owner) */}
               {viewAs === 'owner' && (
                 <ProfileCreatorDashboard
                   analytics={analytics}

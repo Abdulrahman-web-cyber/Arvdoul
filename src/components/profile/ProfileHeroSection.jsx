@@ -51,7 +51,8 @@ import {
   ArrowRight,
   TrendingUp,
   Star,
-  User
+  User,
+  Flame
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
@@ -86,6 +87,8 @@ ProfileBanner.displayName = 'ProfileBanner';
 export const ProfileLevelProgressCard = memo(({
   level = null,
   experience = null,
+  streak = 0,
+  reputation = 0,
   isOwner = false,
   isDark = false,
   navigate
@@ -117,23 +120,43 @@ export const ProfileLevelProgressCard = memo(({
   if (!levelInfo) {
     if (!isOwner) return null;
     return (
-      <div className={cn(
-        "w-full rounded-2xl p-3 sm:p-4 border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl",
-        isDark
-          ? "bg-[#03071B]/80 border-white/[0.08] text-white shadow-lg"
-          : "bg-white/80 border-slate-200/90 text-slate-900 shadow-md"
-      )}>
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-purple-400" />
-            <span className="font-semibold text-slate-400">Civic standing unrecorded</span>
+      <div 
+        onClick={() => navigate?.('/progress')}
+        className={cn(
+          "w-full rounded-[22px] p-3.5 sm:p-4 border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl cursor-pointer group active:scale-[0.99]",
+          isDark
+            ? "bg-[#03071B]/90 hover:bg-[#03071B] border-white/10 text-white shadow-lg shadow-purple-950/20"
+            : "bg-white/90 hover:bg-white border-slate-200/90 text-slate-900 shadow-md"
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#00F0FF]"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-tr from-[#8B1EF3] to-[#4431F7] text-white shadow-md shrink-0 group-hover:scale-105 transition-transform">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xs sm:text-sm font-black tracking-tight leading-none text-slate-900 dark:text-white">
+                Civic Standing
+              </h2>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate">
+                Begin your journey to earn civic XP, unlock titles &amp; perks
+              </p>
+            </div>
           </div>
           <button
             type="button"
-            onClick={() => navigate?.('/progress')}
-            className="text-[11px] font-bold text-purple-500 hover:underline cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate?.('/progress');
+            }}
+            className="text-[11px] font-bold text-white px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 active:scale-95 transition-all shadow-sm shrink-0 cursor-pointer flex items-center gap-1"
           >
-            Learn about civic progression →
+            <span>Explore</span>
+            <ArrowRight className="w-3 h-3" />
           </button>
         </div>
       </div>
@@ -145,14 +168,24 @@ export const ProfileLevelProgressCard = memo(({
   const xpRemaining = levelInfo.xpToNext ?? 0;
   const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
   const rankTitle = levelInfo.title || getRankTitle(currentLevelNumber);
+  const nextReward = useMemo(() => {
+    try {
+      return LevelModule.getLevelUpReward(currentLevelNumber, currentLevelNumber + 1) || 0;
+    } catch {
+      return 0;
+    }
+  }, [currentLevelNumber]);
 
   return (
-    <div className={cn(
-      "w-full rounded-[22px] sm:rounded-[26px] border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl shadow-xl",
-      isDark
-        ? "bg-[#03071B]/90 border-white/[0.08] text-white shadow-[0_12px_36px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.8)]"
-    )}>
+    <div 
+      onClick={() => navigate?.('/progress')}
+      className={cn(
+        "w-full rounded-[22px] sm:rounded-[26px] border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl shadow-xl cursor-pointer group active:scale-[0.99]",
+        isDark
+          ? "bg-[#03071B]/90 hover:bg-[#03071B] border-white/[0.08] text-white shadow-[0_12px_36px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]"
+          : "bg-white/95 hover:bg-white border-slate-200/90 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.8)]"
+      )}
+    >
       {/* Liquid specular hairline highlight */}
       <span
         aria-hidden="true"
@@ -179,9 +212,21 @@ export const ProfileLevelProgressCard = memo(({
                     {rankTitle}
                   </span>
                 )}
+                {streak > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                    <Flame className="w-3 h-3 fill-amber-500 text-amber-500" />
+                    <span>{streak}d</span>
+                  </span>
+                )}
+                {reputation > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <span>{reputation} Rep</span>
+                  </span>
+                )}
               </div>
               <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                Civic Progression & Perks
+                Civic Progression &amp; Perks
               </p>
             </div>
           </div>
@@ -215,14 +260,20 @@ export const ProfileLevelProgressCard = memo(({
           />
         </div>
 
-        {/* XP Having and Remaining XP */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-0.5">
+        {/* XP Having, Remaining XP, and Next Level Reward */}
+        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-0.5 flex-wrap gap-1">
           <span className="inline-flex items-center gap-1">
             <span className="font-mono font-bold text-purple-600 dark:text-purple-300">
               {xpEarned.toLocaleString()} XP
             </span>
             <span>earned</span>
           </span>
+          {nextReward > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-500 dark:text-amber-400">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              <span>+{nextReward} Coins next level</span>
+            </span>
+          )}
           <span className="inline-flex items-center gap-1">
             {levelInfo.isMaxLevel ? (
               <span className="font-bold text-amber-500">Max Civic Standing</span>
@@ -251,6 +302,7 @@ export const ProfileIdentityCard = memo(({
   profile,
   isOwner = false,
   effectiveLevel = null,
+  experience = null,
   hasLevel = false,
   rankLabel = null,
   displayName = 'Citizen',
@@ -480,6 +532,17 @@ export const ProfileIdentityCard = memo(({
             </div>
           </div>
         </div>
+
+        {/* Civic Standing Module placed ON THE SAME TOP CARD containing the profile picture */}
+        <ProfileLevelProgressCard
+          level={effectiveLevel}
+          experience={experience ?? profile?.experience ?? profile?.xp}
+          streak={Number(profile?.activeStreak || profile?.activeDaysCount) || 0}
+          reputation={Number(profile?.reputation || profile?.reputationScore) || 0}
+          isOwner={isOwner}
+          isDark={isDark}
+          navigate={nav}
+        />
 
         {/* 2. The 9 Action Buttons Dock on Liquid Glass in 2 Rows with Hierarchical Sizing */}
         <div className="relative rounded-[26px] sm:rounded-[30px] p-3 sm:p-4.5 bg-white/10 dark:bg-white/[0.04] backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.2)] overflow-hidden space-y-2.5">
@@ -1136,20 +1199,12 @@ const ProfileHeroSection = memo(({
 
   return (
     <div className="w-full space-y-3 sm:space-y-4">
-      {/* 1. Level Progress Card on top of the top card */}
-      <ProfileLevelProgressCard
-        level={effectiveLevel}
-        experience={profile?.experience ?? profile?.xp}
-        isOwner={isOwner}
-        isDark={isDark}
-        navigate={navigate}
-      />
-
-      {/* 2. Elevated Master Identity Card */}
+      {/* Master Top Card containing Profile Picture, Civic Standing Card, 2-Row Action Dock, Coins & Stats */}
       <ProfileIdentityCard
         profile={profile}
         isOwner={isOwner}
         effectiveLevel={effectiveLevel}
+        experience={profile?.experience ?? profile?.xp}
         hasLevel={hasLevel}
         rankLabel={rankLabel}
         displayName={displayName}

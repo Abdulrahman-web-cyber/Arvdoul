@@ -159,16 +159,7 @@ export default function HelpCenterScreen() {
 
   return (
     <div className={`min-h-screen pb-20 ${isDark ? 'bg-[#060816]' : 'bg-gradient-to-b from-slate-50 to-white'}`}>
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-xl ${card}`}>
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} aria-label="Back" className={`p-2 rounded-full ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}>
-            <ArrowLeft className={`w-5 h-5 ${text}`} />
-          </button>
-          <h1 className={`font-bold text-lg ${text}`}>Help Center &amp; Support</h1>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 py-4 space-y-6">
         <div className={`rounded-2xl border p-4 flex items-center gap-3 ${card}`}>
           <Search className={`w-5 h-5 ${muted}`} />
           <input

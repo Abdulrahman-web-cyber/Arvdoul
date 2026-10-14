@@ -36,7 +36,6 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 // Modular Profile Components
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileProgression from '../../components/profile/ProfileProgression';
-import ProfileCivicCard from '../../components/profile/ProfileCivicCard';
 import ProfileMutualFriends from '../../components/profile/ProfileMutualFriends';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';
@@ -563,18 +562,7 @@ export default function ProfilePublicScreen() {
                 }}
               />
 
-              {/* 3. Embedded Civic Prestige Card */}
-              {effectiveProfile?.level && (
-                <ProfileCivicCard
-                  level={effectiveProfile.level}
-                  experience={effectiveProfile?.experience || 0}
-                  streak={Number(effectiveProfile?.activeStreak || effectiveProfile?.activeDaysCount) || 0}
-                  reputation={Number(effectiveProfile?.reputation) || 0}
-                  profile={effectiveProfile}
-                  isOwner={false}
-                  theme={theme}
-                />
-              )}
+
 
               {/* 4. Mutual Friends Line */}
               {mutualFriends && mutualFriends.length > 0 && (

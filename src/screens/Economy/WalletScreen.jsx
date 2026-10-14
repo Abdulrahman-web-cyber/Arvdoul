@@ -133,38 +133,22 @@ export default function WalletScreen() {
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
-        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
-      }`}>
-        <div className="flex items-center space-x-3">
+      <main className="max-w-3xl mx-auto px-4 py-4 space-y-6">
+        {/* In-page utility bar (TopAppBar handles main app title and back navigation) */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            Economic Ledger &amp; Sovereign Balance
+          </div>
           <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
+            onClick={loadWallet}
+            aria-label="Refresh wallet"
+            className={`p-2 rounded-xl transition-colors ${
+              isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
             }`}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <RefreshCw className="w-4 h-4" />
           </button>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Citizen Wallet</h1>
-            <p className="text-xs text-gray-500">Economic Ledger & Sovereign Balance</p>
-          </div>
         </div>
-
-        <button
-          onClick={loadWallet}
-          aria-label="Refresh wallet"
-          className={`p-2 rounded-lg transition-colors ${
-            isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-          }`}
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Sovereign Balance Card */}
         <section
           aria-labelledby="balance-heading"

@@ -597,9 +597,15 @@ export function AuthProvider({ children }) {
 
     // Safety net: never leave the app stuck on an infinite loading/blank screen
     // if auth initialization hangs (e.g. a dynamic import that never resolves).
+    // If a session is stored, give Firebase adequate time to restore tokens before timing out.
+    const storedSession = typeof localStorage !== 'undefined' && (
+      localStorage.getItem('arvdoul_has_session') === 'true' ||
+      localStorage.getItem('arvdoul_uid') ||
+      localStorage.getItem('uid')
+    );
     const authReadyTimer = setTimeout(() => {
       setAuthInitialized(true);
-    }, 3000);
+    }, storedSession ? 8000 : 3500);
     
     const setupAuthListener = async () => {
       try {
@@ -612,6 +618,7 @@ export function AuthProvider({ children }) {
         if (!auth) throw new Error('Failed to get Firebase auth instance');
         
         unsubscribeAuthRef.current = onAuthStateChanged(auth, async (firebaseUser) => {
+          clearTimeout(authReadyTimer);
           if (!isMounted.current) return;
           
           console.log('👤 Auth state changed:', firebaseUser ? `User logged in (${firebaseUser.uid})` : 'No user');

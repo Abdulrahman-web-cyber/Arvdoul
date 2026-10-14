@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { safeReturnPath } from "../utils/profileCompletion.js";
+import { ArvdoulEmblem } from "../components/Shared/ArvdoulLogo.jsx";
 
 // Import country codes (same as login)
 import { countryCodes, sortedCountryCodes, getCountryByIso } from "../data/countryCodes.js";
@@ -716,19 +717,14 @@ export default function LoginScreen() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center shadow-2xl overflow-hidden"
+            className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center shadow-2xl overflow-hidden p-1.5"
           >
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10">
-              <img 
-                src={logoPath} 
-                alt="Arvdoul Logo" 
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = '<span class="text-2xl font-bold text-white">A</span>';
-                }}
-              />
-            </div>
+            <ArvdoulEmblem
+              size={64}
+              theme={resolvedTheme}
+              preferVector={true}
+              animate={true}
+            />
           </motion.div>
           <h1 className="text-2xl font-bold mb-1 text-gray-900 dark:text-white">
             Welcome Back

@@ -8,6 +8,7 @@ import { useAuth } from "@context/AuthContext";
 import LoadingSpinner from "@components/Shared/LoadingSpinner";
 import { resolveSplashDestination } from "../utils/profileCompletion.js";
 import { hasStoredAuthSession } from "../utils/security.js";
+import { ArvdoulEmblem, ArvdoulWordmark } from "../components/Shared/ArvdoulLogo.jsx";
 
 export default function SplashScreen() {
   const navigate = useNavigate();
@@ -148,6 +149,7 @@ export default function SplashScreen() {
         const target = resolveSplashDestination({
           isAuthenticated,
           needsOnboarding,
+          hasStoredSession: hasStored,
         });
         navigate(target, { 
           replace: true,
@@ -174,17 +176,24 @@ export default function SplashScreen() {
 
   // Quick skip on tap / click
   const handleSkip = useCallback(() => {
+    const hasStored = hasStoredAuthSession();
     const target = resolveSplashDestination({
       isAuthenticated,
       needsOnboarding,
+      hasStoredSession: hasStored,
     });
     navigate(target, { replace: true, state: { fromSplash: true } });
   }, [isAuthenticated, needsOnboarding, navigate]);
 
-  // Circular logo component
+  // World-class insignia component
   const PerfectLogo = useMemo(() => (
-    <div className="relative w-28 h-28">
-      {/* Circular container */}
+    <div className="relative w-28 h-28 flex items-center justify-center">
+      {/* Ambient background glow ring */}
+      <div 
+        aria-hidden="true"
+        className="absolute inset-0 rounded-full blur-2xl opacity-40"
+        style={{ background: themeConfig.accentGradient }}
+      />
       <motion.div
         initial={{ scale: 0.85, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -194,36 +203,13 @@ export default function SplashScreen() {
           damping: 22,
           mass: 0.8
         }}
-        className="w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm shadow-2xl relative z-10 p-1 flex items-center justify-center"
-        style={{
-          boxShadow: themeConfig.isDark
-            ? '0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08)'
-            : '0 20px 40px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.08)'
-        }}
+        className="relative z-10 w-full h-full flex items-center justify-center"
       >
-        {/* Logo image */}
-        <img
-          src={themeConfig.logo}
-          alt="Arvdoul"
-          className="w-full h-full object-cover rounded-full transition-all duration-300"
-          onLoad={() => {
-            if (mountedRef.current) {
-              setLogoLoaded(true);
-            }
-          }}
-          onError={(e) => {
-            e.target.style.display = 'none';
-            const parent = e.target.parentElement;
-            if (parent) {
-              parent.className = "w-full h-full rounded-full flex items-center justify-center";
-              parent.style.background = themeConfig.accentGradient;
-              const fallback = document.createElement('div');
-              fallback.className = "text-4xl font-bold text-white tracking-wider";
-              fallback.style.fontFamily = "'Inter', -apple-system, sans-serif";
-              fallback.textContent = "A";
-              parent.appendChild(fallback);
-            }
-          }}
+        <ArvdoulEmblem
+          size={100}
+          theme={themeConfig.isDark ? 'dark' : 'light'}
+          preferVector={true}
+          animate={true}
         />
       </motion.div>
     </div>
@@ -264,24 +250,16 @@ export default function SplashScreen() {
           {/* Perfect Circular Logo */}
           {PerfectLogo}
           
-          {/* App Name - Professional Typography */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
             className="text-center"
           >
-            <h1 
-              className="text-3xl font-bold tracking-tight"
-              style={{ 
-                color: themeConfig.textPrimary,
-                fontFamily: "'Inter', -apple-system, sans-serif",
-                fontWeight: 700,
-                letterSpacing: '-0.025em'
-              }}
-            >
-              Arvdoul
-            </h1>
+            <ArvdoulWordmark
+              variant={themeConfig.isDark ? "gradient" : "auto"}
+              size="xl"
+            />
           </motion.div>
 
           {/* Advanced Loading Indicator */}

@@ -24,6 +24,7 @@ import ThemeToggle from "@components/Shared/ThemeToggle";
 import { motion, AnimatePresence } from "framer-motion";
 import { withLanguage } from "../i18n/index.js";
 import { Sparkles, Shield, Users, Palette, MessageCircle, Smartphone, Lock, Zap, Coins } from "lucide-react";
+import { ArvdoulEmblem } from "../components/Shared/ArvdoulLogo.jsx";
 
 /* -------------------- Cryptographically Secure PRNG -------------------- */
 function secureRandom() {
@@ -207,9 +208,7 @@ const BackgroundParticles = memo(({ theme }) => {
 
 /* -------------------- Logo Component -------------------- */
 const HeroLogo = memo(({ theme, onClick }) => {
-  const [logoError, setLogoError] = useState(false);
   const isDark = theme === "dark";
-  const logoPath = isDark ? "/logo/logo-dark.png" : "/logo/logo-light.png";
 
   return (
     <motion.div
@@ -221,21 +220,13 @@ const HeroLogo = memo(({ theme, onClick }) => {
       role="img"
       aria-label="Arvdoul"
     >
-      <div className="w-16 h-16 rounded-2xl border border-gray-200/80 dark:border-gray-800 flex items-center justify-center p-2 bg-white/90 dark:bg-[#080F2E]/90 shadow-sm backdrop-blur-sm">
-        <img
-          src={logoPath}
-          alt="Arvdoul"
-          className="w-full h-full object-contain rounded-xl"
-          onError={(e) => {
-            e.target.style.display = "none";
-            setLogoError(true);
-          }}
+      <div className="w-18 h-18 rounded-2xl border border-white/10 dark:border-white/10 flex items-center justify-center p-2 bg-white/90 dark:bg-[#080F2E]/90 shadow-[0_8px_32px_rgba(139,30,243,0.35)] backdrop-blur-xl">
+        <ArvdoulEmblem
+          size={52}
+          theme={isDark ? 'dark' : 'light'}
+          preferVector={true}
+          animate={true}
         />
-        {logoError && (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-violet-600 to-indigo-600 rounded-xl text-white font-bold text-xl">
-            A
-          </div>
-        )}
       </div>
     </motion.div>
   );
@@ -284,12 +275,18 @@ function IntroScreen() {
   const isAuthenticated = auth?.isAuthenticated;
   const authInitialized = auth?.authInitialized;
 
+  const hasStored = hasStoredAuthSession();
+
   // Immediate redirect for authenticated users who land on Intro
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated || hasStored) {
       navigate("/home", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, hasStored, navigate]);
+
+  if (isAuthenticated || hasStored) {
+    return null;
+  }
 
   const resolvedTheme = useMemo(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";

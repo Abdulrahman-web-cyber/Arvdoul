@@ -26,6 +26,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
+import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 
 /* ========================================================================== */
 /* Animation & Tokens                                                         */
@@ -398,6 +399,7 @@ export const TopAppBar = ({
     if (path.startsWith("/badges")) return "Badges & Rewards";
     if (path.startsWith("/progress")) return "Progression & Perks";
     if (path.startsWith("/achievements")) return "Achievements";
+    if (path.startsWith("/creator/onboarding") || path.startsWith("/creator-onboarding")) return "Creator Accreditation";
     if (path.startsWith("/create-post")) return "Create Post";
     if (path.startsWith("/create-story")) return "Create Story";
     if (path.startsWith("/image-editor") || path.startsWith("/image-studio")) return "Image Studio";
@@ -529,32 +531,25 @@ export const TopAppBar = ({
                     className="flex items-center gap-3 cursor-pointer group select-none"
                   >
                     <div className="relative">
-                      <img
-                        src={isDark ? "/logo/logo-dark.png" : "/logo/logo-light.png"}
-                        alt="Arvdoul"
-                        className="w-9 h-9 rounded-full object-cover group-hover:scale-105 group-active:scale-95 transition-transform"
-                        loading="eager"
-                        decoding="async"
+                      <ArvdoulEmblem
+                        size={36}
+                        theme={theme}
+                        animate={true}
+                        className="group-hover:scale-105 group-active:scale-95 transition-transform"
                       />
                       {!isOnline && (
                         <span
-                          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500"
+                          className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2"
                           style={{ ringColor: isDark ? "#03071B" : "#F6F8FC" }}
                         />
                       )}
                     </div>
                     <div className="flex flex-col">
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className="text-xl sm:text-2xl font-black tracking-tight"
-                          style={{
-                            backgroundImage: tokens.brandGradient,
-                            WebkitBackgroundClip: "text",
-                            WebkitTextFillColor: "transparent",
-                          }}
-                        >
-                          Arvdoul
-                        </span>
+                        <ArvdoulWordmark
+                          variant={isDark ? "gradient" : "auto"}
+                          size="md"
+                        />
                       </div>
                       <BrandBaseline visible={!isHidden} gradient={tokens.brandLine} />
                     </div>

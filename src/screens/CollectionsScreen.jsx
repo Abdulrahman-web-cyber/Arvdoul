@@ -118,44 +118,28 @@ export default function CollectionsScreen() {
       "min-h-screen pb-24 transition-colors duration-200",
       isDark ? "bg-[#0B0F17] text-white" : "bg-gray-50 text-gray-900"
     )}>
-      {/* Header */}
-      <header className={cn(
-        "sticky top-0 z-40 backdrop-blur-xl border-b transition-colors",
-        isDark ? "bg-[#0B0F17]/85 border-white/10" : "bg-white/85 border-gray-200"
-      )}>
-        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              aria-label="Go back"
-              className={cn(
-                "p-2 rounded-full transition-all",
-                isDark ? "hover:bg-white/10 text-gray-300" : "hover:bg-gray-100 text-gray-700"
-              )}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+      {/* Main Grid */}
+      <main className="max-w-5xl mx-auto px-4 pt-2">
+        {/* In-page toolbar (TopAppBar handles main app title and back navigation) */}
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div>
             <div className="flex items-center gap-2">
               <FolderOpen className="w-5 h-5 text-purple-400" />
-              <h1 className="font-bold text-lg">My Collections</h1>
+              <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Collections Folders</span>
             </div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Organize your saved posts, sparks, and creative audio presets into private or public folders.
+            </p>
           </div>
 
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-95 shadow-md shadow-purple-500/20"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-95 shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>New Folder</span>
           </button>
         </div>
-      </header>
-
-      {/* Main Grid */}
-      <main className="max-w-5xl mx-auto px-4 pt-6">
-        <p className="text-xs text-gray-400 mb-6">
-          Organize your saved posts, sparks, and creative audio presets into private or public folders.
-        </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {/* Create New Folder Card */}

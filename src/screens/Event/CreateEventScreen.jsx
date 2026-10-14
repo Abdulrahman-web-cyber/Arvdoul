@@ -239,24 +239,10 @@ const CreateEventScreen = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/60 dark:border-gray-700/60 shadow-[0_8px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-300" />
-            </button>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              Create Event
-            </h1>
-            <div className="w-10" />
-          </div>
-
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center gap-2 mt-4">
+      {/* Progress Steps (TopAppBar handles back navigation and screen title) */}
+      <div className="border-b border-gray-200/60 dark:border-gray-700/60 pb-3 mb-4">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="flex items-center justify-center gap-2 pt-2">
             {[1, 2, 3].map((num) => (
               <div key={num} className="flex items-center">
                 <div

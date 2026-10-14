@@ -330,36 +330,23 @@ export default function CollaborationScreen() {
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-gray-900'}`}>
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 hover:bg-gray-700 rounded-lg"
-              aria-label="Go back"
-            >
-              <FaChevronLeft />
-            </button>
-            <div>
-              <h1 className="text-xl font-bold">{project?.name || 'Collaboration'}</h1>
-              <p className="text-gray-400 text-sm">{project?.description || 'Team collaboration'}</p>
-            </div>
+      {/* Content */}
+      <main className="max-w-4xl mx-auto p-4 space-y-4">
+        {/* Project Utility Bar (TopAppBar handles main app title and back navigation) */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold">{project?.name || 'Collaboration'}</h1>
+            <p className="text-gray-400 text-sm">{project?.description || 'Team collaboration'}</p>
           </div>
-          
           {canManageTeam && (
             <button
               onClick={() => setShowInviteModal(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 transition-all text-xs font-bold"
             >
               <FaUserPlus /> Invite
             </button>
           )}
         </div>
-      </header>
-
-      {/* Content */}
-      <main className="max-w-4xl mx-auto p-4">
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
           <button

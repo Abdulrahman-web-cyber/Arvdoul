@@ -84,49 +84,34 @@ export default function ProgressScreen() {
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
-        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
-      }`}>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Citizen Progression</h1>
-            <p className="text-xs text-gray-500">
+      <main className="max-w-3xl mx-auto px-4 py-4 space-y-6">
+        {/* In-page utility bar (TopAppBar handles main app title and back navigation) */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
               {citizenTier.tier} · Level {level} {prestige.isPrestige ? `· Prestige ${prestige.prestigeRoman}` : ''}
-            </p>
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              aria-label="Refresh progression"
+              className={`p-2 rounded-xl transition-colors ${
+                isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+              }`}
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={() => navigate('/passport')}
+              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
+            >
+              Digital Passport
+            </button>
           </div>
         </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            aria-label="Refresh progression"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-            }`}
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={() => navigate('/passport')}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-          >
-            Passport
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Section 1: Where am I? & Why am I here? (Primary Progress Card) */}
         <section
           aria-labelledby="progress-overview-heading"

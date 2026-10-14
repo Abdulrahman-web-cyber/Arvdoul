@@ -92,28 +92,10 @@ export default function CreatorOnboardingScreen() {
 
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md px-4 py-3 flex items-center justify-between ${
-        isDark ? 'bg-black/80 border-gray-800' : 'bg-white/80 border-gray-200'
-      }`}>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            className={`p-2 rounded-lg transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-            }`}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Creator Accreditation</h1>
-            <p className="text-xs text-gray-500">Official Arvdoul Creator Workspace</p>
-          </div>
+      <main className="max-w-2xl mx-auto px-4 py-4 space-y-6">
+        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+          Official Arvdoul Creator Workspace &amp; Accreditation
         </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Gate Eligibility Notice */}
         {!isEligible ? (
           <div className="p-6 rounded-2xl border border-amber-900/40 bg-amber-950/20 text-center space-y-3">
