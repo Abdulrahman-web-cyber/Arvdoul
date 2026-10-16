@@ -717,12 +717,11 @@ export default function LoginScreen() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center shadow-2xl overflow-hidden p-1.5"
+            className="mx-auto mb-4 flex items-center justify-center cursor-pointer select-none"
           >
             <ArvdoulEmblem
-              size={64}
+              size={72}
               theme={resolvedTheme}
-              preferVector={true}
               animate={true}
             />
           </motion.div>

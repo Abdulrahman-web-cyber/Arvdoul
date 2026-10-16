@@ -11,6 +11,7 @@ import {
   RefreshCw, CheckCircle2, AlertCircle, ArrowRight,
   Shield, X, Lock, UserCheck, Send
 } from "lucide-react";
+import { ArvdoulEmblem } from "../components/Shared/ArvdoulLogo.jsx";
 
 const ConfettiBurst = ({ isActive }) => {
   const colors = useMemo(() => ["#6366f1", "#8b5cf6", "#a855f7", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"], []);
@@ -411,15 +412,8 @@ export default function EmailVerification() {
           <div className="p-5 sm:p-7 flex flex-col h-full">
             {/* HEADER */}
             <div className="flex-shrink-0 text-center mb-4">
-              <div className="w-14 h-14 mx-auto mb-2 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 flex items-center justify-center shadow-lg overflow-hidden border border-white/10">
-                <img 
-                  src={logoPath} 
-                  alt="Arvdoul Logo" 
-                  className="w-10 h-10 object-contain"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
+              <div className="mx-auto mb-2 flex items-center justify-center">
+                <ArvdoulEmblem size={52} theme={isDark ? "dark" : "light"} />
               </div>
               <VerificationShield status={verificationStatus} />
               <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 dark:from-indigo-300 dark:to-purple-300 bg-clip-text text-transparent mt-2">

@@ -168,13 +168,9 @@ export const ProfileLevelProgressCard = memo(({
   const xpRemaining = levelInfo.xpToNext ?? 0;
   const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
   const rankTitle = levelInfo.title || getRankTitle(currentLevelNumber);
-  const nextReward = useMemo(() => {
-    try {
-      return LevelModule.getLevelUpReward(currentLevelNumber, currentLevelNumber + 1) || 0;
-    } catch {
-      return 0;
-    }
-  }, [currentLevelNumber]);
+  const nextReward = (currentLevelNumber && typeof LevelModule?.getLevelUpReward === 'function')
+    ? (LevelModule.getLevelUpReward(currentLevelNumber, currentLevelNumber + 1) || 0)
+    : 0;
 
   return (
     <div 
@@ -370,6 +366,24 @@ export const ProfileIdentityCard = memo(({
   const rawCoins = profile?.coins ?? profile?.coinBalance;
   const coinsAmount = rawCoins !== null && rawCoins !== undefined ? Number(rawCoins) : (isOwner ? 0 : null);
 
+  // Level Progression Calculation for Avatar Ring (strictly no-fabricated-data)
+  const heroLevelInfo = useMemo(() => {
+    const rawLvl = profile?.level !== null && profile?.level !== undefined ? Number(profile.level) : null;
+    const rawXp = profile?.experience !== null && profile?.experience !== undefined ? Number(profile.experience) : null;
+    if (rawLvl === null && rawXp === null) return null;
+    if (rawXp !== null && !Number.isNaN(rawXp) && rawXp > 0) {
+      return getLevelInfo(rawXp);
+    }
+    if (rawLvl && !Number.isNaN(rawLvl) && rawLvl > 0) {
+      const lvlObj = LevelModule.LEVELS?.[rawLvl - 1];
+      const xpReq = lvlObj?.xpRequired ?? (50 * rawLvl * (rawLvl - 1));
+      return getLevelInfo(xpReq);
+    }
+    return null;
+  }, [profile?.experience, profile?.level]);
+  const heroLevelNumber = heroLevelInfo?.level ?? null;
+  const heroLevelProgress = Math.min(100, Math.max(0, Math.round(heroLevelInfo?.progress ?? 0)));
+
   return (
     <div className={cn(
       "w-full rounded-[26px] sm:rounded-[30px] border transition-all duration-300 relative overflow-hidden",
@@ -380,155 +394,121 @@ export const ProfileIdentityCard = memo(({
       {/* Top Ambient Optical Hairline Highlight */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] z-20"
         style={{
           background: "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
         }}
       />
 
-      {/* Ambient background glow orb */}
-      <div 
-        aria-hidden="true" 
-        className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full blur-3xl opacity-20"
-        style={{
-          background: "radial-gradient(circle, #8B1EF3 0%, #4431F7 60%, transparent 100%)"
-        }}
-      />
+      {/* Luxury Glassmorphism Cover Banner with Ambient Mesh */}
+      <div className="relative w-full h-32 sm:h-44 overflow-hidden">
+        <div 
+          className="absolute inset-0 transition-all duration-700"
+          style={{
+            background: isDark
+              ? 'linear-gradient(135deg, rgba(139, 30, 243, 0.45) 0%, rgba(68, 49, 247, 0.35) 40%, rgba(0, 240, 255, 0.2) 80%, rgba(3, 7, 27, 0.95) 100%)'
+              : 'linear-gradient(135deg, rgba(139, 30, 243, 0.22) 0%, rgba(68, 49, 247, 0.15) 40%, rgba(56, 189, 248, 0.2) 80%, rgba(255, 255, 255, 0.95) 100%)'
+          }}
+        />
+        <div className="absolute inset-0 backdrop-blur-xl bg-black/10 dark:bg-black/25" />
+        <div 
+          className="absolute -top-12 -left-12 w-48 h-48 rounded-full blur-2xl opacity-60 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(139, 30, 243, 0.6) 0%, transparent 70%)' }}
+        />
+        <div 
+          className="absolute -bottom-8 -right-8 w-44 h-44 rounded-full blur-2xl opacity-40 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(0, 240, 255, 0.5) 0%, transparent 70%)' }}
+        />
+      </div>
 
       {/* Interior Container */}
       <div className="p-4 sm:p-6 space-y-4 relative z-10">
 
         {/* 1. Profile Avatar & Full Display Name Header */}
-        <div className="flex flex-col items-center text-center space-y-3 pt-1">
-          {/* 1:1 Circular Avatar with Radiant Gradient Aura */}
+        <div className="flex flex-col items-center text-center space-y-3 -mt-16 sm:-mt-22">
+          {/* 3D Avatar with Animated Level Progression Ring */}
           <div className="relative inline-block group shrink-0">
-            <button
-              type="button"
-              onClick={onAvatarClick}
-              className="relative block w-22 h-22 sm:w-26 sm:h-26 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#00F0FF] shadow-[0_12px_36px_rgba(139,30,243,0.38)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer"
-              title={isOwner ? "Change profile photo" : "View avatar"}
-            >
-              <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-[#03071B] dark:ring-[#03071B] relative">
-                <img
-                  src={avatarUrl}
-                  alt={displayName}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                {/* Camera icon overlay for owner */}
-                {isOwner && (
-                  <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1">
-                    <Camera className="w-5 h-5 text-purple-200" />
-                    <span>Change</span>
-                  </div>
-                )}
-              </div>
-            </button>
-
-            {/* Live Presence Status Dot */}
-            <div 
-              className={cn(
-                "absolute bottom-1 right-1 w-4 h-4 rounded-full ring-2 ring-[#03071B] dark:ring-[#03071B]",
-                isOnline ? "bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" : "bg-slate-400"
+            <div className="relative w-28 h-28 sm:w-34 sm:h-34 flex items-center justify-center">
+              {heroLevelNumber !== null && (
+                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
+                  <defs>
+                    <linearGradient id={`hero-level-ring-${profileUid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#8B1EF3" />
+                      <stop offset="50%" stopColor="#4431F7" />
+                      <stop offset="100%" stopColor="#00F0FF" />
+                    </linearGradient>
+                  </defs>
+                  {/* Background track */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="46"
+                    fill="none"
+                    stroke={isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}
+                    strokeWidth="3.5"
+                  />
+                  {/* Progress stroke */}
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="46"
+                    fill="none"
+                    stroke={`url(#hero-level-ring-${profileUid})`}
+                    strokeWidth="4"
+                    strokeDasharray={2 * Math.PI * 46}
+                    strokeDashoffset={2 * Math.PI * 46 * (1 - (heroLevelProgress / 100))}
+                    strokeLinecap="round"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
               )}
-              title={isOnline ? "Active now" : "Offline"} 
-            />
-          </div>
 
-          {/* Full Name & Username Section (Ample room across 100% card width, zero clipping or overlapping) */}
-          <div className="w-full space-y-1.5 px-2">
-            {/* Full Name Display - unobstructed, bold, pristine */}
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight text-slate-900 dark:text-white break-words">
-              {displayName}
-            </h1>
-
-            {/* Unique Username with instant copy */}
-            <div className="flex items-center justify-center gap-2 flex-wrap text-xs sm:text-sm font-medium">
+              {/* 1:1 Circular Avatar */}
               <button
                 type="button"
-                onClick={handleCopyHandle}
-                className="font-mono text-xs sm:text-sm font-bold text-[#8B1EF3] dark:text-[#B978FF] hover:underline inline-flex items-center gap-1 cursor-pointer"
-                title="Click to copy unique username"
+                onClick={onAvatarClick}
+                className="relative block w-22 h-22 sm:w-26 sm:h-26 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#00F0FF] shadow-[0_12px_36px_rgba(139,30,243,0.38)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer"
+                title={isOwner ? "Change profile photo" : "View avatar"}
               >
-                <span>@{username}</span>
-                {copiedHandle ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                ) : (
-                  <Copy className="w-3 h-3 opacity-60 hover:opacity-100" />
-                )}
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-[#03071B] dark:ring-[#03071B] relative">
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  {/* Camera icon overlay for owner */}
+                  {isOwner && (
+                    <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1">
+                      <Camera className="w-5 h-5 text-purple-200" />
+                      <span>Change</span>
+                    </div>
+                  )}
+                </div>
               </button>
 
-              {profile?.pronouns && (
-                <span className="text-slate-400 text-xs">
-                  · {profile.pronouns}
-                </span>
-              )}
-            </div>
-
-            {/* Status Badges: Verified, Creator, Premium, and Rank */}
-            <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap pt-1">
-              {/* 1. Verified Status */}
-              <div 
-                className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[11px] font-bold border transition-colors select-none",
-                  isVerified
-                    ? "bg-blue-500/10 border-blue-500/30 text-blue-500 dark:text-blue-400"
-                    : "bg-slate-500/10 border-slate-500/20 text-slate-500 dark:text-slate-400"
-                )}
-                title={isVerified ? "Verified Citizen of Arvdoul" : "Unverified Citizen"}
-              >
-                <BadgeCheck className={cn("w-3.5 h-3.5 shrink-0", isVerified ? "text-blue-500" : "text-slate-400")} />
-                <span>{isVerified ? "Verified" : "Unverified"}</span>
-              </div>
-
-              {/* 2. Creator Status */}
-              <div 
-                className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[11px] font-bold border transition-colors select-none",
-                  isCreator
-                    ? "bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-300"
-                    : "bg-slate-500/10 border-slate-500/20 text-slate-500 dark:text-slate-400"
-                )}
-                title={isCreator ? "Recognized Creator of Arvdoul" : "Citizen"}
-              >
-                {isCreator ? (
-                  <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                ) : (
-                  <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                )}
-                <span>{isCreator ? "Creator" : "Citizen"}</span>
-              </div>
-
-              {/* 3. Premium Status */}
-              <div 
-                className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[11px] font-bold border transition-colors select-none",
-                  isPremium
-                    ? "bg-amber-500/10 border-amber-500/30 text-amber-500 dark:text-amber-300"
-                    : "bg-slate-500/10 border-slate-500/20 text-slate-500 dark:text-slate-400"
-                )}
-                title={isPremium ? "Royal / Premium Citizen Tier" : "Standard Tier"}
-              >
-                {isPremium ? (
-                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                ) : (
-                  <Star className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                )}
-                <span>{isPremium ? "Royal Tier" : "Standard"}</span>
-              </div>
-
-              {/* Rank Title badge if present */}
-              {rankLabel && (
-                <button
-                  type="button"
-                  onClick={() => nav(isOwner ? '/titles' : `/passport/${profileUid}`)}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-[11px] font-bold bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 hover:underline cursor-pointer"
-                  title="Civic Rank Title"
+              {/* Level Badge anchored on bottom of ring */}
+              {heroLevelNumber !== null && (
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nav?.('/progress');
+                  }}
+                  className="absolute -bottom-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#00F0FF] text-white shadow-lg shadow-purple-900/40 border border-white/20 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                  title={`Level ${heroLevelNumber} Citizen`}
                 >
-                  <Award className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span>{rankLabel}</span>
-                </button>
+                  Lv.{heroLevelNumber}
+                </div>
               )}
+
+              {/* Live Presence Status Dot */}
+              <div 
+                className={cn(
+                  "absolute bottom-2 right-2 w-4 h-4 rounded-full ring-2 ring-[#03071B] dark:ring-[#03071B]",
+                  isOnline ? "bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" : "bg-slate-400"
+                )}
+                title={isOnline ? "Active now" : "Offline"} 
+              />
             </div>
           </div>
         </div>

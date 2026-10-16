@@ -10,8 +10,9 @@ import React, { memo } from 'react';
 import { 
   Grid3x3, 
   Film, 
-  Sparkles, 
+  Music, 
   Bookmark, 
+  Tag,
   Info,
   LayoutGrid,
   Columns3,
@@ -32,9 +33,10 @@ const ProfileTabsBar = memo(({
 
   const tabs = [
     { id: 'posts', label: 'Posts', icon: Grid3x3, count: counts.posts },
-    { id: 'media', label: 'Media', icon: Film, count: counts.videos },
-    { id: 'sparks', label: 'Sparks', icon: Sparkles },
+    { id: 'reels', label: 'Reels', icon: Film, count: counts.reels ?? counts.videos },
+    { id: 'audio', label: 'Audio', icon: Music, count: counts.audio },
     ...(isOwner ? [{ id: 'saved', label: 'Saved', icon: Bookmark, count: counts.saved }] : []),
+    { id: 'tagged', label: 'Tagged', icon: Tag, count: counts.tagged },
     { id: 'about', label: 'About', icon: Info },
   ];
 
@@ -44,7 +46,7 @@ const ProfileTabsBar = memo(({
     { id: 'feed', label: 'Feed View', icon: Rows3 },
   ];
 
-  const showViewSwitcher = activeTab !== 'about' && typeof onViewModeChange === 'function';
+  const showViewSwitcher = activeTab !== 'about' && activeTab !== 'audio' && typeof onViewModeChange === 'function';
 
   return (
     <div className={cn(

@@ -215,19 +215,16 @@ const HeroLogo = memo(({ theme, onClick }) => {
       initial={{ scale: 0.9, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: 0.4 }}
-      className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center cursor-pointer select-none"
+      className="mx-auto mb-6 flex items-center justify-center cursor-pointer select-none"
       onClick={onClick}
       role="img"
       aria-label="Arvdoul"
     >
-      <div className="w-18 h-18 rounded-2xl border border-white/10 dark:border-white/10 flex items-center justify-center p-2 bg-white/90 dark:bg-[#080F2E]/90 shadow-[0_8px_32px_rgba(139,30,243,0.35)] backdrop-blur-xl">
-        <ArvdoulEmblem
-          size={52}
-          theme={isDark ? 'dark' : 'light'}
-          preferVector={true}
-          animate={true}
-        />
-      </div>
+      <ArvdoulEmblem
+        size={68}
+        theme={isDark ? 'dark' : 'light'}
+        animate={true}
+      />
     </motion.div>
   );
 });
@@ -284,10 +281,6 @@ function IntroScreen() {
     }
   }, [isAuthenticated, hasStored, navigate]);
 
-  if (isAuthenticated || hasStored) {
-    return null;
-  }
-
   const resolvedTheme = useMemo(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
     if (theme === "system") {
@@ -322,7 +315,7 @@ function IntroScreen() {
     [t]
   );
 
-  if (isAuthenticated) {
+  if (isAuthenticated || hasStored) {
     return null;
   }
 

@@ -512,7 +512,8 @@ const NavigationItem = memo(function NavigationItem({
           <div className="relative flex items-center justify-center">
             <img
               src={userAvatar}
-              alt={user?.displayName || "Profile"}
+              alt=""
+              aria-hidden="true"
               className={`w-[26px] h-[26px] rounded-full object-cover transition-transform duration-200 ${
                 active
                   ? "ring-2 ring-purple-500 scale-105 shadow-md shadow-purple-500/20"

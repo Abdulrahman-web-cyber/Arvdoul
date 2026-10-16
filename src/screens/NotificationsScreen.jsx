@@ -19,7 +19,6 @@ import { getMonetizationService } from '../services/monetizationService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/ui/Dialog.jsx';
-import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
 
 const FILTERS = [
   { id: 'All', label: 'All' },

@@ -5,479 +5,223 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
 import { useAuth } from "@context/AuthContext";
-import LoadingSpinner from "@components/Shared/LoadingSpinner";
 import { resolveSplashDestination } from "../utils/profileCompletion.js";
 import { hasStoredAuthSession } from "../utils/security.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "../components/Shared/ArvdoulLogo.jsx";
 
+/**
+ * World-Class Cinematic Splash Screen
+ * 
+ * Delivers a refined, luxury brand reveal experience:
+ * - Fluid 3D emblem with ambient breathing aura
+ * - Wide-tracked geometric wordmark with quiet creator subtitle
+ * - Sleek, non-intrusive hairline progress beam
+ * - Milestone-driven state resolution without simulated timers or jitter
+ * - Full tap/keyboard skip affordance and graceful exit reveal
+ */
 export default function SplashScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const { authInitialized, isAuthenticated, needsOnboarding } = useAuth();
   
-  const [logoLoaded, setLogoLoaded] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("Initializing");
-  const [showComplete, setShowComplete] = useState(false);
-  
+  const [progress, setProgress] = useState(25);
+  const [isExiting, setIsExiting] = useState(false);
   const mountedRef = useRef(true);
 
-  // Perfect theme configuration
+  // Dynamic theme tokens
   const themeConfig = useMemo(() => {
     const resolvedTheme = theme === "system" 
       ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : theme;
     
+    const isDark = resolvedTheme === 'dark';
     return {
-      isDark: resolvedTheme === 'dark',
-      logo: resolvedTheme === 'dark' ? '/logo/logo-dark.png' : '/logo/logo-light.png',
-      fallbackLogo: '/logo/logo-default.png',
-      background: resolvedTheme === 'dark'
-        ? '#03071B'
-        : '#F6F8FC',
-      textPrimary: resolvedTheme === 'dark' ? '#FFFFFF' : '#111827',
-      textSecondary: resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
-      accentGradient: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)',
-      spinnerColor: '#8B1EF3'
+      isDark,
+      background: isDark ? '#03071B' : '#F8FAFC',
+      radialAura: isDark
+        ? 'radial-gradient(circle at 50% 48%, rgba(139, 30, 243, 0.22) 0%, rgba(68, 49, 247, 0.08) 40%, transparent 72%)'
+        : 'radial-gradient(circle at 50% 48%, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.04) 40%, transparent 72%)',
+      auraRing: isDark
+        ? 'radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, rgba(139, 30, 243, 0.35) 50%, transparent 75%)'
+        : 'radial-gradient(circle, rgba(37, 99, 235, 0.2) 0%, rgba(124, 58, 237, 0.25) 50%, transparent 75%)',
+      beamGradient: 'linear-gradient(90deg, #8B1EF3 0%, #38BDF8 60%, #00F0FF 100%)',
     };
   }, [theme]);
 
-  // Preload logo with perfect error handling
-  const preloadLogo = useCallback(() => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = themeConfig.logo;
-      
-      img.onload = () => {
-        if (mountedRef.current) {
-          setLogoLoaded(true);
-          setProgress(15);
-        }
-        resolve(true);
-      };
-      
-      img.onerror = () => {
-        console.warn('Logo failed to load, using fallback');
-        // Try fallback logo
-        const fallbackImg = new Image();
-        fallbackImg.src = themeConfig.fallbackLogo;
-        fallbackImg.onload = () => {
-          if (mountedRef.current) {
-            themeConfig.logo = themeConfig.fallbackLogo;
-            setLogoLoaded(true);
-            setProgress(15);
-          }
-          resolve(true);
-        };
-        fallbackImg.onerror = () => {
-          // Final fallback to canvas
-          const canvas = document.createElement('canvas');
-          canvas.width = 200;
-          canvas.height = 200;
-          const ctx = canvas.getContext('2d');
-          
-          // Draw perfect gradient circle
-          const gradient = ctx.createRadialGradient(100, 100, 0, 100, 100, 100);
-          gradient.addColorStop(0, themeConfig.isDark ? '#3b82f6' : '#2563eb');
-          gradient.addColorStop(1, themeConfig.isDark ? '#8b5cf6' : '#7c3aed');
-          
-          ctx.fillStyle = gradient;
-          ctx.beginPath();
-          ctx.arc(100, 100, 80, 0, Math.PI * 2);
-          ctx.fill();
-          
-          // Add letter 'A' with perfect centering
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 70px "Inter", -apple-system, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('A', 100, 100);
-          
-          themeConfig.logo = canvas.toDataURL();
-          
-          if (mountedRef.current) {
-            setLogoLoaded(true);
-            setProgress(15);
-          }
-          resolve(true);
-        };
-      };
-    });
-  }, [themeConfig]);
-
-  // Progress reflects real milestones only: the logo preload and the auth
-  // session resolving. There is no timer that invents progress.
-  useEffect(() => {
-    mountedRef.current = true;
-    preloadLogo();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [preloadLogo]);
-
-  useEffect(() => {
+  // Handle immediate navigation
+  const handleProceed = useCallback(() => {
     if (!mountedRef.current) return;
-    if (!logoLoaded) {
-      setProgress(15);
-      setStatus('Loading Assets');
-      return;
-    }
-    if (!authInitialized) {
-      setProgress(65);
-      setStatus('Connecting Services');
-      return;
-    }
-    setProgress(90);
-    setStatus('Securing Connection');
-  }, [logoLoaded, authInitialized]);
-
-  // When auth initializes (or safety timeout expires), complete to 100% and navigate cleanly
-  useEffect(() => {
-    let completeTimer;
-    let navTimer;
-
     const hasStored = hasStoredAuthSession();
-
-    const proceed = () => {
-      if (!mountedRef.current) return;
-      setProgress(100);
-      setStatus("Ready");
-      setShowComplete(true);
-
-      navTimer = setTimeout(() => {
-        if (!mountedRef.current) return;
-        const target = resolveSplashDestination({
-          isAuthenticated,
-          needsOnboarding,
-          hasStoredSession: hasStored,
-        });
-        navigate(target, { 
-          replace: true,
-          state: { fromSplash: true }
-        });
-      }, 350);
-    };
-
-    if (authInitialized) {
-      // Auth is resolved: finish progress bar and navigate to destination immediately
-      completeTimer = setTimeout(proceed, 450);
-    } else {
-      // User may be logged in on device: NEVER navigate to /intro before auth initializes!
-      // Keep splash active while auth resolves session. Max 7s safety net for offline/error.
-      setStatus("Connecting Services");
-      completeTimer = setTimeout(proceed, 7000);
-    }
-
-    return () => {
-      clearTimeout(completeTimer);
-      clearTimeout(navTimer);
-    };
-  }, [authInitialized, isAuthenticated, needsOnboarding, navigate]);
-
-  // Quick skip on tap / click
-  const handleSkip = useCallback(() => {
-    const hasStored = hasStoredAuthSession();
-    const target = resolveSplashDestination({
+    const destination = resolveSplashDestination({
       isAuthenticated,
       needsOnboarding,
       hasStoredSession: hasStored,
     });
-    navigate(target, { replace: true, state: { fromSplash: true } });
+    navigate(destination, { 
+      replace: true,
+      state: { fromSplash: true }
+    });
   }, [isAuthenticated, needsOnboarding, navigate]);
 
-  // World-class insignia component
-  const PerfectLogo = useMemo(() => (
-    <div className="relative w-28 h-28 flex items-center justify-center">
-      {/* Ambient background glow ring */}
-      <div 
-        aria-hidden="true"
-        className="absolute inset-0 rounded-full blur-2xl opacity-40"
-        style={{ background: themeConfig.accentGradient }}
-      />
-      <motion.div
-        initial={{ scale: 0.85, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ 
-          type: "spring",
-          stiffness: 320,
-          damping: 22,
-          mass: 0.8
-        }}
-        className="relative z-10 w-full h-full flex items-center justify-center"
-      >
-        <ArvdoulEmblem
-          size={100}
-          theme={themeConfig.isDark ? 'dark' : 'light'}
-          preferVector={true}
-          animate={true}
-        />
-      </motion.div>
-    </div>
-  ), [themeConfig]);
+  // Milestone-driven progress based solely on auth initialization
+  useEffect(() => {
+    mountedRef.current = true;
+    if (authInitialized) {
+      setProgress(100);
+    } else {
+      setProgress(60);
+    }
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [authInitialized]);
+
+  // Resolve session and initiate graceful transition
+  useEffect(() => {
+    let completeTimer;
+    let exitTimer;
+
+    const executeExit = () => {
+      if (!mountedRef.current) return;
+      setIsExiting(true);
+      exitTimer = setTimeout(() => {
+        handleProceed();
+      }, 350);
+    };
+
+    if (authInitialized) {
+      // Session resolved: short pause to appreciate brand reveal then exit
+      completeTimer = setTimeout(executeExit, 400);
+    } else {
+      // Safety ceiling: max 7s timeout for offline or connection drops
+      completeTimer = setTimeout(executeExit, 7000);
+    }
+
+    return () => {
+      clearTimeout(completeTimer);
+      clearTimeout(exitTimer);
+    };
+  }, [authInitialized, handleProceed]);
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key="splash-screen"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        animate={{ opacity: isExiting ? 0 : 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center cursor-pointer select-none"
-        onClick={handleSkip}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center cursor-pointer select-none overflow-hidden"
+        onClick={handleProceed}
         role="button"
         tabIndex={0}
-        aria-label="Skip splash screen"
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSkip(); }}
+        aria-label="Arvdoul - Enter"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleProceed();
+          }
+        }}
         style={{ background: themeConfig.background }}
       >
-        {/* Subtle animated gradient background */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.1 }}
-          transition={{ duration: 1 }}
-          className="absolute inset-0"
-          style={{
-            background: `radial-gradient(circle at 50% 50%, ${
-              themeConfig.isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(79, 70, 229, 0.08)'
-            } 0%, transparent 50%)`
-          }}
+        {/* Ambient Radial Bloom */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none transition-opacity duration-700"
+          style={{ background: themeConfig.radialAura }}
         />
 
-        {/* Main Content Container */}
-        <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-sm px-6 space-y-8">
-          
-          {/* Perfect Circular Logo */}
-          {PerfectLogo}
-          
+        {/* Central Brand Composition */}
+        <motion.div 
+          initial={{ scale: 0.92, opacity: 0, y: 12 }}
+          animate={{ 
+            scale: isExiting ? 1.04 : 1, 
+            opacity: isExiting ? 0 : 1,
+            y: 0 
+          }}
+          transition={{ 
+            type: "spring", 
+            stiffness: 280, 
+            damping: 24,
+            mass: 0.8 
+          }}
+          className="relative z-10 flex flex-col items-center justify-center px-6"
+        >
+          {/* Emblem with Breathing Aura Ring */}
+          <div className="relative flex items-center justify-center mb-6">
+            {/* Ambient Breathing Aura */}
+            <motion.div
+              aria-hidden="true"
+              animate={{
+                scale: [1, 1.15, 1],
+                opacity: [0.35, 0.65, 0.35],
+              }}
+              transition={{
+                duration: 3.2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              className="absolute w-36 h-36 rounded-full blur-2xl pointer-events-none"
+              style={{ background: themeConfig.auraRing }}
+            />
+
+            {/* Official 3D Insignia */}
+            <div className="relative z-10 drop-shadow-[0_8px_32px_rgba(139,30,243,0.35)]">
+              <ArvdoulEmblem
+                size={104}
+                theme={themeConfig.isDark ? 'dark' : 'light'}
+                animate={true}
+                showPlate={true}
+              />
+            </div>
+          </div>
+
+          {/* Wordmark */}
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
-            className="text-center"
+            transition={{ delay: 0.15, duration: 0.4 }}
+            className="flex flex-col items-center text-center"
           >
             <ArvdoulWordmark
               variant={themeConfig.isDark ? "gradient" : "auto"}
               size="xl"
             />
+            <span className="mt-2.5 text-[10px] sm:text-[11px] font-semibold tracking-[0.28em] uppercase text-slate-500 dark:text-slate-400 select-none">
+              The Creator Ecosystem
+            </span>
           </motion.div>
 
-          {/* Advanced Loading Indicator */}
-          <div className="w-full space-y-6">
-            {/* Loading Spinner */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.25, duration: 0.3 }}
-              className="flex justify-center"
-            >
-              <LoadingSpinner
-                size={52}
-                color={themeConfig.spinnerColor}
-                thickness={3.5}
-                className="opacity-90"
-              />
-            </motion.div>
-
-            {/* Status Text */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="text-center space-y-1"
-            >
-              <p className="text-base font-medium tracking-wide"
-                style={{ 
-                  color: themeConfig.textPrimary,
-                  fontFamily: "'Inter', -apple-system, sans-serif",
-                  fontWeight: 500
-                }}
-              >
-                {status}
-              </p>
-              <p className="text-sm tracking-wide opacity-75"
-                style={{ 
-                  color: themeConfig.textSecondary,
-                  fontFamily: "'Inter', -apple-system, sans-serif"
-                }}
-              >
-                {progress < 100 ? "Preparing your experience" : "Ready to launch"}
-              </p>
-            </motion.div>
-
-            {/* Advanced Styled Progress Bar */}
-            <div className="space-y-3">
-              {/* Progress Bar Container */}
-              <div className="relative h-2 w-full rounded-full overflow-hidden"
-                style={{ 
-                  backgroundColor: themeConfig.isDark 
-                    ? 'rgba(255, 255, 255, 0.08)' 
-                    : 'rgba(0, 0, 0, 0.08)' 
-                }}
-              >
-                {/* Animated Background Shine */}
-                <motion.div
-                  className="absolute inset-0"
-                  animate={{
-                    backgroundPosition: ['0% 0%', '100% 0%'],
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "linear"
-                  }}
-                  style={{
-                    background: `linear-gradient(90deg, 
-                      transparent 0%, 
-                      rgba(255, 255, 255, ${themeConfig.isDark ? '0.05' : '0.1'}) 50%, 
-                      transparent 100%)`,
-                    backgroundSize: '200% 100%'
-                  }}
-                />
-                
-                {/* Main Progress Fill */}
-                <motion.div
-                  className="h-full rounded-full relative overflow-hidden"
-                  style={{
-                    width: `${progress}%`,
-                    background: themeConfig.accentGradient,
-                    boxShadow: `0 0 20px ${themeConfig.isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(79, 70, 229, 0.3)'}`
-                  }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ type: "spring", damping: 30, stiffness: 200 }}
-                >
-                  {/* Animated Shine Overlay */}
-                  <motion.div
-                    className="absolute inset-0"
-                    animate={{
-                      x: ['-100%', '100%'],
-                    }}
-                    transition={{
-                      duration: 1.5,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                    style={{
-                      background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent)'
-                    }}
-                  />
-                </motion.div>
-              </div>
-              
-              {/* Progress Details */}
-              <div className="flex justify-between items-center px-1">
-                <span className="text-xs font-medium tracking-wide"
-                  style={{ 
-                    color: themeConfig.textSecondary,
-                    fontFamily: "'Inter', -apple-system, sans-serif"
-                  }}
-                >
-                  Loading
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold tracking-tight"
-                    style={{ 
-                      color: themeConfig.textPrimary,
-                      fontFamily: "'Inter', -apple-system, sans-serif"
-                    }}
-                  >
-                    {Math.round(progress)}%
-                  </span>
-                  {progress >= 100 && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="w-2 h-2 rounded-full"
-                      style={{ 
-                        backgroundColor: themeConfig.isDark ? '#10b981' : '#059669'
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Completion Indicator */}
-          {showComplete && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-center"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs font-medium tracking-wide"
-                  style={{ 
-                    color: themeConfig.isDark ? '#10b981' : '#059669',
-                    fontFamily: "'Inter', -apple-system, sans-serif"
-                  }}
-                >
-                  Ready • Launching...
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="absolute bottom-8 text-center"
-        >
-          <p className="text-xs tracking-wide"
-            style={{ 
-              color: themeConfig.textSecondary,
-              fontFamily: "'Inter', -apple-system, sans-serif",
-              opacity: 0.7
-            }}
+          {/* Sleek Hairline Progress Beam */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.25, duration: 0.3 }}
+            className="mt-8 w-36 sm:w-44 h-[2px] rounded-full overflow-hidden bg-black/5 dark:bg-white/10"
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
           >
-            © {new Date().getFullYear()} Arvdoul
-          </p>
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: themeConfig.beamGradient }}
+              animate={{ width: `${progress}%` }}
+              transition={{ type: "spring", stiffness: 220, damping: 28 }}
+            />
+          </motion.div>
         </motion.div>
 
-        {/* Performance Optimization */}
-        <div 
-          className="sr-only" 
-          aria-live="polite" 
-          aria-atomic="true"
-          role="status"
+        {/* Quiet Minimal Footer */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.6 }}
+          transition={{ delay: 0.4, duration: 0.4 }}
+          className="absolute bottom-7 text-center pointer-events-none select-none"
         >
-          {status}. Loading progress: {Math.round(progress)} percent.
-        </div>
-
-        {/* Inline Performance Styles */}
-        <style>{`
-          /* Performance optimizations */
-          img {
-            content-visibility: auto;
-            will-change: transform;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-          }
-          
-          /* Smooth everything */
-          * {
-            -webkit-tap-highlight-color: transparent;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            backface-visibility: hidden;
-          }
-          
-          /* Reduced motion */
-          @media (prefers-reduced-motion: reduce) {
-            *,
-            *::before,
-            *::after {
-              animation-duration: 0.01ms !important;
-              animation-iteration-count: 1 !important;
-              transition-duration: 0.01ms !important;
-              scroll-behavior: auto !important;
-            }
-          }
-        `}</style>
+          <span className="text-[11px] tracking-widest uppercase font-medium text-slate-400 dark:text-slate-600">
+            © {new Date().getFullYear()} Arvdoul
+          </span>
+        </motion.div>
       </motion.div>
     </AnimatePresence>
   );

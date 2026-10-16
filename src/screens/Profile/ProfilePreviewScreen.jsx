@@ -246,7 +246,13 @@ export default function ProfilePreviewScreen({
           onTabChange={setActiveTab}
           isOwner={isOwnerMode}
           theme={theme}
-          counts={{ posts: storePosts?.length || 0 }}
+          counts={{
+            posts: (storePosts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
+            reels: (storePosts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+            audio: (storePosts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+            saved: 0,
+            tagged: (storePosts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+          }}
         />
 
         {/* 5. Feed & Tab Content */}
@@ -257,6 +263,7 @@ export default function ProfilePreviewScreen({
           loading={false}
           theme={theme}
           profile={effectiveProfile}
+          isOwner={isOwnerMode}
         />
       </div>
     </div>

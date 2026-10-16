@@ -254,6 +254,16 @@ export default function SettingsScreen() {
   return (
     <div className={cn('min-h-screen pb-24 transition-colors duration-200', isDark ? 'bg-[#0B0F17] text-white' : 'bg-gray-50 text-gray-900')}>
       <main className="max-w-3xl mx-auto px-4 pt-4 sm:pt-6 space-y-6">
+        {/* Page Heading & Summary */}
+        <div className="pb-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            Settings &amp; Preferences
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Manage your account security, appearance, notifications, and privacy preferences
+          </p>
+        </div>
+
         {/* ============ LEVEL & PROGRESS ============ */}
         {levelInfo && (
           <section className="rounded-3xl p-5 border shadow-sm bg-gradient-to-br from-purple-600/15 via-indigo-600/10 to-transparent border-purple-500/20">

@@ -636,7 +636,11 @@ export default function ProfilePublicScreen() {
                       isOwner={false}
                       theme={theme}
                       counts={{
-                        posts: posts?.length || 0,
+                        posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
+                        reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+                        audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+                        saved: 0,
+                        tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
                       }}
                     />
                   </div>
