@@ -511,6 +511,57 @@ export const ProfileIdentityCard = memo(({
               />
             </div>
           </div>
+
+          {/* User Full Display Name, Status Badges & 1-Tap Copyable Handle */}
+          <div className="space-y-1.5 max-w-full px-2 pt-1">
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+                {displayName}
+              </h1>
+              {isVerified && (
+                <span title="Verified Citizen" className="inline-flex text-blue-500 shrink-0">
+                  <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-blue-500 text-white" />
+                </span>
+              )}
+              {isCreator && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 border border-purple-500/30 text-purple-300 shadow-sm">
+                  <Sparkles className="w-3 h-3 text-purple-400" />
+                  <span>Creator</span>
+                </span>
+              )}
+              {isPremium && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 text-amber-300 shadow-sm">
+                  <Crown className="w-3 h-3 text-amber-400" />
+                  <span>VIP</span>
+                </span>
+              )}
+            </div>
+
+            {/* Interactive Handle with 1-Tap Clipboard Copy */}
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
+              <button
+                type="button"
+                onClick={handleCopyHandle}
+                className="group/handle inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 font-mono font-semibold transition-colors cursor-pointer px-2.5 py-1 rounded-xl hover:bg-purple-500/10 active:scale-95"
+                title="Click to copy handle"
+              >
+                <span>@{username}</span>
+                {copiedHandle ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5 opacity-60 group-hover/handle:opacity-100 transition-opacity" />
+                )}
+              </button>
+              {rankLabel && (
+                <>
+                  <span className="text-slate-400 dark:text-slate-600">·</span>
+                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 tracking-wide uppercase">
+                    {rankLabel}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Civic Standing Module placed ON THE SAME TOP CARD containing the profile picture */}
