@@ -171,6 +171,15 @@ const MessageBubble = React.memo(({
               />
             )}
 
+            {type === 'gif' && (media?.url || content) && (
+              <img
+                src={media?.url || content}
+                alt="Reaction GIF"
+                className="max-w-xs rounded-lg max-h-64 object-cover"
+                loading="lazy"
+              />
+            )}
+
             {type === 'video' && media?.url && (
               <video
                 src={media.url}

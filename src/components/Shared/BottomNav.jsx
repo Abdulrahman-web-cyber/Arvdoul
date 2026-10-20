@@ -227,19 +227,49 @@ const HomeIcon = memo(function HomeIcon({ active }) {
 });
 HomeIcon.propTypes = { active: PropTypes.bool.isRequired };
 
-const SparksIcon = memo(function SparksIcon() {
+const ReelsIcon = memo(function ReelsIcon({ active }) {
+  const id = useId().replace(/:/g, "");
+  const gradientId = `arvdoul-reels-gradient-${id}`;
+
   return (
     <svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#C82BFF" />
+          <stop offset=".48" stopColor="#8B1EF3" />
+          <stop offset="1" stopColor="#055BFB" />
+        </linearGradient>
+      </defs>
+      <rect
+        x="6"
+        y="5"
+        width="20"
+        height="22"
+        rx="5"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth="1.65"
+      />
+      <line
+        x1="6"
+        y1="11.5"
+        x2="26"
+        y2="11.5"
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
+        strokeWidth="1.35"
+      />
+      <line x1="11.5" y1="5" x2="14" y2="11.5" stroke={active ? `url(#${gradientId})` : "currentColor"} strokeWidth="1.2" />
+      <line x1="18" y1="5" x2="20.5" y2="11.5" stroke={active ? `url(#${gradientId})` : "currentColor"} strokeWidth="1.2" />
       <path
-        d="M18.2 3.5 7.5 17.8h6.2l-1.9 10.7L22.5 13.9h-6.2l1.9-10.4Z"
-        fill="currentColor"
-        stroke="currentColor"
+        d="M13.5 15.5L19.5 19L13.5 22.5V15.5Z"
+        fill={active ? `url(#${gradientId})` : "currentColor"}
+        stroke={active ? `url(#${gradientId})` : "currentColor"}
         strokeWidth="1.2"
         strokeLinejoin="round"
       />
     </svg>
   );
 });
+ReelsIcon.propTypes = { active: PropTypes.bool };
 
 const ChatIcon = memo(function ChatIcon() {
   return (
@@ -442,7 +472,7 @@ const NavigationIcon = memo(function NavigationIcon({ type, active, dark }) {
     : dark ? "text-white/[0.86]" : "text-[#111827]/[0.82]";
 
   if (type === "home") return <span className={iconClass}><HomeIcon active={active} /></span>;
-  if (type === "sparks") return <span className={iconClass}><SparksIcon /></span>;
+  if (type === "sparks" || type === "reels") return <span className={iconClass}><ReelsIcon active={active} /></span>;
   if (type === "chat") return <span className={iconClass}><ChatIcon /></span>;
   if (type === "profile") return <span className={iconClass}><ProfileIcon active={active} /></span>;
   if (type === "network") return <span className={iconClass}><NetworkIcon /></span>;

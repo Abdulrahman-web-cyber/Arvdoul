@@ -16,7 +16,8 @@ import {
   Info,
   LayoutGrid,
   Columns3,
-  Rows3
+  Rows3,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -35,6 +36,7 @@ const ProfileTabsBar = memo(({
     { id: 'posts', label: 'Posts', icon: Grid3x3, count: counts.posts },
     { id: 'reels', label: 'Reels', icon: Film, count: counts.reels ?? counts.videos },
     { id: 'audio', label: 'Audio', icon: Music, count: counts.audio },
+    { id: 'citizenship', label: 'Citizenship', icon: ShieldCheck },
     ...(isOwner ? [{ id: 'saved', label: 'Saved', icon: Bookmark, count: counts.saved }] : []),
     { id: 'tagged', label: 'Tagged', icon: Tag, count: counts.tagged },
     { id: 'about', label: 'About', icon: Info },
@@ -46,7 +48,7 @@ const ProfileTabsBar = memo(({
     { id: 'feed', label: 'Feed View', icon: Rows3 },
   ];
 
-  const showViewSwitcher = activeTab !== 'about' && activeTab !== 'audio' && typeof onViewModeChange === 'function';
+  const showViewSwitcher = activeTab !== 'about' && activeTab !== 'audio' && activeTab !== 'citizenship' && typeof onViewModeChange === 'function';
 
   return (
     <div className={cn(

@@ -703,6 +703,26 @@ export const ProfileIdentityCard = memo(({
                 </>
               )}
             </div>
+
+            {/* Sovereign Citizen Credential Banner with 1-Tap Passport Launch */}
+            <div className="flex items-center justify-center pt-0.5">
+              <button
+                type="button"
+                onClick={() => nav(isOwner ? '/passport' : `/passport/${profileUid}`)}
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-xl border transition-all cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-amber-500/10 hover:from-amber-500/20 hover:to-amber-500/20 border-amber-500/30 text-slate-800 dark:text-slate-200 group/pass"
+                title="Inspect Official Arvdoul Digital Passport"
+              >
+                <span className="text-xs">🛡️</span>
+                <span className="text-[10px] font-mono uppercase tracking-[0.15em] font-extrabold text-amber-500 dark:text-amber-400">
+                  ARV-{profileUid ? profileUid.slice(0, 8).toUpperCase() : 'CITIZEN'}
+                </span>
+                <span className="text-slate-400 dark:text-slate-600">·</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                  Sovereign Passport
+                </span>
+                <ArrowRight className="w-3 h-3 text-amber-500 group-hover/pass:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
           </div>
         </div>
 

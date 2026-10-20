@@ -885,7 +885,8 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
 
-      {/* Video Editor Route */}
+      {/* Video & Audio Editor Routes */}
+      <Route path="/editor" element={<Navigate to="/video-editor" replace />} />
       <Route path="/video-editor" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>

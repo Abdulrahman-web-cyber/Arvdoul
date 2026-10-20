@@ -10,11 +10,12 @@
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Lock, UserPlus, UserX, ShieldAlert } from 'lucide-react';
+import { Lock, UserPlus, UserX, ShieldAlert, Globe, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
+import ProfileCitizenshipCard from '../../components/profile/ProfileCitizenshipCard';
 import {
   pickHandle,
   deriveHandle,
@@ -70,6 +71,7 @@ export default function ProfilePublicScreen() {
   const [pendingRequestId, setPendingRequestId] = useState(null);
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
+  const [personaMode, setPersonaMode] = useState('social'); // 'social' | 'dossier'
   const [relationship, setRelationship] = useState(null);
   const [viewMode, setViewMode] = useState(() => {
     try {
@@ -528,6 +530,54 @@ export default function ProfilePublicScreen() {
         {/* Outer responsive frame matching design specifications */}
         <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-2 sm:py-4 space-y-4">
           
+          {/* Persona Switcher: Social Presence vs Sovereign Citizen Dossier */}
+          <div className="flex items-center justify-between pb-1">
+            <div className={cn(
+              "p-1 rounded-2xl border flex items-center gap-1 shadow-sm",
+              isDark ? "bg-slate-900/80 border-slate-800" : "bg-white border-slate-200"
+            )}>
+              <button
+                type="button"
+                onClick={() => setPersonaMode('social')}
+                className={cn(
+                  "flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer",
+                  personaMode === 'social'
+                    ? (isDark ? "bg-purple-600 text-white shadow" : "bg-slate-900 text-white shadow")
+                    : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+                )}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Social Presence</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPersonaMode('dossier')}
+                className={cn(
+                  "flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer",
+                  personaMode === 'dossier'
+                    ? (isDark ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow" : "bg-amber-600 text-white shadow")
+                    : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+                )}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>Citizen Dossier</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate(`/passport/${effectiveProfile?.id || effectiveProfile?.uid || userId}`)}
+              className={cn(
+                "hidden sm:flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1.5 rounded-xl border transition-colors cursor-pointer",
+                isDark ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10" : "border-amber-600/30 text-amber-700 hover:bg-amber-50"
+              )}
+            >
+              <span>INSPECT PASSPORT</span>
+              <span className="text-[10px]">→</span>
+            </button>
+          </div>
+
           {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
           <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start">
             {/* Left Column: Command Rail (lg:col-span-4, sticky) */}
@@ -576,7 +626,42 @@ export default function ProfilePublicScreen() {
 
             {/* Right Column: Active Feed & Content Hub (lg:col-span-8) */}
             <div className="lg:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
-              {!capabilities.canViewContent ? (
+              {personaMode === 'dossier' ? (
+                /* Full Sovereign Citizen Dossier View */
+                <div className="space-y-5">
+                  <ProfileCitizenshipCard
+                    userId={effectiveProfile?.id || effectiveProfile?.uid || userId}
+                    profile={effectiveProfile}
+                    isOwner={false}
+                    theme={theme}
+                  />
+
+                  {/* Public Civic Record Navigation */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => navigate(`/passport/${effectiveProfile?.id || effectiveProfile?.uid || userId}`)}
+                      className={cn(
+                        "p-4 rounded-2xl border text-left transition-colors cursor-pointer",
+                        isDark ? "bg-slate-900/60 border-slate-800 hover:bg-slate-900" : "bg-white border-slate-200 hover:bg-slate-50"
+                      )}
+                    >
+                      <span className="text-xs text-slate-500 block font-mono uppercase">Full Passport</span>
+                      <span className="text-sm font-bold mt-0.5 block">Attested Identity Booklet</span>
+                    </button>
+
+                    <button
+                      onClick={() => navigate('/progress')}
+                      className={cn(
+                        "p-4 rounded-2xl border text-left transition-colors cursor-pointer",
+                        isDark ? "bg-slate-900/60 border-slate-800 hover:bg-slate-900" : "bg-white border-slate-200 hover:bg-slate-50"
+                      )}
+                    >
+                      <span className="text-xs text-slate-500 block font-mono uppercase">Civic System</span>
+                      <span className="text-sm font-bold mt-0.5 block">Arvdoul Constitution</span>
+                    </button>
+                  </div>
+                </div>
+              ) : !capabilities.canViewContent ? (
                 /* Restricted / Private Account Access Gate */
                 <div className={cn(
                   "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-2",

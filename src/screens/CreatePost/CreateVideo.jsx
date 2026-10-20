@@ -783,8 +783,19 @@ export default function CreateVideo() {
             </div>
 
             {/* Filmstrip */}
-            <div className="flex items-center justify-end mb-2">
+            <div className="flex items-center justify-end gap-2 mb-2">
               <button
+                type="button"
+                onClick={() => {
+                  const media = selectedId ? mediaItems.find((m) => m.id === selectedId) : mediaItems[0];
+                  handleEdit(media);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 rounded-full transition flex items-center gap-1.5"
+              >
+                ✂️ Open in Studio Editor
+              </button>
+              <button
+                type="button"
                 onClick={() => navigate('/thumbnail-designer')}
                 className="px-3 py-1.5 text-xs font-semibold bg-cyan-500/15 text-cyan-500 rounded-full hover:bg-cyan-500/25 transition"
               >

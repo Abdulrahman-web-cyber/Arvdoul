@@ -8,6 +8,7 @@ import {
   getReputationBand,
   getInfluenceBand,
   getContributionBand,
+  getRoyalEligibility,
 } from './levelSystemService.js';
 import { getProfileUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
@@ -40,8 +41,6 @@ class PassportService {
 
     // Resolve the relationship (owner / follower / connection / blocked)
     // from the follow + block graph instead of assuming an empty relationship.
-    // An empty relationship made every passport render as if it were the
-    // viewer's own, bypassing the privacy gates below.
     const isOwner = viewerUserId === targetUserId;
     const relationship = await this._resolveRelationship(viewerUserId, targetUserId);
 
@@ -102,7 +101,7 @@ class PassportService {
     }
     if (!Array.isArray(verifiedAchievements)) verifiedAchievements = [];
 
-    // Titles: only if the viewer is permitted (previously loaded for everyone).
+    // Titles: only if the viewer is permitted.
     let earnedTitles = [];
     if (capabilities.canViewTitles || isOwner) {
       if (Array.isArray(profile.titles)) {
@@ -117,17 +116,48 @@ class PassportService {
     }
     if (!Array.isArray(earnedTitles)) earnedTitles = [];
 
+    const isVerified = resolveVerifiedFlag(profile);
+    const isCreator = resolveCreatorFlag(profile, {}, level);
+
     const citizenId = `ARV-${targetUserId.slice(0, 8).toUpperCase()}`;
     const issueDate = profile.createdAt?.toDate?.()
       ? profile.createdAt.toDate().toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
       : null;
 
+    // Evaluate multidimensional royal eligibility strictly from levelConfig
+    const royalStats = {
+      level: level ?? 0,
+      activeDaysCount: activeDaysCount ?? 0,
+      reputationScore: reputation?.score ?? 0,
+      influenceScore: influence?.score ?? 0,
+      contributionScore: contribution?.score ?? 0,
+      achievementsCount: verifiedAchievements.length,
+      policyStanding: profile.policyStanding || 'good',
+    };
+    const dukeEligibility = getRoyalEligibility('duke', royalStats);
+    const kingEligibility = getRoyalEligibility('king', royalStats);
+
+    // Derive sovereign visa & event stamps based on authenticated milestones
+    const visaStamps = this._deriveVisaStamps({
+      profile,
+      level,
+      activeDaysCount,
+      activeStreak,
+      verifiedAchievements,
+      earnedTitles,
+      isCreator,
+      isVerified,
+      issueDate,
+    });
+
+    const sanitizedUsername = (profile.username || 'CITIZEN').toUpperCase().replace(/[^A-Z0-9]/g, '<');
+    const mrtdLine1 = `P<ARV${sanitizedUsername.padEnd(20, '<')}`.slice(0, 44);
+    const mrtdLine2 = `${citizenId.replace(/[^A-Z0-9]/g, '<')}5ARV0001014M9912316<<<<<<<<<<<<<<02`.slice(0, 44);
+
     return {
       userId: targetUserId,
       citizenId,
       issueDate,
-      // No invented holder name: when the profile has none, report absence
-      // rather than presenting a synthetic generic citizen name.
       displayName: pickDisplayName([profile.displayName, profile.name], { fallback: null }),
       username: profile.username || null,
       photoURL: profile.photoURL || null,
@@ -146,10 +176,136 @@ class PassportService {
       passportUrl: getProfileUrl(targetUserId),
       isOwner,
       capabilities,
-      isVerified: resolveVerifiedFlag(profile),
-      isCreator: resolveCreatorFlag(profile, {}, level),
+      isVerified,
+      isCreator,
       creatorTier: profile.creatorTier || null,
+      royalEligibility: {
+        duke: dukeEligibility,
+        king: kingEligibility,
+        isPeerOfRealm: dukeEligibility.eligible || kingEligibility.eligible,
+      },
+      visaStamps,
+      nationalMotto: 'Veritas, Civitas, Concordia',
+      mrtdLines: [mrtdLine1, mrtdLine2],
     };
+  }
+
+  /**
+   * Derive verified digital visa stamps for the passport.
+   * @private
+   */
+  _deriveVisaStamps({
+    profile,
+    level,
+    activeDaysCount,
+    activeStreak,
+    verifiedAchievements,
+    earnedTitles,
+    isCreator,
+    isVerified,
+    issueDate,
+  }) {
+    const stamps = [];
+
+    // 1. Genesis / Founding Era Stamp
+    if (profile.createdAt || issueDate) {
+      stamps.push({
+        id: 'stamp_genesis',
+        code: 'ARV-GEN-01',
+        title: 'Genesis Citizen',
+        ministry: 'Ministry of State Registry',
+        category: 'Founding',
+        issuedAt: issueDate || 'Genesis Era',
+        verified: true,
+        sealType: 'gold',
+        icon: '🏛️',
+        description: 'Certified founding citizen registered during the national genesis epoch.',
+      });
+    }
+
+    // 2. Sovereign Border Clearance
+    stamps.push({
+      id: 'stamp_border',
+      code: 'ARV-SBC-PASS',
+      title: 'Border Clearance',
+      ministry: 'Sovereign Border Agency',
+      category: 'Security',
+      issuedAt: 'Perpetual',
+      verified: true,
+      sealType: 'emerald',
+      icon: '🛡️',
+      description: 'Permanent right of passage and cryptographic peer clearance across Arvdoul.',
+    });
+
+    // 3. Civic Vanguard Stamp (Level 10+ or 7+ day streak)
+    const hasVanguard = (level !== null && level >= 10) || (activeStreak !== null && activeStreak >= 7);
+    stamps.push({
+      id: 'stamp_vanguard',
+      code: 'ARV-CVG-010',
+      title: 'Civic Vanguard',
+      ministry: 'Chancellery of Civic Merit',
+      category: 'Civic',
+      issuedAt: hasVanguard ? (issueDate || 'Epoch I') : null,
+      verified: hasVanguard,
+      sealType: 'indigo',
+      icon: '⚔️',
+      description: hasVanguard
+        ? 'Commended for civic discipline and persistent participation in the commonwealth.'
+        : 'Requires Level 10 or a 7-day sustained citizenship streak to unlock.',
+    });
+
+    // 4. Creative Laureate Visa
+    const hasCreative = isCreator || (profile.reelsCount > 0) || (profile.videosCount > 0);
+    stamps.push({
+      id: 'stamp_creative',
+      code: 'ARV-CLM-005',
+      title: 'Creative Laureate',
+      ministry: 'Guild of Sovereign Media',
+      category: 'Creative',
+      issuedAt: hasCreative ? (issueDate || 'Epoch I') : null,
+      verified: hasCreative,
+      sealType: 'amber',
+      icon: '🎨',
+      description: hasCreative
+        ? 'Recognized cultural producer contributing artistic media and audio to the nation.'
+        : 'Requires publishing sovereign videos, audio tracks, or creator status.',
+    });
+
+    // 5. Diplomatic Envoy Stamp (Level 15+ or verified citizen)
+    const hasDiplomatic = isVerified || (level !== null && level >= 15);
+    stamps.push({
+      id: 'stamp_diplomatic',
+      code: 'ARV-DIP-015',
+      title: 'Diplomatic Envoy',
+      ministry: 'Diplomatic Mission Corps',
+      category: 'Diplomatic',
+      issuedAt: hasDiplomatic ? (issueDate || 'Epoch I') : null,
+      verified: hasDiplomatic,
+      sealType: 'ruby',
+      icon: '📜',
+      description: hasDiplomatic
+        ? 'Granted diplomatic audience and cross-community representation credentials.'
+        : 'Requires verified identity credentials or Level 15 citizenship standing.',
+    });
+
+    // 6. National Honors Ribbon Stamp
+    const hasHonors = (verifiedAchievements && verifiedAchievements.length >= 3) || (earnedTitles && earnedTitles.length >= 1);
+    stamps.push({
+      id: 'stamp_honors',
+      code: 'ARV-NHL-003',
+      title: 'Honors Legion',
+      ministry: 'High Council of Honors',
+      category: 'Prestige',
+      issuedAt: hasHonors ? (issueDate || 'Epoch I') : null,
+      verified: hasHonors,
+      sealType: 'gold',
+      icon: '👑',
+      description: hasHonors
+        ? 'Bestowed for distinguished service and decorated achievements in Arvdoul.'
+        : 'Requires at least 3 verified achievements or an earned national title.',
+    });
+
+    return stamps;
   }
 
   /**

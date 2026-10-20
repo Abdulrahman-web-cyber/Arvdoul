@@ -445,6 +445,31 @@ class CommunityService {
     return true;
   }
 
+  async updateCommunitySettings(communityId, adminUserId, data) {
+    await this.initialize();
+    const community = await this.getCommunity(communityId);
+    if (!community) throw new Error('Community not found');
+
+    const adminMembership = community.members?.[adminUserId];
+    if (!adminMembership || !['owner', 'admin'].includes(adminMembership.role)) {
+      throw new Error('Insufficient permissions');
+    }
+
+    const allowed = {};
+    if (typeof data.name === 'string') allowed.name = data.name.trim();
+    if (typeof data.description === 'string') allowed.description = data.description.trim();
+    if (typeof data.rules === 'string') allowed.rules = data.rules.trim();
+    if (typeof data.avatar === 'string') allowed.avatar = data.avatar.trim();
+    if (['public', 'private', 'secret'].includes(data.privacy)) allowed.privacy = data.privacy;
+    if (data.settings && typeof data.settings === 'object') {
+      allowed.settings = { ...(community.settings || {}), ...data.settings };
+    }
+
+    allowed.updatedAt = serverTimestamp();
+    await updateDoc(doc(this.db, 'communities', communityId), allowed);
+    return true;
+  }
+
   async getUserCommunities(userId) {
     await this.initialize();
     

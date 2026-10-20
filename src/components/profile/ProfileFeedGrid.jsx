@@ -30,6 +30,7 @@ import {
 import { cn } from '../../lib/utils';
 import { getPerksForLevel } from '../../services/levelSystemService';
 import { toast } from 'sonner';
+import ProfileCitizenshipCard from './ProfileCitizenshipCard';
 
 const ProfileFeedGrid = memo(({
   posts = [],
@@ -84,6 +85,20 @@ const ProfileFeedGrid = memo(({
     e.stopPropagation();
     setPlayingAudioId(prev => (prev === trackId ? null : trackId));
   }, []);
+
+  // Handle 'citizenship' tab
+  if (activeTab === 'citizenship') {
+    return (
+      <div className="w-full py-1">
+        <ProfileCitizenshipCard
+          userId={profile?.id || profile?.userId}
+          profile={profile}
+          isOwner={isOwner}
+          theme={theme}
+        />
+      </div>
+    );
+  }
 
   // Handle 'about' tab
   if (activeTab === 'about') {
@@ -216,7 +231,7 @@ const ProfileFeedGrid = memo(({
         title: 'No Reels Shared Yet',
         desc: 'Vertical 9:16 video reels and short clips will be featured here.',
         cta: isOwner ? 'Explore Reels' : null,
-        action: () => navigate('/stories'),
+        action: () => navigate('/reels'),
       },
       audio: {
         icon: Music,

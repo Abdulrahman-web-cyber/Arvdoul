@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import EmojiPicker from 'emoji-picker-react';
+import GIFPicker from '../Shared/GIFPicker';
 
 const MessageInput = React.memo(({
   onSendMessage,
@@ -35,6 +36,7 @@ const MessageInput = React.memo(({
   const [text, setText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showGIFPicker, setShowGIFPicker] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -276,17 +278,43 @@ const MessageInput = React.memo(({
 
         {/* Emoji button */}
         <button
-          onClick={() => setShowEmoji(!showEmoji)}
+          onClick={() => {
+            setShowEmoji(!showEmoji);
+            setShowGIFPicker(false);
+          }}
           disabled={disabled || isRecording}
           className={cn(
             'p-2 rounded-full transition-colors',
-            theme === 'dark'
-              ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300 disabled:text-gray-600'
-              : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900 disabled:text-gray-300'
+            showEmoji
+              ? 'bg-purple-600 text-white'
+              : (theme === 'dark'
+                ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300 disabled:text-gray-600'
+                : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900 disabled:text-gray-300')
           )}
           title="Emoji"
         >
           <Smile className="w-5 h-5" />
+        </button>
+
+        {/* GIF button */}
+        <button
+          onClick={() => {
+            setShowGIFPicker(!showGIFPicker);
+            setShowEmoji(false);
+            setShowAttachments(false);
+          }}
+          disabled={disabled || isRecording}
+          className={cn(
+            'px-2 py-1.5 rounded-full transition-colors text-xs font-black tracking-tight',
+            showGIFPicker
+              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm'
+              : (theme === 'dark'
+                ? 'hover:bg-gray-800 text-gray-400 hover:text-gray-300 disabled:text-gray-600'
+                : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900 disabled:text-gray-300')
+          )}
+          title="GIF Reactions"
+        >
+          GIF
         </button>
 
         {/* Voice or Send button */}
@@ -401,6 +429,37 @@ const MessageInput = React.memo(({
             <User className="w-5 h-5 text-purple-500" />
             <span className="text-xs">Contact</span>
           </button>
+          <button
+            onClick={() => {
+              setShowAttachments(false);
+              setShowGIFPicker(true);
+            }}
+            className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-700/50 transition-colors"
+          >
+            <div className="w-5 h-5 flex items-center justify-center font-black text-xs text-purple-400">GIF</div>
+            <span className="text-xs">GIF</span>
+          </button>
+        </div>
+      )}
+
+      {/* GIF picker */}
+      {showGIFPicker && (
+        <div className="mb-2 w-full max-w-sm">
+          <GIFPicker
+            onSelect={(url, gif) => {
+              setShowGIFPicker(false);
+              onSendMessage?.({
+                type: 'gif',
+                content: url,
+                media: {
+                  url: url,
+                  thumb: gif?.thumb || url,
+                  name: gif?.title || 'Reaction GIF',
+                },
+              });
+            }}
+            onClose={() => setShowGIFPicker(false)}
+          />
         </div>
       )}
 

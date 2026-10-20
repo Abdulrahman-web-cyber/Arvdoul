@@ -26,8 +26,11 @@ import {
   BarChart2,
   Calendar,
   RefreshCw,
-  Loader2
+  Loader2,
+  Wallet,
+  ArrowUpRight
 } from 'lucide-react';
+import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
 
 /**
  * Format number with K, M suffix
@@ -266,6 +269,53 @@ export default function CreatorDashboardScreen() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Sovereign Creator Earnings & Payout Action Card */}
+            <div className={cn(
+              'p-5 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all shadow-sm',
+              theme === 'dark'
+                ? 'bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-indigo-500/10 border-amber-500/20'
+                : 'bg-gradient-to-r from-amber-50 via-purple-50 to-indigo-50 border-amber-200'
+            )}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                      Creator Sovereign Earnings &amp; Payouts
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Balance: <strong className="text-amber-500">{Number(analytics?.coinsEarned || 0).toLocaleString()} coins</strong> ({formatCoinsAsUsd(analytics?.coinsEarned || 0)}) · Min withdrawal: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigate('/coins')}
+                  className={cn(
+                    'flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-semibold transition border',
+                    theme === 'dark'
+                      ? 'border-white/10 hover:bg-white/10 text-white'
+                      : 'border-gray-300 hover:bg-white text-gray-800'
+                  )}
+                >
+                  Top Up Coins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/wallet')}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-600 hover:to-purple-700 text-white shadow-md transition"
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>Withdraw in Wallet</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-80" />
+                </button>
+              </div>
             </div>
             
             {/* Daily Stats Chart */}
