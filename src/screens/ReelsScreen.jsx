@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -24,6 +24,8 @@ import { VIRTUAL_GIFTS } from '../data/videoData';
 
 export default function ReelsScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetReelId = searchParams.get('reelId');
   const { user } = useAuth();
 
 const formatDuration = (seconds) => {
@@ -104,15 +106,62 @@ const formatDuration = (seconds) => {
           isSaved: Boolean(v.isSaved),
         };
       });
+      if (targetReelId) {
+        const foundIdx = mapped.findIndex((r) => r.id === targetReelId);
+        if (foundIdx >= 0) {
+          setCurrentReelIndex(foundIdx);
+        } else {
+          try {
+            const fetched = await videoService.getVideo(targetReelId);
+            if (fetched?.video) {
+              const v = fetched.video;
+              const creatorName = v.creator?.name || v.authorName || '';
+              const creatorUsername = v.creator?.username || v.authorUsername || '';
+              const creatorId = v.creator?.id || v.authorId || v.userId || null;
+              const singleReel = {
+                id: v.id || targetReelId,
+                creator: {
+                  id: creatorId,
+                  name: creatorName,
+                  username: creatorUsername,
+                  avatar: getSafeAvatarUrl(v.creator?.avatar || v.authorPhoto, creatorName, creatorId),
+                  verified: Boolean(v.creator?.isVerified || v.authorVerified),
+                  isFollowing: false,
+                },
+                title: v.title || v.description || '',
+                hashtags: v.hashtags || [],
+                music: v.audio?.title || v.music || '',
+                videoUrl: v.signedUrl || v.videoUrl || '',
+                thumbnailUrl: v.thumbnailUrl || '',
+                stats: {
+                  likes: v.likes || v.stats?.likes || 0,
+                  comments: v.comments || v.stats?.comments || 0,
+                  shares: v.shares || v.stats?.shares || 0,
+                  saves: v.saves || v.stats?.saves || 0,
+                  gifts: v.gifts || v.stats?.gifts || 0,
+                },
+                duration: v.duration || 0,
+                isLiked: Boolean(v.isLiked),
+                isSaved: Boolean(v.isSaved),
+              };
+              mapped.unshift(singleReel);
+              setCurrentReelIndex(0);
+            }
+          } catch (e) {
+            setCurrentReelIndex(0);
+          }
+        }
+      } else {
+        setCurrentReelIndex(0);
+      }
       setReels(mapped);
-      setCurrentReelIndex(0);
     } catch (err) {
       console.error('Failed to load reels:', err);
       setReels([]);
     } finally {
       setFeedLoading(false);
     }
-  }, [user?.uid]);
+  }, [user?.uid, targetReelId]);
 
   useEffect(() => {
     loadReels(activeTab);

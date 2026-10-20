@@ -424,7 +424,7 @@ const ProfileFeedGrid = memo(({
           return (
             <div
               key={item.id || idx}
-              onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
+              onClick={() => onPostClick?.(item) || (isReel ? navigate(`/reels?reelId=${item.id}`) : navigate(`/post/${item.id}`))}
               className={cn(
                 "group relative rounded-2xl overflow-hidden cursor-pointer border border-white/10 shadow-sm bg-slate-900 transition-all hover:scale-[1.02]",
                 isReel ? "aspect-[9/16]" : "aspect-square"
@@ -497,7 +497,7 @@ const ProfileFeedGrid = memo(({
           return (
             <div
               key={item.id || idx}
-              onClick={() => onPostClick?.(item) || navigate(`/post/${item.id}`)}
+              onClick={() => onPostClick?.(item) || (item.type === 'reel' ? navigate(`/reels?reelId=${item.id}`) : navigate(`/post/${item.id}`))}
               className={cn(
                 "break-inside-avoid rounded-2xl overflow-hidden cursor-pointer border transition-all duration-200 hover:shadow-lg group",
                 isDark ? "bg-[#0B0F19] border-slate-800 hover:border-slate-700" : "bg-white border-slate-200 hover:border-slate-300"
