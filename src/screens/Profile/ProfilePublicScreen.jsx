@@ -528,7 +528,7 @@ export default function ProfilePublicScreen() {
           : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
       )}>
         {/* Outer responsive frame matching design specifications */}
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-2 sm:py-4 space-y-4">
+        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-5 sm:space-y-6">
           
           {/* Persona Switcher: Social Presence vs Sovereign Citizen Dossier */}
           <div className="flex items-center justify-between pb-1">
@@ -540,7 +540,7 @@ export default function ProfilePublicScreen() {
                 type="button"
                 onClick={() => setPersonaMode('social')}
                 className={cn(
-                  "flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer",
+                  "flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer",
                   personaMode === 'social'
                     ? (isDark ? "bg-purple-600 text-white shadow" : "bg-slate-900 text-white shadow")
                     : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
@@ -554,7 +554,7 @@ export default function ProfilePublicScreen() {
                 type="button"
                 onClick={() => setPersonaMode('dossier')}
                 className={cn(
-                  "flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer",
+                  "flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl text-xs font-semibold transition-all cursor-pointer",
                   personaMode === 'dossier'
                     ? (isDark ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow" : "bg-amber-600 text-white shadow")
                     : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
@@ -569,19 +569,19 @@ export default function ProfilePublicScreen() {
               type="button"
               onClick={() => navigate(`/passport/${effectiveProfile?.id || effectiveProfile?.uid || userId}`)}
               className={cn(
-                "hidden sm:flex items-center gap-1.5 text-xs font-bold font-mono px-3 py-1.5 rounded-xl border transition-colors cursor-pointer",
-                isDark ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10" : "border-amber-600/30 text-amber-700 hover:bg-amber-50"
+                "hidden sm:flex items-center gap-2 text-xs font-bold font-mono px-3.5 py-2 rounded-2xl border transition-all cursor-pointer shadow-sm hover:scale-[1.02]",
+                isDark ? "border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20" : "border-amber-600/30 text-amber-800 bg-amber-50 hover:bg-amber-100"
               )}
             >
               <span>INSPECT PASSPORT</span>
-              <span className="text-[10px]">→</span>
+              <span className="text-xs">→</span>
             </button>
           </div>
 
           {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
-          <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-start">
-            {/* Left Column: Command Rail (lg:col-span-4, sticky) */}
-            <div className="lg:col-span-4 lg:sticky lg:top-4 space-y-4 relative z-10">
+          <div className="lg:grid lg:grid-cols-12 lg:gap-8 xl:gap-10 items-start">
+            {/* Left Column: Command Rail (lg:col-span-5 xl:col-span-4, sticky) */}
+            <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 space-y-4 sm:space-y-5 relative z-10">
               {/* TOP CARD: Elevated Master Identity Card with Avatar & Social Counters */}
               <ProfileHeroSection
                 variant="identity"
@@ -624,8 +624,8 @@ export default function ProfilePublicScreen() {
               )}
             </div>
 
-            {/* Right Column: Active Feed & Content Hub (lg:col-span-8) */}
-            <div className="lg:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
+            {/* Right Column: Active Feed & Content Hub (lg:col-span-7 xl:col-span-8) */}
+            <div className="lg:col-span-7 xl:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
               {personaMode === 'dossier' ? (
                 /* Full Sovereign Citizen Dossier View */
                 <div className="space-y-5">

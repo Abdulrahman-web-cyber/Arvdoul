@@ -528,38 +528,49 @@ export const ProfileIdentityCard = memo(({
 
   return (
     <div className={cn(
-      "w-full rounded-[26px] sm:rounded-[30px] border transition-all duration-300 relative overflow-hidden",
+      "w-full rounded-[26px] sm:rounded-[32px] border transition-all duration-300 relative overflow-hidden",
       isDark
-        ? "bg-[#03071B]/95 border-white/[0.08] text-white shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_10px_32px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-2xl"
+        ? "bg-[#03071B]/95 border-white/[0.08] text-white shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-3xl"
+        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_12px_36px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-3xl"
     )}>
       {/* Top Ambient Optical Hairline Highlight */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] z-20"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px] z-20"
         style={{
-          background: "linear-gradient(90deg, #C82BFF 0%, #8B1EF3 34%, #4431F7 66%, #0088FF 100%)",
+          background: "linear-gradient(90deg, #F59E0B 0%, #C82BFF 28%, #4431F7 64%, #00F0FF 100%)",
         }}
       />
 
-      {/* Luxury Glassmorphism Cover Banner with Ambient Mesh */}
-      <div className="relative w-full h-32 sm:h-44 overflow-hidden">
+      {/* Luxury Glassmorphism Cover Banner with Ambient Mesh and Sovereign Watermark */}
+      <div className="relative w-full h-36 sm:h-48 overflow-hidden select-none">
         <div 
           className="absolute inset-0 transition-all duration-700"
           style={{
             background: isDark
-              ? 'linear-gradient(135deg, rgba(139, 30, 243, 0.45) 0%, rgba(68, 49, 247, 0.35) 40%, rgba(0, 240, 255, 0.2) 80%, rgba(3, 7, 27, 0.95) 100%)'
-              : 'linear-gradient(135deg, rgba(139, 30, 243, 0.22) 0%, rgba(68, 49, 247, 0.15) 40%, rgba(56, 189, 248, 0.2) 80%, rgba(255, 255, 255, 0.95) 100%)'
+              ? 'linear-gradient(135deg, rgba(139, 30, 243, 0.5) 0%, rgba(68, 49, 247, 0.4) 35%, rgba(245, 158, 11, 0.22) 75%, rgba(3, 7, 27, 0.98) 100%)'
+              : 'linear-gradient(135deg, rgba(139, 30, 243, 0.2) 0%, rgba(68, 49, 247, 0.14) 35%, rgba(245, 158, 11, 0.16) 75%, rgba(255, 255, 255, 0.98) 100%)'
           }}
         />
         <div className="absolute inset-0 backdrop-blur-xl bg-black/10 dark:bg-black/25" />
+        
+        {/* Heraldic Digital Nation Crest Silhouette Watermark */}
+        <div className="absolute right-4 -top-6 sm:right-8 sm:-top-8 w-44 h-44 sm:w-56 sm:h-56 opacity-10 dark:opacity-15 pointer-events-none flex items-center justify-center text-amber-400">
+          <svg viewBox="0 0 100 100" className="w-full h-full" fill="currentColor">
+            <path d="M50 5 L85 20 L85 55 C85 75 50 95 50 95 C50 95 15 75 15 55 L15 20 Z" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path d="M50 15 L75 28 L75 52 C75 68 50 82 50 82 C50 82 25 68 25 52 L25 28 Z" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.6" />
+            <polygon points="50,28 54,40 67,40 56,48 60,60 50,52 40,60 44,48 33,40 46,40" />
+          </svg>
+        </div>
+
+        {/* Ambient Radial Lights */}
         <div 
-          className="absolute -top-12 -left-12 w-48 h-48 rounded-full blur-2xl opacity-60 pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(139, 30, 243, 0.6) 0%, transparent 70%)' }}
+          className="absolute -top-12 -left-12 w-52 h-52 rounded-full blur-2xl opacity-60 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(139, 30, 243, 0.65) 0%, transparent 70%)' }}
         />
         <div 
-          className="absolute -bottom-8 -right-8 w-44 h-44 rounded-full blur-2xl opacity-40 pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(0, 240, 255, 0.5) 0%, transparent 70%)' }}
+          className="absolute -bottom-8 -right-8 w-48 h-48 rounded-full blur-2xl opacity-40 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.55) 0%, transparent 70%)' }}
         />
       </div>
 
@@ -567,16 +578,17 @@ export const ProfileIdentityCard = memo(({
       <div className="p-4 sm:p-6 space-y-4 relative z-10">
 
         {/* 1. Profile Avatar & Full Display Name Header */}
-        <div className="flex flex-col items-center text-center space-y-3 -mt-16 sm:-mt-22">
+        <div className="flex flex-col items-center text-center space-y-3 -mt-18 sm:-mt-24">
           {/* 3D Avatar with Animated Level Progression Ring */}
           <div className="relative inline-block group shrink-0">
-            <div className="relative w-28 h-28 sm:w-34 sm:h-34 flex items-center justify-center">
+            <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex items-center justify-center">
               {heroLevelNumber !== null && (
-                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
+                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none drop-shadow-md" viewBox="0 0 100 100">
                   <defs>
                     <linearGradient id={`hero-level-ring-${profileUid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#8B1EF3" />
-                      <stop offset="50%" stopColor="#4431F7" />
+                      <stop offset="0%" stopColor="#F59E0B" />
+                      <stop offset="35%" stopColor="#8B1EF3" />
+                      <stop offset="70%" stopColor="#4431F7" />
                       <stop offset="100%" stopColor="#00F0FF" />
                     </linearGradient>
                   </defs>
