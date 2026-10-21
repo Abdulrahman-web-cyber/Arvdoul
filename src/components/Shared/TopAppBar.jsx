@@ -20,6 +20,14 @@ import {
   X,
   ChevronLeft,
   SlidersHorizontal,
+  WifiOff,
+  Check,
+  RefreshCw,
+  QrCode,
+  Share2,
+  MoreVertical,
+  Eye,
+  ShieldCheck,
 } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
@@ -666,7 +674,23 @@ export const TopAppBar = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <CircularButton
+                      icon={QrCode}
+                      label="Identity QR Code"
+                      theme={theme}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('arvdoul:open_qr_code'));
+                      }}
+                    />
+                    <CircularButton
+                      icon={Share2}
+                      label="Share Profile"
+                      theme={theme}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('arvdoul:share_profile'));
+                      }}
+                    />
                     <CircularButton
                       icon={Search}
                       label="Search"
@@ -716,14 +740,29 @@ export const TopAppBar = ({
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
                     <CircularButton
-                      icon={Search}
-                      label="Search"
+                      icon={QrCode}
+                      label="Citizen QR Code"
                       theme={theme}
                       onClick={() => {
-                        if (onSearch) onSearch();
-                        else navigate(ROUTES.search);
+                        window.dispatchEvent(new CustomEvent('arvdoul:open_qr_code'));
+                      }}
+                    />
+                    <CircularButton
+                      icon={Share2}
+                      label="Share Profile"
+                      theme={theme}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('arvdoul:share_profile'));
+                      }}
+                    />
+                    <CircularButton
+                      icon={MoreVertical}
+                      label="Profile Options"
+                      theme={theme}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('arvdoul:open_profile_options'));
                       }}
                     />
                     <CircularButton
@@ -841,11 +880,16 @@ export const TopAppBar = ({
                 className={cn(
                   "flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-xl shadow-lg border",
                   !isOnline
-                    ? "bg-red-950/85 text-red-200 border-red-500/40 shadow-red-950/40"
+                    ? "bg-red-950/85 text-red-200 border-red-500/40 shadow-red-950/40 cursor-pointer hover:bg-red-900/90 active:scale-95 transition-all"
                     : syncSuccess
                     ? "bg-emerald-950/85 text-emerald-200 border-emerald-500/40 shadow-emerald-950/40"
                     : "bg-purple-950/85 text-purple-200 border-purple-500/40 shadow-purple-950/40"
                 )}
+                onClick={() => {
+                  if (!isOnline) {
+                    navigate('/offline-status');
+                  }
+                }}
               >
                 {!isOnline ? (
                   <>
@@ -854,6 +898,7 @@ export const TopAppBar = ({
                       Offline Mode ·{" "}
                       {pendingCount > 0 ? `${pendingCount} saved` : "Viewing cache"}
                     </span>
+                    <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20">Inspect →</span>
                   </>
                 ) : syncSuccess ? (
                   <>
