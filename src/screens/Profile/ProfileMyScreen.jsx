@@ -17,6 +17,7 @@ import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import ProfileCitizenshipCard from '../../components/profile/ProfileCitizenshipCard';
+import ProfileViewAsBanner from '../../components/profile/ProfileViewAsBanner';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
@@ -30,6 +31,7 @@ import {
   resolveCreatorFlag,
   resolveVerifiedFlag,
   isPlaceholderHandle,
+  projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { toast } from 'sonner';
@@ -206,20 +208,28 @@ export default function ProfileMyScreen() {
     };
   }, [profile, cleanUsername, currentUser, currentUserId, posts?.length, balance, level]);
 
-  // Centrally resolved Action Capabilities
+  // Centrally resolved Action Capabilities adhering strictly to active viewAs perspective
   const capabilities = useMemo(() => {
+    const isSimulatedOwner = viewAs === 'owner';
     return resolveCapabilities({
-      viewer: currentUser,
+      viewer: isSimulatedOwner ? currentUser : { uid: `preview_${viewAs}_visitor` },
       target: effectiveProfile,
       relationship: {
-        isOwner: true,
+        isOwner: isSimulatedOwner,
         isFollowing: viewAs === 'follower' || viewAs === 'connection',
-        isFollower: true,
-        isMutualFriend: viewAs === 'connection'
+        isFollower: viewAs === 'follower' || viewAs === 'connection',
+        isMutualFriend: viewAs === 'connection',
+        isBlocked: false,
       },
-      viewAs: viewAs === 'owner' ? null : viewAs
+      viewAs: isSimulatedOwner ? null : viewAs
     });
   }, [currentUser, effectiveProfile, viewAs]);
+
+  // Projected profile adhering strictly to active viewer perspective and privacy boundaries
+  const displayedProfile = useMemo(() => {
+    if (viewAs === 'owner') return effectiveProfile;
+    return projectProfileForViewer(effectiveProfile, capabilities);
+  }, [effectiveProfile, capabilities, viewAs]);
 
   // Load user data on mount
   useEffect(() => {
@@ -388,7 +398,7 @@ export default function ProfileMyScreen() {
               {/* TOP CARD: Elevated Master Identity Card with Profile Picture */}
               <ProfileHeroSection
                 variant="identity"
-                profile={effectiveProfile}
+                profile={displayedProfile}
                 isOwner={viewAs === 'owner'}
                 level={level || effectiveProfile.level}
                 position={position}
@@ -635,6 +645,14 @@ export default function ProfileMyScreen() {
             />
           </Suspense>
         )}
+
+        {/* Persistent Floating Banner for Simulated View As Perspective */}
+        <ProfileViewAsBanner
+          viewAs={viewAs}
+          onViewAsChange={handleViewAsChange}
+          onExit={() => handleViewAsChange('owner')}
+          theme={theme}
+        />
       </div>
     </ErrorBoundary>
   );

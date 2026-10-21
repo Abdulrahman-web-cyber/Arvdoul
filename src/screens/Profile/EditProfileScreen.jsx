@@ -44,7 +44,12 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
-import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY, PROFILE_CONSTRAINTS } from '../../config/profileContracts.js';
+import { 
+  VISIBILITY_SCOPES, 
+  DEFAULT_PROFILE_PRIVACY, 
+  PROFILE_CONSTRAINTS, 
+  validateProfileUpdate 
+} from '../../config/profileContracts.js';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -314,11 +319,6 @@ export default function EditProfileScreen() {
         }
       }
 
-      // Upload avatar if changed
-      if (avatarFile && currentUid && userService?.uploadAvatar) {
-        await userService.uploadAvatar(currentUid, avatarFile);
-      }
-
       // Clean links
       const cleanedLinks = (formData.links || [])
         .filter(l => l.url && l.url.trim().length > 0)
@@ -334,32 +334,63 @@ export default function EditProfileScreen() {
         cleanWebsite = `https://${cleanWebsite}`;
       }
 
-      const updates = {
-        displayName: formData.displayName.trim().slice(0, PROFILE_CONSTRAINTS.DISPLAY_NAME.MAX_LENGTH),
+      const rawUpdates = {
+        displayName: formData.displayName?.trim() || '',
         username: rawUser,
-        bio: formData.bio.trim().slice(0, PROFILE_CONSTRAINTS.BIO.MAX_LENGTH),
-        location: formData.location.trim().slice(0, PROFILE_CONSTRAINTS.LOCATION.MAX_LENGTH),
+        bio: formData.bio?.trim() || '',
+        location: formData.location?.trim() || '',
         website: cleanWebsite,
-        pronouns: formData.pronouns.trim().slice(0, PROFILE_CONSTRAINTS.PRONOUNS.MAX_LENGTH),
-        profession: formData.profession.trim().slice(0, PROFILE_CONSTRAINTS.PROFESSION.MAX_LENGTH),
+        pronouns: formData.pronouns?.trim() || '',
+        profession: formData.profession?.trim() || '',
         isPrivate: Boolean(formData.isPrivate),
         links: cleanedLinks,
         privacy: formData.privacy,
       };
 
-      if (updateUserProfile) {
-        await updateUserProfile(updates);
-      } else if (userService?.updateUserProfile && currentUid) {
-        await userService.updateUserProfile(currentUid, updates);
+      // Canonical validation via profileContracts
+      const validation = validateProfileUpdate(rawUpdates);
+      if (!validation.valid) {
+        toast.error(validation.errors?.[0] || 'Please correct the invalid fields.');
+        setSaving(false);
+        return;
       }
 
-      // Refresh store profile
-      if (currentUid && loadStoreProfile) {
-        await loadStoreProfile(currentUid, currentUid);
+      const sanitizedUpdates = validation.sanitized;
+
+      // Upload avatar if changed
+      if (avatarFile && currentUid && userService?.uploadAvatar) {
+        await userService.uploadAvatar(currentUid, avatarFile);
       }
 
-      toast.success('Profile updated successfully!');
-      navigate('/profile/me');
+      // Immediate optimistic save: snapshot previous state for rollback
+      const previousStoreProfile = useProfileStore.getState().profile;
+      useProfileStore.setState((state) => ({
+        profile: {
+          ...(state.profile || {}),
+          ...sanitizedUpdates,
+        }
+      }));
+
+      // Authoritative backend sync
+      try {
+        if (updateUserProfile) {
+          await updateUserProfile(sanitizedUpdates);
+        } else if (userService?.updateUserProfile && currentUid) {
+          await userService.updateUserProfile(currentUid, sanitizedUpdates);
+        }
+
+        // Refresh store profile to ensure canonical sync
+        if (currentUid && loadStoreProfile) {
+          await loadStoreProfile(currentUid, currentUid);
+        }
+
+        toast.success('Profile updated successfully!');
+        navigate('/profile/me');
+      } catch (backendError) {
+        // Rollback optimistic state on backend failure
+        useProfileStore.setState({ profile: previousStoreProfile });
+        throw backendError;
+      }
     } catch (error) {
       console.error('Failed to update profile:', error);
       toast.error(error.message || 'Failed to update profile');

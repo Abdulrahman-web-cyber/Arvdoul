@@ -13,10 +13,6 @@ import {
 import { getProfileUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag } from './profileReadModel.js';
-import achievementService from './achievementService.js';
-import titleService from './titleService.js';
-import { getFirestoreInstance } from '../firebase/firebase.js';
-import { doc, getDoc } from 'firebase/firestore';
 import { logger } from '../utils/Logger.js';
 
 class PassportService {
@@ -34,9 +30,13 @@ class PassportService {
 
     let profile = cachedTargetProfile;
     if (!profile) {
-      const db = await getFirestoreInstance();
-      const snap = await getDoc(doc(db, 'users', targetUserId));
-      profile = snap.exists() ? { id: snap.id, ...snap.data() } : { id: targetUserId };
+      try {
+        const { getUserService } = await import('./userService.js');
+        profile = await getUserService().getUserProfile(targetUserId);
+      } catch (err) {
+        logger.warn('[PassportService] Failed to load target profile', { targetUserId, error: err?.message });
+        profile = { id: targetUserId };
+      }
     }
 
     // Resolve the relationship (owner / follower / connection / blocked)
@@ -93,6 +93,7 @@ class PassportService {
         verifiedAchievements = profile.achievements;
       } else {
         try {
+          const { default: achievementService } = await import('./achievementService.js');
           verifiedAchievements = await achievementService.getUserAchievements(targetUserId);
         } catch (e) {
           verifiedAchievements = [];
@@ -108,6 +109,7 @@ class PassportService {
         earnedTitles = profile.titles;
       } else {
         try {
+          const { default: titleService } = await import('./titleService.js');
           earnedTitles = await titleService.getUserTitles(targetUserId);
         } catch (e) {
           earnedTitles = [];

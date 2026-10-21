@@ -44,6 +44,7 @@ const CreatorDashboardScreen = lazy(() => import("../screens/Profile/CreatorDash
 const FollowersScreen = lazy(() => import("../screens/Profile/FollowersScreen.jsx"));
 const FollowingScreen = lazy(() => import("../screens/Profile/FollowingScreen.jsx"));
 const FriendsScreen = lazy(() => import("../screens/Profile/FriendsScreen.jsx"));
+const ConnectionsScreen = lazy(() => import("../screens/Profile/ConnectionsScreen.jsx"));
 const HighlightsScreen = lazy(() => import("../screens/Profile/HighlightsScreen.jsx"));
 const AboutScreen = lazy(() => import("../screens/Profile/AboutScreen.jsx"));
 const ProfilePreviewScreen = lazy(() => import("../screens/Profile/ProfilePreviewScreen.jsx"));
@@ -576,6 +577,29 @@ export default function AppRoutes() {
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>
             <FriendsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      
+      {/* Unified Connections Screen */}
+      <Route path="/connections" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ConnectionsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/connections" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ConnectionsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/profile/:userId/connections" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ConnectionsScreen />
           </Suspense>
         </ProtectedRoute>
       } />

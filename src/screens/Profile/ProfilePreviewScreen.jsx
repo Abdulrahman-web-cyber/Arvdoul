@@ -205,7 +205,7 @@ export default function ProfilePreviewScreen({
       </div>
 
       {/* Main Preview Container */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 space-y-4">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5">
         {/* Banner notification for Visitor Mode */}
         {viewPerspective === 'visitor' && (
           <div className="px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs font-semibold flex items-center gap-2">
