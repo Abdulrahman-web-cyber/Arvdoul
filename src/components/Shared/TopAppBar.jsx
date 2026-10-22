@@ -372,8 +372,9 @@ export const TopAppBar = ({
     if (path === "/profile" || path === "/profile/me")
       return "profile_me";
     if (path.startsWith("/profile/") || path.startsWith("/user/")) {
-      const sub = path.replace("/profile/", "").toLowerCase().split("/")[0];
-      if (['edit', 'analytics', 'highlights', 'followers', 'following', 'friends', 'about', 'preview', 'wallet', 'progress', 'achievements', 'titles', 'passport'].includes(sub)) {
+      const parts = path.toLowerCase().split("/").filter(Boolean);
+      const last = parts[parts.length - 1];
+      if (['edit', 'analytics', 'highlights', 'followers', 'following', 'friends', 'connections', 'about', 'preview', 'wallet', 'progress', 'achievements', 'titles', 'passport', 'citizen', 'citizenship'].includes(last)) {
         return "contextual";
       }
       return "profile_visitor";
@@ -389,14 +390,20 @@ export const TopAppBar = ({
     if (path.startsWith("/profile/edit")) return "Edit Profile";
     if (path.startsWith("/profile/analytics")) return "Creator Analytics";
     if (path.startsWith("/profile/highlights")) return "Highlights Studio";
-    if (path.includes("/followers")) return "Followers";
-    if (path.includes("/following")) return "Following";
-    if (path.includes("/friends")) return "Friends";
-    if (path.startsWith("/passport")) return "Digital Passport";
+    if (
+      path.includes("/connections") ||
+      path.includes("/followers") ||
+      path.includes("/following") ||
+      path.includes("/friends") ||
+      path === "/network" ||
+      path.startsWith("/network")
+    ) {
+      return "Citizen Network";
+    }
+    if (path.startsWith("/passport") || path.startsWith("/citizen") || path.startsWith("/citizenship")) return "Digital Passport";
     if (path.startsWith("/titles")) return "Civic Titles & Provenance";
     if (path.startsWith("/reputation")) return "Reputation & Standing";
     if (path.startsWith("/notifications")) return "Notifications";
-    if (path.startsWith("/network")) return "Network & Friends";
     if (path.startsWith("/coins") || path.startsWith("/wallet")) return "Coins & Wallet";
     if (path.startsWith("/saved")) return "Saved Items";
     if (path.startsWith("/collections")) return "Collections";
@@ -602,14 +609,21 @@ export const TopAppBar = ({
                       >
                         {contextualTitle}
                       </h2>
-                      {propSubtitle && (
+                      {propSubtitle ? (
                         <span
                           className="text-xs truncate"
                           style={{ color: tokens.textSecondary }}
                         >
                           {propSubtitle}
                         </span>
-                      )}
+                      ) : (location.pathname.includes("/connections") || location.pathname.includes("/followers") || location.pathname.includes("/following") || location.pathname.includes("/friends")) ? (
+                        <span
+                          className="text-[11px] font-mono truncate"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          {location.pathname.includes("/followers") ? "Followers" : location.pathname.includes("/following") ? "Following" : location.pathname.includes("/friends") ? "Mutual Friends" : "Affiliations & Citizens"}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

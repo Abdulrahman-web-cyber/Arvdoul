@@ -10,7 +10,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
-  ArrowLeft,
   Search,
   Users,
   UserCheck,
@@ -196,53 +195,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
         ? "bg-[#060816] text-white selection:bg-purple-500/30"
         : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
     )}>
-      {/* Header bar with Back button and user title */}
-      <div className={cn(
-        "sticky top-0 z-30 border-b backdrop-blur-xl transition-colors",
-        isDark ? "bg-[#060816]/90 border-white/10" : "bg-white/90 border-slate-200"
-      )}>
-        <div className="max-w-3xl mx-auto px-4 h-14 sm:h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className={cn(
-                "w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer",
-                isDark ? "hover:bg-white/10 text-white" : "hover:bg-slate-100 text-slate-700"
-              )}
-              aria-label="Go Back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-sm sm:text-base font-extrabold tracking-tight truncate max-w-[200px] sm:max-w-md">
-                {targetProfile?.displayName ? `${targetProfile.displayName}'s Network` : 'Citizen Network'}
-              </h1>
-              <p className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                @{targetProfile?.username || (isOwner ? 'me' : 'citizen')}
-              </p>
-            </div>
-          </div>
-
-          {/* Citizen passport badge */}
-          {targetProfile?.uid && (
-            <button
-              type="button"
-              onClick={() => navigate(isOwner ? '/passport' : `/passport/${targetProfile.uid}`)}
-              className={cn(
-                "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-mono font-bold transition-all cursor-pointer shadow-sm",
-                isDark ? "border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20" : "border-amber-600/30 text-amber-800 bg-amber-50 hover:bg-amber-100"
-              )}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span>ARV-PASSPORT</span>
-            </button>
-          )}
-        </div>
-
+      {/* Main Container - TopAppBar handles title and back navigation */}
+      <div className="max-w-3xl mx-auto px-4 pt-3 sm:pt-4 space-y-4">
         {/* Unified 3-Tab Navigator: Followers | Following | Mutual Friends */}
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="grid grid-cols-3 border-t border-white/5 pt-1">
+        <div className={cn(
+          "p-1 rounded-2xl border backdrop-blur-xl transition-all shadow-sm",
+          isDark ? "bg-white/[0.04] border-white/10" : "bg-white border-slate-200"
+        )}>
+          <div className="grid grid-cols-3 gap-1">
             {/* Tab 1: Followers */}
             <button
               type="button"
@@ -251,18 +211,18 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 setSearchQuery('');
               }}
               className={cn(
-                "py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-all cursor-pointer",
+                "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
                 activeTab === 'followers'
-                  ? (isDark ? "border-purple-500 text-white" : "border-purple-600 text-slate-900")
-                  : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  ? (isDark ? "bg-purple-600 text-white shadow" : "bg-purple-600 text-white shadow")
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
               )}
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-4 h-4 shrink-0" />
               <span>Followers</span>
               <span className={cn(
-                "text-[10px] font-mono px-2 py-0.5 rounded-md",
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
                 activeTab === 'followers'
-                  ? (isDark ? "bg-purple-500/20 text-purple-300 font-extrabold" : "bg-purple-100 text-purple-700 font-extrabold")
+                  ? "bg-white/20 text-white font-extrabold"
                   : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
               )}>
                 {followers.length}
@@ -277,18 +237,18 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 setSearchQuery('');
               }}
               className={cn(
-                "py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-all cursor-pointer",
+                "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
                 activeTab === 'following'
-                  ? (isDark ? "border-purple-500 text-white" : "border-purple-600 text-slate-900")
-                  : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  ? (isDark ? "bg-purple-600 text-white shadow" : "bg-purple-600 text-white shadow")
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
               )}
             >
-              <UserCheck className="w-4 h-4" />
+              <UserCheck className="w-4 h-4 shrink-0" />
               <span>Following</span>
               <span className={cn(
-                "text-[10px] font-mono px-2 py-0.5 rounded-md",
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
                 activeTab === 'following'
-                  ? (isDark ? "bg-purple-500/20 text-purple-300 font-extrabold" : "bg-purple-100 text-purple-700 font-extrabold")
+                  ? "bg-white/20 text-white font-extrabold"
                   : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
               )}>
                 {following.length}
@@ -303,18 +263,18 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 setSearchQuery('');
               }}
               className={cn(
-                "py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition-all cursor-pointer",
+                "py-2.5 px-2 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all cursor-pointer",
                 activeTab === 'friends'
-                  ? (isDark ? "border-amber-500 text-white" : "border-amber-600 text-slate-900")
-                  : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  ? (isDark ? "bg-amber-500 text-slate-950 font-black shadow" : "bg-amber-600 text-white shadow")
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
               )}
             >
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <ShieldCheck className={cn("w-4 h-4 shrink-0", activeTab === 'friends' ? "text-slate-950" : "text-amber-400")} />
               <span>{isOwner ? 'Friends' : 'Mutual'}</span>
               <span className={cn(
-                "text-[10px] font-mono px-2 py-0.5 rounded-md",
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-md",
                 activeTab === 'friends'
-                  ? (isDark ? "bg-amber-500/20 text-amber-300 font-extrabold" : "bg-amber-100 text-amber-800 font-extrabold")
+                  ? "bg-black/20 text-slate-950 font-extrabold"
                   : (isDark ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600")
               )}>
                 {friends.length}
@@ -322,10 +282,6 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Main Container */}
-      <div className="max-w-3xl mx-auto px-4 pt-4 space-y-4">
         {/* Search Bar with Instant Reset */}
         <div className={cn(
           "flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border transition-all shadow-sm",

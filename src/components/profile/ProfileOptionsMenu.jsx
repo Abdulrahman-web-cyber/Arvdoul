@@ -11,7 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
   Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus,
-  Eye, QrCode, Crown, Settings
+  Eye, QrCode, Crown, Settings, Award, MapPin
 } from 'lucide-react';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
 
@@ -299,6 +299,36 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
                 className={itemCls}
                 onClick={() => {
                   onClose?.();
+                  navigate('/titles');
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <span>Civic Titles & Provenance</span>
+                </div>
+              </button>
+
+              <button
+                className={itemCls}
+                onClick={() => {
+                  onClose?.();
+                  window.dispatchEvent(new CustomEvent('arvdoul:open_location_setup'));
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <span>Civic Location</span>
+                </div>
+              </button>
+
+              <button
+                className={itemCls}
+                onClick={() => {
+                  onClose?.();
                   navigate('/settings');
                 }}
               >
@@ -315,6 +345,21 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
           {!isOwner && (
             <>
               <div className={cn("my-2 h-px", isDark ? "bg-white/[0.08]" : "bg-slate-100")} />
+
+              <button
+                className={itemCls}
+                onClick={() => {
+                  onClose?.();
+                  navigate(`/passport/${userId}`);
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                    <Crown className="w-4 h-4" />
+                  </div>
+                  <span>Inspect Passport</span>
+                </div>
+              </button>
 
               <button className={itemCls} onClick={handleMute}>
                 <div className="flex items-center gap-3">

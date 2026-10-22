@@ -221,10 +221,10 @@ const ProfileFeedGrid = memo(({
     const emptyStates = {
       posts: {
         icon: Layers,
-        title: 'No Posts Published Yet',
-        desc: 'Thoughts, visual creations, and updates will appear here once published.',
+        title: 'No Posts Yet',
+        desc: 'Published creations and updates will appear here.',
         cta: isOwner ? 'Create Post' : null,
-        action: () => navigate('/home'),
+        action: () => navigate('/create-post'),
       },
       reels: {
         icon: Film,

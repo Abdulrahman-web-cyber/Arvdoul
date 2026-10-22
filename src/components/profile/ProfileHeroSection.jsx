@@ -439,6 +439,7 @@ ProfileTreasuryCard.displayName = 'ProfileTreasuryCard';
 export const ProfileIdentityCard = memo(({
   profile,
   isOwner = false,
+  viewAs = 'owner',
   effectiveLevel = null,
   experience = null,
   hasLevel = false,
@@ -898,279 +899,153 @@ export const ProfileIdentityCard = memo(({
           </div>
         </div>
 
-        {/* 5. The Compact 9 Action Buttons Dock on Liquid Glass in 2 Rows */}
-        <div className="relative rounded-[22px] sm:rounded-[26px] p-3 sm:p-4 bg-white/10 dark:bg-white/[0.04] backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.15),inset_0_1px_1px_rgba(255,255,255,0.2)] overflow-hidden space-y-2">
-          {/* Liquid glass specular reflection hairline */}
+        {/* 5. Sleek Luxury Frosted Glass Command Dock */}
+        <div className="relative rounded-2xl p-2 sm:p-2.5 bg-white/10 dark:bg-white/[0.04] backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-lg overflow-hidden">
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/60 dark:via-white/30 to-transparent"
+            className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 dark:via-white/20 to-transparent"
           />
 
           {isOwner ? (
-            <>
-              {/* Row 1: Primary Feature Actions (4 buttons across 5 columns: 1 Hero col-span-2 + 3 Companion col-span-1) */}
-              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {/* 1. Edit Profile - Hero Primary Action (col-span-2, taller tactile height, vibrant gradient) */}
-                <button
-                  type="button"
-                  onClick={onEditProfile || (() => nav('/profile/edit'))}
-                  className="col-span-2 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-95 shadow-md shadow-purple-500/25 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-purple-400/30 text-white group"
-                  title="Edit Profile"
-                  aria-label="Edit Profile"
-                >
-                  <Edit3 className="w-4.5 h-4.5 group-hover:scale-110 transition-transform text-white shrink-0" />
-                  <span className="text-xs sm:text-sm font-black tracking-tight truncate">Edit Profile</span>
-                </button>
+            <div className="flex items-center gap-2">
+              {/* Primary: Edit Profile */}
+              <button
+                type="button"
+                onClick={onEditProfile || (() => nav('/profile/edit'))}
+                className="flex-1 h-11 sm:h-12 rounded-xl border border-purple-400/30 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-purple-600/25 transition-all cursor-pointer"
+                title="Edit Profile"
+                aria-label="Edit Profile"
+              >
+                <Edit3 className="w-4 h-4 text-white shrink-0" />
+                <span className="truncate">Edit Profile</span>
+              </button>
 
-                {/* 2. View As Perspective (col-span-1) */}
-                <button
-                  type="button"
-                  onClick={onOpenPerspective}
-                  className="col-span-1 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300 group"
-                  title="View Profile As Perspective"
-                  aria-label="View Profile As"
-                >
-                  <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">View As</span>
-                </button>
+              {/* Secondary: Share Profile */}
+              <button
+                type="button"
+                onClick={onShare}
+                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title="Share Profile"
+                aria-label="Share Profile"
+              >
+                <Share2 className="w-4 h-4 text-white/90" />
+                <span className="hidden sm:inline text-xs font-bold">Share</span>
+              </button>
 
-                {/* 3. Identity QR Code (col-span-1) */}
-                <button
-                  type="button"
-                  onClick={onOpenQrCode}
-                  className="col-span-1 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/30 text-fuchsia-300 group"
-                  title="Identity QR Code"
-                  aria-label="Identity QR Code"
-                >
-                  <QrCode className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">QR Code</span>
-                </button>
+              {/* Secondary: QR Pass */}
+              <button
+                type="button"
+                onClick={onOpenQrCode}
+                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title="Citizen QR Pass"
+                aria-label="Citizen QR Pass"
+              >
+                <QrCode className="w-4 h-4 text-white/90" />
+                <span className="hidden sm:inline text-xs font-bold">QR Pass</span>
+              </button>
 
-                {/* 4. Share Profile (col-span-1) */}
-                <button
-                  type="button"
-                  onClick={onShare}
-                  className="col-span-1 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/30 text-cyan-300 group"
-                  title="Share Profile"
-                  aria-label="Share Profile"
-                >
-                  <Share2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">Share</span>
-                </button>
-              </div>
+              {/* Secondary: View As (Perspective) */}
+              <button
+                type="button"
+                onClick={onOpenPerspective}
+                className={cn(
+                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95",
+                  viewAs && viewAs !== 'owner'
+                    ? "border-amber-500/40 bg-amber-500/20 text-amber-300"
+                    : "border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                )}
+                title="View As Perspective"
+                aria-label="View As Perspective"
+              >
+                <Eye className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs font-bold">View As</span>
+              </button>
 
-              {/* Row 2: Secondary Utility & Governance Actions (5 buttons across 5 columns: 1 col each) */}
-              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {/* 5. Digital Passport */}
-                <button
-                  type="button"
-                  onClick={() => nav('/passport')}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300 group"
-                  title="Digital Passport"
-                  aria-label="Digital Passport"
-                >
-                  <Crown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Passport</span>
-                </button>
-
-                {/* 6. Location Setup */}
-                <button
-                  type="button"
-                  onClick={onOpenLocationSetup}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-300 group"
-                  title="Civic Location"
-                  aria-label="Civic Location"
-                >
-                  <MapPin className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Location</span>
-                </button>
-
-                {/* 7. Account Settings */}
-                <button
-                  type="button"
-                  onClick={() => nav('/settings')}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-slate-500/15 hover:bg-slate-500/25 border-slate-500/30 text-slate-300 group"
-                  title="Account Settings"
-                  aria-label="Account Settings"
-                >
-                  <Settings className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Settings</span>
-                </button>
-
-                {/* 8. Civic Titles */}
-                <button
-                  type="button"
-                  onClick={() => nav('/titles')}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/30 text-rose-300 group"
-                  title="Civic Titles & Provenance"
-                  aria-label="Civic Titles"
-                >
-                  <Award className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Titles</span>
-                </button>
-
-                {/* 9. More Options */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenOptions?.();
-                  }}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-white/10 hover:bg-white/20 border-white/15 text-slate-200 group"
-                  title="More Options"
-                  aria-label="More Options"
-                >
-                  <MoreHorizontal className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">More</span>
-                </button>
-              </div>
-            </>
+              {/* Secondary: More Options */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenOptions?.();
+                }}
+                className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                title="More Options"
+                aria-label="More Options"
+              >
+                <MoreHorizontal className="w-4 h-4 text-white/90" />
+              </button>
+            </div>
           ) : (
-            <>
-              {/* Visitor Row 1: Primary Feature Actions (4 buttons across 5 columns: 1 Hero col-span-2 + 3 Companion col-span-1) */}
-              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {/* 1. Follow / Unfollow - Hero Primary Action (col-span-2) */}
-                {capabilities?.canFollow !== false ? (
-                  <button
-                    type="button"
-                    onClick={onFollowToggle}
-                    disabled={followLoading}
-                    className={cn(
-                      "col-span-2 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-95 shadow-md",
-                      isFollowing
-                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                        : "bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-transparent text-white shadow-purple-500/25"
-                    )}
-                    title={isFollowing ? "Following" : "Follow"}
-                    aria-label={isFollowing ? "Following" : "Follow"}
-                  >
-                    {isFollowing ? <UserCheck className="w-4.5 h-4.5 shrink-0" /> : <UserPlus className="w-4.5 h-4.5 shrink-0" />}
-                    <span className="text-xs sm:text-sm font-black tracking-tight truncate">
-                      {isFollowing ? "Following" : "Follow"}
-                    </span>
-                  </button>
-                ) : (
-                  <div className="col-span-2 h-12 sm:h-13" />
-                )}
-
-                {/* 2. Direct Message (col-span-1) */}
+            <div className="flex items-center gap-2">
+              {/* Primary: Follow / Following */}
+              {capabilities?.canFollow !== false && (
                 <button
                   type="button"
-                  onClick={onOpenMessages || (() => nav(`/messages/new?to=${profileUid}`))}
-                  className="col-span-1 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300"
-                  title="Direct Message"
-                  aria-label="Direct Message"
+                  onClick={onFollowToggle}
+                  disabled={followLoading}
+                  className={cn(
+                    "flex-1 h-11 sm:h-12 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-[0.98] font-black text-xs sm:text-sm shadow-md",
+                    isFollowing
+                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                      : "bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-purple-400/30 text-white shadow-purple-600/25"
+                  )}
+                  title={isFollowing ? "Following" : "Follow"}
+                  aria-label={isFollowing ? "Following" : "Follow"}
                 >
-                  <MessageCircle className="w-4 h-4" />
-                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">Message</span>
+                  {isFollowing ? <UserCheck className="w-4 h-4 shrink-0" /> : <UserPlus className="w-4 h-4 shrink-0" />}
+                  <span className="truncate">{isFollowing ? "Following" : "Follow"}</span>
                 </button>
+              )}
 
-                {/* 3. Share Profile (col-span-1) */}
-                <button
-                  type="button"
-                  onClick={onShare}
-                  className="col-span-1 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-500/30 text-cyan-300"
-                  title="Share Profile"
-                  aria-label="Share Profile"
-                >
-                  <Share2 className="w-4 h-4" />
-                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">Share</span>
-                </button>
+              {/* Secondary: Direct Message */}
+              <button
+                type="button"
+                onClick={onOpenMessages || (() => nav(`/messages/new?to=${profileUid}`))}
+                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title="Direct Message"
+                aria-label="Direct Message"
+              >
+                <MessageCircle className="w-4 h-4 text-white/90" />
+                <span className="hidden sm:inline text-xs font-bold">Message</span>
+              </button>
 
-                {/* 4. Identity QR Code (col-span-1) */}
-                <button
-                  type="button"
-                  onClick={onOpenQrCode}
-                  className="col-span-1 h-12 sm:h-13 rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/30 text-fuchsia-300"
-                  title="Identity QR Code"
-                  aria-label="Identity QR Code"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span className="text-[10px] sm:text-[11px] font-bold mt-0.5 truncate">QR Code</span>
-                </button>
-              </div>
+              {/* Secondary: Share Profile */}
+              <button
+                type="button"
+                onClick={onShare}
+                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title="Share Profile"
+                aria-label="Share Profile"
+              >
+                <Share2 className="w-4 h-4 text-white/90" />
+                <span className="hidden sm:inline text-xs font-bold">Share</span>
+              </button>
 
-              {/* Visitor Row 2: Secondary Actions (5 buttons across 5 columns: 1 col each) */}
-              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {/* 5. Digital Passport */}
-                <button
-                  type="button"
-                  onClick={() => nav(`/passport/${profileUid}`)}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300"
-                  title="Digital Passport"
-                  aria-label="Digital Passport"
-                >
-                  <Crown className="w-3.5 h-3.5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Passport</span>
-                </button>
+              {/* Secondary: QR Pass */}
+              <button
+                type="button"
+                onClick={onOpenQrCode}
+                className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                title="Citizen QR Pass"
+                aria-label="Citizen QR Pass"
+              >
+                <QrCode className="w-4 h-4 text-white/90" />
+              </button>
 
-                {/* 6. Friend Status / Add Friend */}
-                {friendshipStatus ? (
-                  <button
-                    type="button"
-                    onClick={onFriendRequestToggle}
-                    disabled={friendRequestLoading}
-                    className={cn(
-                      "h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm",
-                      friendshipStatus === 'friends'
-                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                        : "bg-purple-500/15 border-purple-500/30 text-purple-300"
-                    )}
-                    title={friendshipStatus === 'friends' ? "Friends" : "Add Friend"}
-                    aria-label="Friend Status"
-                  >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">
-                      {friendshipStatus === 'friends' ? "Friends" : "Friend"}
-                    </span>
-                  </button>
-                ) : (
-                  <div className="h-10 sm:h-11" />
-                )}
-
-                {/* 7. Civic Location */}
-                <button
-                  type="button"
-                  onClick={location && onOpenLocationSetup ? onOpenLocationSetup : undefined}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-300"
-                  title="Civic Location"
-                  aria-label="Civic Location"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Location</span>
-                </button>
-
-                {/* 8. Block / Restrict */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenOptions?.();
-                  }}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-rose-500/15 hover:bg-rose-500/25 border-rose-500/30 text-rose-300"
-                  title="Block or Restrict"
-                  aria-label="Block or Restrict"
-                >
-                  <UserX className="w-3.5 h-3.5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">Restrict</span>
-                </button>
-
-                {/* 9. More Options */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenOptions?.();
-                  }}
-                  className="h-10 sm:h-11 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95 shadow-sm bg-white/10 hover:bg-white/20 border-white/15 text-slate-200"
-                  title="Profile Options"
-                  aria-label="Profile Options"
-                >
-                  <MoreHorizontal className="w-3.5 h-3.5" />
-                  <span className="text-[9px] sm:text-[10px] font-bold mt-0.5 truncate">More</span>
-                </button>
-              </div>
-            </>
+              {/* Secondary: More Options */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenOptions?.();
+                }}
+                className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                title="Profile Options"
+                aria-label="Profile Options"
+              >
+                <MoreHorizontal className="w-4 h-4 text-white/90" />
+              </button>
+            </div>
           )}
         </div>
 
@@ -1190,6 +1065,7 @@ ProfileIdentityCard.displayName = 'ProfileIdentityCard';
 const ProfileHeroSection = memo(({
   profile,
   isOwner = false,
+  viewAs = 'owner',
   level = null,
   theme = 'light',
   variant = 'identity',
@@ -1272,6 +1148,7 @@ const ProfileHeroSection = memo(({
       <ProfileIdentityCard
         profile={profile}
         isOwner={isOwner}
+        viewAs={viewAs}
         effectiveLevel={effectiveLevel}
         experience={profile?.experience ?? profile?.xp}
         hasLevel={hasLevel}

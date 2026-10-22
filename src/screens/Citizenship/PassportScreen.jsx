@@ -11,7 +11,6 @@ import passportService from '../../services/passportService';
 import { shareProfile } from '../../utils/shareUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
 import {
-  ArrowLeft,
   ShieldCheck,
   Award,
   Crown,
@@ -202,23 +201,16 @@ export default function PassportScreen() {
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-[#060816] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <main className="max-w-2xl mx-auto px-4 py-4 sm:py-6 space-y-4">
         
-        {/* Top Sovereign Navigation Header */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => navigate(-1)}
-            aria-label="Back"
-            className={`p-2 rounded-xl border transition-colors cursor-pointer ${
-              isDark ? 'border-slate-800 hover:bg-slate-900 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-700'
-            }`}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-
-          <div className="text-center">
-            <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-amber-500 dark:text-amber-400 block">
-              Sovereign Digital Nation
-            </span>
-            <h1 className="text-sm font-extrabold tracking-tight">Passport & Citizenship Pass</h1>
+        {/* Sovereign Credential Header Strip */}
+        <div className="flex items-center justify-between pb-1">
+          <div className="flex items-center gap-2.5">
+            <ArvdoulNationalCrest className="w-8 h-8 text-amber-500 shrink-0" />
+            <div>
+              <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-amber-500 dark:text-amber-400 block font-mono">
+                Sovereign Digital Commonwealth
+              </span>
+              <p className="text-xs font-extrabold tracking-tight">ARVDOUL CITIZEN PASSPORT</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

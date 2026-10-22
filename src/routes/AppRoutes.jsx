@@ -382,7 +382,9 @@ export default function AppRoutes() {
       <Route path="/create" element={<Navigate to="/create-post" replace />} />
       <Route path="/create_post" element={<Navigate to="/create-post" replace />} />
       
-      <Route path="/network" element={<Navigate to="/notifications?tab=network" replace />} />
+      <Route path="/network" element={<Navigate to="/connections" replace />} />
+      <Route path="/posts" element={<Navigate to="/home" replace />} />
+      <Route path="/profile/:userId/posts" element={<Navigate to="/profile/:userId" replace />} />
       
       <Route path="/coins" element={
         <ProtectedRoute>
@@ -1014,6 +1016,22 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/profile/passport" element={<Navigate to="/passport" replace />} />
+      <Route path="/citizen" element={<Navigate to="/passport" replace />} />
+      <Route path="/citizenship" element={<Navigate to="/passport" replace />} />
+      <Route path="/citizen/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PassportScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/citizenship/:userId" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PassportScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
 
       {/* Part 2: Creator Workspace & Onboarding */}
       <Route path="/creator/onboarding" element={
