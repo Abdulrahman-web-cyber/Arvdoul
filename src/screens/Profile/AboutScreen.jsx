@@ -110,47 +110,22 @@ export default function AboutScreen() {
         ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a] text-white'
         : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8] text-slate-900'
     )}>
-      {/* Header */}
-      <div className={cn(
-        'sticky top-0 z-20 backdrop-blur-xl border-b transition-colors',
-        isDark
-          ? 'bg-[#060816]/90 border-slate-800'
-          : 'bg-white/90 border-slate-200 shadow-sm'
-      )}>
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className={cn(
-                'p-2 rounded-xl border transition-colors',
-                isDark ? 'bg-[#0d1424] border-slate-800 hover:bg-slate-800' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
-              )}
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <h1 className="text-base font-bold text-slate-900 dark:text-white">
-              About Profile
-            </h1>
-          </div>
-
-          {isActualOwner && (
+      {/* Content */}
+      <div className="max-w-3xl mx-auto px-4 py-4 sm:py-5 space-y-4">
+        {isActualOwner && (
+          <div className="flex justify-end">
             <button
               onClick={handleEdit}
               className={cn(
-                'px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm',
-                'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-90'
+                'px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm cursor-pointer',
+                'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:brightness-110 active:scale-95'
               )}
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit Details</span>
+              <span>Edit Profile Details</span>
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-3xl mx-auto px-4 py-5 space-y-5">
+          </div>
+        )}
         {/* Profile Card & Info */}
         <ProfileAbout
           profile={effectiveProfile}
@@ -183,8 +158,8 @@ export default function AboutScreen() {
               </div>
             </div>
             <button
-              onClick={() => navigate('/progression')}
-              className="text-xs font-bold text-indigo-500 hover:underline"
+              onClick={() => navigate('/progress')}
+              className="text-xs font-bold text-indigo-500 hover:underline cursor-pointer"
             >
               View System
             </button>

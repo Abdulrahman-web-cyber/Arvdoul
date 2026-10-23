@@ -5,39 +5,43 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   ShieldCheck,
   Award,
   Zap,
-  CheckCircle2,
-  TrendingUp,
-  Share2,
 } from 'lucide-react';
 import reputationService from '../../services/reputationService.js';
+import { getStoredUid } from '../../utils/security.js';
 import { toast } from 'sonner';
 
 export default function ReputationScreen() {
   const { theme, isDark } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { userId } = useParams();
+
+  const targetUserId = userId || user?.uid || getStoredUid();
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
 
   const fetchReputation = useCallback(async () => {
-    if (!userId) return;
-    setLoading(false);
+    if (!targetUserId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      const data = await reputationService.getReputationProfile(userId);
+      const data = await reputationService.getReputationProfile(targetUserId);
       setProfile(data);
     } catch (err) {
       toast.error('Failed to load reputation profile');
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [targetUserId]);
 
   useEffect(() => {
     fetchReputation();
@@ -72,7 +76,7 @@ export default function ReputationScreen() {
             <p className="text-xs text-gray-500">Multidimensional Civic Standing</p>
           </div>
           <button
-            onClick={() => navigate(`/passport/${userId}`)}
+            onClick={() => navigate(targetUserId ? `/passport/${targetUserId}` : '/passport')}
             className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors cursor-pointer"
           >
             Digital Passport

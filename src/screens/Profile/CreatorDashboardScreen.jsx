@@ -108,74 +108,53 @@ export default function CreatorDashboardScreen() {
       'min-h-screen pb-20',
       theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
     )}>
-      {/* Header */}
+      {/* Top Sub-Toolbar: Actions & Timeframe */}
       <div className={cn(
-        'sticky top-0 z-20',
-        'bg-white/80 dark:bg-gray-900/70 backdrop-blur-xl',
-        'border-b border-gray-200 dark:border-gray-800'
+        'sticky top-0 z-20 backdrop-blur-xl border-b transition-colors',
+        theme === 'dark' ? 'bg-gray-900/90 border-gray-800' : 'bg-white/90 border-gray-200 shadow-sm'
       )}>
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className={cn(
-                'p-2 rounded-xl',
-                'hover:bg-gray-100 dark:hover:bg-gray-800',
-                'transition-colors'
-              )}
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            </button>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Creator Dashboard
-            </h1>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={loading}
-              className={cn(
-                'p-2 rounded-xl',
-                'bg-gray-100 dark:bg-gray-800',
-                'hover:bg-gray-200 dark:hover:bg-gray-700',
-                'transition-colors',
-                loading && 'opacity-50'
-              )}
-            >
-              <RefreshCw className={cn('w-5 h-5 text-gray-600 dark:text-gray-400', loading && 'animate-spin')} />
-            </button>
-            <button
-              onClick={handleExport}
-              className={cn(
-                'p-2 rounded-xl',
-                'bg-gray-100 dark:bg-gray-800',
-                'hover:bg-gray-200 dark:hover:bg-gray-700',
-                'transition-colors'
-              )}
-            >
-              <Download className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            </button>
-          </div>
-        </div>
-        
-        {/* Timeframe Selector */}
-        <div className="px-4 pb-3">
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          {/* Timeframe Selector */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
             {['7d', '30d', '90d', '365d'].map((tf) => (
               <button
                 key={tf}
                 onClick={() => handleTimeframeChange(tf)}
                 className={cn(
-                  'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap',
+                  'px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer',
                   timeframe === tf
-                    ? 'bg-purple-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                 )}
               >
-                {tf === '7d' ? '7 Days' : tf === '30d' ? '30 Days' : tf === '90d' ? '90 Days' : '1 Year'}
+                {tf}
               </button>
             ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              title="Refresh Analytics"
+              className={cn(
+                'p-2 rounded-xl transition-colors cursor-pointer',
+                'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700',
+                loading && 'opacity-50'
+              )}
+            >
+              <RefreshCw className={cn('w-4 h-4 text-gray-600 dark:text-gray-300', loading && 'animate-spin')} />
+            </button>
+            <button
+              onClick={handleExport}
+              title="Export Analytics JSON"
+              className={cn(
+                'p-2 rounded-xl transition-colors cursor-pointer',
+                'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+              )}
+            >
+              <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
           </div>
         </div>
       </div>

@@ -353,7 +353,7 @@ export default function PassportScreen() {
                       isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200'
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Diplomatic Tier</span>
-                      <span className="font-bold text-amber-400 flex items-center gap-1">
+                      <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                         <Crown className="w-3.5 h-3.5" />
                         {passport.citizenTier?.tier || 'Platform Resident'}
                       </span>
@@ -363,7 +363,7 @@ export default function PassportScreen() {
                       isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200'
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Civic Rank</span>
-                      <span className="font-bold text-indigo-400">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
                         {passport.rankTitle || 'Arrival'}
                       </span>
                     </div>
@@ -372,7 +372,7 @@ export default function PassportScreen() {
                       isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200'
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">National Status</span>
-                      <span className="font-bold text-emerald-400">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
                         Active Citizen
                       </span>
                     </div>
@@ -381,7 +381,7 @@ export default function PassportScreen() {
                       isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200'
                     }`}>
                       <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Issuance Epoch</span>
-                      <span className="font-bold">
+                      <span className="font-bold text-slate-800 dark:text-slate-100">
                         {passport.issueDate || 'Genesis Era'}
                       </span>
                     </div>
@@ -395,17 +395,17 @@ export default function PassportScreen() {
               }`}>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Progression</span>
-                  <span className="text-base font-bold text-indigo-400">Level {passport.level ?? '—'}</span>
+                  <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">Level {passport.level ?? '—'}</span>
                   <span className="text-[9px] text-slate-500 block truncate">{passport.rankTitle || 'Registered'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Active Days</span>
-                  <span className="text-base font-bold text-emerald-400">{passport.activeDaysCount ?? '—'}</span>
+                  <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{passport.activeDaysCount ?? '—'}</span>
                   <span className="text-[9px] text-slate-500 block">{passport.activeStreak != null ? `${passport.activeStreak}d streak` : 'Perpetual'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block font-mono uppercase">Verified Visas</span>
-                  <span className="text-base font-bold text-amber-400">{passport.visaStamps?.filter(s => s.verified).length || 0}</span>
+                  <span className="text-base font-bold text-amber-600 dark:text-amber-400">{passport.visaStamps?.filter(s => s.verified).length || 0}</span>
                   <span className="text-[9px] text-slate-500 block">Stamped</span>
                 </div>
               </div>
@@ -579,16 +579,16 @@ export default function PassportScreen() {
                     : (isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50')
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400">Ducal Candidacy (Duke)</span>
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Ducal Candidacy (Duke)</span>
                     <span className="text-[10px] font-mono">
                       {passport.royalEligibility?.duke?.eligible ? '✅ ELIGIBLE' : 'REQUIREMENTS'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     Requires Level 70, 180 Active Days, 85 Reputation, and 10 Verified Achievements.
                   </p>
                   {passport.royalEligibility?.duke?.missing?.length > 0 && (
-                    <div className="mt-2 text-[10px] font-mono text-amber-500/80">
+                    <div className="mt-2 text-[10px] font-mono text-amber-600 dark:text-amber-400">
                       Missing: {passport.royalEligibility.duke.missing.join(', ')}
                     </div>
                   )}
@@ -601,16 +601,16 @@ export default function PassportScreen() {
                     : (isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50')
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-400">Royal Crown (King)</span>
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Royal Crown (King)</span>
                     <span className="text-[10px] font-mono">
                       {passport.royalEligibility?.king?.eligible ? '👑 SOVEREIGN' : 'REQUIREMENTS'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     Requires Level 90, 365 Active Days, 95 Reputation, and 25 Verified Achievements.
                   </p>
                   {passport.royalEligibility?.king?.missing?.length > 0 && (
-                    <div className="mt-2 text-[10px] font-mono text-amber-500/80">
+                    <div className="mt-2 text-[10px] font-mono text-amber-600 dark:text-amber-400">
                       Missing: {passport.royalEligibility.king.missing.join(', ')}
                     </div>
                   )}
@@ -631,8 +631,8 @@ export default function PassportScreen() {
                 <div className={`flex items-center justify-between p-3 rounded-xl border ${
                   isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}>
-                  <span className="text-slate-400">Trust & Policy Standing</span>
-                  <span className="font-bold text-emerald-400">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Trust & Policy Standing</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
                     {passport.reputation?.available
                       ? `${passport.reputation.band} (${passport.reputation.score}/100)`
                       : 'Unavailable'}
@@ -642,8 +642,8 @@ export default function PassportScreen() {
                 <div className={`flex items-center justify-between p-3 rounded-xl border ${
                   isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}>
-                  <span className="text-slate-400">Ecosystem Reach & Influence</span>
-                  <span className="font-bold text-purple-400">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Ecosystem Reach & Influence</span>
+                  <span className="font-bold text-purple-600 dark:text-purple-400">
                     {passport.influence?.available ? passport.influence.band : 'Unavailable'}
                   </span>
                 </div>
@@ -651,8 +651,8 @@ export default function PassportScreen() {
                 <div className={`flex items-center justify-between p-3 rounded-xl border ${
                   isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}>
-                  <span className="text-slate-400">Civic & Community Contribution</span>
-                  <span className="font-bold text-teal-400">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Civic & Community Contribution</span>
+                  <span className="font-bold text-teal-600 dark:text-teal-400">
                     {passport.contribution?.available ? passport.contribution.band : 'Unavailable'}
                   </span>
                 </div>

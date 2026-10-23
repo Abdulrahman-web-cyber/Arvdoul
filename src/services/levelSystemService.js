@@ -135,10 +135,8 @@ class LevelSystemService {
     // Server-authoritative path first (best-effort, never blocks the caller).
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        const { getFunctions, httpsCallable } = await import('firebase/functions');
-        const func = httpsCallable(getFunctions(), 'awardExperience');
-        const res = await func({ action, count, source });
-        const data = res.data;
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        const data = await callFunction(FUNCTIONS.AWARD_EXPERIENCE, { action, count, source });
         if (data && data.success) {
           this._cache.delete(this._cacheKey(userId));
           if (data.leveledUp) {
@@ -184,12 +182,11 @@ class LevelSystemService {
 
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        const { getFunctions, httpsCallable } = await import('firebase/functions');
-        const func = httpsCallable(getFunctions(), 'recordActiveDay');
-        const res = await func({ userId });
-        if (res.data?.success) {
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        const data = await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
+        if (data?.success) {
           this._cache.delete(this._cacheKey(userId));
-          return res.data;
+          return data;
         }
       } catch (err) {
         logger.warn('[LevelSystem] recordActiveDay callable failed:', { error: err.message });

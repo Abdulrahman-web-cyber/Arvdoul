@@ -24,6 +24,7 @@ import {
   Coins,
   Settings,
   Shield,
+  ShieldCheck,
   Palette,
   HelpCircle,
   Info,
@@ -75,11 +76,19 @@ export default function MenuScreen() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const activeUser = currentUser || user;
-  const userCoins = activeUser?.coins ?? 1250;
+  const userCoins = typeof activeUser?.coins === 'number' ? activeUser.coins : 0;
   const formattedCoins = userCoins >= 1000 ? `${(userCoins / 1000).toFixed(1)}k` : `${userCoins}`;
 
   // Quick Action Launchers (Top Bento Banner)
   const quickLaunchers = useMemo(() => [
+    {
+      title: "Digital Passport",
+      desc: "Biometric identity & visas",
+      icon: ShieldCheck,
+      gradient: "from-amber-600 via-orange-600 to-yellow-500",
+      path: "/passport",
+      badge: "Passport",
+    },
     {
       title: "Create Post",
       desc: "Rich text, media & polls",
@@ -120,14 +129,6 @@ export default function MenuScreen() {
       path: "/thumbnail-designer",
       badge: "Design",
     },
-    {
-      title: "Live Audio Space",
-      desc: "Stage lounge & live tips",
-      icon: Radio,
-      gradient: "from-rose-500 via-red-600 to-orange-500",
-      path: "/spaces",
-      badge: "Live",
-    },
   ], []);
 
   // Categorized Hub Items
@@ -138,7 +139,9 @@ export default function MenuScreen() {
     { id: "audio-editor", category: "creator", icon: Music, label: "Audio Editor & Synthesizer", description: "Multi-waveform audio splicing & volume normalizer", color: "#ec4899", path: "/audio-editor", badge: "New" },
     { id: "thumbnail-designer", category: "creator", icon: Sliders, label: "Thumbnail & Poster Studio", description: "Layer-based typography, gradients & presets", color: "#06b6d4", path: "/thumbnail-designer", badge: "Design" },
     { id: "create-story", category: "creator", icon: Flame, label: "Create 24h Vibe Story", description: "Ephemeral stories with interactive stickers", color: "#f97316", path: "/create-story", badge: null },
+    { id: "collaboration", category: "creator", icon: Layers, label: "Collaboration Studio", description: "Multi-creator shared projects & co-authored workspaces", color: "#8b5cf6", path: "/collaboration", badge: "Collab" },
     { id: "creator-dashboard", category: "creator", icon: TrendingUp, label: "Creator Dashboard & Analytics", description: "Reach metrics, audience retention & coin revenue", color: "#10b981", path: "/creator/dashboard", badge: "Stats" },
+    { id: "creator-onboarding", category: "creator", icon: Award, label: "Creator Verification & Grants", description: "Accreditation, royalty payouts & sovereign creator status", color: "#ec4899", path: "/creator/onboarding", badge: "Apply" },
     { id: "creator-payout", category: "creator", icon: Wallet, label: "Monetization & Payouts", description: "Stripe Connect payout balance and tip-jar logs", color: "#f59e0b", path: "/creator-payout", badge: "Earn" },
 
     // Social & Feeds
@@ -152,9 +155,14 @@ export default function MenuScreen() {
     { id: "notifications", category: "social", icon: Bell, label: "Notifications & Alerts", description: "Live activity, comments, likes & coin tips", color: "#f59e0b", path: "/notifications", badge: unreadCounts?.notifications ? `${unreadCounts.notifications}` : null },
     { id: "saved", category: "social", icon: Bookmark, label: "Saved Items & Collections", description: "Bookmarked media, reels, and inspiration folders", color: "#8b5cf6", path: "/saved", badge: null },
 
-    // Community & Rankings
+    // Civic Nation, Community & Progression
+    { id: "passport", category: "community", icon: ShieldCheck, label: "Digital Commonwealth Passport", description: "Biometric sovereign passport, visa stamps & nation dossier", color: "#f59e0b", path: "/passport", badge: "ID" },
+    { id: "progress", category: "community", icon: TrendingUp, label: "Progression & Civic Perks", description: "XP level tree, tier perks & rank unlocks", color: "#6366f1", path: "/progress", badge: "Level" },
+    { id: "titles", category: "community", icon: Award, label: "Civic & Nobility Titles", description: "Nobility titles, ceremonial honours & civic provenance", color: "#a855f7", path: "/titles", badge: "Titles" },
+    { id: "reputation", category: "community", icon: Zap, label: "Civic Trust & Reputation", description: "Multidimensional trust score, influence & community contribution", color: "#10b981", path: "/reputation", badge: "Rep" },
     { id: "rankings", category: "community", icon: Trophy, label: "Global Creator Leaderboards", description: "Top creators, reputation badges & ranking XP", color: "#fbbf24", path: "/rankings", badge: "Top 100" },
-    { id: "coins", category: "community", icon: Coins, label: "Coin Treasury & Top-Up", description: "Purchase virtual coins and support favorite creators", color: "#f59e0b", path: "/coins", badge: `${formattedCoins} Coins` },
+    { id: "coins", category: "community", icon: Coins, label: "Coin Treasury & Top-Up", description: "Purchase virtual coins and support favorite creators", color: "#f59e0b", path: "/coins", badge: userCoins > 0 ? `${formattedCoins} Coins` : "Coins" },
+    { id: "wallet", category: "community", icon: Wallet, label: "Sovereign Treasury Wallet", description: "Coins ledger, monthly subscriptions & withdrawal earnings", color: "#059669", path: "/wallet", badge: "Ledger" },
     { id: "community", category: "community", icon: Layers, label: "Communities & Circles", description: "Discover niche creator communities and forums", color: "#3b82f6", path: "/community", badge: null },
     { id: "events", category: "community", icon: Calendar, label: "Events & Meetups", description: "Virtual and in-person creator events RSVP", color: "#10b981", path: "/event", badge: null },
     { id: "badges", category: "community", icon: Award, label: "Badges & Achievements", description: "Unlockable VIP badges, milestones & verified status", color: "#a855f7", path: "/badges", badge: null },
@@ -165,7 +173,7 @@ export default function MenuScreen() {
     { id: "privacy", category: "system", icon: Shield, label: "Privacy & Security", description: "Two-factor auth, blocked users & visibility", color: "#10b981", path: "/settings#privacy", badge: null },
     { id: "appearance", category: "system", icon: Palette, label: "Theme & Appearance", description: "Dark mode, OLED accents & display density", color: "#8b5cf6", path: "/settings#appearance", badge: null },
     { id: "help", category: "system", icon: HelpCircle, label: "Help Center & Support", description: "Community guidelines, FAQ & 24/7 ticket support", color: "#3b82f6", path: "/help", badge: null },
-  ], [unreadCounts, formattedCoins]);
+  ], [unreadCounts, formattedCoins, userCoins]);
 
   // Filtered items based on active category & search query
   const filteredItems = useMemo(() => {
@@ -240,14 +248,16 @@ export default function MenuScreen() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                    {activeUser?.displayName || "Creator"}
+                    {activeUser?.displayName || "Citizen"}
                   </h1>
-                  <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-400 text-xs font-bold">
-                    PRO
-                  </span>
+                  {activeUser?.isCreator && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 text-purple-400 text-xs font-bold">
+                      PRO
+                    </span>
+                  )}
                 </div>
                 <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                  @{activeUser?.username || "creator"} • Citizen Level 4
+                  @{activeUser?.username || "citizen"} • {activeUser?.level ? `Citizen Level ${activeUser.level}` : "Arvdoul Citizen"}
                 </p>
               </div>
             </div>

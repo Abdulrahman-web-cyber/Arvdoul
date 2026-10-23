@@ -204,7 +204,7 @@ export const ProfileLevelProgressCard = memo(({
                   Level {currentLevelNumber}
                 </span>
                 {rankTitle && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 truncate">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-400 truncate">
                     {rankTitle}
                   </span>
                 )}
@@ -625,7 +625,7 @@ export const ProfileIdentityCard = memo(({
                 className="relative block w-22 h-22 sm:w-26 sm:h-26 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#00F0FF] shadow-[0_12px_36px_rgba(139,30,243,0.38)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer"
                 title={isOwner ? "Change profile photo" : "View avatar"}
               >
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-[#03071B] dark:ring-[#03071B] relative">
+                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-white dark:ring-[#03071B] relative">
                   <img
                     src={avatarUrl}
                     alt={displayName}
@@ -659,7 +659,7 @@ export const ProfileIdentityCard = memo(({
               {/* Live Presence Status Dot */}
               <div 
                 className={cn(
-                  "absolute bottom-2 right-2 w-4 h-4 rounded-full ring-2 ring-[#03071B] dark:ring-[#03071B]",
+                  "absolute bottom-2 right-2 w-4 h-4 rounded-full ring-2 ring-white dark:ring-[#03071B]",
                   isOnline ? "bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" : "bg-slate-400"
                 )}
                 title={isOnline ? "Active now" : "Offline"} 
@@ -679,14 +679,14 @@ export const ProfileIdentityCard = memo(({
                 </span>
               )}
               {isCreator && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 border border-purple-500/30 text-purple-300 shadow-sm">
-                  <Sparkles className="w-3 h-3 text-purple-400" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 shadow-sm">
+                  <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400" />
                   <span>Creator</span>
                 </span>
               )}
               {isPremium && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 text-amber-300 shadow-sm">
-                  <Crown className="w-3 h-3 text-amber-400" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-sm">
+                  <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                   <span>VIP</span>
                 </span>
               )}
@@ -900,10 +900,18 @@ export const ProfileIdentityCard = memo(({
         </div>
 
         {/* 5. Sleek Luxury Frosted Glass Command Dock */}
-        <div className="relative rounded-2xl p-2 sm:p-2.5 bg-white/10 dark:bg-white/[0.04] backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-lg overflow-hidden">
+        <div className={cn(
+          "relative rounded-2xl p-2 sm:p-2.5 backdrop-blur-2xl border shadow-lg overflow-hidden transition-all",
+          isDark
+            ? "bg-white/[0.04] border-white/10"
+            : "bg-slate-100/90 border-slate-200/90 shadow-slate-200/50"
+        )}>
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 dark:via-white/20 to-transparent"
+            className={cn(
+              "pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent to-transparent",
+              isDark ? "via-white/20" : "via-purple-500/30"
+            )}
           />
 
           {isOwner ? (
@@ -924,11 +932,16 @@ export const ProfileIdentityCard = memo(({
               <button
                 type="button"
                 onClick={onShare}
-                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className={cn(
+                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="Share Profile"
                 aria-label="Share Profile"
               >
-                <Share2 className="w-4 h-4 text-white/90" />
+                <Share2 className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
                 <span className="hidden sm:inline text-xs font-bold">Share</span>
               </button>
 
@@ -936,11 +949,16 @@ export const ProfileIdentityCard = memo(({
               <button
                 type="button"
                 onClick={onOpenQrCode}
-                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className={cn(
+                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="Citizen QR Pass"
                 aria-label="Citizen QR Pass"
               >
-                <QrCode className="w-4 h-4 text-white/90" />
+                <QrCode className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
                 <span className="hidden sm:inline text-xs font-bold">QR Pass</span>
               </button>
 
@@ -951,13 +969,15 @@ export const ProfileIdentityCard = memo(({
                 className={cn(
                   "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95",
                   viewAs && viewAs !== 'owner'
-                    ? "border-amber-500/40 bg-amber-500/20 text-amber-300"
-                    : "border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    ? "border-amber-500/40 bg-amber-500/20 text-amber-500 dark:text-amber-300 font-bold"
+                    : isDark
+                      ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
                 )}
                 title="View As Perspective"
                 aria-label="View As Perspective"
               >
-                <Eye className="w-4 h-4" />
+                <Eye className={cn("w-4 h-4", viewAs && viewAs !== 'owner' ? "text-amber-500 dark:text-amber-300" : isDark ? "text-white/90" : "text-slate-700")} />
                 <span className="hidden sm:inline text-xs font-bold">View As</span>
               </button>
 
@@ -968,11 +988,16 @@ export const ProfileIdentityCard = memo(({
                   e.stopPropagation();
                   onOpenOptions?.();
                 }}
-                className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                className={cn(
+                  "h-11 sm:h-12 w-11 sm:w-12 rounded-xl border active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="More Options"
                 aria-label="More Options"
               >
-                <MoreHorizontal className="w-4 h-4 text-white/90" />
+                <MoreHorizontal className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
               </button>
             </div>
           ) : (
@@ -986,7 +1011,7 @@ export const ProfileIdentityCard = memo(({
                   className={cn(
                     "flex-1 h-11 sm:h-12 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-[0.98] font-black text-xs sm:text-sm shadow-md",
                     isFollowing
-                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300"
                       : "bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-purple-400/30 text-white shadow-purple-600/25"
                   )}
                   title={isFollowing ? "Following" : "Follow"}
@@ -1001,11 +1026,16 @@ export const ProfileIdentityCard = memo(({
               <button
                 type="button"
                 onClick={onOpenMessages || (() => nav(`/messages/new?to=${profileUid}`))}
-                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className={cn(
+                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="Direct Message"
                 aria-label="Direct Message"
               >
-                <MessageCircle className="w-4 h-4 text-white/90" />
+                <MessageCircle className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
                 <span className="hidden sm:inline text-xs font-bold">Message</span>
               </button>
 
@@ -1013,11 +1043,16 @@ export const ProfileIdentityCard = memo(({
               <button
                 type="button"
                 onClick={onShare}
-                className="h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                className={cn(
+                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="Share Profile"
                 aria-label="Share Profile"
               >
-                <Share2 className="w-4 h-4 text-white/90" />
+                <Share2 className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
                 <span className="hidden sm:inline text-xs font-bold">Share</span>
               </button>
 
@@ -1025,11 +1060,16 @@ export const ProfileIdentityCard = memo(({
               <button
                 type="button"
                 onClick={onOpenQrCode}
-                className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                className={cn(
+                  "h-11 sm:h-12 w-11 sm:w-12 rounded-xl border active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="Citizen QR Pass"
                 aria-label="Citizen QR Pass"
               >
-                <QrCode className="w-4 h-4 text-white/90" />
+                <QrCode className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
               </button>
 
               {/* Secondary: More Options */}
@@ -1039,11 +1079,16 @@ export const ProfileIdentityCard = memo(({
                   e.stopPropagation();
                   onOpenOptions?.();
                 }}
-                className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl border border-white/10 dark:border-white/[0.08] bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0"
+                className={cn(
+                  "h-11 sm:h-12 w-11 sm:w-12 rounded-xl border active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0",
+                  isDark
+                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
+                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
+                )}
                 title="Profile Options"
                 aria-label="Profile Options"
               >
-                <MoreHorizontal className="w-4 h-4 text-white/90" />
+                <MoreHorizontal className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
               </button>
             </div>
           )}

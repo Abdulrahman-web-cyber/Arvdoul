@@ -1059,6 +1059,13 @@ export default function AppRoutes() {
       } />
       <Route path="/profile/wallet" element={<Navigate to="/wallet" replace />} />
 
+      <Route path="/reputation" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <ReputationScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
       <Route path="/reputation/:userId" element={
         <ProtectedRoute>
           <Suspense fallback={<RouteFallback />}>

@@ -287,45 +287,7 @@ export default function CoinsScreen() {
 
   return (
     <div className={cn("min-h-screen pb-24", colors.bg)}>
-      {/* Header */}
-      <div className={cn("sticky top-0 z-50 border-b backdrop-blur-xl", colors.card, colors.border)}>
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate(-1)}
-              aria-label="Go back"
-              className="p-3 rounded-xl hover:bg-gray-800/50 dark:hover:bg-gray-800 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-3">
-              <ArvdoulLogo size={32} showWordmark={false} />
-              <div className="text-left">
-                <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 bg-clip-text text-transparent">
-                  Arvdoul Coins
-                </h1>
-                <p className={cn("text-xs sm:text-sm", colors.secondary)}>Monetization, gifts & creator rewards</p>
-              </div>
-            </div>
-
-            <button
-              onClick={loadBalance}
-              aria-label="Refresh balance"
-              className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500/15 to-yellow-500/15 border border-amber-500/30 hover:border-amber-500/50 flex items-center gap-2.5 transition-all shadow-sm"
-            >
-              <CoinStackIcon size={22} />
-              {balanceLoading ? (
-                <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
-              ) : (
-                <span className="font-extrabold text-amber-400">{(balance ?? 0).toLocaleString()}</span>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
         {/* Balance Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

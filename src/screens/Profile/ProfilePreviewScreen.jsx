@@ -149,20 +149,9 @@ export default function ProfilePreviewScreen({
       )}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleBack}
-              className={cn(
-                'p-2 rounded-xl border transition-colors',
-                isDark ? 'bg-[#0d1424] border-slate-800 hover:bg-slate-800' : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
-              )}
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="flex items-center gap-1.5 text-xs font-bold">
-              <Eye className="w-4 h-4 text-purple-500" />
-              <span>Profile Preview</span>
-            </div>
+            <span className="text-xs font-mono uppercase tracking-wider text-purple-400 font-bold">
+              Perspective:
+            </span>
           </div>
 
           {/* Perspective Toggle */}

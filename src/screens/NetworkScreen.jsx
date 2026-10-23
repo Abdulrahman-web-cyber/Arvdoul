@@ -119,14 +119,8 @@ export default function NetworkScreen() {
 
   return (
     <div className={cn("min-h-screen pb-16", colors.bg)}>
-      <div className={cn("sticky top-0 z-50 border-b backdrop-blur-xl", colors.card, "border")}>
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} aria-label="Go back" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className={cn("text-xl font-bold", colors.text)}>Network</h1>
-        </div>
-        <div className="max-w-3xl mx-auto px-4 pb-3 flex gap-2">
+      <div className={cn("sticky top-0 z-30 border-b backdrop-blur-xl pt-3 pb-3", colors.card, "border")}>
+        <div className="max-w-3xl mx-auto px-4 flex gap-2">
           {TABS.map((t) => (
             <button
               key={t.id}
