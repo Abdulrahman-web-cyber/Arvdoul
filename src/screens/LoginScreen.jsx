@@ -468,11 +468,7 @@ export default function LoginScreen() {
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') 
     : theme;
 
-  const logoPath = useMemo(() => {
-    return resolvedTheme === "dark" 
-      ? "/logo/logo-dark.png" 
-      : "/logo/logo-light.png";
-  }, [resolvedTheme]);
+  const logoPath = "/logo/logo.svg";
 
   // Shake on error
   const triggerShake = useCallback(() => {

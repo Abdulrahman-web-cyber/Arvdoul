@@ -45,6 +45,19 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const targetUserId = userId || currentUserId;
   const isOwner = Boolean(currentUserId && targetUserId === currentUserId);
 
+  // 1. State hooks declared first before any derived values (prevents TDZ ReferenceError)
+  const [targetProfile, setTargetProfile] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Lists state
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [friends, setFriends] = useState([]);
+  
+  // Loading & privacy state
+  const [loading, setLoading] = useState(true);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+
   // Basic level users start with community Friends; Level 3+ unlocks public Followers
   const effectiveLevel = Number(targetProfile?.level || userProfile?.level || currentUser?.level) || 1;
   const isCreatorOrAdvanced = Boolean(
@@ -64,18 +77,14 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     return isCreatorOrAdvanced ? 'followers' : 'friends';
   }, [propInitialTab, location.pathname, isCreatorOrAdvanced]);
 
-  const [activeTab, setActiveTab] = useState(derivedInitialTab);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Lists state
-  const [followers, setFollowers] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [friends, setFriends] = useState([]);
-  
-  // Loading & privacy state
-  const [loading, setLoading] = useState(true);
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const [targetProfile, setTargetProfile] = useState(null);
+  const [activeTab, setActiveTab] = useState(propInitialTab || derivedInitialTab);
+
+  // Keep activeTab in sync if propInitialTab changes
+  useEffect(() => {
+    if (propInitialTab) {
+      setActiveTab(propInitialTab);
+    }
+  }, [propInitialTab]);
 
   const { follow, unfollow, followLoading } = useProfileStore();
 
@@ -96,7 +105,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           userService.getUserProfile(targetUserId, currentUserId).catch(() => null),
           currentUserId && currentUserId !== targetUserId
             ? userService.getRelationshipState(currentUserId, targetUserId).catch(() => null)
-            : Promise.resolve({ isOwner: true }),
+            : Promise.resolve({ isOwner: Boolean(currentUserId && targetUserId === currentUserId) }),
         ]);
 
         if (isMounted) {
@@ -134,7 +143,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
             setFollowers(followersRes.value?.followers || []);
           }
           if (followingRes.status === 'fulfilled') {
-            setFollowing(followingRes.value?.following || []);
+            setFollowing(followingRes.value?.following || followingRes.value?.friends || []);
           }
           if (friendsRes.status === 'fulfilled') {
             setFriends(friendsRes.value?.mutualFriends || friendsRes.value?.friends || []);

@@ -34,7 +34,7 @@ export const ArvdoulEmblem = memo(({
     : (theme === 'dark' ? 'dark' : (isDarkTheme ? 'dark' : 'light'));
 
   const isLight = effectiveTheme === 'light';
-  const logoSrc = isLight ? '/logo/logo-light.png' : '/logo/logo-dark.png';
+  const logoSrc = '/logo/logo.svg';
 
   return (
     <div 

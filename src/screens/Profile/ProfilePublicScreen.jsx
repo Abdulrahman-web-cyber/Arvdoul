@@ -356,9 +356,10 @@ export default function ProfilePublicScreen() {
   // The single projection handed to the view layer. Economic status and every
   // gated section are masked here based on the capability engine's decision —
   // never recomputed by a component.
+  const isOwner = Boolean(currentUser?.uid && (baseProfile?.uid === currentUser.uid || baseProfile?.id === currentUser.uid));
   const effectiveProfile = useMemo(
-    () => projectProfileForViewer(baseProfile, capabilities),
-    [baseProfile, capabilities]
+    () => projectProfileForViewer(baseProfile, capabilities, { isOwner }),
+    [baseProfile, capabilities, isOwner]
   );
 
   const handleUnblock = useCallback(async () => {
@@ -435,13 +436,13 @@ export default function ProfilePublicScreen() {
           <div className="pt-2 flex justify-center gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
             >
               Go Back
             </button>
             <button
               onClick={handleUnblock}
-              className="px-5 py-2.5 rounded-full font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-600 hover:bg-red-700 shadow-md transition-opacity"
             >
               Unblock Profile
             </button>
@@ -471,7 +472,7 @@ export default function ProfilePublicScreen() {
           <div className="pt-2 flex justify-center">
             <button
               onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
             >
               Back to Home
             </button>
@@ -501,13 +502,13 @@ export default function ProfilePublicScreen() {
           <div className="pt-2 flex justify-center gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="px-5 py-2.5 rounded-full font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-slate-200 dark:bg-white/10 hover:opacity-90 transition-opacity"
             >
               Go Back
             </button>
             <button
               onClick={() => navigate('/')}
-              className="px-5 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity"
+              className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity"
             >
               Discover Creators
             </button>
@@ -595,7 +596,7 @@ export default function ProfilePublicScreen() {
                   <div className="pt-2 flex justify-center">
                     <button
                       onClick={handleFollowToggle}
-                      className="px-6 py-2.5 rounded-full font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
+                      className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
                     >
                       <UserPlus className="w-4 h-4" />
                       <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>

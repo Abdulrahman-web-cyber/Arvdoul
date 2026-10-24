@@ -185,9 +185,7 @@ export default function EmailVerification() {
   const isMounted = useRef(true);
   const checkVerificationRef = useRef();
 
-  const logoPath = useMemo(() => {
-    return isDark ? "/logo/logo-dark.png" : "/logo/logo-light.png";
-  }, [isDark]);
+  const logoPath = "/logo/logo.svg";
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);

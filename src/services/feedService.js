@@ -587,7 +587,7 @@ class UltimateFeedService {
             authorId: 'arvdoul_official',
             authorName: 'Arvdoul Official',
             authorUsername: 'arvdoul',
-            authorPhoto: '/logo/logo-dark.png',
+            authorPhoto: '/logo/logo.svg',
             isVerified: true,
             type: 'text',
             content: '✨ Welcome to Arvdoul — the creator network and social ecosystem! Explore Sparks & Reels, live audio spaces, instant messaging with voice notes, coin gifting, and vibrant creator communities. Tap "Create Post" to publish your first post!',
@@ -610,8 +610,8 @@ class UltimateFeedService {
             media: [
               {
                 type: 'image',
-                url: '/logo/logo-light.png',
-                thumbnail: '/logo/logo-light.png'
+                url: '/logo/logo.svg',
+                thumbnail: '/logo/logo.svg'
               }
             ],
             tags: ['Sparks', 'Trending', 'Reels'],

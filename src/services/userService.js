@@ -1110,7 +1110,12 @@ class ProfessionalUserService {
    * @returns {Object} { success, following, hasMore, nextCursor, total }
    */
   async getFollowing(userId, options = {}) {
-    return this.getFriends(userId, options);
+    const res = await this.getFriends(userId, options);
+    return {
+      ...res,
+      following: res.friends || [],
+      friends: res.friends || []
+    };
   }
 
   async getMutualFriends(userId, otherUserId) {
@@ -1597,6 +1602,12 @@ class ProfessionalUserService {
       await this._ensureInitialized();
       const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
       await updateDoc(doc(this.firestore, 'users', userId), { isOnline: true, lastActive: serverTimestamp() });
+      try {
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        await callFunction(FUNCTIONS.RECORD_ACTIVE_DAY, { userId });
+      } catch (callErr) {
+        // Non-blocking: fails gracefully if offline or not signed in
+      }
     } catch (e) { /* silent */ }
   }
 

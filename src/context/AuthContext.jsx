@@ -481,6 +481,9 @@ export function AuthProvider({ children }) {
                   levelSystemService.awardExperience({ userId: uid, action: 'daily_login', source: today })
                 )
                 .catch(() => {});
+              if (userService?.updateLastActive) {
+                userService.updateLastActive(uid).catch(() => {});
+              }
             }
 
             const status = profile.accountStatus;
