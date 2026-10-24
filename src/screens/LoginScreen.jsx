@@ -2,15 +2,548 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { safeReturnPath } from "../utils/profileCompletion.js";
-import { ArvdoulEmblem } from "../components/Shared/ArvdoulLogo.jsx";
 
-// Import country codes (same as login)
-import { countryCodes, sortedCountryCodes, getCountryByIso } from "../data/countryCodes.js";
+// Import country codes (same as signup)
+import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Design system (shared with Signup Step 1 / Step 2)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const GRADIENT =
+  "linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)";
+
+const THEMES = {
+  dark: {
+    colorScheme: "dark",
+    "--bg": "#03071B",
+    "--text": "#F3F5FF",
+    "--text-2": "#B4BEDF",
+    "--text-3": "#8490B8",
+    "--accent-text": "#B8AAFF",
+
+    "--card-bg":
+      "linear-gradient(145deg, rgba(18,27,70,0.48), rgba(7,12,40,0.25) 48%, rgba(13,23,62,0.36))",
+    "--card-border": "rgba(174,185,255,0.20)",
+    "--card-shadow":
+      "0 36px 90px -32px rgba(0,0,0,0.72), 0 14px 36px -20px rgba(65,49,247,0.32)",
+    "--card-inset":
+      "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1px rgba(255,255,255,0.025)",
+
+    "--field-bg": "rgba(13,22,59,0.30)",
+    "--field-bg-focus": "rgba(20,29,78,0.48)",
+    "--field-bg-solid": "#0A1030",
+    "--field-border": "rgba(162,176,255,0.22)",
+    "--field-border-hover": "rgba(174,169,255,0.48)",
+    "--field-focus": "#9B8BFF",
+    "--field-ring": "rgba(117,99,255,0.23)",
+    "--sel-glow": "rgba(120,90,255,0.22)",
+
+    "--danger": "#FF879B",
+    "--danger-ring": "rgba(255,90,120,0.18)",
+    "--success": "#49E3AC",
+
+    "--pop-bg": "rgba(9,15,43,0.96)",
+    "--pop-border": "rgba(162,176,255,0.24)",
+    "--pop-shadow": "0 24px 60px -12px rgba(0,0,0,0.72)",
+    "--pop-active": "rgba(124,108,255,0.17)",
+    "--pop-selected": "rgba(124,108,255,0.26)",
+
+    "--line": "rgba(165,178,255,0.23)",
+    "--dot": "rgba(165,178,255,0.11)",
+    "--glow-a": "rgba(139,30,243,0.15)",
+    "--glow-b": "rgba(5,91,251,0.13)",
+    "--glow-c": "rgba(68,49,247,0.07)",
+
+    "--btn-off-bg": "rgba(255,255,255,0.065)",
+    "--btn-off-text": "rgba(200,208,245,0.43)",
+    "--btn-shadow":
+      "0 12px 28px -12px rgba(68,49,247,0.55), inset 0 1px 0 rgba(255,255,255,0.28)",
+
+    "--focus-outline": "#A99BFF",
+    "--rim-1": "rgba(196,186,255,0.65)",
+    "--rim-2": "rgba(70,140,255,0.48)",
+    "--spec": "rgba(255,255,255,0.10)",
+    "--field-inset":
+      "inset 0 1px 0 rgba(255,255,255,0.075), inset 0 -8px 18px -14px rgba(0,0,0,0.55)",
+  },
+
+  light: {
+    colorScheme: "light",
+    "--bg": "#F6F8FC",
+    "--text": "#101735",
+    "--text-2": "#4D587B",
+    "--text-3": "#7783A5",
+    "--accent-text": "#4431F7",
+
+    "--card-bg":
+      "linear-gradient(145deg, rgba(255,255,255,0.60), rgba(255,255,255,0.30) 48%, rgba(237,242,255,0.35))",
+    "--card-border": "rgba(80,91,177,0.18)",
+    "--card-shadow":
+      "0 36px 82px -34px rgba(48,56,140,0.27), 0 14px 34px -20px rgba(68,49,247,0.20)",
+    "--card-inset":
+      "inset 0 1px 0 rgba(255,255,255,0.94), inset 0 0 0 1px rgba(255,255,255,0.24)",
+
+    "--field-bg": "rgba(255,255,255,0.32)",
+    "--field-bg-focus": "rgba(255,255,255,0.65)",
+    "--field-bg-solid": "#FFFFFF",
+    "--field-border": "rgba(61,76,147,0.18)",
+    "--field-border-hover": "rgba(68,49,247,0.38)",
+    "--field-focus": "#4431F7",
+    "--field-ring": "rgba(68,49,247,0.15)",
+    "--sel-glow": "rgba(68,49,247,0.12)",
+
+    "--danger": "#D42A49",
+    "--danger-ring": "rgba(212,42,73,0.13)",
+    "--success": "#0E9468",
+
+    "--pop-bg": "rgba(250,251,255,0.98)",
+    "--pop-border": "rgba(68,49,247,0.17)",
+    "--pop-shadow": "0 24px 56px -14px rgba(40,50,130,0.30)",
+    "--pop-active": "rgba(68,49,247,0.075)",
+    "--pop-selected": "rgba(68,49,247,0.13)",
+
+    "--line": "rgba(61,76,147,0.18)",
+    "--dot": "rgba(68,49,247,0.10)",
+    "--glow-a": "rgba(139,30,243,0.07)",
+    "--glow-b": "rgba(5,91,251,0.07)",
+    "--glow-c": "rgba(68,49,247,0.035)",
+
+    "--btn-off-bg": "rgba(40,60,140,0.065)",
+    "--btn-off-text": "rgba(71,82,122,0.52)",
+    "--btn-shadow":
+      "0 12px 26px -12px rgba(68,49,247,0.36), inset 0 1px 0 rgba(255,255,255,0.28)",
+
+    "--focus-outline": "#4431F7",
+    "--rim-1": "rgba(139,30,243,0.34)",
+    "--rim-2": "rgba(5,91,251,0.30)",
+    "--spec": "rgba(255,255,255,0.67)",
+    "--field-inset":
+      "inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -8px 18px -14px rgba(40,60,140,0.15)",
+  },
+};
+
+const STYLES = `
+.av2-root {
+  position:relative;min-height:100vh;min-height:100dvh;overflow-x:clip;
+  background:var(--bg);color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  transition:background .3s ease,color .3s ease;
+}
+.av2-root *,.av2-root *::before,.av2-root *::after {box-sizing:border-box}
+.av2-bg {position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.av2-orb {position:absolute;border-radius:50%}
+.av2-orb-a {width:75vmax;height:75vmax;top:-43vmax;left:-34vmax;background:radial-gradient(circle,var(--glow-a),transparent 65%)}
+.av2-orb-b {width:78vmax;height:78vmax;right:-42vmax;bottom:-46vmax;background:radial-gradient(circle,var(--glow-b),transparent 66%)}
+.av2-orb-c {width:48vmax;height:48vmax;top:28%;left:30%;background:radial-gradient(circle,var(--glow-c),transparent 66%)}
+.av2-dots {
+  position:absolute;inset:0;
+  background-image:radial-gradient(var(--dot) .8px,transparent 1px);background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000,transparent 76%);
+  mask-image:radial-gradient(ellipse at 50% 30%,#000,transparent 76%);
+}
+.av2-shell {
+  position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;
+  padding:max(18px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right))
+    max(22px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+}
+.av2-wrap {width:100%;max-width:540px;margin:auto}
+
+/* Card */
+.av2-card {
+  position:relative;isolation:isolate;padding:28px 23px 23px;
+  border:1px solid var(--card-border);border-radius:28px;background:var(--card-bg);
+  box-shadow:var(--card-shadow),var(--card-inset);
+  -webkit-backdrop-filter:blur(34px) saturate(175%);backdrop-filter:blur(34px) saturate(175%);
+  transition:background .3s,border-color .3s;
+}
+.av2-card::before {
+  content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(142deg,rgba(255,255,255,.10),transparent 34%,transparent 74%,rgba(100,130,255,.045));
+}
+.av2-rim {
+  position:absolute;inset:0;padding:1px;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(145deg,var(--rim-1),transparent 30%,transparent 69%,var(--rim-2));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+}
+.av2-spec {position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;background:radial-gradient(105% 42% at 12% 0%,var(--spec),transparent 63%)}
+.av2-card>header,.av2-card>.av2-body {position:relative;z-index:1}
+.av2-h1 {margin:0;font-size:clamp(23px,5vw,28px);line-height:1.17;font-weight:800;letter-spacing:-.035em}
+.av2-sub {margin:9px 0 0;color:var(--text-2);font-size:13.5px;line-height:1.55}
+.av2-divider {
+  display:flex;align-items:center;gap:12px;margin:23px 0 17px;color:var(--text-3);
+  font-size:10.5px;font-weight:750;letter-spacing:.15em;text-transform:uppercase;
+}
+.av2-divider::before,.av2-divider::after {content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--line))}
+.av2-divider::after {background:linear-gradient(270deg,transparent,var(--line))}
+.av2-panel {display:flex;flex-direction:column;gap:19px;margin-top:20px}
+
+/* Method switch */
+.av2-seg {
+  position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:6px;
+  border:1px solid var(--field-border);border-radius:20px;background:var(--field-bg);box-shadow:var(--field-inset);
+  -webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);
+}
+.av2-seg-btn {
+  position:relative;isolation:isolate;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;
+  padding:11px 4px 10px;border:0;border-radius:15px;background:transparent;color:var(--text-2);
+  font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color .2s;
+}
+.av2-seg-btn:hover {color:var(--text)}
+.av2-seg-btn[aria-selected="true"] {color:#fff}
+.av2-seg-btn:disabled {opacity:.55;cursor:not-allowed}
+.av2-seg-pill {
+  position:absolute;inset:0;z-index:-1;border-radius:15px;background:${GRADIENT};
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 9px 18px -12px rgba(68,49,247,.6);
+}
+.av2-seg-ico {display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--pop-active);transition:background .2s}
+.av2-seg-btn[aria-selected="true"] .av2-seg-ico {background:rgba(255,255,255,.2)}
+.av2-seg-ico[data-google="true"] {background:#fff}
+.av2-seg-label {font-size:13px;font-weight:750}
+.av2-seg-desc {font-size:10.5px;font-weight:600;opacity:.72}
+
+/* Labels + messages */
+.av2-label-row {display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px 2px}
+.av2-label {display:flex;align-items:center;gap:3px;color:var(--text-2);font-size:13px;font-weight:700;transition:color .2s}
+.av2-label[data-focus="true"] {color:var(--accent-text)}
+.av2-label[data-invalid="true"] {color:var(--danger)}
+.av2-req {color:var(--danger);font-weight:800}
+.av2-hint {color:var(--text-3);font-size:11px;font-weight:600}
+.av2-msg {display:flex;align-items:flex-start;gap:6px;margin:8px 2px 0;color:var(--danger);font-size:12px;font-weight:650;line-height:1.45}
+.av2-msg svg {flex:none;margin-top:1px}
+.av2-link {
+  padding:4px 2px;border:0;background:none;color:var(--accent-text);font:inherit;font-size:12.5px;font-weight:750;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;border-radius:6px;
+}
+.av2-link:hover:not(:disabled) {text-decoration:underline;text-underline-offset:3px}
+.av2-link:disabled {opacity:.5;cursor:not-allowed}
+
+/* Rectangular glass field */
+.av2-field {
+  position:relative;display:flex;align-items:center;gap:10px;min-width:0;height:56px;padding:0 13px;
+  border:1px solid var(--field-border);border-radius:12px;background:var(--field-bg);
+  color:var(--text-3);box-shadow:var(--field-inset);
+  -webkit-backdrop-filter:blur(16px) saturate(145%);backdrop-filter:blur(16px) saturate(145%);
+  transition:border-color .22s,background .22s,box-shadow .22s,color .22s;
+}
+.av2-field::after {
+  content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;
+  background:${GRADIENT};transform:scaleX(0);transform-origin:left center;
+  transition:transform .32s cubic-bezier(.22,1,.36,1);pointer-events:none;
+}
+.av2-field:hover {border-color:var(--field-border-hover)}
+.av2-field:focus-within {
+  border-color:var(--field-focus);background:var(--field-bg-focus);color:var(--accent-text);
+  box-shadow:var(--field-inset),0 0 0 3px var(--field-ring);
+}
+.av2-field:focus-within::after {transform:scaleX(1)}
+.av2-field[data-invalid="true"] {border-color:var(--danger);color:var(--danger);box-shadow:var(--field-inset),0 0 0 3px var(--danger-ring)}
+.av2-field[data-invalid="true"]::after {background:var(--danger);transform:scaleX(1)}
+.av2-field[data-disabled="true"] {opacity:.55;cursor:not-allowed}
+.av2-field-ico {display:grid;place-items:center;flex:none}
+.av2-input {
+  flex:1;min-width:0;height:100%;padding:0;border:0;outline:0;background:transparent;
+  color:var(--text);font:inherit;font-size:16px;font-weight:600;letter-spacing:-.01em;
+  text-overflow:ellipsis;appearance:none;-webkit-appearance:none;
+}
+.av2-input::placeholder {color:var(--text-3);font-size:15px;font-weight:450;letter-spacing:0}
+.av2-input:disabled {cursor:not-allowed}
+.av2-input:-webkit-autofill,.av2-input:-webkit-autofill:focus {
+  -webkit-text-fill-color:var(--text);caret-color:var(--text);-webkit-box-shadow:0 0 0 1000px var(--field-bg-solid) inset;
+}
+.av2-iconbtn {
+  display:grid;place-items:center;flex:none;width:38px;height:38px;margin-right:-8px;border:0;border-radius:10px;
+  background:transparent;color:var(--text-3);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .2s,color .2s;
+}
+.av2-iconbtn:hover {background:var(--pop-active);color:var(--text)}
+.av2-iconbtn:disabled {opacity:.5;cursor:not-allowed}
+
+/* Remember me */
+.av2-remember {
+  position:relative;display:inline-flex;align-items:center;gap:10px;width:fit-content;min-height:28px;
+  color:var(--text-2);font-size:13px;font-weight:650;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+}
+.av2-remember input {position:absolute;opacity:0;width:20px;height:20px;margin:0;cursor:pointer}
+.av2-box {
+  display:grid;place-items:center;flex:none;width:20px;height:20px;border:1px solid var(--field-border);
+  border-radius:6px;background:var(--field-bg);box-shadow:var(--field-inset);color:transparent;
+  transition:background .2s,border-color .2s,color .2s,box-shadow .2s;
+}
+.av2-remember:hover .av2-box {border-color:var(--field-border-hover)}
+.av2-remember input:checked+.av2-box {background:${GRADIENT};border-color:transparent;color:#fff}
+.av2-remember input:focus-visible+.av2-box {outline:2px solid var(--focus-outline);outline-offset:3px}
+.av2-remember input:disabled {cursor:not-allowed}
+.av2-remember input:disabled+.av2-box {opacity:.55}
+
+/* Phone */
+.av2-phone {display:flex;align-items:stretch;gap:10px}
+.av2-phone>.av2-field {flex:1}
+.av2-cc {position:relative;flex:none;width:124px}
+.av2-cc-btn {
+  display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;height:56px;padding:0 11px;
+  border:1px solid var(--field-border);border-radius:12px;background:var(--field-bg);color:var(--text);
+  box-shadow:var(--field-inset);font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  -webkit-backdrop-filter:blur(16px) saturate(145%);backdrop-filter:blur(16px) saturate(145%);
+  transition:border-color .2s,box-shadow .2s,background .2s;
+}
+.av2-cc-btn:hover {border-color:var(--field-border-hover)}
+.av2-cc-btn[data-open="true"] {border-color:var(--field-focus);background:var(--field-bg-focus);box-shadow:var(--field-inset),0 0 0 3px var(--field-ring)}
+.av2-cc-btn:disabled {opacity:.55;cursor:not-allowed}
+.av2-cc-main {display:flex;align-items:baseline;gap:6px;min-width:0}
+.av2-cc-code {font-size:15px;font-weight:750}
+.av2-cc-iso {color:var(--text-3);font-size:10.5px;font-weight:700;letter-spacing:.04em}
+.av2-chev {flex:none;color:var(--text-3);transition:transform .2s,color .2s}
+.av2-cc-btn[data-open="true"] .av2-chev {transform:rotate(180deg);color:var(--field-focus)}
+.av2-pop {
+  position:absolute;z-index:80;top:calc(100% + 8px);left:0;display:flex;flex-direction:column;overflow:hidden;
+  width:min(330px,calc(100vw - 52px));max-height:312px;border:1px solid var(--pop-border);border-radius:16px;
+  background:var(--pop-bg);box-shadow:var(--pop-shadow);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+}
+.av2-pop-search {
+  display:flex;align-items:center;gap:8px;flex:none;height:44px;margin:8px;padding:0 12px;color:var(--text-3);
+  border:1px solid var(--field-border);border-radius:10px;background:var(--field-bg);
+}
+.av2-pop-search:focus-within {border-color:var(--field-focus);box-shadow:0 0 0 3px var(--field-ring)}
+.av2-pop-search input {flex:1;min-width:0;height:100%;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:14px;font-weight:550}
+.av2-pop-search input::placeholder {color:var(--text-3);font-weight:450}
+.av2-pop-list {overflow-y:auto;overscroll-behavior:contain;padding:0 6px 6px;max-height:236px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.av2-pop-list::-webkit-scrollbar {width:7px}
+.av2-pop-list::-webkit-scrollbar-thumb {background:var(--line);border-radius:8px}
+.av2-country {
+  display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:0 10px;border:0;border-radius:10px;
+  background:transparent;color:var(--text-2);font:inherit;font-size:14px;font-weight:550;text-align:left;cursor:pointer;
+}
+.av2-country:hover {background:var(--pop-active);color:var(--text)}
+.av2-country[aria-selected="true"] {background:var(--pop-selected);color:var(--text);font-weight:700}
+.av2-country-flag {font-size:18px;line-height:1;flex:none}
+.av2-country-name {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av2-country-code {flex:none;color:var(--text-3);font-variant-numeric:tabular-nums;font-size:13px}
+.av2-country svg {flex:none;color:var(--accent-text)}
+.av2-empty {padding:18px 10px;color:var(--text-3);font-size:13px;text-align:center}
+
+/* Google */
+.av2-gcard {padding:24px 18px 18px;border:1px solid var(--field-border);border-radius:20px;background:var(--field-bg);box-shadow:var(--field-inset);text-align:center}
+.av2-gmark {display:grid;place-items:center;width:64px;height:64px;margin:0 auto 14px;border-radius:20px;background:#fff;box-shadow:0 14px 28px -16px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.06)}
+.av2-gtitle {margin:0 0 4px;font-size:17px;font-weight:800;letter-spacing:-.02em}
+.av2-gsub {margin:0 0 18px;color:var(--text-2);font-size:12.5px}
+.av2-gbtn {
+  display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:54px;padding:0 18px;
+  border:1px solid rgba(15,23,42,.14);border-radius:16px;background:#fff;color:#1f2937;
+  font:inherit;font-size:15px;font-weight:750;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  box-shadow:0 12px 24px -16px rgba(0,0,0,.45);transition:transform .2s,box-shadow .2s,background .2s;
+}
+.av2-gbtn:hover {background:#f8fafc;transform:translateY(-1px)}
+.av2-gbtn:disabled {opacity:.6;cursor:not-allowed;transform:none}
+.av2-gnote {margin:14px 0 0;color:var(--text-3);font-size:11px;line-height:1.5}
+.av2-alt {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.av2-btn-alt {
+  display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:48px;padding:0 16px;
+  border:1px solid var(--field-border);border-radius:14px;background:var(--field-bg);color:var(--accent-text);
+  font:inherit;font-size:13.5px;font-weight:750;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:border-color .2s,background .2s;
+}
+.av2-btn-alt:hover:not(:disabled) {border-color:var(--field-border-hover);background:var(--field-bg-focus)}
+
+/* Actions */
+.av2-btn {
+  position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:11px;
+  width:100%;min-height:56px;padding:0 20px;border:1px solid rgba(255,255,255,.18);border-radius:17px;
+  background:${GRADIENT};color:#fff;box-shadow:var(--btn-shadow);font:inherit;font-size:15.5px;font-weight:800;letter-spacing:.005em;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .2s,filter .2s,box-shadow .2s;
+}
+.av2-btn:hover:not(:disabled) {filter:brightness(1.06);transform:translateY(-1px)}
+.av2-btn::after {
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.24) 50%,transparent 70%);transform:translateX(-120%);
+}
+.av2-btn:hover:not(:disabled)::after {animation:av2-shine .85s ease}
+.av2-btn:disabled {
+  border-color:var(--field-border);background:var(--btn-off-bg);color:var(--btn-off-text);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);cursor:not-allowed;
+}
+.av2-btn:disabled::after {display:none}
+.av2-btn[data-loading="true"] {background:${GRADIENT};color:#fff;cursor:progress;box-shadow:var(--btn-shadow)}
+.av2-note {margin:-4px 0 0;text-align:center;color:var(--text-3);font-size:12px;line-height:1.5}
+.av2-alert {
+  display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:12px 14px;border-radius:14px;
+  border:1px solid color-mix(in srgb,var(--danger) 38%,transparent);background:color-mix(in srgb,var(--danger) 9%,transparent);
+  color:var(--danger);font-size:12.5px;font-weight:650;line-height:1.5;
+}
+.av2-alert svg {flex:none;margin-top:1px}
+.av2-switch {margin-top:22px;padding-top:18px;border-top:1px solid var(--line);text-align:center;color:var(--text-2);font-size:13.5px}
+.av2-switch a {margin-left:4px;color:var(--accent-text);font-weight:800;text-decoration:none;border-radius:6px}
+.av2-switch a:hover {text-decoration:underline;text-underline-offset:3px}
+.av2-secure {display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px 12px;margin:18px 0 0;color:var(--text-3);font-size:12px;font-weight:600}
+.av2-secure span {display:inline-flex;align-items:center;gap:6px}
+.av2-secure i {width:3px;height:3px;border-radius:50%;background:var(--text-3);opacity:.6}
+.av2-foot {margin:10px 0 0;text-align:center;color:var(--text-3);font-size:12px}
+.av2-spin {animation:av2-spin .8s linear infinite;transform-origin:center}
+.av2-recaptcha {position:fixed;right:0;bottom:0;z-index:50;pointer-events:auto}
+
+.av2-root button:focus-visible,.av2-root input:focus-visible,.av2-root a:focus-visible {outline:2px solid var(--focus-outline);outline-offset:3px}
+.av2-root .av2-input:focus-visible,.av2-root .av2-pop-search input:focus-visible,.av2-root .av2-remember input:focus-visible {outline:none}
+
+@keyframes av2-spin {to{transform:rotate(360deg)}}
+@keyframes av2-shine {to{transform:translateX(120%)}}
+
+@media(min-width:520px) {.av2-card {padding:33px 32px 26px}}
+@media(max-width:390px) {
+  .av2-shell {padding-left:13px;padding-right:13px}
+  .av2-card {padding:24px 17px 20px;border-radius:24px}
+  .av2-cc {width:108px}
+  .av2-cc-code {font-size:14px}
+  .av2-field {padding:0 11px;height:54px}
+  .av2-cc-btn {height:54px;padding:0 9px}
+  .av2-phone {gap:8px}
+}
+@media(max-width:340px) {
+  .av2-seg-desc {display:none}
+  .av2-alt {grid-template-columns:minmax(0,1fr)}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  .av2-card {background:var(--field-bg-solid)}
+  .av2-field,.av2-cc-btn,.av2-seg,.av2-pop {background:var(--field-bg-solid)}
+}
+@media(forced-colors:active) {
+  .av2-card,.av2-field,.av2-cc-btn,.av2-pop,.av2-seg,.av2-gcard {border:1px solid CanvasText}
+  .av2-seg-btn[aria-selected="true"] {outline:2px solid Highlight}
+}
+@media(prefers-reduced-motion:reduce) {
+  .av2-root *,.av2-root *::before,.av2-root *::after {animation:none!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+`;
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Icons
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const Svg = ({ size = 20, stroke = 1.9, children, ...rest }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={stroke}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+    {...rest}
+  >
+    {children}
+  </svg>
+);
+
+const PhoneIcon = (p) => (
+  <Svg {...p}>
+    <path d="M5 4h3.3a1 1 0 0 1 .95.68l1.5 4.5a1 1 0 0 1-.5 1.2l-2.26 1.13a11 11 0 0 0 5.52 5.52l1.13-2.26a1 1 0 0 1 1.2-.5l4.5 1.5a1 1 0 0 1 .68.95V19a2 2 0 0 1-2 2h-1C9.72 21 3 14.28 3 6V5a1 1 0 0 1 1-1z" />
+  </Svg>
+);
+const MailIcon = (p) => (
+  <Svg {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2.5" />
+    <path d="m3.5 7.5 7.4 4.6a2 2 0 0 0 2.2 0l7.4-4.6" />
+  </Svg>
+);
+const LockIcon = (p) => (
+  <Svg {...p}>
+    <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+  </Svg>
+);
+const ShieldCheckIcon = (p) => (
+  <Svg {...p}>
+    <path d="M12 3 4.5 6v5.5c0 4.4 3.1 8 7.5 9.5 4.4-1.5 7.5-5.1 7.5-9.5V6L12 3z" />
+    <path d="m8.8 12.2 2.3 2.3 4.2-4.4" />
+  </Svg>
+);
+const CheckIcon = (p) => (
+  <Svg {...p}>
+    <path d="m5 12.5 4.6 4.6L19 7.6" />
+  </Svg>
+);
+const AlertIcon = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.8v5M12 16.4h.01" />
+  </Svg>
+);
+const ChevronIcon = (p) => (
+  <Svg {...p}>
+    <path d="m6 9.5 6 6 6-6" />
+  </Svg>
+);
+const SearchIcon = (p) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m20 20-3.8-3.8" />
+  </Svg>
+);
+const EyeIcon = (p) => (
+  <Svg {...p}>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Svg>
+);
+const EyeOffIcon = (p) => (
+  <Svg {...p}>
+    <path d="M10.6 5.7A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-3 3.8M6.5 7.2C3.9 9 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.5 0 2.8-.4 4-1" />
+    <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" />
+  </Svg>
+);
+const SendIcon = (p) => (
+  <Svg {...p}>
+    <path d="M21 3 10.5 13.5" />
+    <path d="M21 3 14.5 21l-4-7.5L3 9.5 21 3z" />
+  </Svg>
+);
+const SpinnerIcon = (p) => (
+  <Svg {...p} className="av2-spin">
+    <circle cx="12" cy="12" r="9" opacity=".25" />
+    <path d="M21 12a9 9 0 0 0-9-9" />
+  </Svg>
+);
+const GoogleIcon = ({ size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+  </svg>
+);
+
+const FieldError = ({ id, message }) => (
+  <AnimatePresence initial={false}>
+    {message && (
+      <motion.p
+        id={id}
+        key="err"
+        className="av2-msg"
+        role="alert"
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: "auto" }}
+        exit={{ opacity: 0, height: 0 }}
+        style={{ overflow: "hidden" }}
+      >
+        <AlertIcon size={14} />
+        <span>{message}</span>
+      </motion.p>
+    )}
+  </AnimatePresence>
+);
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Phone input
+ * ──────────────────────────────────────────────────────────────────────────── */
 
 const UltimatePhoneInput = React.memo(({
   value,
@@ -19,7 +552,6 @@ const UltimatePhoneInput = React.memo(({
   disabled = false,
   onValidationChange = () => {}
 }) => {
-  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState(() => getCountryByIso('US'));
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -27,10 +559,7 @@ const UltimatePhoneInput = React.memo(({
   const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
-
-  const resolvedTheme = theme === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme;
+  const countryButtonRef = useRef(null);
 
   useEffect(() => {
     if (value) {
@@ -84,6 +613,15 @@ const UltimatePhoneInput = React.memo(({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape' && showCountryDropdown) {
+      event.stopPropagation();
+      setShowCountryDropdown(false);
+      setSearchQuery('');
+      countryButtonRef.current?.focus();
+    }
+  };
+
   const filteredCountries = useMemo(() => {
     if (!searchQuery) return countryCodes;
     const query = searchQuery.toLowerCase();
@@ -95,152 +633,124 @@ const UltimatePhoneInput = React.memo(({
   }, [searchQuery]);
 
   return (
-    <div className="space-y-2" ref={dropdownRef}>
-      <div className="flex items-center justify-between">
-        <label className={`text-xs font-medium ${
-          error ? 'text-red-600 dark:text-red-400'
-          : isFocused || value ? 'text-indigo-600 dark:text-indigo-400'
-          : resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-        }`}>
-          Phone Number <span className="text-red-500">*</span>
+    <div ref={dropdownRef} onKeyDown={handleKeyDown}>
+      <div className="av2-label-row">
+        <label
+          htmlFor="login-phone-number"
+          className="av2-label"
+          data-focus={isFocused || !!value}
+          data-invalid={!!error}
+        >
+          Phone Number <span className="av2-req" aria-hidden="true">*</span>
         </label>
-        <span className="text-[10px] text-gray-500">Verification code will be sent</span>
+        <span className="av2-hint">Verification code will be sent</span>
       </div>
 
-      <div className="relative">
-        <div className="flex gap-2">
-          <div className="relative flex-shrink-0 w-28">
-            <button
-              type="button"
-              onClick={() => !disabled && setShowCountryDropdown(!showCountryDropdown)}
-              disabled={disabled}
-              className={`w-full px-3 py-2.5 rounded-lg border transition-all duration-200 flex items-center justify-between group ${
-                showCountryDropdown
-                  ? 'border-indigo-500 ring-2 ring-indigo-500/20'
-                  : resolvedTheme === 'dark'
-                  ? 'border-gray-700 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800'
-                  : 'border-gray-300 bg-white hover:border-gray-400 hover:bg-gray-50'
-              } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className={`text-sm font-medium ${resolvedTheme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                  {selectedCountry.code}
-                </span>
-                <span className={`text-[10px] ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  {selectedCountry.iso}
-                </span>
-              </div>
-              <svg className={`w-3.5 h-3.5 transform transition-transform ${showCountryDropdown ? 'rotate-180' : ''} ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+      <div className="av2-phone">
+        <div className="av2-cc">
+          <button
+            ref={countryButtonRef}
+            type="button"
+            onClick={() => !disabled && setShowCountryDropdown(!showCountryDropdown)}
+            disabled={disabled}
+            className="av2-cc-btn"
+            data-open={showCountryDropdown}
+            aria-haspopup="listbox"
+            aria-expanded={showCountryDropdown}
+            aria-label={`Country code ${selectedCountry.code} ${selectedCountry.iso}`}
+          >
+            <span className="av2-cc-main">
+              <span className="av2-cc-code">{selectedCountry.code}</span>
+              <span className="av2-cc-iso">{selectedCountry.iso}</span>
+            </span>
+            <ChevronIcon size={16} className="av2-chev" />
+          </button>
 
-            <AnimatePresence>
-              {showCountryDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  className={`absolute top-full left-0 right-0 mt-2 rounded-lg border shadow-2xl z-50 max-h-60 overflow-hidden ${
-                    resolvedTheme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
-                  }`}
-                >
-                  <div className="p-2 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-inherit">
-                    <input
-                      type="text"
-                      placeholder="Search countries..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className={`w-full px-3 py-1.5 rounded text-xs ${
-                        resolvedTheme === 'dark'
-                          ? 'bg-gray-800 text-white placeholder-gray-400 border border-gray-700'
-                          : 'bg-gray-100 text-gray-900 placeholder-gray-500 border border-gray-300'
-                      }`}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="overflow-y-auto max-h-48">
-                    {filteredCountries.map((country) => (
+          <AnimatePresence>
+            {showCountryDropdown && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="av2-pop"
+                style={{ transformOrigin: "top left" }}
+              >
+                <label className="av2-pop-search">
+                  <SearchIcon size={17} />
+                  <input
+                    type="text"
+                    placeholder="Search country or code"
+                    aria-label="Search countries"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoComplete="off"
+                    autoFocus
+                  />
+                </label>
+                <div className="av2-pop-list" role="listbox" aria-label="Country codes">
+                  {filteredCountries.map((country) => {
+                    const isSelected = country.code === selectedCountry.code;
+                    return (
                       <button
                         key={`${country.iso}-${country.code}`}
                         type="button"
+                        role="option"
+                        aria-selected={isSelected}
                         onClick={() => handleCountrySelect(country)}
-                        className={`w-full px-3 py-2 text-left transition-colors flex items-center justify-between text-xs ${
-                          country.code === selectedCountry.code
-                            ? resolvedTheme === 'dark' ? 'bg-indigo-900/40 text-indigo-300' : 'bg-indigo-50 text-indigo-700'
-                            : resolvedTheme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
-                        }`}
+                        className="av2-country"
                       >
-                        <div className="flex items-center gap-2">
-                          <div className="text-base">{country.flag}</div>
-                          <div className="font-medium">{country.code}</div>
-                        </div>
-                        {country.code === selectedCountry.code && (
-                          <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
+                        <span className="av2-country-flag">{country.flag}</span>
+                        <span className="av2-country-name">{country.name}</span>
+                        <span className="av2-country-code">{country.code}</span>
+                        {isSelected && <CheckIcon size={16} stroke={2.6} />}
                       </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="flex-1">
-            <input
-              ref={inputRef}
-              type="tel"
-              value={phoneNumber}
-              onChange={handlePhoneChange}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              disabled={disabled}
-              placeholder="123 456 7890"
-              className={`w-full px-3 py-2.5 rounded-lg border transition-all duration-200 text-sm ${
-                error
-                  ? 'border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/10'
-                  : isFocused
-                  ? 'border-indigo-500 ring-2 ring-indigo-500/20'
-                  : resolvedTheme === 'dark'
-                  ? 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                  : 'border-gray-300 bg-white hover:border-gray-400'
-              } ${resolvedTheme === 'dark' ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'} ${
-                disabled ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              inputMode="tel"
-            />
-          </div>
+                    );
+                  })}
+                  {filteredCountries.length === 0 && (
+                    <div className="av2-empty">No countries found</div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        <AnimatePresence>
-          {error && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <div className="flex items-center gap-1.5 mt-1.5 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50">
-                <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <span className="text-xs text-red-600 dark:text-red-400 font-medium">{error}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="av2-field" data-invalid={!!error} data-disabled={!!disabled}>
+          <input
+            ref={inputRef}
+            id="login-phone-number"
+            name="phone"
+            type="tel"
+            className="av2-input"
+            value={phoneNumber}
+            onChange={handlePhoneChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            disabled={disabled}
+            placeholder="Phone number"
+            autoComplete="tel-national"
+            inputMode="tel"
+            aria-invalid={!!error}
+            aria-describedby={error ? "login-phone-error" : undefined}
+          />
+        </div>
       </div>
+
+      <FieldError id="login-phone-error" message={error} />
     </div>
   );
 });
 UltimatePhoneInput.displayName = 'UltimatePhoneInput';
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Google
+ * ──────────────────────────────────────────────────────────────────────────── */
+
 const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) => {
-  const { theme } = useTheme();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState(null);
   const { signInWithGoogle } = useAuth();
-
-  const resolvedTheme = theme === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme;
 
   const handleGoogleSignIn = async () => {
     if (loading || isAuthenticating) return;
@@ -275,175 +785,134 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
     }
   };
 
+  const busy = loading || isAuthenticating;
+
   return (
-    <div className={`p-4 rounded-2xl backdrop-blur-sm border shadow-md ${
-      resolvedTheme === 'dark'
-        ? 'bg-gradient-to-br from-gray-900/80 to-gray-800/80 border-gray-700/50'
-        : 'bg-gradient-to-br from-white to-gray-50 border-gray-200/60'
-    }`}>
-      <div className="text-center mb-4">
-        <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", delay: 0.1 }}
-          className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center shadow-lg"
-        >
-          <svg className="w-8 h-8" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-        </motion.div>
-        <h3 className={`text-base font-bold mb-1 ${
-          resolvedTheme === 'dark' ? 'text-gray-300' : 'text-gray-800'
-        }`}>
-          Fast & Secure Login
-        </h3>
-        <p className={`text-xs ${resolvedTheme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-          One-click authentication • No password needed
-        </p>
-      </div>
+    <div className="av2-gcard">
+      <motion.div
+        initial={{ scale: 0.6, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 320, damping: 22, delay: 0.05 }}
+        className="av2-gmark"
+      >
+        <GoogleIcon size={32} />
+      </motion.div>
+
+      <h3 className="av2-gtitle">Fast &amp; Secure Login</h3>
+      <p className="av2-gsub">One-click authentication • No password needed</p>
 
       {error && (
-        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mb-3 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50">
-          <p className="text-xs text-red-600 dark:text-red-400 text-center">{error}</p>
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="av2-alert"
+          style={{ marginTop: 0, marginBottom: 14, textAlign: "left" }}
+          role="alert"
+        >
+          <AlertIcon size={16} />
+          <span>{error}</span>
         </motion.div>
       )}
 
       <motion.button
+        type="button"
         onClick={handleGoogleSignIn}
-        disabled={loading || isAuthenticating}
-        whileHover={!(loading || isAuthenticating) ? { scale: 1.02, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' } : {}}
-        whileTap={!(loading || isAuthenticating) ? { scale: 0.98 } : {}}
-        className={`w-full py-3 px-4 rounded-xl font-medium text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
-          resolvedTheme === 'dark'
-            ? 'bg-white text-gray-900 hover:bg-gray-100 border border-gray-300 shadow-md'
-            : 'bg-white text-gray-900 hover:bg-gray-50 border border-gray-300 shadow-md'
-        } ${(loading || isAuthenticating) ? 'opacity-50 cursor-not-allowed' : ''}`}
+        disabled={busy}
+        whileTap={!busy ? { scale: 0.98 } : undefined}
+        className="av2-gbtn"
       >
-        {(loading || isAuthenticating) ? (
+        {busy ? (
           <>
-            <div className="animate-spin w-4 h-4 border-2 border-gray-900 border-t-transparent rounded-full" />
-            <span className="font-medium">Connecting to Google...</span>
+            <SpinnerIcon size={18} />
+            <span>Connecting to Google...</span>
           </>
         ) : (
           <>
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            <span className="font-medium">Continue with Google</span>
+            <GoogleIcon size={20} />
+            <span>Continue with Google</span>
           </>
         )}
       </motion.button>
 
-      <div className="mt-3 text-center">
-        <p className="text-[10px] text-gray-500 dark:text-gray-400">
-          Your Google account information will be used to sign in.
-        </p>
-      </div>
+      <p className="av2-gnote">Your Google account information will be used to sign in.</p>
     </div>
   );
 });
 UltimateGoogleAuth.displayName = 'UltimateGoogleAuth';
 
-const UltimateMethodToggle = React.memo(({ method, onToggle, disabled = false }) => {
-  const { theme } = useTheme();
-  const resolvedTheme = theme === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme;
+/* ────────────────────────────────────────────────────────────────────────────
+ * Method switch
+ * ──────────────────────────────────────────────────────────────────────────── */
 
-  const methods = [
-    {
-      id: 'phone', label: 'Phone',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-        </svg>
-      ),
-      description: 'SMS',
-      gradient: 'bg-gradient-to-r from-blue-500 to-cyan-500'
-    },
-    {
-      id: 'email', label: 'Email',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      ),
-      description: 'Traditional',
-      gradient: 'bg-gradient-to-r from-purple-500 to-pink-500'
-    },
-    {
-      id: 'google', label: 'Google',
-      icon: (
-        <svg className="w-4 h-4" viewBox="0 0 24 24">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-        </svg>
-      ),
-      description: 'One-Click',
-      gradient: 'bg-gradient-to-r from-red-500 to-orange-500'
+const METHODS = [
+  { id: 'phone', label: 'Phone', description: 'SMS', icon: <PhoneIcon size={18} /> },
+  { id: 'email', label: 'Email', description: 'Traditional', icon: <MailIcon size={18} /> },
+  { id: 'google', label: 'Google', description: 'One-Click', icon: <GoogleIcon size={18} /> },
+];
+
+const UltimateMethodToggle = React.memo(({ method, onToggle, disabled = false }) => {
+  const handleKeyDown = (event) => {
+    if (disabled) return;
+    const index = METHODS.findIndex((option) => option.id === method);
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const next = METHODS[(index + 1) % METHODS.length].id;
+      onToggle(next);
+      document.getElementById(`login-method-${next}`)?.focus();
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const prev = METHODS[(index - 1 + METHODS.length) % METHODS.length].id;
+      onToggle(prev);
+      document.getElementById(`login-method-${prev}`)?.focus();
     }
-  ];
+  };
 
   return (
-    <div className="relative mb-6">
-      <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 z-10">
-        <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg">
-          <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
-          <span className="text-[10px] font-semibold text-white">Secure Login</span>
-        </div>
-      </div>
-      <div className={`grid grid-cols-3 gap-1.5 p-1.5 rounded-2xl backdrop-blur-sm ${resolvedTheme === 'dark' ? 'bg-gray-800/60 border border-gray-700/50 shadow-2xl' : 'bg-gray-100/80 border border-gray-300/60 shadow-2xl'}`}>
-        {methods.map((option) => {
-          const isActive = method === option.id;
-          return (
-            <motion.button
-              key={option.id}
-              onClick={() => !disabled && onToggle(option.id)}
-              disabled={disabled}
-              whileHover={!disabled ? { scale: 1.02 } : {}}
-              whileTap={!disabled ? { scale: 0.98 } : {}}
-              className={`relative py-3 px-1.5 rounded-xl transition-all duration-300 ${
-                isActive ? 'text-white' : resolvedTheme === 'dark' ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/30' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
-              } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-            >
-              {isActive && (
-                <motion.div layoutId="loginMethodBackground" className={`absolute inset-0 rounded-xl ${option.gradient}`} initial={false} transition={{ type: "spring", stiffness: 500, damping: 30 }} />
-              )}
-              <div className="relative z-10 flex flex-col items-center gap-1">
-                <div className="relative">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${resolvedTheme === 'dark' ? isActive ? 'bg-white/10 backdrop-blur-sm' : 'bg-gray-700/50' : isActive ? 'bg-white/20 backdrop-blur-sm' : 'bg-gray-200/50'}`}>
-                    {option.icon}
-                  </div>
-                  {isActive && (
-                    <motion.div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-400 shadow-lg border-2 border-white" initial={{ scale: 0 }} animate={{ scale: 1 }} />
-                  )}
-                </div>
-                <span className="font-semibold text-xs">{option.label}</span>
-                <span className="text-[10px] opacity-75">{option.description}</span>
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
+    <div className="av2-seg" role="tablist" aria-label="Sign in method" onKeyDown={handleKeyDown}>
+      {METHODS.map((option) => {
+        const isActive = method === option.id;
+        return (
+          <motion.button
+            key={option.id}
+            id={`login-method-${option.id}`}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            onClick={() => !disabled && onToggle(option.id)}
+            disabled={disabled}
+            whileTap={!disabled ? { scale: 0.97 } : undefined}
+            className="av2-seg-btn"
+          >
+            {isActive && (
+              <motion.span
+                layoutId="loginMethodBackground"
+                className="av2-seg-pill"
+                initial={false}
+                transition={{ type: "spring", stiffness: 500, damping: 34 }}
+              />
+            )}
+            <span className="av2-seg-ico" data-google={option.id === 'google'}>{option.icon}</span>
+            <span className="av2-seg-label">{option.label}</span>
+            <span className="av2-seg-desc">{option.description}</span>
+          </motion.button>
+        );
+      })}
     </div>
   );
 });
 UltimateMethodToggle.displayName = 'UltimateMethodToggle';
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Screen
+ * ──────────────────────────────────────────────────────────────────────────── */
+
 export default function LoginScreen() {
   const navigate = useNavigate();
   const themeCtx = useTheme?.() || { theme: 'light' };
   const { theme } = themeCtx;
-  const { 
-    user, 
+  const {
+    user,
     isAuthenticated,
     profileResolved,
     needsOnboarding,
@@ -452,10 +921,11 @@ export default function LoginScreen() {
     createRecaptchaVerifier,
     cleanupRecaptchaVerifier
   } = useAuth();
-  
+
   const [method, setMethod] = useState("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -464,11 +934,11 @@ export default function LoginScreen() {
   const [shakeCard, setShakeCard] = useState(false);
   const [isPhoneValid, setIsPhoneValid] = useState(false);
 
-  const resolvedTheme = theme === 'system' 
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') 
-    : theme;
+  const emailRef = useRef(null);
 
-  const logoPath = "/logo/logo.svg";
+  const resolvedTheme = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
 
   // Shake on error
   const triggerShake = useCallback(() => {
@@ -487,6 +957,14 @@ export default function LoginScreen() {
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true });
   }, [isAuthenticated, user, profileResolved, needsOnboarding, navigate]);
+
+  // Focus the email field only where it won't pop a mobile keyboard unexpectedly.
+  useEffect(() => {
+    if (method !== "email") return undefined;
+    if (typeof window === "undefined" || !window.matchMedia?.("(pointer: fine)").matches) return undefined;
+    const timer = setTimeout(() => emailRef.current?.focus({ preventScroll: true }), 340);
+    return () => clearTimeout(timer);
+  }, [method]);
 
   // Initialize reCAPTCHA for phone method
   useEffect(() => {
@@ -699,231 +1177,254 @@ export default function LoginScreen() {
     }
   }, [method, email, password, phoneNumber, isPhoneValid, errors, recaptchaVerifier]);
 
+  const rootVariables = resolvedTheme === 'dark' ? THEMES.dark : THEMES.light;
+  const year = new Date().getFullYear();
+  const canSubmitEmail = !loading && !!email && !!password;
+  const canSubmitPhone = !loading && isPhoneValid;
+
   return (
-    <div className={`h-[100dvh] flex flex-col ${resolvedTheme === 'dark' ? 'bg-[#03071B] text-white' : 'bg-[#F6F8FC] text-gray-900'}`}>
-      <div className="flex-1 flex items-center justify-center p-3 overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md flex flex-col items-center"
-        >
-          {/* Logo */}
-          <motion.div
-            initial={{ scale: 0, rotate: -180 }}
-            animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="mx-auto mb-4 flex items-center justify-center cursor-pointer select-none"
-          >
-            <ArvdoulEmblem
-              size={72}
-              theme={resolvedTheme}
-              animate={true}
-            />
-          </motion.div>
-          <h1 className="text-2xl font-bold mb-1 text-gray-900 dark:text-white">
-            Welcome Back
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Sign in to continue to Arvdoul
-          </p>
+    <MotionConfig reducedMotion="user">
+      <div className="av2-root" style={rootVariables} data-theme={resolvedTheme}>
+        <style>{STYLES}</style>
 
-          {/* Glass Card */}
-          <motion.div
-            animate={shakeCard ? { x: [0, -10, 10, -10, 10, 0] } : {}}
-            transition={{ duration: 0.5 }}
-            className={`w-full rounded-3xl border backdrop-blur-2xl ${navigator.deviceMemory >= 4 ? 'shadow-2xl' : 'shadow-none'} ${
-              resolvedTheme === 'dark' ? 'bg-white/[0.06] border-white/[0.08]' : 'bg-white/80 border-black/[0.08]'
-            } p-5`}
-          >
-            <UltimateMethodToggle method={method} onToggle={setMethod} disabled={loading} />
+        <div className="av2-bg" aria-hidden="true">
+          <span className="av2-orb av2-orb-a" />
+          <span className="av2-orb av2-orb-b" />
+          <span className="av2-orb av2-orb-c" />
+          <span className="av2-dots" />
+        </div>
 
-            <AnimatePresence mode="wait">
-              {method === "email" && (
-                <motion.form key="email" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} onSubmit={handleEmailLogin} className="space-y-4">
-                  <div>
-                    <label className={`text-xs font-medium mb-1 block ${errors.email ? 'text-red-500' : resolvedTheme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+        <main className="av2-shell">
+          <motion.div
+            className="av2-wrap"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <motion.section
+              className="av2-card"
+              aria-labelledby="login-title"
+              animate={shakeCard ? { x: [0, -10, 10, -10, 10, 0] } : { x: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <span className="av2-spec" aria-hidden="true" />
+              <span className="av2-rim" aria-hidden="true" />
+
+              <header>
+                <h1 id="login-title" className="av2-h1">Welcome Back</h1>
+                <p className="av2-sub">Sign in to continue to Arvdoul</p>
+              </header>
+
+              <div className="av2-body">
+                <div className="av2-divider" aria-hidden="true">Sign in with</div>
+
+                <UltimateMethodToggle method={method} onToggle={setMethod} disabled={loading} />
+
+                <AnimatePresence mode="wait">
+                  {method === "email" && (
+                    <motion.form
+                      key="email"
+                      role="tabpanel"
+                      aria-labelledby="login-method-email"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      onSubmit={handleEmailLogin}
+                      noValidate
+                      className="av2-panel"
+                    >
+                      <div>
+                        <div className="av2-label-row">
+                          <label htmlFor="login-email" className="av2-label" data-invalid={!!errors.email}>
+                            Email Address <span className="av2-req" aria-hidden="true">*</span>
+                          </label>
+                        </div>
+                        <div className="av2-field" data-invalid={!!errors.email} data-disabled={!!loading}>
+                          <span className="av2-field-ico"><MailIcon size={19} /></span>
+                          <input
+                            ref={emailRef}
+                            id="login-email"
+                            name="email"
+                            type="email"
+                            className="av2-input"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            disabled={loading}
+                            autoComplete="email"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            aria-invalid={!!errors.email}
+                            aria-describedby={errors.email ? "login-email-error" : undefined}
+                          />
+                        </div>
+                        <FieldError id="login-email-error" message={errors.email} />
                       </div>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm transition-colors ${
-                          errors.email ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
-                        } ${resolvedTheme === 'dark' ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
-                        placeholder="you@example.com"
-                        disabled={loading}
-                        autoFocus
-                      />
-                    </div>
-                    {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
-                  </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className={`text-xs font-medium ${errors.password ? 'text-red-500' : resolvedTheme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Password
+                      <div>
+                        <div className="av2-label-row">
+                          <label htmlFor="login-password" className="av2-label" data-invalid={!!errors.password}>
+                            Password <span className="av2-req" aria-hidden="true">*</span>
+                          </label>
+                          <button type="button" className="av2-link" onClick={handleForgotPassword} disabled={loading}>
+                            Forgot password?
+                          </button>
+                        </div>
+                        <div className="av2-field" data-invalid={!!errors.password} data-disabled={!!loading}>
+                          <span className="av2-field-ico"><LockIcon size={19} /></span>
+                          <input
+                            id="login-password"
+                            name="password"
+                            type={showPassword ? "text" : "password"}
+                            className="av2-input"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Enter your password"
+                            disabled={loading}
+                            autoComplete="current-password"
+                            aria-invalid={!!errors.password}
+                            aria-describedby={errors.password ? "login-password-error" : undefined}
+                          />
+                          <button
+                            type="button"
+                            className="av2-iconbtn"
+                            onClick={() => setShowPassword(!showPassword)}
+                            disabled={loading}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                            aria-pressed={showPassword}
+                          >
+                            {showPassword ? <EyeOffIcon size={19} /> : <EyeIcon size={19} />}
+                          </button>
+                        </div>
+                        <FieldError id="login-password-error" message={errors.password} />
+                      </div>
+
+                      <label className="av2-remember" htmlFor="remember">
+                        <input
+                          type="checkbox"
+                          id="remember"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          disabled={loading}
+                        />
+                        <span className="av2-box" aria-hidden="true"><CheckIcon size={13} stroke={3.2} /></span>
+                        <span>Remember me on this device</span>
                       </label>
-                      <button type="button" onClick={handleForgotPassword} className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                        Forgot password?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                      </div>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm transition-colors ${
-                          errors.password ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/50 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20'
-                        } ${resolvedTheme === 'dark' ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
-                        placeholder="••••••••"
+
+                      <motion.button
+                        type="submit"
+                        disabled={!canSubmitEmail}
+                        whileTap={canSubmitEmail ? { scale: 0.98 } : undefined}
+                        className="av2-btn"
+                        data-loading={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <SpinnerIcon size={19} />
+                            <span>Signing in...</span>
+                          </>
+                        ) : (
+                          <span>Sign In with Email</span>
+                        )}
+                      </motion.button>
+                    </motion.form>
+                  )}
+
+                  {method === "phone" && (
+                    <motion.div
+                      key="phone"
+                      role="tabpanel"
+                      aria-labelledby="login-method-phone"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="av2-panel"
+                    >
+                      <UltimatePhoneInput
+                        value={phoneNumber}
+                        onChange={setPhoneNumber}
+                        error={errors.phone}
                         disabled={loading}
+                        onValidationChange={setIsPhoneValid}
                       />
-                    </div>
-                    {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
-                  </div>
+                      <motion.button
+                        type="button"
+                        onClick={handlePhoneLogin}
+                        disabled={!canSubmitPhone}
+                        whileTap={canSubmitPhone ? { scale: 0.98 } : undefined}
+                        className="av2-btn"
+                        data-loading={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <SpinnerIcon size={19} />
+                            <span>Sending Code...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Send Verification Code</span>
+                            <SendIcon size={18} />
+                          </>
+                        )}
+                      </motion.button>
+                      <p className="av2-note">We'll send a 6-digit code to your phone</p>
+                    </motion.div>
+                  )}
 
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="remember"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500"
-                      disabled={loading}
-                    />
-                    <label htmlFor="remember" className="ml-2 text-xs text-gray-600 dark:text-gray-300">
-                      Remember me on this device
-                    </label>
-                  </div>
+                  {method === "google" && (
+                    <motion.div
+                      key="google"
+                      role="tabpanel"
+                      aria-labelledby="login-method-google"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="av2-panel"
+                    >
+                      <UltimateGoogleAuth onSuccess={handleGoogleSuccess} onError={handleGoogleError} loading={loading} />
+                      <div className="av2-alt">
+                        <button type="button" className="av2-btn-alt" onClick={() => setMethod("email")}>
+                          <MailIcon size={17} />
+                          Email
+                        </button>
+                        <button type="button" className="av2-btn-alt" onClick={() => setMethod("phone")}>
+                          <PhoneIcon size={17} />
+                          Phone
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                  <motion.button
-                    type="submit"
-                    disabled={loading || !email || !password}
-                    whileHover={!loading && email && password ? { scale: 1.02 } : {}}
-                    whileTap={!loading && email && password ? { scale: 0.98 } : {}}
-                    className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
-                      !loading && email && password
-                        ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl cursor-pointer'
-                        : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                        Signing in...
-                      </span>
-                    ) : "Sign In with Email"}
-                  </motion.button>
-                </motion.form>
-              )}
+                {errors.general && (
+                  <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="av2-alert" role="alert">
+                    <AlertIcon size={16} />
+                    <span>{errors.general}</span>
+                  </motion.div>
+                )}
 
-              {method === "phone" && (
-                <motion.div key="phone" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                  <UltimatePhoneInput
-                    value={phoneNumber}
-                    onChange={setPhoneNumber}
-                    error={errors.phone}
-                    disabled={loading}
-                    onValidationChange={setIsPhoneValid}
-                  />
-                  <motion.button
-                    onClick={handlePhoneLogin}
-                    disabled={loading || !isPhoneValid}
-                    whileHover={!loading && isPhoneValid ? { scale: 1.02 } : {}}
-                    whileTap={!loading && isPhoneValid ? { scale: 0.98 } : {}}
-                    className={`w-full py-3 rounded-2xl font-bold text-sm transition-all ${
-                      !loading && isPhoneValid
-                        ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white shadow-lg hover:shadow-xl cursor-pointer'
-                        : 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                        Sending Code...
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-center gap-2">
-                        Send Verification Code
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      </span>
-                    )}
-                  </motion.button>
-                  <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-                    We'll send a 6-digit code to your phone
-                  </p>
-                </motion.div>
-              )}
+                <p className="av2-switch">
+                  Don't have an account?
+                  <Link to="/signup/step1">Sign up now</Link>
+                </p>
+              </div>
+            </motion.section>
 
-              {method === "google" && (
-                <motion.div key="google" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                  <UltimateGoogleAuth onSuccess={handleGoogleSuccess} onError={handleGoogleError} loading={loading} />
-                  <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => setMethod("email")} className={`py-2.5 rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 ${
-                      resolvedTheme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      Email
-                    </button>
-                    <button onClick={() => setMethod("phone")} className={`py-2.5 rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 ${
-                      resolvedTheme === 'dark' ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      Phone
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {errors.general && (
-              <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50">
-                <p className="text-xs text-red-600 dark:text-red-400 text-center">{errors.general}</p>
-              </motion.div>
-            )}
-
-            <div className={`mt-5 pt-4 border-t ${resolvedTheme === 'dark' ? 'border-white/10' : 'border-gray-200'}`}>
-              <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-                Don't have an account?{" "}
-                <Link to="/signup/step1" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
-                  Sign up now
-                </Link>
+            <footer>
+              <p className="av2-secure">
+                <span><LockIcon size={14} />End-to-end encrypted</span>
+                <i aria-hidden="true" />
+                <span><ShieldCheckIcon size={14} />Military-grade security</span>
               </p>
-            </div>
+              <p className="av2-foot">© {year} Arvdoul</p>
+            </footer>
           </motion.div>
+        </main>
 
-          {/* Security Footer */}
-          <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500 dark:text-gray-600">
-            <span>🔒</span>
-            <span>End-to-end encrypted</span>
-            <span>•</span>
-            <span>🛡️</span>
-            <span>Military-grade security</span>
-          </div>
-        </motion.div>
+        {/* reCAPTCHA container */}
+        <div id="login-recaptcha-container" className="av2-recaptcha" />
       </div>
-
-      {/* reCAPTCHA container */}
-      <div id="login-recaptcha-container" className="fixed bottom-0 right-0 z-50 pointer-events-auto" />
-    </div>
+    </MotionConfig>
   );
 }
