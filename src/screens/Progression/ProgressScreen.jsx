@@ -34,8 +34,11 @@ import { toast } from 'sonner';
 
 export default function ProgressScreen() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { theme } = useTheme();
+
+  const profile = userProfile || user;
+  const currentUid = profile?.uid || user?.uid;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,19 +50,19 @@ export default function ProgressScreen() {
   const isDark = theme === 'dark' || theme === 'midnight';
 
   const loadProgression = useCallback(async () => {
-    if (!user?.uid) return;
+    if (!currentUid) return;
     try {
-      const info = await levelSystemService.getLevelInfo(user.uid);
+      const info = await levelSystemService.getLevelInfo(currentUid);
       setLevelInfo(info);
-      setActiveStreak(Number(user.activeStreak) || 1);
-      setActiveDaysCount(Number(user.activeDaysCount) || 1);
-    } catch (err) {
+      setActiveStreak(Number(profile?.activeStreak) || 1);
+      setActiveDaysCount(Number(profile?.activeDaysCount) || 1);
+    } catch {
       toast.error('Failed to load live progression data');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, [currentUid, profile]);
 
   useEffect(() => {
     loadProgression();
@@ -103,6 +106,12 @@ export default function ProgressScreen() {
               }`}
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={() => navigate('/perks')}
+              className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white transition-colors cursor-pointer shadow-sm"
+            >
+              Perks & Rewards
             </button>
             <button
               onClick={() => navigate('/passport')}
@@ -244,9 +253,18 @@ export default function ProgressScreen() {
 
         {/* Section 3: Unlocked Capabilities */}
         <section aria-labelledby="unlocked-heading" className="space-y-3">
-          <h3 id="unlocked-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
-            Unlocked Platform Capabilities ({unlockedPerks.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 id="unlocked-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
+              Unlocked Platform Capabilities ({unlockedPerks.length})
+            </h3>
+            <button
+              onClick={() => navigate('/perks')}
+              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+            >
+              <span>All Perks & Virtual Gifts</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {unlockedPerks.map((perk) => (

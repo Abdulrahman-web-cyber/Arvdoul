@@ -8,7 +8,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import titleService from '../../services/titleService';
 import {
-  ArrowLeft,
   Crown,
   Check,
   Lock,
@@ -17,6 +16,9 @@ import {
   ShieldCheck,
   RefreshCw,
   X,
+  Award,
+  Flame,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,7 +32,7 @@ const DOMAINS = [
 
 export default function TitlesScreen() {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, userProfile, refreshUser } = useAuth();
   const { theme } = useTheme();
 
   const [loading, setLoading] = useState(true);
@@ -41,20 +43,22 @@ export default function TitlesScreen() {
   const [inspectingTitle, setInspectingTitle] = useState(null);
 
   const isDark = theme === 'dark' || theme === 'midnight';
+  const profile = userProfile || user;
 
   const catalog = useMemo(() => titleService.getCatalog(), []);
 
   const loadTitles = useCallback(async () => {
-    if (!user?.uid) return;
+    const uid = profile?.uid || user?.uid;
+    if (!uid) return;
     try {
-      const items = await titleService.getUserTitles(user.uid);
+      const items = await titleService.getUserTitles(uid);
       setEarnedTitles(items);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load titles');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [profile, user]);
 
   useEffect(() => {
     loadTitles();
@@ -65,8 +69,8 @@ export default function TitlesScreen() {
   }, [earnedTitles]);
 
   const activeTitleId = useMemo(() => {
-    return user?.activeTitle?.id || (user?.primaryTitle ? user.primaryTitle.toLowerCase() : 'resident');
-  }, [user]);
+    return profile?.activeTitle?.id || (profile?.primaryTitle ? profile.primaryTitle.toLowerCase() : 'resident');
+  }, [profile]);
 
   const handleSetActive = async (titleId) => {
     if (activating) return;
@@ -104,45 +108,69 @@ export default function TitlesScreen() {
     });
   }, [catalog, selectedDomain]);
 
+  const activeTitleObj = catalog[activeTitleId] || { name: profile?.primaryTitle || 'Resident', icon: '🏛️' };
+
   return (
     <div className={`min-h-screen pb-24 ${isDark ? 'bg-black text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       <main className="max-w-4xl mx-auto px-4 py-4 sm:py-6 space-y-6">
         {/* Top Summary Strip */}
-        <div className="flex items-center justify-between pb-1">
+        <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
           <div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">Titles & Provenance</h2>
-            <p className="text-xs text-gray-500">Active: {user?.primaryTitle || 'Resident'} · {earnedTitles.length} Earned</p>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span>Titles & Provenance</span>
+              {profile?.isVerified && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Verified
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-gray-500">
+              Active: {profile?.primaryTitle || activeTitleObj.name || 'Resident'} · {earnedTitles.length} Earned Titles
+            </p>
           </div>
-          <button
-            onClick={() => navigate('/passport')}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors cursor-pointer"
-          >
-            Digital Passport
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/perks')}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white shadow-sm transition-colors cursor-pointer"
+            >
+              Perks & Rewards
+            </button>
+            <button
+              onClick={() => navigate('/passport')}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors cursor-pointer"
+            >
+              Digital Passport
+            </button>
+          </div>
         </div>
+
         {/* Active Title Banner */}
         <section
           aria-labelledby="active-title-heading"
-          className={`p-6 rounded-2xl border ${
-            isDark ? 'bg-gradient-to-r from-gray-900 to-indigo-950/40 border-gray-800' : 'bg-white border-gray-200 shadow-sm'
+          className={`p-6 rounded-2xl border transition-all ${
+            isDark ? 'bg-gradient-to-r from-gray-900 via-indigo-950/40 to-purple-950/30 border-gray-800' : 'bg-white border-gray-200 shadow-sm'
           }`}
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <span className="text-xs font-medium uppercase tracking-wider text-indigo-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
                 Primary Identity Title
               </span>
-              <h2 id="active-title-heading" className="text-2xl font-bold tracking-tight mt-1 flex items-center space-x-2">
-                <Crown className="w-6 h-6 text-amber-400" />
-                <span>{user?.primaryTitle || 'Resident'}</span>
+              <h2 id="active-title-heading" className="text-2xl font-black tracking-tight mt-1 flex items-center space-x-2">
+                <span className="text-2xl">{activeTitleObj.icon || '👑'}</span>
+                <span>{profile?.primaryTitle || activeTitleObj.name || 'Resident'}</span>
               </h2>
-              <p className="text-xs text-gray-400 mt-1">
-                This title appears beside your name across profiles, comments, and nation artifacts.
+              <p className="text-xs text-gray-400 mt-1 max-w-md">
+                This title appears beside your handle across all feeds, spaces, digital passport credentials, and citizen registry artifacts.
               </p>
             </div>
             <div className="text-right">
               <span className="text-xs text-gray-500 block">Civic Standing</span>
-              <span className="text-sm font-semibold text-emerald-400">Verified Citizen</span>
+              <span className="text-sm font-semibold text-emerald-400 flex items-center justify-end gap-1">
+                <ShieldCheck className="w-4 h-4" />
+                <span>{profile?.isVerified ? 'Verified Sovereign' : 'Citizen Resident'}</span>
+              </span>
             </div>
           </div>
         </section>
@@ -153,9 +181,9 @@ export default function TitlesScreen() {
             <button
               key={dom.id}
               onClick={() => setSelectedDomain(dom.id)}
-              className={`text-xs px-3.5 py-2 rounded-xl shrink-0 transition-colors ${
+              className={`text-xs px-3.5 py-2 rounded-xl shrink-0 transition-colors cursor-pointer ${
                 selectedDomain === dom.id
-                  ? 'bg-indigo-600 text-white font-medium'
+                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
                   : isDark
                   ? 'bg-gray-900 text-gray-400 hover:bg-gray-800'
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
@@ -172,14 +200,16 @@ export default function TitlesScreen() {
             const isEarned = earnedMap.has(t.id);
             const isActive = activeTitleId === t.id;
             const evalResult = titleService.checkEligibility(t.id, {
-              level: user?.level || 1,
-              activeDaysCount: user?.activeDaysCount || 1,
-              contributionScore: user?.contributionScore || 25,
-              reputationScore: user?.reputationScore || 50,
-              influenceScore: user?.influenceScore || 20,
-              isCreator: Boolean(user?.isCreator),
-              isFounder: Boolean(user?.isFounder),
-              isPioneer: Boolean(user?.isPioneer),
+              level: Number(profile?.level) || 1,
+              activeDaysCount: Number(profile?.activeDaysCount || profile?.activeDays) || 1,
+              contributionScore: Number(profile?.contributionScore || profile?.contribution) || 25,
+              reputationScore: Number(profile?.reputationScore || profile?.reputation) || 50,
+              influenceScore: Number(profile?.influenceScore || profile?.influence) || 20,
+              isCreator: Boolean(profile?.isCreator),
+              isVerified: Boolean(profile?.isVerified || profile?.verified),
+              isFounder: Boolean(profile?.isFounder),
+              isPioneer: Boolean(profile?.isPioneer),
+              policyStanding: profile?.policyStanding || 'good',
             });
 
             return (
@@ -188,7 +218,7 @@ export default function TitlesScreen() {
                 className={`p-5 rounded-2xl border flex flex-col justify-between transition-all ${
                   isActive
                     ? isDark
-                      ? 'bg-indigo-950/20 border-indigo-600 shadow-md'
+                      ? 'bg-indigo-950/20 border-indigo-600 shadow-md ring-1 ring-indigo-500/40'
                       : 'bg-indigo-50/50 border-indigo-400 shadow-sm'
                     : isEarned
                     ? isDark
@@ -219,7 +249,7 @@ export default function TitlesScreen() {
                     <button
                       onClick={() => setInspectingTitle(t)}
                       aria-label="Inspect title details"
-                      className="p-1 rounded-lg text-gray-400 hover:text-gray-200"
+                      className="p-1 rounded-lg text-gray-400 hover:text-gray-200 cursor-pointer"
                     >
                       <Info className="w-4 h-4" />
                     </button>
@@ -239,7 +269,7 @@ export default function TitlesScreen() {
                     <button
                       onClick={() => handleSetActive(t.id)}
                       disabled={activating === t.id}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-white transition-colors cursor-pointer"
                     >
                       {activating === t.id ? 'Setting...' : 'Set as Active'}
                     </button>
@@ -247,7 +277,7 @@ export default function TitlesScreen() {
                     <button
                       onClick={() => handleClaim(t.id)}
                       disabled={claiming === t.id}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer shadow-sm"
                     >
                       {claiming === t.id ? 'Claiming...' : 'Claim Title'}
                     </button>
@@ -258,7 +288,7 @@ export default function TitlesScreen() {
                     </div>
                   )}
 
-                  <span className="text-[11px] text-gray-500">
+                  <span className="text-[11px] text-gray-500 font-mono">
                     {isEarned ? 'Granted' : 'Audited'}
                   </span>
                 </div>
@@ -285,7 +315,7 @@ export default function TitlesScreen() {
               <button
                 onClick={() => setInspectingTitle(null)}
                 aria-label="Close dialog"
-                className="p-1 rounded-lg text-gray-400 hover:text-white"
+                className="p-1 rounded-lg text-gray-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -308,12 +338,16 @@ export default function TitlesScreen() {
                 <span className="text-gray-500">Minimum Level</span>
                 <span>Level {inspectingTitle.minLevel || 1}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Provenance Status</span>
+                <span className="text-emerald-400 font-mono">Audited & Cryptographically Bound</span>
+              </div>
             </div>
 
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setInspectingTitle(null)}
-                className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors"
+                className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors cursor-pointer"
               >
                 Done
               </button>

@@ -4,42 +4,48 @@
  * Specifically designed for Arvdoul:
  * - NO background/cover images (Arvdoul does not support background images).
  * - Full alignment with Arvdoul design tokens (arvdoul-gradient, arvdoul-surface, arvdoul-border).
+ * - Progressive sections based on Level, Creator status, and Royal Standing:
+ *     - Creator Suite (Category, Inquiries Email, Patronage Tip Note)
+ *     - Royal & Nobility Heraldic Settings (House Creed, Insignia/Crest Aura)
+ *     - Civic Display Preferences (Level badge, Reputation score, Streak, Default tab)
+ * - Robust protection against background snapshot resets during live typing.
  * - Integrated unique username generation & live availability checker via userService.
- * - Interactive Avatar Studio with 1:1 circular crop and live presence aura.
+ * - Interactive Avatar Studio with 1:1 circular crop.
  * - Granular Privacy & Audience Governance adhering to profileContracts.js.
  * - Interactive Location Modal & Civic Coordinates.
  * 
  * @component
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
 import { 
-  ChevronLeft, 
   Camera, 
   Save, 
   User, 
   MapPin, 
   Globe, 
-  Shield, 
   Plus, 
   Trash2, 
-  ExternalLink, 
   Lock, 
   Eye, 
-  Check, 
   Sparkles, 
   RefreshCw, 
   CheckCircle2, 
   AlertCircle,
   Link as LinkIcon,
-  HelpCircle,
   Star,
   AtSign,
   Coins,
-  ArrowRight
+  Crown,
+  Briefcase,
+  Mail,
+  HeartHandshake,
+  ShieldCheck,
+  Flame,
+  LayoutGrid
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -67,12 +73,51 @@ const PLATFORM_PRESETS = [
   { id: 'custom', label: 'Custom Link' },
 ];
 
+const CREATOR_CATEGORIES = [
+  'Music & Audio',
+  'Visual Arts & 3D',
+  'Tech & Software',
+  'Gaming & Interactive',
+  'Writing & Journalism',
+  'Education & Science',
+  'Fashion & Lifestyle',
+  'Community & Civic Governance',
+  'Entertainment & Comedy',
+];
+
+const CREST_AURAS = [
+  { id: 'gold', label: 'Solar Gold', color: 'from-amber-400 to-yellow-500', ring: 'ring-amber-400' },
+  { id: 'purple', label: 'Imperial Purple', color: 'from-purple-500 to-indigo-600', ring: 'ring-purple-400' },
+  { id: 'royal', label: 'Crown Sapphire', color: 'from-blue-500 to-indigo-700', ring: 'ring-blue-400' },
+  { id: 'cyan', label: 'Astral Cyan', color: 'from-cyan-400 to-teal-500', ring: 'ring-cyan-400' },
+  { id: 'emerald', label: 'Sovereign Emerald', color: 'from-emerald-400 to-green-600', ring: 'ring-emerald-400' },
+];
+
 export default function EditProfileScreen() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const { user, userProfile, updateUserProfile, userService } = useAuth();
   const loadStoreProfile = useProfileStore((state) => state.loadProfile);
+
+  // Effective user reference
+  const currentUid = userProfile?.uid || userProfile?.id || user?.uid;
+  const userLevel = Number(userProfile?.level || user?.level) || 1;
+
+  // Progressive unlock flags
+  const isCreatorAccount = Boolean(
+    userProfile?.isCreator || 
+    userProfile?.creatorStatus === 'approved' || 
+    userLevel >= 10
+  );
+
+  const isRoyalOrNoble = Boolean(
+    userProfile?.isRoyalFamily ||
+    userProfile?.isDucal ||
+    userProfile?.activeTitle === 'duke' ||
+    userProfile?.activeTitle === 'king' ||
+    userLevel >= 35
+  );
 
   // Form state
   const [formData, setFormData] = useState({
@@ -92,6 +137,18 @@ export default function EditProfileScreen() {
       activity: DEFAULT_PROFILE_PRIVACY.activity,
       economicStatus: DEFAULT_PROFILE_PRIVACY.economicStatus,
     },
+    // Creator Suite
+    creatorCategory: '',
+    inquiriesEmail: '',
+    tipMessage: '',
+    // Royal / Nobility Heraldry
+    heraldicMotto: '',
+    crestAura: 'gold',
+    // Civic display preferences
+    showLevel: true,
+    showReputation: true,
+    showStreak: true,
+    defaultTab: 'posts',
   });
 
   const [saving, setSaving] = useState(false);
@@ -99,9 +156,12 @@ export default function EditProfileScreen() {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
-  const [usernameAvailability, setUsernameAvailability] = useState(null); // 'checking' | 'available' | 'taken' | 'invalid' | 'current'
+  const [usernameAvailability, setUsernameAvailability] = useState(null);
   const [isGeneratingUsername, setIsGeneratingUsername] = useState(false);
-  const [activeSection, setActiveSection] = useState('all'); // 'all' | 'identity' | 'coordinates' | 'links' | 'privacy'
+  const [activeSection, setActiveSection] = useState('all');
+
+  // Prevent background snapshot pulses from wiping unsaved edits
+  const initializedUidRef = useRef(null);
 
   // Profile completeness calculation
   const completeness = useMemo(() => {
@@ -119,12 +179,10 @@ export default function EditProfileScreen() {
     return { score, checks };
   }, [avatarPreview, formData.displayName, formData.username, formData.bio, formData.location, formData.website, formData.links]);
 
-  // Effective user reference
-  const currentUid = userProfile?.uid || userProfile?.id || user?.uid;
-
-  // Initialize form data from profile
+  // Initialize form data once per distinct account
   useEffect(() => {
-    if (userProfile || user) {
+    if ((userProfile || user) && currentUid && initializedUidRef.current !== currentUid) {
+      initializedUidRef.current = currentUid;
       const src = userProfile || user;
       const p = src.privacy || {};
       
@@ -152,6 +210,15 @@ export default function EditProfileScreen() {
           activity: p.activity || (p.activityVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.activityVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
           economicStatus: p.economicStatus || VISIBILITY_SCOPES.ONLY_ME,
         },
+        creatorCategory: src.creatorCategory || '',
+        inquiriesEmail: src.inquiriesEmail || '',
+        tipMessage: src.tipMessage || '',
+        heraldicMotto: src.heraldicMotto || '',
+        crestAura: src.crestAura || 'gold',
+        showLevel: src.showLevel !== false,
+        showReputation: src.showReputation !== false,
+        showStreak: src.showStreak !== false,
+        defaultTab: src.defaultTab || 'posts',
       });
 
       const safePhoto = getSafeAvatarUrl(src.photoURL, src.displayName, currentUid);
@@ -198,7 +265,6 @@ export default function EditProfileScreen() {
       const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'creator';
       let uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
       
-      // Ensure no leftover placeholder prefix
       if (uniqueUser.startsWith('user_')) {
         uniqueUser = uniqueUser.replace(/^user_/, `${cleanBase}_`);
       }
@@ -211,7 +277,7 @@ export default function EditProfileScreen() {
     } finally {
       setIsGeneratingUsername(false);
     }
-  }, [formData.displayName, userProfile, user, currentUid, userService]);
+  }, [formData.displayName, userProfile, user, userService]);
 
   // Input Handlers
   const handleInputChange = useCallback((field, value) => {
@@ -345,6 +411,16 @@ export default function EditProfileScreen() {
         isPrivate: Boolean(formData.isPrivate),
         links: cleanedLinks,
         privacy: formData.privacy,
+        // Progressive Settings
+        creatorCategory: formData.creatorCategory?.trim() || '',
+        inquiriesEmail: formData.inquiriesEmail?.trim() || '',
+        tipMessage: formData.tipMessage?.trim() || '',
+        heraldicMotto: formData.heraldicMotto?.trim() || '',
+        crestAura: formData.crestAura || 'gold',
+        showLevel: Boolean(formData.showLevel),
+        showReputation: Boolean(formData.showReputation),
+        showStreak: Boolean(formData.showStreak),
+        defaultTab: formData.defaultTab || 'posts',
       };
 
       // Canonical validation via profileContracts
@@ -387,7 +463,6 @@ export default function EditProfileScreen() {
         toast.success('Profile updated successfully!');
         navigate('/profile/me');
       } catch (backendError) {
-        // Rollback optimistic state on backend failure
         useProfileStore.setState({ profile: previousStoreProfile });
         throw backendError;
       }
@@ -435,7 +510,7 @@ export default function EditProfileScreen() {
         }}
       />
 
-      {/* Sub-Toolbar & Section Navigation Tabs (TopAppBar handles main app title and back navigation) */}
+      {/* Sub-Toolbar & Section Navigation (TopAppBar handles main app title and back navigation) */}
       <div className={cn(
         "sticky top-0 z-30 w-full backdrop-blur-2xl border-b transition-colors mb-2",
         isDark
@@ -447,6 +522,16 @@ export default function EditProfileScreen() {
             <span className="font-mono text-purple-400 font-bold">@{formData.username || 'citizen'}</span>
             <span>·</span>
             <span className="text-emerald-500 font-semibold">{completeness.score}% complete</span>
+            {isCreatorAccount && (
+              <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                Creator
+              </span>
+            )}
+            {isRoyalOrNoble && (
+              <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                Heraldic
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -484,13 +569,16 @@ export default function EditProfileScreen() {
           </div>
         </div>
 
-        {/* Section Navigation Tabs */}
+        {/* Section Navigation Tabs (Unified all sections tab + quick filters) */}
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {[
             { id: 'all', label: 'All Sections' },
-            { id: 'identity', label: 'Identity & Handle' },
+            { id: 'identity', label: 'Identity & Bio' },
             { id: 'coordinates', label: 'Coordinates & Web' },
             { id: 'links', label: 'Custom Links' },
+            ...(isCreatorAccount ? [{ id: 'creator', label: 'Creator Suite' }] : []),
+            ...(isRoyalOrNoble ? [{ id: 'royal', label: 'Heraldic Crown' }] : []),
+            { id: 'civic', label: 'Civic Display' },
             { id: 'privacy', label: 'Privacy & Scopes' },
           ].map(tab => (
             <button
@@ -560,7 +648,6 @@ export default function EditProfileScreen() {
 
         {/* 1. CITIZEN AVATAR STUDIO (Arvdoul does NOT support background images) */}
         {(activeSection === 'all' || activeSection === 'identity') && (
-        <>
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 relative overflow-hidden",
           isDark
@@ -633,8 +720,10 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
+        )}
 
         {/* 2. UNIQUE USERNAME & CIVIC IDENTITY */}
+        {(activeSection === 'all' || activeSection === 'identity') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
           isDark
@@ -785,7 +874,7 @@ export default function EditProfileScreen() {
               />
             </div>
 
-            {/* Pronouns & Category/Profession Row */}
+            {/* Pronouns & Profession Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -847,7 +936,6 @@ export default function EditProfileScreen() {
 
           </div>
         </section>
-        </>
         )}
 
         {/* 3. CIVIC COORDINATES & LOCATION */}
@@ -997,7 +1085,7 @@ export default function EditProfileScreen() {
                     type="text"
                     value={link.title || ''}
                     onChange={(e) => handleUpdateLink(idx, 'title', e.target.value)}
-                    placeholder="Link Title (e.g. My GitHub)"
+                    placeholder="Link Title (e.g. My Portfolio)"
                     className={cn(
                       "sm:w-44 px-3 py-1.5 rounded-xl text-xs font-medium outline-none border",
                       isDark 
@@ -1049,7 +1137,288 @@ export default function EditProfileScreen() {
         </section>
         )}
 
-        {/* 5. PRIVACY & AUDIENCE GOVERNANCE */}
+        {/* 5. CREATOR SUITE SETTINGS (Unlocked for Creators or Level 10+) */}
+        {isCreatorAccount && (activeSection === 'all' || activeSection === 'creator') && (
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
+          isDark
+            ? "bg-gradient-to-br from-[#0c142c] to-[#070D27] border-amber-500/20 shadow-[0_12px_40px_rgba(245,158,11,0.08)]"
+            : "bg-gradient-to-br from-amber-50/50 to-white border-amber-200 shadow-[0_8px_30px_rgba(245,158,11,0.06)]"
+        )}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                <Briefcase className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug flex items-center gap-2">
+                  <span>Creator Suite & Patronage</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    Unlocked
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Configure your creative craft classification, collaboration pipeline, and tip jar message.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Creator Category */}
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Palette className="w-4 h-4 text-amber-400" />
+                  <span>Primary Creator Discipline</span>
+                </label>
+                <select
+                  value={formData.creatorCategory}
+                  onChange={(e) => handleInputChange('creatorCategory', e.target.value)}
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                    isDark 
+                      ? "bg-slate-900 border-white/10 text-white focus:border-amber-400" 
+                      : "bg-white border-slate-200 text-slate-800 focus:border-amber-400"
+                  )}
+                >
+                  <option value="">Select Creative Category...</option>
+                  {CREATOR_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Inquiries Email */}
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-amber-400" />
+                  <span>Business / Inquiries Contact</span>
+                </label>
+                <input
+                  type="email"
+                  value={formData.inquiriesEmail}
+                  onChange={(e) => handleInputChange('inquiriesEmail', e.target.value)}
+                  placeholder="creator.mgmt@domain.com"
+                  maxLength={100}
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                    isDark
+                      ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-amber-400"
+                      : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-400"
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Custom Tip Jar Message */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <HeartHandshake className="w-4 h-4 text-rose-400" />
+                <span>Patronage Tip Note</span>
+              </label>
+              <input
+                type="text"
+                value={formData.tipMessage}
+                onChange={(e) => handleInputChange('tipMessage', e.target.value)}
+                placeholder="e.g. Thanks for supporting my independent audio creations and video stories!"
+                maxLength={200}
+                className={cn(
+                  "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                  isDark
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-rose-400"
+                    : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-rose-400"
+                )}
+              />
+            </div>
+          </div>
+        </section>
+        )}
+
+        {/* 6. ROYAL & NOBILITY HERALDIC SETTINGS (Unlocked for Royal Family or Level 35+) */}
+        {isRoyalOrNoble && (activeSection === 'all' || activeSection === 'royal') && (
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5 relative overflow-hidden",
+          isDark
+            ? "bg-gradient-to-br from-[#12072B] to-[#070D27] border-purple-500/30 shadow-[0_12px_40px_rgba(168,85,247,0.12)]"
+            : "bg-gradient-to-br from-purple-50/50 to-white border-purple-200 shadow-[0_8px_30px_rgba(168,85,247,0.08)]"
+        )}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
+              <Crown className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug flex items-center gap-2">
+                <span>Royal House & Heraldry</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  Noble Order
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Ceremonial attributes unlocked through proven civic standing and nobility status.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-1">
+            {/* Heraldic Creed / Motto */}
+            <div className="space-y-1.5">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                House Creed / Heraldic Motto
+              </label>
+              <input
+                type="text"
+                value={formData.heraldicMotto}
+                onChange={(e) => handleInputChange('heraldicMotto', e.target.value)}
+                placeholder="e.g. In Aetere Dignitas · Building with honor across Arvdoul"
+                maxLength={120}
+                className={cn(
+                  "w-full px-4 py-2.5 rounded-2xl text-sm font-medium outline-none transition-all border",
+                  isDark
+                    ? "bg-black/20 border-white/10 text-white placeholder-slate-500 focus:border-purple-400"
+                    : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-purple-400"
+                )}
+              />
+            </div>
+
+            {/* Insignia Aura Selector */}
+            <div className="space-y-2">
+              <label className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                Insignia & Crest Radiance
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {CREST_AURAS.map((aura) => (
+                  <button
+                    key={aura.id}
+                    type="button"
+                    onClick={() => handleInputChange('crestAura', aura.id)}
+                    className={cn(
+                      "p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5",
+                      formData.crestAura === aura.id
+                        ? "bg-purple-500/20 border-purple-500 shadow-md ring-2 ring-purple-500/40"
+                        : isDark
+                        ? "bg-black/20 border-white/10 hover:bg-white/[0.04]"
+                        : "bg-white border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    <div className={cn("w-5 h-5 rounded-full bg-gradient-to-tr shadow-sm", aura.color)} />
+                    <span className="text-[11px] font-bold">{aura.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {/* 7. CIVIC PRESENTATION & DISPLAY TOGGLES */}
+        {(activeSection === 'all' || activeSection === 'civic') && (
+        <section className={cn(
+          "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",
+          isDark
+            ? "bg-[#070D27]/90 border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
+            : "bg-white/95 border-slate-200/90 shadow-[0_8px_30px_rgba(15,23,42,0.06)]"
+        )}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <LayoutGrid className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight leading-snug">
+                Civic Standing & Showcase Preferences
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Configure which civic badges appear on your public hero card and choose your starting profile tab.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Show Level Toggle */}
+              <label className={cn(
+                "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2",
+                formData.showLevel 
+                  ? (isDark ? "bg-purple-900/20 border-purple-500/40" : "bg-purple-50 border-purple-200") 
+                  : (isDark ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-200")
+              )}>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span className="text-xs font-bold">Level Badge</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.showLevel}
+                  onChange={(e) => handleInputChange('showLevel', e.target.checked)}
+                  className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
+                />
+              </label>
+
+              {/* Show Reputation Toggle */}
+              <label className={cn(
+                "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2",
+                formData.showReputation 
+                  ? (isDark ? "bg-emerald-900/20 border-emerald-500/40" : "bg-emerald-50 border-emerald-200") 
+                  : (isDark ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-200")
+              )}>
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-bold">Reputation Score</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.showReputation}
+                  onChange={(e) => handleInputChange('showReputation', e.target.checked)}
+                  className="w-4 h-4 accent-emerald-600 rounded cursor-pointer"
+                />
+              </label>
+
+              {/* Show Streak Toggle */}
+              <label className={cn(
+                "p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2",
+                formData.showStreak 
+                  ? (isDark ? "bg-amber-900/20 border-amber-500/40" : "bg-amber-50 border-amber-200") 
+                  : (isDark ? "bg-black/20 border-white/10" : "bg-slate-50 border-slate-200")
+              )}>
+                <div className="flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-xs font-bold">Day Streak</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.showStreak}
+                  onChange={(e) => handleInputChange('showStreak', e.target.checked)}
+                  className="w-4 h-4 accent-amber-600 rounded cursor-pointer"
+                />
+              </label>
+            </div>
+
+            {/* Default Profile Tab */}
+            <div className="pt-2 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-xs sm:text-sm font-semibold">Default Starting Tab</div>
+                <div className="text-[11px] text-slate-400">The tab visitors see first when opening your profile</div>
+              </div>
+              <select
+                value={formData.defaultTab}
+                onChange={(e) => handleInputChange('defaultTab', e.target.value)}
+                className={cn(
+                  "px-3.5 py-1.5 rounded-xl text-xs font-semibold outline-none border cursor-pointer",
+                  isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <option value="posts">Posts & Sparks</option>
+                <option value="reels">Reels & Clips</option>
+                <option value="audio">Audio Tracks</option>
+                <option value="citizenship">Citizenship & Provenance</option>
+                <option value="about">About & Manifesto</option>
+              </select>
+            </div>
+          </div>
+        </section>
+        )}
+
+        {/* 8. PRIVACY & AUDIENCE GOVERNANCE */}
         {(activeSection === 'all' || activeSection === 'privacy') && (
         <section className={cn(
           "rounded-[28px] border transition-all p-5 sm:p-7 space-y-5",

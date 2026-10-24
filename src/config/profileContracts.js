@@ -440,6 +440,102 @@ export function validateProfileUpdate(rawUpdates = {}) {
         break;
       }
 
+      case 'username': {
+        if (typeof val === 'string') {
+          const trimmed = val.trim().toLowerCase();
+          const { MIN_LENGTH, MAX_LENGTH, PATTERN } = PROFILE_CONSTRAINTS.USERNAME;
+          if (trimmed.length < MIN_LENGTH || trimmed.length > MAX_LENGTH) {
+            errors.push(`Username must be between ${MIN_LENGTH} and ${MAX_LENGTH} characters`);
+          } else if (!PATTERN.test(trimmed)) {
+            errors.push('Username may only contain letters, numbers, periods, and underscores');
+          } else {
+            sanitized.username = trimmed;
+          }
+        }
+        break;
+      }
+
+      case 'locationPrivacy': {
+        if (typeof val === 'string' && ['public', 'country_only', 'hidden'].includes(val)) {
+          sanitized.locationPrivacy = val;
+        }
+        break;
+      }
+
+      case 'locationCoordinates': {
+        if (val && typeof val === 'object' && typeof val.lat === 'number' && typeof val.lng === 'number') {
+          sanitized.locationCoordinates = {
+            lat: Math.max(-90, Math.min(90, val.lat)),
+            lng: Math.max(-180, Math.min(180, val.lng)),
+          };
+        }
+        break;
+      }
+
+      case 'creatorCategory': {
+        if (typeof val === 'string') {
+          sanitized.creatorCategory = val.trim().slice(0, 50);
+        } else if (val === null) {
+          sanitized.creatorCategory = '';
+        }
+        break;
+      }
+
+      case 'inquiriesEmail': {
+        if (typeof val === 'string' && val.trim().length > 0) {
+          const trimmed = val.trim();
+          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+            sanitized.inquiriesEmail = trimmed.slice(0, 100);
+          } else {
+            errors.push('Inquiries email format is invalid');
+          }
+        } else if (val === '' || val === null) {
+          sanitized.inquiriesEmail = '';
+        }
+        break;
+      }
+
+      case 'tipMessage': {
+        if (typeof val === 'string') {
+          sanitized.tipMessage = val.trim().slice(0, 200);
+        } else if (val === null) {
+          sanitized.tipMessage = '';
+        }
+        break;
+      }
+
+      case 'heraldicMotto': {
+        if (typeof val === 'string') {
+          sanitized.heraldicMotto = val.trim().slice(0, 120);
+        } else if (val === null) {
+          sanitized.heraldicMotto = '';
+        }
+        break;
+      }
+
+      case 'crestAura': {
+        if (typeof val === 'string' && ['gold', 'purple', 'royal', 'cyan', 'emerald'].includes(val)) {
+          sanitized.crestAura = val;
+        }
+        break;
+      }
+
+      case 'showLevel':
+      case 'showReputation':
+      case 'showStreak': {
+        if (typeof val === 'boolean') {
+          sanitized[key] = val;
+        }
+        break;
+      }
+
+      case 'defaultTab': {
+        if (typeof val === 'string' && ['posts', 'reels', 'audio', 'citizenship', 'about'].includes(val)) {
+          sanitized.defaultTab = val;
+        }
+        break;
+      }
+
       case 'preferences': {
         if (val && typeof val === 'object') {
           sanitized.preferences = val;

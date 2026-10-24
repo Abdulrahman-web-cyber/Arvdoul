@@ -10,7 +10,7 @@ import {
   getContributionBand,
   getRoyalEligibility,
 } from './levelSystemService.js';
-import { getProfileUrl } from '../utils/shareUtils.js';
+import { getProfileUrl, getPassportUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag } from './profileReadModel.js';
 import { logger } from '../utils/Logger.js';
@@ -175,7 +175,7 @@ class PassportService {
       contribution,
       achievements: verifiedAchievements,
       titles: earnedTitles,
-      passportUrl: getProfileUrl(targetUserId),
+      passportUrl: getPassportUrl(targetUserId),
       isOwner,
       capabilities,
       isVerified,

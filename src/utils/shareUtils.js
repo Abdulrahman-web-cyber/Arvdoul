@@ -15,6 +15,10 @@ export const PROFILE_ORIGIN =
  * for accounts that never chose one.
  */
 export function getProfileHandle(profile) {
+  if (typeof profile === 'string') {
+    const trimmed = profile.trim();
+    return trimmed;
+  }
   const candidates = [profile?.username, profile?.handle];
   for (const raw of candidates) {
     const value = typeof raw === 'string' ? raw.trim() : '';
@@ -31,12 +35,18 @@ export function getProfileUrl(profile) {
   return `${PROFILE_ORIGIN}/profile/${handle}`;
 }
 
+/** Builds the absolute public digital passport URL for a profile or user id. */
+export function getPassportUrl(profile) {
+  const handle = getProfileHandle(profile);
+  return `${PROFILE_ORIGIN}/passport/${handle}`;
+}
+
 /**
  * Stable human-readable identity code derived from the immutable user id.
  * Deterministic, so the same user always shows the same code.
  */
 export function getGlobalIdentityCode(profile) {
-  const id = profile?.uid || profile?.id || '';
+  const id = typeof profile === 'string' ? profile.trim() : (profile?.uid || profile?.id || '');
   return id ? `ARV-${String(id).toUpperCase()}` : '';
 }
 

@@ -103,6 +103,7 @@ const ReputationScreen = lazy(() => import("../screens/Rankings/ReputationScreen
 
 // Part 2: Progression, Achievements, Titles, Citizenship, Creator Onboarding, Wallet
 const ProgressScreen = lazy(() => import("../screens/Progression/ProgressScreen.jsx"));
+const PerksRewardsScreen = lazy(() => import("../screens/Progression/PerksRewardsScreen.jsx"));
 const AchievementsScreen = lazy(() => import("../screens/Achievements/AchievementsScreen.jsx"));
 const TitlesScreen = lazy(() => import("../screens/Titles/TitlesScreen.jsx"));
 const PassportScreen = lazy(() => import("../screens/Citizenship/PassportScreen.jsx"));
@@ -979,6 +980,18 @@ export default function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/profile/progress" element={<Navigate to="/progress" replace />} />
+
+      {/* Part 2: Perks & Rewards Suite */}
+      <Route path="/perks" element={
+        <ProtectedRoute>
+          <Suspense fallback={<RouteFallback />}>
+            <PerksRewardsScreen />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+      <Route path="/rewards" element={<Navigate to="/perks" replace />} />
+      <Route path="/profile/perks" element={<Navigate to="/perks" replace />} />
+      <Route path="/profile/rewards" element={<Navigate to="/perks" replace />} />
 
       {/* Part 2: Achievements Gallery */}
       <Route path="/achievements" element={

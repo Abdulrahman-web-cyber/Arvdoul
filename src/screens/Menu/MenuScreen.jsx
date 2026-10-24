@@ -22,6 +22,7 @@ import {
   PlayCircle,
   Trophy,
   Coins,
+  Gift,
   Settings,
   Shield,
   ShieldCheck,
@@ -157,7 +158,8 @@ export default function MenuScreen() {
 
     // Civic Nation, Community & Progression
     { id: "passport", category: "community", icon: ShieldCheck, label: "Digital Commonwealth Passport", description: "Biometric sovereign passport, visa stamps & nation dossier", color: "#f59e0b", path: "/passport", badge: "ID" },
-    { id: "progress", category: "community", icon: TrendingUp, label: "Progression & Civic Perks", description: "XP level tree, tier perks & rank unlocks", color: "#6366f1", path: "/progress", badge: "Level" },
+    { id: "progress", category: "community", icon: TrendingUp, label: "Progression & Level Milestones", description: "XP level tree, tier progression & stage unlocks", color: "#6366f1", path: "/progress", badge: "Level" },
+    { id: "perks", category: "community", icon: Gift, label: "Perks & Virtual Gift Rewards", description: "Platform perks, level-up coin rewards & virtual gift sharing", color: "#ec4899", path: "/perks", badge: "Rewards" },
     { id: "titles", category: "community", icon: Award, label: "Civic & Nobility Titles", description: "Nobility titles, ceremonial honours & civic provenance", color: "#a855f7", path: "/titles", badge: "Titles" },
     { id: "reputation", category: "community", icon: Zap, label: "Civic Trust & Reputation", description: "Multidimensional trust score, influence & community contribution", color: "#10b981", path: "/reputation", badge: "Rep" },
     { id: "rankings", category: "community", icon: Trophy, label: "Global Creator Leaderboards", description: "Top creators, reputation badges & ranking XP", color: "#fbbf24", path: "/rankings", badge: "Top 100" },
