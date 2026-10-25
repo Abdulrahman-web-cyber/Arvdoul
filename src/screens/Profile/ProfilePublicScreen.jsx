@@ -526,143 +526,143 @@ export default function ProfilePublicScreen() {
           ? "bg-[#060816] text-white selection:bg-purple-500/30"
           : "bg-[#f0f4fa] text-slate-900 selection:bg-purple-500/20"
       )}>
-        {/* Outer responsive frame matching design specifications */}
-        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-5 sm:space-y-6">
-          {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
-          <div className="lg:grid lg:grid-cols-12 lg:gap-8 xl:gap-10 items-start">
-            {/* Left Column: Command Rail (lg:col-span-5 xl:col-span-4, sticky) */}
-            <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 space-y-4 sm:space-y-5 relative z-10">
-              {/* TOP CARD: Elevated Master Identity Card with Avatar & Social Counters */}
-              <ProfileHeroSection
-                variant="identity"
-                profile={effectiveProfile}
+        {/* Master Container matching Image 2 Hierarchy */}
+        <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
+          {/* 1. Master Identity Card with Level Badge, Passport & Public Action Buttons */}
+          <ProfileHeroSection
+            variant="identity"
+            profile={effectiveProfile}
+            isOwner={false}
+            level={effectiveProfile.level}
+            theme={theme}
+            onBack={() => navigate(-1)}
+            onOpenQrCode={() => setShowQrModal(true)}
+            onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
+            onOpenOptions={() => setShowOptionsMenu(true)}
+            onAvatarClick={() => setShowQrModal(true)}
+            onShare={handleShare}
+            onFollowToggle={handleFollowToggle}
+            isFollowing={isFollowing}
+            followLoading={followLoading}
+            friendshipStatus={friendshipStatus}
+            friendRequestLoading={friendRequestLoading}
+            onFriendRequestToggle={handleFriendRequestToggle}
+            onOpenTipModal={() => setShowTipModal(true)}
+            capabilities={capabilities}
+            analytics={analytics}
+          />
+
+          {/* 2. Social Context Bar (Mutual Friends, Shared Communities, Follows You) */}
+          <ProfileMutualFriends
+            mutualFriends={mutualFriends}
+            relationship={relationship}
+            isFollowing={isFollowing}
+            targetName={effectiveProfile?.displayName || 'Creator'}
+            theme={theme}
+            onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+          />
+
+          {/* 3. 6-Card Civic Metrics Grid */}
+          <ProfileMetricsGrid
+            isOwner={false}
+            theme={theme}
+            profile={effectiveProfile}
+            analytics={analytics}
+            capabilities={capabilities}
+            onMetricPress={(key) => {
+              const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;
+              if (key === 'followers') navigate(`/profile/${targetId}/followers`);
+              else if (key === 'following') navigate(`/profile/${targetId}/following`);
+              else if (key === 'friends') navigate(`/profile/${targetId}/friends`);
+              else if (key === 'coins') setShowTipModal(true);
+              else if (key === 'posts') setActiveTab('posts');
+            }}
+          />
+
+          {!capabilities.canViewContent ? (
+            /* Restricted / Private Account Access Gate */
+            <div className={cn(
+              "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-2",
+              isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
+            )}>
+              <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                  Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
+                </p>
+              </div>
+              <div className="pt-2 flex justify-center">
+                <button
+                  onClick={handleFollowToggle}
+                  className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* 4. Story Highlights Carousel */}
+              <ProfileHighlightsSection
+                highlights={effectiveProfile?.highlights || []}
+                userId={userId}
                 isOwner={false}
-                level={effectiveProfile.level}
                 theme={theme}
-                onBack={() => navigate(-1)}
-                onOpenQrCode={() => setShowQrModal(true)}
-                onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
-                onOpenOptions={() => setShowOptionsMenu(true)}
-                onAvatarClick={() => setShowQrModal(true)}
-                onShare={handleShare}
-                onFollowToggle={handleFollowToggle}
-                isFollowing={isFollowing}
-                followLoading={followLoading}
-                friendshipStatus={friendshipStatus}
-                friendRequestLoading={friendRequestLoading}
-                onFriendRequestToggle={handleFriendRequestToggle}
-                onOpenTipModal={() => setShowTipModal(true)}
-                capabilities={capabilities}
-                analytics={analytics}
-                onMetricPress={(key) => {
-                  const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;
-                  if (key === 'followers') navigate(`/profile/${targetId}/followers`);
-                  else if (key === 'following') navigate(`/profile/${targetId}/following`);
-                  else if (key === 'friends') navigate(`/profile/${targetId}/friends`);
-                  else if (key === 'posts') setActiveTab('posts');
-                  else if (key === 'reputation') navigate(`/passport/${targetId}`);
-                }}
               />
 
+              {/* 5. Featured by Creator 4-Card Section */}
+              <ProfileFeaturedSection
+                profile={effectiveProfile}
+                posts={posts}
+                theme={theme}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
 
-
-              {/* 4. Mutual Friends Line */}
-              {mutualFriends && mutualFriends.length > 0 && (
-                <ProfileMutualFriends
-                  mutualFriends={mutualFriends}
+              {/* 6. Multi-Tab Navigation Bar with Multi-View Switcher */}
+              <div className="sticky top-2 z-30 pt-1">
+                <ProfileTabsBar
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  viewMode={viewMode}
+                  onViewModeChange={handleViewModeChange}
+                  isOwner={false}
                   theme={theme}
-                  onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
+                  counts={{
+                    posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
+                    reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+                    audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+                    saved: 0,
+                    tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+                  }}
+                />
+              </div>
+
+              {/* 7. Pinned Posts 4-Card Section (shown on 'posts' tab) */}
+              {activeTab === 'posts' && (
+                <ProfilePinnedPosts
+                  posts={posts}
+                  theme={theme}
+                  onPostClick={(post) => navigate(`/post/${post.id}`)}
                 />
               )}
-            </div>
 
-            {/* Right Column: Active Feed & Content Hub (lg:col-span-7 xl:col-span-8) */}
-            <div className="lg:col-span-7 xl:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
-              {!capabilities.canViewContent ? (
-                /* Restricted / Private Account Access Gate */
-                <div className={cn(
-                  "rounded-3xl p-8 sm:p-12 text-center border shadow-sm space-y-4 my-2",
-                  isDark ? "bg-[#0d1424]/80 border-white/10" : "bg-white border-slate-200"
-                )}>
-                  <div className="w-16 h-16 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                    <Lock className="w-8 h-8" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">This Account is Private</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                      Follow @{effectiveProfile.username} to view their media gallery, highlights, and activity feed.
-                    </p>
-                  </div>
-                  <div className="pt-2 flex justify-center">
-                    <button
-                      onClick={handleFollowToggle}
-                      className="px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-md transition-opacity flex items-center gap-2 cursor-pointer"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      <span>{isFollowing ? 'Requested' : 'Follow to View'}</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Highlights / Vibes Carousel */}
-                  <ProfileHighlightsSection
-                    highlights={effectiveProfile?.highlights || []}
-                    userId={userId}
-                    isOwner={false}
-                    theme={theme}
-                  />
-
-                  {/* Featured by Creator Section */}
-                  <ProfileFeaturedSection
-                    profile={effectiveProfile}
-                    posts={posts}
-                    theme={theme}
-                    onPostClick={(post) => navigate(`/post/${post.id}`)}
-                  />
-
-                  {/* Pinned Posts Section */}
-                  <ProfilePinnedPosts
-                    posts={posts}
-                    theme={theme}
-                    onPostClick={(post) => navigate(`/post/${post.id}`)}
-                  />
-
-                  {/* Multi-Tab Navigation Bar with Multi-View Switcher */}
-                  <div className="sticky top-2 z-30 pt-1">
-                    <ProfileTabsBar
-                      activeTab={activeTab}
-                      onTabChange={setActiveTab}
-                      viewMode={viewMode}
-                      onViewModeChange={handleViewModeChange}
-                      isOwner={false}
-                      theme={theme}
-                      counts={{
-                        posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
-                        reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-                        audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
-                        saved: 0,
-                        tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
-                      }}
-                    />
-                  </div>
-
-                  {/* Media Feed Grid with Multi-View Mode */}
-                  <ProfileFeedGrid
-                    posts={posts}
-                    activeTab={activeTab}
-                    viewMode={viewMode}
-                    loading={loading}
-                    theme={theme}
-                    profile={effectiveProfile}
-                    onPostClick={(post) => navigate(`/post/${post.id}`)}
-                    onOpenTipModal={() => setShowTipModal(true)}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
+              {/* 8. Media Feed Grid with Multi-View Mode */}
+              <ProfileFeedGrid
+                posts={posts}
+                activeTab={activeTab}
+                viewMode={viewMode}
+                loading={loading}
+                theme={theme}
+                profile={effectiveProfile}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+                onOpenTipModal={() => setShowTipModal(true)}
+              />
+            </>
+          )}
         </div>
 
         {/* Tip / Gift Modal */}

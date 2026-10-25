@@ -339,45 +339,72 @@ export default function ProfileMyScreen() {
           </div>
         )}
 
-        {/* Outer responsive frame */}
-        <div className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-5 sm:space-y-6">
-          {/* Dual-column architecture: Sticky command rail on left, media/content feed on right */}
-          <div className="lg:grid lg:grid-cols-12 lg:gap-8 xl:gap-10 items-start">
-            
-            {/* Left Column: Command Rail (lg:col-span-5 xl:col-span-4, sticky) */}
-            <div className="lg:col-span-5 xl:col-span-4 lg:sticky lg:top-4 space-y-4 sm:space-y-5 relative z-10">
-              
-              {/* TOP CARD: Elevated Master Identity Card with Profile Picture */}
-              <ProfileHeroSection
-                variant="identity"
-                profile={displayedProfile}
+        {/* Master Container matching Image 1 Hierarchy */}
+        <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
+          {/* 1. Master Identity Card with Level Badge, Passport & 6 Action Buttons */}
+          <ProfileHeroSection
+            variant="identity"
+            profile={displayedProfile}
+            isOwner={viewAs === 'owner'}
+            viewAs={viewAs}
+            level={level || effectiveProfile.level}
+            position={position}
+            theme={theme}
+            onOpenQrCode={() => setShowQrModal(true)}
+            onOpenQrScanner={() => setShowScannerModal(true)}
+            onOpenLocationSetup={() => setShowLocationModal(true)}
+            onOpenPerspective={() => setShowPerspectiveModal(true)}
+            onOpenOptions={() => setShowOptionsMenu(true)}
+            onAvatarClick={() => setShowAvatarModal(true)}
+            onShare={handleShare}
+            onEditProfile={() => navigate('/profile/edit')}
+            onInsightsPress={() => navigate('/profile/analytics')}
+            capabilities={capabilities}
+            analytics={analytics}
+          />
+
+          {/* 2. 6-Card Metrics Grid */}
+          <ProfileMetricsGrid
+            isOwner={viewAs === 'owner'}
+            theme={theme}
+            profile={displayedProfile}
+            analytics={analytics}
+            capabilities={capabilities}
+            onMetricPress={(key) => {
+              if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
+              else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
+              else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
+              else if (key === 'coins') navigate('/coins');
+              else if (key === 'posts') setActiveTab('posts');
+              else if (key === 'views') navigate('/profile/analytics');
+            }}
+          />
+
+          {viewAs !== 'owner' && !capabilities.canViewContent ? (
+            <div className={cn(
+              "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
+              isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
+            )}>
+              <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                Visitors in {viewAs === 'public' ? 'Public' : viewAs} perspective cannot view private highlights, pinned posts, or media gallery.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* 3. Story Highlights Carousel */}
+              <ProfileHighlightsSection
+                highlights={highlights}
+                userId={currentUserId}
                 isOwner={viewAs === 'owner'}
-                viewAs={viewAs}
-                level={level || effectiveProfile.level}
-                position={position}
                 theme={theme}
-                onOpenQrCode={() => setShowQrModal(true)}
-                onOpenQrScanner={() => setShowScannerModal(true)}
-                onOpenLocationSetup={() => setShowLocationModal(true)}
-                onOpenPerspective={() => setShowPerspectiveModal(true)}
-                onOpenOptions={() => setShowOptionsMenu(true)}
-                onAvatarClick={() => setShowAvatarModal(true)}
-                onShare={handleShare}
-                onEditProfile={() => navigate('/profile/edit')}
-                onInsightsPress={() => navigate('/profile/analytics')}
-                capabilities={capabilities}
-                analytics={analytics}
-                onMetricPress={(key) => {
-                  if (key === 'followers') navigate(`/profile/${currentUserId}/followers`);
-                  else if (key === 'following') navigate(`/profile/${currentUserId}/following`);
-                  else if (key === 'friends') navigate(`/profile/${currentUserId}/friends`);
-                  else if (key === 'coins') navigate('/coins');
-                  else if (key === 'posts') setActiveTab('posts');
-                  else if (key === 'reputation') navigate('/passport');
-                }}
+                onAddHighlight={() => navigate('/profile/highlights?create=true')}
               />
 
-              {/* 2. Creator Analytics Dashboard (if owner) */}
+              {/* 4. Creator Analytics Dashboard (when owner) */}
               {viewAs === 'owner' && (
                 <ProfileCreatorDashboard
                   analytics={analytics}
@@ -390,76 +417,49 @@ export default function ProfileMyScreen() {
                   onTimeframeChange={setTimeframe}
                 />
               )}
-            </div>
 
-            {/* Right Column: Active Feed & Content Hub (lg:col-span-7 xl:col-span-8) */}
-            <div className="lg:col-span-7 xl:col-span-8 space-y-5 min-w-0 pt-4 lg:pt-0">
-              {viewAs !== 'owner' && !capabilities.canViewContent ? (
-                <div className={cn(
-                  "p-8 sm:p-12 rounded-3xl border text-center space-y-3 shadow-sm",
-                  isDark ? "bg-[#0d1424] border-white/10" : "bg-white border-slate-200"
-                )}>
-                  <div className="w-14 h-14 mx-auto rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center">
-                    <Lock className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-white">This Account is Private</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                    Visitors in {viewAs === 'public' ? 'Public' : viewAs} perspective cannot view private highlights, pinned posts, or media gallery.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Story Highlights */}
-                  <ProfileHighlightsSection
-                    highlights={highlights}
-                    userId={currentUserId}
-                    isOwner={viewAs === 'owner'}
-                    theme={theme}
-                    onAddHighlight={() => navigate('/profile/highlights?create=true')}
-                  />
+              {/* 5. Pill Tabs Bar with View Mode Switcher */}
+              <div className="sticky top-2 z-30 pt-1">
+                <ProfileTabsBar
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
+                  viewMode={viewMode}
+                  onViewModeChange={handleViewModeChange}
+                  isOwner={viewAs === 'owner'}
+                  theme={theme}
+                  counts={{
+                    posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
+                    reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
+                    audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
+                    saved: savedPosts?.length || 0,
+                    tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
+                  }}
+                />
+              </div>
 
-                  {/* Pinned Posts Section */}
-                  <ProfilePinnedPosts
-                    posts={posts}
-                    theme={theme}
-                    onPostClick={(post) => navigate(`/post/${post.id}`)}
-                  />
-
-                  {/* Multi-Tab Navigation Bar with Multi-View Switcher */}
-                  <div className="sticky top-2 z-30 pt-1">
-                    <ProfileTabsBar
-                      activeTab={activeTab}
-                      onTabChange={handleTabChange}
-                      viewMode={viewMode}
-                      onViewModeChange={handleViewModeChange}
-                      isOwner={viewAs === 'owner'}
-                      theme={theme}
-                      counts={{
-                        posts: (posts || []).filter(p => p.type !== 'audio' && p.type !== 'track').length,
-                        reels: (posts || []).filter(p => p.type === 'reel' || p.type === 'spark' || p.isReel || p.isSpark).length,
-                        audio: (posts || []).filter(p => p.type === 'audio' || p.type === 'track' || p.type === 'music' || Boolean(p.audioURL || p.audioUrl)).length,
-                        saved: savedPosts?.length || 0,
-                        tagged: (posts || []).filter(p => Array.isArray(p.taggedUsers) && p.taggedUsers.length > 0).length,
-                      }}
-                    />
-                  </div>
-
-                  {/* Multi-View Media & Posts Grid */}
-                  <ProfileFeedGrid
-                    posts={posts}
-                    savedPosts={savedPosts}
-                    activeTab={activeTab}
-                    viewMode={viewMode}
-                    loading={postsLoading || savedLoading}
-                    theme={theme}
-                    profile={effectiveProfile}
-                    isOwner={viewAs === 'owner'}
-                    onPostClick={(post) => navigate(`/post/${post.id}`)}
-                  />
-                </>
+              {/* 6. Pinned Posts 4-Card Section (shown on 'posts' tab) */}
+              {activeTab === 'posts' && (
+                <ProfilePinnedPosts
+                  posts={posts}
+                  theme={theme}
+                  onPostClick={(post) => navigate(`/post/${post.id}`)}
+                />
               )}
-            </div>
-          </div>
+
+              {/* 7. Multi-View Media & Posts Grid */}
+              <ProfileFeedGrid
+                posts={posts}
+                savedPosts={savedPosts}
+                activeTab={activeTab}
+                viewMode={viewMode}
+                loading={postsLoading || savedLoading}
+                theme={theme}
+                profile={effectiveProfile}
+                isOwner={viewAs === 'owner'}
+                onPostClick={(post) => navigate(`/post/${post.id}`)}
+              />
+            </>
+          )}
         </div>
 
         {/* Floating Perspective Preview Bar when simulating visitor view */}

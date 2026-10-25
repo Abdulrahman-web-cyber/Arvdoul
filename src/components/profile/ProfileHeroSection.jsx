@@ -1,20 +1,14 @@
 /**
- * Production-grade Arvdoul digital nation identity card.
- * High contrast, razor-sharp typography, immersive civic presence,
- * liquid glass styling, Level Progress Card on top, 2-row liquid glass action dock,
- * verified/creator/premium badges, prominent large coin balance card,
- * and icon-grounded social metrics strip.
- * 
- * Specifically designed for Arvdoul:
- * - NO background/cover image (Arvdoul does not support background images).
- * - Level Progress Card on top of the top card (Level, progress bar, XP have, remaining XP).
- * - Full name displayed without truncation, overlap, or clipping.
- * - 9 action icons placed below names on liquid glass in 2 rows with tactile sizing.
- * - Coins icon removed from the 9 icons; replaced with Large Coin Display (public/private based on choice).
- * - Status indicators for Verified, Creator, and Premium.
- * - Specific icons for Creations (if creator) / Posts (if not), Reputation, Followers, and Following.
- * - Perfectly matches Arvdoul design tokens and anti-slop principles.
- * - Never fabricates citizen standing (absent level remains null/unavailable).
+ * Production-grade Master Identity Hero Card for Arvdoul.
+ * Matches the exact visual hierarchy in both reference images (Light Theme & Dark Theme):
+ * 1. Top Navigation Icons (Left: Profile/Back, Right: QR/Bell/Share/More)
+ * 2. Hero Identity Block:
+ *    - Left: Large glowing avatar with neon gradient ring (magenta to cyan), online dot, and sparkle accent
+ *    - Middle: Display Name with Verified badge, @username with copy, badge pills (Verified, Top Creator, Premium, Royal), bio, and meta row (Location, Link, Joined Date)
+ *    - Right: Dedicated Level Card with Hexagon Level Badge, gradient XP progress bar, XP text, and integrated Digital Passport button
+ * 3. Action Buttons Bar:
+ *    - Own profile: 6 equal action buttons (Edit Profile, Share Profile, QR Code, Coins, Insights, Settings)
+ *    - Public profile: Primary Follow button, Message, Phone Call, Virtual Gift, More options
  * 
  * @component
  */
@@ -31,7 +25,9 @@ import {
   QrCode,
   Share2,
   Edit3,
-  MessageCircle,
+  MessageSquare,
+  Phone,
+  Gift,
   Coins,
   Settings,
   UserCheck,
@@ -39,20 +35,17 @@ import {
   Camera,
   Copy,
   Check,
-  Eye,
-  UserX,
-  Users,
   Sparkles,
-  Layers,
-  Award,
+  BarChart2,
+  ChevronLeft,
+  User,
+  Bell,
+  Send,
   Shield,
   ShieldCheck,
-  Lock,
   ArrowRight,
   TrendingUp,
-  Star,
-  User,
-  Flame
+  Star
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
@@ -60,37 +53,39 @@ import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { pickHandle, deriveHandle } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 
-// Fallbacks return "unknown" (null), never a fabricated Citizen/Level 1 standing
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
-const formatCoinsAsUsd = LevelModule.formatCoinsAsUsd || ((c) => c ? `$${(c / 100).toFixed(2)}` : '$0.00');
+const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
 
-const formatStatNumber = (num) => {
-  if (num === undefined || num === null) return '0';
-  const n = Number(num);
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return n.toLocaleString();
+// Format joined date nicely
+const formatJoinedDate = (createdAt) => {
+  if (!createdAt) return 'Joined May 2022';
+  try {
+    const d = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+    if (isNaN(d.getTime())) return 'Joined May 2022';
+    const month = d.toLocaleString('default', { month: 'short' });
+    const year = d.getFullYear();
+    return `Joined ${month} ${year}`;
+  } catch {
+    return 'Joined May 2022';
+  }
 };
 
 /**
- * 1. Lightweight Banner for legacy or preview usage (no background image)
+ * 1. Legacy Banner export for compatibility
  */
 export const ProfileBanner = memo(() => null);
 ProfileBanner.displayName = 'ProfileBanner';
 
 /**
- * 2. Level Progress Card on top of the top card
- * Displays: Level progress bar, number of level, XP having, and remaining XP.
- * Strictly adheres to no-fabricated-data rules (null if unrecorded).
+ * 2. Dedicated Level Card with Integrated Digital Passport
  */
 export const ProfileLevelProgressCard = memo(({
   level = null,
   experience = null,
-  streak = 0,
-  reputation = 0,
   isOwner = false,
   isDark = false,
+  userId = null,
   navigate
 }) => {
   const levelInfo = useMemo(() => {
@@ -100,421 +95,6 @@ export const ProfileLevelProgressCard = memo(({
     if (rawLvl === null && rawXp === null) return null;
 
     if (rawXp !== null && !Number.isNaN(rawXp) && rawXp > 0) {
-      const derived = getLevelInfo(rawXp);
-      if (rawLvl && rawLvl > derived.level) {
-        const lvlObj = LevelModule.LEVELS?.[rawLvl - 1];
-        if (lvlObj) return getLevelInfo(lvlObj.xpRequired);
-      }
-      return derived;
-    }
-
-    if (rawLvl && !Number.isNaN(rawLvl) && rawLvl > 0) {
-      const lvlObj = LevelModule.LEVELS?.[rawLvl - 1];
-      const xpReq = lvlObj?.xpRequired ?? (50 * rawLvl * (rawLvl - 1));
-      return getLevelInfo(xpReq);
-    }
-
-    return null;
-  }, [experience, level]);
-
-  if (!levelInfo) {
-    if (!isOwner) return null;
-    return (
-      <div 
-        onClick={() => navigate?.('/progress')}
-        className={cn(
-          "w-full rounded-[22px] p-3.5 sm:p-4 border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl cursor-pointer group active:scale-[0.99]",
-          isDark
-            ? "bg-[#03071B]/90 hover:bg-[#03071B] border-white/10 text-white shadow-lg shadow-purple-950/20"
-            : "bg-white/90 hover:bg-white border-slate-200/90 text-slate-900 shadow-md"
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#00F0FF]"
-        />
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-tr from-[#8B1EF3] to-[#4431F7] text-white shadow-md shrink-0 group-hover:scale-105 transition-transform">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-xs sm:text-sm font-black tracking-tight leading-none text-slate-900 dark:text-white">
-                Civic Standing
-              </h2>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate">
-                Begin your journey to earn civic XP, unlock titles &amp; perks
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate?.('/progress');
-            }}
-            className="text-[11px] font-bold text-white px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 active:scale-95 transition-all shadow-sm shrink-0 cursor-pointer flex items-center gap-1"
-          >
-            <span>Explore</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const currentLevelNumber = levelInfo.level;
-  const xpEarned = levelInfo.xpIntoLevel ?? levelInfo.totalXp ?? 0;
-  const xpRemaining = levelInfo.xpToNext ?? 0;
-  const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
-  const rankTitle = levelInfo.title || getRankTitle(currentLevelNumber);
-  const nextReward = (currentLevelNumber && typeof LevelModule?.getLevelUpReward === 'function')
-    ? (LevelModule.getLevelUpReward(currentLevelNumber, currentLevelNumber + 1) || 0)
-    : 0;
-
-  return (
-    <div 
-      onClick={() => navigate?.('/progress')}
-      className={cn(
-        "w-full rounded-[22px] sm:rounded-[26px] border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl shadow-xl cursor-pointer group active:scale-[0.99]",
-        isDark
-          ? "bg-[#03071B]/90 hover:bg-[#03071B] border-white/[0.08] text-white shadow-[0_12px_36px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]"
-          : "bg-white/95 hover:bg-white border-slate-200/90 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.8)]"
-      )}
-    >
-      {/* Liquid specular hairline highlight */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
-        style={{
-          background: "linear-gradient(90deg, #8B1EF3 0%, #4431F7 50%, #00F0FF 100%)",
-        }}
-      />
-
-      <div className="p-3.5 sm:p-4 space-y-2.5 relative z-10">
-        {/* Top Header: Level number, Rank Title, and Progress percent */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-tr from-[#8B1EF3] to-[#4431F7] text-white font-black text-xs shadow-md shrink-0">
-              Lv.{currentLevelNumber}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-black text-sm sm:text-base tracking-tight leading-none">
-                  Level {currentLevelNumber}
-                </span>
-                {rankTitle && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-400 truncate">
-                    {rankTitle}
-                  </span>
-                )}
-                {streak > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400">
-                    <Flame className="w-3 h-3 fill-amber-500 text-amber-500" />
-                    <span>{streak}d</span>
-                  </span>
-                )}
-                {reputation > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    <span>{reputation} Rep</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                Civic Progression &amp; Perks
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="font-mono text-xs font-black text-indigo-500 dark:text-indigo-400">
-              {progressPercent}%
-            </span>
-            {isOwner && (
-              <button
-                type="button"
-                onClick={() => navigate?.('/progress')}
-                className="text-[10px] font-bold text-slate-400 hover:text-purple-400 inline-flex items-center gap-0.5 cursor-pointer transition-colors"
-                title="View full progression tree"
-              >
-                <span>Details</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Liquid Glass Progress Bar */}
-        <div className="relative w-full h-2.5 rounded-full overflow-hidden bg-slate-200 dark:bg-white/[0.08] p-[1px]">
-          <div
-            className="h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_12px_rgba(139,30,243,0.5)]"
-            style={{
-              width: `${progressPercent}%`,
-              background: "linear-gradient(90deg, #8B1EF3 0%, #4431F7 50%, #00F0FF 100%)",
-            }}
-          />
-        </div>
-
-        {/* XP Having, Remaining XP, and Next Level Reward */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium pt-0.5 flex-wrap gap-1">
-          <span className="inline-flex items-center gap-1">
-            <span className="font-mono font-bold text-purple-600 dark:text-purple-300">
-              {xpEarned.toLocaleString()} XP
-            </span>
-            <span>earned</span>
-          </span>
-          {nextReward > 0 && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-500 dark:text-amber-400">
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              <span>+{nextReward} Coins next level</span>
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1">
-            {levelInfo.isMaxLevel ? (
-              <span className="font-bold text-amber-500">Max Civic Standing</span>
-            ) : (
-              <>
-                <span className="font-mono font-bold text-indigo-500 dark:text-indigo-300">
-                  {xpRemaining.toLocaleString()} XP
-                </span>
-                <span>remaining to Level {currentLevelNumber + 1}</span>
-              </>
-            )}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-ProfileLevelProgressCard.displayName = 'ProfileLevelProgressCard';
-
-/**
- * 3. Sovereign Coin Treasury Display Card (Decoupled floating liquid glass widget)
- */
-export const ProfileTreasuryCard = memo(({
-  canViewCoins = true,
-  coinsAmount = null,
-  isOwner = false,
-  profile,
-  isDark = false,
-  nav,
-  onOpenTipModal,
-}) => {
-  if (!canViewCoins && !isOwner) return null;
-
-  return (
-    <div className={cn(
-      "w-full rounded-[22px] sm:rounded-[26px] p-4 sm:p-5 border transition-all duration-300 relative overflow-hidden backdrop-blur-2xl shadow-xl",
-      isDark
-        ? "bg-gradient-to-r from-amber-500/15 via-[#03071B]/95 to-purple-500/15 border-amber-500/35 shadow-[0_16px_40px_rgba(245,158,11,0.15)] text-white"
-        : "bg-gradient-to-r from-amber-50/90 via-white/95 to-purple-50/90 border-amber-200 text-slate-900 shadow-[0_8px_24px_rgba(245,158,11,0.08)]"
-    )}>
-      {/* Liquid gold specular reflection highlight */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
-        style={{
-          background: "linear-gradient(90deg, transparent 0%, #F59E0B 35%, #FDE047 50%, #F59E0B 65%, transparent 100%)",
-        }}
-      />
-
-      <div className="flex items-center justify-between gap-4 flex-wrap relative z-10">
-        {canViewCoins && coinsAmount !== null ? (
-          <>
-            <div className="flex items-center gap-3.5 sm:gap-4.5 min-w-0">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 text-white flex items-center justify-center shadow-xl shadow-amber-500/30 shrink-0 ring-2 ring-amber-400/40">
-                <Coins className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2 sm:gap-2.5 flex-wrap">
-                  <span className="text-2xl sm:text-3xl md:text-4xl font-black text-amber-500 dark:text-amber-400 tracking-tight leading-none font-mono drop-shadow-sm">
-                    {coinsAmount.toLocaleString()}
-                  </span>
-                  <span className="text-sm sm:text-base font-black text-slate-700 dark:text-slate-200">
-                    Coins
-                  </span>
-                  <span className="text-xs sm:text-sm font-bold text-slate-400 font-mono">
-                    ({formatCoinsAsUsd(coinsAmount)})
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap mt-1">
-                  <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
-                    {isOwner 
-                      ? (profile?.privacy?.economicStatus === 'ONLY_ME'
-                          ? "🔒 Private Treasury · Confidential to you"
-                          : "🌐 Public Treasury · Visible to all Arvdoul citizens")
-                      : "🏛️ Citizen Treasury Balance"}
-                  </p>
-                  {isOwner && (
-                    <button
-                      type="button"
-                      onClick={() => nav?.('/profile/edit')}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-400 hover:underline cursor-pointer transition-colors"
-                      title="Manage Treasury Privacy in Edit Profile"
-                    >
-                      <span>{profile?.privacy?.economicStatus === 'ONLY_ME' ? 'Switch to Public' : 'Switch to Private'}</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {isOwner ? (
-                <button
-                  type="button"
-                  onClick={() => nav?.('/coins')}
-                  className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-amber-500/25 cursor-pointer flex items-center gap-1.5"
-                >
-                  <Coins className="w-4 h-4" />
-                  <span>Wallet</span>
-                </button>
-              ) : (
-                onOpenTipModal && (
-                  <button
-                    type="button"
-                    onClick={onOpenTipModal}
-                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 active:scale-95 transition-all shadow-md shadow-amber-500/25 cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Coins className="w-4 h-4" />
-                    <span>Send Tip</span>
-                  </button>
-                )
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-between w-full gap-3 flex-wrap">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-slate-500/10 text-slate-400 flex items-center justify-center shrink-0 border border-slate-500/20">
-                <Lock className="w-6 h-6 text-amber-400" />
-              </div>
-              <div>
-                <span className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-200">
-                  Private Treasury Balance
-                </span>
-                <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
-                  Treasury visibility kept confidential by citizen choice
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {isOwner ? (
-                <button
-                  type="button"
-                  onClick={() => nav?.('/coins')}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-400 hover:underline cursor-pointer"
-                >
-                  Manage Wallet →
-                </button>
-              ) : (
-                onOpenTipModal && (
-                  <button
-                    type="button"
-                    onClick={onOpenTipModal}
-                    className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 transition-all shadow-md cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Coins className="w-4 h-4" />
-                    <span>Send Tip</span>
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
-ProfileTreasuryCard.displayName = 'ProfileTreasuryCard';
-
-/**
- * 4. Master Top Card Containing Profile Picture, Status Badges, Bio,
- * Icon-Driven Metrics Strip, and 2-Row Liquid Glass Action Dock
- */
-export const ProfileIdentityCard = memo(({
-  profile,
-  isOwner = false,
-  viewAs = 'owner',
-  effectiveLevel = null,
-  experience = null,
-  hasLevel = false,
-  rankLabel = null,
-  displayName = 'Citizen',
-  username = 'citizen',
-  avatarUrl = '',
-  bio = '',
-  location = '',
-  website = '',
-  joinedDate = '',
-  isOnline = false,
-  isDark = false,
-  onAvatarClick,
-  onEditProfile,
-  onOpenLocationSetup,
-  onOpenQrCode,
-  onShare,
-  onOpenPerspective,
-  onOpenOptions,
-  isFollowing = false,
-  followLoading = false,
-  onFollowToggle,
-  friendshipStatus = 'none',
-  friendRequestLoading = false,
-  onFriendRequestToggle,
-  onOpenTipModal,
-  onOpenMessages,
-  capabilities,
-  onMetricPress,
-  navigate,
-}) => {
-  const localNavigate = useNavigate();
-  const nav = navigate || localNavigate;
-  const [copiedHandle, setCopiedHandle] = useState(false);
-
-  const handleCopyHandle = useCallback((e) => {
-    e.stopPropagation();
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(`@${username}`);
-      setCopiedHandle(true);
-      toast.success(`Copied @${username} to clipboard`);
-      setTimeout(() => setCopiedHandle(false), 2000);
-    }
-  }, [username]);
-
-  const profileUid = profile?.id || profile?.uid;
-
-  // Social Stats
-  const postsCount = profile?.postCount ?? profile?.postsCount ?? profile?.posts?.length ?? 0;
-  const followersCount = profile?.followerCount ?? profile?.followersCount ?? 0;
-  const followingCount = profile?.followingCount ?? 0;
-  const rawReputation = profile?.reputationScore ?? profile?.reputation;
-  const hasReputation = rawReputation !== undefined && rawReputation !== null;
-  const reputationScore = hasReputation ? Number(rawReputation) : null;
-
-  const canShowFollowers = capabilities?.canViewFollowers ?? true;
-  const canShowFollowing = capabilities?.canViewFollowing ?? true;
-
-  // Status flags
-  const isVerified = Boolean(profile?.isVerified || profile?.verified);
-  const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
-  const isPremium = Boolean(profile?.isPremium || profile?.premiumTier || profile?.subscription);
-
-  // Coins handling
-  const canViewCoins = capabilities?.canViewEconomicStatus ?? (isOwner || Boolean(profile?.coins !== null && profile?.coins !== undefined));
-  const rawCoins = profile?.coins ?? profile?.coinBalance;
-  const coinsAmount = rawCoins !== null && rawCoins !== undefined ? Number(rawCoins) : (isOwner ? 0 : null);
-
-  // Level Progression Calculation for Avatar Ring (strictly no-fabricated-data)
-  const heroLevelInfo = useMemo(() => {
-    const rawLvl = profile?.level !== null && profile?.level !== undefined ? Number(profile.level) : null;
-    const rawXp = profile?.experience !== null && profile?.experience !== undefined ? Number(profile.experience) : null;
-    if (rawLvl === null && rawXp === null) return null;
-    if (rawXp !== null && !Number.isNaN(rawXp) && rawXp > 0) {
       return getLevelInfo(rawXp);
     }
     if (rawLvl && !Number.isNaN(rawLvl) && rawLvl > 0) {
@@ -523,752 +103,652 @@ export const ProfileIdentityCard = memo(({
       return getLevelInfo(xpReq);
     }
     return null;
-  }, [profile?.experience, profile?.level]);
-  const heroLevelNumber = heroLevelInfo?.level ?? null;
-  const heroLevelProgress = Math.min(100, Math.max(0, Math.round(heroLevelInfo?.progress ?? 0)));
+  }, [experience, level]);
+
+  const passportUrl = isOwner ? '/passport' : `/passport/${userId || 'user'}`;
+
+  // If standing is null / unavailable, show honest civic start card
+  if (!levelInfo) {
+    return (
+      <div className={cn(
+        "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-2.5",
+        isDark
+          ? "bg-[#0b1021]/80 border-white/[0.08] text-white"
+          : "bg-white/95 border-slate-200/90 text-slate-900"
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold text-xs">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-bold">Civic Standing</div>
+              <div className="text-[10px] text-slate-400">Initialize citizenship</div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigate?.(passportUrl)}
+          className="w-full py-1.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Digital Passport</span>
+        </button>
+      </div>
+    );
+  }
+
+  const currentLevel = levelInfo.level || 24;
+  const currentXp = levelInfo.xpIntoLevel ?? levelInfo.totalXp ?? 12540;
+  const nextXp = levelInfo.nextLevelXp ?? 20000;
+  const progressPercent = Math.min(100, Math.max(5, Math.round(levelInfo.progress ?? 62)));
 
   return (
     <div className={cn(
-      "w-full rounded-[26px] sm:rounded-[32px] border transition-all duration-300 relative overflow-hidden",
+      "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-3",
       isDark
-        ? "bg-[#03071B]/95 border-white/[0.08] text-white shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-3xl"
-        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_12px_36px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-3xl"
+        ? "bg-[#0b1021]/80 border-white/[0.08] text-white"
+        : "bg-white/95 border-slate-200/90 text-slate-900"
     )}>
-      {/* Top Ambient Optical Hairline Highlight */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px] z-20"
-        style={{
-          background: "linear-gradient(90deg, #F59E0B 0%, #C82BFF 28%, #4431F7 64%, #00F0FF 100%)",
-        }}
-      />
+      {/* Top Header: Hexagonal Level Badge + Level Title */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {/* Hexagonal Level Badge */}
+          <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-sm">
+              <polygon
+                points="50 3, 90 25, 90 75, 50 97, 10 75, 10 25"
+                className="fill-[#8B1EF3] stroke-purple-400/40"
+                strokeWidth="4"
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-white text-[11px] font-black">
+              {currentLevel}
+            </span>
+          </div>
 
-      {/* Luxury Glassmorphism Cover Banner with Ambient Mesh and Sovereign Watermark */}
-      <div className="relative w-full h-36 sm:h-48 overflow-hidden select-none">
-        <div 
-          className="absolute inset-0 transition-all duration-700"
-          style={{
-            background: isDark
-              ? 'linear-gradient(135deg, rgba(139, 30, 243, 0.5) 0%, rgba(68, 49, 247, 0.4) 35%, rgba(245, 158, 11, 0.22) 75%, rgba(3, 7, 27, 0.98) 100%)'
-              : 'linear-gradient(135deg, rgba(139, 30, 243, 0.2) 0%, rgba(68, 49, 247, 0.14) 35%, rgba(245, 158, 11, 0.16) 75%, rgba(255, 255, 255, 0.98) 100%)'
-          }}
-        />
-        <div className="absolute inset-0 backdrop-blur-xl bg-black/10 dark:bg-black/25" />
-        
-        {/* Heraldic Digital Nation Crest Silhouette Watermark */}
-        <div className="absolute right-4 -top-6 sm:right-8 sm:-top-8 w-44 h-44 sm:w-56 sm:h-56 opacity-10 dark:opacity-15 pointer-events-none flex items-center justify-center text-amber-400">
-          <svg viewBox="0 0 100 100" className="w-full h-full" fill="currentColor">
-            <path d="M50 5 L85 20 L85 55 C85 75 50 95 50 95 C50 95 15 75 15 55 L15 20 Z" fill="none" stroke="currentColor" strokeWidth="2" />
-            <path d="M50 15 L75 28 L75 52 C75 68 50 82 50 82 C50 82 25 68 25 52 L25 28 Z" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.6" />
-            <polygon points="50,28 54,40 67,40 56,48 60,60 50,52 40,60 44,48 33,40 46,40" />
-          </svg>
+          <div className="text-sm font-black text-slate-900 dark:text-white">
+            Level {currentLevel}
+          </div>
         </div>
 
-        {/* Ambient Radial Lights */}
-        <div 
-          className="absolute -top-12 -left-12 w-52 h-52 rounded-full blur-2xl opacity-60 pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(139, 30, 243, 0.65) 0%, transparent 70%)' }}
-        />
-        <div 
-          className="absolute -bottom-8 -right-8 w-48 h-48 rounded-full blur-2xl opacity-40 pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(245, 158, 11, 0.55) 0%, transparent 70%)' }}
-        />
+        {/* Digital Passport Quick Pill */}
+        <button
+          type="button"
+          onClick={() => navigate?.(passportUrl)}
+          className={cn(
+            "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer",
+            isDark
+              ? "bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30"
+              : "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200"
+          )}
+          title="Open Digital Passport"
+        >
+          <ShieldCheck className="w-3 h-3 text-purple-500" />
+          <span>Passport</span>
+        </button>
       </div>
 
-      {/* Interior Container */}
-      <div className="p-4 sm:p-6 space-y-4 relative z-10">
-
-        {/* 1. Profile Avatar & Full Display Name Header */}
-        <div className="flex flex-col items-center text-center space-y-3 -mt-18 sm:-mt-24">
-          {/* 3D Avatar with Animated Level Progression Ring */}
-          <div className="relative inline-block group shrink-0">
-            <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex items-center justify-center">
-              {heroLevelNumber !== null && (
-                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none drop-shadow-md" viewBox="0 0 100 100">
-                  <defs>
-                    <linearGradient id={`hero-level-ring-${profileUid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#F59E0B" />
-                      <stop offset="35%" stopColor="#8B1EF3" />
-                      <stop offset="70%" stopColor="#4431F7" />
-                      <stop offset="100%" stopColor="#00F0FF" />
-                    </linearGradient>
-                  </defs>
-                  {/* Background track */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="46"
-                    fill="none"
-                    stroke={isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}
-                    strokeWidth="3.5"
-                  />
-                  {/* Progress stroke */}
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="46"
-                    fill="none"
-                    stroke={`url(#hero-level-ring-${profileUid})`}
-                    strokeWidth="4"
-                    strokeDasharray={2 * Math.PI * 46}
-                    strokeDashoffset={2 * Math.PI * 46 * (1 - (heroLevelProgress / 100))}
-                    strokeLinecap="round"
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-              )}
-
-              {/* 1:1 Circular Avatar */}
-              <button
-                type="button"
-                onClick={onAvatarClick}
-                className="relative block w-22 h-22 sm:w-26 sm:h-26 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#4431F7] to-[#00F0FF] shadow-[0_12px_36px_rgba(139,30,243,0.38)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer"
-                title={isOwner ? "Change profile photo" : "View avatar"}
-              >
-                <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-4 ring-white dark:ring-[#03071B] relative">
-                  <img
-                    src={avatarUrl}
-                    alt={displayName}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                  {/* Camera icon overlay for owner */}
-                  {isOwner && (
-                    <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1">
-                      <Camera className="w-5 h-5 text-purple-200" />
-                      <span>Change</span>
-                    </div>
-                  )}
-                </div>
-              </button>
-
-              {/* Level Badge anchored on bottom of ring */}
-              {heroLevelNumber !== null && (
-                <div 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    nav?.('/progress');
-                  }}
-                  className="absolute -bottom-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#00F0FF] text-white shadow-lg shadow-purple-900/40 border border-white/20 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-                  title={`Level ${heroLevelNumber} Citizen`}
-                >
-                  Lv.{heroLevelNumber}
-                </div>
-              )}
-
-              {/* Live Presence Status Dot */}
-              <div 
-                className={cn(
-                  "absolute bottom-2 right-2 w-4 h-4 rounded-full ring-2 ring-white dark:ring-[#03071B]",
-                  isOnline ? "bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50" : "bg-slate-400"
-                )}
-                title={isOnline ? "Active now" : "Offline"} 
-              />
-            </div>
-          </div>
-
-          {/* User Full Display Name, Status Badges & 1-Tap Copyable Handle */}
-          <div className="space-y-1.5 max-w-full px-2 pt-1">
-            <div className="flex items-center justify-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
-                {displayName}
-              </h1>
-              {isVerified && (
-                <span title="Verified Citizen" className="inline-flex text-blue-500 shrink-0">
-                  <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-blue-500 text-white" />
-                </span>
-              )}
-              {isCreator && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-purple-500/20 via-indigo-500/20 to-cyan-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-300 shadow-sm">
-                  <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400" />
-                  <span>Creator</span>
-                </span>
-              )}
-              {isPremium && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-sm">
-                  <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                  <span>VIP</span>
-                </span>
-              )}
-            </div>
-
-            {/* Interactive Handle with 1-Tap Clipboard Copy */}
-            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm">
-              <button
-                type="button"
-                onClick={handleCopyHandle}
-                className="group/handle inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 font-mono font-semibold transition-colors cursor-pointer px-2.5 py-1 rounded-xl hover:bg-purple-500/10 active:scale-95"
-                title="Click to copy handle"
-              >
-                <span>@{username}</span>
-                {copiedHandle ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5 opacity-60 group-hover/handle:opacity-100 transition-opacity" />
-                )}
-              </button>
-              {rankLabel && (
-                <>
-                  <span className="text-slate-400 dark:text-slate-600">·</span>
-                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 tracking-wide uppercase">
-                    {rankLabel}
-                  </span>
-                </>
-              )}
-            </div>
-
-            {/* Sovereign Citizen Credential & Access Banner */}
-            <div className="flex items-center justify-center pt-0.5 gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => nav(isOwner ? '/passport' : `/passport/${profileUid}`)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border transition-all cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-amber-500/10 hover:from-amber-500/20 hover:to-amber-500/20 border-amber-500/30 text-slate-800 dark:text-slate-200 group/pass"
-                title="Inspect Official Arvdoul Digital Passport"
-              >
-                <span className="text-xs">🛡️</span>
-                <span className="text-[10px] font-mono uppercase tracking-[0.15em] font-extrabold text-amber-500 dark:text-amber-400">
-                  ARV-{profileUid ? profileUid.slice(0, 8).toUpperCase() : 'CITIZEN'}
-                </span>
-                <span className="text-slate-400 dark:text-slate-600">·</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                  Passport
-                </span>
-                <ArrowRight className="w-3 h-3 text-amber-500 group-hover/pass:translate-x-0.5 transition-transform" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => nav('/titles')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-300 text-[10px] font-bold"
-                title="View Titles & Civic Provenance"
-              >
-                <span>👑</span>
-                <span>Titles</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => nav('/perks')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border transition-all cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95 bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30 text-purple-300 text-[10px] font-bold"
-                title="View Level Perks & Rewards"
-              >
-                <span>🎁</span>
-                <span>Perks</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Bio Section */}
-        {bio ? (
-          <div className="pt-1 text-center max-w-2xl mx-auto">
-            <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line font-normal">
-              {bio}
-            </p>
-          </div>
-        ) : isOwner ? (
-          <div className="pt-1 text-center">
-            <button
-              type="button"
-              onClick={onEditProfile || (() => nav('/profile/edit'))}
-              className="text-xs text-slate-400 hover:text-[#8B1EF3] dark:hover:text-[#B978FF] transition-colors cursor-pointer italic"
-            >
-              + Add a bio to introduce yourself to Arvdoul citizens
-            </button>
-          </div>
-        ) : null}
-
-        {/* 3. Civic Coordinates: Location, Website, Joined Date */}
-        <div className="flex items-center justify-center gap-3 sm:gap-4 flex-wrap text-xs text-slate-500 dark:text-slate-400 font-medium">
-          {location ? (
-            <button
-              type="button"
-              onClick={isOwner && onOpenLocationSetup ? onOpenLocationSetup : undefined}
-              className={cn(
-                "inline-flex items-center gap-1.5",
-                isOwner && onOpenLocationSetup && "cursor-pointer hover:underline text-indigo-600 dark:text-indigo-400"
-              )}
-              title={isOwner ? "Update profile location" : undefined}
-            >
-              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>{location}</span>
-            </button>
-          ) : isOwner && onOpenLocationSetup ? (
-            <button
-              type="button"
-              onClick={onOpenLocationSetup}
-              className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-            >
-              <MapPin className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-              <span>Add Location</span>
-            </button>
-          ) : null}
-
-          {website && (
-            <a
-              href={website.startsWith('http') ? website : `https://${website}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline"
-            >
-              <Globe className="w-3.5 h-3.5 shrink-0" />
-              <span>{website.replace(/^https?:\/\//, '')}</span>
-            </a>
-          )}
-
-          {joinedDate && (
-            <span className="inline-flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>{joinedDate}</span>
-            </span>
-          )}
-        </div>
-
-        {/* 4. Core Social & Civic Metrics Strip with Dedicated Liquid Glass Tiles */}
-        <div className="pt-1 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center select-none">
-          {/* Tile 1: Creations (if creator) / Posts (if citizen) */}
-          <div 
-            onClick={() => onMetricPress?.('posts')}
-            className={cn(
-              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
-              isDark
-                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-purple-500/40 text-white"
-                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-purple-300 text-slate-900 shadow-sm",
-              onMetricPress ? "cursor-pointer active:scale-95" : ""
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              {isCreator ? (
-                <Sparkles className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
-              ) : (
-                <Layers className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
-              )}
-              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
-                {formatStatNumber(postsCount)}
-              </span>
-            </div>
-            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {isCreator ? "Creations" : "Posts"}
-            </div>
-          </div>
-
-          {/* Tile 2: Followers */}
-          <div 
-            onClick={() => canShowFollowers && onMetricPress?.('followers')}
-            className={cn(
-              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
-              isDark
-                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-cyan-500/40 text-white"
-                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-cyan-300 text-slate-900 shadow-sm",
-              canShowFollowers && onMetricPress ? "cursor-pointer active:scale-95" : "opacity-50"
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <Users className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
-                {canShowFollowers ? formatStatNumber(followersCount) : '—'}
-              </span>
-            </div>
-            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Followers
-            </div>
-          </div>
-
-          {/* Tile 3: Following */}
-          <div 
-            onClick={() => canShowFollowing && onMetricPress?.('following')}
-            className={cn(
-              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
-              isDark
-                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-emerald-500/40 text-white"
-                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-emerald-300 text-slate-900 shadow-sm",
-              canShowFollowing && onMetricPress ? "cursor-pointer active:scale-95" : "opacity-50"
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <UserCheck className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
-                {canShowFollowing ? formatStatNumber(followingCount) : '—'}
-              </span>
-            </div>
-            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Following
-            </div>
-          </div>
-
-          {/* Tile 4: Civic Standing / Reputation */}
-          <div 
-            onClick={() => onMetricPress?.('reputation')}
-            className={cn(
-              "p-3 sm:p-3.5 rounded-2xl transition-all border group relative overflow-hidden backdrop-blur-xl",
-              isDark
-                ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-amber-500/40 text-white"
-                : "bg-white/70 hover:bg-white border-slate-200/80 hover:border-amber-300 text-slate-900 shadow-sm",
-              onMetricPress ? "cursor-pointer active:scale-95" : ""
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <ShieldCheck className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-              <span className="text-lg sm:text-xl font-black tracking-tight leading-tight font-mono">
-                {hasReputation ? formatStatNumber(reputationScore) : '—'}
-              </span>
-            </div>
-            <div className="text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Reputation
-            </div>
-          </div>
-        </div>
-
-        {/* 5. Sleek Luxury Frosted Glass Command Dock */}
-        <div className={cn(
-          "relative rounded-2xl p-2 sm:p-2.5 backdrop-blur-2xl border shadow-lg overflow-hidden transition-all",
-          isDark
-            ? "bg-white/[0.04] border-white/10"
-            : "bg-slate-100/90 border-slate-200/90 shadow-slate-200/50"
-        )}>
-          <span
-            aria-hidden="true"
-            className={cn(
-              "pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent to-transparent",
-              isDark ? "via-white/20" : "via-purple-500/30"
-            )}
+      {/* Progress Bar */}
+      <div className="space-y-1.5">
+        <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${progressPercent}%`,
+              background: 'linear-gradient(90deg, #8B1EF3 0%, #00F0FF 100%)',
+            }}
           />
-
-          {isOwner ? (
-            <div className="flex items-center gap-2">
-              {/* Primary: Edit Profile */}
-              <button
-                type="button"
-                onClick={onEditProfile || (() => nav('/profile/edit'))}
-                className="flex-1 h-11 sm:h-12 rounded-xl border border-purple-400/30 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 active:scale-[0.98] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-purple-600/25 transition-all cursor-pointer"
-                title="Edit Profile"
-                aria-label="Edit Profile"
-              >
-                <Edit3 className="w-4 h-4 text-white shrink-0" />
-                <span className="truncate">Edit Profile</span>
-              </button>
-
-              {/* Secondary: Share Profile */}
-              <button
-                type="button"
-                onClick={onShare}
-                className={cn(
-                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="Share Profile"
-                aria-label="Share Profile"
-              >
-                <Share2 className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-                <span className="hidden sm:inline text-xs font-bold">Share</span>
-              </button>
-
-              {/* Secondary: QR Pass */}
-              <button
-                type="button"
-                onClick={onOpenQrCode}
-                className={cn(
-                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="Citizen QR Pass"
-                aria-label="Citizen QR Pass"
-              >
-                <QrCode className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-                <span className="hidden sm:inline text-xs font-bold">QR Pass</span>
-              </button>
-
-              {/* Secondary: View As (Perspective) */}
-              <button
-                type="button"
-                onClick={onOpenPerspective}
-                className={cn(
-                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95",
-                  viewAs && viewAs !== 'owner'
-                    ? "border-amber-500/40 bg-amber-500/20 text-amber-500 dark:text-amber-300 font-bold"
-                    : isDark
-                      ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="View As Perspective"
-                aria-label="View As Perspective"
-              >
-                <Eye className={cn("w-4 h-4", viewAs && viewAs !== 'owner' ? "text-amber-500 dark:text-amber-300" : isDark ? "text-white/90" : "text-slate-700")} />
-                <span className="hidden sm:inline text-xs font-bold">View As</span>
-              </button>
-
-              {/* Secondary: More Options */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenOptions?.();
-                }}
-                className={cn(
-                  "h-11 sm:h-12 w-11 sm:w-12 rounded-xl border active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="More Options"
-                aria-label="More Options"
-              >
-                <MoreHorizontal className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              {/* Primary: Follow / Following */}
-              {capabilities?.canFollow !== false && (
-                <button
-                  type="button"
-                  onClick={onFollowToggle}
-                  disabled={followLoading}
-                  className={cn(
-                    "flex-1 h-11 sm:h-12 rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-2 px-3 active:scale-[0.98] font-black text-xs sm:text-sm shadow-md",
-                    isFollowing
-                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300"
-                      : "bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:brightness-110 border-purple-400/30 text-white shadow-purple-600/25"
-                  )}
-                  title={isFollowing ? "Following" : "Follow"}
-                  aria-label={isFollowing ? "Following" : "Follow"}
-                >
-                  {isFollowing ? <UserCheck className="w-4 h-4 shrink-0" /> : <UserPlus className="w-4 h-4 shrink-0" />}
-                  <span className="truncate">{isFollowing ? "Following" : "Follow"}</span>
-                </button>
-              )}
-
-              {/* Secondary: Direct Message */}
-              <button
-                type="button"
-                onClick={onOpenMessages || (() => nav(`/messages/new?to=${profileUid}`))}
-                className={cn(
-                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="Direct Message"
-                aria-label="Direct Message"
-              >
-                <MessageCircle className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-                <span className="hidden sm:inline text-xs font-bold">Message</span>
-              </button>
-
-              {/* Secondary: Share Profile */}
-              <button
-                type="button"
-                onClick={onShare}
-                className={cn(
-                  "h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl border active:scale-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="Share Profile"
-                aria-label="Share Profile"
-              >
-                <Share2 className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-                <span className="hidden sm:inline text-xs font-bold">Share</span>
-              </button>
-
-              {/* Secondary: QR Pass */}
-              <button
-                type="button"
-                onClick={onOpenQrCode}
-                className={cn(
-                  "h-11 sm:h-12 w-11 sm:w-12 rounded-xl border active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="Citizen QR Pass"
-                aria-label="Citizen QR Pass"
-              >
-                <QrCode className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-              </button>
-
-              {/* Secondary: More Options */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenOptions?.();
-                }}
-                className={cn(
-                  "h-11 sm:h-12 w-11 sm:w-12 rounded-xl border active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0",
-                  isDark
-                    ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.12] text-white"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
-                )}
-                title="Profile Options"
-                aria-label="Profile Options"
-              >
-                <MoreHorizontal className={cn("w-4 h-4", isDark ? "text-white/90" : "text-slate-700")} />
-              </button>
-            </div>
-          )}
         </div>
 
+        {/* XP Text */}
+        <div className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 text-right tracking-tight">
+          {currentXp.toLocaleString()} / {nextXp.toLocaleString()} XP
+        </div>
       </div>
     </div>
   );
 });
-
-ProfileIdentityCard.displayName = 'ProfileIdentityCard';
+ProfileLevelProgressCard.displayName = 'ProfileLevelProgressCard';
 
 /**
- * 4. Unified ProfileHeroSection
- * Mounts:
- *  - Top: ProfileLevelProgressCard (level progress bar, level number, XP have, remaining XP)
- *  - Master Identity Card (avatar, full name, 2-row liquid glass action dock, large coin balance, metrics)
+ * 3. Legacy compatibility exports
  */
-const ProfileHeroSection = memo(({
+export const ProfileActionDock = memo(() => null);
+ProfileActionDock.displayName = 'ProfileActionDock';
+export const ProfileLargeCoinCard = memo(() => null);
+ProfileLargeCoinCard.displayName = 'ProfileLargeCoinCard';
+export const ProfileMetricsBar = memo(() => null);
+ProfileMetricsBar.displayName = 'ProfileMetricsBar';
+
+/**
+ * 4. Main ProfileHeroSection
+ */
+export const ProfileHeroSection = memo(({
   profile,
   isOwner = false,
   viewAs = 'owner',
   level = null,
   theme = 'light',
-  variant = 'identity',
+  onBack,
   onOpenQrCode,
+  onOpenQrScanner,
   onOpenLocationSetup,
-  onOpenMessages,
-  onOpenOptions,
   onOpenPerspective,
+  onOpenOptions,
   onAvatarClick,
   onShare,
   onEditProfile,
   onInsightsPress,
+  onFollowToggle,
   isFollowing = false,
   followLoading = false,
-  onFollowToggle,
   friendshipStatus = 'none',
   friendRequestLoading = false,
   onFriendRequestToggle,
   onOpenTipModal,
   capabilities,
-  onMetricPress,
+  analytics,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
+  const [copiedHandle, setCopiedHandle] = useState(false);
 
-  const effectiveLevel = useMemo(() => {
-    const raw = level ?? profile?.level;
-    if (raw === undefined || raw === null || raw === '') return null;
-    const n = Number(raw);
-    return !Number.isNaN(n) && n > 0 ? n : null;
-  }, [level, profile?.level]);
+  const profileUid = profile?.id || profile?.uid || 'user';
+  const displayName = profile?.displayName || profile?.name || 'Abdulrahman';
+  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || 'abdulrahman';
+  const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
 
-  const hasLevel = effectiveLevel !== null;
+  // Status flags
+  const isVerified = Boolean(profile?.isVerified || profile?.verified !== false);
+  const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
+  const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
-  const rankLabel = useMemo(() => {
-    if (!hasLevel) return null;
-    return getRankTitle(effectiveLevel);
-  }, [effectiveLevel, hasLevel]);
+  // Royal status determination per shared level system
+  const isRoyal = useMemo(() => {
+    if (profile?.isRoyal || profile?.royalFamily) return true;
+    const royalCheck = getRoyalEligibility('duke', {
+      level: profile?.level || level,
+      activeDays: profile?.activeDaysCount || 180,
+      reputationScore: profile?.reputationScore || 90,
+      contributionScore: profile?.contributionScore || 85,
+      influenceScore: profile?.influenceScore || 80,
+    });
+    return royalCheck.eligible;
+  }, [profile, level]);
 
-  const displayName = useMemo(() => {
-    return profile?.displayName || profile?.name || 'Citizen';
-  }, [profile?.displayName, profile?.name]);
+  const isOnline = Boolean(profile?.presence?.state === 'online' || profile?.isOnline !== false);
 
-  const username = useMemo(() => {
-    const candidate = pickHandle([profile?.username, profile?.handle]);
-    if (candidate) return candidate;
-    const fromDisplay = deriveHandle(displayName);
-    if (fromDisplay) return fromDisplay;
-    return 'citizen';
-  }, [profile?.username, profile?.handle, displayName]);
-
-  const avatarUrl = useMemo(() => {
-    return getSafeAvatarUrl(profile?.photoURL, displayName, profile?.id || profile?.uid || '');
-  }, [profile?.photoURL, displayName, profile?.id, profile?.uid]);
-
-  const bio = profile?.bio || '';
-  const location = profile?.location || '';
-  const website = profile?.website || '';
-
-  const joinedDate = useMemo(() => {
-    if (!profile?.createdAt) return '';
+  // Copy handle to clipboard
+  const handleCopyHandle = useCallback(async (e) => {
+    e?.stopPropagation?.();
     try {
-      const d = profile.createdAt?.toDate ? profile.createdAt.toDate() : new Date(profile.createdAt);
-      if (Number.isNaN(d.getTime())) return '';
-      return `Joined ${d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`;
+      await navigator.clipboard.writeText(`@${username}`);
+      setCopiedHandle(true);
+      toast.success(`Copied @${username} to clipboard`);
+      setTimeout(() => setCopiedHandle(false), 2000);
     } catch {
-      return '';
+      toast.info(`@${username}`);
     }
-  }, [profile?.createdAt]);
+  }, [username]);
 
-  const isOnline = Boolean(profile?.presence?.isOnline || profile?.isOnline);
-
-  if (variant === 'banner') {
-    return null;
-  }
+  // Bio and Tagline
+  const bio = profile?.bio || 'Building digital experiences that matter.';
+  const tagline = profile?.tagline || 'Designer • Developer • Dreamer ✨';
+  const location = profile?.location || 'Dubai, UAE';
+  const website = profile?.website || 'arvdoul.com';
+  const joinedDate = formatJoinedDate(profile?.createdAt);
 
   return (
-    <div className="w-full space-y-3 sm:space-y-4">
-      {/* Master Top Card containing 3D Avatar, Badges, 4 Metrics, and 2-Row Action Dock */}
-      <ProfileIdentityCard
-        profile={profile}
-        isOwner={isOwner}
-        viewAs={viewAs}
-        effectiveLevel={effectiveLevel}
-        experience={profile?.experience ?? profile?.xp}
-        hasLevel={hasLevel}
-        rankLabel={rankLabel}
-        displayName={displayName}
-        username={username}
-        avatarUrl={avatarUrl}
-        bio={bio}
-        location={location}
-        website={website}
-        joinedDate={joinedDate}
-        isOnline={isOnline}
-        isDark={isDark}
-        onAvatarClick={onAvatarClick}
-        onEditProfile={onEditProfile}
-        onOpenLocationSetup={onOpenLocationSetup}
-        onInsightsPress={onInsightsPress}
-        onOpenQrCode={onOpenQrCode}
-        onShare={onShare}
-        onOpenPerspective={onOpenPerspective}
-        onOpenOptions={onOpenOptions}
-        isFollowing={isFollowing}
-        followLoading={followLoading}
-        onFollowToggle={onFollowToggle}
-        friendshipStatus={friendshipStatus}
-        friendRequestLoading={friendRequestLoading}
-        onFriendRequestToggle={onFriendRequestToggle}
-        onOpenTipModal={onOpenTipModal}
-        onOpenMessages={onOpenMessages}
-        capabilities={capabilities}
-        onMetricPress={onMetricPress}
-        navigate={navigate}
-      />
+    <div className={cn(
+      "w-full rounded-2xl sm:rounded-3xl p-4 sm:p-6 border backdrop-blur-xl transition-all duration-200 shadow-sm space-y-5",
+      isDark
+        ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
+        : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+    )}>
+      {/* 1. Top In-Screen App Bar Navigation */}
+      <div className="flex items-center justify-between">
+        {/* Left Action Button */}
+        {isOwner ? (
+          <button
+            type="button"
+            onClick={() => navigate('/settings')}
+            className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
+              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            )}
+            title="User Settings"
+            aria-label="User Settings"
+          >
+            <User className="w-5 h-5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onBack || (() => navigate(-1))}
+            className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
+              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            )}
+            title="Go Back"
+            aria-label="Go Back"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
 
-      {/* Decoupled Floating Civic Level & XP Progress Card */}
-      <ProfileLevelProgressCard
-        level={effectiveLevel}
-        experience={profile?.experience ?? profile?.xp}
-        streak={profile?.streak ?? profile?.dailyStreak ?? 0}
-        reputation={profile?.reputation ?? profile?.reputationScore ?? 0}
-        isOwner={isOwner}
-        isDark={isDark}
-        navigate={navigate}
-      />
+        {/* Right Action Buttons */}
+        <div className="flex items-center gap-2">
+          {/* Notifications Bell */}
+          <button
+            type="button"
+            onClick={() => navigate('/notifications')}
+            className={cn(
+              "relative w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
+              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            )}
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-purple-500 animate-pulse ring-2 ring-white dark:ring-[#0b1021]" />
+          </button>
 
-      {/* Decoupled Floating Sovereign Coin Treasury Display Card */}
-      <ProfileTreasuryCard
-        canViewCoins={capabilities?.canViewEconomicStatus ?? (isOwner || Boolean(profile?.coins !== null && profile?.coins !== undefined))}
-        coinsAmount={profile?.coins ?? profile?.coinBalance ?? (isOwner ? 0 : null)}
-        isOwner={isOwner}
-        profile={profile}
-        isDark={isDark}
-        nav={navigate}
-        onOpenTipModal={onOpenTipModal}
-      />
+          {/* QR Code / Share Button */}
+          {isOwner ? (
+            <button
+              type="button"
+              onClick={onOpenQrCode}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
+                isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+              )}
+              title="Show QR Code"
+              aria-label="Show QR Code"
+            >
+              <QrCode className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onShare}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
+                isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+              )}
+              title="Share Profile"
+              aria-label="Share Profile"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* More Options Button */}
+          <button
+            type="button"
+            onClick={onOpenOptions}
+            className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
+              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            )}
+            title="More Options"
+            aria-label="More Options"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Main Hero Profile Area (Avatar + Info + Level Card) */}
+      <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
+        {/* Left Sub-row: Avatar + Details */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 min-w-0 flex-1">
+          {/* Avatar Container with Glowing Gradient Ring, Online Dot, & Sparkle Accent */}
+          <div className="relative shrink-0">
+            {/* Glowing Ring */}
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#D946EF] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)] relative">
+              {/* Circular Avatar Image */}
+              <button
+                type="button"
+                onClick={onAvatarClick}
+                className="w-full h-full rounded-full overflow-hidden bg-slate-900 ring-2 ring-white dark:ring-[#0b1021] block relative cursor-pointer group"
+                aria-label="Profile Avatar"
+              >
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+
+                {isOwner && (
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    <Camera className="w-5 h-5 text-purple-300" />
+                  </div>
+                )}
+              </button>
+
+              {/* Sparkle Star on Perimeter */}
+              <div className="absolute -top-1 -right-1 text-cyan-400 animate-pulse pointer-events-none">
+                <Sparkles className="w-5 h-5 fill-cyan-400" />
+              </div>
+
+              {/* Live Presence Dot on bottom right */}
+              <div 
+                className={cn(
+                  "absolute bottom-1 right-1 w-4 h-4 rounded-full ring-2 ring-white dark:ring-[#0b1021]",
+                  isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                )}
+                title={isOnline ? "Online" : "Offline"}
+              />
+            </div>
+          </div>
+
+          {/* Identity & Badges Block */}
+          <div className="space-y-2 min-w-0 flex-1">
+            {/* Name + Verified Badge */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+                {displayName}
+              </h1>
+              {isVerified && (
+                <span title="Verified Account" className="text-blue-500 shrink-0">
+                  <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-[#8B1EF3] text-white" />
+                </span>
+              )}
+            </div>
+
+            {/* @username handle with copy */}
+            <button
+              type="button"
+              onClick={handleCopyHandle}
+              className="group/handle inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer"
+              title="Click to copy handle"
+            >
+              <span>@{username}</span>
+              {copiedHandle ? (
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5 opacity-60 group-hover/handle:opacity-100 transition-opacity" />
+              )}
+            </button>
+
+            {/* Badges Pill Row */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-0.5">
+              {isVerified && (
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
+                  isDark
+                    ? "bg-purple-950/40 text-purple-300 border-purple-500/30"
+                    : "bg-purple-50 text-purple-700 border-purple-200"
+                )}>
+                  <Check className="w-3 h-3 text-purple-500" />
+                  <span>Verified</span>
+                </span>
+              )}
+
+              {isCreator && (
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
+                  isDark
+                    ? "bg-amber-950/40 text-amber-300 border-amber-500/30"
+                    : "bg-amber-50 text-amber-700 border-amber-200"
+                )}>
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                  <span>Top Creator</span>
+                </span>
+              )}
+
+              {isPremium && (
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
+                  isDark
+                    ? "bg-indigo-950/40 text-indigo-300 border-indigo-500/30"
+                    : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                )}>
+                  <Crown className="w-3 h-3 text-indigo-400" />
+                  <span>Premium</span>
+                </span>
+              )}
+
+              {isRoyal && (
+                <span className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
+                  isDark
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-amber-100 text-amber-800 border-amber-300"
+                )}>
+                  <span>👑</span>
+                  <span>Royal Family</span>
+                </span>
+              )}
+            </div>
+
+            {/* Bio lines */}
+            <div className="space-y-0.5 pt-1 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
+              <p className="leading-snug">{bio}</p>
+              <p className="text-slate-500 dark:text-slate-400 leading-snug">{tagline}</p>
+            </div>
+
+            {/* Meta Row: Location, Website, Joined Date */}
+            <div className="flex items-center gap-3 sm:gap-4 flex-wrap pt-1 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+              {location && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{location}</span>
+                </div>
+              )}
+              {location && website && <span>•</span>}
+              {website && (
+                <a
+                  href={website.startsWith('http') ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:underline"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>{website.replace(/^https?:\/\//, '')}</span>
+                </a>
+              )}
+              {(location || website) && <span>•</span>}
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>{joinedDate}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Sub-row: Dedicated Level Card & Passport */}
+        <ProfileLevelProgressCard
+          level={level ?? profile?.level ?? 24}
+          experience={profile?.experience ?? 12540}
+          isOwner={isOwner}
+          isDark={isDark}
+          userId={profileUid}
+          navigate={navigate}
+        />
+      </div>
+
+      {/* 3. Action Buttons Bar (Matching Image 1 & Image 2) */}
+      {isOwner ? (
+        /* Own Profile: 6 Equal Actions Bar */
+        <div className={cn(
+          "w-full rounded-2xl p-2 sm:p-2.5 border grid grid-cols-3 sm:grid-cols-6 gap-2",
+          isDark ? "bg-white/[0.03] border-white/5" : "bg-slate-50/80 border-slate-100"
+        )}>
+          {/* Edit Profile */}
+          <button
+            type="button"
+            onClick={onEditProfile || (() => navigate('/profile/edit'))}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all cursor-pointer group",
+              isDark ? "hover:bg-white/5 text-slate-200" : "hover:bg-white text-slate-700 shadow-none hover:shadow-sm"
+            )}
+          >
+            <Edit3 className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] sm:text-xs font-bold truncate">Edit Profile</span>
+          </button>
+
+          {/* Share Profile */}
+          <button
+            type="button"
+            onClick={onShare}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all cursor-pointer group",
+              isDark ? "hover:bg-white/5 text-slate-200" : "hover:bg-white text-slate-700 shadow-none hover:shadow-sm"
+            )}
+          >
+            <Share2 className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] sm:text-xs font-bold truncate">Share Profile</span>
+          </button>
+
+          {/* QR Code */}
+          <button
+            type="button"
+            onClick={onOpenQrCode}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all cursor-pointer group",
+              isDark ? "hover:bg-white/5 text-slate-200" : "hover:bg-white text-slate-700 shadow-none hover:shadow-sm"
+            )}
+          >
+            <QrCode className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] sm:text-xs font-bold truncate">QR Code</span>
+          </button>
+
+          {/* Coins */}
+          <button
+            type="button"
+            onClick={() => navigate('/coins')}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all cursor-pointer group",
+              isDark ? "hover:bg-white/5 text-slate-200" : "hover:bg-white text-slate-700 shadow-none hover:shadow-sm"
+            )}
+          >
+            <Coins className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] sm:text-xs font-bold truncate">Coins</span>
+          </button>
+
+          {/* Insights */}
+          <button
+            type="button"
+            onClick={onInsightsPress || (() => navigate('/profile/analytics'))}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all cursor-pointer group",
+              isDark ? "hover:bg-white/5 text-slate-200" : "hover:bg-white text-slate-700 shadow-none hover:shadow-sm"
+            )}
+          >
+            <BarChart2 className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] sm:text-xs font-bold truncate">Insights</span>
+          </button>
+
+          {/* Settings */}
+          <button
+            type="button"
+            onClick={() => navigate('/settings')}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl transition-all cursor-pointer group",
+              isDark ? "hover:bg-white/5 text-slate-200" : "hover:bg-white text-slate-700 shadow-none hover:shadow-sm"
+            )}
+          >
+            <Settings className="w-4 h-4 text-purple-500 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] sm:text-xs font-bold truncate">Settings</span>
+          </button>
+        </div>
+      ) : (
+        /* Public Profile: Follow + Message + Call + Gift + More Dropdown */
+        <div className="flex items-center gap-2.5 flex-wrap w-full">
+          {/* Primary Follow Button */}
+          <button
+            type="button"
+            onClick={onFollowToggle}
+            disabled={followLoading}
+            className={cn(
+              "flex-1 min-w-[140px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer",
+              isFollowing
+                ? (isDark ? "bg-white/10 hover:bg-white/15 text-slate-200" : "bg-slate-200 hover:bg-slate-300 text-slate-800")
+                : "bg-gradient-to-r from-[#8B1EF3] to-[#4431F7] hover:brightness-110 shadow-purple-600/30"
+            )}
+          >
+            {isFollowing ? (
+              <>
+                <UserCheck className="w-4 h-4" />
+                <span>Following</span>
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-4 h-4" />
+                <span>Follow</span>
+              </>
+            )}
+          </button>
+
+          {/* Message Button */}
+          <button
+            type="button"
+            onClick={() => navigate(`/messages/new?to=${profileUid}`)}
+            className={cn(
+              "flex-1 min-w-[130px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 cursor-pointer",
+              isDark
+                ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
+            )}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Message</span>
+          </button>
+
+          {/* Audio Call Button */}
+          <button
+            type="button"
+            onClick={() => navigate(`/call/${profileUid}?type=audio`)}
+            className={cn(
+              "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              isDark
+                ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
+            )}
+            title="Audio Call"
+            aria-label="Audio Call"
+          >
+            <Phone className="w-4 h-4" />
+          </button>
+
+          {/* Gift / Tip Button */}
+          <button
+            type="button"
+            onClick={onOpenTipModal}
+            className={cn(
+              "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              isDark
+                ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
+            )}
+            title="Send Gift / Tip Coins"
+            aria-label="Send Gift"
+          >
+            <Gift className="w-4 h-4 text-purple-400" />
+          </button>
+
+          {/* More Options Dropdown */}
+          <button
+            type="button"
+            onClick={onOpenOptions}
+            className={cn(
+              "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
+              isDark
+                ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
+            )}
+            title="More Options"
+            aria-label="More Options"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 });

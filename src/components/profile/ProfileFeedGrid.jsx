@@ -195,6 +195,24 @@ const ProfileFeedGrid = memo(({
       p.isSpark ||
       (p.type === 'video' && (p.aspectRatio === '9:16' || p.isVertical))
     );
+  } else if (activeTab === 'videos') {
+    displayItems = displayItems.filter(p => 
+      p.type === 'video' || 
+      p.type === 'reel' || 
+      Boolean(p.videoURL || p.videoUrl || p.mediaType === 'video')
+    );
+  } else if (activeTab === 'photos') {
+    displayItems = displayItems.filter(p => 
+      p.type === 'image' || 
+      p.type === 'photo' || 
+      Boolean(p.mediaURL || p.imageUrl || p.photoURL || p.coverImage)
+    );
+  } else if (activeTab === 'stories') {
+    displayItems = displayItems.filter(p => 
+      p.type === 'story' || 
+      p.isStory || 
+      p.isVibe
+    );
   } else if (activeTab === 'audio') {
     displayItems = displayItems.filter(p => 
       p.type === 'audio' || 
@@ -225,6 +243,27 @@ const ProfileFeedGrid = memo(({
         desc: 'Published creations and updates will appear here.',
         cta: isOwner ? 'Create Post' : null,
         action: () => navigate('/create-post'),
+      },
+      videos: {
+        icon: Film,
+        title: 'No Videos Yet',
+        desc: 'Full-length videos and project clips will be featured here.',
+        cta: isOwner ? 'Upload Video' : null,
+        action: () => navigate('/create-post'),
+      },
+      photos: {
+        icon: ImageIcon,
+        title: 'No Photos Yet',
+        desc: 'High-resolution photography and visual artworks appear here.',
+        cta: isOwner ? 'Share Photo' : null,
+        action: () => navigate('/create-post'),
+      },
+      stories: {
+        icon: Sparkles,
+        title: 'No Stories Yet',
+        desc: 'Moments and daily vibe stories will appear here.',
+        cta: isOwner ? 'Post Story' : null,
+        action: () => navigate('/create-story'),
       },
       reels: {
         icon: Film,
