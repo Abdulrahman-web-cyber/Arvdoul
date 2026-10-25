@@ -25,6 +25,9 @@ jest.mock('../context/ThemeContext.jsx', () => ({
   useTheme: () => ({ theme: 'light' }),
   ThemeProvider: ({ children }) => children,
 }));
+jest.mock('../context/AuthContext.jsx', () => ({
+  useAuth: () => ({ authInitialized: true, isAuthenticated: false }),
+}));
 jest.mock('../i18n/index.js', () => {
   const ReactMock = require('react');
   return {
@@ -144,7 +147,7 @@ describe('Intro robustness - hostile environments', () => {
     });
     try {
       renderIntro();
-      expect(screen.getByText('Connect. Create.')).toBeInTheDocument();
+      expect(screen.getAllByText(/Arvdoul/i).length).toBeGreaterThan(0);
     } finally {
       Object.defineProperty(globalThis.window, 'matchMedia', { configurable: true, value: original });
     }

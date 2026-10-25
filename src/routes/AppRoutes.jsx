@@ -1212,6 +1212,7 @@ export default function AppRoutes() {
       } />
       
       {/* ========== REDIRECTS ========== */}
+      <Route path="/onboarding" element={<Navigate to="/setup-profile" replace />} />
       <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
       <Route path="/message" element={<Navigate to="/messages" replace />} />
       <Route path="/chat" element={<Navigate to="/messages" replace />} />

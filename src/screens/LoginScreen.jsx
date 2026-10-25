@@ -763,12 +763,13 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
         return;
       }
       if (result?.success) {
-        toast.success("Welcome back!");
+        const isNew = result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
         const userInfo = {
           uid: result.user?.uid,
           email: result.user?.email,
           displayName: result.user?.displayName,
-          isNewUser: result.isNewUser || false
+          isNewUser: isNew,
+          isProfileComplete: result.user?.isProfileComplete
         };
         onSuccess(userInfo);
       } else {
@@ -1130,8 +1131,8 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSuccess = (userInfo) => {
-    if (userInfo?.isNewUser === true) {
-      toast.success(`Welcome to Arvdoul, ${userInfo.displayName || 'there'}! Let's set up your profile.`);
+    if (userInfo?.isNewUser === true || userInfo?.isProfileComplete === false) {
+      toast.success(`Welcome to Arvdoul, ${userInfo?.displayName || 'there'}! Let's set up your profile.`);
       navigate('/setup-profile', {
         replace: true,
         state: {
@@ -1143,9 +1144,9 @@ export default function LoginScreen() {
       });
       return;
     }
-    toast.success(`Welcome back, ${userInfo.displayName || 'User'}!`);
+    toast.success(`Welcome back, ${userInfo?.displayName || 'User'}!`);
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
-    navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo.displayName, isLogin: true } });
+    navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo?.displayName, isLogin: true } });
   };
 
   const handleGoogleError = (error) => {

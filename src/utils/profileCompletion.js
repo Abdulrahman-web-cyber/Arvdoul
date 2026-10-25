@@ -146,6 +146,9 @@ export function hasChosenUsername(username) {
 export function computeProfileComplete(authUser, profile, options = {}) {
   if (!authUser) return false;
 
+  // An explicitly incomplete profile must always be treated as incomplete
+  if (profile?.isProfileComplete === false) return false;
+
   if (profile?.isProfileComplete === true || profile?.profileComplete === true) return true;
   if (profile?.profileCompletedAt) return true;
 
@@ -188,6 +191,9 @@ export function needsOnboarding({
   if (session?.required) return true;
   if (isSignupInProgress) return true;
   if (isNewUserThisSession === true || authUser.isNewUser === true) return true;
+
+  // An explicitly incomplete profile requires onboarding
+  if (profile && profile.isProfileComplete === false) return true;
 
   if (computeProfileComplete(authUser, profile, { profileResolved })) {
     return false;

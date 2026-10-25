@@ -53,8 +53,6 @@ import { userService } from '../../services/userService.js';
 import { getCitizenTier } from '../../services/levelSystemService';
 
 import ProfileAvatar from './ProfileAvatar';
-import ProfileLevel from './ProfileLevel';
-import ProfileBadges from './ProfileBadges';
 import ProfileStats from './ProfileStats';
 import ProfileOptionsMenu from './ProfileOptionsMenu';
 import ProfileTipModal from './ProfileTipModal';

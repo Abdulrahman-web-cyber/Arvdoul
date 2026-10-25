@@ -174,9 +174,12 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
   
   const isProfileComplete = computeProfileComplete(user, userProfile);
   
-  const cleanDerivedUsername = (userProfile?.username && !userProfile.username.startsWith('user_'))
+  const isDigitsOnly = (str) => /^\+?\d+$/.test(String(str || '').trim());
+  const cleanDerivedUsername = (userProfile?.username && !userProfile.username.startsWith('user_') && !isDigitsOnly(userProfile.username))
     ? userProfile.username
-    : (user.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || user.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (userProfile?.username || 'member'));
+    : (user.displayName && !isDigitsOnly(user.displayName) && !user.displayName.startsWith('+') && !/^User\s+\d{2,6}$/i.test(user.displayName)
+        ? user.displayName.toLowerCase().replace(/[^a-z0-9_]/g, '')
+        : (user.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9_]/g, '') || (userProfile?.username && !isDigitsOnly(userProfile.username) ? userProfile.username : 'member')));
 
   const userData = {
     uid: user.uid,
@@ -877,7 +880,8 @@ export function AuthProvider({ children }) {
           return result;
         }
         if (!result.success) throw new Error(result.error || 'Google auth failed');
-        if (result.isNewUser && result.user?.isProfileComplete === false) {
+        const isGoogleComplete = result.user?.isProfileComplete !== false && result.user?.requiresProfileCompletion !== true && !result.isNewUser;
+        if (result.isNewUser || !isGoogleComplete) {
           markOnboardingRequired(result.user?.uid, { method: 'google' });
           AuthStorageManager.set('pending_profile_creation', {
             userId: result.user.uid,
@@ -887,10 +891,10 @@ export function AuthProvider({ children }) {
             emailVerified: true,
             requiresProfile: true
           });
-          toast.success('Welcome to Arvdoul! Complete your profile.');
+          toast.success(result.isNewUser ? 'Welcome to Arvdoul! Complete your profile.' : 'Welcome to Arvdoul! Complete your profile.');
         } else {
           clearOnboardingRequired();
-          toast.success(result.isNewUser ? 'Welcome to Arvdoul!' : 'Welcome back!');
+          toast.success('Welcome back!');
         }
         return result;
       } catch (error) {
@@ -944,7 +948,8 @@ export function AuthProvider({ children }) {
         setError(null);
         const result = await authService.verifyPhoneOTP(verificationId, otp);
         if (!result.success) throw new Error(result.error || 'Failed to verify OTP');
-        if (result.isNewUser) {
+        const isPhoneComplete = result.user?.isProfileComplete !== false && result.user?.requiresProfileCompletion !== true && !result.isNewUser;
+        if (result.isNewUser || !isPhoneComplete) {
           markOnboardingRequired(result.user?.uid, { method: 'phone' });
           AuthStorageManager.set('pending_profile_creation', {
             userId: result.user.uid,

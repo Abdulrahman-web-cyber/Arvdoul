@@ -971,13 +971,11 @@ export default function OTPVerification() {
         setShowSuccess(true);
 
         const fallbackStep1 = step1Data || JSON.parse(sessionStorage.getItem('signup_step1') || sessionStorage.getItem('signup_data') || '{}');
-        // Only a confirmed new Firebase user (or an explicit signup that created one)
-        // goes to setup. Existing accounts with a placeholder displayName go Home.
-        const isNewUser = result.isNewUser === true || (isSignup === true && result.isNewUser !== false);
+        const isNewUser = result.isNewUser === true || (isSignup === true && result.isNewUser !== false) || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
 
         console.log("✅ OTP verified. isNewUser =", isNewUser);
 
-        if (!isNewUser) {
+        if (!isNewUser && result.user?.isProfileComplete !== false) {
           toast.success("Welcome back!");
           navigate("/home", { replace: true, state: { welcomeMessage: true } });
         } else {

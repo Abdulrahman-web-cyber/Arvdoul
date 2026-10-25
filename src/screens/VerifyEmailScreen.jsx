@@ -756,7 +756,8 @@ export default function EmailVerification() {
       location.state?.isNewUser === true ||
       mode === "signup" ||
       !!getOnboardingSession(uid);
-    const goToSetup = !fromLogin && fromSignup;
+    const hasIncompleteProfile = user?.isProfileComplete === false || user?.requiresProfileCompletion === true;
+    const goToSetup = fromSignup || hasIncompleteProfile || !!getOnboardingSession(uid);
     toast.success(goToSetup ? "Email verified! Let's finish your profile." : "Email verified! Welcome back.");
     const step1Data = location.state?.step1Data || JSON.parse(sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_data') || '{}');
     setTimeout(() => {

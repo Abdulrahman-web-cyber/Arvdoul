@@ -491,8 +491,11 @@ export default function SetupProfile() {
 
   const signupData = useMemo(() => {
     try {
-      const raw = sessionStorage.getItem("signup_data");
-      return raw ? JSON.parse(raw) : {};
+      const step1 = sessionStorage.getItem("signup_step1");
+      const signup = sessionStorage.getItem("signup_data");
+      const parsedStep1 = step1 ? JSON.parse(step1) : {};
+      const parsedSignup = signup ? JSON.parse(signup) : {};
+      return { ...parsedStep1, ...parsedSignup };
     } catch {
       return {};
     }
@@ -510,30 +513,51 @@ export default function SetupProfile() {
       : theme;
 
   const buildDisplayName = useCallback(() => {
-    const step1 = signupData.firstName ? signupData : step1FromState;
+    const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
+      try {
+        return JSON.parse(sessionStorage.getItem("signup_step1") || "{}");
+      } catch { return {}; }
+    })());
     if (step1.firstName && step1.lastName) {
       return `${step1.firstName} ${step1.lastName}`.trim();
     }
     if (step1.firstName) return step1.firstName;
     if (step1.lastName) return step1.lastName;
-    if (stateData.displayName) return stateData.displayName;
-    if (user?.displayName) return user.displayName;
+    if (stateData.displayName && !/^User\s+\d{2,6}$/i.test(stateData.displayName)) return stateData.displayName;
+    if (user?.displayName && !/^User\s+\d{2,6}$/i.test(user.displayName)) return user.displayName;
     if (user?.email) return user.email.split('@')[0];
-    return "Arvdoul User";
+    return "";
   }, [signupData, step1FromState, stateData, user]);
 
   const getInitials = useCallback(() => {
     const displayName = buildDisplayName();
-    const username =
-      signupData.username ||
-      stateData.username ||
-      (user?.email ? user.email.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase() : '') ||
-      `user_${user?.uid?.slice(0, 6) || Math.random().toString(36).slice(2, 8)}`;
+    const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
+      try {
+        return JSON.parse(sessionStorage.getItem("signup_step1") || "{}");
+      } catch { return {}; }
+    })());
+
+    const isPhoneLike = (str) => /^\+?\d+$/.test(String(str || '').trim());
+    let username = "";
+    if (signupData.username && !signupData.username.startsWith("user_") && !isPhoneLike(signupData.username)) {
+      username = signupData.username;
+    } else if (stateData.username && !stateData.username.startsWith("user_") && !isPhoneLike(stateData.username)) {
+      username = stateData.username;
+    } else if (step1.firstName) {
+      const nameBase = `${step1.firstName}${step1.lastName ? '_' + step1.lastName : ''}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (nameBase.length >= 3) username = nameBase.slice(0, 20);
+    } else if (displayName && !/^User\s+\d{2,6}$/i.test(displayName)) {
+      const nameBase = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (nameBase.length >= 3) username = nameBase.slice(0, 20);
+    } else if (user?.email) {
+      username = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
+    }
+
     const avatar = signupData.photoURL || stateData.photoURL || user?.photoURL || "";
     const authProvider = signupData.authProvider || stateData.authProvider || stateMethod || user?.authProvider || "email";
     const identifier = signupData.phoneNumber || signupData.email || stateData.phoneNumber || stateData.email || user?.phoneNumber || user?.email || "";
     return { displayName, username, avatar, authProvider, identifier };
-  }, [buildDisplayName, signupData, stateData, stateMethod, user]);
+  }, [buildDisplayName, signupData, stateData, stateMethod, step1FromState, user]);
 
   const [displayName, setDisplayName] = useState(() => getInitials().displayName);
   const [username, setUsername] = useState(() => getInitials().username);
@@ -551,7 +575,7 @@ export default function SetupProfile() {
       initialLoadedRef.current = true;
       const initial = getInitials();
       if (!displayName || displayName === "Arvdoul User") setDisplayName(initial.displayName);
-      if (!username || username.startsWith("user_")) setUsername(initial.username);
+      if (!username || username.startsWith("user_") || /^\+?\d+$/.test(username)) setUsername(initial.username);
       if (!avatarUrl && initial.avatar) setAvatarUrl(initial.avatar);
       if (initial.authProvider) setAuthProvider(initial.authProvider);
       if (initial.identifier) setIdentifier(initial.identifier);
@@ -603,9 +627,19 @@ export default function SetupProfile() {
       }
 
       const finalAvatar = avatarUrl || generateDefaultAvatar(user.uid, displayName);
+      const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
+        try {
+          return JSON.parse(sessionStorage.getItem("signup_step1") || "{}");
+        } catch { return {}; }
+      })());
+
       const result = await createUserProfile(user.uid, {
         uid: user.uid,
         displayName: displayName.trim(),
+        firstName: step1.firstName || "",
+        lastName: step1.lastName || "",
+        gender: step1.gender || "",
+        dob: step1.dob || {},
         username: username.toLowerCase(),
         bio: bio.trim(),
         photoURL: finalAvatar,
@@ -633,6 +667,7 @@ export default function SetupProfile() {
       // Force a refresh of the profile to ensure the flag is updated
       await refreshUserProfile();
 
+      sessionStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
       clearOnboardingRequired();
@@ -653,9 +688,19 @@ export default function SetupProfile() {
     setLoading(true);
     try {
       const finalAvatar = avatarUrl || generateDefaultAvatar(user.uid, displayName);
+      const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
+        try {
+          return JSON.parse(sessionStorage.getItem("signup_step1") || "{}");
+        } catch { return {}; }
+      })());
+
       const result = await createUserProfile(user.uid, {
         uid: user.uid,
         displayName: displayName.trim(),
+        firstName: step1.firstName || "",
+        lastName: step1.lastName || "",
+        gender: step1.gender || "",
+        dob: step1.dob || {},
         username: finalUsername.toLowerCase(),
         bio: bio.trim(),
         photoURL: finalAvatar,
@@ -675,8 +720,10 @@ export default function SetupProfile() {
         });
       }
       await refreshUserProfile();
+      sessionStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
+      clearOnboardingRequired();
       setProfileComplete(true);
       toast.success("🎉 Profile setup complete!");
       setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);

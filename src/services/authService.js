@@ -78,6 +78,7 @@ class ProductionAuthService {
                   photoURL: user.photoURL,
                   authProvider: 'google',
                   emailVerified: user.emailVerified,
+                  isProfileComplete: false
                 });
               } catch (pErr) {
                 this._storePendingProfile(user.uid, {
@@ -85,7 +86,8 @@ class ProductionAuthService {
                   email: user.email,
                   photoURL: user.photoURL,
                   authProvider: 'google',
-                  emailVerified: user.emailVerified
+                  emailVerified: user.emailVerified,
+                  isProfileComplete: false
                 });
               }
             }
@@ -625,36 +627,44 @@ class ProductionAuthService {
 
       const isNewUser = !profile;
 
-      let displayName = user.displayName;
-      if (!displayName) {
-        try {
-          const step1 = typeof sessionStorage !== 'undefined'
-            ? JSON.parse(sessionStorage.getItem('signup_step1') || sessionStorage.getItem('signup_data') || '{}')
-            : {};
-          if (step1.firstName && step1.lastName) {
-            displayName = `${step1.firstName} ${step1.lastName}`.trim();
-          } else if (step1.firstName) {
-            displayName = step1.firstName.trim();
-          }
-        } catch (e) {}
-      }
+      const step1 = this._getSignupStep1Data();
+      const firstName = (step1.firstName || '').trim();
+      const lastName = (step1.lastName || '').trim();
+      const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
 
-      if (!displayName) {
-        displayName = `User ${user.phoneNumber ? user.phoneNumber.slice(-4) : 'Mobile'}`;
+      let displayName = user.displayName;
+      if (!displayName || /^User\s+\d{2,6}$/i.test(displayName) || displayName === 'Mobile' || displayName === user.phoneNumber) {
+        displayName = step1DisplayName || `User ${user.phoneNumber ? user.phoneNumber.slice(-4) : 'Mobile'}`;
       }
 
       if (isNewUser) {
-        const username = `user_${user.uid.slice(0, 8)}`;
+        let nameCandidate = (firstName && lastName)
+          ? `${firstName}_${lastName}`
+          : (firstName || 'user');
+        nameCandidate = nameCandidate.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+        let username = '';
+        try {
+          const { generateUniqueUsername } = await import('./userService.js');
+          username = await generateUniqueUsername(nameCandidate, user.uid);
+        } catch (uErr) {
+          username = nameCandidate.length >= 3 ? nameCandidate : `user_${user.uid.slice(0, 8)}`;
+        }
+
         try {
           await createUserProfile(user.uid, {
             displayName,
+            firstName,
+            lastName,
+            gender: step1.gender || '',
+            dob: step1.dob || {},
             username,
             phoneNumber: user.phoneNumber || '',
             authProvider: 'phone',
-            isProfileComplete: true,
+            phoneVerified: true,
+            isProfileComplete: false,
             accountStatus: 'active'
           });
-          logger.warn('// Profile created in Firestore for Phone user');
+          logger.warn('// Profile created in Firestore for Phone user with username:', username);
           try {
             profile = await getUserProfile(user.uid);
           } catch (e) {}
@@ -662,9 +672,15 @@ class ProductionAuthService {
           logger.error('❌ Profile creation failed for Phone user', profileError);
           this._storePendingProfile(user.uid, {
             displayName,
+            firstName,
+            lastName,
+            gender: step1.gender || '',
+            dob: step1.dob || {},
+            username,
             phoneNumber: user.phoneNumber,
             authProvider: 'phone',
-            isProfileComplete: true
+            phoneVerified: true,
+            isProfileComplete: false
           });
         }
       }
@@ -675,6 +691,8 @@ class ProductionAuthService {
         }
       } catch (e) {}
 
+      const isComplete = profile ? (profile.isProfileComplete !== false) : false;
+
       const userData = {
         uid: user.uid,
         userId: user.uid,
@@ -683,7 +701,8 @@ class ProductionAuthService {
         photoURL: user.photoURL || profile?.photoURL || null,
         isNewUser,
         authProvider: 'phone',
-        isProfileComplete: profile?.isProfileComplete ?? true,
+        isProfileComplete: isComplete,
+        requiresProfileCompletion: !isComplete,
         ...(profile && {
           coins: profile.coins,
           level: profile.level,
@@ -766,27 +785,47 @@ class ProductionAuthService {
         profile = await getUserProfile(user.uid);
       } catch (e) {}
 
+      const isAccountNew = isNewUser || !profile;
       let profileCreated = false;
       if (!profile) {
         try {
-          const initialDisplayName = user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || 'User';
+          const step1 = this._getSignupStep1Data();
+          const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();
+          const lastName = (step1.lastName || additionalInfo?.profile?.family_name || '').trim();
+          const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
+
+          const initialDisplayName = step1DisplayName || user.displayName || additionalInfo?.profile?.name || user.email?.split('@')[0] || 'User';
           const initialPhoto = user.photoURL || additionalInfo?.profile?.picture || null;
-          const initialUsername = (user.email?.split('@')[0] || `user_${user.uid.slice(0, 6)}`)
-            .replace(/[^a-zA-Z0-9_]/g, '_')
-            .toLowerCase();
+          
+          let nameCandidate = (firstName && lastName)
+            ? `${firstName}_${lastName}`
+            : (firstName || user.email?.split('@')[0] || initialDisplayName);
+          nameCandidate = nameCandidate.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+
+          let initialUsername = '';
+          try {
+            const { generateUniqueUsername } = await import('./userService.js');
+            initialUsername = await generateUniqueUsername(nameCandidate || 'user', user.uid);
+          } catch (uErr) {
+            initialUsername = nameCandidate && nameCandidate.length >= 3 ? nameCandidate : `user_${user.uid.slice(0, 6)}`;
+          }
 
           await createUserProfile(user.uid, {
             displayName: initialDisplayName,
+            firstName,
+            lastName,
+            gender: step1.gender || '',
+            dob: step1.dob || {},
             username: initialUsername,
             email: user.email || '',
             photoURL: initialPhoto,
             authProvider: 'google',
             emailVerified: true,
-            isProfileComplete: true,
+            isProfileComplete: false,
             accountStatus: 'active'
           });
           profileCreated = true;
-          logger.warn('// User profile created in Firestore for Google login');
+          logger.warn('// User profile created in Firestore for Google signup/login with username:', initialUsername);
           try {
             profile = await getUserProfile(user.uid);
           } catch (e) {}
@@ -798,7 +837,7 @@ class ProductionAuthService {
             photoURL: user.photoURL,
             authProvider: 'google',
             emailVerified: true,
-            isProfileComplete: true
+            isProfileComplete: false
           });
         }
       }
@@ -806,6 +845,8 @@ class ProductionAuthService {
       if (profileCreated) {
         this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
       }
+
+      const isComplete = profile ? (profile.isProfileComplete !== false) : false;
 
       return {
         success: true,
@@ -816,14 +857,15 @@ class ProductionAuthService {
           emailVerified: true,
           displayName: user.displayName || profile?.displayName || 'User',
           photoURL: user.photoURL || profile?.photoURL || null,
-          isNewUser,
-          requiresProfileCompletion: false,
+          isNewUser: isAccountNew,
+          requiresProfileCompletion: !isComplete,
           authProvider: 'google',
           coins: profile?.coins,
           level: profile?.level,
-          isProfileComplete: profile?.isProfileComplete ?? true
+          isProfileComplete: isComplete,
+          username: profile?.username
         },
-        isNewUser
+        isNewUser: isAccountNew
       };
     } catch (error) {
       logger.error('❌ Google authentication failed:', error);

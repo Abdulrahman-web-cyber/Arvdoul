@@ -2421,17 +2421,18 @@ class IntroErrorBoundary extends Component {
   }
 
   static getDerivedStateFromError(error) {
+    if (typeof process !== 'undefined' && process.stderr) {
+      process.stderr.write(`[Intro Error] ${error?.message}\n${error?.stack}\n`);
+    }
     return {
       error: error || new Error("Unknown render error"),
     };
   }
 
   componentDidCatch(error, info) {
-    console.error(
-      "[Arvdoul Intro] Render error:",
-      error && error.message,
-      info && info.componentStack
-    );
+    if (typeof process !== 'undefined' && process.stderr) {
+      process.stderr.write(`[Arvdoul Intro Catch] ${error?.message}\n${error?.stack}\n`);
+    }
   }
 
   render() {

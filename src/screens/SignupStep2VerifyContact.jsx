@@ -1338,12 +1338,14 @@ export default function SignupStep2VerifyContact() {
     setLoading(true);
     try {
       toast.success("✅ Google authentication successful!");
-      if (result.isNewUser && result.user?.isProfileComplete === false) {
+      const isNew = result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
+      if (isNew) {
         navigate("/setup-profile", {
           state: {
             method: "google",
             userData: result.user,
-            isNewUser: true
+            isNewUser: true,
+            step1Data: step1Data || {}
           },
           replace: true
         });
@@ -1358,7 +1360,7 @@ export default function SignupStep2VerifyContact() {
       setLoading(false);
       setTimeout(() => { navigationLock.current = false; }, 1000);
     }
-  }, [navigate, triggerShake]);
+  }, [navigate, triggerShake, step1Data]);
 
   const handlePhoneVerification = useCallback(async () => {
     if (navigationLock.current || phoneLoading) return;
@@ -1431,6 +1433,8 @@ export default function SignupStep2VerifyContact() {
         email: emailForm.email,
         firstName: step1Data?.firstName || '',
         lastName: step1Data?.lastName || '',
+        gender: step1Data?.gender || '',
+        dob: step1Data?.dob || {},
         isNewUser: true,
         requiresEmailVerification: true
       });
