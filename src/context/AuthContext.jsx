@@ -880,8 +880,8 @@ export function AuthProvider({ children }) {
           return result;
         }
         if (!result.success) throw new Error(result.error || 'Google auth failed');
-        const isGoogleComplete = result.user?.isProfileComplete !== false && result.user?.requiresProfileCompletion !== true && !result.isNewUser;
-        if (result.isNewUser || !isGoogleComplete) {
+        const isLoginFlow = options.isLogin === true || options.flow === 'login' || !result.isNewUser;
+        if (result.isNewUser && !isLoginFlow) {
           markOnboardingRequired(result.user?.uid, { method: 'google' });
           AuthStorageManager.set('pending_profile_creation', {
             userId: result.user.uid,
@@ -891,7 +891,7 @@ export function AuthProvider({ children }) {
             emailVerified: true,
             requiresProfile: true
           });
-          toast.success(result.isNewUser ? 'Welcome to Arvdoul! Complete your profile.' : 'Welcome to Arvdoul! Complete your profile.');
+          toast.success('Welcome to Arvdoul! Complete your profile.');
         } else {
           clearOnboardingRequired();
           toast.success('Welcome back!');
@@ -940,13 +940,13 @@ export function AuthProvider({ children }) {
     });
   }, [authService]);
 
-  const verifyPhoneOTP = useCallback(async (verificationId, otp) => {
+  const verifyPhoneOTP = useCallback(async (verificationId, otp, step1Data = null) => {
     return runOnce(`phone_verify_${verificationId}`, async () => {
       if (!authService) throw new Error('Auth service not ready');
       navigationLock.current = true;
       try {
         setError(null);
-        const result = await authService.verifyPhoneOTP(verificationId, otp);
+        const result = await authService.verifyPhoneOTP(verificationId, otp, step1Data);
         if (!result.success) throw new Error(result.error || 'Failed to verify OTP');
         const isPhoneComplete = result.user?.isProfileComplete !== false && result.user?.requiresProfileCompletion !== true && !result.isNewUser;
         if (result.isNewUser || !isPhoneComplete) {

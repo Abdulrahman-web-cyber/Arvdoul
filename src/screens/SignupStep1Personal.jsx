@@ -1759,10 +1759,9 @@ export default function SignupStep1Personal() {
       };
 
       try {
-        window.sessionStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(processedData),
-        );
+        const jsonStr = JSON.stringify(processedData);
+        window.sessionStorage.setItem(STORAGE_KEY, jsonStr);
+        window.localStorage.setItem(STORAGE_KEY, jsonStr);
       } catch (storageError) {
         console.warn("Could not persist signup step 1:", storageError);
       }

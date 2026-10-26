@@ -16,34 +16,6 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Pin, Play, Images, ChevronRight, Heart } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-// Default curated featured portfolio if creator has no explicit featured items yet
-const DEFAULT_FEATURED_ITEMS = [
-  {
-    id: 'feat-1',
-    type: 'post',
-    badgeType: 'Pinned Post',
-    title: 'My creative journey',
-    cover: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600&auto=format&fit=crop&q=80',
-    likes: '2.3K',
-  },
-  {
-    id: 'feat-2',
-    type: 'reel',
-    badgeType: 'Pinned Reel',
-    title: 'Night drive in Dubai',
-    cover: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&auto=format&fit=crop&q=80',
-    likes: '3.1K',
-  },
-  {
-    id: 'feat-3',
-    type: 'album',
-    badgeType: 'Pinned Album',
-    title: 'Switzerland 2024',
-    cover: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80',
-    likes: '2.7K',
-  },
-];
-
 const ProfileFeaturedSection = memo(({
   profile,
   posts = [],
@@ -54,23 +26,38 @@ const ProfileFeaturedSection = memo(({
   const isDark = theme === 'dark';
   const creatorName = profile?.displayName || 'Creator';
 
-  // Extract pinned or featured posts if available
+  // Extract pinned or featured posts if available (strictly real posts)
   const items = React.useMemo(() => {
     if (Array.isArray(posts) && posts.length > 0) {
-      const pinned = posts.filter(p => p.isPinned || p.isFeatured);
-      if (pinned.length >= 2) {
-        return pinned.slice(0, 3).map((p, idx) => ({
-          id: p.id,
-          type: p.type || 'post',
-          badgeType: idx === 0 ? 'Pinned Post' : (idx === 1 ? 'Pinned Reel' : 'Pinned Album'),
-          title: p.title || p.caption || 'Featured Creation',
-          cover: p.mediaURL || p.thumbnailUrl || p.cover || p.mediaUrl,
-          likes: p.likes ? `${p.likes}` : '1.8K',
-        }));
+      const pinned = posts.filter(p => p.isPinned || p.isFeatured || p.featured || p.pinned);
+      if (pinned.length > 0) {
+        return pinned.slice(0, 3).map((p, idx) => {
+          const rawLikes = p.likesCount ?? (Array.isArray(p.likes) ? p.likes.length : p.likes) ?? 0;
+          const numLikes = Number(rawLikes) || 0;
+          const formattedLikes = numLikes >= 1000000 
+            ? `${(numLikes / 1000000).toFixed(1)}M` 
+            : numLikes >= 1000 
+              ? `${(numLikes / 1000).toFixed(1)}K` 
+              : `${numLikes}`;
+
+          return {
+            id: p.id,
+            type: p.type || 'post',
+            badgeType: idx === 0 ? 'Pinned Post' : (idx === 1 ? 'Pinned Reel' : 'Featured'),
+            title: p.title || p.caption || 'Featured Creation',
+            cover: p.mediaURL || p.thumbnailUrl || p.cover || p.mediaUrl || '',
+            likes: formattedLikes,
+          };
+        }).filter(item => Boolean(item.cover));
       }
     }
-    return DEFAULT_FEATURED_ITEMS;
+    return [];
   }, [posts]);
+
+  // If creator has no explicit featured items, don't show mock photos
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <div className={cn(

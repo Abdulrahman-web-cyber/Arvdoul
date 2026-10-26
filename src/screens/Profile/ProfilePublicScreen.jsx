@@ -645,6 +645,7 @@ export default function ProfilePublicScreen() {
               {activeTab === 'posts' && (
                 <ProfilePinnedPosts
                   posts={posts}
+                  isOwner={false}
                   theme={theme}
                   onPostClick={(post) => navigate(`/post/${post.id}`)}
                 />

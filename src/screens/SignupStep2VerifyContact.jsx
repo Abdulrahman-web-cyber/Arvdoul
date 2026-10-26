@@ -1396,8 +1396,10 @@ export default function SignupStep2VerifyContact() {
       if (!result.success) throw new Error(result.error || "Failed to send code");
       const verificationData = { verificationId: result.verificationId, phoneNumber: result.phoneNumber, method: "phone", isSignup: true, step1Data, timestamp: Date.now() };
       sessionStorage.setItem('phone_verification', JSON.stringify(verificationData));
+      localStorage.setItem('phone_verification', JSON.stringify(verificationData));
       const signupData = { ...step1Data, phoneNumber: result.phoneNumber, contactMethod: "phone", verificationId: result.verificationId, authProvider: 'phone', requiresProfileCompletion: true, isNewUser: true };
       sessionStorage.setItem('signup_data', JSON.stringify(signupData));
+      localStorage.setItem('signup_data', JSON.stringify(signupData));
       toast.success(`✅ Code sent to ${result.phoneNumber}`);
       navigate("/otp-verification", { state: { verificationId: result.verificationId, phoneNumber: result.phoneNumber, isSignup: true, method: "phone", step1Data }, replace: true });
     } catch (error) {

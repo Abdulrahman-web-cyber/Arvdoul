@@ -491,10 +491,12 @@ export default function SetupProfile() {
 
   const signupData = useMemo(() => {
     try {
-      const step1 = sessionStorage.getItem("signup_step1");
-      const signup = sessionStorage.getItem("signup_data");
-      const parsedStep1 = step1 ? JSON.parse(step1) : {};
-      const parsedSignup = signup ? JSON.parse(signup) : {};
+      const step1Session = sessionStorage.getItem("signup_step1");
+      const step1Local = localStorage.getItem("signup_step1");
+      const signupSession = sessionStorage.getItem("signup_data");
+      const signupLocal = localStorage.getItem("signup_data");
+      const parsedStep1 = step1Session ? JSON.parse(step1Session) : (step1Local ? JSON.parse(step1Local) : {});
+      const parsedSignup = signupSession ? JSON.parse(signupSession) : (signupLocal ? JSON.parse(signupLocal) : {});
       return { ...parsedStep1, ...parsedSignup };
     } catch {
       return {};
@@ -513,16 +515,23 @@ export default function SetupProfile() {
       : theme;
 
   const buildDisplayName = useCallback(() => {
-    const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
+    const getStoredStep1 = () => {
       try {
-        return JSON.parse(sessionStorage.getItem("signup_step1") || "{}");
+        const s = sessionStorage.getItem("signup_step1") || localStorage.getItem("signup_step1");
+        return s ? JSON.parse(s) : {};
       } catch { return {}; }
-    })());
+    };
+    const step1 = (signupData.firstName || signupData.lastName)
+      ? signupData
+      : ((step1FromState.firstName || step1FromState.lastName)
+        ? step1FromState
+        : getStoredStep1());
+
     if (step1.firstName && step1.lastName) {
       return `${step1.firstName} ${step1.lastName}`.trim();
     }
-    if (step1.firstName) return step1.firstName;
-    if (step1.lastName) return step1.lastName;
+    if (step1.firstName) return step1.firstName.trim();
+    if (step1.lastName) return step1.lastName.trim();
     if (stateData.displayName && !/^User\s+\d{2,6}$/i.test(stateData.displayName)) return stateData.displayName;
     if (user?.displayName && !/^User\s+\d{2,6}$/i.test(user.displayName)) return user.displayName;
     if (user?.email) return user.email.split('@')[0];
@@ -531,11 +540,17 @@ export default function SetupProfile() {
 
   const getInitials = useCallback(() => {
     const displayName = buildDisplayName();
-    const step1 = signupData.firstName ? signupData : (step1FromState.firstName ? step1FromState : (() => {
+    const getStoredStep1 = () => {
       try {
-        return JSON.parse(sessionStorage.getItem("signup_step1") || "{}");
+        const s = sessionStorage.getItem("signup_step1") || localStorage.getItem("signup_step1");
+        return s ? JSON.parse(s) : {};
       } catch { return {}; }
-    })());
+    };
+    const step1 = (signupData.firstName || signupData.lastName)
+      ? signupData
+      : ((step1FromState.firstName || step1FromState.lastName)
+        ? step1FromState
+        : getStoredStep1());
 
     const isPhoneLike = (str) => /^\+?\d+$/.test(String(str || '').trim());
     let username = "";
@@ -564,7 +579,7 @@ export default function SetupProfile() {
   const [avatarUrl, setAvatarUrl] = useState(() => getInitials().avatar);
   const [authProvider, setAuthProvider] = useState(() => getInitials().authProvider);
   const [identifier, setIdentifier] = useState(() => getInitials().identifier);
-  const [bio, setBio] = useState("");
+  const [bio, setBio] = useState(() => signupData.bio || stateData.bio || user?.bio || "");
   const [loading, setLoading] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
 
@@ -668,7 +683,9 @@ export default function SetupProfile() {
       await refreshUserProfile();
 
       sessionStorage.removeItem("signup_step1");
+      localStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
+      localStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
       clearOnboardingRequired();
       setProfileComplete(true);
@@ -721,7 +738,9 @@ export default function SetupProfile() {
       }
       await refreshUserProfile();
       sessionStorage.removeItem("signup_step1");
+      localStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
+      localStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
       clearOnboardingRequired();
       setProfileComplete(true);

@@ -182,16 +182,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // usernames registry: created/updated via owner flows
+    // usernames registry: created/updated via owner flows; public read for availability and profile lookups
     match /usernames/{username} {
-      allow read: if isSignedIn();
+      allow read: if true;
       // Only the owner may create/update/delete a username doc that belongs to them.
       allow create, update, delete: if isSignedIn() && request.resource.data.userId == uid();
     }
     // Immutable username history: readable so old share/QR links keep resolving,
     // writable only by the owner who held the previous username.
     match /previous_usernames/{username} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && request.resource.data.userId == uid();
       allow update, delete: if false;
     }

@@ -6,7 +6,7 @@ import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { safeReturnPath } from "../utils/profileCompletion.js";
+import { safeReturnPath, getOnboardingSession } from "../utils/profileCompletion.js";
 
 // Import country codes (same as signup)
 import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
@@ -757,18 +757,18 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
     setIsAuthenticating(true);
     setError(null);
     try {
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle({ isLogin: true, flow: 'login' });
       if (result?.redirecting) {
         toast.info("Redirecting to Google Sign-In...");
         return;
       }
       if (result?.success) {
-        const isNew = result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
         const userInfo = {
           uid: result.user?.uid,
           email: result.user?.email,
           displayName: result.user?.displayName,
-          isNewUser: isNew,
+          isNewUser: Boolean(result.isNewUser && !result.user?.hasExistingProfile),
+          hasExistingProfile: Boolean(result.user?.hasExistingProfile),
           isProfileComplete: result.user?.isProfileComplete
         };
         onSuccess(userInfo);
@@ -951,7 +951,7 @@ export default function LoginScreen() {
   // never bounce through /setup-profile because a flag is still loading.
   useEffect(() => {
     if (!isAuthenticated || !user || !profileResolved) return;
-    if (needsOnboarding) {
+    if (needsOnboarding && getOnboardingSession(user.uid)) {
       navigate('/setup-profile', { replace: true });
       return;
     }
@@ -1131,7 +1131,7 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSuccess = (userInfo) => {
-    if (userInfo?.isNewUser === true || userInfo?.isProfileComplete === false) {
+    if (userInfo?.isNewUser === true && userInfo?.hasExistingProfile === false) {
       toast.success(`Welcome to Arvdoul, ${userInfo?.displayName || 'there'}! Let's set up your profile.`);
       navigate('/setup-profile', {
         replace: true,
@@ -1139,7 +1139,7 @@ export default function LoginScreen() {
           method: 'google',
           userData: userInfo,
           isNewUser: true,
-          fromLogin: false
+          fromLogin: true
         }
       });
       return;

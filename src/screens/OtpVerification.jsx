@@ -960,7 +960,14 @@ export default function OTPVerification() {
       triggerHaptic("medium");
 
       try {
-        const result = await auth.verifyPhoneOTP(verificationId, code);
+        const fallbackStep1 = step1Data || JSON.parse(
+          sessionStorage.getItem('signup_step1') || 
+          localStorage.getItem('signup_step1') || 
+          sessionStorage.getItem('signup_data') || 
+          localStorage.getItem('signup_data') || 
+          '{}'
+        );
+        const result = await auth.verifyPhoneOTP(verificationId, code, fallbackStep1);
         if (!result.success) throw new Error(result.error || "Verification failed");
 
         sessionStorage.removeItem("phone_verification");
@@ -970,7 +977,6 @@ export default function OTPVerification() {
         triggerHaptic("success");
         setShowSuccess(true);
 
-        const fallbackStep1 = step1Data || JSON.parse(sessionStorage.getItem('signup_step1') || sessionStorage.getItem('signup_data') || '{}');
         const isNewUser = result.isNewUser === true || (isSignup === true && result.isNewUser !== false) || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
 
         console.log("✅ OTP verified. isNewUser =", isNewUser);

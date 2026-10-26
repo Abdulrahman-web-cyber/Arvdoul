@@ -57,9 +57,9 @@ const ProfileMetricsGrid = memo(({
   const canShowFollowing = capabilities?.canViewFollowing ?? true;
   const canShowEconomic = capabilities?.canViewEconomicStatus ?? (isOwner || Boolean(profile?.coins !== undefined && profile?.coins !== null));
 
-  // Growth percentages from analytics or realistic positive growth
-  const followerGrowth = analytics?.followerGrowth ?? 12.6;
-  const viewsGrowth = analytics?.viewsGrowth ?? 18.4;
+  // Growth percentages strictly from analytics (no fake default growth numbers)
+  const followerGrowth = analytics?.followerGrowth ? Number(analytics.followerGrowth) : null;
+  const viewsGrowth = analytics?.viewsGrowth ? Number(analytics.viewsGrowth) : null;
 
   const stats = [
     {
@@ -106,8 +106,8 @@ const ProfileMetricsGrid = memo(({
       key: isOwner ? 'views' : 'likes',
       label: isOwner ? 'Profile Views' : 'Likes',
       value: isOwner 
-        ? formatNumber(profileViews > 0 ? profileViews : 2180000) 
-        : formatNumber(likesCount > 0 ? likesCount : 2100000),
+        ? formatNumber(profileViews) 
+        : formatNumber(likesCount),
       icon: isOwner ? Eye : Heart,
       iconColor: isOwner ? 'text-[#00F0FF] dark:text-[#38BDF8]' : 'text-pink-500 dark:text-pink-400',
       iconBg: isDark 

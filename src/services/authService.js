@@ -205,7 +205,10 @@ class ProductionAuthService {
 
   _getSignupStep1Data() {
     try {
-      const raw = sessionStorage.getItem('signup_step1');
+      const raw = sessionStorage.getItem('signup_step1') || 
+                  localStorage.getItem('signup_step1') || 
+                  sessionStorage.getItem('signup_data') || 
+                  localStorage.getItem('signup_data');
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -601,7 +604,7 @@ class ProductionAuthService {
     }
   }
 
-  async verifyPhoneOTP(verificationId, otp) {
+  async verifyPhoneOTP(verificationId, otp, optionalStep1Data = null) {
     try {
       await this.initialize();
       const { PhoneAuthProvider, signInWithCredential, updateProfile } = await import('firebase/auth');
@@ -627,12 +630,12 @@ class ProductionAuthService {
 
       const isNewUser = !profile;
 
-      const step1 = this._getSignupStep1Data();
+      const step1 = optionalStep1Data || this._getSignupStep1Data();
       const firstName = (step1.firstName || '').trim();
       const lastName = (step1.lastName || '').trim();
       const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
 
-      let displayName = user.displayName;
+      let displayName = step1DisplayName || user.displayName;
       if (!displayName || /^User\s+\d{2,6}$/i.test(displayName) || displayName === 'Mobile' || displayName === user.phoneNumber) {
         displayName = step1DisplayName || `User ${user.phoneNumber ? user.phoneNumber.slice(-4) : 'Mobile'}`;
       }
@@ -686,7 +689,7 @@ class ProductionAuthService {
       }
 
       try {
-        if (!user.displayName && displayName) {
+        if (displayName && user.displayName !== displayName) {
           await updateProfile(user, { displayName });
         }
       } catch (e) {}
@@ -697,7 +700,7 @@ class ProductionAuthService {
         uid: user.uid,
         userId: user.uid,
         phoneNumber: user.phoneNumber,
-        displayName: user.displayName || displayName,
+        displayName: displayName || user.displayName,
         photoURL: user.photoURL || profile?.photoURL || null,
         isNewUser,
         authProvider: 'phone',

@@ -140,10 +140,10 @@ export const ProfileLevelProgressCard = memo(({
     );
   }
 
-  const currentLevel = levelInfo.level || 24;
-  const currentXp = levelInfo.xpIntoLevel ?? levelInfo.totalXp ?? 12540;
-  const nextXp = levelInfo.nextLevelXp ?? 20000;
-  const progressPercent = Math.min(100, Math.max(5, Math.round(levelInfo.progress ?? 62)));
+  const currentLevel = levelInfo.level;
+  const currentXp = levelInfo.xpIntoLevel ?? levelInfo.totalXp ?? 0;
+  const nextXp = levelInfo.nextLevelXp ?? 100;
+  const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
 
   return (
     <div className={cn(
@@ -257,12 +257,12 @@ export const ProfileHeroSection = memo(({
   const [copiedHandle, setCopiedHandle] = useState(false);
 
   const profileUid = profile?.id || profile?.uid || 'user';
-  const displayName = profile?.displayName || profile?.name || 'Abdulrahman';
-  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || 'abdulrahman';
+  const displayName = profile?.displayName || profile?.name || 'User';
+  const username = pickHandle([profile?.username, profile?.handle]) || deriveHandle(displayName) || 'user';
   const avatarUrl = getSafeAvatarUrl(profile?.photoURL, displayName, profileUid);
 
-  // Status flags
-  const isVerified = Boolean(profile?.isVerified || profile?.verified !== false);
+  // Status flags strictly derived from profile without fabricated defaults
+  const isVerified = Boolean(profile?.isVerified === true);
   const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
@@ -271,15 +271,15 @@ export const ProfileHeroSection = memo(({
     if (profile?.isRoyal || profile?.royalFamily) return true;
     const royalCheck = getRoyalEligibility('duke', {
       level: profile?.level || level,
-      activeDays: profile?.activeDaysCount || 180,
-      reputationScore: profile?.reputationScore || 90,
-      contributionScore: profile?.contributionScore || 85,
-      influenceScore: profile?.influenceScore || 80,
+      activeDays: profile?.activeDaysCount || 0,
+      reputationScore: profile?.reputationScore || 0,
+      contributionScore: profile?.contributionScore || 0,
+      influenceScore: profile?.influenceScore || 0,
     });
     return royalCheck.eligible;
   }, [profile, level]);
 
-  const isOnline = Boolean(profile?.presence?.state === 'online' || profile?.isOnline !== false);
+  const isOnline = Boolean(profile?.presence?.state === 'online' || profile?.isOnline === true);
 
   // Copy handle to clipboard
   const handleCopyHandle = useCallback(async (e) => {
@@ -294,12 +294,12 @@ export const ProfileHeroSection = memo(({
     }
   }, [username]);
 
-  // Bio and Tagline
-  const bio = profile?.bio || 'Building digital experiences that matter.';
-  const tagline = profile?.tagline || 'Designer • Developer • Dreamer ✨';
-  const location = profile?.location || 'Dubai, UAE';
-  const website = profile?.website || 'arvdoul.com';
-  const joinedDate = formatJoinedDate(profile?.createdAt);
+  // Real Bio, Tagline, Location, Website without placeholder stubs
+  const bio = (typeof profile?.bio === 'string' && profile.bio.trim()) ? profile.bio.trim() : (typeof profile?.about === 'string' ? profile.about.trim() : '');
+  const tagline = (typeof profile?.tagline === 'string' && profile.tagline.trim()) ? profile.tagline.trim() : '';
+  const location = (typeof profile?.location === 'string' && profile.location.trim()) ? profile.location.trim() : '';
+  const website = (typeof profile?.website === 'string' && profile.website.trim()) ? profile.website.trim() : '';
+  const joinedDate = profile?.createdAt ? formatJoinedDate(profile.createdAt) : null;
 
   return (
     <div className={cn(
@@ -308,100 +308,7 @@ export const ProfileHeroSection = memo(({
         ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
         : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
-      {/* 1. Top In-Screen App Bar Navigation */}
-      <div className="flex items-center justify-between">
-        {/* Left Action Button */}
-        {isOwner ? (
-          <button
-            type="button"
-            onClick={() => navigate('/settings')}
-            className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
-              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-            )}
-            title="User Settings"
-            aria-label="User Settings"
-          >
-            <User className="w-5 h-5" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onBack || (() => navigate(-1))}
-            className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
-              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-            )}
-            title="Go Back"
-            aria-label="Go Back"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-        )}
-
-        {/* Right Action Buttons */}
-        <div className="flex items-center gap-2">
-          {/* Notifications Bell */}
-          <button
-            type="button"
-            onClick={() => navigate('/notifications')}
-            className={cn(
-              "relative w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
-              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-            )}
-            title="Notifications"
-            aria-label="Notifications"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-purple-500 animate-pulse ring-2 ring-white dark:ring-[#0b1021]" />
-          </button>
-
-          {/* QR Code / Share Button */}
-          {isOwner ? (
-            <button
-              type="button"
-              onClick={onOpenQrCode}
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
-                isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              )}
-              title="Show QR Code"
-              aria-label="Show QR Code"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onShare}
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
-                isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-              )}
-              title="Share Profile"
-              aria-label="Share Profile"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* More Options Button */}
-          <button
-            type="button"
-            onClick={onOpenOptions}
-            className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer",
-              isDark ? "bg-white/5 hover:bg-white/10 text-slate-200" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-            )}
-            title="More Options"
-            aria-label="More Options"
-          >
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Main Hero Profile Area (Avatar + Info + Level Card) */}
+      {/* Main Hero Profile Area (Avatar + Info + Dedicated Level Card) */}
       <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
         {/* Left Sub-row: Avatar + Details */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 min-w-0 flex-1">
@@ -528,20 +435,33 @@ export const ProfileHeroSection = memo(({
 
             {/* Bio lines */}
             <div className="space-y-0.5 pt-1 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
-              <p className="leading-snug">{bio}</p>
-              <p className="text-slate-500 dark:text-slate-400 leading-snug">{tagline}</p>
+              {bio ? (
+                <p className="leading-snug">{bio}</p>
+              ) : isOwner ? (
+                <button
+                  type="button"
+                  onClick={onEditProfile || (() => navigate('/profile/edit'))}
+                  className="text-xs text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Add a bio to your profile</span>
+                </button>
+              ) : null}
+              {tagline ? (
+                <p className="text-slate-500 dark:text-slate-400 leading-snug">{tagline}</p>
+              ) : null}
             </div>
 
-            {/* Meta Row: Location, Website, Joined Date */}
+            {/* Meta Row: Location, Website, Joined Date (rendered only if real data exists) */}
             <div className="flex items-center gap-3 sm:gap-4 flex-wrap pt-1 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
-              {location && (
+              {location ? (
                 <div className="flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-slate-400" />
                   <span>{location}</span>
                 </div>
-              )}
-              {location && website && <span>•</span>}
-              {website && (
+              ) : null}
+              {location && website ? <span>•</span> : null}
+              {website ? (
                 <a
                   href={website.startsWith('http') ? website : `https://${website}`}
                   target="_blank"
@@ -551,20 +471,22 @@ export const ProfileHeroSection = memo(({
                   <Globe className="w-3.5 h-3.5" />
                   <span>{website.replace(/^https?:\/\//, '')}</span>
                 </a>
-              )}
-              {(location || website) && <span>•</span>}
-              <div className="flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>{joinedDate}</span>
-              </div>
+              ) : null}
+              {(location || website) && joinedDate ? <span>•</span> : null}
+              {joinedDate ? (
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{joinedDate}</span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
 
         {/* Right Sub-row: Dedicated Level Card & Passport */}
         <ProfileLevelProgressCard
-          level={level ?? profile?.level ?? 24}
-          experience={profile?.experience ?? 12540}
+          level={profile?.level ?? level ?? null}
+          experience={profile?.experience ?? null}
           isOwner={isOwner}
           isDark={isDark}
           userId={profileUid}

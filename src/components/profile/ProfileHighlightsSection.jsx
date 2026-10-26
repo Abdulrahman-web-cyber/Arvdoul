@@ -15,21 +15,6 @@ import { Plus, ChevronRight, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import storyService from '../../services/storyService';
 
-// Default highlight topics with curated theme imagery for display when user hasn't created custom highlights
-const DEFAULT_CURATED_HIGHLIGHTS = [
-  { id: 'hl-1', title: 'Travel', cover: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-2', title: 'Work', cover: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-3', title: 'Gaming', cover: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-4', title: 'Photography', cover: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-5', title: 'Life', cover: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-6', title: 'Achievements', cover: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-7', title: 'Studio', cover: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-8', title: 'Cars', cover: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-9', title: 'Designs', cover: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-10', title: 'Milestones', cover: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&auto=format&fit=crop&q=80' },
-  { id: 'hl-11', title: 'Memories', cover: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=200&auto=format&fit=crop&q=80' },
-];
-
 const ProfileHighlightsSection = memo(({
   highlights = [],
   userId,
@@ -67,24 +52,29 @@ const ProfileHighlightsSection = memo(({
     return () => { isMounted = false; };
   }, [userId, isOwner]);
 
-  // Combine passed props, fetched real highlights, or curated defaults
+  // Combine passed props or fetched real highlights (strictly NO fake Unsplash images)
   const items = React.useMemo(() => {
     if (realHighlights.length > 0) {
       return realHighlights.map(h => ({
         id: h.id,
         title: h.title || 'Moment',
-        cover: h.cover || h.coverUrl || h.thumbnailUrl,
+        cover: h.cover || h.coverUrl || h.thumbnailUrl || h.mediaURL,
       }));
     }
     if (Array.isArray(highlights) && highlights.length > 0) {
       return highlights.map(h => ({
         id: h.id,
         title: h.title || 'Highlight',
-        cover: h.cover || h.coverUrl || h.thumbnailUrl,
+        cover: h.cover || h.coverUrl || h.thumbnailUrl || h.mediaURL,
       }));
     }
-    return DEFAULT_CURATED_HIGHLIGHTS;
+    return [];
   }, [realHighlights, highlights]);
+
+  // If a visitor is viewing and there are no highlights, don't show an empty or fake box
+  if (!isOwner && items.length === 0) {
+    return null;
+  }
 
   const handleItemClick = (item) => {
     if (onHighlightPress) {

@@ -273,51 +273,94 @@ class ProfessionalUserService {
 
   async generateUniqueUsername(baseName, excludeUserId = null) {
     try {
-      let clean = (baseName || '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 14);
-      if (clean.length < 3) clean = 'user';
+      const raw = String(baseName || '').trim().toLowerCase();
+      const isDigitsOnly = /^\+?\d+$/.test(raw) || /^user\s*\d*$/i.test(raw);
+      
+      let candidatePool = [];
 
-      // 1. Check clean base name first
-      const baseCheck = await this.checkUsernameAvailability(clean, excludeUserId);
-      if (baseCheck.available) return clean.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
+      if (isDigitsOnly || raw.length === 0) {
+        // High quality, brand-aligned creative roots instead of raw phone digits or ugly 'user_1234'
+        const CREATIVE_ROOTS = ['arv', 'vibe', 'nova', 'echo', 'pulse', 'spark', 'flux', 'zenith', 'atlas', 'lunar'];
+        const root = CREATIVE_ROOTS[Math.floor(Math.random() * CREATIVE_ROOTS.length)];
+        const rand2 = Math.floor(10 + Math.random() * 89);
+        const rand3 = Math.floor(100 + Math.random() * 899);
+        const randHex = Math.random().toString(36).substring(2, 5);
+        candidatePool = [
+          `${root}_${rand3}`,
+          `${root}${rand3}`,
+          `${root}_${randHex}`,
+          `the_${root}_${rand2}`,
+          `${root}_official_${rand2}`,
+          `${root}.${rand3}`
+        ];
+      } else {
+        // Split names (e.g. "Jane Doe" or "jane.doe" or "jane_doe")
+        const words = raw.split(/[\s._-]+/).filter(w => w.length > 0 && !/^\d+$/.test(w));
+        const rand2 = Math.floor(10 + Math.random() * 89);
+        const rand3 = Math.floor(100 + Math.random() * 899);
+        const randHex = Math.random().toString(36).substring(2, 5);
 
-      // 2. Build high-entropy attractive candidates
-      const rand2 = Math.floor(10 + Math.random() * 89);
-      const rand3 = Math.floor(100 + Math.random() * 899);
-      const ts3 = Date.now().toString(36).slice(-3);
-      const randHex = Math.random().toString(36).substring(2, 5);
+        if (words.length >= 2) {
+          const first = words[0].replace(/[^a-z0-9]/g, '').slice(0, 10);
+          const last = words[1].replace(/[^a-z0-9]/g, '').slice(0, 10);
+          if (first && last) {
+            candidatePool = [
+              `${first}_${last}`,
+              `${first}${last}`,
+              `${first}.${last}`,
+              `the_${first}${last}`,
+              `${first}_${last.charAt(0)}`,
+              `${first.charAt(0)}_${last}`,
+              `${first}_${last}_${rand2}`,
+              `${first}${last}${rand2}`,
+              `${first}_${last}_official`,
+              `real_${first}_${last}`,
+              `${first}_${last}_${randHex}`
+            ];
+          }
+        }
+        
+        if (candidatePool.length === 0) {
+          let clean = raw.replace(/[^a-z0-9_.]/g, '').replace(/^[._]+|[._]+$/g, '').slice(0, 14);
+          if (clean.length < 3) clean = 'member';
+          candidatePool = [
+            clean,
+            `${clean}_${rand2}`,
+            `${clean}${rand2}`,
+            `${clean}_${rand3}`,
+            `${clean}${rand3}`,
+            `the_${clean}`,
+            `${clean}_official`,
+            `${clean}_pro`,
+            `${clean}_vibe`,
+            `${clean}.${rand2}`,
+            `${clean}_${randHex}`
+          ];
+        }
+      }
 
-      const candidates = [
-        `${clean}_${rand2}`,
-        `${clean}${rand2}`,
-        `${clean}_${rand3}`,
-        `${clean}${rand3}`,
-        `${clean}_${ts3}`,
-        `${clean}.${rand2}`,
-        `the_${clean}`,
-        `${clean}_${randHex}`,
-        `${clean}_pro`,
-        `${clean}_official`
-      ].filter(c => c.length >= 3 && c.length <= USER_CONFIG.DEFAULT_USERNAME_LENGTH);
+      // Filter and sanitize every candidate
+      const validCandidates = Array.from(new Set(candidatePool))
+        .map(c => c.toLowerCase().replace(/[^a-z0-9._]/g, '').replace(/^[._]+|[._]+$/g, ''))
+        .filter(c => c.length >= 3 && c.length <= USER_CONFIG.DEFAULT_USERNAME_LENGTH && /^[a-z0-9][a-z0-9._]*[a-z0-9]$/.test(c) && !c.includes('..') && !c.includes('__'));
 
-      // 3. Parallel availability check for all candidates
+      // Check in parallel
       const results = await Promise.all(
-        candidates.map(async (candidate) => {
+        validCandidates.map(async (candidate) => {
           const res = await this.checkUsernameAvailability(candidate, excludeUserId);
           return { candidate, available: res.available };
         })
       );
 
       const found = results.find(r => r.available);
-      if (found) {
-        return found.candidate;
-      }
+      if (found) return found.candidate;
 
-      // 4. Guaranteed instant fallback
-      const guaranteed = `${clean}_${Date.now().toString(36).slice(-4)}`.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
-      return guaranteed;
+      // Guaranteed fallback
+      const basePrefix = validCandidates[0] ? validCandidates[0].slice(0, 10) : 'arv_user';
+      return `${basePrefix}_${Date.now().toString(36).slice(-4)}${Math.random().toString(36).substring(2, 4)}`.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
     } catch (error) {
       logger.error('Username generation failed, using instant fallback:', error);
-      const emergency = `user_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).substring(2, 5)}`;
+      const emergency = `arv_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).substring(2, 5)}`;
       return emergency.slice(0, USER_CONFIG.DEFAULT_USERNAME_LENGTH);
     }
   }

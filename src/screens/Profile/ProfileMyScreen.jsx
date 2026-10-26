@@ -441,6 +441,7 @@ export default function ProfileMyScreen() {
               {activeTab === 'posts' && (
                 <ProfilePinnedPosts
                   posts={posts}
+                  isOwner={viewAs === 'owner'}
                   theme={theme}
                   onPostClick={(post) => navigate(`/post/${post.id}`)}
                 />
