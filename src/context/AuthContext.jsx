@@ -197,7 +197,7 @@ const syncUserWithAppStore = (user, userProfile, setCurrentUser) => {
     isProfileComplete,
     accountStatus: userProfile?.accountStatus || 'active',
     coins: userProfile?.coins || 0,
-    level: userProfile?.level || 1,
+    level: userProfile?.level !== undefined ? userProfile.level : null,
     postCount: userProfile?.postCount || 0,
     videoCount: userProfile?.videoCount || 0,
     savedCount: userProfile?.savedCount || 0,
@@ -508,12 +508,41 @@ export function AuthProvider({ children }) {
               return;
             }
 
-            const isComplete = computeProfileComplete(firebaseUser, profile, { profileResolved: true });
-            const onboarding = computeNeedsOnboarding({
+            // Check if Step 1 has personal details from current signup flow
+            let step1Data = null;
+            try {
+              const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
+                          sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
+              if (raw) step1Data = JSON.parse(raw);
+            } catch (e) {}
+
+            const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
+            const step1FullName = (step1Data?.firstName && step1Data?.lastName)
+              ? `${step1Data.firstName} ${step1Data.lastName}`.trim()
+              : (step1Data?.firstName || step1Data?.lastName || '');
+
+            // If profile has a placeholder name (e.g. User 1234 or Mobile) and step 1 has real name, heal it immediately
+            const isPlaceholderName = !profile.displayName || /^User\s+\d{2,6}$/i.test(profile.displayName) || profile.displayName === 'Mobile' || profile.displayName === profile.phoneNumber;
+            if (hasStep1Names && isPlaceholderName && step1FullName) {
+              profile.displayName = step1FullName;
+              profile.firstName = step1Data.firstName || '';
+              profile.lastName = step1Data.lastName || '';
+              userService.updateUserProfile(uid, {
+                displayName: step1FullName,
+                firstName: step1Data.firstName || '',
+                lastName: step1Data.lastName || '',
+              }).catch(() => {});
+            }
+
+            const isComplete = hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true });
+            const onboarding = hasStep1Names ? true : computeNeedsOnboarding({
               authUser: firebaseUser,
               profile,
               profileResolved: true,
             });
+            if (hasStep1Names) {
+              markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
+            }
             if (isComplete && !onboarding && profile.isProfileComplete !== true) {
               userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
             }
@@ -522,20 +551,41 @@ export function AuthProvider({ children }) {
               setAuthState(onboarding ? AuthState.PROFILE_INCOMPLETE : AuthState.AUTHENTICATED);
             }
           } else {
-            const onboarding = !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true;
-            const basicName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
-            const fallbackUsername = (firebaseUser.email?.split('@')[0] || firebaseUser.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'arvdoul_member').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+            let step1Data = null;
+            try {
+              const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
+                          sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
+              if (raw) step1Data = JSON.parse(raw);
+            } catch (e) {}
+
+            const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
+            const step1FullName = (step1Data?.firstName && step1Data?.lastName)
+              ? `${step1Data.firstName} ${step1Data.lastName}`.trim()
+              : (step1Data?.firstName || step1Data?.lastName || '');
+
+            const onboarding = hasStep1Names || !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true;
+            if (onboarding) {
+              markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
+            }
+
+            const basicName = step1FullName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
+            let candidateBase = step1FullName
+              ? step1FullName.toLowerCase().replace(/[^a-z0-9_]/g, '')
+              : (firebaseUser.email?.split('@')[0] || firebaseUser.displayName?.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'arvdoul_member');
+            const fallbackUsername = (candidateBase || 'member').replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
             const fallbackProfile = {
               uid: firebaseUser.uid,
               displayName: basicName,
+              firstName: step1Data?.firstName || '',
+              lastName: step1Data?.lastName || '',
               username: fallbackUsername,
               email: firebaseUser.email || '',
               phoneNumber: firebaseUser.phoneNumber || '',
               photoURL: firebaseUser.photoURL || null,
-              authProvider: firebaseUser.providerData?.[0]?.providerId || 'email',
+              authProvider: firebaseUser.providerData?.[0]?.providerId || 'phone',
               isProfileComplete: !onboarding,
               coins: 0,
-              level: 1,
+              level: null,
               accountStatus: 'active'
             };
             setUserProfile(fallbackProfile);

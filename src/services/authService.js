@@ -623,17 +623,26 @@ class ProductionAuthService {
       const user = userCredential.user;
       logger.warn('// Phone verification successful:', user.uid);
 
+      const step1 = optionalStep1Data || this._getSignupStep1Data();
+      const firstName = (step1.firstName || '').trim();
+      const lastName = (step1.lastName || '').trim();
+      const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
+      const hasStep1Names = Boolean(firstName || lastName);
+
+      // If user came through signup flow with step 1 names, mark onboarding required immediately
+      if (hasStep1Names) {
+        try {
+          const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
+          markOnboardingRequired(user.uid, { method: 'phone', isSignup: true, step1Data: step1 });
+        } catch (e) {}
+      }
+
       let profile = null;
       try {
         profile = await getUserProfile(user.uid);
       } catch (e) {}
 
       const isNewUser = !profile;
-
-      const step1 = optionalStep1Data || this._getSignupStep1Data();
-      const firstName = (step1.firstName || '').trim();
-      const lastName = (step1.lastName || '').trim();
-      const step1DisplayName = (firstName && lastName) ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
 
       let displayName = step1DisplayName || user.displayName;
       if (!displayName || /^User\s+\d{2,6}$/i.test(displayName) || displayName === 'Mobile' || displayName === user.phoneNumber) {
@@ -686,6 +695,23 @@ class ProductionAuthService {
             isProfileComplete: false
           });
         }
+      } else if (hasStep1Names) {
+        // Heal existing profile or stub document with real names from Step 1
+        try {
+          const { updateUserProfile } = await import('./userService.js');
+          await updateUserProfile(user.uid, {
+            displayName,
+            firstName,
+            lastName,
+            gender: step1.gender || profile?.gender || '',
+            dob: step1.dob || profile?.dob || {},
+            isProfileComplete: false
+          });
+          profile = await getUserProfile(user.uid);
+          logger.warn('// Profile updated with Step 1 names for Phone user:', user.uid);
+        } catch (upErr) {
+          logger.warn('Could not update profile with Step 1 names:', upErr?.message);
+        }
       }
 
       try {
@@ -694,7 +720,8 @@ class ProductionAuthService {
         }
       } catch (e) {}
 
-      const isComplete = profile ? (profile.isProfileComplete !== false) : false;
+      // If user came with step 1 names, profile completion in setup-profile is strictly required
+      const isComplete = hasStep1Names ? false : (profile ? (profile.isProfileComplete !== false) : false);
 
       const userData = {
         uid: user.uid,
@@ -702,7 +729,7 @@ class ProductionAuthService {
         phoneNumber: user.phoneNumber,
         displayName: displayName || user.displayName,
         photoURL: user.photoURL || profile?.photoURL || null,
-        isNewUser,
+        isNewUser: isNewUser || hasStep1Names,
         authProvider: 'phone',
         isProfileComplete: isComplete,
         requiresProfileCompletion: !isComplete,
@@ -861,6 +888,7 @@ class ProductionAuthService {
           displayName: user.displayName || profile?.displayName || 'User',
           photoURL: user.photoURL || profile?.photoURL || null,
           isNewUser: isAccountNew,
+          hasExistingProfile: Boolean(profile && !profileCreated),
           requiresProfileCompletion: !isComplete,
           authProvider: 'google',
           coins: profile?.coins,
@@ -868,7 +896,8 @@ class ProductionAuthService {
           isProfileComplete: isComplete,
           username: profile?.username
         },
-        isNewUser: isAccountNew
+        isNewUser: isAccountNew,
+        hasExistingProfile: Boolean(profile && !profileCreated)
       };
     } catch (error) {
       logger.error('❌ Google authentication failed:', error);

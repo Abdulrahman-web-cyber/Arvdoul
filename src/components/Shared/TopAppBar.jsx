@@ -550,6 +550,7 @@ export const TopAppBar = ({
                         size={36}
                         theme={theme}
                         animate={true}
+                        showPlate={false}
                         className="group-hover:scale-105 group-active:scale-95 transition-transform"
                       />
                       {!isOnline && (

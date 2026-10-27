@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="av-brand-gradient" gradientUnits="userSpaceOnUse" x1="60" y1="96" x2="440" y2="446">
+      <stop offset="0" stop-color="#BD03F6" />
+      <stop offset="0.2" stop-color="#A508F9" />
+      <stop offset="0.3" stop-color="#9210F8" />
+      <stop offset="0.4" stop-color="#7A1AF8" />
+      <stop offset="0.5" stop-color="#5A25FA" />
+      <stop offset="0.6" stop-color="#3434FA" />
+      <stop offset="0.7" stop-color="#1048FA" />
+      <stop offset="0.8" stop-color="#0160FB" />
+      <stop offset="1" stop-color="#0074F8" />
+    </linearGradient>
+    <filter id="av-cast-shadow" x="-15%" y="-15%" width="130%" height="135%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="9" result="b1" />
+      <feOffset in="b1" dy="8" result="o1" />
+      <feFlood flood-color="#3B44E0" flood-opacity="0.26" />
+      <feComposite in2="o1" operator="in" result="wide" />
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.8" result="b2" />
+      <feOffset in="b2" dy="2.5" result="o2" />
+      <feFlood flood-color="#2A2FA0" flood-opacity="0.30" />
+      <feComposite in2="o2" operator="in" result="tight" />
+      <feMerge>
+        <feMergeNode in="wide" />
+        <feMergeNode in="tight" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <g fill="none" stroke="url(#av-brand-gradient)" stroke-linecap="round" stroke-linejoin="round" filter="url(#av-cast-shadow)">
+    <path d="M328.2 446.3 A197 197 0 1 1 390.3 407.1" stroke-width="39" />
+    <path d="M154 352 L226.4 192 Q256.5 119 286.6 192 L386 408" stroke-width="47.5" />
+    <path d="M154 352 Q256 257 358 352" stroke-width="41" />
+  </g>
+</svg>

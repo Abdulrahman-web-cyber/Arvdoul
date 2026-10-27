@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { clearOnboardingRequired } from "../utils/profileCompletion.js";
+import { clearOnboardingRequired, markOnboardingRequired, getOnboardingSession } from "../utils/profileCompletion.js";
 
 import {
   createUserProfile,
@@ -483,11 +483,21 @@ export default function SetupProfile() {
 
   useEffect(() => {
     if (!user || !profileResolved) return;
-    if (!needsOnboarding) {
+    const isExplicitSignup = Boolean(
+      location.state?.fromVerification ||
+      location.state?.isNewUser ||
+      signupData?.firstName ||
+      step1FromState?.firstName ||
+      getOnboardingSession(user.uid)
+    );
+    if (isExplicitSignup) {
+      markOnboardingRequired(user.uid, { method: location.state?.method || 'phone', isSignup: true });
+    }
+    if (!needsOnboarding && !isExplicitSignup) {
       console.log("Profile already complete, redirecting to /home");
       navigate("/home", { replace: true });
     }
-  }, [user, needsOnboarding, profileResolved, navigate]);
+  }, [user, needsOnboarding, profileResolved, navigate, location.state, signupData, step1FromState]);
 
   const signupData = useMemo(() => {
     try {
@@ -517,7 +527,8 @@ export default function SetupProfile() {
   const buildDisplayName = useCallback(() => {
     const getStoredStep1 = () => {
       try {
-        const s = sessionStorage.getItem("signup_step1") || localStorage.getItem("signup_step1");
+        const s = sessionStorage.getItem("signup_step1") || localStorage.getItem("signup_step1") ||
+                  sessionStorage.getItem("signup_data") || localStorage.getItem("signup_data");
         return s ? JSON.parse(s) : {};
       } catch { return {}; }
     };
@@ -532,17 +543,18 @@ export default function SetupProfile() {
     }
     if (step1.firstName) return step1.firstName.trim();
     if (step1.lastName) return step1.lastName.trim();
-    if (stateData.displayName && !/^User\s+\d{2,6}$/i.test(stateData.displayName)) return stateData.displayName;
-    if (user?.displayName && !/^User\s+\d{2,6}$/i.test(user.displayName)) return user.displayName;
+    if (stateData.displayName && !/^User\s+\d{2,6}$/i.test(stateData.displayName) && stateData.displayName !== 'Mobile') return stateData.displayName;
+    if (user?.displayName && !/^User\s+\d{2,6}$/i.test(user.displayName) && user.displayName !== 'Mobile') return user.displayName;
     if (user?.email) return user.email.split('@')[0];
     return "";
   }, [signupData, step1FromState, stateData, user]);
 
   const getInitials = useCallback(() => {
-    const displayName = buildDisplayName();
+    const resolvedDisplayName = buildDisplayName();
     const getStoredStep1 = () => {
       try {
-        const s = sessionStorage.getItem("signup_step1") || localStorage.getItem("signup_step1");
+        const s = sessionStorage.getItem("signup_step1") || localStorage.getItem("signup_step1") ||
+                  sessionStorage.getItem("signup_data") || localStorage.getItem("signup_data");
         return s ? JSON.parse(s) : {};
       } catch { return {}; }
     };
@@ -561,41 +573,53 @@ export default function SetupProfile() {
     } else if (step1.firstName) {
       const nameBase = `${step1.firstName}${step1.lastName ? '_' + step1.lastName : ''}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
       if (nameBase.length >= 3) username = nameBase.slice(0, 20);
-    } else if (displayName && !/^User\s+\d{2,6}$/i.test(displayName)) {
-      const nameBase = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    } else if (resolvedDisplayName && !/^User\s+\d{2,6}$/i.test(resolvedDisplayName) && resolvedDisplayName !== 'Mobile') {
+      const nameBase = resolvedDisplayName.toLowerCase().replace(/[^a-z0-9_]/g, '');
       if (nameBase.length >= 3) username = nameBase.slice(0, 20);
     } else if (user?.email) {
       username = user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
     }
 
     const avatar = signupData.photoURL || stateData.photoURL || user?.photoURL || "";
-    const authProvider = signupData.authProvider || stateData.authProvider || stateMethod || user?.authProvider || "email";
+    const authProvider = signupData.authProvider || stateData.authProvider || stateMethod || user?.authProvider || "phone";
     const identifier = signupData.phoneNumber || signupData.email || stateData.phoneNumber || stateData.email || user?.phoneNumber || user?.email || "";
-    return { displayName, username, avatar, authProvider, identifier };
+    return { displayName: resolvedDisplayName, username, avatar, authProvider, identifier };
   }, [buildDisplayName, signupData, stateData, stateMethod, step1FromState, user]);
 
-  const [displayName, setDisplayName] = useState(() => getInitials().displayName);
+  const [displayName, setDisplayName] = useState(() => buildDisplayName());
   const [username, setUsername] = useState(() => getInitials().username);
   const [avatarUrl, setAvatarUrl] = useState(() => getInitials().avatar);
   const [authProvider, setAuthProvider] = useState(() => getInitials().authProvider);
   const [identifier, setIdentifier] = useState(() => getInitials().identifier);
   const [bio, setBio] = useState(() => signupData.bio || stateData.bio || user?.bio || "");
+  const [website, setWebsite] = useState(() => signupData.website || stateData.website || user?.website || "");
   const [loading, setLoading] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
 
   const initialLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!initialLoadedRef.current && (user?.uid || signupData.firstName || stateData.displayName)) {
+    if (!initialLoadedRef.current && (user?.uid || signupData.firstName || stateData.displayName || step1FromState.firstName)) {
       initialLoadedRef.current = true;
       const initial = getInitials();
-      if (!displayName || displayName === "Arvdoul User") setDisplayName(initial.displayName);
-      if (!username || username.startsWith("user_") || /^\+?\d+$/.test(username)) setUsername(initial.username);
+      const resolvedName = buildDisplayName();
+      if (!displayName || displayName === "Arvdoul User" || /^User\s+\d{2,6}$/i.test(displayName) || displayName === 'Mobile') {
+        if (resolvedName) setDisplayName(resolvedName);
+      }
+      if (!username || username.startsWith("user_") || /^\+?\d+$/.test(username)) {
+        if (initial.username) setUsername(initial.username);
+      }
       if (!avatarUrl && initial.avatar) setAvatarUrl(initial.avatar);
       if (initial.authProvider) setAuthProvider(initial.authProvider);
       if (initial.identifier) setIdentifier(initial.identifier);
+      if (!bio && (signupData.bio || stateData.bio || user?.bio)) {
+        setBio(signupData.bio || stateData.bio || user?.bio);
+      }
+      if (!website && (signupData.website || stateData.website || user?.website)) {
+        setWebsite(signupData.website || stateData.website || user?.website);
+      }
     }
-  }, [user?.uid, signupData, stateData, getInitials]);
+  }, [user?.uid, signupData, stateData, step1FromState, getInitials, buildDisplayName, displayName, username, avatarUrl, bio, website, user?.bio, user?.website]);
 
   const handleAvatarUpload = (url) => setAvatarUrl(url);
 
@@ -657,12 +681,13 @@ export default function SetupProfile() {
         dob: step1.dob || {},
         username: username.toLowerCase(),
         bio: bio.trim(),
+        website: website.trim(),
         photoURL: finalAvatar,
         email: user?.email || "",
         emailVerified: user?.emailVerified || false,
         phoneNumber: user?.phoneNumber || "",
         isProfileComplete: true,
-        authProvider: authProvider || "email",
+        authProvider: authProvider || "phone",
         accountStatus: "active",
       });
 
@@ -720,12 +745,13 @@ export default function SetupProfile() {
         dob: step1.dob || {},
         username: finalUsername.toLowerCase(),
         bio: bio.trim(),
+        website: website.trim(),
         photoURL: finalAvatar,
         email: user?.email || "",
         emailVerified: user?.emailVerified || false,
         phoneNumber: user?.phoneNumber || "",
         isProfileComplete: true,
-        authProvider: authProvider || "email",
+        authProvider: authProvider || "phone",
         accountStatus: "active",
       });
       if (!result.success) throw new Error(result.error || "Profile creation failed");
@@ -840,6 +866,24 @@ export default function SetupProfile() {
                 <span className="text-xs text-gray-500">{150 - bio.length} chars left</span>
               </div>
               <textarea value={bio} onChange={(e) => setBio(e.target.value.slice(0, 150))} disabled={loading} placeholder="Tell us about yourself..." rows={3} className="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-500 resize-none border-gray-300 dark:border-gray-600 focus:border-indigo-500" />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white">Website / Link (Optional)</label>
+              </div>
+              <input
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                disabled={loading}
+                placeholder="https://yourwebsite.com"
+                className={`w-full px-3 py-2.5 rounded-lg border transition-all duration-200 text-sm ${
+                  resolvedTheme === "dark"
+                    ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-500 focus:border-[#8B1EF3] focus:ring-1 focus:ring-[#8B1EF3]"
+                    : "bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#8B1EF3] focus:ring-1 focus:ring-[#8B1EF3]"
+                } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
+              />
             </div>
 
             <div className="space-y-3">

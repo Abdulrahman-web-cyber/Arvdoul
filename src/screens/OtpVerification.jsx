@@ -6,6 +6,7 @@ import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext.jsx";
 import { useTheme } from "@context/ThemeContext.jsx";
+import { markOnboardingRequired } from "../utils/profileCompletion.js";
 
 const DIGIT_COUNT = 6;
 const INITIAL_COUNTDOWN = 120;
@@ -977,14 +978,19 @@ export default function OTPVerification() {
         triggerHaptic("success");
         setShowSuccess(true);
 
-        const isNewUser = result.isNewUser === true || (isSignup === true && result.isNewUser !== false) || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
+        const hasStep1Personal = Boolean(fallbackStep1?.firstName || fallbackStep1?.lastName);
+        const isSignupFlow = Boolean(isSignup === true || hasStep1Personal);
+        const isNewUser = isSignupFlow || result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
 
-        console.log("✅ OTP verified. isNewUser =", isNewUser);
+        console.log("✅ OTP verified. isSignupFlow =", isSignupFlow, "isNewUser =", isNewUser);
 
-        if (!isNewUser && result.user?.isProfileComplete !== false) {
-          toast.success("Welcome back!");
-          navigate("/home", { replace: true, state: { welcomeMessage: true } });
-        } else {
+        if (isSignupFlow || isNewUser) {
+          const targetUid = result.user?.uid || result.user?.userId || auth.user?.uid;
+          markOnboardingRequired(targetUid, {
+            method: "phone",
+            isSignup: true,
+            step1Data: fallbackStep1,
+          });
           toast.success("Phone verified! Let's set up your profile.");
           navigate("/setup-profile", {
             state: {
@@ -996,6 +1002,9 @@ export default function OTPVerification() {
             },
             replace: true,
           });
+        } else {
+          toast.success("Welcome back!");
+          navigate("/home", { replace: true, state: { welcomeMessage: true } });
         }
       } catch (err) {
         console.error("OTP error:", err);

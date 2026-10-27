@@ -776,10 +776,27 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
         throw new Error(result?.error || "Google authentication failed");
       }
     } catch (error) {
-      if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-        const errorMessage = error.message || "Google authentication failed";
-        setError(errorMessage);
+      let friendlyMessage = "Google authentication failed";
+      const code = error?.code || '';
+      if (code === 'auth/popup-blocked') {
+        friendlyMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this page or sign in with Email/Phone.";
+      } else if (code === 'auth/unauthorized-domain') {
+        friendlyMessage = "This domain is not authorized for Google Sign-In in Firebase. Please sign in with Phone or Email.";
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        friendlyMessage = "Google sign-in was cancelled.";
+      } else if (code === 'auth/network-request-failed') {
+        friendlyMessage = "Network error. Please check your connection and try again.";
+      } else if (code === 'auth/account-exists-with-different-credential') {
+        friendlyMessage = "An account already exists with this email using another sign-in method. Please sign in using that method.";
+      } else if (error?.message) {
+        friendlyMessage = error.message;
+      }
+      
+      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        setError(friendlyMessage);
         onError(error);
+      } else {
+        setError(null);
       }
     } finally {
       setIsAuthenticating(false);
@@ -1131,19 +1148,6 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSuccess = (userInfo) => {
-    if (userInfo?.isNewUser === true && userInfo?.hasExistingProfile === false) {
-      toast.success(`Welcome to Arvdoul, ${userInfo?.displayName || 'there'}! Let's set up your profile.`);
-      navigate('/setup-profile', {
-        replace: true,
-        state: {
-          method: 'google',
-          userData: userInfo,
-          isNewUser: true,
-          fromLogin: true
-        }
-      });
-      return;
-    }
     toast.success(`Welcome back, ${userInfo?.displayName || 'User'}!`);
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo?.displayName, isLogin: true } });

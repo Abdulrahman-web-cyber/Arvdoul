@@ -11,7 +11,7 @@ export const ArvdoulEmblem = memo(({
   className = '', 
   theme = 'auto',
   animate = false,
-  showPlate = true,
+  showPlate = false,
   alt = 'Arvdoul',
 }) => {
   const s = typeof size === 'number' ? `${size}px` : size;
@@ -34,7 +34,8 @@ export const ArvdoulEmblem = memo(({
     : (theme === 'dark' ? 'dark' : (isDarkTheme ? 'dark' : 'light'));
 
   const isLight = effectiveTheme === 'light';
-  const logoSrc = '/logo/logo.svg';
+  // Use exact transparent master logo matching Splash & Intro screens
+  const logoSrc = '/icons/Logo transparent.svg';
 
   return (
     <div 
@@ -45,14 +46,14 @@ export const ArvdoulEmblem = memo(({
           ? isLight
             ? 'rounded-[22%] shadow-[0_2px_8px_rgba(15,23,42,0.08)] ring-1 ring-black/5 overflow-hidden'
             : 'rounded-[22%] shadow-[0_2px_16px_rgba(139,30,243,0.3)] ring-1 ring-white/10 overflow-hidden'
-          : 'overflow-hidden'
+          : 'overflow-visible'
       } ${animate ? 'hover:scale-105 active:scale-95 transition-transform duration-200' : ''} ${className}`}
       style={{ width: s, height: s }}
     >
       <img
         src={logoSrc}
         alt={alt}
-        className="w-full h-full object-contain block select-none pointer-events-none"
+        className="w-full h-full object-contain block select-none pointer-events-none drop-shadow-[0_2px_12px_rgba(139,30,243,0.35)]"
         loading="eager"
         decoding="async"
       />
