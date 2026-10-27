@@ -241,6 +241,8 @@ export const ProfileHeroSection = memo(({
   onAvatarClick,
   onShare,
   onEditProfile,
+  onOpenQuickEdit,
+  onOpenVerificationModal,
   onInsightsPress,
   onFollowToggle,
   isFollowing = false,
@@ -360,10 +362,25 @@ export const ProfileHeroSection = memo(({
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
                 {displayName}
               </h1>
+              {isOwner && onOpenQuickEdit && (
+                <button
+                  type="button"
+                  onClick={() => onOpenQuickEdit('displayName')}
+                  className="p-1 rounded-lg text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer"
+                  title="Edit Display Name"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )}
               {isVerified && (
-                <span title="Verified Account" className="text-blue-500 shrink-0">
+                <button
+                  type="button"
+                  onClick={onOpenVerificationModal}
+                  title="Verified Account • Click to view credentials"
+                  className="text-blue-500 shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                >
                   <BadgeCheck className="w-5 h-5 sm:w-6 sm:h-6 fill-[#8B1EF3] text-white" />
-                </span>
+                </button>
               )}
             </div>
 
@@ -384,17 +401,35 @@ export const ProfileHeroSection = memo(({
 
             {/* Badges Pill Row */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap pt-0.5">
-              {isVerified && (
-                <span className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
-                  isDark
-                    ? "bg-purple-950/40 text-purple-300 border-purple-500/30"
-                    : "bg-purple-50 text-purple-700 border-purple-200"
-                )}>
+              {isVerified ? (
+                <button
+                  type="button"
+                  onClick={onOpenVerificationModal}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border transition-transform hover:scale-105 cursor-pointer",
+                    isDark
+                      ? "bg-purple-950/40 text-purple-300 border-purple-500/30"
+                      : "bg-purple-50 text-purple-700 border-purple-200"
+                  )}
+                >
                   <Check className="w-3 h-3 text-purple-500" />
                   <span>Verified</span>
-                </span>
-              )}
+                </button>
+              ) : isOwner ? (
+                <button
+                  type="button"
+                  onClick={onOpenVerificationModal}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border transition-all hover:scale-105 cursor-pointer",
+                    isDark
+                      ? "bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20"
+                      : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                  )}
+                >
+                  <ShieldCheck className="w-3 h-3 text-purple-500" />
+                  <span>Get Verified</span>
+                </button>
+              ) : null}
 
               {isCreator && (
                 <span className={cn(
@@ -436,11 +471,23 @@ export const ProfileHeroSection = memo(({
             {/* Bio lines */}
             <div className="space-y-0.5 pt-1 text-xs sm:text-sm text-slate-700 dark:text-slate-200">
               {bio ? (
-                <p className="leading-snug">{bio}</p>
+                <div className="flex items-start justify-between gap-2 group/bio">
+                  <p className="leading-snug">{bio}</p>
+                  {isOwner && onOpenQuickEdit && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenQuickEdit('bio')}
+                      className="text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 opacity-60 hover:opacity-100 transition-opacity p-0.5 shrink-0 cursor-pointer"
+                      title="Edit Bio"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               ) : isOwner ? (
                 <button
                   type="button"
-                  onClick={onEditProfile || (() => navigate('/profile/edit'))}
+                  onClick={() => onOpenQuickEdit ? onOpenQuickEdit('bio') : (onEditProfile || (() => navigate('/profile/edit')))}
                   className="text-xs text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
                 >
                   <Edit3 className="w-3 h-3" />
@@ -452,15 +499,38 @@ export const ProfileHeroSection = memo(({
               ) : null}
             </div>
 
-            {/* Meta Row: Location, Website, Joined Date (rendered only if real data exists) */}
+            {/* Meta Row: Location, Website, Joined Date */}
             <div className="flex items-center gap-3 sm:gap-4 flex-wrap pt-1 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
               {location ? (
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{location}</span>
-                </div>
+                isOwner ? (
+                  <button
+                    type="button"
+                    onClick={onOpenLocationSetup}
+                    className="flex items-center gap-1 hover:text-purple-600 dark:hover:text-purple-400 transition cursor-pointer"
+                    title="Change location"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-purple-500" />
+                    <span>{location}</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{location}</span>
+                  </div>
+                )
+              ) : isOwner ? (
+                <button
+                  type="button"
+                  onClick={onOpenLocationSetup}
+                  className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Add location</span>
+                </button>
               ) : null}
-              {location && website ? <span>•</span> : null}
+
+              {(location || isOwner) && website ? <span>•</span> : null}
+
               {website ? (
                 <a
                   href={website.startsWith('http') ? website : `https://${website}`}
@@ -471,8 +541,19 @@ export const ProfileHeroSection = memo(({
                   <Globe className="w-3.5 h-3.5" />
                   <span>{website.replace(/^https?:\/\//, '')}</span>
                 </a>
+              ) : isOwner && onOpenQuickEdit ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenQuickEdit('website')}
+                  className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Add link</span>
+                </button>
               ) : null}
-              {(location || website) && joinedDate ? <span>•</span> : null}
+
+              {(location || website || isOwner) && joinedDate ? <span>•</span> : null}
+
               {joinedDate ? (
                 <div className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />

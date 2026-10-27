@@ -481,6 +481,24 @@ export default function SetupProfile() {
   const { user, updateUserProfile, authService, needsOnboarding, profileResolved } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
+  const stateData = location.state?.userData || {};
+  const stateMethod = location.state?.method || null;
+  const step1FromState = location.state?.step1Data || {};
+
+  const signupData = useMemo(() => {
+    try {
+      const step1Session = sessionStorage.getItem("signup_step1");
+      const step1Local = localStorage.getItem("signup_step1");
+      const signupSession = sessionStorage.getItem("signup_data");
+      const signupLocal = localStorage.getItem("signup_data");
+      const parsedStep1 = step1Session ? JSON.parse(step1Session) : (step1Local ? JSON.parse(step1Local) : {});
+      const parsedSignup = signupSession ? JSON.parse(signupSession) : (signupLocal ? JSON.parse(signupLocal) : {});
+      return { ...parsedStep1, ...parsedSignup };
+    } catch {
+      return {};
+    }
+  }, []);
+
   useEffect(() => {
     if (!user || !profileResolved) return;
     const isExplicitSignup = Boolean(
@@ -498,24 +516,6 @@ export default function SetupProfile() {
       navigate("/home", { replace: true });
     }
   }, [user, needsOnboarding, profileResolved, navigate, location.state, signupData, step1FromState]);
-
-  const signupData = useMemo(() => {
-    try {
-      const step1Session = sessionStorage.getItem("signup_step1");
-      const step1Local = localStorage.getItem("signup_step1");
-      const signupSession = sessionStorage.getItem("signup_data");
-      const signupLocal = localStorage.getItem("signup_data");
-      const parsedStep1 = step1Session ? JSON.parse(step1Session) : (step1Local ? JSON.parse(step1Local) : {});
-      const parsedSignup = signupSession ? JSON.parse(signupSession) : (signupLocal ? JSON.parse(signupLocal) : {});
-      return { ...parsedStep1, ...parsedSignup };
-    } catch {
-      return {};
-    }
-  }, []);
-
-  const stateData = location.state?.userData || {};
-  const stateMethod = location.state?.method || null;
-  const step1FromState = location.state?.step1Data || {};
 
   const resolvedTheme =
     theme === "system"

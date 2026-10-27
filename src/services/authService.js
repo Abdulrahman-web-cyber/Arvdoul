@@ -851,7 +851,7 @@ class ProductionAuthService {
             photoURL: initialPhoto,
             authProvider: 'google',
             emailVerified: true,
-            isProfileComplete: false,
+            isProfileComplete: true,
             accountStatus: 'active'
           });
           profileCreated = true;
@@ -867,16 +867,23 @@ class ProductionAuthService {
             photoURL: user.photoURL,
             authProvider: 'google',
             emailVerified: true,
-            isProfileComplete: false
+            isProfileComplete: true
           });
         }
+      } else if (profile && profile.isProfileComplete === false) {
+        // Heal existing Google profile so user is not stuck on onboarding
+        try {
+          const { updateUserProfile } = await import('./userService.js');
+          await updateUserProfile(user.uid, { isProfileComplete: true });
+          profile.isProfileComplete = true;
+        } catch (healErr) {}
       }
+
+      this.clearOnboardingRequired();
 
       if (profileCreated) {
         this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
       }
-
-      const isComplete = profile ? (profile.isProfileComplete !== false) : false;
 
       return {
         success: true,
@@ -889,11 +896,11 @@ class ProductionAuthService {
           photoURL: user.photoURL || profile?.photoURL || null,
           isNewUser: isAccountNew,
           hasExistingProfile: Boolean(profile && !profileCreated),
-          requiresProfileCompletion: !isComplete,
+          requiresProfileCompletion: false,
           authProvider: 'google',
           coins: profile?.coins,
           level: profile?.level,
-          isProfileComplete: isComplete,
+          isProfileComplete: true,
           username: profile?.username
         },
         isNewUser: isAccountNew,

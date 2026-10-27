@@ -805,8 +805,93 @@ class ProfessionalUserService {
       lastActive: serverTimestamp()
     });
 
+    // Keep Firebase Auth current user in sync if displayName or photoURL was updated
+    try {
+      const firebase = await import('../firebase/firebase.js');
+      const auth = await firebase.getAuthInstance();
+      if (auth?.currentUser && auth.currentUser.uid === userId && (sanitizedUpdates.displayName || sanitizedUpdates.photoURL !== undefined)) {
+        const { updateProfile } = await import('firebase/auth');
+        const authPatch = {};
+        if (sanitizedUpdates.displayName) authPatch.displayName = sanitizedUpdates.displayName;
+        if (sanitizedUpdates.photoURL) authPatch.photoURL = sanitizedUpdates.photoURL;
+        await updateProfile(auth.currentUser, authPatch);
+      }
+    } catch (authSyncErr) {
+      logger.warn('Firebase Auth profile sync failed (non-blocking)', { error: authSyncErr?.message });
+    }
+
     this._invalidateUserCache(userId);
     return { success: true };
+  }
+
+  /**
+   * Submit an application for creator / civic verification.
+   * Stored in creator_verifications collection for admin review.
+   */
+  async submitVerificationApplication(userId, applicationData = {}) {
+    if (!userId) throw new Error('User ID is required');
+    await this._ensureInitialized();
+    const { collection, addDoc, serverTimestamp, query, where, limit, getDocs } = await import('firebase/firestore');
+
+    // Check if an existing pending application exists
+    try {
+      const snap = await getDocs(
+        query(
+          collection(this.firestore, 'creator_verifications'),
+          where('userId', '==', userId),
+          where('status', '==', 'pending'),
+          limit(1)
+        )
+      );
+      if (!snap.empty) {
+        return { success: false, error: 'You already have a pending verification application under review.' };
+      }
+    } catch (e) {
+      // Best-effort check
+    }
+
+    const docData = {
+      userId,
+      applicantName: applicationData.applicantName || applicationData.displayName || 'Applicant',
+      username: applicationData.username || '',
+      category: applicationData.category || 'Creator',
+      reason: applicationData.reason || '',
+      portfolioLink: applicationData.portfolioLink || applicationData.website || '',
+      followerCount: Number(applicationData.followerCount || 0),
+      level: Number(applicationData.level || 1),
+      status: 'pending',
+      submittedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const docRef = await addDoc(collection(this.firestore, 'creator_verifications'), docData);
+    return { success: true, applicationId: docRef.id };
+  }
+
+  /**
+   * Fetch current verification application status for a user.
+   */
+  async getVerificationApplication(userId) {
+    if (!userId) return null;
+    await this._ensureInitialized();
+    const { collection, query, where, limit, getDocs } = await import('firebase/firestore');
+    try {
+      const snap = await getDocs(
+        query(
+          collection(this.firestore, 'creator_verifications'),
+          where('userId', '==', userId),
+          limit(5)
+        )
+      );
+      if (snap.empty) return null;
+      const apps = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const pending = apps.find(a => a.status === 'pending');
+      return pending || apps[0] || null;
+    } catch (e) {
+      logger.warn('Failed to get verification application', { userId, error: e?.message });
+      return null;
+    }
   }
 
   async _getCurrentUsername(userId) {

@@ -49,6 +49,8 @@ import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModa
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import ProfilePerspectiveModal from '../../components/profile/ProfilePerspectiveModal';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
+import ProfileVerificationModal from '../../components/profile/ProfileVerificationModal';
+import ProfileQuickEditModal from '../../components/profile/ProfileQuickEditModal';
 
 // Modals & Extras
 import ProfileOptionsMenu from '../../components/profile/ProfileOptionsMenu';
@@ -64,6 +66,9 @@ export default function ProfileMyScreen() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showQuickEditModal, setShowQuickEditModal] = useState(false);
+  const [quickEditField, setQuickEditField] = useState('all');
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPerspectiveModal, setShowPerspectiveModal] = useState(false);
   const [activeTab, setActiveTab] = useState('posts');
@@ -358,6 +363,11 @@ export default function ProfileMyScreen() {
             onAvatarClick={() => setShowAvatarModal(true)}
             onShare={handleShare}
             onEditProfile={() => navigate('/profile/edit')}
+            onOpenQuickEdit={(field = 'all') => {
+              setQuickEditField(field);
+              setShowQuickEditModal(true);
+            }}
+            onOpenVerificationModal={() => setShowVerificationModal(true)}
             onInsightsPress={() => navigate('/profile/analytics')}
             capabilities={capabilities}
             analytics={analytics}
@@ -516,6 +526,32 @@ export default function ProfileMyScreen() {
             }}
           />
         )}
+
+        {/* Verification Status & Application Modal */}
+        <ProfileVerificationModal
+          isOpen={showVerificationModal}
+          onClose={() => setShowVerificationModal(false)}
+          isVerified={effectiveProfile.isVerified}
+          profile={effectiveProfile}
+          isOwner={true}
+          theme={theme}
+          onVerificationSubmitted={() => {
+            useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+          }}
+        />
+
+        {/* Quick Profile Edit Modal */}
+        <ProfileQuickEditModal
+          isOpen={showQuickEditModal}
+          onClose={() => setShowQuickEditModal(false)}
+          initialField={quickEditField}
+          profile={effectiveProfile}
+          userId={currentUserId}
+          theme={theme}
+          onProfileUpdated={() => {
+            useProfileStore.getState().loadProfile(currentUserId, currentUserId);
+          }}
+        />
 
         {/* Options Menu Dialog */}
         {showOptionsMenu && (

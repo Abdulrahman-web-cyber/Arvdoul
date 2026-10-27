@@ -534,13 +534,21 @@ export function AuthProvider({ children }) {
               }).catch(() => {});
             }
 
-            const isComplete = hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true });
-            const onboarding = hasStep1Names ? true : computeNeedsOnboarding({
+            const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com') || profile.authProvider === 'google';
+            if (isGoogle) {
+              clearOnboardingRequired();
+              if (profile.isProfileComplete !== true) {
+                userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
+              }
+            }
+
+            const isComplete = isGoogle ? true : (hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true }));
+            const onboarding = isGoogle ? false : (hasStep1Names ? true : computeNeedsOnboarding({
               authUser: firebaseUser,
               profile,
               profileResolved: true,
-            });
-            if (hasStep1Names) {
+            }));
+            if (hasStep1Names && !isGoogle) {
               markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
             }
             if (isComplete && !onboarding && profile.isProfileComplete !== true) {
@@ -558,14 +566,17 @@ export function AuthProvider({ children }) {
               if (raw) step1Data = JSON.parse(raw);
             } catch (e) {}
 
-            const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
+            const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com');
+            const hasStep1Names = isGoogle ? false : Boolean(step1Data?.firstName || step1Data?.lastName);
             const step1FullName = (step1Data?.firstName && step1Data?.lastName)
               ? `${step1Data.firstName} ${step1Data.lastName}`.trim()
               : (step1Data?.firstName || step1Data?.lastName || '');
 
-            const onboarding = hasStep1Names || !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true;
+            const onboarding = isGoogle ? false : (hasStep1Names || !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true);
             if (onboarding) {
               markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
+            } else if (isGoogle) {
+              clearOnboardingRequired();
             }
 
             const basicName = step1FullName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');

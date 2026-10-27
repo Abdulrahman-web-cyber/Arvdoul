@@ -187,6 +187,15 @@ export function needsOnboarding({
 } = {}) {
   if (!authUser) return false;
 
+  // Google sign-in / sign-up provides verified identity and enters the app directly
+  const isGoogle = (
+    authUser.authProvider === 'google' ||
+    authUser.authProvider === 'google.com' ||
+    profile?.authProvider === 'google' ||
+    authUser.providerData?.some((p) => p.providerId === 'google.com')
+  );
+  if (isGoogle) return false;
+
   const session = getOnboardingSession(authUser.uid);
   if (session?.required) return true;
   if (isSignupInProgress) return true;

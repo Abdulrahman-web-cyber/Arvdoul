@@ -1338,20 +1338,15 @@ export default function SignupStep2VerifyContact() {
     setLoading(true);
     try {
       toast.success("✅ Google authentication successful!");
-      const isNew = result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
-      if (isNew) {
-        navigate("/setup-profile", {
-          state: {
-            method: "google",
-            userData: result.user,
-            isNewUser: true,
-            step1Data: step1Data || {}
-          },
-          replace: true
-        });
-      } else {
-        navigate("/home", { replace: true });
-      }
+      try {
+        const { default: authService } = await import('../services/authService.js');
+        authService?.clearOnboardingRequired?.();
+        sessionStorage.removeItem("signup_step1");
+        localStorage.removeItem("signup_step1");
+        sessionStorage.removeItem("signup_data");
+        localStorage.removeItem("signup_data");
+      } catch (e) {}
+      navigate("/home", { replace: true, state: { welcomeMessage: true } });
     } catch (error) {
       toast.error("Failed to process Google authentication");
       setErrors({ general: error.message });
@@ -1360,7 +1355,7 @@ export default function SignupStep2VerifyContact() {
       setLoading(false);
       setTimeout(() => { navigationLock.current = false; }, 1000);
     }
-  }, [navigate, triggerShake, step1Data]);
+  }, [navigate, triggerShake]);
 
   const handlePhoneVerification = useCallback(async () => {
     if (navigationLock.current || phoneLoading) return;

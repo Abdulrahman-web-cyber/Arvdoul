@@ -50,6 +50,7 @@ import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 
 // Modals
 import ProfileOptionsMenu from '../../components/profile/ProfileOptionsMenu';
+import ProfileVerificationModal from '../../components/profile/ProfileVerificationModal';
 
 export default function ProfilePublicScreen() {
   const { userId } = useParams();
@@ -91,6 +92,7 @@ export default function ProfilePublicScreen() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   // Load profile and related data
   useEffect(() => {
@@ -539,6 +541,7 @@ export default function ProfilePublicScreen() {
             onOpenQrCode={() => setShowQrModal(true)}
             onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
             onOpenOptions={() => setShowOptionsMenu(true)}
+            onOpenVerificationModal={() => setShowVerificationModal(true)}
             onAvatarClick={() => setShowQrModal(true)}
             onShare={handleShare}
             onFollowToggle={handleFollowToggle}
@@ -707,6 +710,16 @@ export default function ProfilePublicScreen() {
             onClose={() => setShowOptionsMenu(false)}
           />
         )}
+
+        {/* Verification Details Modal */}
+        <ProfileVerificationModal
+          isOpen={showVerificationModal}
+          onClose={() => setShowVerificationModal(false)}
+          isVerified={effectiveProfile.isVerified}
+          profile={effectiveProfile}
+          isOwner={false}
+          theme={theme}
+        />
       </div>
     </ErrorBoundary>
   );
