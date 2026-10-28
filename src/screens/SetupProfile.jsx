@@ -1148,7 +1148,10 @@ export default function SetupProfile() {
       toast.success("🎉 Profile setup complete!");
       setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);
     } catch (error) {
-      toast.error(error.message || "Failed to create profile");
+      const msg = error?.message?.includes("does not exist") || error?.message?.includes("datastore/setup")
+        ? "Database connection updating. Please tap again."
+        : (error?.message || "Failed to create profile");
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -1201,7 +1204,10 @@ export default function SetupProfile() {
       toast.success("🎉 Profile setup complete!");
       setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);
     } catch (err) {
-      toast.error(err.message || "Profile creation failed");
+      const msg = err?.message?.includes("does not exist") || err?.message?.includes("datastore/setup")
+        ? "Database connection updating. Please tap again."
+        : (err?.message || "Profile creation failed");
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

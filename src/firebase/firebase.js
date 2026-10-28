@@ -15,7 +15,19 @@ const FIREBASE_CONFIG = {
   measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || ""
 };
 
-const FIRESTORE_DATABASE_ID = import.meta.env?.VITE_FIREBASE_DATABASE_ID || "ai-studio-arvdoul-22fc8386-1c12-445c-a748-45267b88f61a";
+const resolveFirestoreDatabaseId = () => {
+  if (import.meta.env?.VITE_FIREBASE_DATABASE_ID) {
+    return import.meta.env.VITE_FIREBASE_DATABASE_ID;
+  }
+  const pid = import.meta.env?.VITE_FIREBASE_PROJECT_ID || FIREBASE_CONFIG.projectId;
+  // Live project arvdoul-8057b uses the standard default Firestore database
+  if (pid === 'arvdoul-8057b' || pid !== 'ecstatic-medium-3f6jr') {
+    return '(default)';
+  }
+  return 'ai-studio-arvdoul-22fc8386-1c12-445c-a748-45267b88f61a';
+};
+
+const FIRESTORE_DATABASE_ID = resolveFirestoreDatabaseId();
 
 // Several components import `db` / `auth` / `storage` as *live* SDK instances and
 // use them synchronously (e.g. `collection(db, …)`, `signInWithPhoneNumber(auth, …)`).
@@ -28,7 +40,9 @@ import { getAuth as _fbGetAuth, setPersistence as _fbSetPersistence, browserLoca
 import { getStorage as _fbGetStorage } from 'firebase/storage';
 
 const _fbApp = _fbGetApps().length ? _fbGetApp() : _fbInitializeApp(FIREBASE_CONFIG);
-export const db = _fbGetFirestore(_fbApp, FIRESTORE_DATABASE_ID);
+export const db = (!FIRESTORE_DATABASE_ID || FIRESTORE_DATABASE_ID === '(default)')
+  ? _fbGetFirestore(_fbApp)
+  : _fbGetFirestore(_fbApp, FIRESTORE_DATABASE_ID);
 export const auth = _fbGetAuth(_fbApp);
 export const storage = _fbGetStorage(_fbApp);
 
@@ -192,8 +206,9 @@ class UltimateFirebaseManager {
     
     try {
       const { getFirestore } = await import('firebase/firestore');
-      
-      this._firestore = getFirestore(this._app, FIRESTORE_DATABASE_ID);
+      this._firestore = (!FIRESTORE_DATABASE_ID || FIRESTORE_DATABASE_ID === '(default)')
+        ? getFirestore(this._app)
+        : getFirestore(this._app, FIRESTORE_DATABASE_ID);
       
       console.log('✅ Firestore service loaded');
       return this._firestore;

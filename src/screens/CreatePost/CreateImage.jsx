@@ -13,6 +13,7 @@ import * as Icons from "lucide-react";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
 import { TopAppLoadingBanner } from "../../components/Navigation/RouteProgressBar.jsx";
 import { getStorageService } from "../../services/storageService";
+import { getAuthService } from "../../services/authService";
 import { openDB } from "idb";
 
 const ImageEditor = lazy(() => import("./ImageEditor"));
@@ -1302,11 +1303,23 @@ export default function CreateImage() {
   // ─── Authentication check ──────────────────────────────────────────
   const getAuthUser = useCallback(() => {
     try {
-      const { getAuthService } = require('../../services/authService.js');
-      return getAuthService().getCurrentUser();
+      const authService = getAuthService();
+      const u = authService?.getCurrentUser?.();
+      if (u?.uid) return u;
     } catch {
-      return null;
+      // ignore
     }
+    if (typeof window !== "undefined" && window._arvdoul_auth?.currentUser) {
+      return window._arvdoul_auth.currentUser;
+    }
+    try {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.uid) return parsed;
+      }
+    } catch {}
+    return null;
   }, []);
 
   // ─── Upload Manager ──────────────────────────────────────────────

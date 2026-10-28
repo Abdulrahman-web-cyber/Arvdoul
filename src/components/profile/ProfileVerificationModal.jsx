@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';
 import { CREATOR_VERIFICATION_REQUIREMENTS } from '../../config/profileContracts.js';
+import { LEVEL_GATES } from '../../shared/levelConfig.cjs';
 
 const CATEGORIES = [
   'Content Creator / Artist',
@@ -82,6 +83,10 @@ export const ProfileVerificationModal = memo(({
 
   if (!isOpen) return null;
 
+  const userLevel = typeof profile?.level === 'number' ? profile.level : null;
+  const requiredLevel = LEVEL_GATES?.verifiedPriority ?? 15;
+  const isLevelEligible = userLevel !== null && userLevel >= requiredLevel;
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (submitting) return;
@@ -103,7 +108,7 @@ export const ProfileVerificationModal = memo(({
         reason: statement.trim(),
         portfolioLink: portfolioLink.trim(),
         followerCount: profile.followerCount || 0,
-        level: profile.level || 1,
+        level: typeof profile.level === 'number' ? profile.level : 0,
       });
 
       if (res.success) {
@@ -243,6 +248,59 @@ export const ProfileVerificationModal = memo(({
                         <div className="text-slate-600 dark:text-slate-300 line-clamp-3">{pendingApplication.reason}</div>
                       </>
                     )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    Got It
+                  </button>
+                </div>
+              ) : !isLevelEligible ? (
+                /* Level Requirement Not Met */
+                <div className="space-y-4 text-center py-4">
+                  <div className="w-16 h-16 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center mx-auto">
+                    <Lock className="w-8 h-8 text-purple-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Level {requiredLevel} Required
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                      Arvdoul creator verification unlocks once your account reaches Level {requiredLevel} standing.
+                    </p>
+                  </div>
+
+                  <div className={cn(
+                    "p-4 rounded-2xl border text-left space-y-3",
+                    isDark ? "bg-white/[0.03] border-white/10" : "bg-purple-50/50 border-purple-100"
+                  )}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Your Standing:</span>
+                      <span className="font-black text-purple-600 dark:text-purple-400">
+                        {userLevel !== null ? `Level ${userLevel}` : 'Unranked'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="w-full bg-slate-200 dark:bg-white/10 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-purple-600 to-cyan-500 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(5, ((userLevel || 0) / requiredLevel) * 100))}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                        <span>Level {userLevel || 0}</span>
+                        <span>Level {requiredLevel} Target</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 pt-1 border-t border-slate-100 dark:border-white/5">
+                      <div className="font-bold text-slate-700 dark:text-slate-300">How to level up:</div>
+                      <p>Share posts (+10 XP), receive likes and comments, stream (+1 XP/min), and build community trust.</p>
+                    </div>
                   </div>
 
                   <button

@@ -1877,6 +1877,10 @@ export const deleteAccount = (uid) => getUserService().deleteAccount(uid);
 export const searchUsers = (q, opts) => getUserService().searchUsers(q, opts);
 export const getUserByUsername = (username) => getUserService().getUserByUsername(username);
 
+// Verification
+export const submitVerificationApplication = (uid, data) => getUserService().submitVerificationApplication(uid, data);
+export const getVerificationApplication = (uid) => getUserService().getVerificationApplication(uid);
+
 // Activity
 export const updateLastActive = (uid) => getUserService().updateLastActive(uid);
 export const markProfileComplete = (uid) => getUserService().markProfileComplete(uid);
@@ -1934,6 +1938,8 @@ const userServiceExport = Object.assign(getUserService, {
   deleteAccount,
   searchUsers,
   getUserByUsername,
+  submitVerificationApplication,
+  getVerificationApplication,
   updateLastActive,
   markProfileComplete,
   getUserPublicKey,

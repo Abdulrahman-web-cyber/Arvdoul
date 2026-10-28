@@ -45,7 +45,8 @@ import {
   ShieldCheck,
   ArrowRight,
   TrendingUp,
-  Star
+  Star,
+  Lock
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
@@ -268,6 +269,9 @@ export const ProfileHeroSection = memo(({
   const isCreator = Boolean(profile?.isCreator || profile?.creatorStatus === 'active');
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
+  const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
+  const isLevelEligibleForVerification = userLevel !== null && userLevel >= 15;
+
   // Royal status determination per shared level system
   const isRoyal = useMemo(() => {
     if (profile?.isRoyal || profile?.royalFamily) return true;
@@ -426,8 +430,17 @@ export const ProfileHeroSection = memo(({
                       : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
                   )}
                 >
-                  <ShieldCheck className="w-3 h-3 text-purple-500" />
-                  <span>Get Verified</span>
+                  {isLevelEligibleForVerification ? (
+                    <>
+                      <ShieldCheck className="w-3 h-3 text-purple-500" />
+                      <span>Get Verified</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3 h-3 text-purple-400" />
+                      <span>Level 15 to Verify</span>
+                    </>
+                  )}
                 </button>
               ) : null}
 
