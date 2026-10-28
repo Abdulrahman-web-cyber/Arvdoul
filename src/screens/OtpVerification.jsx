@@ -6,7 +6,7 @@ import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext.jsx";
 import { useTheme } from "@context/ThemeContext.jsx";
-import { markOnboardingRequired } from "../utils/profileCompletion.js";
+import { markOnboardingRequired, clearOnboardingRequired } from "../utils/profileCompletion.js";
 
 const DIGIT_COUNT = 6;
 const INITIAL_COUNTDOWN = 120;
@@ -978,11 +978,19 @@ export default function OTPVerification() {
         triggerHaptic("success");
         setShowSuccess(true);
 
+        const isExplicitLogin = location.state?.fromLogin === true || isSignup === false;
         const hasStep1Personal = Boolean(fallbackStep1?.firstName || fallbackStep1?.lastName);
-        const isSignupFlow = Boolean(isSignup === true || hasStep1Personal);
-        const isNewUser = isSignupFlow || result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true;
+        const isSignupFlow = !isExplicitLogin && Boolean(isSignup === true || hasStep1Personal);
+        const isNewUser = isSignupFlow && (result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true);
 
-        console.log("✅ OTP verified. isSignupFlow =", isSignupFlow, "isNewUser =", isNewUser);
+        console.log("✅ OTP verified. isSignupFlow =", isSignupFlow, "isNewUser =", isNewUser, "isExplicitLogin =", isExplicitLogin);
+
+        if (isExplicitLogin || (!isSignupFlow && !isNewUser)) {
+          clearOnboardingRequired();
+          toast.success("Welcome back!");
+          navigate("/home", { replace: true, state: { welcomeMessage: true, isLogin: true } });
+          return;
+        }
 
         if (isSignupFlow || isNewUser) {
           const targetUid = result.user?.uid || result.user?.userId || auth.user?.uid;
@@ -1003,8 +1011,9 @@ export default function OTPVerification() {
             replace: true,
           });
         } else {
+          clearOnboardingRequired();
           toast.success("Welcome back!");
-          navigate("/home", { replace: true, state: { welcomeMessage: true } });
+          navigate("/home", { replace: true, state: { welcomeMessage: true, isLogin: true } });
         }
       } catch (err) {
         console.error("OTP error:", err);

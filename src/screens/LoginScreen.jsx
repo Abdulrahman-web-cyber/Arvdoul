@@ -6,7 +6,7 @@ import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "@context/ThemeContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { safeReturnPath, getOnboardingSession } from "../utils/profileCompletion.js";
+import { safeReturnPath, clearOnboardingRequired } from "../utils/profileCompletion.js";
 
 // Import country codes (same as signup)
 import { countryCodes, getCountryByIso } from "../data/countryCodes.js";
@@ -964,17 +964,13 @@ export default function LoginScreen() {
     setTimeout(() => setShakeCard(false), 600);
   }, []);
 
-  // Redirect if already authenticated — wait for profile so returning users
-  // never bounce through /setup-profile because a flag is still loading.
+  // Redirect if already authenticated — login users must NEVER navigate to /setup-profile.
   useEffect(() => {
     if (!isAuthenticated || !user || !profileResolved) return;
-    if (needsOnboarding && getOnboardingSession(user.uid)) {
-      navigate('/setup-profile', { replace: true });
-      return;
-    }
+    clearOnboardingRequired();
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
-    navigate(from, { replace: true });
-  }, [isAuthenticated, user, profileResolved, needsOnboarding, navigate]);
+    navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
+  }, [isAuthenticated, user, profileResolved, navigate]);
 
   // Focus the email field only where it won't pop a mobile keyboard unexpectedly.
   useEffect(() => {

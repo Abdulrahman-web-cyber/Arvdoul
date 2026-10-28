@@ -6,7 +6,7 @@ import { motion, AnimatePresence, MotionConfig, useReducedMotion } from "framer-
 import { toast } from "sonner";
 import { useAuth } from "@context/AuthContext";
 import { useTheme } from "@context/ThemeContext";
-import { getOnboardingSession } from "../utils/profileCompletion.js";
+import { getOnboardingSession, clearOnboardingRequired } from "../utils/profileCompletion.js";
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Design system (shared with Signup, Login and OTP screens)
@@ -752,12 +752,17 @@ export default function EmailVerification() {
     const mode = new URLSearchParams(location.search).get("mode");
     const fromLogin = location.state?.fromLogin === true;
     const fromSignup =
-      location.state?.fromSignup === true ||
-      location.state?.isNewUser === true ||
-      mode === "signup" ||
-      !!getOnboardingSession(uid);
-    const hasIncompleteProfile = user?.isProfileComplete === false || user?.requiresProfileCompletion === true;
-    const goToSetup = fromSignup || hasIncompleteProfile || !!getOnboardingSession(uid);
+      !fromLogin && (
+        location.state?.fromSignup === true ||
+        location.state?.isNewUser === true ||
+        mode === "signup" ||
+        !!getOnboardingSession(uid)
+      );
+    const hasIncompleteProfile = !fromLogin && (user?.isProfileComplete === false || user?.requiresProfileCompletion === true);
+    const goToSetup = !fromLogin && (fromSignup || hasIncompleteProfile);
+    if (!goToSetup) {
+      clearOnboardingRequired();
+    }
     toast.success(goToSetup ? "Email verified! Let's finish your profile." : "Email verified! Welcome back.");
     const step1Data = location.state?.step1Data || JSON.parse(sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_data') || '{}');
     setTimeout(() => {

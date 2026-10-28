@@ -19,12 +19,7 @@ const resolveFirestoreDatabaseId = () => {
   if (import.meta.env?.VITE_FIREBASE_DATABASE_ID) {
     return import.meta.env.VITE_FIREBASE_DATABASE_ID;
   }
-  const pid = import.meta.env?.VITE_FIREBASE_PROJECT_ID || FIREBASE_CONFIG.projectId;
-  // Live project arvdoul-8057b uses the standard default Firestore database
-  if (pid === 'arvdoul-8057b' || pid !== 'ecstatic-medium-3f6jr') {
-    return '(default)';
-  }
-  return 'ai-studio-arvdoul-22fc8386-1c12-445c-a748-45267b88f61a';
+  return '(default)';
 };
 
 const FIRESTORE_DATABASE_ID = resolveFirestoreDatabaseId();

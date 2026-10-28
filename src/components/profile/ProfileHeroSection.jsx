@@ -275,14 +275,21 @@ export const ProfileHeroSection = memo(({
   // Royal status determination per shared level system
   const isRoyal = useMemo(() => {
     if (profile?.isRoyal || profile?.royalFamily) return true;
-    const royalCheck = getRoyalEligibility('duke', {
-      level: profile?.level || level,
-      activeDays: profile?.activeDaysCount || 0,
-      reputationScore: profile?.reputationScore || 0,
-      contributionScore: profile?.contributionScore || 0,
-      influenceScore: profile?.influenceScore || 0,
-    });
-    return royalCheck.eligible;
+    if (profile?.activeTitle && ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(profile.activeTitle).toLowerCase())) return true;
+    if (Array.isArray(profile?.titles) && profile.titles.some(t => ['king', 'queen', 'duke', 'duchess', 'sovereign'].includes(String(t).toLowerCase()))) return true;
+    const stats = {
+      level: profile?.level || level || 0,
+      activeDays: profile?.activeDaysCount || profile?.activeDays || 0,
+      reputationScore: profile?.reputationScore || profile?.reputation || 0,
+      contributionScore: profile?.contributionScore || profile?.contribution || 0,
+      influenceScore: profile?.influenceScore || profile?.influence || 0,
+      achievements: profile?.achievements || 0,
+      policyStanding: profile?.policyStanding || 'good',
+    };
+    const dukeCheck = getRoyalEligibility('duke', stats);
+    if (dukeCheck.eligible) return true;
+    const kingCheck = getRoyalEligibility('king', stats);
+    return kingCheck.eligible;
   }, [profile, level]);
 
   const isOnline = Boolean(profile?.presence?.state === 'online' || profile?.isOnline === true);
@@ -366,16 +373,6 @@ export const ProfileHeroSection = memo(({
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
                 {displayName}
               </h1>
-              {isOwner && onOpenQuickEdit && (
-                <button
-                  type="button"
-                  onClick={() => onOpenQuickEdit('displayName')}
-                  className="p-1 rounded-lg text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer"
-                  title="Edit Display Name"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
-              )}
               {isVerified && (
                 <button
                   type="button"

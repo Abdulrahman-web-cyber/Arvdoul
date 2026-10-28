@@ -17,7 +17,18 @@ export default function MainLayout({ children }) {
 
   const isImmersiveVideo = location.pathname.startsWith("/videos") || location.pathname.startsWith("/reels");
   const isIndividualChat = location.pathname.startsWith("/messages/") && location.pathname !== "/messages/new";
-  const isStudioOrCall = location.pathname.startsWith("/call") || location.pathname.startsWith("/video-editor") || location.pathname.startsWith("/audio-editor") || location.pathname.startsWith("/thumbnail-designer") || location.pathname.startsWith("/live/");
+  const isStudioOrCall = (
+    location.pathname.startsWith("/call") ||
+    location.pathname.startsWith("/video-editor") ||
+    location.pathname.startsWith("/audio-editor") ||
+    location.pathname.startsWith("/thumbnail-designer") ||
+    location.pathname.startsWith("/image-editor") ||
+    location.pathname.startsWith("/image-studio") ||
+    location.pathname.startsWith("/live") ||
+    location.pathname.startsWith("/create-post") ||
+    location.pathname.startsWith("/create-story") ||
+    location.pathname.startsWith("/camera")
+  );
   
   const hideTopAppBar = isImmersiveVideo || isIndividualChat || isStudioOrCall;
   const hideBottomNav = isIndividualChat || isStudioOrCall;

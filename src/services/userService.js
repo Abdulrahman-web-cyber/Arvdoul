@@ -695,12 +695,43 @@ class ProfessionalUserService {
     const { publicFields, privateFields } = splitProfileFields(profile);
 
     await runTransaction(this.firestore, async (transaction) => {
-      const existing = await transaction.get(usernameDoc);
-      if (existing.exists() && existing.data()?.userId !== userId) {
+      const existingUsername = await transaction.get(usernameDoc);
+      if (existingUsername.exists() && existingUsername.data()?.userId !== userId) {
         throw new Error(`Username "${username}" is already taken. Please choose another one.`);
       }
-      transaction.set(userDoc, publicFields, { merge: true });
-      transaction.set(privateDoc, { uid: userId, ...privateFields, updatedAt: serverTimestamp() }, { merge: true });
+
+      const existingUser = await transaction.get(userDoc);
+      if (existingUser.exists()) {
+        // Document already exists! This is an update on users/{userId}.
+        // Strip server-authoritative fields to satisfy touchesServerAuthoritativeFields()
+        const userUpdate = { ...publicFields };
+        SERVER_AUTHORITATIVE_FIELDS.forEach((key) => {
+          delete userUpdate[key];
+        });
+        delete userUpdate.createdAt;
+        userUpdate.updatedAt = serverTimestamp();
+        transaction.update(userDoc, userUpdate);
+      } else {
+        // New document creation - publicFields has the exact required NEW_USER_DEFAULTS
+        transaction.set(userDoc, publicFields);
+      }
+
+      // Safe private fields handling according to firestore.rules
+      const safePrivateData = {
+        updatedAt: serverTimestamp()
+      };
+      if (privateFields.email !== undefined) safePrivateData.email = privateFields.email;
+      if (privateFields.phoneNumber !== undefined) safePrivateData.phoneNumber = privateFields.phoneNumber;
+      if (privateFields.emailVerified !== undefined) safePrivateData.emailVerified = Boolean(privateFields.emailVerified);
+      if (privateFields.phoneVerified !== undefined) safePrivateData.phoneVerified = Boolean(privateFields.phoneVerified);
+
+      const existingPrivate = await transaction.get(privateDoc);
+      if (existingPrivate.exists()) {
+        transaction.update(privateDoc, safePrivateData);
+      } else {
+        transaction.set(privateDoc, { uid: userId, ...safePrivateData });
+      }
+
       transaction.set(usernameDoc, {
         userId,
         username,
