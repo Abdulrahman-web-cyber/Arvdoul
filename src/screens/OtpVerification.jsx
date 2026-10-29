@@ -968,7 +968,8 @@ export default function OTPVerification() {
           localStorage.getItem('signup_data') || 
           '{}'
         );
-        const result = await auth.verifyPhoneOTP(verificationId, code, fallbackStep1);
+        const isExplicitLogin = location.state?.fromLogin === true || location.state?.isLogin === true || isSignup === false;
+        const result = await auth.verifyPhoneOTP(verificationId, code, { ...fallbackStep1, isLogin: isExplicitLogin });
         if (!result.success) throw new Error(result.error || "Verification failed");
 
         sessionStorage.removeItem("phone_verification");
@@ -978,7 +979,6 @@ export default function OTPVerification() {
         triggerHaptic("success");
         setShowSuccess(true);
 
-        const isExplicitLogin = location.state?.fromLogin === true || isSignup === false;
         const hasStep1Personal = Boolean(fallbackStep1?.firstName || fallbackStep1?.lastName);
         const isSignupFlow = !isExplicitLogin && Boolean(isSignup === true || hasStep1Personal);
         const isNewUser = isSignupFlow && (result.isNewUser === true || result.user?.isProfileComplete === false || result.user?.requiresProfileCompletion === true);
@@ -1018,6 +1018,13 @@ export default function OTPVerification() {
       } catch (err) {
         console.error("OTP error:", err);
         triggerHaptic("error");
+        if (err.code === 'auth/user-not-found' || err.message?.includes('No Arvdoul account found')) {
+          toast.error("No account found with this phone number. Please sign up.");
+          setTimeout(() => {
+            navigate("/signup", { replace: true, state: { phoneNumber } });
+          }, 1800);
+          return;
+        }
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
         const humanErr = ERROR_MAP[err.code] || ERROR_MAP.default;

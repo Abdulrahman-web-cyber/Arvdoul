@@ -643,6 +643,16 @@ class ProductionAuthService {
       } catch (e) {}
 
       const isNewUser = !profile;
+      const isLoginMode = Boolean(optionalStep1Data?.isLogin);
+
+      if (isNewUser && isLoginMode) {
+        logger.warn('Phone OTP verified on login screen, but no account found for uid:', user.uid);
+        await this.signOut();
+        throw new AuthError(
+          'auth/user-not-found',
+          'No Arvdoul account found with this phone number. Please sign up to create an account.'
+        );
+      }
 
       let displayName = step1DisplayName || user.displayName;
       if (!displayName || /^User\s+\d{2,6}$/i.test(displayName) || displayName === 'Mobile' || displayName === user.phoneNumber) {
@@ -818,6 +828,16 @@ class ProductionAuthService {
       const isAccountNew = isNewUser || !profile;
       let profileCreated = false;
       if (!profile) {
+        if (options.isLogin || options.flow === 'login') {
+          logger.warn('Google sign-in on login screen, but no account found for uid:', user.uid);
+          await this.signOut();
+          return {
+            success: false,
+            isNewUser: true,
+            code: 'auth/user-not-found',
+            error: 'No Arvdoul account found with this Google account. Please sign up to create an account.'
+          };
+        }
         try {
           const step1 = this._getSignupStep1Data();
           const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();

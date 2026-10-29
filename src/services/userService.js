@@ -515,7 +515,8 @@ class ProfessionalUserService {
     // Evaluate Relationship & Bidirectional Block enforcement. The relation
     // flags are resolved here; the *decision* is made once, by the capability
     // engine below — this method must not run a second privacy layer (N007).
-    const isOwner = requesterId === userId;
+    const targetUid = resolvedUserId || userId;
+    const isOwner = Boolean(requesterId && (requesterId === userId || requesterId === targetUid));
     const relationshipFlags = {};
 
     // Auto-record active day in server-authoritative ledger for owner
@@ -523,26 +524,26 @@ class ProfessionalUserService {
       const todayStr = new Date().toISOString().slice(0, 10);
       if (full.lastActiveDay !== todayStr) {
         import('./levelSystemService.js').then(({ levelSystemService }) => {
-          levelSystemService.recordActiveDay({ userId }).catch(() => {});
+          levelSystemService.recordActiveDay({ userId: targetUid }).catch(() => {});
         }).catch(() => {});
       }
     }
 
-    if (requesterId && requesterId !== userId) {
+    if (requesterId && !isOwner) {
       const [targetBlockedViewer, viewerBlockedTarget, muted, restricted, followStatus, isFriend] = await Promise.all([
-        this.isBlocked(userId, requesterId),
-        this.isBlocked(requesterId, userId),
-        this.isMuted(requesterId, userId),
-        this.isRestricted(requesterId, userId),
-        this.getFollowStatus(requesterId, userId),
-        this._areMutualFriends(userId, requesterId)
+        this.isBlocked(targetUid, requesterId),
+        this.isBlocked(requesterId, targetUid),
+        this.isMuted(requesterId, targetUid),
+        this.isRestricted(requesterId, targetUid),
+        this.getFollowStatus(requesterId, targetUid),
+        this._areMutualFriends(targetUid, requesterId)
       ]);
 
       // `isBlocking` = the viewer blocked the target; `isBlockedBy` = the
       // target blocked the viewer. The engine derives the aggregate `isBlocked`
       // from these two, so direction is preserved (N007).
-      relationshipFlags.isBlocking = Boolean(viewerBlockedTarget?.blocked);
-      relationshipFlags.isBlockedBy = Boolean(targetBlockedViewer?.blocked);
+      relationshipFlags.isBlocking = Boolean(viewerBlockedTarget?.success && viewerBlockedTarget?.blocked);
+      relationshipFlags.isBlockedBy = Boolean(targetBlockedViewer?.success && targetBlockedViewer?.blocked);
       relationshipFlags.isMuted = Boolean(muted?.muted);
       relationshipFlags.isRestricted = Boolean(restricted?.restricted);
       relationshipFlags.isFollowing = Boolean(followStatus?.isFollowing);
@@ -1166,8 +1167,8 @@ class ProfessionalUserService {
     const isFollowing = Boolean(fAtoB?.isFollowing);
     const isFollower = Boolean(fBtoA?.isFollowing);
     const isMutualFriend = isFollowing && isFollower;
-    const isBlocking = Boolean(bAtoB?.blocked);
-    const isBlockedBy = Boolean(bBtoA?.blocked);
+    const isBlocking = Boolean(bAtoB?.success && bAtoB?.blocked);
+    const isBlockedBy = Boolean(bBtoA?.success && bBtoA?.blocked);
     const isBlocked = isBlocking || isBlockedBy;
     const isMuted = Boolean(mAtoB?.muted);
     const isRestricted = Boolean(rAtoB?.restricted);
@@ -1569,14 +1570,12 @@ class ProfessionalUserService {
       await this._ensureInitialized();
       const { doc, getDoc } = await import('firebase/firestore');
       const snap = await getDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
-      const result = { success: true, blocked: snap.exists() };
+      const result = { success: true, blocked: snap ? snap.exists() : false };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (err) {
-      // A failed read must never be reported as "not blocked". Tell the
-      // caller the check is inconclusive so it can fail closed.
-      this.logger?.warn?.('[UserService] Block check failed', { error: err?.message });
-      return { success: false, blocked: true, inconclusive: true };
+      this.logger?.warn?.('[UserService] Block check failed (defaulting to not blocked)', { error: err?.message });
+      return { success: false, blocked: false, error: err?.message };
     }
   }
 

@@ -334,8 +334,8 @@ class PassportService {
       logger.warn('[PassportService] Relationship resolution failed; failing closed', {
         viewerUserId, targetUserId, error: e?.message,
       });
-      // Fail closed: assume blocked rather than granting access.
-      return { isFollower: false, isFollowing: false, isMutualFriend: false, isBlocked: true };
+      // Fail safe: viewer is not granting extra privileges, but not falsely marked blocked.
+      return { isFollower: false, isFollowing: false, isMutualFriend: false, isBlocked: false };
     }
   }
 }

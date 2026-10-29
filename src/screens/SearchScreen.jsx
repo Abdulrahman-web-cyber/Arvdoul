@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   Video, Users, FileText, Image, Radio, Calendar, BarChart2, 
-  HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search
+  HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search, SlidersHorizontal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useSearch } from '../hooks/useSearch';
@@ -236,14 +236,14 @@ const SearchScreen = memo(() => {
         <TrendingSection
           type="hashtags"
           title="Trending Now"
-          items={trending.hashtags || []}
+          items={Array.isArray(trending) ? trending : (trending?.hashtags || [])}
           isDark={isDark}
           onItemClick={(item) => handleSuggestionSelect(`#${item.hashtag || item.label}`)}
         />
 
         {/* Recommended Creators */}
         <CreatorCarousel
-          creators={trending.creators || []}
+          creators={Array.isArray(trending?.creators) ? trending.creators : []}
           onFollow={handleFollow}
           onCreatorClick={handleCreatorClick}
           isDark={isDark}
@@ -264,8 +264,69 @@ const SearchScreen = memo(() => {
           : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
       )}
     >
-      {/* Category Pills Bar (Under Unified TopAppBar) */}
-      <div className="px-4 pt-2 pb-3">
+      {/* Search Header Bar with Input & Category Pills */}
+      <div className="px-4 pt-2 pb-3 space-y-3">
+        {/* In-Page Quick Search Input */}
+        <div className="relative flex items-center gap-2">
+          <div className="relative flex-1 flex items-center">
+            <Search className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateQuery(val);
+                window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: val }));
+                if (!val.trim()) setHasSearched(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSearch();
+                }
+              }}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              placeholder="Search people, tags, videos, and posts..."
+              className={cn(
+                "w-full pl-10 pr-9 py-2.5 rounded-2xl text-sm font-medium transition-all outline-none",
+                isDark
+                  ? "bg-white/[0.06] border border-white/10 text-white placeholder-slate-400 focus:bg-white/[0.10] focus:border-purple-500/50"
+                  : "bg-white border border-slate-200 text-slate-900 placeholder-slate-400 shadow-sm focus:border-purple-500"
+              )}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateQuery('');
+                  setHasSearched(false);
+                  window.dispatchEvent(new CustomEvent('arvdoul:set_search_query', { detail: '' }));
+                }}
+                className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters(prev => !prev)}
+            className={cn(
+              "p-2.5 rounded-2xl border transition-all flex items-center justify-center shrink-0 cursor-pointer",
+              showFilters
+                ? "bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-500/25"
+                : isDark
+                ? "bg-white/[0.06] border-white/10 text-slate-300 hover:bg-white/[0.10]"
+                : "bg-white border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50"
+            )}
+            title="Search Filters"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Category Pills Bar */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           {CATEGORIES.map((cat) => {
             const Icon = cat.icon;
@@ -290,13 +351,13 @@ const SearchScreen = memo(() => {
           })}
         </div>
 
-        {/* Suggestions Dropdown (Powered by TopAppBar Search Query) */}
+        {/* Suggestions Dropdown */}
         {query && !hasSearched && (
           <div className="relative mt-2">
             <SearchSuggestions
               query={query}
               suggestions={suggestions}
-              recentSearches={recent.slice(0, 5).map((q) => ({ id: q, text: q, type: 'recent' }))}
+              recentSearches={(recent || []).slice(0, 5).map((q) => ({ id: q, text: q, type: 'recent' }))}
               onSelect={handleSuggestionSelect}
               onRemoveRecent={removeRecent}
               visible={true}

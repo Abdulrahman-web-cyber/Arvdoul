@@ -1,23 +1,25 @@
-// src/firebase/firebase.js
+import appletConfig from '../../firebase-applet-config.json';
 
 // Environment-overridable Firebase config. VITE_FIREBASE_* takes precedence
-// (set in CI / .env); fallbacks keep local dev working. The committed values
-// are public client keys (not secrets) — rotate in the Firebase console and
-// deploy with env vars for production.
+// (set in CI / .env); fallbacks read from firebase-applet-config.json.
 const FIREBASE_CONFIG = {
-  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || "AIzaSyCP8E8KAbpNiAKHarAf98MMlcxxXcqmW7s",
-  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || "ecstatic-medium-3f6jr.firebaseapp.com",
-  databaseURL: import.meta.env?.VITE_FIREBASE_DATABASE_URL || "https://ecstatic-medium-3f6jr-default-rtdb.firebaseio.com",
-  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || "ecstatic-medium-3f6jr",
-  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || "ecstatic-medium-3f6jr.firebasestorage.app",
-  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || "266743197979",
-  appId: import.meta.env?.VITE_FIREBASE_APP_ID || "1:266743197979:web:e95ccab595e04a90fb23be",
-  measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || ""
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || appletConfig?.apiKey || "AIzaSyDm9ks21qUT7vCVh6USGVtHJblBzEEPjxk",
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || appletConfig?.authDomain || "arvdoul-8057b.firebaseapp.com",
+  databaseURL: import.meta.env?.VITE_FIREBASE_DATABASE_URL || `https://${appletConfig?.projectId || "arvdoul-8057b"}-default-rtdb.firebaseio.com`,
+  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || appletConfig?.projectId || "arvdoul-8057b",
+  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || appletConfig?.storageBucket || "arvdoul-8057b.firebasestorage.app",
+  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig?.messagingSenderId || "892956185588",
+  appId: import.meta.env?.VITE_FIREBASE_APP_ID || appletConfig?.appId || "1:892956185588:web:6bb72ad4459be7a86b9fa1",
+  measurementId: import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID || appletConfig?.measurementId || ""
 };
 
 const resolveFirestoreDatabaseId = () => {
-  if (import.meta.env?.VITE_FIREBASE_DATABASE_ID) {
-    return import.meta.env.VITE_FIREBASE_DATABASE_ID;
+  const envDbId = import.meta.env?.VITE_FIREBASE_DATABASE_ID;
+  if (envDbId && !envDbId.includes('22fc8386')) {
+    return envDbId;
+  }
+  if (appletConfig?.firestoreDatabaseId && appletConfig.firestoreDatabaseId !== '(default)' && !appletConfig.firestoreDatabaseId.includes('22fc8386')) {
+    return appletConfig.firestoreDatabaseId;
   }
   return '(default)';
 };

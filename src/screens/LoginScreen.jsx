@@ -780,6 +780,8 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
       const code = error?.code || '';
       if (code === 'auth/popup-blocked') {
         friendlyMessage = "Pop-up was blocked by your browser. Please allow pop-ups for this page or sign in with Email/Phone.";
+      } else if (code === 'auth/user-not-found' || error?.message?.includes('No Arvdoul account found')) {
+        friendlyMessage = "No Arvdoul account found with this Google account. Please sign up to create an account.";
       } else if (code === 'auth/unauthorized-domain') {
         friendlyMessage = "This domain is not authorized for Google Sign-In in Firebase. Please sign in with Phone or Email.";
       } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
@@ -794,7 +796,7 @@ const UltimateGoogleAuth = React.memo(({ onSuccess, onError, loading = false }) 
       
       if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
         setError(friendlyMessage);
-        onError(error);
+        onError({ ...error, message: friendlyMessage, isUserNotFound: code === 'auth/user-not-found' || friendlyMessage.includes('sign up') });
       } else {
         setError(null);
       }
@@ -1153,6 +1155,11 @@ export default function LoginScreen() {
     setErrors({ general: error.message });
     toast.error(error.message || "Google authentication failed");
     triggerShake();
+    if (error?.isUserNotFound || error?.code === 'auth/user-not-found' || error?.message?.includes('sign up')) {
+      setTimeout(() => {
+        navigate("/signup", { state: { fromLogin: true } });
+      }, 1800);
+    }
   };
 
   const handleForgotPassword = () => {

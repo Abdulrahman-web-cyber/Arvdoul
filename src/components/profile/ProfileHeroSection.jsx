@@ -53,6 +53,7 @@ import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { pickHandle, deriveHandle } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
+import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
 
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
@@ -87,7 +88,8 @@ export const ProfileLevelProgressCard = memo(({
   isOwner = false,
   isDark = false,
   userId = null,
-  navigate
+  navigate,
+  onOpenRoadmap
 }) => {
   const levelInfo = useMemo(() => {
     const rawLvl = level !== null && level !== undefined ? Number(level) : null;
@@ -111,12 +113,17 @@ export const ProfileLevelProgressCard = memo(({
   // If standing is null / unavailable, show honest civic start card
   if (!levelInfo) {
     return (
-      <div className={cn(
-        "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-2.5",
-        isDark
-          ? "bg-[#0b1021]/80 border-white/[0.08] text-white"
-          : "bg-white/95 border-slate-200/90 text-slate-900"
-      )}>
+      <div 
+        onClick={() => onOpenRoadmap ? onOpenRoadmap('citizenship') : navigate?.(passportUrl)}
+        className={cn(
+          "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-2.5 cursor-pointer hover:border-purple-500/50",
+          isDark
+            ? "bg-[#0b1021]/80 border-white/[0.08] text-white hover:bg-[#0e152e]/90"
+            : "bg-white/95 border-slate-200/90 text-slate-900 hover:bg-slate-50/90"
+        )}
+        role="button"
+        tabIndex={0}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold text-xs">
@@ -131,7 +138,10 @@ export const ProfileLevelProgressCard = memo(({
 
         <button
           type="button"
-          onClick={() => navigate?.(passportUrl)}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate?.(passportUrl);
+          }}
           className="w-full py-1.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
           <ShieldCheck className="w-3.5 h-3.5" />
@@ -147,12 +157,18 @@ export const ProfileLevelProgressCard = memo(({
   const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
 
   return (
-    <div className={cn(
-      "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-3",
-      isDark
-        ? "bg-[#0b1021]/80 border-white/[0.08] text-white"
-        : "bg-white/95 border-slate-200/90 text-slate-900"
-    )}>
+    <div 
+      onClick={() => onOpenRoadmap ? onOpenRoadmap('levels') : navigate?.(passportUrl)}
+      className={cn(
+        "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-3 cursor-pointer hover:border-purple-500/50 group/levelcard",
+        isDark
+          ? "bg-[#0b1021]/80 border-white/[0.08] text-white hover:bg-[#0e152e]/90"
+          : "bg-white/95 border-slate-200/90 text-slate-900 hover:bg-slate-50/90"
+      )}
+      role="button"
+      tabIndex={0}
+      title="Click to view full Level Progression & Citizenship Roadmap"
+    >
       {/* Top Header: Hexagonal Level Badge + Level Title */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -258,6 +274,13 @@ export const ProfileHeroSection = memo(({
   const navigate = useNavigate();
   const isDark = theme === 'dark';
   const [copiedHandle, setCopiedHandle] = useState(false);
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [roadmapInitialTab, setRoadmapInitialTab] = useState('levels');
+
+  const handleOpenRoadmap = useCallback((tab = 'levels') => {
+    setRoadmapInitialTab(tab);
+    setShowRoadmapModal(true);
+  }, []);
 
   const profileUid = profile?.id || profile?.uid || 'user';
   const displayName = profile?.displayName || profile?.name || 'User';
@@ -466,15 +489,20 @@ export const ProfileHeroSection = memo(({
               )}
 
               {isRoyal && (
-                <span className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border",
-                  isDark
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    : "bg-amber-100 text-amber-800 border-amber-300"
-                )}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenRoadmap('royals')}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border transition-transform hover:scale-105 active:scale-95 cursor-pointer",
+                    isDark
+                      ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40"
+                      : "bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300"
+                  )}
+                  title="View Royal Family Privileges & Standing"
+                >
                   <span>👑</span>
                   <span>Royal Family</span>
-                </span>
+                </button>
               )}
             </div>
 
@@ -582,6 +610,7 @@ export const ProfileHeroSection = memo(({
           isDark={isDark}
           userId={profileUid}
           navigate={navigate}
+          onOpenRoadmap={handleOpenRoadmap}
         />
       </div>
 
@@ -762,6 +791,16 @@ export const ProfileHeroSection = memo(({
           </button>
         </div>
       )}
+
+      {/* Interactive Level, Citizenship & Royal Family System Roadmap Modal */}
+      <ProfileSystemRoadmapModal
+        isOpen={showRoadmapModal}
+        onClose={() => setShowRoadmapModal(false)}
+        profile={profile}
+        theme={theme}
+        initialTab={roadmapInitialTab}
+        userId={profileUid}
+      />
     </div>
   );
 });
