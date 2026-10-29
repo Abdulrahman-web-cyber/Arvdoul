@@ -704,13 +704,26 @@ class ProfessionalUserService {
       const existingUser = await transaction.get(userDoc);
       if (existingUser.exists()) {
         // Document already exists! This is an update on users/{userId}.
-        // Strip server-authoritative fields to satisfy touchesServerAuthoritativeFields()
-        const userUpdate = { ...publicFields };
-        SERVER_AUTHORITATIVE_FIELDS.forEach((key) => {
-          delete userUpdate[key];
-        });
-        delete userUpdate.createdAt;
-        userUpdate.updatedAt = serverTimestamp();
+        // Only update user-editable fields so we NEVER touch server-authoritative
+        // fields or reset counters (followers, following, posts, etc.).
+        const isComplete = profileData.isProfileComplete !== undefined ? !!profileData.isProfileComplete : true;
+        const userUpdate = {
+          updatedAt: serverTimestamp(),
+          isProfileComplete: isComplete,
+        };
+        if (isComplete) {
+          userUpdate.profileCompletedAt = serverTimestamp();
+        }
+        if (publicFields.displayName !== undefined && publicFields.displayName) userUpdate.displayName = publicFields.displayName;
+        if (publicFields.firstName !== undefined) userUpdate.firstName = publicFields.firstName;
+        if (publicFields.lastName !== undefined) userUpdate.lastName = publicFields.lastName;
+        if (publicFields.username !== undefined && publicFields.username) userUpdate.username = publicFields.username;
+        if (publicFields.bio !== undefined) userUpdate.bio = publicFields.bio;
+        if (publicFields.website !== undefined) userUpdate.website = publicFields.website;
+        if (publicFields.location !== undefined) userUpdate.location = publicFields.location;
+        if (publicFields.gender !== undefined) userUpdate.gender = publicFields.gender;
+        if (publicFields.dob !== undefined) userUpdate.dob = publicFields.dob;
+        if (publicFields.photoURL !== undefined && publicFields.photoURL) userUpdate.photoURL = publicFields.photoURL;
         transaction.update(userDoc, userUpdate);
       } else {
         // New document creation - publicFields has the exact required NEW_USER_DEFAULTS

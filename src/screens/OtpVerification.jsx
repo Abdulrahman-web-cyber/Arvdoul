@@ -1021,7 +1021,7 @@ export default function OTPVerification() {
         if (err.code === 'auth/user-not-found' || err.message?.includes('No Arvdoul account found')) {
           toast.error("No account found with this phone number. Please sign up.");
           setTimeout(() => {
-            navigate("/signup", { replace: true, state: { phoneNumber } });
+            navigate("/signup/step1", { replace: true, state: { phoneNumber } });
           }, 1800);
           return;
         }

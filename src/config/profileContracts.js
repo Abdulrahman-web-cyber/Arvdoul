@@ -529,6 +529,20 @@ export function validateProfileUpdate(rawUpdates = {}) {
         break;
       }
 
+      case 'isProfileComplete': {
+        if (typeof val === 'boolean') {
+          sanitized.isProfileComplete = val;
+        }
+        break;
+      }
+
+      case 'profileCompletedAt': {
+        if (typeof val === 'string' || typeof val === 'number') {
+          sanitized.profileCompletedAt = val;
+        }
+        break;
+      }
+
       case 'defaultTab': {
         if (typeof val === 'string' && ['posts', 'reels', 'audio', 'citizenship', 'about'].includes(val)) {
           sanitized.defaultTab = val;

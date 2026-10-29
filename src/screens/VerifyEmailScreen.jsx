@@ -751,15 +751,9 @@ export default function EmailVerification() {
     const uid = userId || user?.uid;
     const mode = new URLSearchParams(location.search).get("mode");
     const fromLogin = location.state?.fromLogin === true;
-    const fromSignup =
-      !fromLogin && (
-        location.state?.fromSignup === true ||
-        location.state?.isNewUser === true ||
-        mode === "signup" ||
-        !!getOnboardingSession(uid)
-      );
-    const hasIncompleteProfile = !fromLogin && (user?.isProfileComplete === false || user?.requiresProfileCompletion === true);
-    const goToSetup = !fromLogin && (fromSignup || hasIncompleteProfile);
+    const isProfileComplete = user?.isProfileComplete === true && !user?.requiresProfileCompletion;
+    const isNew = location.state?.fromSignup === true || location.state?.isNewUser === true || mode === "signup" || !!getOnboardingSession(uid);
+    const goToSetup = !isProfileComplete || isNew;
     if (!goToSetup) {
       clearOnboardingRequired();
     }

@@ -535,22 +535,26 @@ export function AuthProvider({ children }) {
             }
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com') || profile.authProvider === 'google';
-            if (isGoogle) {
+            const isGoogleProfileComplete = isGoogle && (profile.isProfileComplete === true || !!profile.profileCompletedAt);
+            if (isGoogleProfileComplete) {
               clearOnboardingRequired();
-              if (profile.isProfileComplete !== true) {
-                userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
-              }
             }
 
-            const isComplete = isGoogle ? true : (hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true }));
-            const onboarding = isGoogle ? false : (hasStep1Names ? true : computeNeedsOnboarding({
-              authUser: firebaseUser,
-              profile,
-              profileResolved: true,
-            }));
+            const isComplete = hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true });
+            const onboarding = isGoogle
+              ? !isGoogleProfileComplete
+              : (hasStep1Names ? true : computeNeedsOnboarding({
+                  authUser: firebaseUser,
+                  profile,
+                  profileResolved: true,
+                }));
+
             if (hasStep1Names && !isGoogle) {
               markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
+            } else if (isGoogle && onboarding) {
+              markOnboardingRequired(firebaseUser.uid, { method: 'google', isSignup: true });
             }
+
             if (isComplete && !onboarding && profile.isProfileComplete !== true) {
               userService.updateUserProfile(uid, { isProfileComplete: true }).catch(() => {});
             }
@@ -567,17 +571,13 @@ export function AuthProvider({ children }) {
             } catch (e) {}
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com');
-            const hasStep1Names = isGoogle ? false : Boolean(step1Data?.firstName || step1Data?.lastName);
+            const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
             const step1FullName = (step1Data?.firstName && step1Data?.lastName)
               ? `${step1Data.firstName} ${step1Data.lastName}`.trim()
               : (step1Data?.firstName || step1Data?.lastName || '');
 
-            const onboarding = isGoogle ? false : (hasStep1Names || !!getOnboardingSession(firebaseUser.uid) || firebaseUser.isNewUser === true);
-            if (onboarding) {
-              markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
-            } else if (isGoogle) {
-              clearOnboardingRequired();
-            }
+            const onboarding = true;
+            markOnboardingRequired(firebaseUser.uid, { method: isGoogle ? 'google' : 'phone', isSignup: true, step1Data });
 
             const basicName = step1FullName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || (firebaseUser.phoneNumber ? `User ${firebaseUser.phoneNumber.slice(-4)}` : 'User');
             let candidateBase = step1FullName

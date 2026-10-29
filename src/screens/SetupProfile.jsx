@@ -1035,7 +1035,7 @@ export default function SetupProfile() {
   const [avatarUrl, setAvatarUrl] = useState(() => getInitials().avatar);
   const [authProvider, setAuthProvider] = useState(() => getInitials().authProvider);
   const [identifier, setIdentifier] = useState(() => getInitials().identifier);
-  const [bio, setBio] = useState("");
+  const [bio, setBio] = useState(() => signupData.bio || stateData.bio || user?.bio || "");
   const [loading, setLoading] = useState(false);
   const [profileComplete, setProfileComplete] = useState(false);
   const [nameFocused, setNameFocused] = useState(false);
@@ -1052,8 +1052,11 @@ export default function SetupProfile() {
       if (!avatarUrl && initial.avatar) setAvatarUrl(initial.avatar);
       if (initial.authProvider) setAuthProvider(initial.authProvider);
       if (initial.identifier) setIdentifier(initial.identifier);
+      if (!bio && (signupData.bio || stateData.bio || user?.bio)) {
+        setBio(signupData.bio || stateData.bio || user?.bio || "");
+      }
     }
-  }, [user?.uid, signupData, stateData, getInitials]);
+  }, [user?.uid, signupData, stateData, getInitials, bio, displayName, username, avatarUrl]);
 
   const handleAvatarUpload = (url) => setAvatarUrl(url);
 
@@ -1070,15 +1073,13 @@ export default function SetupProfile() {
     }
   };
 
-  // Force refresh user profile from Firestore
+  // Refresh user profile from Firestore without illegal full-doc update
   const refreshUserProfile = async () => {
     if (!user?.uid) return;
     setRefreshing(true);
     try {
       const freshProfile = await getUserProfile(user.uid);
-      if (freshProfile && updateUserProfile) {
-        await updateUserProfile(freshProfile);
-        // Manually update the local userProfile state via AuthContext's updateUserProfile
+      if (freshProfile) {
         console.log("Profile refreshed:", freshProfile);
       }
     } catch (err) {
@@ -1113,7 +1114,7 @@ export default function SetupProfile() {
         lastName: step1.lastName || "",
         gender: step1.gender || "",
         dob: step1.dob || {},
-        username: username.toLowerCase(),
+        username: username.toLowerCase().trim(),
         bio: bio.trim(),
         photoURL: finalAvatar,
         email: user?.email || "",
@@ -1126,9 +1127,6 @@ export default function SetupProfile() {
 
       if (!result.success) throw new Error(result.error || "Profile creation failed");
 
-      // Update AuthContext
-      if (updateUserProfile) await updateUserProfile({ isProfileComplete: true });
-
       // Update Firebase Auth user profile
       if (authService?.auth?.currentUser) {
         await updateFirebaseAuthProfile(authService.auth.currentUser, {
@@ -1137,7 +1135,6 @@ export default function SetupProfile() {
         });
       }
 
-      // Force a refresh of the profile to ensure the flag is updated
       await refreshUserProfile();
 
       sessionStorage.removeItem("signup_step1");
@@ -1146,7 +1143,7 @@ export default function SetupProfile() {
       clearOnboardingRequired();
       setProfileComplete(true);
       toast.success("🎉 Profile setup complete!");
-      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);
+      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1200);
     } catch (error) {
       const msg = error?.message?.includes("does not exist") || error?.message?.includes("datastore/setup")
         ? "Database connection updating. Please tap again."
@@ -1188,7 +1185,6 @@ export default function SetupProfile() {
         accountStatus: "active",
       });
       if (!result.success) throw new Error(result.error || "Profile creation failed");
-      if (updateUserProfile) await updateUserProfile({ isProfileComplete: true });
       if (authService?.auth?.currentUser) {
         await updateFirebaseAuthProfile(authService.auth.currentUser, {
           displayName: displayName.trim(),
@@ -1202,7 +1198,7 @@ export default function SetupProfile() {
       clearOnboardingRequired();
       setProfileComplete(true);
       toast.success("🎉 Profile setup complete!");
-      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1500);
+      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1200);
     } catch (err) {
       const msg = err?.message?.includes("does not exist") || err?.message?.includes("datastore/setup")
         ? "Database connection updating. Please tap again."

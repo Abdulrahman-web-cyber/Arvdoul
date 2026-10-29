@@ -184,19 +184,26 @@ export function needsOnboarding({
 } = {}) {
   if (!authUser) return false;
 
-  // Google sign-in / sign-up provides verified identity and enters the app directly
+  // Google sign-in / sign-up provides verified identity, but new users or incomplete profiles must reach setup
   const isGoogle = (
     authUser.authProvider === 'google' ||
     authUser.authProvider === 'google.com' ||
     profile?.authProvider === 'google' ||
     authUser.providerData?.some((p) => p.providerId === 'google.com')
   );
-  if (isGoogle) return false;
+  if (isGoogle && (profile?.isProfileComplete === true || profile?.profileCompletedAt)) {
+    return false;
+  }
 
   const session = getOnboardingSession(authUser.uid);
   if (session?.required || session?.isSignup) return true;
   if (isSignupInProgress) return true;
   if (isNewUserThisSession === true || authUser.isNewUser === true) return true;
+
+  // New Google users or accounts with missing profile document must complete profile setup
+  if (isGoogle && (!profile || profile?.isProfileComplete === false)) {
+    return true;
+  }
 
   if (computeProfileComplete(authUser, profile, { profileResolved })) {
     return false;

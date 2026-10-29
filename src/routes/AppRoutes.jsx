@@ -222,6 +222,8 @@ export default function AppRoutes() {
         </PublicRoute>
       } />
       
+      <Route path="/signup" element={<Navigate to="/signup/step1" replace />} />
+
       <Route path="/signup/step1" element={
         <PublicRoute>
           <Suspense fallback={<RouteFallback />}>

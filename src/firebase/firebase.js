@@ -15,10 +15,10 @@ const FIREBASE_CONFIG = {
 
 const resolveFirestoreDatabaseId = () => {
   const envDbId = import.meta.env?.VITE_FIREBASE_DATABASE_ID;
-  if (envDbId && !envDbId.includes('22fc8386')) {
+  if (envDbId && envDbId !== '(default)' && !envDbId.includes('22fc8386') && !envDbId.startsWith('ai-studio-arvdoul')) {
     return envDbId;
   }
-  if (appletConfig?.firestoreDatabaseId && appletConfig.firestoreDatabaseId !== '(default)' && !appletConfig.firestoreDatabaseId.includes('22fc8386')) {
+  if (appletConfig?.firestoreDatabaseId && appletConfig.firestoreDatabaseId !== '(default)' && !appletConfig.firestoreDatabaseId.includes('22fc8386') && !appletConfig.firestoreDatabaseId.startsWith('ai-studio-arvdoul')) {
     return appletConfig.firestoreDatabaseId;
   }
   return '(default)';

@@ -832,6 +832,7 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
   const { createRecaptchaVerifier, cleanupRecaptchaVerifier } = useAuth();
   const [status, setStatus] = useState('initializing');
   const [errorMessage, setErrorMessage] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
@@ -842,9 +843,12 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
 
   useEffect(() => {
     let mounted = true;
+    setStatus('initializing');
+    setErrorMessage('');
     const initialize = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 50));
+        cleanupRecaptchaVerifier('signup-recaptcha-container');
+        await new Promise(resolve => setTimeout(resolve, 80));
         const verifier = await createRecaptchaVerifier('signup-recaptcha-container', {
           size: 'invisible',
           theme: resolvedTheme === 'dark' ? 'dark' : 'light',
@@ -853,7 +857,7 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
             cleanupRecaptchaVerifier('signup-recaptcha-container');
             if (mounted) {
               setStatus('error');
-              setErrorMessage('Security check expired. Please refresh.');
+              setErrorMessage('Security check expired. Tap retry.');
               if (onErrorRef.current) onErrorRef.current('Security check expired');
             }
           }
@@ -863,11 +867,14 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
           if (onReadyRef.current) onReadyRef.current(verifier);
         }
       } catch (error) {
-        const message = error?.message || error?.toString() || 'Failed to initialize security check';
+        const rawMsg = error?.message || error?.toString() || 'Failed to initialize security check';
+        const userFriendlyMsg = rawMsg.includes('already rendered')
+          ? 'Security check refreshing...'
+          : 'Security check issue. Tap retry.';
         if (mounted) {
           setStatus('error');
-          setErrorMessage(message);
-          if (onErrorRef.current) onErrorRef.current(message);
+          setErrorMessage(userFriendlyMsg);
+          if (onErrorRef.current) onErrorRef.current(userFriendlyMsg);
         }
       }
     };
@@ -876,7 +883,11 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
       mounted = false;
       cleanupRecaptchaVerifier('signup-recaptcha-container');
     };
-  }, [createRecaptchaVerifier, cleanupRecaptchaVerifier, resolvedTheme]);
+  }, [createRecaptchaVerifier, cleanupRecaptchaVerifier, resolvedTheme, retryCount]);
+
+  const handleRetry = useCallback(() => {
+    setRetryCount(c => c + 1);
+  }, []);
 
   return (
     <div>
@@ -898,7 +909,7 @@ const InvisibleRecaptcha = React.memo(({ onReady, onError, loading }) => {
           {status === 'error' && (
             <>
               <span className="av2-sec-sub">{errorMessage}</span>
-              <button type="button" onClick={() => window.location.reload()} className="av2-retry">
+              <button type="button" onClick={handleRetry} className="av2-retry">
                 Retry
               </button>
             </>
@@ -1338,15 +1349,22 @@ export default function SignupStep2VerifyContact() {
     setLoading(true);
     try {
       toast.success("✅ Google authentication successful!");
-      try {
-        const { default: authService } = await import('../services/authService.js');
-        authService?.clearOnboardingRequired?.();
-        sessionStorage.removeItem("signup_step1");
-        localStorage.removeItem("signup_step1");
-        sessionStorage.removeItem("signup_data");
-        localStorage.removeItem("signup_data");
-      } catch (e) {}
-      navigate("/home", { replace: true, state: { welcomeMessage: true } });
+      const targetUid = result?.user?.uid || auth.user?.uid;
+      const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
+      markOnboardingRequired(targetUid, {
+        method: "google",
+        isSignup: true,
+        step1Data,
+      });
+      navigate("/setup-profile", {
+        replace: true,
+        state: {
+          method: "google",
+          userData: result?.user || auth.user,
+          step1Data,
+          isNewUser: true,
+        },
+      });
     } catch (error) {
       toast.error("Failed to process Google authentication");
       setErrors({ general: error.message });
@@ -1355,7 +1373,7 @@ export default function SignupStep2VerifyContact() {
       setLoading(false);
       setTimeout(() => { navigationLock.current = false; }, 1000);
     }
-  }, [navigate, triggerShake]);
+  }, [auth.user, navigate, step1Data, triggerShake]);
 
   const handlePhoneVerification = useCallback(async () => {
     if (navigationLock.current || phoneLoading) return;
@@ -1379,7 +1397,7 @@ export default function SignupStep2VerifyContact() {
         setRecaptchaVerifier(verifier);
         setRecaptchaReady(true);
       } catch (rErr) {
-        toast.error("Security check failed. Please refresh or try again.");
+        toast.error("Security check failed. Please tap retry and try again.");
         navigationLock.current = false;
         setPhoneLoading(false);
         triggerShake();
@@ -1398,7 +1416,15 @@ export default function SignupStep2VerifyContact() {
       toast.success(`✅ Code sent to ${result.phoneNumber}`);
       navigate("/otp-verification", { state: { verificationId: result.verificationId, phoneNumber: result.phoneNumber, isSignup: true, method: "phone", step1Data }, replace: true });
     } catch (error) {
-      const friendlyMsg = error.message || 'Failed to send verification code';
+      let friendlyMsg = "Failed to send verification code";
+      if (error?.message) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('quota-exceeded')) friendlyMsg = "SMS quota exceeded. Please try email verification or try again in a few minutes.";
+        else if (msg.includes('captcha') || msg.includes('recaptcha')) friendlyMsg = "Security check failed. Please tap retry on the security badge.";
+        else if (msg.includes('too-many-requests')) friendlyMsg = "Too many attempts. Please wait a moment before trying again.";
+        else if (msg.includes('invalid-phone-number')) friendlyMsg = "Invalid phone number. Please include your country code (e.g. +1234567890).";
+        else friendlyMsg = error.message || friendlyMsg;
+      }
       setErrors({ phone: friendlyMsg });
       toast.error(friendlyMsg);
       triggerShake();

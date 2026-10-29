@@ -966,13 +966,17 @@ export default function LoginScreen() {
     setTimeout(() => setShakeCard(false), 600);
   }, []);
 
-  // Redirect if already authenticated — login users must NEVER navigate to /setup-profile.
+  // Redirect if already authenticated — if account has incomplete profile, guide to setup-profile
   useEffect(() => {
     if (!isAuthenticated || !user || !profileResolved) return;
+    if (needsOnboarding || user?.isProfileComplete === false) {
+      navigate('/setup-profile', { replace: true, state: { welcomeMessage: true, isLogin: true } });
+      return;
+    }
     clearOnboardingRequired();
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, isLogin: true } });
-  }, [isAuthenticated, user, profileResolved, navigate]);
+  }, [isAuthenticated, user, profileResolved, needsOnboarding, navigate]);
 
   // Focus the email field only where it won't pop a mobile keyboard unexpectedly.
   useEffect(() => {
@@ -1147,6 +1151,10 @@ export default function LoginScreen() {
 
   const handleGoogleSuccess = (userInfo) => {
     toast.success(`Welcome back, ${userInfo?.displayName || 'User'}!`);
+    if (needsOnboarding || userInfo?.isProfileComplete === false) {
+      navigate('/setup-profile', { replace: true, state: { welcomeMessage: true, isLogin: true, userData: userInfo } });
+      return;
+    }
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo?.displayName, isLogin: true } });
   };
@@ -1157,7 +1165,7 @@ export default function LoginScreen() {
     triggerShake();
     if (error?.isUserNotFound || error?.code === 'auth/user-not-found' || error?.message?.includes('sign up')) {
       setTimeout(() => {
-        navigate("/signup", { state: { fromLogin: true } });
+        navigate("/signup/step1", { state: { fromLogin: true } });
       }, 1800);
     }
   };

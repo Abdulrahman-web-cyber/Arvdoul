@@ -17,7 +17,7 @@ export default function MainLayout({ children }) {
 
   const isImmersiveVideo = location.pathname.startsWith("/videos") || location.pathname.startsWith("/reels");
   const isIndividualChat = location.pathname.startsWith("/messages/") && location.pathname !== "/messages/new";
-  const isStudioOrCall = (
+  const isDedicatedStudioOrCall = (
     location.pathname.startsWith("/call") ||
     location.pathname.startsWith("/video-editor") ||
     location.pathname.startsWith("/audio-editor") ||
@@ -25,13 +25,15 @@ export default function MainLayout({ children }) {
     location.pathname.startsWith("/image-editor") ||
     location.pathname.startsWith("/image-studio") ||
     location.pathname.startsWith("/live") ||
-    location.pathname.startsWith("/create-post") ||
-    location.pathname.startsWith("/create-story") ||
     location.pathname.startsWith("/camera")
   );
   
-  const hideTopAppBar = isImmersiveVideo || isIndividualChat || isStudioOrCall;
-  const hideBottomNav = isIndividualChat || isStudioOrCall;
+  const isCreatePost = location.pathname.startsWith("/create-post");
+  const isCreateStory = location.pathname.startsWith("/create-story");
+
+  const hideTopAppBar = isImmersiveVideo || isIndividualChat || isDedicatedStudioOrCall || isCreatePost || isCreateStory;
+  // create-post displays the bottom nav; image/video editors, stories, live, and 1-on-1 calls hide it
+  const hideBottomNav = isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
   const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || location.pathname === "/messages";
 
   return (
@@ -51,8 +53,12 @@ export default function MainLayout({ children }) {
         <main className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
           {children}
         </main>
-      ) : isIndividualChat || isStudioOrCall ? (
+      ) : isIndividualChat || isDedicatedStudioOrCall || isCreateStory ? (
         <main className="flex-1 w-full h-full min-h-0 relative overflow-hidden flex flex-col">
+          {children}
+        </main>
+      ) : isCreatePost ? (
+        <main className="flex-1 w-full min-h-0 relative overflow-y-auto pb-20">
           {children}
         </main>
       ) : isFullHeightFeed ? (
