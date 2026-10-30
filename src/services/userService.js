@@ -696,12 +696,16 @@ class ProfessionalUserService {
     const { publicFields, privateFields } = splitProfileFields(profile);
 
     await runTransaction(this.firestore, async (transaction) => {
+      // Execute all reads first before any writes
       const existingUsername = await transaction.get(usernameDoc);
+      const existingUser = await transaction.get(userDoc);
+      const existingPrivate = await transaction.get(privateDoc);
+
       if (existingUsername.exists() && existingUsername.data()?.userId !== userId) {
         throw new Error(`Username "${username}" is already taken. Please choose another one.`);
       }
 
-      const existingUser = await transaction.get(userDoc);
+      // Execute writes only after all reads have completed
       if (existingUser.exists()) {
         // Document already exists! This is an update on users/{userId}.
         // Only update user-editable fields so we NEVER touch server-authoritative
@@ -744,7 +748,6 @@ class ProfessionalUserService {
       if (privateFields.emailVerified !== undefined) safePrivateData.emailVerified = Boolean(privateFields.emailVerified);
       if (privateFields.phoneVerified !== undefined) safePrivateData.phoneVerified = Boolean(privateFields.phoneVerified);
 
-      const existingPrivate = await transaction.get(privateDoc);
       if (existingPrivate.exists()) {
         transaction.update(privateDoc, safePrivateData);
       } else {
@@ -1537,9 +1540,12 @@ class ProfessionalUserService {
     if (existingBlock.blocked) return { success: true, alreadyBlocked: true };
 
     const result = await runTransaction(this.firestore, async (transaction) => {
-      transaction.set(blockRef, { blockerId, blockedId, createdAt: serverTimestamp() });
+      // Execute all reads first
       const s1 = await transaction.get(f1);
       const s2 = await transaction.get(f2);
+
+      // Execute writes
+      transaction.set(blockRef, { blockerId, blockedId, createdAt: serverTimestamp() });
       if (s1.exists()) {
         transaction.delete(f1);
         await countersManager.incrementInTransaction(transaction, { docPath: `users/${blockerId}`, field: 'followingCount', amount: -1 });

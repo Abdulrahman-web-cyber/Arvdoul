@@ -14,12 +14,13 @@ const FIREBASE_CONFIG = {
 };
 
 const resolveFirestoreDatabaseId = () => {
-  const envDbId = import.meta.env?.VITE_FIREBASE_DATABASE_ID;
-  if (envDbId && envDbId !== '(default)' && !envDbId.includes('22fc8386') && !envDbId.startsWith('ai-studio-arvdoul')) {
-    return envDbId;
+  const configured = appletConfig?.firestoreDatabaseId;
+  if (configured && configured !== '(default)' && !configured.startsWith('ai-studio-') && !configured.includes('22fc8386')) {
+    return configured;
   }
-  if (appletConfig?.firestoreDatabaseId && appletConfig.firestoreDatabaseId !== '(default)' && !appletConfig.firestoreDatabaseId.includes('22fc8386') && !appletConfig.firestoreDatabaseId.startsWith('ai-studio-arvdoul')) {
-    return appletConfig.firestoreDatabaseId;
+  const envDbId = import.meta.env?.VITE_FIREBASE_DATABASE_ID;
+  if (envDbId && envDbId !== '(default)' && !envDbId.startsWith('ai-studio-') && !envDbId.includes('22fc8386')) {
+    return envDbId;
   }
   return '(default)';
 };

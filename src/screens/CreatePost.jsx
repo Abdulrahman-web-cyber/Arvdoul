@@ -2400,19 +2400,38 @@ const LauncherGrid = React.memo(() => {
   const [showScheduled, setShowScheduled] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [recentPostsData, setRecentPostsData] = useState([]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const { user } = useAuth();
 
+  const loadAnalyticsData = useCallback(async (force = false) => {
+    if (!user?.uid) return;
+    if (analyticsData && !force) return;
+    setLoadingAnalytics(true);
+    try {
+      const { default: analyticsService } = await import('../services/analyticsService.js');
+      const data = await analyticsService.getUserAnalytics(user.uid);
+      setAnalyticsData(data);
+
+      const fsService = getFirestoreService();
+      if (fsService && typeof fsService.getUserPosts === 'function') {
+        const postsRes = await fsService.getUserPosts(user.uid, { limit: 3 }).catch(() => null);
+        if (postsRes?.posts) {
+          setRecentPostsData(postsRes.posts);
+        }
+      }
+    } catch (_e) {
+      // analytics fallback gracefully
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  }, [user?.uid, analyticsData]);
+
   useEffect(() => {
     if (showAnalytics && user?.uid && !analyticsData) {
-      setLoadingAnalytics(true);
-      import('../services/analyticsService.js')
-        .then(({ default: analyticsService }) => analyticsService.getUserAnalytics(user.uid))
-        .then((data) => setAnalyticsData(data))
-        .catch(() => {})
-        .finally(() => setLoadingAnalytics(false));
+      loadAnalyticsData();
     }
-  }, [showAnalytics, user?.uid, analyticsData]);
+  }, [showAnalytics, user?.uid, analyticsData, loadAnalyticsData]);
 
   const scheduledDrafts = useMemo(() => draftsList.filter(d => d.data?.scheduledTime).sort((a, b) => new Date(a.data.scheduledTime) - new Date(b.data.scheduledTime)), [draftsList]);
   const memoizedDraftsList = useMemo(() => draftsList, [draftsList]);
@@ -2462,42 +2481,87 @@ const LauncherGrid = React.memo(() => {
       {/* Post Analytics panel */}
       {showAnalytics && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-lg mx-auto mb-6">
-          <div className="rounded-2xl bg-white dark:bg-gray-800/90 backdrop-blur-xl border border-purple-500/20 shadow-xl p-5">
+          <div className="rounded-2xl bg-white dark:bg-gray-800/95 backdrop-blur-xl border border-purple-500/20 shadow-2xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Icons.TrendingUp className="w-5 h-5 text-purple-500" />
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Post Analytics & Performance</h3>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                  <Icons.BarChart3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Post Analytics & Performance</h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">Real-time creator insights</p>
+                </div>
               </div>
-              <button onClick={() => setShowAnalytics(false)} className="text-xs text-gray-500 hover:text-gray-300">Close</button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadAnalyticsData(true)}
+                  disabled={loadingAnalytics}
+                  title="Refresh analytics"
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition disabled:opacity-50"
+                >
+                  <Icons.RefreshCw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin text-purple-500' : ''}`} />
+                </button>
+                <button onClick={() => setShowAnalytics(false)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50">Close</button>
+              </div>
             </div>
-            {loadingAnalytics ? (
-              <div className="flex items-center justify-center py-8">
+
+            {!user ? (
+              <div className="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
+                Please sign in to view your post analytics.
+              </div>
+            ) : loadingAnalytics ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
                 <LoadingSpinner size="sm" />
+                <p className="text-xs text-gray-400">Aggregating post metrics...</p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Total Views</p>
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Views</p>
                     <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? 0}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Total Reach</p>
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Total Reach</p>
                     <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? 0}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Engagement</p>
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Engagement</p>
                     <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? 0}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Coins Earned</p>
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Coins Earned</p>
                     <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? 0}</p>
                   </div>
                 </div>
+
                 <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30 flex items-center justify-between text-xs">
-                  <span className="text-gray-600 dark:text-gray-300">Audience Growth Rate:</span>
+                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                    <Icons.TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                    <span>Audience Growth Rate:</span>
+                  </div>
                   <span className="font-semibold text-green-500">+{analyticsData?.changes?.engagement ? Math.round(analyticsData.changes.engagement) : 12}% this week</span>
                 </div>
+
+                {recentPostsData && recentPostsData.length > 0 && (
+                  <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
+                    <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-2">Recent Content Performance</p>
+                    <div className="space-y-1.5">
+                      {recentPostsData.slice(0, 2).map((post, idx) => (
+                        <div key={post.id || idx} className="flex items-center justify-between p-2 rounded-lg bg-gray-50/70 dark:bg-gray-700/20 text-xs">
+                          <span className="truncate max-w-[180px] font-medium text-gray-800 dark:text-gray-200">
+                            {post.content || post.title || 'Untitled Post'}
+                          </span>
+                          <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400">
+                            <span>❤️ {post.likes || post.likeCount || 0}</span>
+                            <span>💬 {post.comments || post.commentCount || 0}</span>
+                            <span>👁️ {post.views || post.viewCount || 0}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
