@@ -828,16 +828,6 @@ class ProductionAuthService {
       const isAccountNew = isNewUser || !profile;
       let profileCreated = false;
       if (!profile) {
-        if (options.isLogin || options.flow === 'login') {
-          logger.warn('Google sign-in on login screen, but no account found for uid:', user.uid);
-          await this.signOut();
-          return {
-            success: false,
-            isNewUser: true,
-            code: 'auth/user-not-found',
-            error: 'No Arvdoul account found with this Google account. Please sign up to create an account.'
-          };
-        }
         try {
           const step1 = this._getSignupStep1Data();
           const firstName = (step1.firstName || additionalInfo?.profile?.given_name || '').trim();
@@ -871,11 +861,15 @@ class ProductionAuthService {
             photoURL: initialPhoto,
             authProvider: 'google',
             emailVerified: true,
-            isProfileComplete: true,
+            isProfileComplete: false,
             accountStatus: 'active'
           });
           profileCreated = true;
           logger.warn('// User profile created in Firestore for Google signup/login with username:', initialUsername);
+          try {
+            const { markOnboardingRequired } = await import('../utils/profileCompletion.js');
+            markOnboardingRequired(user.uid, { method: 'google', isSignup: true, step1Data: step1 });
+          } catch (e) {}
           try {
             profile = await getUserProfile(user.uid);
           } catch (e) {}
@@ -887,19 +881,15 @@ class ProductionAuthService {
             photoURL: user.photoURL,
             authProvider: 'google',
             emailVerified: true,
-            isProfileComplete: true
+            isProfileComplete: false
           });
         }
-      } else if (profile && profile.isProfileComplete === false) {
-        // Heal existing Google profile so user is not stuck on onboarding
-        try {
-          const { updateUserProfile } = await import('./userService.js');
-          await updateUserProfile(user.uid, { isProfileComplete: true });
-          profile.isProfileComplete = true;
-        } catch (healErr) {}
       }
 
-      this.clearOnboardingRequired();
+      const isProfileDone = Boolean(profile && profile.isProfileComplete === true && !profileCreated);
+      if (isProfileDone) {
+        this.clearOnboardingRequired();
+      }
 
       if (profileCreated) {
         this._sendWelcomeNotification(user.uid, user.displayName || user.email?.split('@')[0]);
@@ -916,11 +906,11 @@ class ProductionAuthService {
           photoURL: user.photoURL || profile?.photoURL || null,
           isNewUser: isAccountNew,
           hasExistingProfile: Boolean(profile && !profileCreated),
-          requiresProfileCompletion: false,
+          requiresProfileCompletion: !isProfileDone,
           authProvider: 'google',
           coins: profile?.coins,
           level: profile?.level,
-          isProfileComplete: true,
+          isProfileComplete: isProfileDone,
           username: profile?.username
         },
         isNewUser: isAccountNew,

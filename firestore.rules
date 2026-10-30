@@ -186,7 +186,8 @@ service cloud.firestore {
     match /usernames/{username} {
       allow read: if true;
       // Only the owner may create/update/delete a username doc that belongs to them.
-      allow create, update, delete: if isSignedIn() && request.resource.data.userId == uid();
+      allow create, update: if isSignedIn() && request.resource.data.userId == uid();
+      allow delete: if isSignedIn() && resource.data.userId == uid();
     }
     // Immutable username history: readable so old share/QR links keep resolving,
     // writable only by the owner who held the previous username.

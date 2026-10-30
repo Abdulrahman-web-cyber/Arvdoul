@@ -194,8 +194,10 @@ class UploadManager {
 
     // Auth check (canonical auth service, no direct firebase/auth import)
     const { getAuthService } = await import('../../services/authService.js');
-    const auth = await getAuthService().initialize();
-    if (!auth?.currentUser) {
+    const authService = getAuthService();
+    const auth = await authService.initialize();
+    const currentUser = auth?.currentUser || authService?.auth?.currentUser || (typeof window !== 'undefined' && window._arvdoul_auth?.currentUser);
+    if (!currentUser) {
       this._updateState(item.id, UPLOAD_STATES.ERROR, 0);
       if (this.onError) {
         this.onError(item.id, new Error("You must be signed in to upload"));
@@ -1304,12 +1306,12 @@ export default function CreateImage() {
   const getAuthUser = useCallback(() => {
     try {
       const authService = getAuthService();
-      const u = authService?.getCurrentUser?.();
+      const u = authService?.getCurrentUser?.() || authService?.auth?.currentUser;
       if (u?.uid) return u;
     } catch {
       // ignore
     }
-    if (typeof window !== "undefined" && window._arvdoul_auth?.currentUser) {
+    if (typeof window !== "undefined" && window._arvdoul_auth?.currentUser?.uid) {
       return window._arvdoul_auth.currentUser;
     }
     try {
@@ -1467,8 +1469,12 @@ export default function CreateImage() {
     if (remaining <= 0) { toast.error(`Maximum ${MAX_IMAGES} images`); return; }
 
     if (!storageReady) {
-      toast.error("Storage is initializing. Please wait.");
-      return;
+      try {
+        await storage.initialize();
+        setStorageReady(true);
+      } catch (err) {
+        console.warn("Storage auto-init notice:", err);
+      }
     }
 
     const user = getAuthUser();

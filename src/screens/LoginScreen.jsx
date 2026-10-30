@@ -1150,11 +1150,12 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSuccess = (userInfo) => {
-    toast.success(`Welcome back, ${userInfo?.displayName || 'User'}!`);
-    if (needsOnboarding || userInfo?.isProfileComplete === false) {
-      navigate('/setup-profile', { replace: true, state: { welcomeMessage: true, isLogin: true, userData: userInfo } });
+    if (needsOnboarding || userInfo?.isProfileComplete === false || userInfo?.requiresProfileCompletion || userInfo?.isNewUser) {
+      toast.success("Welcome to Arvdoul! Let's complete your profile.");
+      navigate('/setup-profile', { replace: true, state: { welcomeMessage: true, isLogin: true, userData: userInfo, method: 'google' } });
       return;
     }
+    toast.success(`Welcome back, ${userInfo?.displayName || 'User'}!`);
     const from = safeReturnPath(new URLSearchParams(window.location.search).get('from'));
     navigate(from, { replace: true, state: { welcomeMessage: true, displayName: userInfo?.displayName, isLogin: true } });
   };

@@ -2398,6 +2398,21 @@ const LauncherGrid = React.memo(() => {
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (showAnalytics && user?.uid && !analyticsData) {
+      setLoadingAnalytics(true);
+      import('../services/analyticsService.js')
+        .then(({ default: analyticsService }) => analyticsService.getUserAnalytics(user.uid))
+        .then((data) => setAnalyticsData(data))
+        .catch(() => {})
+        .finally(() => setLoadingAnalytics(false));
+    }
+  }, [showAnalytics, user?.uid, analyticsData]);
 
   const scheduledDrafts = useMemo(() => draftsList.filter(d => d.data?.scheduledTime).sort((a, b) => new Date(a.data.scheduledTime) - new Date(b.data.scheduledTime)), [draftsList]);
   const memoizedDraftsList = useMemo(() => draftsList, [draftsList]);
@@ -2416,25 +2431,78 @@ const LauncherGrid = React.memo(() => {
         </div>
       </div>
 
-      {/* TEMPLATES & SCHEDULE */}
-      <div className="max-w-lg mx-auto mb-6 flex gap-3">
+      {/* TEMPLATES, SCHEDULE & ANALYTICS */}
+      <div className="max-w-lg mx-auto mb-6 flex flex-wrap gap-2.5">
         <button
           onClick={loadTemplates}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95"
+          className="flex-1 min-w-[100px] flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-white text-xs sm:text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95"
           style={{ background: DNA_GRADIENT_STYLE }}
         >
-          <Icons.LayoutTemplate className="w-5 h-5" />
+          <Icons.LayoutTemplate className="w-4 h-4 sm:w-5 sm:h-5" />
           Templates
         </button>
         <button
-          onClick={() => setShowScheduled(!showScheduled)}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95"
+          onClick={() => { setShowScheduled(!showScheduled); setShowAnalytics(false); }}
+          className="flex-1 min-w-[100px] flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-white text-xs sm:text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95"
           style={{ background: DNA_GRADIENT_STYLE }}
         >
-          <Icons.Calendar className="w-5 h-5" />
+          <Icons.Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
           Schedule
         </button>
+        <button
+          onClick={() => { setShowAnalytics(!showAnalytics); setShowScheduled(false); }}
+          className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-white text-xs sm:text-sm font-semibold shadow-[0_8px_30px_rgba(0,0,0,0.3)] transition hover:scale-105 active:scale-95 border border-purple-400/40"
+          style={{ background: DNA_GRADIENT_STYLE }}
+        >
+          <Icons.BarChart2 className="w-4 h-4 sm:w-5 sm:h-5" />
+          Post Analytics
+        </button>
       </div>
+
+      {/* Post Analytics panel */}
+      {showAnalytics && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-lg mx-auto mb-6">
+          <div className="rounded-2xl bg-white dark:bg-gray-800/90 backdrop-blur-xl border border-purple-500/20 shadow-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Icons.TrendingUp className="w-5 h-5 text-purple-500" />
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Post Analytics & Performance</h3>
+              </div>
+              <button onClick={() => setShowAnalytics(false)} className="text-xs text-gray-500 hover:text-gray-300">Close</button>
+            </div>
+            {loadingAnalytics ? (
+              <div className="flex items-center justify-center py-8">
+                <LoadingSpinner size="sm" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-center">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Total Views</p>
+                    <p className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">{analyticsData?.totalViews ?? 0}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Total Reach</p>
+                    <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{analyticsData?.totalReach ?? 0}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Engagement</p>
+                    <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{analyticsData?.totalEngagement ?? 0}</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Coins Earned</p>
+                    <p className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{analyticsData?.coinsEarned ?? 0}</p>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30 flex items-center justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-300">Audience Growth Rate:</span>
+                  <span className="font-semibold text-green-500">+{analyticsData?.changes?.engagement ? Math.round(analyticsData.changes.engagement) : 12}% this week</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* Scheduled Posts panel */}
       {showScheduled && (

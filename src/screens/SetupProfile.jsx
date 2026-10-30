@@ -962,10 +962,12 @@ export default function SetupProfile() {
 
   const signupData = useMemo(() => {
     try {
-      const step1 = sessionStorage.getItem("signup_step1");
-      const signup = sessionStorage.getItem("signup_data");
-      const parsedStep1 = step1 ? JSON.parse(step1) : {};
-      const parsedSignup = signup ? JSON.parse(signup) : {};
+      const step1Session = sessionStorage.getItem("signup_step1");
+      const step1Local = localStorage.getItem("signup_step1");
+      const signupSession = sessionStorage.getItem("signup_data");
+      const signupLocal = localStorage.getItem("signup_data");
+      const parsedStep1 = step1Session ? JSON.parse(step1Session) : (step1Local ? JSON.parse(step1Local) : {});
+      const parsedSignup = signupSession ? JSON.parse(signupSession) : (signupLocal ? JSON.parse(signupLocal) : {});
       return { ...parsedStep1, ...parsedSignup };
     } catch {
       return {};
@@ -1122,7 +1124,6 @@ export default function SetupProfile() {
         phoneNumber: user?.phoneNumber || "",
         isProfileComplete: true,
         authProvider: authProvider || "email",
-        accountStatus: "active",
       });
 
       if (!result.success) throw new Error(result.error || "Profile creation failed");
@@ -1182,7 +1183,6 @@ export default function SetupProfile() {
         phoneNumber: user?.phoneNumber || "",
         isProfileComplete: true,
         authProvider: authProvider || "email",
-        accountStatus: "active",
       });
       if (!result.success) throw new Error(result.error || "Profile creation failed");
       if (authService?.auth?.currentUser) {

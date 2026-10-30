@@ -724,6 +724,11 @@ class ProfessionalUserService {
         if (publicFields.gender !== undefined) userUpdate.gender = publicFields.gender;
         if (publicFields.dob !== undefined) userUpdate.dob = publicFields.dob;
         if (publicFields.photoURL !== undefined && publicFields.photoURL) userUpdate.photoURL = publicFields.photoURL;
+        const oldUsername = existingUser.data()?.username;
+        if (oldUsername && oldUsername !== username) {
+          const oldDoc = doc(this.firestore, 'usernames', oldUsername);
+          transaction.delete(oldDoc);
+        }
         transaction.update(userDoc, userUpdate);
       } else {
         // New document creation - publicFields has the exact required NEW_USER_DEFAULTS
