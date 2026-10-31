@@ -31,8 +31,8 @@ export default function MainLayout({ children }) {
   const isCreatePost = location.pathname.startsWith("/create-post");
   const isCreateStory = location.pathname.startsWith("/create-story");
 
-  const hideTopAppBar = isImmersiveVideo || isIndividualChat || isDedicatedStudioOrCall || isCreatePost || isCreateStory;
-  // create-post displays the bottom nav; image/video editors, stories, live, and 1-on-1 calls hide it
+  // create-post displays the top app bar and bottom nav; stories, immersive video and studios hide them
+  const hideTopAppBar = isImmersiveVideo || isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
   const hideBottomNav = isIndividualChat || isDedicatedStudioOrCall || isCreateStory;
   const isFullHeightFeed = isImmersiveVideo || location.pathname === "/home" || location.pathname === "/" || location.pathname === "/messages";
 

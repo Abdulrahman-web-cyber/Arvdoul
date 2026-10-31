@@ -1,8 +1,7 @@
-// src/services/authService.js
-
 import { logger, setCorrelationId, getCorrelationId } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
+import { clearOnboardingRequired } from '../utils/profileCompletion.js';
 
 const AUTH_CONFIG = {
   MAX_RETRIES: 3,
@@ -37,6 +36,10 @@ class ProductionAuthService {
     this.initialized = false;
     this.verificationStates = new Map();
     this.recaptchaVerifiers = new Map();
+  }
+
+  clearOnboardingRequired() {
+    clearOnboardingRequired();
   }
 
   async initialize() {
@@ -888,7 +891,7 @@ class ProductionAuthService {
 
       const isProfileDone = Boolean(profile && profile.isProfileComplete === true && !profileCreated);
       if (isProfileDone) {
-        this.clearOnboardingRequired();
+        clearOnboardingRequired();
       }
 
       if (profileCreated) {

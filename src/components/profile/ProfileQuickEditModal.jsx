@@ -63,7 +63,8 @@ export const ProfileQuickEditModal = memo(({
 
     if (website && website.trim()) {
       const trimmedUrl = website.trim();
-      if (!isValidWebUrl(trimmedUrl)) {
+      const withProto = trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://') ? trimmedUrl : `https://${trimmedUrl}`;
+      if (!isValidWebUrl(withProto)) {
         newErrors.website = 'Please enter a valid website URL';
       }
     }
@@ -81,11 +82,16 @@ export const ProfileQuickEditModal = memo(({
 
     try {
       const userService = getUserService();
+      let cleanWebsite = website.trim();
+      if (cleanWebsite && !cleanWebsite.startsWith('http://') && !cleanWebsite.startsWith('https://')) {
+        cleanWebsite = `https://${cleanWebsite}`;
+      }
+
       const updates = {
         displayName: displayName.trim(),
         bio: bio.trim(),
         tagline: tagline.trim(),
-        website: website.trim(),
+        website: cleanWebsite,
       };
 
       await userService.updateUserProfile(userId, updates);
@@ -240,10 +246,10 @@ export const ProfileQuickEditModal = memo(({
               </label>
             </div>
             <input
-              type="url"
+              type="text"
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://yourwebsite.com"
+              placeholder="e.g. yourwebsite.com or https://..."
               className={cn(
                 "w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm border outline-none transition",
                 errors.website ? "border-rose-500" : (isDark ? "bg-slate-900 border-white/10 text-white focus:border-purple-500" : "bg-white border-slate-200 text-slate-900 focus:border-purple-600")

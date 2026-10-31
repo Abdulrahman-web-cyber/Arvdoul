@@ -1075,14 +1075,24 @@ export default function SetupProfile() {
     }
   };
 
-  // Refresh user profile from Firestore without illegal full-doc update
+  // Refresh user profile from Firestore and sync profileStore & appStore
   const refreshUserProfile = async () => {
     if (!user?.uid) return;
     setRefreshing(true);
     try {
       const freshProfile = await getUserProfile(user.uid);
       if (freshProfile) {
-        console.log("Profile refreshed:", freshProfile);
+        try {
+          const { useProfileStore } = await import("../store/profileStore.js");
+          await useProfileStore.getState().loadProfile(user.uid, user.uid);
+        } catch {}
+        try {
+          const { useAppStore } = await import("../store/appStore.js");
+          const cur = useAppStore.getState().currentUser;
+          if (cur) {
+            useAppStore.getState().setCurrentUser({ ...cur, ...freshProfile, isProfileComplete: true });
+          }
+        } catch {}
       }
     } catch (err) {
       console.warn("Failed to refresh profile", err);

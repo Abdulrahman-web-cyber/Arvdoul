@@ -282,11 +282,15 @@ export function validateProfileUpdate(rawUpdates = {}) {
         break;
       }
 
-      case 'status': {
+      case 'status':
+      case 'tagline': {
         if (typeof val === 'string') {
-          sanitized.status = val.trim().slice(0, PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH);
+          const cleanStatus = val.trim().slice(0, PROFILE_CONSTRAINTS.STATUS.MAX_LENGTH);
+          sanitized.status = cleanStatus;
+          sanitized.tagline = cleanStatus;
         } else if (val === null) {
           sanitized.status = '';
+          sanitized.tagline = '';
         }
         break;
       }
@@ -426,9 +430,12 @@ export function validateProfileUpdate(rawUpdates = {}) {
         break;
       }
 
-      case 'photoURL': {
-        if (typeof val === 'string') {
-          sanitized.photoURL = val;
+      case 'photoURL':
+      case 'profilePicture': {
+        if (typeof val === 'string' && val.trim().length > 0) {
+          sanitized.photoURL = val.trim();
+        } else if (val === null || val === '') {
+          sanitized.photoURL = '';
         }
         break;
       }

@@ -200,6 +200,47 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
 
           {/* Tab Content Body (Scrollable) */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 overscroll-contain">
+            {/* The Three Identity Pillars of Arvdoul */}
+            <div className={cn(
+              "p-4 rounded-2xl border text-xs space-y-2",
+              isDark ? "bg-gradient-to-r from-purple-950/40 via-cyan-950/30 to-amber-950/40 border-white/10" : "bg-gradient-to-r from-purple-50 via-cyan-50 to-amber-50 border-slate-200"
+            )}>
+              <div className="font-extrabold uppercase tracking-wider text-[10px] text-purple-400 font-mono">
+                The Three Pillars of Arvdoul Identity
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 space-y-1">
+                  <div className="font-black text-cyan-400 flex items-center gap-1.5 text-xs">
+                    <span>🏛️</span>
+                    <span>1. Citizen</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-tight">
+                    <strong>Who you are:</strong> You belong to Arvdoul. Belonging, membership, and participation.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                  <div className="font-black text-purple-400 flex items-center gap-1.5 text-xs">
+                    <span>⚡</span>
+                    <span>2. Level</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-tight">
+                    <strong>How you grow:</strong> XP from actions, milestones, and unlocked capabilities.
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
+                  <div className="font-black text-amber-400 flex items-center gap-1.5 text-xs">
+                    <span>👑</span>
+                    <span>3. Royal Family</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-tight">
+                    <strong>Distinguished status:</strong> Exclusive appointed institution of honor, heritage, and leadership.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* TAB 1: LEVELS & UNLOCKS */}
             {activeTab === 'levels' && (
               <div className="space-y-6">
@@ -312,13 +353,13 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-cyan-400 block">
-                        Instituted Status
+                        Citizenship — Who You Are
                       </span>
                       <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
-                        {currentCitizenTier?.tier || 'Platform Resident'}
+                        {currentCitizenTier?.tier || 'Citizen'}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        {currentCitizenTier?.description}
+                        Every registered member of Arvdoul is a Citizen. Citizenship represents belonging, identity, membership, and participation in the Arvdoul community.
                       </p>
                     </div>
 

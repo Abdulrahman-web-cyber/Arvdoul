@@ -781,6 +781,11 @@ class ProfessionalUserService {
     this.avatarCache.set(`avatar_${userId}`, profile.photoURL);
     this._invalidateUserCache(userId);
 
+    try {
+      const { useProfileStore } = await import('../store/profileStore.js');
+      useProfileStore.getState().loadProfile(userId, userId);
+    } catch {}
+
     return { success: true, profile, username };
   }
 
@@ -872,6 +877,16 @@ class ProfessionalUserService {
     } catch (authSyncErr) {
       logger.warn('Firebase Auth profile sync failed (non-blocking)', { error: authSyncErr?.message });
     }
+
+    try {
+      const { useProfileStore } = await import('../store/profileStore.js');
+      const storeProfile = useProfileStore.getState().profile;
+      if (storeProfile && (storeProfile.id === userId || storeProfile.uid === userId)) {
+        useProfileStore.setState((state) => ({
+          profile: { ...(state.profile || {}), ...sanitizedUpdates }
+        }));
+      }
+    } catch {}
 
     this._invalidateUserCache(userId);
     return { success: true };
