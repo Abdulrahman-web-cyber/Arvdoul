@@ -1140,11 +1140,13 @@ export default function SetupProfile() {
 
       sessionStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
+      localStorage.removeItem("signup_step1");
+      localStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
       clearOnboardingRequired();
       setProfileComplete(true);
       toast.success("🎉 Profile setup complete!");
-      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1200);
+      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 500);
     } catch (error) {
       const msg = error?.message?.includes("does not exist") || error?.message?.includes("datastore/setup")
         ? "Database connection updating. Please tap again."
@@ -1194,11 +1196,13 @@ export default function SetupProfile() {
       await refreshUserProfile();
       sessionStorage.removeItem("signup_step1");
       sessionStorage.removeItem("signup_data");
+      localStorage.removeItem("signup_step1");
+      localStorage.removeItem("signup_data");
       localStorage.removeItem("signup_data_persist");
       clearOnboardingRequired();
       setProfileComplete(true);
       toast.success("🎉 Profile setup complete!");
-      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 1200);
+      setTimeout(() => navigate("/home", { replace: true, state: { welcomeMessage: true } }), 500);
     } catch (err) {
       const msg = err?.message?.includes("does not exist") || err?.message?.includes("datastore/setup")
         ? "Database connection updating. Please tap again."

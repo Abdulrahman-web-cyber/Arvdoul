@@ -508,15 +508,30 @@ export function AuthProvider({ children }) {
               return;
             }
 
-            // Check if Step 1 has personal details from current signup flow
-            let step1Data = null;
-            try {
-              const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
-                          sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
-              if (raw) step1Data = JSON.parse(raw);
-            } catch (e) {}
+            const isDocComplete = profile.isProfileComplete === true || !!profile.profileCompletedAt;
 
-            const hasStep1Names = Boolean(step1Data?.firstName || step1Data?.lastName);
+            if (isDocComplete) {
+              try {
+                sessionStorage.removeItem('signup_step1');
+                sessionStorage.removeItem('signup_data');
+                localStorage.removeItem('signup_step1');
+                localStorage.removeItem('signup_data');
+                localStorage.removeItem('signup_data_persist');
+              } catch (e) {}
+              clearOnboardingRequired();
+            }
+
+            // Check if Step 1 has personal details from current signup flow only when profile is still incomplete
+            let step1Data = null;
+            if (!isDocComplete) {
+              try {
+                const raw = sessionStorage.getItem('signup_step1') || localStorage.getItem('signup_step1') ||
+                            sessionStorage.getItem('signup_data') || localStorage.getItem('signup_data');
+                if (raw) step1Data = JSON.parse(raw);
+              } catch (e) {}
+            }
+
+            const hasStep1Names = Boolean(!isDocComplete && (step1Data?.firstName || step1Data?.lastName));
             const step1FullName = (step1Data?.firstName && step1Data?.lastName)
               ? `${step1Data.firstName} ${step1Data.lastName}`.trim()
               : (step1Data?.firstName || step1Data?.lastName || '');
@@ -535,24 +550,28 @@ export function AuthProvider({ children }) {
             }
 
             const isGoogle = firebaseUser.providerData?.some((p) => p.providerId === 'google.com') || profile.authProvider === 'google';
-            const isGoogleProfileComplete = isGoogle && (profile.isProfileComplete === true || !!profile.profileCompletedAt);
-            if (isGoogleProfileComplete) {
+            const isGoogleProfileComplete = isGoogle && isDocComplete;
+            if (isGoogleProfileComplete || isDocComplete) {
               clearOnboardingRequired();
             }
 
-            const isComplete = hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true });
-            const onboarding = isGoogle
-              ? !isGoogleProfileComplete
-              : (hasStep1Names ? true : computeNeedsOnboarding({
-                  authUser: firebaseUser,
-                  profile,
-                  profileResolved: true,
-                }));
+            const isComplete = isDocComplete || (hasStep1Names ? false : computeProfileComplete(firebaseUser, profile, { profileResolved: true }));
+            const onboarding = isDocComplete
+              ? false
+              : (isGoogle
+                  ? !isGoogleProfileComplete
+                  : (hasStep1Names ? true : computeNeedsOnboarding({
+                      authUser: firebaseUser,
+                      profile,
+                      profileResolved: true,
+                    })));
 
-            if (hasStep1Names && !isGoogle) {
-              markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
-            } else if (isGoogle && onboarding) {
-              markOnboardingRequired(firebaseUser.uid, { method: 'google', isSignup: true });
+            if (!isDocComplete) {
+              if (hasStep1Names && !isGoogle) {
+                markOnboardingRequired(firebaseUser.uid, { method: 'phone', isSignup: true, step1Data });
+              } else if (isGoogle && onboarding) {
+                markOnboardingRequired(firebaseUser.uid, { method: 'google', isSignup: true });
+              }
             }
 
             if (isComplete && !onboarding && profile.isProfileComplete !== true) {

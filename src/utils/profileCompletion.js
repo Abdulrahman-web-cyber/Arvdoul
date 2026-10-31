@@ -184,6 +184,12 @@ export function needsOnboarding({
 } = {}) {
   if (!authUser) return false;
 
+  // If the profile is explicitly complete, the user has finished setup and NEVER needs onboarding.
+  if (profile?.isProfileComplete === true || profile?.profileComplete === true || !!profile?.profileCompletedAt) {
+    clearOnboardingRequired();
+    return false;
+  }
+
   // Google sign-in / sign-up provides verified identity, but new users or incomplete profiles must reach setup
   const isGoogle = (
     authUser.authProvider === 'google' ||
@@ -191,9 +197,6 @@ export function needsOnboarding({
     profile?.authProvider === 'google' ||
     authUser.providerData?.some((p) => p.providerId === 'google.com')
   );
-  if (isGoogle && (profile?.isProfileComplete === true || profile?.profileCompletedAt)) {
-    return false;
-  }
 
   const session = getOnboardingSession(authUser.uid);
   if (session?.required || session?.isSignup) return true;

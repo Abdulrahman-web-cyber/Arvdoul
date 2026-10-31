@@ -179,6 +179,28 @@ describe('needsOnboarding', () => {
     ).toBe(true);
   });
 
+  test('completed profile in current session immediately exits onboarding even if markOnboardingRequired was set', () => {
+    markOnboardingRequired('n1');
+    const newUser = {
+      uid: 'n1',
+      email: 'new@example.com',
+      displayName: 'New Hero',
+      isNewUser: true,
+      metadata: {
+        creationTime: '2026-08-31T10:00:00.000Z',
+        lastSignInTime: '2026-08-31T10:00:00.000Z',
+      },
+    };
+    expect(
+      needsOnboarding({
+        authUser: newUser,
+        profile: { uid: 'n1', email: 'new@example.com', isProfileComplete: true },
+        profileResolved: true,
+        isNewUserThisSession: true,
+      })
+    ).toBe(false);
+  });
+
   test('onboarding session is uid-scoped', () => {
     markOnboardingRequired('other');
     expect(getOnboardingSession('u1')).toBeNull();
