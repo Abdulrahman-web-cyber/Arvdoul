@@ -19,24 +19,66 @@ const NewConversationScreen = () => {
   const { theme, isDark } = useTheme();
   const { loadConversations } = useMessagingStore();
 
-  // Post shared from PostCard ("Send to Friends"): we hold the id and send it as
-  // a real message after a conversation is created.
   const sharePostId = searchParams.get('sharePost');
+  const toUserId = searchParams.get('to') || searchParams.get('userId') || searchParams.get('uid');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery] = useDebounce(searchQuery, 300);
   const [searchResults, setSearchResults] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(toUserId));
   const [friends, setFriends] = useState([]);
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [groupName, setGroupName] = useState('');
   const [groupPhoto, setGroupPhoto] = useState(null);
 
+  // If a specific recipient UID was passed (e.g. from a user's profile "Message" button),
+  // immediately create/retrieve the direct conversation and navigate straight to the chat.
+  React.useEffect(() => {
+    if (!user?.uid || !toUserId) return;
+    let cancelled = false;
+
+    const openDirectChat = async () => {
+      try {
+        setLoading(true);
+        // Resolve profile first to make sure user exists
+        await userService.getUserProfile(toUserId);
+        if (cancelled) return;
+        const result = await messagingService.createConversation([user.uid, toUserId]);
+        if (result.success && result.conversation?.id) {
+          if (sharePostId) {
+            try {
+              const origin = typeof window !== 'undefined' ? window.location.origin : '';
+              await messagingService.sendMessage(result.conversation.id, {
+                type: 'text',
+                content: `Check out this post on ARVDOUL: ${origin}/post/${sharePostId}`,
+              });
+            } catch (err) {
+              console.warn('Post share failed:', err);
+            }
+          }
+          await loadConversations(user.uid);
+          navigate(`/messages/${result.conversation.id}`, { replace: true });
+        } else {
+          toast.error(result.error || 'Could not start conversation');
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err.message || 'Could not start conversation');
+          setLoading(false);
+        }
+      }
+    };
+
+    openDirectChat();
+    return () => { cancelled = true; };
+  }, [user?.uid, toUserId, sharePostId, loadConversations, navigate]);
+
   // Load friends on mount
   React.useEffect(() => {
-    if (!user) return;
+    if (!user || toUserId) return;
     const loadFriends = async () => {
       try {
         setLoadingFriends(true);
@@ -51,7 +93,7 @@ const NewConversationScreen = () => {
       }
     };
     loadFriends();
-  }, [user]);
+  }, [user, toUserId]);
 
   // Search users
   React.useEffect(() => {
@@ -145,6 +187,19 @@ const NewConversationScreen = () => {
 
   const displayUsers = debouncedQuery.trim() ? searchResults : friends;
   const isGroup = selectedUsers.length > 1;
+
+  if (loading && toUserId) {
+    return (
+      <div className={cn(
+        'min-h-screen flex flex-col items-center justify-center p-6 text-center',
+        theme === 'dark' ? 'bg-[#060816] text-white' : 'bg-gray-50 text-gray-900'
+      )}>
+        <Loader2 className="w-9 h-9 animate-spin text-purple-500 mb-3" />
+        <h2 className="text-base font-bold">Connecting to conversation</h2>
+        <p className="text-xs text-gray-400 mt-1">Opening secure chat...</p>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(
