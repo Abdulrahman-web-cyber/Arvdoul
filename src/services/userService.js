@@ -1578,6 +1578,8 @@ class ProfessionalUserService {
     countersManager.invalidate({ docPath: `users/${blockedId}`, field: 'followingCount' });
     countersManager.invalidate({ docPath: `users/${blockerId}`, field: 'followerCount' });
     auditLogger.log('social.block', { userId: blockerId, meta: { blockedId } });
+    this.cache.delete(`block_${blockerId}_${blockedId}`);
+    this.cache.delete(`block_${blockedId}_${blockerId}`);
     this._invalidateUserCache(blockerId);
     this._invalidateUserCache(blockedId);
     return result;
@@ -1593,13 +1595,17 @@ class ProfessionalUserService {
       transaction.delete(ref);
       return { success: true };
     });
+    this.cache.delete(`block_${blockerId}_${blockedId}`);
+    this.cache.delete(`block_${blockedId}_${blockerId}`);
     this._invalidateUserCache(blockerId);
     this._invalidateUserCache(blockedId);
     return result;
   }
 
   async isBlocked(blockerId, blockedId) {
-    if (!blockerId || !blockedId || blockerId === blockedId) return { success: true, blocked: false };
+    if (!blockerId || !blockedId || blockerId === blockedId || blockerId === 'undefined' || blockedId === 'undefined' || blockerId === 'null' || blockedId === 'null') {
+      return { success: true, blocked: false };
+    }
     const cacheKey = `block_${blockerId}_${blockedId}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 60000) {

@@ -14,6 +14,7 @@ import { Lock, UserPlus, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import {
   pickHandle,
@@ -60,13 +61,16 @@ export default function ProfilePublicScreen() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [profileData, setProfileData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [analytics, setAnalytics] = useState(null);
-  const [posts, setPosts] = useState([]);
-  const [mutualFriends, setMutualFriends] = useState([]);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
+  // Read state authoritatively from Profile Store
+  const storeProfile = useProfileStore((state) => state.profile);
+  const storePosts = useProfileStore((state) => state.posts);
+  const storeLoading = useProfileStore((state) => state.loading);
+  const storeFollowStatus = useProfileStore((state) => state.followStatus);
+  const storeFollowLoading = useProfileStore((state) => state.followLoading);
+  const storeMutualFriends = useProfileStore((state) => state.mutualFriends);
+  const storeHighlights = useProfileStore((state) => state.highlights);
+
+  const [localLoading, setLocalLoading] = useState(true);
   const [friendshipStatus, setFriendshipStatus] = useState('none'); // 'none' | 'pending' | 'received' | 'friends'
   const [pendingRequestId, setPendingRequestId] = useState(null);
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
@@ -94,70 +98,54 @@ export default function ProfilePublicScreen() {
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
 
-  // Load profile and related data
+  // Load profile and related data using useProfileStore
   useEffect(() => {
     let isMounted = true;
     const cleanUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
+    if (!cleanUserId) return;
+
+    setLocalLoading(true);
+
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setLocalLoading(false);
+    }, 6000);
 
     const loadPublicProfile = async () => {
-      if (!cleanUserId) return;
-      setLoading(true);
-
-      const safetyTimer = setTimeout(() => {
-        if (isMounted) setLoading(false);
-      }, 6000);
-
       try {
-        const userServiceModule = await import('../../services/userService.js');
-        const userService = userServiceModule.getUserService();
+        // 1. Fetch user profile via store
+        await useProfileStore.getState().loadProfile(cleanUserId, currentUserId);
+        const currentProfile = useProfileStore.getState().profile;
+        const targetUid = currentProfile?.id || currentProfile?.uid || cleanUserId;
 
-        // 1. Fetch user profile
-        const fetched = await userService.getUserProfile(cleanUserId, currentUserId);
-        const targetUid = fetched?.id || fetched?.uid || cleanUserId;
-        
-        // 2. Fetch posts
-        let userPosts = [];
-        try {
-          const { getFirestoreService } = await import('../../services/firestoreService.js');
-          const postsRes = await getFirestoreService().getPostsByUser(targetUid, { limit: 30 });
-          if (postsRes?.posts && Array.isArray(postsRes.posts)) {
-            userPosts = postsRes.posts;
-          }
-        } catch (postErr) {
-          console.warn('Posts fetch note:', postErr);
-        }
+        // 2. Load posts & highlights via store
+        await Promise.allSettled([
+          useProfileStore.getState().loadPosts(targetUid, { limit: 30 }),
+          useProfileStore.getState().loadHighlights(targetUid),
+        ]);
 
         // 3. Fetch relationship & follow status
-        if (currentUser?.uid && targetUid !== currentUser.uid) {
+        if (currentUserId && targetUid !== currentUserId) {
+          const userServiceModule = await import('../../services/userService.js');
+          const userService = userServiceModule.getUserService();
+
           try {
-            const rel = await userService.getRelationshipState(currentUser.uid, targetUid);
+            const rel = await userService.getRelationshipState(currentUserId, targetUid);
             if (isMounted) {
               setRelationship(rel);
-              setIsFollowing(Boolean(rel?.isFollowing || fetched?.isFollowing));
             }
           } catch (followErr) {
-            if (isMounted && fetched?.isFollowing !== undefined) {
-              setIsFollowing(Boolean(fetched.isFollowing));
-            }
+            console.warn('Relationship state note:', followErr);
           }
-        }
 
-        // 4. Fetch mutual friends and friend request status
-        if (currentUser?.uid && targetUid !== currentUser.uid) {
+          // 4. Fetch mutual friends and friend request status
           try {
-            const mutual = await userService.getMutualFriends(currentUser.uid, targetUid);
-            const friendsList = Array.isArray(mutual) ? mutual : (mutual?.mutualFriends || []);
-            if (isMounted) {
-              setMutualFriends(friendsList);
-            }
+            await useProfileStore.getState().loadMutualFriends(currentUserId, targetUid);
 
-            // Check if mutual friends directly using canonical areFriends
-            const areFriends = await userService.areFriends(currentUser.uid, targetUid).catch(() => false);
+            const areFriends = await userService.areFriends(currentUserId, targetUid).catch(() => false);
             if (areFriends) {
               if (isMounted) setFriendshipStatus('friends');
             } else {
-              // Check sent friend requests
-              const sent = await userService.getFriendRequests(currentUser.uid, 'sent').catch(() => ({ requests: [] }));
+              const sent = await userService.getFriendRequests(currentUserId, 'sent').catch(() => ({ requests: [] }));
               const sentReq = sent.requests?.find(r => r.toUserId === targetUid);
               if (sentReq) {
                 if (isMounted) {
@@ -165,8 +153,7 @@ export default function ProfilePublicScreen() {
                   setPendingRequestId(sentReq.id);
                 }
               } else {
-                // Check received friend requests
-                const received = await userService.getFriendRequests(currentUser.uid, 'received').catch(() => ({ requests: [] }));
+                const received = await userService.getFriendRequests(currentUserId, 'received').catch(() => ({ requests: [] }));
                 const recReq = received.requests?.find(r => r.fromUserId === targetUid);
                 if (recReq) {
                   if (isMounted) {
@@ -179,84 +166,53 @@ export default function ProfilePublicScreen() {
               }
             }
           } catch (mutualErr) {
-            console.warn('Mutual friends and request note:', mutualErr);
+            console.warn('Mutual friends note:', mutualErr);
           }
-        }
 
-        // 5. Track profile view in analytics & fetch analytics. Analytics is
-        // owner-only data (rules: profile_analytics is owner/admin readable);
-        // only fetch it when the viewer is the profile owner, otherwise the
-        // read is denied and the strip must show real counters, not analytics.
-        try {
-          const analyticsService = (await import('../../services/analyticsService.js')).default;
-          if (currentUser?.uid && targetUid !== currentUser.uid) {
-            analyticsService.trackProfileView(currentUser.uid, targetUid).catch(() => {});
-          }
-          if (currentUser?.uid && targetUid === currentUser.uid) {
-            const userAnalytics = await analyticsService.getUserAnalytics(targetUid, '30d');
-            if (isMounted && userAnalytics) {
-              setAnalytics(userAnalytics);
-            }
-          }
-        } catch (analyticsErr) {
-          console.warn('Analytics note:', analyticsErr);
-        }
-
-        if (isMounted && fetched) {
-          setProfileData(fetched);
-          setPosts(userPosts.length > 0 ? userPosts : (fetched.posts || []));
+          // 5. Track profile view
+          try {
+            const analyticsService = (await import('../../services/analyticsService.js')).default;
+            analyticsService.trackProfileView(currentUserId, targetUid).catch(() => {});
+          } catch {}
         }
       } catch (err) {
         console.warn('Public profile fetch error:', err);
       } finally {
         clearTimeout(safetyTimer);
-        if (isMounted) setLoading(false);
+        if (isMounted) setLocalLoading(false);
       }
     };
 
     loadPublicProfile();
     return () => { isMounted = false; };
-  }, [userId, currentUser?.uid]);
+  }, [userId, currentUserId]);
 
-  // Optimistic Follow / Unfollow
+  const profileData = storeProfile;
+  const posts = storePosts;
+  const mutualFriends = storeMutualFriends;
+  const loading = localLoading || storeLoading;
+  const isFollowing = Boolean(storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing);
+  const followLoading = storeFollowLoading;
+
+  // Optimistic Follow / Unfollow via Profile Store
   const handleFollowToggle = useCallback(async () => {
-    if (!currentUser?.uid) {
+    if (!currentUserId) {
       toast.error('Please sign in to follow this creator');
       navigate('/login');
       return;
     }
 
-    const nextState = !isFollowing;
-    setIsFollowing(nextState);
-    setFollowLoading(true);
+    const targetUid = profileData?.id || profileData?.uid || userId;
+    if (!targetUid || targetUid === currentUserId) return;
 
-    try {
-      const userServiceModule = await import('../../services/userService.js');
-      const userService = userServiceModule.getUserService();
-
-      if (nextState) {
-        await userService.followUser(currentUser.uid, userId);
-        toast.success(`Following @${profileData?.username || 'creator'}`);
-        setProfileData(prev => prev ? ({
-          ...prev,
-          followerCount: (Number(prev.followerCount || prev.followersCount) || 0) + 1
-        }) : prev);
-      } else {
-        await userService.unfollowUser(currentUser.uid, userId);
-        toast.info(`Unfollowed @${profileData?.username || 'creator'}`);
-        setProfileData(prev => prev ? ({
-          ...prev,
-          followerCount: Math.max(0, (Number(prev.followerCount || prev.followersCount) || 1) - 1)
-        }) : prev);
-      }
-    } catch (e) {
-      // Revert on failure
-      setIsFollowing(!nextState);
-      toast.error('Could not update follow status');
-    } finally {
-      setFollowLoading(false);
+    if (isFollowing) {
+      await useProfileStore.getState().unfollow(currentUserId, targetUid);
+      setRelationship(prev => prev ? { ...prev, isFollowing: false } : null);
+    } else {
+      await useProfileStore.getState().follow(currentUserId, targetUid);
+      setRelationship(prev => prev ? { ...prev, isFollowing: true } : null);
     }
-  }, [currentUser?.uid, isFollowing, userId, profileData?.username, profileData?.followerCount, profileData?.followersCount, navigate]);
+  }, [currentUserId, isFollowing, profileData?.id, profileData?.uid, userId, navigate]);
 
   // Handle Friend Request Toggle (For Newcomer level 1-2 profiles)
   const handleFriendRequestToggle = useCallback(async () => {
@@ -552,7 +508,7 @@ export default function ProfilePublicScreen() {
             onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
             capabilities={capabilities}
-            analytics={analytics}
+            analytics={null}
           />
 
           {/* 2. Social Context Bar (Mutual Friends, Shared Communities, Follows You) */}
@@ -570,7 +526,7 @@ export default function ProfilePublicScreen() {
             isOwner={false}
             theme={theme}
             profile={effectiveProfile}
-            analytics={analytics}
+            analytics={null}
             capabilities={capabilities}
             onMetricPress={(key) => {
               const targetId = effectiveProfile?.id || effectiveProfile?.uid || userId;

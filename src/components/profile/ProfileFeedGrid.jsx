@@ -519,16 +519,32 @@ const ProfileFeedGrid = memo(({
                 </div>
               )}
 
-              {/* Hover Overlay with Stats */}
-              <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white">
-                <div className="flex items-center gap-1 text-xs font-bold">
-                  <Heart className="w-4 h-4 fill-white text-white" />
-                  <span>{(item.likes || item.likesCount || 0) + (likedPosts[item.id] ? 1 : 0)}</span>
+              {/* Hover Overlay with Stats & Quick Actions */}
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                    <Heart className="w-4 h-4 fill-white text-white" />
+                    <span>{(item.likes || item.likesCount || 0) + (likedPosts[item.id] ? 1 : 0)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                    <MessageCircle className="w-4 h-4 fill-white text-white" />
+                    <span>{item.comments || item.commentsCount || 0}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-xs font-bold">
-                  <MessageCircle className="w-4 h-4 fill-white text-white" />
-                  <span>{item.comments || item.commentsCount || 0}</span>
-                </div>
+
+                {onOpenTipModal && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTipModal();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-semibold border border-amber-400/30 transition-all cursor-pointer active:scale-95"
+                  >
+                    <Coins className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Tip</span>
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -604,14 +620,43 @@ const ProfileFeedGrid = memo(({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => handleQuickShare(e, item)}
-                    className="p-1 rounded hover:bg-slate-500/10 transition-colors"
-                    title="Share"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {onOpenTipModal && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenTipModal();
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-semibold text-amber-500 hover:text-amber-400 transition-colors"
+                        title="Tip creator"
+                      >
+                        <Coins className="w-3.5 h-3.5" />
+                        <span>Tip</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleQuickBookmark(e, item.id)}
+                      className={cn(
+                        "p-1 rounded hover:bg-slate-500/10 transition-colors",
+                        savedMap[item.id] ? "text-indigo-500" : "text-slate-400"
+                      )}
+                      title={savedMap[item.id] ? "Remove bookmark" : "Bookmark post"}
+                    >
+                      <Bookmark className={cn("w-3.5 h-3.5", savedMap[item.id] && "fill-indigo-500")} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleQuickShare(e, item)}
+                      className="p-1 rounded hover:bg-slate-500/10 transition-colors"
+                      title="Share"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

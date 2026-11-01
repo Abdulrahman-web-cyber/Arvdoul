@@ -93,7 +93,8 @@ export default function SponsoredPostCard({
   // Real IntersectionObserver for impression logging
   useEffect(() => {
     const el = cardRef.current;
-    if (!el || !ad?.id || hasRecordedImpression) return;
+    const adId = ad?.id;
+    if (!el || !adId || hasRecordedImpression) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -101,7 +102,7 @@ export default function SponsoredPostCard({
           if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
             setHasRecordedImpression(true);
             try {
-              getMonetizationService().recordAdImpression(ad.id, placement);
+              getMonetizationService().recordAdImpression(adId, placement);
             } catch (e) {
               // silent catch
             }
@@ -113,14 +114,16 @@ export default function SponsoredPostCard({
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ad.id, placement, hasRecordedImpression]);
+  }, [ad?.id, placement, hasRecordedImpression]);
 
   // Handle CTA Click
   const handleCtaClick = () => {
+    const adId = ad?.id;
+    if (!adId) return;
     try {
-      getMonetizationService().recordAdImpression(ad.id, `${placement}_click`);
+      getMonetizationService().recordAdImpression(adId, `${placement}_click`);
     } catch {}
-    if (adClickUrl(ad)) {
+    if (ad && adClickUrl(ad)) {
       window.open(adClickUrl(ad), '_blank', 'noopener,noreferrer');
     }
   };
@@ -147,6 +150,7 @@ export default function SponsoredPostCard({
 
   // Claim Ad Coin Reward
   const handleClaimReward = async () => {
+    if (!ad?.id) return;
     setIsClaiming(true);
     try {
       const svc = getMonetizationService();
@@ -165,7 +169,7 @@ export default function SponsoredPostCard({
 
   const handleHideAd = () => {
     setShowMenu(false);
-    onAdHidden(ad.id);
+    if (ad?.id) onAdHidden(ad.id);
   };
 
   const [isReporting, setIsReporting] = useState(false);

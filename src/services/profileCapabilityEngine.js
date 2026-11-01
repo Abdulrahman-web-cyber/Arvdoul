@@ -49,9 +49,13 @@ export function resolveRelationshipState(relationship = {}) {
   //   5. pending / requested follow
   //   6. mutual / following / followed-by
   //   7. none
-  const isBlocking = Boolean(relationship.isBlocking || relationship.isBlocked);
+  const isBlockedBy = Boolean(relationship.isBlockedBy);
+  const isBlocking = relationship.isBlocking !== undefined
+    ? Boolean(relationship.isBlocking)
+    : Boolean(relationship.isBlocked && !isBlockedBy);
   if (isBlocking) return RELATIONSHIP_STATES.BLOCKED;
-  if (relationship.isBlockedBy) return RELATIONSHIP_STATES.BLOCKED_BY;
+  if (isBlockedBy) return RELATIONSHIP_STATES.BLOCKED_BY;
+  if (relationship.isBlocked) return RELATIONSHIP_STATES.BLOCKED;
   if (relationship.isRestricted) return RELATIONSHIP_STATES.RESTRICTED;
   if (relationship.isMuted) return RELATIONSHIP_STATES.MUTED;
   if (relationship.requestStatus === 'pending') return RELATIONSHIP_STATES.PENDING;
@@ -112,9 +116,11 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
                                accountState === ACCOUNT_STATES.DEACTIVATED;
 
   // Block & Safety enforcement
-  const isBlocking = Boolean(relationship.isBlocking || relationship.isBlocked);
   const isBlockedBy = Boolean(relationship.isBlockedBy);
-  const isBlocked = Boolean(isBlocking || isBlockedBy);
+  const isBlocking = relationship.isBlocking !== undefined
+    ? Boolean(relationship.isBlocking)
+    : Boolean(relationship.isBlocked && !isBlockedBy);
+  const isBlocked = Boolean(isBlocking || isBlockedBy || relationship.isBlocked);
   const isMuted = Boolean(relationship.isMuted);
   const isRestricted = Boolean(relationship.isRestricted);
 

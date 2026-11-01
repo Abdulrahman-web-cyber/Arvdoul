@@ -289,9 +289,12 @@ export default function ProgressScreen() {
 
         {/* Section 4: Legitimate XP Sources & Anti-Farming Transparency */}
         <section aria-labelledby="xp-rules-heading" className="space-y-3">
-          <h3 id="xp-rules-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
-            Eligible Progression Activities
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 id="xp-rules-heading" className="text-sm font-semibold tracking-wide uppercase text-gray-500">
+              Eligible Progression Activities
+            </h3>
+            <span className="text-[11px] font-bold text-purple-400">XP Resets Daily 00:00 UTC</span>
+          </div>
 
           <div
             className={`p-5 rounded-xl border divide-y ${
@@ -303,8 +306,20 @@ export default function ProgressScreen() {
               <span className="font-semibold text-emerald-400">+{XP_RULES.daily_login.xp} XP / day</span>
             </div>
             <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Active Streak Milestone (7d, 14d, 30d)</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.streak_milestone.xp} XP</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
               <span className="text-gray-400">Original Post Publication</span>
               <span className="font-semibold text-emerald-400">+{XP_RULES.post_created.xp} XP (Cap: {XP_RULES.post_created.dailyCap}/day)</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Story & Ephemeral Moments</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.story_created.xp} XP (Cap: {XP_RULES.story_created.dailyCap}/day)</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Audio Studio Production</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.audio_track_created.xp} XP (Cap: {XP_RULES.audio_track_created.dailyCap}/day)</span>
             </div>
             <div className="py-2.5 flex items-center justify-between text-xs">
               <span className="text-gray-400">Constructive Conversation Comment</span>
@@ -315,8 +330,24 @@ export default function ProgressScreen() {
               <span className="font-semibold text-emerald-400">+{XP_RULES.follow_received.xp} XP</span>
             </div>
             <div className="py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-400">Creator Patronage & Gift Support</span>
-              <span className="font-semibold text-emerald-400">+{XP_RULES.gift_received.xp} XP</span>
+              <span className="text-gray-400">Sending Virtual Gifts to Creators</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.gift_sent.xp} XP (Cap: {XP_RULES.gift_sent.dailyCap}/day)</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Receiving Creator Patronage & Gifts</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.gift_received.xp} XP (Cap: {XP_RULES.gift_received.dailyCap}/day)</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Sharing Great Content Across the Network</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.post_shared.xp} XP (Cap: {XP_RULES.post_shared.dailyCap}/day)</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Civic Poll & Governance Voting</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.civic_vote_cast.xp} XP</span>
+            </div>
+            <div className="py-2.5 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Watching Sponsored Video Ads</span>
+              <span className="font-semibold text-emerald-400">+{XP_RULES.ad_reward_claimed.xp} XP (Cap: {XP_RULES.ad_reward_claimed.dailyCap}/day)</span>
             </div>
           </div>
         </section>
