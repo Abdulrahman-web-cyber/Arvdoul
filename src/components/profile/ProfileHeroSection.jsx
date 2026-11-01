@@ -293,7 +293,18 @@ export const ProfileHeroSection = memo(({
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
   const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
-  const isLevelEligibleForVerification = userLevel !== null && userLevel >= 15;
+  const isLevelEligibleForVerification = userLevel !== null && userLevel >= (LevelModule.LEVEL_GATES?.verifiedPriority || 15);
+
+  // Dynamic level appearance & crest aura unlocked at higher levels / royal standing
+  const crestAuraRing = useMemo(() => {
+    const aura = profile?.crestAura;
+    if (aura === 'purple') return 'bg-gradient-to-tr from-purple-500 via-indigo-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.45)]';
+    if (aura === 'royal' || (userLevel && userLevel >= (LevelModule.LEVEL_GATES?.sovereign || 50))) return 'bg-gradient-to-tr from-blue-500 via-indigo-700 to-cyan-400 shadow-[0_0_25px_rgba(59,130,246,0.5)]';
+    if (aura === 'cyan') return 'bg-gradient-to-tr from-cyan-400 via-teal-500 to-sky-300 shadow-[0_0_25px_rgba(34,211,238,0.45)]';
+    if (aura === 'emerald') return 'bg-gradient-to-tr from-emerald-400 via-green-600 to-teal-300 shadow-[0_0_25px_rgba(52,211,153,0.45)]';
+    if (aura === 'gold') return 'bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.45)]';
+    return 'bg-gradient-to-tr from-[#8B1EF3] via-[#D946EF] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)]';
+  }, [profile?.crestAura, userLevel]);
 
   // Royal status determination per shared level system
   const isRoyal = useMemo(() => {
@@ -351,7 +362,7 @@ export const ProfileHeroSection = memo(({
           {/* Avatar Container with Glowing Gradient Ring, Online Dot, & Sparkle Accent */}
           <div className="relative shrink-0">
             {/* Glowing Ring */}
-            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full p-[3px] bg-gradient-to-tr from-[#8B1EF3] via-[#D946EF] to-[#00F0FF] shadow-[0_0_25px_rgba(139,30,243,0.35)] relative">
+            <div className={cn("w-28 h-28 sm:w-32 sm:h-32 rounded-full p-[3px] relative transition-all duration-300", crestAuraRing)}>
               {/* Circular Avatar Image */}
               <button
                 type="button"

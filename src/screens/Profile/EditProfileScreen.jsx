@@ -56,6 +56,7 @@ import {
   PROFILE_CONSTRAINTS, 
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
+import { LEVEL_GATES, getRoyalEligibility } from '../../shared/levelConfig.cjs';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
@@ -104,11 +105,11 @@ export default function EditProfileScreen() {
   const currentUid = userProfile?.uid || userProfile?.id || user?.uid;
   const userLevel = Number(userProfile?.level || user?.level) || 1;
 
-  // Progressive unlock flags
+  // Progressive unlock flags derived authoritatively from LEVEL_GATES
   const isCreatorAccount = Boolean(
     userProfile?.isCreator || 
     userProfile?.creatorStatus === 'approved' || 
-    userLevel >= 10
+    userLevel >= LEVEL_GATES.creatorProfile
   );
 
   const isRoyalOrNoble = Boolean(
@@ -116,7 +117,7 @@ export default function EditProfileScreen() {
     userProfile?.isDucal ||
     userProfile?.activeTitle === 'duke' ||
     userProfile?.activeTitle === 'king' ||
-    userLevel >= 35
+    userLevel >= LEVEL_GATES.sovereign
   );
 
   // Form state

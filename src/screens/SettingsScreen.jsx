@@ -17,14 +17,18 @@ import {
   ArrowLeft, Bell, Shield, Globe, HelpCircle, LogOut, Moon, Sun,
   Lock, Trash2, Smartphone, Volume2, Video, Sparkles, DollarSign,
   Database, Info, ChevronRight, Check, AlertTriangle, Eye, User,
-  Sliders, ShieldCheck, Key, RefreshCw, Languages, Activity, Trophy
+  Sliders, ShieldCheck, Key, RefreshCw, Languages, Activity, Trophy,
+  Award, Zap, Coins
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useProfileStore } from '../store/profileStore.js';
 import { settingsService, DEFAULT_SETTINGS } from '../services/settingsService.js';
-import { levelSystemService, getPerksForLevel, getLifetimeRewards } from '../services/levelSystemService.js';
+import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES } from '../services/levelSystemService.js';
+import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
+import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
 import { Dialog } from '../components/ui/Dialog.jsx';
 import { Skeleton } from '../components/ui/Skeleton.jsx';
@@ -124,6 +128,12 @@ export default function SettingsScreen() {
   const [levelInfo, setLevelInfo] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showRoadmapModal, setShowRoadmapModal] = useState(false);
+  const [roadmapTab, setRoadmapTab] = useState('levels');
+
+  const storeProfile = useProfileStore((state) => state.profile);
+  const [profilePrivacy, setProfilePrivacy] = useState(DEFAULT_PROFILE_PRIVACY);
+  const [profileIsPrivate, setProfileIsPrivate] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -135,6 +145,11 @@ export default function SettingsScreen() {
       if (!mounted) return;
       setSettings(loaded);
       setLevelInfo(level);
+      // Initialize profile privacy from storeProfile or loaded doc
+      if (storeProfile?.privacy) {
+        setProfilePrivacy({ ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy });
+      }
+      setProfileIsPrivate(Boolean(storeProfile?.isPrivate ?? loaded?.privacy?.profilePrivate));
       // Apply persisted reduce-motion override
       if (loaded?.appearance?.reduceMotion) {
         document.documentElement.classList.add('arvdoul-reduce-motion');
@@ -143,7 +158,7 @@ export default function SettingsScreen() {
     return () => {
       mounted = false;
     };
-  }, [uid]);
+  }, [uid, storeProfile]);
 
   // Deep-link support: /settings#appearance, /settings#privacy, /settings#data
   // scroll to the matching section once settings have rendered.
@@ -181,6 +196,44 @@ export default function SettingsScreen() {
     },
     [settings, uid, t]
   );
+
+  const handleToggleProfilePrivate = useCallback(async (val) => {
+    setProfileIsPrivate(val);
+    updateSetting('privacy.profilePrivate', val);
+    if (!uid) return;
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const userService = getUserService();
+      await userService.updateUserProfile(uid, { isPrivate: val });
+      useProfileStore.setState((s) => ({
+        profile: s.profile ? { ...s.profile, isPrivate: val } : s.profile
+      }));
+      toast.success(val ? 'Profile visibility set to Private' : 'Profile visibility set to Public');
+    } catch (err) {
+      console.warn('Failed to sync profile private flag:', err);
+    }
+  }, [uid, updateSetting]);
+
+  const handleUpdateProfilePrivacyScope = useCallback(async (scopeKey, scopeVal) => {
+    setProfilePrivacy((cur) => {
+      const next = { ...cur, [scopeKey]: scopeVal };
+      return next;
+    });
+    if (!uid) return;
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const userService = getUserService();
+      const updatedPrivacy = { ...profilePrivacy, [scopeKey]: scopeVal };
+      await userService.updateUserProfile(uid, { privacy: updatedPrivacy });
+      useProfileStore.setState((s) => ({
+        profile: s.profile ? { ...s.profile, privacy: updatedPrivacy } : s.profile
+      }));
+      toast.success('Audience privacy updated');
+    } catch (err) {
+      console.warn('Failed to update privacy scope:', err);
+      toast.error('Failed to update privacy settings');
+    }
+  }, [uid, profilePrivacy]);
 
   const handleReduceMotion = (value) => {
     document.documentElement.classList.toggle('arvdoul-reduce-motion', value);
@@ -267,9 +320,20 @@ export default function SettingsScreen() {
         {/* ============ LEVEL & PROGRESS ============ */}
         {levelInfo && (
           <section className="rounded-3xl p-5 border shadow-sm bg-gradient-to-br from-purple-600/15 via-indigo-600/10 to-transparent border-purple-500/20">
-            <div className="flex items-center gap-2.5 text-xs font-bold text-purple-400 uppercase tracking-wider mb-3">
-              <Trophy className="w-4 h-4" aria-hidden="true" />
-              <span>{t('level.title')}</span>
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <div className="flex items-center gap-2.5 text-xs font-bold text-purple-400 uppercase tracking-wider">
+                <Trophy className="w-4 h-4" aria-hidden="true" />
+                <span>{t('level.title')}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setRoadmapTab('levels'); setShowRoadmapModal(true); }}
+                className="text-xs font-bold text-purple-400 hover:text-purple-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Perks &amp; Appearance Roadmap</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
             <div className="flex items-center gap-4">
               <div
@@ -313,7 +377,8 @@ export default function SettingsScreen() {
                 <p className="font-black text-amber-400 text-lg">+{getLifetimeRewards(levelInfo.level)} 🪙</p>
               </div>
             </div>
-            {/* Perks */}
+
+            {/* Active Unlocked Perks */}
             <div className="mt-4 flex flex-wrap gap-2">
               {getPerksForLevel(levelInfo.level).map((perk) => (
                 <span
@@ -327,6 +392,60 @@ export default function SettingsScreen() {
               {getPerksForLevel(levelInfo.level).length === 0 && (
                 <p className="text-xs text-gray-400">{t('level.noPerksYet')}</p>
               )}
+            </div>
+
+            {/* Level Appearance Unlocks Tracker */}
+            <div className="mt-4 pt-3 border-t border-white/10 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wider">
+                  Appearance &amp; Cosmetic Unlocks
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">
+                  Level {levelInfo.level} of 100
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                  levelInfo.level >= 2 
+                    ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
+                    : "bg-white/5 border-white/10 text-gray-500"
+                )}>
+                  <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < 2 && "• Unlocks Lvl 2"}
+                </span>
+                <span className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                  levelInfo.level >= LEVEL_GATES.customBadge 
+                    ? "bg-amber-500/15 border-amber-500/30 text-amber-300" 
+                    : "bg-white/5 border-white/10 text-gray-500"
+                )}>
+                  <span>🏷️</span> Custom Badge {levelInfo.level < LEVEL_GATES.customBadge && `• Unlocks Lvl ${LEVEL_GATES.customBadge}`}
+                </span>
+                <span className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                  levelInfo.level >= LEVEL_GATES.verifiedPriority 
+                    ? "bg-blue-500/15 border-blue-500/30 text-blue-300" 
+                    : "bg-white/5 border-white/10 text-gray-500"
+                )}>
+                  <span>🎨</span> Custom Profile Accent {levelInfo.level < LEVEL_GATES.verifiedPriority && `• Unlocks Lvl ${LEVEL_GATES.verifiedPriority}`}
+                </span>
+                <span className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                  levelInfo.level >= LEVEL_GATES.sovereign 
+                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" 
+                    : "bg-white/5 border-white/10 text-gray-500"
+                )}>
+                  <span>💎</span> Cornerstone Aura Glow {levelInfo.level < LEVEL_GATES.sovereign && `• Unlocks Lvl ${LEVEL_GATES.sovereign}`}
+                </span>
+                <span className={cn(
+                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                  levelInfo.level >= LEVEL_GATES.transcendent 
+                    ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" 
+                    : "bg-white/5 border-white/10 text-gray-500"
+                )}>
+                  <span>👑</span> Monarch Halo {levelInfo.level < LEVEL_GATES.transcendent && `• Unlocks Lvl ${LEVEL_GATES.transcendent}`}
+                </span>
+              </div>
             </div>
           </section>
         )}
@@ -394,15 +513,156 @@ export default function SettingsScreen() {
           <ToggleRow icon={Smartphone} label={t('settings.spatialAudio')} checked={settings.notifications.spatialAudio} onChange={(v) => updateSetting('notifications.spatialAudio', v)} />
         </Section>
 
-        {/* ============ PRIVACY ============ */}
+        {/* ============ PRIVACY & AUDIENCE GOVERNANCE ============ */}
         <Section id="settings-privacy" icon={Shield} title={t('settings.privacySection')}>
-          <ToggleRow icon={Eye} label={t('settings.privateProfile')} description={t('settings.privateProfileDesc')} checked={settings.privacy.profilePrivate} onChange={(v) => updateSetting('privacy.profilePrivate', v)} />
-          <ToggleRow icon={Eye} label={t('settings.activeStatus')} checked={settings.privacy.showActiveStatus} onChange={(v) => updateSetting('privacy.showActiveStatus', v)} />
+          <ToggleRow
+            icon={Eye}
+            label={t('settings.privateProfile')}
+            description={t('settings.privateProfileDesc')}
+            checked={profileIsPrivate}
+            onChange={handleToggleProfilePrivate}
+          />
+          <ToggleRow
+            icon={Activity}
+            label={t('settings.activeStatus')}
+            description="Broadcast your live presence status to permitted circles"
+            checked={settings.privacy.showActiveStatus}
+            onChange={(v) => {
+              updateSetting('privacy.showActiveStatus', v);
+              handleUpdateProfilePrivacyScope('presence', v ? VISIBILITY_SCOPES.FOLLOWERS : VISIBILITY_SCOPES.ONLY_ME);
+            }}
+          />
+
+          {/* Granular Scope Selectors */}
+          <div className="w-full py-3.5 space-y-3 border-t border-gray-100 dark:border-white/5">
+            <p className="text-xs font-bold uppercase tracking-wider text-purple-400">Audience &amp; Visibility Permissions</p>
+
+            {/* Profile Discovery Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Profile Discovery</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can view your full bio and public identity card</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.profileInfo || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScope('profileInfo', s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Live Presence Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Live Online Presence</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can see when you are active on the platform</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Nobody' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.presence || VISIBILITY_SCOPES.FOLLOWERS) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScope('presence', s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Social Graph Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Followers &amp; Following List</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can inspect your follower and following social graph</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.followersList || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => {
+                      handleUpdateProfilePrivacyScope('followersList', s.id);
+                      handleUpdateProfilePrivacyScope('followingList', s.id);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Civic Standing & Badges Scope */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Civic Badges &amp; Milestones</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can view your earned badges, level, and accomplishments</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.activity || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => {
+                      handleUpdateProfilePrivacyScope('activity', s.id);
+                      handleUpdateProfilePrivacyScope('achievements', s.id);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Large Coin Treasury Privacy Card */}
+            <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+              <div>
+                <p className="font-bold text-sm">Large Coin Treasury Card Display</p>
+                <p className="text-xs text-gray-400 mt-0.5">Showcase total coin treasury proudly or keep confidential</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group">
+                {[
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: '🔒 Only Me (Confidential)' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: '👥 Connections' },
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: '🌐 Public Showcase' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.economicStatus || VISIBILITY_SCOPES.ONLY_ME) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScope('economicStatus', s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+          </div>
+
           <div className="w-full py-3.5">
             <div className="flex items-start gap-3 mb-2">
               <Lock className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
               <div>
                 <p className="font-bold text-sm">{t('settings.allowDMs')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can initiate direct messages with you</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label={t('settings.allowDMs')}>
@@ -505,6 +765,17 @@ export default function SettingsScreen() {
           </div>
         </div>
       </Dialog>
+      {/* Interactive Level Perks & Appearance Roadmap Modal */}
+      {showRoadmapModal && (
+        <ProfileSystemRoadmapModal
+          isOpen={showRoadmapModal}
+          onClose={() => setShowRoadmapModal(false)}
+          initialTab={roadmapTab}
+          profile={storeProfile || { level: levelInfo?.level, experience: levelInfo?.currentLevelXp }}
+          theme={theme}
+          userId={uid}
+        />
+      )}
     </div>
   );
 }
