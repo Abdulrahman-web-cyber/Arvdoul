@@ -405,46 +405,53 @@ export default function SettingsScreen() {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                <span className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                  levelInfo.level >= 2 
-                    ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
-                    : "bg-white/5 border-white/10 text-gray-500"
-                )}>
-                  <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < 2 && "• Unlocks Lvl 2"}
-                </span>
-                <span className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                  levelInfo.level >= LEVEL_GATES.customBadge 
-                    ? "bg-amber-500/15 border-amber-500/30 text-amber-300" 
-                    : "bg-white/5 border-white/10 text-gray-500"
-                )}>
-                  <span>🏷️</span> Custom Badge {levelInfo.level < LEVEL_GATES.customBadge && `• Unlocks Lvl ${LEVEL_GATES.customBadge}`}
-                </span>
-                <span className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                  levelInfo.level >= LEVEL_GATES.verifiedPriority 
-                    ? "bg-blue-500/15 border-blue-500/30 text-blue-300" 
-                    : "bg-white/5 border-white/10 text-gray-500"
-                )}>
-                  <span>🎨</span> Custom Profile Accent {levelInfo.level < LEVEL_GATES.verifiedPriority && `• Unlocks Lvl ${LEVEL_GATES.verifiedPriority}`}
-                </span>
-                <span className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                  levelInfo.level >= LEVEL_GATES.sovereign 
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" 
-                    : "bg-white/5 border-white/10 text-gray-500"
-                )}>
-                  <span>💎</span> Cornerstone Aura Glow {levelInfo.level < LEVEL_GATES.sovereign && `• Unlocks Lvl ${LEVEL_GATES.sovereign}`}
-                </span>
-                <span className={cn(
-                  "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                  levelInfo.level >= LEVEL_GATES.transcendent 
-                    ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" 
-                    : "bg-white/5 border-white/10 text-gray-500"
-                )}>
-                  <span>👑</span> Monarch Halo {levelInfo.level < LEVEL_GATES.transcendent && `• Unlocks Lvl ${LEVEL_GATES.transcendent}`}
-                </span>
+                {(() => {
+                  const gates = LEVEL_GATES || { customBadge: 12, verifiedPriority: 15, sovereign: 50, transcendent: 100 };
+                  return (
+                    <>
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        levelInfo.level >= 2 
+                          ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
+                          : "bg-white/5 border-white/10 text-gray-500"
+                      )}>
+                        <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < 2 && "• Unlocks Lvl 2"}
+                      </span>
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        levelInfo.level >= (gates.customBadge ?? 12)
+                          ? "bg-amber-500/15 border-amber-500/30 text-amber-300" 
+                          : "bg-white/5 border-white/10 text-gray-500"
+                      )}>
+                        <span>🏷️</span> Custom Badge {levelInfo.level < (gates.customBadge ?? 12) && `• Unlocks Lvl ${gates.customBadge ?? 12}`}
+                      </span>
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        levelInfo.level >= (gates.verifiedPriority ?? 15)
+                          ? "bg-blue-500/15 border-blue-500/30 text-blue-300" 
+                          : "bg-white/5 border-white/10 text-gray-500"
+                      )}>
+                        <span>🎨</span> Custom Profile Accent {levelInfo.level < (gates.verifiedPriority ?? 15) && `• Unlocks Lvl ${gates.verifiedPriority ?? 15}`}
+                      </span>
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        levelInfo.level >= (gates.sovereign ?? 50)
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" 
+                          : "bg-white/5 border-white/10 text-gray-500"
+                      )}>
+                        <span>💎</span> Cornerstone Aura Glow {levelInfo.level < (gates.sovereign ?? 50) && `• Unlocks Lvl ${gates.sovereign ?? 50}`}
+                      </span>
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
+                        levelInfo.level >= (gates.transcendent ?? 100)
+                          ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" 
+                          : "bg-white/5 border-white/10 text-gray-500"
+                      )}>
+                        <span>👑</span> Monarch Halo {levelInfo.level < (gates.transcendent ?? 100) && `• Unlocks Lvl ${gates.transcendent ?? 100}`}
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </section>

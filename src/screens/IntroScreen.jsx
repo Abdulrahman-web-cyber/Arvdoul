@@ -53,7 +53,7 @@ import {
   useReducedMotion,
 } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
-import { useAuth } from "@context/AuthContext";
+import { useAuth, useOptionalAuth } from "@context/AuthContext";
 import ThemeToggle from "@components/Shared/ThemeToggle";
 
 /* ═════════════════════════════ configuration ═════════════════════════════ */
@@ -1865,10 +1865,14 @@ function IntroScreen({
 
   const resolved = useResolvedTheme(requestedTheme);
 
+  const authCtx = (typeof useOptionalAuth === 'function' ? useOptionalAuth() : null) || (() => {
+    try { return typeof useAuth === 'function' ? useAuth() : null; } catch { return null; }
+  })();
+
   const {
-    authInitialized,
-    isAuthenticated,
-  } = useAuth() || {};
+    authInitialized = false,
+    isAuthenticated = false,
+  } = authCtx || {};
 
   const nav = useAccountNavigation();
 

@@ -936,6 +936,14 @@ class UltimateMessagingService {
     }
 
     const convRef = this.fs.doc(this.firestore, 'conversations', conversationId);
+    if (!isGroup && !isChannel) {
+      const existingSnap = await this.fs.getDoc(convRef);
+      if (existingSnap.exists()) {
+        const existingData = { id: existingSnap.id, ...existingSnap.data() };
+        this.conversationsCache.set(conversationId, existingData);
+        return { success: true, conversation: existingData, alreadyExisted: true };
+      }
+    }
     await this.fs.setDoc(convRef, conversationData);
 
     if (isGroup || isChannel) {

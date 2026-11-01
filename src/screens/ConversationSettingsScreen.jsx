@@ -1,6 +1,6 @@
 // src/screens/ConversationSettingsScreen.jsx
 //
-// Conversation info, mute/unmute, leave group — backed by messagesService.
+// Conversation info, mute/unmute, pin/unpin, leave group — backed by messagesService.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2 } from 'lucide-react';
+import { ArrowLeft, Settings, Bell, BellOff, Users, LogOut, Loader2, Pin, Info } from 'lucide-react';
 
 export default function ConversationSettingsScreen() {
   const navigate = useNavigate();
@@ -20,6 +20,7 @@ export default function ConversationSettingsScreen() {
   const [conv, setConv] = useState(null);
   const [loading, setLoading] = useState(true);
   const [muted, setMuted] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [acting, setActing] = useState(false);
 
   const colors = {
@@ -39,6 +40,7 @@ export default function ConversationSettingsScreen() {
       if (res?.success) {
         setConv(res.conversation);
         setMuted(res.conversation.mutedBy?.includes(user?.uid) || false);
+        setPinned(res.conversation.pinnedBy?.includes(user?.uid) || false);
       } else {
         toast.error('Conversation not found.');
         navigate('/messages');
@@ -62,6 +64,23 @@ export default function ConversationSettingsScreen() {
       else await service.muteConversation(conversationId, user.uid);
       setMuted(!muted);
       toast.success(muted ? 'Conversation unmuted.' : 'Conversation muted.');
+    } catch (err) {
+      toast.error('Action failed.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const togglePin = async () => {
+    if (!user?.uid || acting) return;
+    setActing(true);
+    try {
+      const mod = await import('../services/messagesService.js');
+      const service = mod.getMessagingService ? mod.getMessagingService() : mod.default?.getMessagingService?.() || mod;
+      if (pinned) await service.unpinConversation(conversationId, user.uid);
+      else await service.pinConversation(conversationId, user.uid);
+      setPinned(!pinned);
+      toast.success(pinned ? 'Conversation unpinned.' : 'Conversation pinned 📌');
     } catch (err) {
       toast.error('Action failed.');
     } finally {
@@ -93,7 +112,7 @@ export default function ConversationSettingsScreen() {
         <button onClick={() => navigate(-1)} aria-label="Go back" className="rounded-full p-2 transition hover:bg-gray-100 dark:hover:bg-gray-800">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="flex-1 text-lg font-semibold text-white dark:text-white">Conversation Settings</h1>
+        <h1 className={cn("flex-1 text-lg font-semibold", colors.text)}>Conversation Settings</h1>
       </div>
 
       <main className="max-w-md mx-auto px-4 py-6 space-y-4">
@@ -106,11 +125,40 @@ export default function ConversationSettingsScreen() {
               <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center">
                 <Users className="w-8 h-8 text-violet-500" />
               </div>
-              <h2 className={cn("font-bold text-lg", colors.text)}>{conv?.title || 'Conversation'}</h2>
+              <h2 className={cn("font-bold text-lg", colors.text)}>{conv?.title || conv?.name || 'Conversation'}</h2>
               <p className={cn("text-sm mt-1", colors.secondary)}>{members} members{memberNames ? ` · ${memberNames}` : ''}</p>
             </div>
 
             {/* Actions */}
+            {conv?.type === 'group' && (
+              <button
+                onClick={() => navigate(`/messages/${conversationId}/info`)}
+                className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+              >
+                <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className={cn("font-medium text-sm", colors.text)}>Group Information</p>
+                  <p className={cn("text-xs", colors.secondary)}>Manage members, invite links, and group description</p>
+                </div>
+              </button>
+            )}
+
+            <button
+              onClick={togglePin}
+              disabled={acting}
+              className={cn("w-full flex items-center gap-3 p-4 rounded-xl", colors.card, "border", "hover:opacity-90")}
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center">
+                <Pin className={cn("w-5 h-5", pinned && "rotate-45 text-purple-500")} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className={cn("font-medium text-sm", colors.text)}>{pinned ? 'Unpin Conversation' : 'Pin Conversation'}</p>
+                <p className={cn("text-xs", colors.secondary)}>{pinned ? 'Remove from top of message list' : 'Keep at the top of your messages'}</p>
+              </div>
+            </button>
+
             <button
               onClick={toggleMute}
               disabled={acting}

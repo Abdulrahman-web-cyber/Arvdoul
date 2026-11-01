@@ -63,6 +63,12 @@ jest.mock('../services/levelSystemService.js', () => ({
   },
   getPerksForLevel: () => [{ icon: '🎨', title: 'Advanced Editor', description: 'x' }],
   getLifetimeRewards: () => 60,
+  LEVEL_GATES: {
+    customBadge: 12,
+    verifiedPriority: 15,
+    sovereign: 50,
+    transcendent: 100,
+  },
 }));
 
 const { default: SettingsScreen } = require('../screens/SettingsScreen.jsx');

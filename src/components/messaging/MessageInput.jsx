@@ -158,6 +158,20 @@ const MessageInput = React.memo(({
     }
   };
 
+  // Cancel recording voice
+  const handleCancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      clearInterval(recordingTimerRef.current);
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      setIsRecording(false);
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = null;
+      toast.info('Recording cancelled');
+    }
+  };
+
   // Remove attached file
   const removeAttachedFile = (index) => {
     setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
@@ -211,22 +225,32 @@ const MessageInput = React.memo(({
       {/* Recording indicator */}
       {isRecording && (
         <div className={cn(
-          'flex items-center gap-3 px-4 py-3 rounded-lg',
-          theme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'
+          'flex items-center gap-3 px-4 py-3 rounded-2xl border animate-pulse',
+          theme === 'dark' ? 'bg-red-950/30 border-red-800/40' : 'bg-red-50 border-red-200'
         )}>
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+          <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
           <span className={cn(
-            'text-sm font-medium',
+            'text-xs font-bold tracking-wide',
             theme === 'dark' ? 'text-red-400' : 'text-red-700'
           )}>
-            Recording: {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
+            Recording Voice: {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
           </span>
-          <button
-            onClick={handleStopRecording}
-            className="ml-auto px-3 py-1 rounded bg-red-500 text-white text-xs font-medium hover:bg-red-600 transition-colors"
-          >
-            Stop
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancelRecording}
+              className="px-2.5 py-1 rounded-xl text-xs font-medium text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleStopRecording}
+              className="px-3 py-1 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 transition-colors shadow-sm"
+            >
+              Send
+            </button>
+          </div>
         </div>
       )}
 
@@ -465,11 +489,14 @@ const MessageInput = React.memo(({
 
       {/* Emoji picker */}
       {showEmoji && (
-        <div className="max-h-64 overflow-y-auto">
-          <EmojiPicker onEmojiClick={(e) => {
-            setText((prev) => prev + e.emoji);
-            setShowEmoji(false);
-          }} />
+        <div className="max-h-72 overflow-y-auto rounded-2xl border border-white/10 shadow-xl">
+          <EmojiPicker
+            theme={theme === 'dark' ? 'dark' : 'light'}
+            onEmojiClick={(e) => {
+              setText((prev) => prev + e.emoji);
+              setShowEmoji(false);
+            }}
+          />
         </div>
       )}
 

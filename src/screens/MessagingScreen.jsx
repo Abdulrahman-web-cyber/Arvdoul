@@ -104,7 +104,14 @@ export default function MessagingScreen() {
       }
     };
     load();
-    return () => { cancelled = true; };
+    const handleFocus = () => { if (document.visibilityState === 'visible') load(); };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
   }, [user?.uid]);
   const [showSearchFilters, setShowSearchFilters] = useState(false);
   const [messageRequests, setMessageRequests] = useState([]);

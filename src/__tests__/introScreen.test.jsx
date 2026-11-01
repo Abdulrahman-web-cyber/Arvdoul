@@ -19,6 +19,10 @@ jest.mock('../context/ThemeContext.jsx', () => ({
   useTheme: () => ({ theme: 'dark' }),
 }));
 jest.mock('../components/Shared/ThemeToggle.jsx', () => () => null);
+jest.mock('../context/AuthContext.jsx', () => ({
+  useAuth: () => ({ authInitialized: true, isAuthenticated: false }),
+  useOptionalAuth: () => ({ authInitialized: true, isAuthenticated: false }),
+}));
 jest.mock('../i18n/index.js', () => {
   const ReactMock = require('react');
   return {
@@ -100,26 +104,25 @@ describe('IntroScreen - integrity', () => {
 
   test('renders honest product pillars', () => {
     renderIntro();
-    expect(screen.getByText('End-to-End Encrypted')).toBeInTheDocument();
-    expect(screen.getByText('Privacy by Design')).toBeInTheDocument();
-    expect(screen.getByText('Creator-First')).toBeInTheDocument();
-    expect(screen.getByText('Real-Time Everything')).toBeInTheDocument();
+    expect(screen.getByText('Real people')).toBeInTheDocument();
+    expect(screen.getByText('Real connections')).toBeInTheDocument();
+    expect(screen.getByText('A stronger tomorrow')).toBeInTheDocument();
   });
 
-  test('renders all six feature cards from i18n', () => {
+  test('renders all six feature cards', () => {
     renderIntro();
-    expect(screen.getByText('Smart Feed')).toBeInTheDocument();
-    expect(screen.getByText('Privacy Control')).toBeInTheDocument();
-    expect(screen.getByText('Communities')).toBeInTheDocument();
-    expect(screen.getByText('Creation Tools')).toBeInTheDocument();
-    expect(screen.getByText('Real-time Chat')).toBeInTheDocument();
-    expect(screen.getByText('Multi-platform')).toBeInTheDocument();
+    expect(screen.getByText('Be you')).toBeInTheDocument();
+    expect(screen.getByText('Your crew')).toBeInTheDocument();
+    expect(screen.getByText('Chat')).toBeInTheDocument();
+    expect(screen.getByText('Coins')).toBeInTheDocument();
+    expect(screen.getByText('Create')).toBeInTheDocument();
+    expect(screen.getByText('Level up')).toBeInTheDocument();
   });
 
   test('navigation CTAs render', () => {
     renderIntro();
-    expect(screen.getByText('Create Account')).toBeInTheDocument();
-    expect(screen.getByText('Sign In')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sign Up/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Log In/i })).toBeInTheDocument();
   });
 
   test('has no axe violations', async () => {

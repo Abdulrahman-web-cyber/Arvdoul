@@ -78,10 +78,11 @@ const NewConversationScreen = () => {
   }, [debouncedQuery]);
 
   const toggleUserSelection = useCallback((userToToggle) => {
+    const targetId = userToToggle.uid || userToToggle.id;
     setSelectedUsers((prev) => {
-      const exists = prev.some((u) => u.uid === userToToggle.uid);
+      const exists = prev.some((u) => (u.uid || u.id) === targetId);
       if (exists) {
-        return prev.filter((u) => u.uid !== userToToggle.uid);
+        return prev.filter((u) => (u.uid || u.id) !== targetId);
       } else {
         return [...prev, userToToggle];
       }
@@ -96,7 +97,7 @@ const NewConversationScreen = () => {
 
     try {
       setLoading(true);
-      const participants = selectedUsers.map((u) => u.uid);
+      const participants = selectedUsers.map((u) => u.uid || u.id);
       
       let options = {};
       if (selectedUsers.length > 1) {
@@ -197,25 +198,28 @@ const NewConversationScreen = () => {
           'border-b p-4 flex flex-wrap gap-2',
           theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
         )}>
-          {selectedUsers.map((u) => (
-            <div
-              key={u.uid}
-              className={cn(
-                'flex items-center gap-2 px-3 py-1 rounded-full',
-                theme === 'dark'
-                  ? 'bg-purple-600/30 text-purple-300 border border-purple-600/50'
-                  : 'bg-purple-100 text-purple-900 border border-purple-300'
-              )}
-            >
-              <span className="text-sm">{u.displayName}</span>
-              <button
-                onClick={() => toggleUserSelection(u)}
-                className="p-0 hover:scale-110 transition-transform"
+          {selectedUsers.map((u) => {
+            const uid = u.uid || u.id;
+            return (
+              <div
+                key={uid}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1 rounded-full',
+                  theme === 'dark'
+                    ? 'bg-purple-600/30 text-purple-300 border border-purple-600/50'
+                    : 'bg-purple-100 text-purple-900 border border-purple-300'
+                )}
               >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+                <span className="text-sm">{u.displayName}</span>
+                <button
+                  onClick={() => toggleUserSelection(u)}
+                  className="p-0 hover:scale-110 transition-transform"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -287,10 +291,11 @@ const NewConversationScreen = () => {
         ) : (
           <div className="divide-y" style={{ borderColor: theme === 'dark' ? '#374151' : '#e5e7eb' }}>
             {displayUsers.map((u) => {
-              const isSelected = selectedUsers.some((su) => su.uid === u.uid);
+              const uid = u.uid || u.id;
+              const isSelected = selectedUsers.some((su) => (su.uid || su.id) === uid);
               return (
                 <button
-                  key={u.uid}
+                  key={uid}
                   onClick={() => toggleUserSelection(u)}
                   className={cn(
                     'w-full p-4 text-left transition-colors flex items-center gap-3',
@@ -330,7 +335,7 @@ const NewConversationScreen = () => {
                       'text-sm',
                       theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                     )}>
-                      @{u.username || u.uid.substring(0, 8)}
+                      @{u.username || uid.substring(0, 8)}
                     </div>
                   </div>
                 </button>
