@@ -58,9 +58,10 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
     if (isOpen && initialTab) setActiveTab(initialTab);
   }, [isOpen, initialTab]);
 
-  const currentLevel = typeof profile?.level === 'number' ? profile.level : 1;
+  const rawLvl = profile?.level;
+  const currentLevel = rawLvl !== null && rawLvl !== undefined && !isNaN(Number(rawLvl)) && Number(rawLvl) > 0 ? Number(rawLvl) : null;
   const currentXp = profile?.experience || profile?.xp || 0;
-  const levelInfo = useMemo(() => getLevelInfo(currentXp), [currentXp]);
+  const levelInfo = useMemo(() => currentXp > 0 || currentLevel !== null ? getLevelInfo(currentXp) : { level: null, progress: 0, nextLevelXp: 100 }, [currentXp, currentLevel]);
   const activeDays = Number(profile?.activeDaysCount || profile?.activeDays || 0);
   const reputation = Number(profile?.reputationScore || profile?.reputation || 0);
   const contribution = Number(profile?.contributionScore || profile?.contribution || 0);
@@ -72,7 +73,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
   );
 
   const stats = useMemo(() => ({
-    level: currentLevel,
+    level: currentLevel || 0,
     activeDays,
     reputation,
     contribution,
@@ -84,11 +85,11 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
   const dukeEligibility = useMemo(() => getRoyalEligibility('duke', stats), [stats]);
   const kingEligibility = useMemo(() => getRoyalEligibility('king', stats), [stats]);
 
-  const currentCitizenTier = useMemo(() => getCitizenTier(currentLevel, activeDays), [currentLevel, activeDays]);
-  const currentRankTitle = useMemo(() => getRankTitle(currentLevel), [currentLevel]);
+  const currentCitizenTier = useMemo(() => currentLevel !== null ? getCitizenTier(currentLevel, activeDays) : null, [currentLevel, activeDays]);
+  const currentRankTitle = useMemo(() => currentLevel !== null ? getRankTitle(currentLevel) : null, [currentLevel]);
 
   // Is full citizen? (Level 5 + 7 active days)
-  const isFullCitizen = currentLevel >= 5 && activeDays >= 7;
+  const isFullCitizen = currentLevel !== null && currentLevel >= 5 && activeDays >= 7;
 
   if (!isOpen) return null;
 
@@ -251,15 +252,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                 )}>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black text-lg shadow-lg">
-                      {currentLevel}
+                      {currentLevel !== null ? currentLevel : "—"}
                     </div>
                     <div>
                       <div className="text-xs text-purple-400 font-bold uppercase tracking-wider font-mono">Current Standing</div>
                       <div className="text-base font-black text-slate-900 dark:text-white">
-                        Level {currentLevel} • {currentRankTitle}
+                        {currentLevel !== null ? `Level ${currentLevel} • ${currentRankTitle}` : 'Civic Standing Initializing'}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {currentXp.toLocaleString()} XP earned across Arvdoul
+                        {currentXp > 0 ? `${currentXp.toLocaleString()} XP earned across Arvdoul` : 'Start posting & engaging to earn XP'}
                       </div>
                     </div>
                   </div>

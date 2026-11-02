@@ -59,11 +59,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   const [permissionDenied, setPermissionDenied] = useState(false);
 
   // Basic level users start with community Friends; Level 3+ unlocks public Followers
-  const effectiveLevel = Number(targetProfile?.level || userProfile?.level || currentUser?.level) || 1;
+  const rawLvl = targetProfile?.level ?? userProfile?.level ?? currentUser?.level;
+  const effectiveLevel = rawLvl != null ? Number(rawLvl) : null;
   const isCreatorOrAdvanced = Boolean(
     targetProfile?.isCreator || 
     userProfile?.isCreator || 
-    effectiveLevel >= LEVEL_GATES.publicFollowers
+    (effectiveLevel != null && effectiveLevel >= LEVEL_GATES.publicFollowers)
   );
 
   // Derive initial active tab from props or route path

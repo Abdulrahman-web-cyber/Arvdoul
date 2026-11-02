@@ -12,6 +12,7 @@ import { cn } from '../../lib/utils';
 import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
+import { useProfileStore } from '../../store/profileStore';
 
 const EMOJI_OPTIONS = ['✨', '🔥', '💖', '🎵', '✈️', '📸', '⚡', '🏆', '🌴', '🎨', '🚀', '🌟'];
 
@@ -122,6 +123,7 @@ export default function HighlightsScreen() {
         name: editTitle.trim(),
       });
       setHighlights(prev => prev.map(h => h.id === editingHighlight.id ? { ...h, title: editTitle.trim(), name: editTitle.trim() } : h));
+      useProfileStore.getState().loadHighlights(currentUserId);
       toast.success('Highlight updated successfully!');
       setEditingHighlight(null);
       setEditTitle('');
@@ -141,6 +143,7 @@ export default function HighlightsScreen() {
         await storyService.deleteHighlight(currentUserId, highlight.id);
       }
       setHighlights(prev => prev.filter(h => h.id !== highlight.id));
+      useProfileStore.getState().loadHighlights(currentUserId);
       toast.success(`Highlight "${highlight.title || highlight.name || 'Story'}" removed`);
     } catch (error) {
       toast.error('Failed to delete highlight');
@@ -473,6 +476,7 @@ export default function HighlightsScreen() {
                     const res = await s2().getHighlights(currentUserId);
                     const updated = Array.isArray(res) ? res : (res?.highlights || []);
                     setHighlights(updated);
+                    useProfileStore.getState().loadHighlights(currentUserId);
                   } catch (err) {
                     toast.error(err?.message || 'Could not create highlight.');
                   } finally {

@@ -1238,7 +1238,8 @@ export default function SetupProfile() {
       : username.length < 3
         ? "Choose a username of at least 3 characters to continue."
         : "";
-  const bioLeft = 150 - bio.length;
+  const maxBio = 500;
+  const bioLeft = maxBio - bio.length;
   const rootVariables = resolvedTheme === "dark" ? THEMES.dark : THEMES.light;
   const lowPerf = typeof navigator !== "undefined" && !!navigator.deviceMemory && navigator.deviceMemory < 4;
   const year = new Date().getFullYear();
@@ -1372,7 +1373,7 @@ export default function SetupProfile() {
                     <label htmlFor="setup-bio" className="av2-label" data-focus={bioFocused}>
                       Bio <span className="av2-hint" style={{ marginLeft: 4 }}>(Optional)</span>
                     </label>
-                    <span className="av2-hint" data-warn={bioLeft <= 20}>{bioLeft} chars left</span>
+                    <span className="av2-hint" data-warn={bioLeft <= 30}>{bioLeft} chars left</span>
                   </div>
                   <div className="av2-field" data-area="true" data-disabled={!!loading}>
                     <textarea
@@ -1380,12 +1381,13 @@ export default function SetupProfile() {
                       name="bio"
                       className="av2-input av2-area"
                       value={bio}
-                      onChange={(e) => setBio(e.target.value.slice(0, 150))}
+                      onChange={(e) => setBio(e.target.value.slice(0, maxBio))}
                       onFocus={() => setBioFocused(true)}
                       onBlur={() => setBioFocused(false)}
                       disabled={loading}
                       placeholder="Tell us about yourself..."
                       rows={3}
+                      maxLength={maxBio}
                     />
                   </div>
                 </div>

@@ -171,8 +171,8 @@ export default function ProfilePublicScreen() {
 
           // 5. Track profile view
           try {
-            const analyticsService = (await import('../../services/analyticsService.js')).default;
-            analyticsService.trackProfileView(currentUserId, targetUid).catch(() => {});
+            const { getAnalyticsService } = await import('../../services/analyticsService.js');
+            getAnalyticsService().trackProfileView(currentUserId, targetUid).catch(() => {});
           } catch {}
         }
       } catch (err) {

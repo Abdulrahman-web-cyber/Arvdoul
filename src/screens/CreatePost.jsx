@@ -2545,17 +2545,33 @@ const LauncherGrid = React.memo(() => {
 
                 {recentPostsData && recentPostsData.length > 0 && (
                   <div className="pt-2 border-t border-gray-100 dark:border-gray-700/50">
-                    <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-2">Recent Content Performance</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Recent Content Performance</p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/profile/analytics')}
+                        className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <span>Full Studio</span>
+                        <Icons.ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
                     <div className="space-y-1.5">
-                      {recentPostsData.slice(0, 2).map((post, idx) => (
-                        <div key={post.id || idx} className="flex items-center justify-between p-2 rounded-lg bg-gray-50/70 dark:bg-gray-700/20 text-xs">
-                          <span className="truncate max-w-[180px] font-medium text-gray-800 dark:text-gray-200">
+                      {recentPostsData.slice(0, 4).map((post, idx) => (
+                        <div 
+                          key={post.id || idx} 
+                          onClick={() => post.id && navigate(`/post/${post.id}/analytics`)}
+                          className="flex items-center justify-between p-2 rounded-xl bg-gray-50/70 dark:bg-gray-700/20 text-xs cursor-pointer hover:bg-purple-500/10 dark:hover:bg-purple-900/30 transition group"
+                          title="Click to view full post analytics"
+                        >
+                          <span className="truncate max-w-[170px] sm:max-w-[220px] font-medium text-gray-800 dark:text-gray-200 group-hover:text-purple-600 dark:group-hover:text-purple-400">
                             {post.content || post.title || 'Untitled Post'}
                           </span>
-                          <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-gray-500 dark:text-gray-400">
                             <span>❤️ {post.likes || post.likeCount || 0}</span>
                             <span>💬 {post.comments || post.commentCount || 0}</span>
                             <span>👁️ {post.views || post.viewCount || 0}</span>
+                            <Icons.ChevronRight className="w-3.5 h-3.5 text-purple-400 group-hover:translate-x-0.5 transition-transform" />
                           </div>
                         </div>
                       ))}

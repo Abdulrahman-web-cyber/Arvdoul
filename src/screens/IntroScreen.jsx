@@ -1865,9 +1865,7 @@ function IntroScreen({
 
   const resolved = useResolvedTheme(requestedTheme);
 
-  const authCtx = (typeof useOptionalAuth === 'function' ? useOptionalAuth() : null) || (() => {
-    try { return typeof useAuth === 'function' ? useAuth() : null; } catch { return null; }
-  })();
+  const authCtx = useOptionalAuth();
 
   const {
     authInitialized = false,

@@ -101,11 +101,24 @@ const ProfileCivicCard = memo(({
   const royalStatus = useMemo(() => {
     if (!hasLevel || !profile) return null;
     try {
-      return getRoyalEligibility(profile);
+      const stats = {
+        level: effectiveLevel,
+        activeDays: profile.activeDaysCount || profile.activeDays || 0,
+        reputationScore: profile.reputationScore || profile.reputation || 0,
+        contributionScore: profile.contributionScore || profile.contribution || 0,
+        influenceScore: profile.influenceScore || profile.influence || 0,
+        achievements: profile.achievements || 0,
+        policyStanding: profile.policyStanding || 'good',
+      };
+      const kingCheck = getRoyalEligibility('king', stats);
+      if (kingCheck?.eligible) return { title: 'King / Queen', ...kingCheck };
+      const dukeCheck = getRoyalEligibility('duke', stats);
+      if (dukeCheck?.eligible) return { title: 'Duke / Duchess', ...dukeCheck };
+      return null;
     } catch {
       return null;
     }
-  }, [hasLevel, profile]);
+  }, [hasLevel, profile, effectiveLevel]);
 
   // Strict invariant: absent level must NOT fabricate Citizen or Level 1
   if (!hasLevel) {

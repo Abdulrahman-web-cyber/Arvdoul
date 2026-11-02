@@ -103,13 +103,14 @@ export default function EditProfileScreen() {
 
   // Effective user reference
   const currentUid = userProfile?.uid || userProfile?.id || user?.uid;
-  const userLevel = Number(userProfile?.level || user?.level) || 1;
+  const rawLevel = userProfile?.level ?? user?.level;
+  const userLevel = rawLevel != null ? Number(rawLevel) : null;
 
   // Progressive unlock flags derived authoritatively from LEVEL_GATES
   const isCreatorAccount = Boolean(
     userProfile?.isCreator || 
     userProfile?.creatorStatus === 'approved' || 
-    userLevel >= LEVEL_GATES.creatorProfile
+    (userLevel != null && userLevel >= LEVEL_GATES.creatorProfile)
   );
 
   const isRoyalOrNoble = Boolean(
@@ -117,7 +118,7 @@ export default function EditProfileScreen() {
     userProfile?.isDucal ||
     userProfile?.activeTitle === 'duke' ||
     userProfile?.activeTitle === 'king' ||
-    userLevel >= LEVEL_GATES.sovereign
+    (userLevel != null && userLevel >= LEVEL_GATES.sovereign)
   );
 
   // Form state
