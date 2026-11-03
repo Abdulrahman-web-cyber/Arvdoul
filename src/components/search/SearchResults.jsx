@@ -57,6 +57,37 @@ const SearchResults = memo(({
     if (selectedTab === 'all') return results;
     return results.filter((result) => {
       const type = result.type?.toLowerCase();
+      if (!type) return false;
+      if (selectedTab === 'people') {
+        return type === 'user' || type === 'users' || type === 'people' || type === 'citizen' || type === 'profile';
+      }
+      if (selectedTab === 'communities') {
+        return type === 'community' || type === 'communities' || type === 'group' || type === 'groups';
+      }
+      if (selectedTab === 'posts') {
+        return type === 'post' || type === 'posts' || type === 'article';
+      }
+      if (selectedTab === 'videos') {
+        return type === 'video' || type === 'videos' || type === 'clip' || type === 'short';
+      }
+      if (selectedTab === 'images') {
+        return type === 'image' || type === 'images' || type === 'photo' || type === 'photos';
+      }
+      if (selectedTab === 'live') {
+        return type === 'live' || type === 'stream' || type === 'broadcast';
+      }
+      if (selectedTab === 'events') {
+        return type === 'event' || type === 'events';
+      }
+      if (selectedTab === 'polls') {
+        return type === 'poll' || type === 'polls';
+      }
+      if (selectedTab === 'questions') {
+        return type === 'question' || type === 'questions' || type === 'ask' || type === 'qa';
+      }
+      if (selectedTab === 'hashtags') {
+        return type === 'hashtag' || type === 'hashtags' || type === 'tag' || type === 'tags';
+      }
       return type === selectedTab || type === selectedTab.slice(0, -1);
     });
   }, [results, selectedTab]);

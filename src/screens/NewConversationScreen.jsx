@@ -20,6 +20,7 @@ const NewConversationScreen = () => {
   const { loadConversations } = useMessagingStore();
 
   const sharePostId = searchParams.get('sharePost');
+  const shareProfileId = searchParams.get('shareProfile') || searchParams.get('profile');
   const toUserId = searchParams.get('to') || searchParams.get('userId') || searchParams.get('uid');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,6 +57,19 @@ const NewConversationScreen = () => {
               });
             } catch (err) {
               console.warn('Post share failed:', err);
+            }
+          }
+          if (shareProfileId) {
+            try {
+              const origin = typeof window !== 'undefined' ? window.location.origin : '';
+              const targetProfile = await userService.getUserProfile(shareProfileId).catch(() => null);
+              const targetHandle = targetProfile?.username || shareProfileId;
+              await messagingService.sendMessage(result.conversation.id, {
+                type: 'text',
+                content: `Check out @${targetHandle}'s profile on ARVDOUL: ${origin}/profile/${targetHandle}`,
+              });
+            } catch (err) {
+              console.warn('Profile share failed:', err);
             }
           }
           await loadConversations(user.uid);
@@ -171,8 +185,22 @@ const NewConversationScreen = () => {
             toast.error('Conversation created, but the post could not be sent');
           }
         }
+        if (shareProfileId) {
+          try {
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const targetProfile = await userService.getUserProfile(shareProfileId).catch(() => null);
+            const targetHandle = targetProfile?.username || shareProfileId;
+            await messagingService.sendMessage(result.conversation.id, {
+              type: 'text',
+              content: `Check out @${targetHandle}'s profile on ARVDOUL: ${origin}/profile/${targetHandle}`,
+            });
+            toast.success('Profile shared');
+          } catch (shareErr) {
+            toast.error('Conversation created, but profile could not be sent');
+          }
+        }
         await loadConversations(user.uid);
-        if (!sharePostId) toast.success('Conversation created');
+        if (!sharePostId && !shareProfileId) toast.success('Conversation created');
         navigate(`/messages/${result.conversation.id}`);
       } else {
         toast.error('Failed to create conversation');

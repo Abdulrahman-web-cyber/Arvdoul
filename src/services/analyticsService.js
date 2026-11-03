@@ -236,6 +236,65 @@ class UltimateAnalyticsService {
             coins: previousCoins > 0 ? ((analytics.coinsEarned - previousCoins) / previousCoins) * 100 : 0,
           };
         }
+      } else {
+        // Fallback for new creators: load live sharded views, coins, and post engagement
+        const docPath = `profile_analytics/${userId}`;
+        const [totalViews, totalReach] = await Promise.all([
+          countersManager.get({ docPath, field: 'totalViews', fallback: 0 }),
+          countersManager.get({ docPath, field: 'totalReach', fallback: 0 }),
+        ]);
+
+        let coinsEarned = 0;
+        let followerCount = 0;
+        try {
+          const userRef = doc(this.firestore, 'users', userId);
+          const uSnap = await getDoc(userRef);
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            coinsEarned = uData.coins ?? uData.coinBalance ?? 0;
+            followerCount = uData.followerCount ?? uData.followersCount ?? 0;
+          }
+        } catch { /* identity optional */ }
+
+        let topPosts = [];
+        let totalEngagement = 0;
+        try {
+          const postsRef = collection(this.firestore, 'posts');
+          const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), orderBy('createdAt', 'desc'), limit(10)));
+          topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          totalEngagement = topPosts.reduce((sum, p) => sum + (p.likesCount || p.likes || 0) + (p.commentsCount || 0) + (p.sharesCount || 0), 0);
+        } catch { /* posts optional */ }
+
+        const days = this._getTimeframeDays(timeframe);
+        const dailyStats = [];
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          dailyStats.push({
+            date: d.toISOString().split('T')[0],
+            views: 0,
+            reach: 0,
+            engagement: 0,
+            coins: 0,
+          });
+        }
+        if (totalViews > 0 && dailyStats.length > 0) {
+          dailyStats[dailyStats.length - 1].views = totalViews;
+        }
+
+        analytics = {
+          ...analytics,
+          hasData: Boolean(totalViews > 0 || coinsEarned > 0 || topPosts.length > 0),
+          totalViews,
+          totalReach: totalReach || Math.max(totalViews, followerCount),
+          totalEngagement,
+          coinsEarned,
+          dailyStats,
+          topPosts: topPosts.slice(0, 5),
+          growthRate: 0,
+          activeDays: topPosts.length > 0 ? Math.min(topPosts.length, days) : 0,
+          demographics: analytics.demographics,
+        };
       }
 
       // Get ranking safely

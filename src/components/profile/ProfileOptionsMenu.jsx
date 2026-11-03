@@ -11,7 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
 import {
   Share2, Link2, ShieldAlert, Loader2, X, UserX, BadgeCheck, Flag, VolumeX, Volume2, ShieldMinus,
-  Eye, QrCode, Crown, Settings, Award, MapPin
+  Eye, QrCode, Crown, Settings, Award, MapPin, MessageCircle
 } from 'lucide-react';
 import { shareProfile, getProfileUrl, copyToClipboard } from '../../utils/shareUtils.js';
 
@@ -242,6 +242,23 @@ const ProfileOptionsMenu = ({ profile, isOwner = false, onClose, theme = 'light'
               <span>Copy Profile Link</span>
             </div>
           </button>
+
+          {!isOwner && (
+            <button
+              className={itemCls}
+              onClick={() => {
+                onClose?.();
+                navigate(`/messages/new?shareProfile=${userId}`);
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <span>Send via Direct Message</span>
+              </div>
+            </button>
+          )}
 
           {isOwner && (
             <>

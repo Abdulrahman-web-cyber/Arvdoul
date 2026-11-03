@@ -268,6 +268,7 @@ export const ProfileHeroSection = memo(({
   friendRequestLoading = false,
   onFriendRequestToggle,
   onOpenTipModal,
+  onOpenMessages,
   capabilities,
   analytics,
 }) => {
@@ -741,10 +742,12 @@ export const ProfileHeroSection = memo(({
           {/* Message Button */}
           <button
             type="button"
-            onClick={() => navigate(`/messages/new?to=${profileUid}`)}
+            onClick={onOpenMessages ? onOpenMessages : () => navigate(`/messages/new?to=${profileUid}`)}
             className={cn(
               "flex-1 min-w-[130px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 cursor-pointer",
-              isDark
+              capabilities && capabilities.canMessage === false
+                ? (isDark ? "bg-white/5 opacity-60 border-white/5 text-slate-400" : "bg-slate-100 opacity-60 border-slate-200 text-slate-500")
+                : isDark
                 ? "bg-white/5 hover:bg-white/10 border-white/10 text-white"
                 : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800"
             )}

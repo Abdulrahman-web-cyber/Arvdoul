@@ -494,9 +494,13 @@ export default function ProfilePublicScreen() {
             level={effectiveProfile.level}
             theme={theme}
             onBack={() => navigate(-1)}
-            onOpenQrCode={() => setShowQrModal(true)}
-            onOpenMessages={() => navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`)}
-            onOpenOptions={() => setShowOptionsMenu(true)}
+            onOpenMessages={() => {
+              if (capabilities && capabilities.canMessage === false) {
+                toast.error('This citizen does not accept direct messages based on their privacy settings.');
+                return;
+              }
+              navigate(`/messages/new?to=${effectiveProfile.id || effectiveProfile.uid}`);
+            }}
             onOpenVerificationModal={() => setShowVerificationModal(true)}
             onAvatarClick={() => setShowQrModal(true)}
             onShare={handleShare}

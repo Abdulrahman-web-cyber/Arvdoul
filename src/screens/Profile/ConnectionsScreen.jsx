@@ -446,7 +446,11 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                         />
                       </div>
                       {/* Presence indicator */}
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-[#060816]" />
+                      {citizen.isOnline || citizen.presence?.status === 'online' ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#060816] animate-pulse" title="Online" />
+                      ) : (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-white dark:ring-[#060816]" title="Offline" />
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1">

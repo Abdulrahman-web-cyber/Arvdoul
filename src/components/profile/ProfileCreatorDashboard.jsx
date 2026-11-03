@@ -24,8 +24,8 @@ import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 
 // Clean SVG Sparklines matching image curves
-const Sparkline = ({ color = '#8B1EF3', data = [10, 15, 12, 18, 16, 24, 22, 28] }) => {
-  const safeData = Array.isArray(data) && data.length > 0 ? data : [10, 15, 12, 18, 16, 24, 22, 28];
+const Sparkline = ({ color = '#8B1EF3', data = [0, 0, 0, 0, 0, 0, 0] }) => {
+  const safeData = Array.isArray(data) && data.length > 0 ? data : [0, 0, 0, 0, 0, 0, 0];
   const min = Math.min(...safeData);
   const max = Math.max(...safeData);
   const range = max - min || 1;
@@ -128,16 +128,44 @@ const ProfileCreatorDashboard = memo(({
     onTimeframeChange?.(val);
   };
 
-  // Values matching reference design with real analytics fallback
-  const views = analytics?.totalViews ?? 128000;
-  const reach = analytics?.totalReach ?? 312000;
-  const engagement = analytics?.totalEngagement ?? 24600;
-  const coins = analytics?.coinsEarned ?? 2840000;
+  // Real metrics from analytics store without fabricated defaults
+  const views = Number(analytics?.totalViews) || 0;
+  const reach = Number(analytics?.totalReach) || 0;
+  const engagement = Number(analytics?.totalEngagement) || 0;
+  const coins = Number(analytics?.coinsEarned) || 0;
 
-  const viewsTrend = analytics?.viewsGrowth ?? 15.3;
-  const reachTrend = analytics?.reachGrowth ?? 22.1;
-  const engagementTrend = analytics?.engagementGrowth ?? 18.6;
-  const coinsTrend = analytics?.coinsGrowth ?? 35.7;
+  const viewsTrend = analytics?.changes?.views ?? analytics?.viewsGrowth ?? 0;
+  const reachTrend = analytics?.changes?.reach ?? analytics?.reachGrowth ?? 0;
+  const engagementTrend = analytics?.changes?.engagement ?? analytics?.engagementGrowth ?? 0;
+  const coinsTrend = analytics?.changes?.coins ?? analytics?.coinsGrowth ?? 0;
+
+  // Extract real daily stats for sparklines if available
+  const dailyStats = Array.isArray(analytics?.dailyStats) ? analytics.dailyStats : [];
+  const viewsSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.views) || 0) : [0, 0, 0, 0, 0, 0, views > 0 ? views : 0];
+  const reachSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.reach) || 0) : [0, 0, 0, 0, 0, 0, reach > 0 ? reach : 0];
+  const engagementSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.engagement) || 0) : [0, 0, 0, 0, 0, 0, engagement > 0 ? engagement : 0];
+  const coinsSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.coins) || 0) : [0, 0, 0, 0, 0, 0, coins > 0 ? coins : 0];
+
+  const formatTrend = (trend) => {
+    const num = Number(trend) || 0;
+    if (num > 0) return { text: `▲ +${num.toFixed(1)}%`, isPositive: true };
+    if (num < 0) return { text: `▼ ${num.toFixed(1)}%`, isPositive: false };
+    return { text: `— 0.0%`, isNeutral: true };
+  };
+
+  const vTrend = formatTrend(viewsTrend);
+  const rTrend = formatTrend(reachTrend);
+  const eTrend = formatTrend(engagementTrend);
+  const cTrend = formatTrend(coinsTrend);
+
+  // Real ranking calculation from ranking prop
+  const rankLabel = ranking?.percentile
+    ? `Top ${ranking.percentile}%`
+    : ranking?.position || ranking?.rank
+    ? `#${ranking.position || ranking.rank}`
+    : ranking?.label
+    ? ranking.label
+    : 'Creator';
 
   return (
     <div className={cn(
@@ -155,26 +183,44 @@ const ProfileCreatorDashboard = memo(({
           </h2>
         </div>
 
-        <div className="relative">
-          <select
-            value={selectedTimeframe}
-            onChange={handleSelectTimeframe}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/profile/analytics')}
             className={cn(
-              "appearance-none text-xs font-semibold pl-3 pr-7 py-1.5 rounded-xl border cursor-pointer transition-all outline-none",
+              "text-xs font-semibold px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-colors cursor-pointer",
               isDark
-                ? "bg-white/5 border-white/10 text-gray-200 hover:bg-white/10"
-                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                ? "bg-purple-950/30 hover:bg-purple-900/40 text-purple-300 border-purple-500/20"
+                : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
             )}
+            title="Open Full Analytics Studio"
           >
-            <option value="7d">This Week</option>
-            <option value="30d">This Month</option>
-            <option value="all">All Time</option>
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+            <span>Full Insights</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
+
+          <div className="relative">
+            <select
+              value={selectedTimeframe}
+              onChange={handleSelectTimeframe}
+              className={cn(
+                "appearance-none text-xs font-semibold pl-3 pr-7 py-1.5 rounded-xl border cursor-pointer transition-all outline-none",
+                isDark
+                  ? "bg-white/5 border-white/10 text-gray-200 hover:bg-white/10"
+                  : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+              )}
+            >
+              <option value="7d">This Week</option>
+              <option value="30d">This Month</option>
+              <option value="90d">90 Days</option>
+              <option value="365d">This Year</option>
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+          </div>
         </div>
       </div>
 
-      {/* 5 Cards Row (4 Metric Cards with Sparklines + 1 Top Creator Badge) */}
+      {/* 5 Cards Row (4 Metric Cards with Sparklines + 1 Creator Standing Badge) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* 1. Profile Views */}
         <div className={cn(
@@ -188,13 +234,15 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
               {views >= 1000 ? `${(views / 1000).toFixed(0)}K` : views}
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-              <span>▲</span>
-              <span>{viewsTrend}%</span>
+            <div className={cn(
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              vTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : vTrend.isNeutral ? "text-slate-400" : "text-rose-500"
+            )}>
+              <span>{vTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#8B1EF3" data={[12, 14, 18, 15, 22, 20, 26, 28]} />
+            <Sparkline color="#8B1EF3" data={viewsSeries} />
           </div>
         </div>
 
@@ -210,13 +258,15 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
               {reach >= 1000 ? `${(reach / 1000).toFixed(0)}K` : reach}
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-              <span>▲</span>
-              <span>{reachTrend}%</span>
+            <div className={cn(
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              rTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : rTrend.isNeutral ? "text-slate-400" : "text-rose-500"
+            )}>
+              <span>{rTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#00F0FF" data={[10, 16, 14, 20, 18, 24, 28, 32]} />
+            <Sparkline color="#00F0FF" data={reachSeries} />
           </div>
         </div>
 
@@ -232,13 +282,15 @@ const ProfileCreatorDashboard = memo(({
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
               {engagement >= 1000 ? `${(engagement / 1000).toFixed(1)}K` : engagement}
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-              <span>▲</span>
-              <span>{engagementTrend}%</span>
+            <div className={cn(
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              eTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : eTrend.isNeutral ? "text-slate-400" : "text-rose-500"
+            )}>
+              <span>{eTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#D946EF" data={[8, 12, 10, 15, 14, 18, 20, 24]} />
+            <Sparkline color="#D946EF" data={engagementSeries} />
           </div>
         </div>
 
@@ -252,19 +304,21 @@ const ProfileCreatorDashboard = memo(({
               Coins Earned
             </div>
             <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-1">
-              {coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins}
+              {coins >= 1000000 ? `${(coins / 1000000).toFixed(2)}M` : coins >= 1000 ? `${(coins / 1000).toFixed(1)}K` : coins}
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-              <span>▲</span>
-              <span>{coinsTrend}%</span>
+            <div className={cn(
+              "flex items-center gap-1 text-[10px] font-bold mt-0.5",
+              cTrend.isPositive ? "text-emerald-600 dark:text-emerald-400" : cTrend.isNeutral ? "text-slate-400" : "text-rose-500"
+            )}>
+              <span>{cTrend.text}</span>
             </div>
           </div>
           <div className="mt-2">
-            <Sparkline color="#F59E0B" data={[15, 18, 22, 20, 25, 30, 28, 35]} />
+            <Sparkline color="#F59E0B" data={coinsSeries} />
           </div>
         </div>
 
-        {/* 5. Top 1% Ranking Badge Card */}
+        {/* 5. Creator Standing / Ranking Badge Card */}
         <div className={cn(
           "rounded-2xl p-3 sm:p-3.5 border flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1 transition-all duration-200 group cursor-pointer",
           isDark
@@ -281,7 +335,7 @@ const ProfileCreatorDashboard = memo(({
           </div>
 
           <div className="text-sm font-black text-purple-700 dark:text-purple-300">
-            Top 1%
+            {rankLabel}
           </div>
           <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
             Among Creators
