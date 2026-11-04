@@ -126,6 +126,7 @@ export default function EditProfileScreen() {
     username: '',
     bio: '',
     location: '',
+    locationPrivacy: 'public',
     website: '',
     pronouns: '',
     profession: '',
@@ -199,6 +200,7 @@ export default function EditProfileScreen() {
         username: initialUsername,
         bio: src.bio || '',
         location: src.location || '',
+        locationPrivacy: src.locationPrivacy || 'public',
         website: src.website || '',
         pronouns: src.pronouns || '',
         profession: src.profession || '',
@@ -407,6 +409,7 @@ export default function EditProfileScreen() {
         username: rawUser,
         bio: formData.bio?.trim() || '',
         location: formData.location?.trim() || '',
+        locationPrivacy: formData.locationPrivacy || 'public',
         website: cleanWebsite,
         pronouns: formData.pronouns?.trim() || '',
         profession: formData.profession?.trim() || '',
@@ -1664,6 +1667,7 @@ export default function EditProfileScreen() {
           isOpen={showLocationModal}
           onClose={() => setShowLocationModal(false)}
           currentLocation={formData.location}
+          currentPrivacy={formData.locationPrivacy}
           userId={currentUid}
           theme={theme}
           onLocationUpdated={(newLoc) => {

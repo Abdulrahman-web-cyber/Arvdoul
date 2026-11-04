@@ -788,7 +788,7 @@ class ProfessionalUserService {
 
   async updateUserProfile(userId, updates) {
     await this._ensureInitialized();
-    const { doc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
+    const { doc, updateDoc, serverTimestamp, runTransaction, deleteField } = await import('firebase/firestore');
 
     // Run schema validation and sanitization
     const validation = validateProfileUpdate(updates);
@@ -854,11 +854,17 @@ class ProfessionalUserService {
     }
 
     const userRef = doc(this.firestore, 'users', userId);
-    await updateDoc(userRef, {
+    const updatePayload = {
       ...sanitizedUpdates,
       updatedAt: serverTimestamp(),
       lastActive: serverTimestamp()
-    });
+    };
+    // A null `locationCoordinates` is an explicit clear (privacy switched to
+    // hidden/country_only) — delete the field rather than storing null.
+    if (sanitizedUpdates.locationCoordinates === null) {
+      updatePayload.locationCoordinates = deleteField();
+    }
+    await updateDoc(userRef, updatePayload);
 
     // Keep Firebase Auth current user in sync if displayName or photoURL was updated
     try {

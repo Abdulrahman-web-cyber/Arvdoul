@@ -543,6 +543,7 @@ export default function ProfileMyScreen() {
             isOpen={showLocationModal}
             onClose={() => setShowLocationModal(false)}
             currentLocation={effectiveProfile?.location}
+            currentPrivacy={effectiveProfile?.locationPrivacy}
             userId={currentUserId}
             theme={theme}
             onLocationUpdated={(newLoc) => {

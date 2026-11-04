@@ -115,6 +115,45 @@ describe('Profile System Hardening & Validation Contracts', () => {
     });
   });
 
+  describe('location privacy enforcement (N036)', () => {
+    test('rounds coordinates to ~1 km so full-precision GPS never lands on users/{uid}', () => {
+      const { sanitized } = validateProfileUpdate({
+        locationCoordinates: { lat: 51.50712345, lng: -0.12765432 },
+      });
+      expect(sanitized.locationCoordinates).toEqual({ lat: 51.51, lng: -0.13 });
+    });
+
+    test('hidden clears the location string and the coordinates', () => {
+      const { sanitized } = validateProfileUpdate({
+        location: 'London, United Kingdom',
+        locationPrivacy: 'hidden',
+        locationCoordinates: { lat: 51.5, lng: -0.12 },
+      });
+      expect(sanitized.location).toBe('');
+      expect(sanitized.locationCoordinates).toBeNull();
+    });
+
+    test('country_only keeps the country and drops the city and coordinates', () => {
+      const { sanitized } = validateProfileUpdate({
+        location: 'London, United Kingdom',
+        locationPrivacy: 'country_only',
+        locationCoordinates: { lat: 51.5, lng: -0.12 },
+      });
+      expect(sanitized.location).toBe('United Kingdom');
+      expect(sanitized.locationCoordinates).toBeNull();
+    });
+
+    test('public keeps the location and the rounded coordinates', () => {
+      const { sanitized } = validateProfileUpdate({
+        location: 'London, United Kingdom',
+        locationPrivacy: 'public',
+        locationCoordinates: { lat: 51.5, lng: -0.12 },
+      });
+      expect(sanitized.location).toBe('London, United Kingdom');
+      expect(sanitized.locationCoordinates).toEqual({ lat: 51.5, lng: -0.12 });
+    });
+  });
+
   describe('canViewProfileSection Privacy Access Rules', () => {
     const privacy = {
       profileInfo: VISIBILITY_SCOPES.EVERYONE,
