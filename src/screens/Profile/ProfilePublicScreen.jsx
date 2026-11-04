@@ -58,12 +58,16 @@ export default function ProfilePublicScreen() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const currentUserId = currentUser?.uid || getStoredUid();
+  const routeUserId = userId ? String(userId).replace(/^@/, '').trim() : '';
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   // Read state authoritatively from Profile Store
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
+  const storePostsLoading = useProfileStore((state) => state.postsLoading);
+  const storePostsHasMore = useProfileStore((state) => state.postsHasMore);
+  const storePostsCursor = useProfileStore((state) => state.postsCursor);
   const storeLoading = useProfileStore((state) => state.loading);
   const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const storeFollowLoading = useProfileStore((state) => state.followLoading);
@@ -191,6 +195,11 @@ export default function ProfilePublicScreen() {
   const posts = storePosts;
   const mutualFriends = storeMutualFriends;
   const loading = localLoading || storeLoading;
+  const targetUid = storeProfile?.id || storeProfile?.uid || routeUserId;
+  const handleLoadMorePosts = useCallback(() => {
+    if (!targetUid) return;
+    useProfileStore.getState().loadMorePosts(targetUid);
+  }, [targetUid]);
   const isFollowing = Boolean(storeFollowStatus?.isFollowing ?? relationship?.isFollowing ?? profileData?.isFollowing);
   const followLoading = storeFollowLoading;
 
@@ -624,6 +633,9 @@ export default function ProfilePublicScreen() {
                 profile={effectiveProfile}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
                 onOpenTipModal={() => setShowTipModal(true)}
+                hasMore={Boolean(storePostsCursor && storePostsHasMore)}
+                loadingMore={storePostsLoading}
+                onLoadMore={handleLoadMorePosts}
               />
             </>
           )}

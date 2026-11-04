@@ -110,6 +110,7 @@ export default function ProfileMyScreen() {
   const posts = useProfileStore((state) => state.posts);
   const postsLoading = useProfileStore((state) => state.postsLoading);
   const postsHasMore = useProfileStore((state) => state.postsHasMore);
+  const postsCursor = useProfileStore((state) => state.postsCursor);
   const savedPosts = useProfileStore((state) => state.savedPosts);
   const savedLoading = useProfileStore((state) => state.savedLoading);
   const highlights = useProfileStore((state) => state.highlights);
@@ -247,6 +248,12 @@ export default function ProfileMyScreen() {
     profileStore.loadPosts(currentUserId);
     analyticsStore.loadAnalytics(currentUserId, timeframe);
   }, [currentUserId, timeframe]);
+
+  // Paginate the profile feed. Without this the grid stopped at the first page.
+  const handleLoadMorePosts = useCallback(() => {
+    if (!currentUserId) return;
+    useProfileStore.getState().loadMorePosts(currentUserId);
+  }, [currentUserId]);
 
   // Tab change handler
   const handleTabChange = useCallback((tab) => {
@@ -468,6 +475,9 @@ export default function ProfileMyScreen() {
                 profile={effectiveProfile}
                 isOwner={viewAs === 'owner'}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
+                hasMore={Boolean(postsCursor && postsHasMore)}
+                loadingMore={postsLoading}
+                onLoadMore={handleLoadMorePosts}
               />
             </>
           )}

@@ -355,7 +355,7 @@ class EnterpriseFirestoreService {
       const docRef = await Promise.race([addDocPromise, addDocTimeout]);
       const postId = docRef.id;
       this.cache.set(postId, { ...cleanPostDoc, id: postId, _cachedAt: Date.now() });
-      this.invalidateCachePattern(`user_posts_${postData.authorId}`);
+      this.invalidateCachePattern(`user_posts_${postData.authorId}*`);
 
       // Level system: award post_created XP (best-effort, never breaks publish).
       try {
@@ -408,7 +408,10 @@ class EnterpriseFirestoreService {
     const cacheKey = `user_posts_${userId}_${JSON.stringify(options)}`;
     if (options.cacheFirst !== false) {
       const cached = this.cache.get(cacheKey);
-      if (cached) return { success: true, posts: cached.posts, cached: true };
+      // Return the whole cached result: returning only `posts` dropped
+      // hasMore/nextCursor, so a cached first page looked like the entire feed
+      // and pagination silently died.
+      if (cached) return { ...cached, cached: true };
     }
     try {
       const { collection, query, where, getDocs, orderBy, limit, startAfter, doc, getDoc } = this.firestoreMethods;
@@ -423,8 +426,11 @@ class EnterpriseFirestoreService {
       if (options.limit) conditions.push(limit(options.limit));
       
       let lastDocSnap = null;
-      if (options.startAfter) {
-        const lastDocRef = doc(this.firestore, 'posts', options.startAfter);
+      // Callers pass the cursor as `cursor` (the store's public name); accept
+      // `startAfter` too for backwards compatibility.
+      const afterId = options.startAfter || options.cursor;
+      if (afterId) {
+        const lastDocRef = doc(this.firestore, 'posts', afterId);
         lastDocSnap = await getDoc(lastDocRef);
         if (lastDocSnap.exists()) {
           conditions.push(startAfter(lastDocSnap));
@@ -441,8 +447,9 @@ class EnterpriseFirestoreService {
       const hasMore = snap.docs.length === (options.limit || 10);
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
       
-      this.cache.set(cacheKey, { posts, _cachedAt: Date.now() });
-      return { success: true, posts, hasMore, nextCursor, total: posts.length };
+      const result = { success: true, posts, hasMore, nextCursor, total: posts.length };
+      this.cache.set(cacheKey, result);
+      return result;
     } catch (error) {
       throw enhanceError(error, `Failed to fetch posts for user ${userId}`);
     }
@@ -455,7 +462,7 @@ class EnterpriseFirestoreService {
       const postRef = doc(this.firestore, 'posts', postId);
       await updateDoc(postRef, { ...updates, updatedAt: serverTimestamp(), _clientUpdatedAt: new Date().toISOString() });
       this.cache.delete(postId);
-      this.invalidateCachePattern(`user_posts_`);
+      this.invalidateCachePattern(`user_posts_*`);
       return { success: true, postId };
     } catch (error) { throw enhanceError(error, 'Failed to update post'); }
   }
@@ -470,7 +477,7 @@ class EnterpriseFirestoreService {
         status: 'deleted', deletedBy: userId
       });
       this.cache.delete(postId);
-      this.invalidateCachePattern(`user_posts_`);
+      this.invalidateCachePattern(`user_posts_*`);
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to delete post'); }
   }
@@ -485,7 +492,7 @@ class EnterpriseFirestoreService {
         status: 'published', deletedBy: userId
       });
       this.cache.delete(postId);
-      this.invalidateCachePattern(`user_posts_`);
+      this.invalidateCachePattern(`user_posts_*`);
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to restore post'); }
   }
@@ -511,7 +518,7 @@ class EnterpriseFirestoreService {
         this.cache.delete(postId);
       }
       await batch.commit();
-      this.invalidateCachePattern('user_posts_');
+      this.invalidateCachePattern('user_posts_*');
       return { success: true, deletedCount };
     } catch (error) { throw enhanceError(error, 'Failed to batch delete posts'); }
   }
