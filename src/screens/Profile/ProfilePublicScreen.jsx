@@ -578,7 +578,21 @@ export default function ProfilePublicScreen() {
             </div>
           ) : (
             <>
-              {/* 4. Story Highlights Carousel */}
+              {/* 4. Citizen Progression & Civic Standing (level / XP / streak /
+                  reputation — each gated by the owner's show* privacy toggles) */}
+              <ProfileProgression
+                level={effectiveProfile?.level}
+                experience={effectiveProfile?.experience || 0}
+                streak={effectiveProfile?.activeStreak ?? 0}
+                reputation={effectiveProfile?.reputation}
+                showLevel={effectiveProfile?.showLevel !== false}
+                showReputation={effectiveProfile?.showReputation !== false}
+                showStreak={effectiveProfile?.showStreak !== false}
+                isOwner={false}
+                theme={theme}
+              />
+
+              {/* 5. Story Highlights Carousel */}
               <ProfileHighlightsSection
                 highlights={effectiveProfile?.highlights || []}
                 userId={userId}

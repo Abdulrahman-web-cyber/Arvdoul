@@ -231,6 +231,21 @@ describe('profile components fail closed on capabilities', () => {
     expect(src).not.toContain('LEVEL_GATES.creatorProfile');
   });
 
+  it('the show* privacy toggles are read by the progression surfaces, not just written', () => {
+    // showLevel/showReputation/showStreak were saved by EditProfileScreen but
+    // read nowhere, so every viewer saw the level badge, reputation and streak
+    // regardless of the owner's choice. They must now gate the render.
+    const progression = read('src/components/profile/ProfileProgression.jsx');
+    const hero = read('src/components/profile/ProfileHeroSection.jsx');
+    for (const toggle of ['showLevel', 'showReputation', 'showStreak']) {
+      expect(progression).toContain(toggle);
+    }
+    expect(hero).toContain('showLevel');
+    // Both profile surfaces must render the progression component.
+    expect(read('src/screens/Profile/ProfilePublicScreen.jsx')).toContain('<ProfileProgression');
+    expect(read('src/screens/Profile/ProfileMyScreen.jsx')).toContain('<ProfileProgression');
+  });
+
   it('no dead profile components linger', () => {
     for (const gone of [
       'src/components/profile/ProfileHeader.jsx',

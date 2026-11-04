@@ -88,6 +88,7 @@ export const ProfileLevelProgressCard = memo(({
   isOwner = false,
   isDark = false,
   userId = null,
+  showLevel = true,
   navigate,
   onOpenRoadmap
 }) => {
@@ -109,6 +110,41 @@ export const ProfileLevelProgressCard = memo(({
   }, [experience, level]);
 
   const passportUrl = isOwner ? '/passport' : `/passport/${userId || 'user'}`;
+
+  // The owner's `showLevel` toggle hides the badge and XP curve from other
+  // viewers. The Digital Passport entry point stays available so the card is
+  // never a dead end.
+  if (!showLevel && !isOwner) {
+    return (
+      <div
+        className={cn(
+          "rounded-2xl p-3.5 sm:p-4 border backdrop-blur-xl transition-all shadow-sm w-full md:w-64 shrink-0 flex flex-col justify-between gap-2.5",
+          isDark
+            ? "bg-[#0b1021]/80 border-white/[0.08] text-white"
+            : "bg-white/95 border-slate-200/90 text-slate-900"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold text-xs">
+            <Shield className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-bold">Civic Standing</div>
+            <div className="text-[10px] text-slate-400">Level hidden by owner</div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigate?.(passportUrl)}
+          className="w-full py-1.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Digital Passport</span>
+        </button>
+      </div>
+    );
+  }
 
   // If standing is null / unavailable, show honest civic start card
   if (!levelInfo) {
@@ -621,6 +657,7 @@ export const ProfileHeroSection = memo(({
           isOwner={isOwner}
           isDark={isDark}
           userId={profileUid}
+          showLevel={profile?.showLevel !== false}
           navigate={navigate}
           onOpenRoadmap={handleOpenRoadmap}
         />
