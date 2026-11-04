@@ -47,35 +47,43 @@ const NewConversationScreen = () => {
         // Resolve profile first to make sure user exists
         await userService.getUserProfile(toUserId);
         if (cancelled) return;
-        const result = await messagingService.createConversation([user.uid, toUserId]);
-        if (result.success && result.conversation?.id) {
-          if (sharePostId) {
+        const result = await messagingService.startDirectConversation(toUserId, user.uid);
+        if (result.status === 'request') {
+          toast.info('Message request sent. You can chat once they accept.');
+          navigate('/messages', { replace: true });
+          return;
+        }
+        if (result.status === 'conversation' && result.conversationId) {
+          const conversation = { id: result.conversationId };
+          const sharePost = async () => {
             try {
               const origin = typeof window !== 'undefined' ? window.location.origin : '';
-              await messagingService.sendMessage(result.conversation.id, {
+              await messagingService.sendMessage(conversation.id, {
                 type: 'text',
                 content: `Check out this post on ARVDOUL: ${origin}/post/${sharePostId}`,
               });
             } catch (err) {
               console.warn('Post share failed:', err);
             }
-          }
-          if (shareProfileId) {
+          };
+          const shareProfile = async () => {
             try {
               const targetProfile = await userService.getUserProfile(shareProfileId).catch(() => null);
               const targetHandle = getProfileHandle(targetProfile) || shareProfileId;
-              await messagingService.sendMessage(result.conversation.id, {
+              await messagingService.sendMessage(conversation.id, {
                 type: 'text',
                 content: `Check out @${targetHandle}'s profile on ARVDOUL: ${getProfileUrl(targetProfile || shareProfileId)}`,
               });
             } catch (err) {
               console.warn('Profile share failed:', err);
             }
-          }
+          };
+          if (sharePostId) await sharePost();
+          if (shareProfileId) await shareProfile();
           await loadConversations(user.uid);
-          navigate(`/messages/${result.conversation.id}`, { replace: true });
+          navigate(`/messages/${conversation.id}`, { replace: true });
         } else {
-          toast.error(result.error || 'Could not start conversation');
+          toast.error('Could not start conversation');
           setLoading(false);
         }
       } catch (err) {
@@ -155,17 +163,26 @@ const NewConversationScreen = () => {
       setLoading(true);
       const participants = selectedUsers.map((u) => u.uid || u.id);
       
-      let options = {};
-      if (selectedUsers.length > 1) {
-        options = {
-          type: 'group',
-          name: groupName || `Group with ${selectedUsers.map((u) => u.displayName).join(', ')}`,
-        };
-        if (groupPhoto) {
-          options.photoURL = groupPhoto;
+      // 1:1 opens through the spine so the recipient's allowDMs preference is
+      // honoured: a refused DM becomes a message request instead of a hard error.
+      if (selectedUsers.length === 1) {
+        const direct = await messagingService.startDirectConversation(participants[0], user.uid);
+        if (direct.status === 'request') {
+          toast.info('Message request sent. You can chat once they accept.');
+          navigate('/messages');
+          return;
         }
-      } else {
-        options = { type: 'direct' };
+        await loadConversations(user.uid);
+        navigate(`/messages/${direct.conversationId}`);
+        return;
+      }
+
+      let options = {
+        type: 'group',
+        name: groupName || `Group with ${selectedUsers.map((u) => u.displayName).join(', ')}`,
+      };
+      if (groupPhoto) {
+        options.photoURL = groupPhoto;
       }
 
       const result = await messagingService.createConversation(participants, options);

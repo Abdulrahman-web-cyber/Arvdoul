@@ -61,6 +61,29 @@ service cloud.firestore {
       return request.resource.data[field] == uid();
     }
 
+    // ---------- direct-message privacy ----------
+    // The recipient's allowDMs preference (users/{uid}.settings.privacy.allowDMs,
+    // written by the Settings screen) governs who may open a 1:1 conversation
+    // with them: 'everyone' | 'friends' (mutual follow) | 'none'. Messages are
+    // written straight from the client, so this is the only real enforcement
+    // point. Absent settings default to 'everyone' (current behaviour).
+    function followEdgeExists(a, b) {
+      return exists(/databases/$(database)/documents/follows/$(a + '_' + b));
+    }
+    function dmAllowedTo(senderUid, recipientUid) {
+      let pref = get(/databases/$(database)/documents/users/$(recipientUid)).data
+        .get('settings', {}).get('privacy', {}).get('allowDMs', 'everyone');
+      return pref == 'everyone' ||
+        (pref == 'friends' &&
+          followEdgeExists(senderUid, recipientUid) &&
+          followEdgeExists(recipientUid, senderUid));
+    }
+    // The recipient explicitly consenting (accepting a pending request) overrides
+    // their own allowDMs preference — otherwise a 'none' user could never accept.
+    function dmRequestFrom(senderUid, recipientUid) {
+      return exists(/databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid));
+    }
+
     // Fields that must never appear on the world-readable `users/{uid}` doc.
     // They live in `users_private/{uid}` instead (owner/admin only). Mirrors
     // PRIVATE_PROFILE_FIELDS in src/config/profileContracts.js.
@@ -471,7 +494,22 @@ service cloud.firestore {
          request.resource.data.createdBy == resource.data.createdBy)
       );
       allow delete: if isSignedIn() && (uid() in resource.data.participants && isConvAdmin());
-      allow create: if isSignedIn() && uid() in request.resource.data.participants;
+      // A 1:1 conversation may only be opened if the *other* participant's
+      // allowDMs preference admits the caller. Groups/channels (>2) are
+      // unaffected. This is the enforcement point for the allowDMs setting,
+      // which was previously a dead control (writable in Settings, checked
+      // nowhere) that let anyone open a DM with anyone.
+      allow create: if isSignedIn() &&
+        uid() in request.resource.data.participants &&
+        (
+          request.resource.data.participants.size() != 2 ||
+          (request.resource.data.participants[0] == uid() &&
+            (dmAllowedTo(uid(), request.resource.data.participants[1]) ||
+             dmRequestFrom(request.resource.data.participants[1], uid()))) ||
+          (request.resource.data.participants[1] == uid() &&
+            (dmAllowedTo(uid(), request.resource.data.participants[0]) ||
+             dmRequestFrom(request.resource.data.participants[0], uid())))
+        );
 
       // MESSAGES — ownership enforced:
       //  - create: the message must be authored by the caller

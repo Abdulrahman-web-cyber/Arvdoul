@@ -132,6 +132,7 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
     });
     try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
       const alice = env.authenticatedContext('alice');
       const bob = env.authenticatedContext('bob');
 
@@ -160,6 +161,7 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
     });
     try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
       // Seed the participant list and the owner-scoped docs with rules off.
       await env.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
@@ -194,6 +196,68 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await assertFails(setDoc(doc(alice, 'audit_logs/l1'), { action: 'forged', userId: 'alice' }));
       await assertFails(getDoc(doc(alice, 'audit_logs/l1')));
       await assertFails(setDoc(doc(alice, 'audit_logs/l1'), { action: 'tamper' }));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('allowDMs preference gates direct-conversation creation (N029)', async () => {
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    const dm = (self, other) => ({
+      id: `direct_${[self, other].sort().join('_')}`,
+      type: 'direct',
+      participants: [self, other],
+      createdBy: self,
+    });
+    try {
+      await env.clearFirestore(); // clean DB: init does not wipe prior data
+      // Seed three recipients with different allowDMs preferences + a mutual
+      // follow between alice and bob only.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users/alice'), { settings: { privacy: { allowDMs: 'everyone' } } });
+        await setDoc(doc(db, 'users/bob'), { settings: { privacy: { allowDMs: 'friends' } } });
+        await setDoc(doc(db, 'users/carol'), { settings: { privacy: { allowDMs: 'none' } } });
+        await setDoc(doc(db, 'follows/alice_bob'), { followerId: 'alice', followingId: 'bob' });
+        await setDoc(doc(db, 'follows/bob_alice'), { followerId: 'bob', followingId: 'alice' });
+      });
+
+      const alice = env.authenticatedContext('alice').firestore();
+      const dave = env.authenticatedContext('dave').firestore();
+
+      // alice<->bob are mutual friends and bob allows 'friends' — alice may DM.
+      await assertSucceeds(setDoc(doc(alice, 'conversations/direct_alice_bob'), dm('alice', 'bob')));
+      // dave is not a mutual friend of bob ('friends') — blocked.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_bob_dave'), dm('dave', 'bob')));
+      // carol accepts no DMs at all — blocked.
+      await assertFails(setDoc(doc(dave, 'conversations/direct_carol_dave'), dm('dave', 'carol')));
+      // alice allows 'everyone' — dave may DM.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/direct_alice_dave'), dm('dave', 'alice')));
+
+      // A 3-participant group is unaffected by allowDMs.
+      await assertSucceeds(setDoc(doc(dave, 'conversations/group_x'), {
+        id: 'group_x', type: 'group', participants: ['dave', 'carol', 'bob'], createdBy: 'dave',
+      }));
+
+      // A 'none' recipient can still accept a pending request: consent (the
+      // message_requests doc addressed to them) overrides their preference.
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'message_requests/carol_dave'), {
+          senderId: 'dave', recipientId: 'carol', status: 'pending',
+        });
+      });
+      const carol = env.authenticatedContext('carol').firestore();
+      await assertSucceeds(setDoc(doc(carol, 'conversations/direct_carol_dave'), dm('carol', 'dave')));
     } finally {
       await env.cleanup();
     }

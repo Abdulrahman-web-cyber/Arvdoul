@@ -2430,6 +2430,36 @@ class UltimateMessagingService {
     return { success: true, status: 'pending' };
   }
 
+  /**
+   * Opens a 1:1 conversation, falling back to a message request when the
+   * recipient's allowDMs preference refuses the caller (the rules reject the
+   * conversation create). Returns a discriminated result so the UI can tell
+   * the outcomes apart.
+   * @returns {Promise<{status:'conversation'|'request', conversationId?:string, requestStatus?:string}>}
+   */
+  async startDirectConversation(recipientId, senderId) {
+    await this.ensureInitialized();
+    if (!recipientId || !senderId || recipientId === senderId) throw new Error('Invalid request');
+
+    const directId = `direct_${[senderId, recipientId].sort().join('_')}`;
+    const existing = await this.fs.getDoc(this.fs.doc(this.firestore, 'conversations', directId));
+    if (existing.exists()) return { status: 'conversation', conversationId: directId };
+
+    try {
+      const conv = await this.createConversation([senderId, recipientId]);
+      if (conv?.success && conv.conversation?.id) {
+        return { status: 'conversation', conversationId: conv.conversation.id };
+      }
+    } catch (err) {
+      // A permission-denied create is the allowDMs gate (firestore.rules
+      // dmAllowedTo); any other failure is real and must surface.
+      if (err?.code && !String(err.code).includes('permission-denied')) throw err;
+    }
+
+    const req = await this.sendMessageRequest(recipientId, senderId);
+    return { status: 'request', requestStatus: req?.status || 'pending' };
+  }
+
   async getMessageRequests(userId, options = {}) {
     await this.ensureInitialized();
     const colRef = this.fs.collection(this.firestore, 'message_requests');
@@ -3212,6 +3242,7 @@ const messagingService = {
   sendTypingIndicator: (cid, uid, typing) => getMessagingService().sendTypingIndicator(cid, uid, typing),
   subscribeToTyping: (cid, uid, cb) => getMessagingService().subscribeToTyping(cid, uid, cb),
   createConversation: (participants, opts) => getMessagingService().createConversation(participants, opts),
+  startDirectConversation: (recipientId, senderId) => getMessagingService().startDirectConversation(recipientId, senderId),
   getConversation: (cid, opts) => getMessagingService().getConversation(cid, opts),
   getUserConversations: (uid, opts) => getMessagingService().getUserConversations(uid, opts),
   sendMessage: (cid, data, opts) => getMessagingService().sendMessage(cid, data, opts),
