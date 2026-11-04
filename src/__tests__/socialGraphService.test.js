@@ -5,8 +5,11 @@
  */
 
 import { jest } from '@jest/globals';
+import fs from 'fs';
 
 const store = new Map(); // "collection/id" -> data
+
+const capturedQueries = [];
 
 const idOf = (key) => key.slice(key.indexOf('/') + 1);
 const colOf = (key) => key.slice(0, key.indexOf('/'));
@@ -28,6 +31,7 @@ jest.unstable_mockModule('firebase/firestore', () => ({
   documentId: () => '__name__',
   getDocs: async (q) => {
     const constraints = q.constraints || [];
+    capturedQueries.push({ name: q.name, constraints });
     const filters = constraints.filter((c) => c.__type === 'where');
     const order = constraints.find((c) => c.__type === 'orderBy');
     const cap = constraints.find((c) => c.__type === 'limit');
@@ -81,6 +85,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   store.clear();
+  capturedQueries.length = 0;
   const svc = getSocialGraphService();
   svc.initialized = true;
   svc.firestore = {};
@@ -230,5 +235,77 @@ describe('cache invalidation', () => {
     expect((await graph.getRelationship('me', 'a')).isFollowing).toBe(false);
     graph.invalidate('me');
     expect((await graph.getRelationship('me', 'a')).isFollowing).toBe(true);
+  });
+});
+
+describe('query shape (rules-provable, no silent denial)', () => {
+  // Firestore rules are not filters: `blocks`/`mutes`/`restricts` authorise on
+  // `resource.data.<actorField> == uid()`, so a `documentId() in [...]` list
+  // read is denied and the batch silently degrades. The batch reader must pin
+  // the actor field with `==`. See socialGraphEdgeReadRules.test.js (emulator).
+  test('getEdgeSet scopes block/mute/restrict reads by the actor field', async () => {
+    store.set('blocks/me_x', { blockerId: 'me', blockedId: 'x' });
+    store.set('blocks/y_me', { blockerId: 'y', blockedId: 'me' });
+    store.set('mutes/me_x', { muterId: 'me', mutedId: 'x' });
+    store.set('restricts/me_x', { restricterId: 'me', restrictedId: 'x' });
+
+    await getSocialGraphService().getEdgeSet('me', ['x', 'y', 'z']);
+
+    const safetyQueries = capturedQueries.filter((q) =>
+      ['blocks', 'mutes', 'restricts'].includes(q.name)
+    );
+    expect(safetyQueries.length).toBeGreaterThan(0);
+
+    const allowedActorFields = {
+      blocks: ['blockerId', 'blockedId'],
+      mutes: ['muterId'],
+      restricts: ['restricterId'],
+    };
+    for (const q of safetyQueries) {
+      const wheres = q.constraints.filter((c) => c.__type === 'where');
+      const equalityFields = wheres.filter((c) => c.op === '==').map((c) => c.field);
+      // Never rely on a bare documentId `in` list (which the rules cannot prove).
+      expect(equalityFields.some((f) => allowedActorFields[q.name].includes(f))).toBe(true);
+    }
+  });
+
+  test('a two-target block read resolves both directions', async () => {
+    store.set('blocks/me_x', { blockerId: 'me', blockedId: 'x' });
+    store.set('blocks/y_me', { blockerId: 'y', blockedId: 'me' });
+    const map = await getSocialGraphService().getEdgeSet('me', ['x', 'y', 'z']);
+    expect(map.get('x')).toMatchObject({ isBlocking: true, isBlocked: true });
+    expect(map.get('y')).toMatchObject({ isBlocking: false, isBlockedBy: true, isBlocked: true });
+    expect(map.get('z')).toMatchObject({ isBlocked: false });
+  });
+
+  test('getRelationship uses the same rules-provable shape (no point read)', async () => {
+    store.set('blocks/x_me', { blockerId: 'x', blockedId: 'me' });
+    capturedQueries.length = 0;
+
+    const edge = await getSocialGraphService().getRelationship('me', 'x');
+
+    expect(edge).toMatchObject({ isBlocking: false, isBlockedBy: true, isBlocked: true });
+    const safetyQueries = capturedQueries.filter((q) =>
+      ['blocks', 'mutes', 'restricts'].includes(q.name)
+    );
+    expect(safetyQueries.length).toBe(4); // block out, block in, mute, restrict (follows excluded)
+    const allowedActorFields = {
+      blocks: ['blockerId', 'blockedId'],
+      mutes: ['muterId'],
+      restricts: ['restricterId'],
+    };
+    for (const q of safetyQueries) {
+      const equalityFields = q.constraints
+        .filter((c) => c.__type === 'where' && c.op === '==')
+        .map((c) => c.field);
+      expect(equalityFields.some((f) => allowedActorFields[q.name].includes(f))).toBe(true);
+    }
+  });
+
+  test('the spine never point-reads a safety collection', () => {
+    const src = fs.readFileSync(new URL('../services/socialGraphService.js', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/getDoc\(\s*doc\([^)]*'blocks'/);
+    expect(src).not.toMatch(/getDoc\(\s*doc\([^)]*'mutes'/);
+    expect(src).not.toMatch(/getDoc\(\s*doc\([^)]*'restricts'/);
   });
 });

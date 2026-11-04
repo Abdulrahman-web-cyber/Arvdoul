@@ -21,6 +21,8 @@ import {
 } from 'firebase/firestore';
 
 const EVENTS_PER_PAGE = 20;
+// Hard ceiling for any single event read (registrations/organizer/feedback).
+const MAX_EVENT_READ = 200;
 
 class EventService {
   constructor() {
@@ -343,7 +345,8 @@ class EventService {
     const q = query(
       collection(this.db, 'events'),
       where(`attendees.${userId}.status`, 'in', ['registered', 'waitlisted', 'checked_in']),
-      orderBy('startDate', 'asc')
+      orderBy('startDate', 'asc'),
+      limit(MAX_EVENT_READ)
     );
 
     const snapshot = await getDocs(q);
@@ -490,7 +493,8 @@ class EventService {
     const q = query(
       collection(this.db, 'events'),
       where('organizerId', '==', userId),
-      orderBy('startDate', 'desc')
+      orderBy('startDate', 'desc'),
+      limit(MAX_EVENT_READ)
     );
 
     const snapshot = await getDocs(q);
@@ -528,7 +532,8 @@ class EventService {
     // Update average rating
     const feedbackQuery = query(
       collection(this.db, 'event_feedback'),
-      where('eventId', '==', eventId)
+      where('eventId', '==', eventId),
+      limit(MAX_EVENT_READ)
     );
     const feedbackSnapshot = await getDocs(feedbackQuery);
     
@@ -558,7 +563,8 @@ class EventService {
     const q = query(
       collection(this.db, 'event_feedback'),
       where('eventId', '==', eventId),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(MAX_EVENT_READ)
     );
 
     const snapshot = await getDocs(q);

@@ -30,7 +30,8 @@ are expected — only treat errors as failures.
   access (`resolveCapabilities`); `src/services/profileReadModel.js` owns the derivation every
   profile surface needs — placeholder name/handle rejection (`pickHandle`, `pickDisplayName`,
   `deriveHandle`), avatar fallback (`resolveAvatarUrl`), count/level coercion
-  (`resolveCount`, `resolveLevelValue`), creator/verified flags (`resolveCreatorFlag`,
+  (`resolveCount`, `resolveLevelValue`), the standing-score clamp (`readStandingScore`),
+  creator/verified flags (`resolveCreatorFlag`,
   `resolveVerifiedFlag`) — and applies the capability decision exactly once
   (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
   `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
@@ -70,6 +71,18 @@ are expected — only treat errors as failures.
 - **Firestore rules must cover every collection the client reads/writes.** Notably
   `previous_usernames` (old username -> userId) is read when resolving share/QR links, so it
   needs an explicit `match` block; a missing block silently denies those reads.
+- **Graph edge reads must be the shape the rules can prove.** `blocks`/`mutes`/
+  `restricts` authorise on `resource.data.<actorField> == uid()`; Firestore rules are
+  not filters. A `documentId() in [...]` list read cannot prove that condition, and a
+  point read of a *missing* edge (`resource == null`) makes `resource.data.<field>`
+  throw, so the read is denied. Never list-read these collections by id, and never
+  point-read a possibly-absent safety edge — a denied `get` fails open to "not
+  blocked". Answer "is there an edge?" with an actor-equality + other-party `in` list
+  read (empty result = no edge). Use `socialGraphService.getEdgeSet`/
+  `getRelationship`; if you add a collection read, use that shape, add the composite
+  index, and cover it in `socialGraphEdgeReadRules.test.js`. Do not "fix" this by
+  allowing `get` on a null `resource` in the rules — that turns a point read into an
+  edge-existence oracle for arbitrary pairs.
 - **Avatar field**: `photoURL` is the only stored avatar field on `users/{uid}`.
   `profilePicture` is accepted as an input alias by `validateProfileUpdate` and folded onto
   `photoURL` — never write `profilePicture` to Firestore.

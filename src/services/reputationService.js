@@ -7,8 +7,8 @@ import {
   getInfluenceBand,
   getContributionBand,
 } from './levelSystemService.js';
-import { getFirestoreInstance } from '../firebase/firebase.js';
-import { doc, getDoc } from 'firebase/firestore';
+import { readStandingScore } from './profileReadModel.js';
+import { getUserService } from './userService.js';
 import { logger } from '../utils/Logger.js';
 
 class ReputationService {
@@ -36,24 +36,14 @@ class ReputationService {
     try {
       let data = fallbackData;
       if (!data) {
-        const db = await getFirestoreInstance();
-        const snap = await getDoc(doc(db, 'users', userId));
-        data = snap.exists() ? snap.data() : {};
+        // Route through the canonical profile read (one graph + privacy
+        // decision) instead of a second direct `users/{uid}` read.
+        data = (await getUserService().getUserProfile(userId).catch(() => null)) || {};
       }
 
-      const readScore = (...candidates) => {
-        for (const value of candidates) {
-          if (value !== undefined && value !== null && value !== '') {
-            const num = Number(value);
-            if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
-          }
-        }
-        return null;
-      };
-
-      const repScore = readScore(data.reputationScore, data.reputation);
-      const infScore = readScore(data.influenceScore, data.influence);
-      const conScore = readScore(data.contributionScore, data.contribution);
+      const repScore = readStandingScore(data.reputationScore, data.reputation);
+      const infScore = readStandingScore(data.influenceScore, data.influence);
+      const conScore = readStandingScore(data.contributionScore, data.contribution);
 
       const dimension = (score, bandFn) => (
         score === null

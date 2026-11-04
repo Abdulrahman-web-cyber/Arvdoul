@@ -423,7 +423,9 @@ class EnterpriseFirestoreService {
       ];
       if (options.status) conditions.push(where('status', '==', options.status));
       if (options.type) conditions.push(where('type', '==', options.type));
-      if (options.limit) conditions.push(limit(options.limit));
+      // Always bound: a caller that omits `limit` must not pull the author's
+      // entire post history in one read.
+      conditions.push(limit(Math.max(1, Number(options.limit) || 20)));
       
       let lastDocSnap = null;
       // Callers pass the cursor as `cursor` (the store's public name); accept
@@ -998,10 +1000,10 @@ class EnterpriseFirestoreService {
 
   async getPostDailyViews(postId, days = 7) {
     await this.ensureInitialized();
-    const { collection, query, where, orderBy, getDocs } = this.firestoreMethods;
+    const { collection, query, where, orderBy, getDocs, limit } = this.firestoreMethods;
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const statsRef = collection(this.firestore, 'posts', postId, CONFIG.DAILY_STATS_SUBCOLLECTION);
-    const q = query(statsRef, where('date', '>=', startDate), orderBy('date', 'asc'));
+    const q = query(statsRef, where('date', '>=', startDate), orderBy('date', 'asc'), limit(Math.max(1, Number(days) || 7)));
     const snap = await getDocs(q);
     const dailyViews = snap.docs.map(doc => ({ date: doc.id, ...doc.data() }));
     return { success: true, dailyViews };

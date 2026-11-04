@@ -5,8 +5,11 @@
 import { ACHIEVEMENTS_CATALOG } from './levelSystemService.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, limit } from 'firebase/firestore';
 import { logger } from '../utils/Logger.js';
+
+// Hard ceiling for a user's earned-achievements list read.
+const ACHIEVEMENTS_MAX_READ = 200;
 
 class AchievementService {
   constructor() {
@@ -50,7 +53,7 @@ class AchievementService {
     try {
       const db = await getFirestoreInstance();
       const colRef = collection(db, 'achievements', userId, 'items');
-      const snap = await getDocs(colRef);
+      const snap = await getDocs(query(colRef, limit(ACHIEVEMENTS_MAX_READ)));
 
       const items = snap.docs.map((d) => ({
         id: d.id,

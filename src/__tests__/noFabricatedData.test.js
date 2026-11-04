@@ -574,8 +574,12 @@ describe('Unbounded queries bounded', () => {
   test('collections items + blocks reads are bounded', () => {
     const cols = fs.readFileSync(path.join(root, 'src/services/collectionsService.js'), 'utf8');
     expect(cols).toContain('limit(200)');
+    // The block read moved onto the graph spine, which bounds every edge list;
+    // the feed must delegate rather than query `blocks` itself.
     const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
-    expect(feed).toContain('fLimit(1000)');
+    expect(feed).toContain("getSocialGraphService().listConnections(userId, 'blocked'");
+    const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
+    expect(spine).toContain('MAX_PAGE_SIZE');
   });
 });
 
@@ -772,7 +776,10 @@ describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
     expect(src).toContain("story.status === 'expired'");
     expect(src).toContain("story.expiresAt.toDate().getTime() <= Date.now()");
-    expect(src).toContain("'blocks', `${viewerId}_${story.userId}`");
+    // Block check goes through the graph spine: a point read of an absent edge
+    // is denied by the `resource.data` rule and would silently skip the check.
+    expect(src).toContain("getSocialGraphService().getRelationship(viewerId, story.userId)");
+    expect(src).toContain('edge.isBlocking || edge.isBlockedBy');
     expect(src).toContain("story.visibility === STORY_CONFIG.VISIBILITY.PRIVATE");
   });
 });

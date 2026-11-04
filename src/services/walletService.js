@@ -28,7 +28,12 @@ class WalletService {
       let pendingWithdrawals = 0;
       try {
         const wCol = collection(db, 'withdrawal_requests');
-        const wQ = query(wCol, where('userId', '==', userId), where('status', 'in', ['pending', 'processing']));
+        const wQ = query(
+          wCol,
+          where('userId', '==', userId),
+          where('status', 'in', ['pending', 'processing']),
+          limit(100)
+        );
         const wSnap = await getDocs(wQ);
         wSnap.forEach((d) => {
           pendingWithdrawals += Number(d.data().amount || 0);

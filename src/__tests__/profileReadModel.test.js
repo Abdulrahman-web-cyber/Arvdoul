@@ -22,6 +22,7 @@ import {
   resolveAvatarUrl,
   resolveCount,
   resolveLevelValue,
+  readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
   projectProfileForViewer,
@@ -82,6 +83,13 @@ describe('profileReadModel - numeric coercion', () => {
     expect(resolveLevelValue(undefined, null, 0)).toBeNull();
     expect(resolveLevelValue(0, 7)).toBe(7);
     expect(resolveLevelValue('8')).toBe(8);
+  });
+
+  it('readStandingScore clamps to 0..100 and keeps absence as null', () => {
+    expect(readStandingScore(undefined, null, '')).toBeNull();
+    expect(readStandingScore(140, 20)).toBe(100);
+    expect(readStandingScore(-5)).toBe(0);
+    expect(readStandingScore('42')).toBe(42);
   });
 });
 
@@ -192,6 +200,19 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
     expect(src).toContain('projectProfileForViewer(');
     // A second hand-rolled section mask would be the divergence N007 describes.
     expect(src).not.toContain('canViewProfileSection(');
+  });
+
+  it('standing scores are read through the canonical read model, not re-clamped', () => {
+    // passportService + reputationService previously carried identical private
+    // `readScore` closures (Math.max(0, Math.min(100, …))). They now call
+    // readStandingScore so the clamp and the absent-value policy cannot drift.
+    for (const file of ['src/services/passportService.js', 'src/services/reputationService.js']) {
+      const src = read(file);
+      expect(src).toContain('readStandingScore');
+      expect(src).not.toMatch(/const readScore = /);
+    }
+    // reputationService must read the profile through the canonical service.
+    expect(read('src/services/reputationService.js')).not.toContain("getDoc(doc(db, 'users'");
   });
 });
 

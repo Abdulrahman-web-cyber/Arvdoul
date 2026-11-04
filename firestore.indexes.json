@@ -97,6 +97,20 @@
       ]
     },
     {
+      "collectionGroup": "blocks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "blockedId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "blockerId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "calls",
       "queryScope": "COLLECTION",
       "fields": [

@@ -1013,11 +1013,9 @@ class ProfessionalUserService {
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
 
     const result = await runTransaction(this.firestore, async (transaction) => {
-      // Re-check block inside transaction to avoid race
-      const blockForward = await transaction.get(doc(this.firestore, 'blocks', `${followerId}_${followingId}`));
-      const blockBackward = await transaction.get(doc(this.firestore, 'blocks', `${followingId}_${followerId}`));
-      if (blockForward.exists() || blockBackward.exists()) throw new Error('Blocked by or against user');
-
+      // The block gate ran in `_assertNotBlocked` via the spine's actor-scoped
+      // read; a point read of an absent block edge here would be denied by the
+      // `resource.data` rule and abort the follow (N033).
       const snap = await transaction.get(followRef);
       if (snap.exists()) return { success: true, alreadyFollowing: true };
       transaction.set(followRef, { followerId, followingId, createdAt: serverTimestamp() });
@@ -1478,19 +1476,22 @@ class ProfessionalUserService {
 
   async unblockUser(blockerId, blockedId) {
     await this._ensureInitialized();
-    const { doc, runTransaction } = await import('firebase/firestore');
-    const ref = doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
-    const result = await runTransaction(this.firestore, async (transaction) => {
-      const snap = await transaction.get(ref);
-      if (!snap.exists()) return { success: true, alreadyUnblocked: true };
-      transaction.delete(ref);
-      return { success: true };
-    });
+    // A point read/delete of an absent block edge is denied by the
+    // `resource.data` rule, so the idempotent "already unblocked" answer comes
+    // from the spine's actor-scoped read (N033).
+    const { blocked } = await this.isBlocked(blockerId, blockedId);
+    if (!blocked) {
+      this._invalidateUserCache(blockerId);
+      this._invalidateUserCache(blockedId);
+      return { success: true, alreadyUnblocked: true };
+    }
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
     this.cache.delete(`block_${blockerId}_${blockedId}`);
     this.cache.delete(`block_${blockedId}_${blockerId}`);
     this._invalidateUserCache(blockerId);
     this._invalidateUserCache(blockedId);
-    return result;
+    return { success: true };
   }
 
   async isBlocked(blockerId, blockedId) {
@@ -1504,9 +1505,11 @@ class ProfessionalUserService {
     }
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
-      const result = { success: true, blocked: snap ? snap.exists() : false };
+      // Actor-scoped list read (not a point read): a missing block edge denies a
+      // point read under the `resource.data` rule, which would fail open here.
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(blockerId, blockedId);
+      const result = { success: true, blocked: edge.isBlocking };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (err) {
@@ -1555,9 +1558,9 @@ class ProfessionalUserService {
     }
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'mutes', `${muterId}_${mutedId}`));
-      const result = { success: true, muted: snap.exists() };
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(muterId, mutedId);
+      const result = { success: true, muted: edge.isMuted };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch {
@@ -1603,9 +1606,9 @@ class ProfessionalUserService {
     }
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`));
-      const result = { success: true, restricted: snap.exists() };
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(restricterId, restrictedId);
+      const result = { success: true, restricted: edge.isRestricted };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch {

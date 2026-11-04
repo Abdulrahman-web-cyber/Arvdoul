@@ -25,6 +25,35 @@ const fakeFirestore = {
     const data = docs.get(`${ref.collection}/${ref.id}`);
     return { exists: () => data !== undefined, data: () => data, id: ref.id };
   },
+  documentId: () => '__name__',
+  getDocs: async (q) => {
+    const colName = q.colRef?.name ?? q.name;
+    const constraints = q.constraints || [];
+    const wheres = constraints.filter((c) => c && c.op !== undefined);
+    const cap = constraints.find((c) => c && typeof c.limit === 'number');
+    let rows = [...docs.entries()]
+      .filter(([key]) => key.slice(0, key.indexOf('/')) === colName)
+      .map(([key, data]) => ({ id: key.slice(key.indexOf('/') + 1), data }));
+    rows = rows.filter((r) => wheres.every((w) => {
+      if (w.field === '__name__') {
+        if (w.op === 'in') return w.value.includes(r.id);
+        if (w.op === '==') return r.id === w.value;
+        return true;
+      }
+      const v = r.data?.[w.field];
+      if (w.op === '==') return v === w.value;
+      if (w.op === 'in') return Array.isArray(w.value) && w.value.includes(v);
+      return true;
+    }));
+    if (cap) rows = rows.slice(0, cap.limit);
+    const docsArr = rows.map((r) => ({ id: r.id, data: () => r.data, exists: () => true }));
+    return {
+      docs: docsArr,
+      size: docsArr.length,
+      empty: docsArr.length === 0,
+      forEach: (cb) => docsArr.forEach(cb),
+    };
+  },
   enableIndexedDbPersistence: async () => ({}),
   serverTimestamp: () => ({ __ts: 1 }),
   Timestamp: { fromDate: (d) => ({ toDate: () => d }), now: () => ({ toDate: () => new Date() }) },
@@ -32,7 +61,6 @@ const fakeFirestore = {
   setDoc: async () => {},
   updateDoc: async () => {},
   deleteDoc: async () => {},
-  getDocs: async () => ({ docs: [], forEach: () => {}, size: 0, empty: true }),
   onSnapshot: (_ref, cb) => { cb({ exists: () => false, data: () => null }); return () => {}; },
   writeBatch: () => ({ set: () => {}, update: () => {}, delete: () => {}, commit: async () => {} }),
   runTransaction: async () => {},

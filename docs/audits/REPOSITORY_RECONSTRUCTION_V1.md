@@ -69,7 +69,7 @@ Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed
 | Coin packages / tiers / IAP | ✅ canonical | shared config; `monetizationService` no longer declares shadow tables (guarded by `noFabricatedData.test.js`) |
 | Profile read model | ✅ canonical | `src/services/profileReadModel.js` owns placeholder/name/handle/avatar/count/level/creator-flag derivation and the single `projectProfileForViewer` masking; `ProfilePublicScreen`, `ProfilePreviewScreen`, `ProfileMyScreen`, `AboutScreen`, `passportService` consume it (AUDIT V3 A-3/N018). Guarded by `profileReadModel.test.js`. |
 | Relationship/capability | ✅ canonical | `profileCapabilityEngine.resolveCapabilities` decides once; `userService.getUserProfile`, screens and passport project via `projectProfileForViewer` and no longer re-derive privacy (N007/N017/N018). |
-| Social graph | ✅ canonical | `src/services/socialGraphService.js` is the single reader of `follows`/`blocks`/`mutes`/`restricts`: `getRelationship` (single pair), `getEdgeSet` (batch `documentId() in`, chunked 30 — no N+1), `listEdges` (bounded, index-backed, cursor-paged), `hydrateProfiles` (batched `users` reads, never one fetch per follower). `userService.getFollowStates`/`getRelationshipState`/`getFriends`/`getFollowers`/`getFollowing`/`getMutualFriends`/`getFriendRecommendations`/`getBlockedUsers`/`getMutedUsers`/`getRestrictedUsers` and `getUserProfile`'s relation resolution all delegate to it. Guarded by `socialGraphService.test.js` + `profileSocialGraph.test.js`. |
+| Social graph | ✅ canonical | `src/services/socialGraphService.js` is the single reader of `follows`/`blocks`/`mutes`/`restricts`: `getRelationship` (single pair — 6 bounded reads, tolerant of absent safety edges, see N033), `getEdgeSet` (follow reads via `documentId() in`, chunked 30; safety edges via actor-equality + other-party `in` — the shape the collection rules can prove, N033), `listEdges`/`listConnections` (bounded, index-backed, cursor-paged), `hydrateProfiles` (batched `users` reads, never one fetch per follower). `userService.getFollowStates`/`getRelationshipState`/`getFriends`/`getFollowers`/`getFollowing`/`getMutualFriends`/`getFriendRecommendations`/`getBlockedUsers`/`getMutedUsers`/`getRestrictedUsers`, `messagesService.isBlocked`/`getBlockedUsers`, `storyService._canViewStory` and `getUserProfile`'s relation resolution all delegate to it. Guarded by `socialGraphService.test.js` + `profileSocialGraph.test.js` + `socialGraphEdgeReadRules.test.js` (emulator). |
 
 ---
 
@@ -84,8 +84,8 @@ Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed
 | Surface | Measure | Risk |
 |---|---|---|
 | Client listeners | 31 `onSnapshot` sites in 15 files | **High** — heaviest: `spacesService` (5), `messagesService` (4), `liveService` (4), `communityService` (3) |
-| Unbounded queries | 119 `getDocs(` sites without a `limit` across 22 files | **High** — needs per-query `limit` audit |
-| Duplicate profile reads | AuthContext + profileStore + walletService + passportService + screens | **Medium** — consolidation pending |
+| Unbounded queries | 109 `getDocs(` sites the analyzer still flags across 17 files; every genuine unbounded collection scan has been bounded (see the audit note below) | **Medium** — remainder are single-document / chunked `documentId() in` false positives |
+| Duplicate profile reads | ✅ consolidation done for `reputationService` (was a second `users/{uid}` read) — it now reads through `userService.getUserProfile`. `walletService`/`rankingService`/`liveService` still do a single-document `users/{uid}` read for one field (wallet balance, badge counters, stream level), which is a legitimate single-doc read, not a duplicate projection | **Low** |
 | `profile_views` / `profile_analytics` | ✅ server-write-only now (`firestore.rules:705-722`); client write denied | dedupe + sharded counters in `trackProfileView` |
 | Client write fallback reads | ✅ client coin write fallback removed; no `tx.get` amplification on the money path | |
 
@@ -98,6 +98,49 @@ The baseline is allowed to shrink (bound a query, delete a listener, drop a dep)
 but never to grow silently. Negative path verified: a temporary unbounded read
 was caught and the probe removed. The guard runs in the hard-failing `guards`
 job of `.github/workflows/ci.yml`.
+
+**Unbounded-query audit ✅.** Every `getDocs` in `src/services` was classified by
+hand (the analyzer under-reports because it resolves only a single-line local
+variable hop). Genuine unbounded reads fixed in this pass:
+
+- `feedService._getFallbackSimpleFeed` / `_getDiscoverFeedPaginated` /
+  `_getVideoFeedPaginated` — the `catch` branch called `getDocs(postsRef)` with
+  **no limit at all**, reading the entire `posts` collection whenever the ordered
+  query failed (missing index / field). Now falls back to a *bounded* unordered
+  read (`query(postsRef, limit(limit * 3|4))`).
+- `commentService.getCommentsByPost` — the `limit` was applied only when the
+  caller passed one (defaulted to no bound), and the index-error fallback
+  `getDocs(simpleQ)` was fully unbounded. Both now carry
+  `COMMENTS_CONFIG.MAX_FETCH_LIMIT` (200).
+- `communityService.getUserCommunities` / `getUserManagedCommunities` — per-user
+  membership lists read with no ceiling; now `MAX_COMMUNITY_READ` (200).
+- `eventService.getUserRegistrations` / `getOrganizerEvents` / `submitFeedback`
+  aggregate / `getEventFeedback` — now `MAX_EVENT_READ` (200).
+- `liveService` active/ended/history/statistics reads — now
+  `LIVE_CONFIG.MAX_STREAM_READ` (200); `getActiveLiveStreams` /
+  `getLiveHistory` apply the bound even when the caller passes no `limit`.
+- `collaborationService.getTeam` / `getUserInvites` / `getContentVersions` —
+  now `COLLABORATION_CONFIG.MAX_LIST_READ` (200).
+- `achievementService.getUserAchievements` / `titleService.getUserTitles` —
+  per-user list reads now bounded (200).
+- `walletService.getWalletOverview` pending-withdrawal read, and
+  `firestoreService.getPostsByUser` (limit now always applied) /
+  `getPostDailyViews` (bounded to the requested day window) — bounded.
+
+After the pass the baseline **shrank** (feedService 16→14, messagesService
+11→10, achievementService 1→0, titleService 1→0, collaborationService 4→3); no
+count grew. Remaining analyzer-flagged sites are single-document reads or
+`documentId() in` chunked reads the analyzer cannot resolve (documented
+false-positive class), not unbounded collection scans.
+
+**Rules/graph adversarial checks in CI.** The `guards` job installs a JDK
+(`actions/setup-java`, the emulator is a JVM process) and runs
+`firebase-tools emulators:exec --only firestore` around
+`firestoreRulesCompile.test.js` + `socialGraphEdgeReadRules.test.js`, so the
+live rules assertions execute instead of skipping (they self-skip when no
+emulator is reachable). `socialGraphService.test.js` additionally asserts the
+*shape* of every batch safety-edge query without an emulator, so the
+rules-provable-read invariant (N033) is frozen even in the unit run.
 
 ---
 
@@ -156,7 +199,9 @@ job of `.github/workflows/ci.yml`.
 | V2-01 monetization pagination | ✅ **now closed** | `getTransactionHistory(userId, limit, cursor)` and `getCoinLeaderboard(limit, cursor)` return `{ items, nextCursor }` with real `createdAt <` / `coins <` cursor clauses; `CoinsScreen` has a working *Load more*; the two other history consumers unwrap `.items`. Contract test: `monetizationPagination.test.js` (7 tests). |
 | V2-09 privacy/capability divergence | ✅ **now closed** | `canViewProfileSection` fails closed on unknown section/scope (`profileContracts.js:475-494`); the capability engine is the single decision point and `projectProfileForViewer` applies it once. `getUserProfile` no longer runs a parallel mask (N007/N017/N018). Guarded by `profileCapabilityEngine.test.js` + `userServicePrivacyProjection.test.js` + `profileReadModel.test.js`. |
 | N011 PII boundary | ✅ mostly | `users_private` exists and is written by the owner |
+| N033 graph edge reads silently denied by rules | ✅ **now closed** | Two failures from the same cause (rules are not filters). (a) `getEdgeSet` batch-read `blocks`/`mutes`/`restricts` with `documentId() in [...]`, which cannot prove the rule's `resource.data.<actorField> == uid()`, so every batch hydration lost block/mute/restrict flags. (b) `getRelationship` answered "are we blocked/muted/restricted?" with *point* reads of `blocks`/`mutes`/`restricts`; a missing edge (`resource == null`) made `resource.data.<actorField>` throw, so the read was denied and the check failed open to "not blocked"/"no relationship". The same point-read shape sat in `userService` (`followUser`'s in-transaction block check, `isBlocked`/`isMuted`/`isRestricted`, `blockUser`/`unblockUser`), `messagesService` (`isBlocked`/`blockUser`/`unblockUser`) and `storyService._canViewStory`. Fixed by moving every safety-edge read onto the actor-equality + other-party `in` list shape (new reversed `blocks` index) — an empty result means "no edge". `getRelationship` is now 4 bounded list reads (block out/in, mute, restrict) plus 2 follow reads; `followUser`'s transaction now touches only `follows` (the block gate moved out); `unblockUser` resolves existence through the spine before deleting; `feedService._getBlockedUsersCached` delegates to `listConnections(userId, 'blocked')` instead of querying `blocks` itself. The rules were left `resource.data`-scoped on purpose: allowing `get` on a null `resource` would have answered "does an edge exist" for arbitrary pairs (an existence oracle), so the client shape was changed instead. Guarded by `socialGraphEdgeReadRules.test.js` (emulator, hard-failing `guards` CI job) + query-shape assertions in `socialGraphService.test.js`. |
 | §11 shadow-system classification | 🟨 mostly done | 11 removed (WAF/CSRF/DDoS/session + CSP/headers/PoW + botProtection/userIntegrity + apiSecurityGateway/searchAbuse); all remaining client-side infra-control services classified (§10.1). WRONG-TIER detectors await a server home. |
+| N034 unbounded collection reads | ✅ **now closed** | Hand-audited every `getDocs` in `src/services` (the analyzer resolves only a single local-variable hop, so it under-reports). Genuine full-collection scans fixed: `feedService` fallback `catch` branches (3 sites) read the **entire** `posts` collection with no limit at all; `commentService.getCommentsByPost` applied `limit` only when the caller passed one and its index-error fallback was unbounded; `communityService.getUserCommunities`/`getUserManagedCommunities`, `eventService` (registrations/organizer/feedback), `liveService` (active/ended/history/statistics), `collaborationService` (team/invites/content), `achievementService.getUserAchievements`, `titleService.getUserTitles`, `walletService.getWalletOverview` pending withdrawals, `firestoreService.getPostsByUser`/`getPostDailyViews` — all now carry a hard ceiling (200) or a caller-derived bound. Baseline **shrank** (feed 16→14, messages 11→10, achievement/title 1→0, collaboration 4→3); no count grew. Guarded by `firebaseCostGuard.test.js` (baseline may only shrink). |
 | §83 cost guards in CI | ✅ **now closed** | `firebaseCostGuard.test.js` freezes unbounded `getDocs`, `onSnapshot` and runtime dependency counts; hard-failing `guards` CI job (§5). |
 
 ---
@@ -171,6 +216,8 @@ job of `.github/workflows/ci.yml`.
 6. **Monetization pagination** (V2-01) — **done ✅** (`getTransactionHistory`/`getCoinLeaderboard` cursor pages + `CoinsScreen` *Load more*; `monetizationPagination.test.js`).
 7. **Comment debt** (§52): forbidden "TODO integrate / production would / handled later" comment patterns and decorative emoji/change-history prefixes removed from production source — **done ✅** (one corrupted line at `storyService.js` repaired).
 8. **Close the residual privacy/capability divergence** (N007/N017/V2-09): `getUserProfile` now resolves only relation flags and delegates to the engine + projection; `resolveRelationshipState` has explicit precedence; `canViewProfileSection` fails closed — **done ✅** (`userServicePrivacyProjection.test.js`, `profileCapabilityEngine.test.js`, `profileReadModel.test.js`; all in the hard-failing `guards` CI job).
+9. **Bound every unbounded Firestore read** (N034): hand-audited each `getDocs` in `src/services`; the genuine full-collection scans (feedService fallback branches, commentService default/unbounded fallback, community/event/live/collaboration/achievement/title/wallet/firestoreService per-user lists) now carry a hard ceiling; the cost baseline only shrank — **done ✅** (§5 audit note, `firebaseCostGuard.test.js`).
+10. **Consolidate duplicate profile reads**: `reputationService` read `users/{uid}` a second time and carried its own score-clamp copy; it now reads through `userService.getUserProfile` and uses the canonical `profileReadModel.readStandingScore` (same helper `passportService` now shares) — **done ✅** (`profileReadModel.test.js`).
 
 ---
 

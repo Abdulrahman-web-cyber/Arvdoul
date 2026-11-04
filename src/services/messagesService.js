@@ -803,9 +803,15 @@ class UltimateMessagingService {
     await this.ensureInitialized();
     if (blockerId === blockedId) throw new Error('Cannot block yourself');
     const blockRef = this.fs.doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
-    const existing = await this.fs.getDoc(blockRef);
-    if (existing.exists()) return { success: true, alreadyBlocked: true };
+    // Actor-scoped list read (not a point read): a point read of an absent block
+    // edge is denied by the `resource.data` rule and would abort the block.
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const graph = getSocialGraphService();
+    const edge = await graph.getRelationship(blockerId, blockedId);
+    if (edge.isBlocking) return { success: true, alreadyBlocked: true };
     await this.fs.setDoc(blockRef, { blockerId, blockedId, createdAt: this.fs.serverTimestamp() });
+    graph.invalidate(blockerId);
+    graph.invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
     return { success: true };
@@ -813,8 +819,17 @@ class UltimateMessagingService {
 
   async unblockUser(blockerId, blockedId) {
     await this.ensureInitialized();
+    // A delete of an absent block edge is evaluated against a null `resource`
+    // and denied by the `resource.data` rule, so resolve existence through the
+    // spine first (N033).
+    if (!(await this.isBlocked(blockerId, blockedId))) {
+      return { success: true, alreadyUnblocked: true };
+    }
     const blockRef = this.fs.doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
     await this.fs.deleteDoc(blockRef);
+    const { getSocialGraphService: getGraph } = await import('./socialGraphService.js');
+    getGraph().invalidate(blockerId);
+    getGraph().invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
     return { success: true };
@@ -824,9 +839,12 @@ class UltimateMessagingService {
     const cacheKey = `block_${userId}_${otherUserId}`;
     const cached = this.blockCache.get(cacheKey);
     if (cached !== undefined) return cached;
-    const blockRef = this.fs.doc(this.firestore, 'blocks', `${userId}_${otherUserId}`);
-    const snap = await this.fs.getDoc(blockRef);
-    const blocked = snap.exists();
+    // Actor-scoped list read via the graph spine: a point read of an absent
+    // block edge is denied by the `resource.data` rule, which would wrongly
+    // report "not blocked" (N033).
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const edge = await getSocialGraphService().getRelationship(userId, otherUserId);
+    const blocked = edge.isBlocking;
     this.blockCache.set(cacheKey, blocked);
     return blocked;
   }
@@ -854,11 +872,9 @@ class UltimateMessagingService {
   }
 
   async getBlockedUsers(userId) {
-    await this.ensureInitialized();
-    const blocksRef = this.fs.collection(this.firestore, 'blocks');
-    const q = this.fs.query(blocksRef, this.fs.where('blockerId', '==', userId));
-    const snap = await this.fs.getDocs(q);
-    return snap.docs.map(d => d.data().blockedId);
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 100 });
+    return res.connections.map((c) => c.id || c.uid).filter(Boolean);
   }
 
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }

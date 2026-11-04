@@ -5,9 +5,12 @@
 // cohorts) resolves it here, so the graph is read one way.
 //
 // Scale contract (billion-user target):
-//   * Single relationship  -> 6 point reads (follows x2, blocks x2, mutes, restricts).
-//   * Batch relationship   -> `documentId() in` queries chunked to 30 (no N+1,
-//     no unbounded scan of the viewer's whole graph).
+//   * Single relationship  -> 6 bounded reads (follows x2 by id, blocks x2,
+//     mute, restrict by actor-scoped `in`; empty result = no edge).
+//   * Batch relationship   -> follow reads are `documentId() in` chunks (the
+//     `follows` collection is world-readable); the safety edges
+//     (blocks/mutes/restricts) are read with actor-equality + other-party `in`,
+//     the shape their rules can prove (no N+1, no unbounded graph scan).
 //   * List edges           -> bounded, index-backed, cursor-paged.
 //   * List hydration       -> batched `users` reads chunked to 30 (never one
 //     profile fetch per follower).
@@ -35,6 +38,25 @@ const EDGE_COLLECTIONS = Object.freeze({
   block: 'blocks',
   mute: 'mutes',
   restrict: 'restricts',
+});
+
+/**
+ * Actor-scoped read specs for the safety edges. Firestore rules are not
+ * filters: a list query is authorised against the rule condition, and
+ * `blocks`/`mutes`/`restricts` authorise on `resource.data.<actorField> ==
+ * uid()`. A `documentId() in [...]` query cannot prove that condition, so the
+ * read is denied and the whole batch silently degrades to "no relation" —
+ * losing block/mute masking on every follower list. Constraining the actor
+ * field with `==` (and the other party with `in`) is provable, so the read is
+ * allowed. `follows` is world-readable, so its id-only read stays valid.
+ */
+const EDGE_ACTOR_SPECS = Object.freeze({
+  block: {
+    out: { collection: 'blocks', actorField: 'blockerId', otherField: 'blockedId' },
+    in: { collection: 'blocks', actorField: 'blockedId', otherField: 'blockerId' },
+  },
+  mute: { out: { collection: 'mutes', actorField: 'muterId', otherField: 'mutedId' } },
+  restrict: { out: { collection: 'restricts', actorField: 'restricterId', otherField: 'restrictedId' } },
 });
 
 // Firestore caps an `in` filter at 30 values; every batch read chunks to this.
@@ -149,8 +171,43 @@ class SocialGraphService {
   }
 
   /**
+   * Read the edges where `viewerId` is the actor and the other party is one of
+   * `otherIds`. `blocks`/`mutes`/`restricts` rules authorise on
+   * `resource.data.<actorField> == uid()`, which a `documentId() in [...]`
+   * query cannot prove — so we constrain the actor field with `==` and the
+   * other party with `in`. Chunked to 30 for the `in` cap. Returns the set of
+   * `${actorId}_${otherId}` keys.
+   */
+  async _actorScopedIds(viewerId, otherIds, { collection: collectionName, actorField, otherField }) {
+    const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
+    const found = new Set();
+    const unique = [...new Set(otherIds)].filter(Boolean);
+    for (const chunk of this._chunk(unique, IN_CHUNK)) {
+      if (chunk.length === 0) continue;
+      const snap = await getDocs(
+        query(
+          collection(this.firestore, collectionName),
+          where(actorField, '==', viewerId),
+          where(otherField, 'in', chunk),
+          fLimit(chunk.length)
+        )
+      );
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        const other = data[otherField];
+        if (other) found.add(`${viewerId}_${other}`);
+      });
+    }
+    return found;
+  }
+
+  /**
    * Resolve the relationship between `viewerId` and a single `targetId`.
-   * Bounded: exactly 6 point reads (matches the pre-existing cost, now single-source).
+   * Bounded: one actor-scoped list query per edge family (follow out/in,
+   * block out/in, mute, restrict), each a single-value `in`. Point reads of the
+   * safety edges are avoided on purpose: a missing edge makes a `resource.data`
+   * rule evaluate to a permission error, so a point read cannot answer "are we
+   * blocked?" (N033).
    */
   async getRelationship(viewerId, targetId) {
     if (!viewerId || !targetId) return emptyEdge(targetId);
@@ -162,19 +219,18 @@ class SocialGraphService {
 
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const [fOut, fIn, bOut, bIn, mOut, rOut] = await Promise.all([
-        getDoc(doc(this.firestore, EDGE_COLLECTIONS.follow, `${viewerId}_${targetId}`)),
-        getDoc(doc(this.firestore, EDGE_COLLECTIONS.follow, `${targetId}_${viewerId}`)),
-        getDoc(doc(this.firestore, EDGE_COLLECTIONS.block, `${viewerId}_${targetId}`)),
-        getDoc(doc(this.firestore, EDGE_COLLECTIONS.block, `${targetId}_${viewerId}`)),
-        getDoc(doc(this.firestore, EDGE_COLLECTIONS.mute, `${viewerId}_${targetId}`)),
-        getDoc(doc(this.firestore, EDGE_COLLECTIONS.restrict, `${viewerId}_${targetId}`)),
+      const [followOut, followIn, blockOut, blockIn, muteOut, restrictOut] = await Promise.all([
+        this._existingIds(EDGE_COLLECTIONS.follow, [`${viewerId}_${targetId}`]),
+        this._existingIds(EDGE_COLLECTIONS.follow, [`${targetId}_${viewerId}`]),
+        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.out),
+        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.block.in),
+        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.mute.out),
+        this._actorScopedIds(viewerId, [targetId], EDGE_ACTOR_SPECS.restrict.out),
       ]);
-      const isFollowing = Boolean(fOut?.exists?.());
-      const isFollower = Boolean(fIn?.exists?.());
-      const isBlocking = Boolean(bOut?.exists?.());
-      const isBlockedBy = Boolean(bIn?.exists?.());
+      const isFollowing = followOut.has(`${viewerId}_${targetId}`);
+      const isFollower = followIn.has(`${targetId}_${viewerId}`);
+      const isBlocking = blockOut.has(`${viewerId}_${targetId}`);
+      const isBlockedBy = blockIn.has(`${viewerId}_${targetId}`);
       const edge = {
         uid: targetId,
         isFollowing,
@@ -183,8 +239,8 @@ class SocialGraphService {
         isBlocking,
         isBlockedBy,
         isBlocked: isBlocking || isBlockedBy,
-        isMuted: Boolean(mOut?.exists?.()),
-        isRestricted: Boolean(rOut?.exists?.()),
+        isMuted: muteOut.has(`${viewerId}_${targetId}`),
+        isRestricted: restrictOut.has(`${viewerId}_${targetId}`),
         requestStatus: null,
       };
       this._writeCache(this.edgeCache, cacheKey, edge);
@@ -197,8 +253,10 @@ class SocialGraphService {
 
   /**
    * Batch-resolve the relationship between `viewerId` and many targets.
-   * Bounded: 8 id-sets (follow/block/mute/restrict x in/out) chunked to 30.
-   * Replaces the previous "load the viewer's entire graph" scans.
+   * Bounded: follow reads are id-set based (chunked to 30); the safety edges
+   * (block/mute/restrict) are read with the actor-equality + other-party-`in`
+   * shape the rules can prove, so a denied list query can never silently drop
+   * block/mute masking.
    */
   async getEdgeSet(viewerId, targetIds, options = {}) {
     const include = options.include || ['follow', 'block', 'mute', 'restrict'];
@@ -212,33 +270,26 @@ class SocialGraphService {
 
     try {
       await this._ensureInitialized();
-      const outIds = others.map((t) => `${viewerId}_${t}`);
-      const inIds = others.map((t) => `${t}_${viewerId}`);
 
+      // `follows` is world-readable, so the id-only `in` read is allowed.
       const [followOut, followIn] = include.includes('follow')
         ? await Promise.all([
-            this._existingIds(EDGE_COLLECTIONS.follow, outIds),
-            this._existingIds(EDGE_COLLECTIONS.follow, inIds),
+            this._existingIds(EDGE_COLLECTIONS.follow, others.map((t) => `${viewerId}_${t}`)),
+            this._existingIds(EDGE_COLLECTIONS.follow, others.map((t) => `${t}_${viewerId}`)),
           ])
         : [new Set(), new Set()];
-      const [blockOut, blockIn] = include.includes('block')
-        ? await Promise.all([
-            this._existingIds(EDGE_COLLECTIONS.block, outIds),
-            this._existingIds(EDGE_COLLECTIONS.block, inIds),
-          ])
-        : [new Set(), new Set()];
-      const muteOut = include.includes('mute')
-        ? await this._existingIds(EDGE_COLLECTIONS.mute, outIds)
-        : new Set();
-      const restrictOut = include.includes('restrict')
-        ? await this._existingIds(EDGE_COLLECTIONS.restrict, outIds)
-        : new Set();
+
+      // Safety edges: actor-equality + other-party `in` (rules-provable).
+      const blockOut = include.includes('block') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.block.out) : new Set();
+      const blockIn = include.includes('block') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.block.in) : new Set();
+      const muteOut = include.includes('mute') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.mute.out) : new Set();
+      const restrictOut = include.includes('restrict') ? await this._actorScopedIds(viewerId, others, EDGE_ACTOR_SPECS.restrict.out) : new Set();
 
       for (const t of others) {
         const isFollowing = followOut.has(`${viewerId}_${t}`);
         const isFollower = followIn.has(`${t}_${viewerId}`);
         const isBlocking = blockOut.has(`${viewerId}_${t}`);
-        const isBlockedBy = blockIn.has(`${t}_${viewerId}`);
+        const isBlockedBy = blockIn.has(`${viewerId}_${t}`);
         result.set(t, {
           uid: t,
           isFollowing,

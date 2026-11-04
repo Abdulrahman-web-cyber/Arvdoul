@@ -5,8 +5,11 @@
 import { TITLES_CATALOG, ROYAL_ELIGIBILITY, getRoyalEligibility } from './levelSystemService.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from 'firebase/firestore';
 import { logger } from '../utils/Logger.js';
+
+// Hard ceiling for a user's granted-titles list read.
+const TITLES_MAX_READ = 200;
 
 class TitleService {
   constructor() {
@@ -100,7 +103,7 @@ class TitleService {
     try {
       const db = await getFirestoreInstance();
       const colRef = collection(db, 'titles', userId, 'items');
-      const snap = await getDocs(colRef);
+      const snap = await getDocs(query(colRef, limit(TITLES_MAX_READ)));
 
       const items = snap.docs.map((d) => ({
         id: d.id,

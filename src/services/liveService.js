@@ -50,6 +50,9 @@ const LIVE_CONFIG = {
   CACHE_TTL: 60 * 1000,
   COMMENTS_LIMIT: 50,
   VIEWERS_LIMIT: 100,
+  // Hard ceiling for any single live_streams list read; a streamer with a long
+  // history must not pull every row in one query.
+  MAX_STREAM_READ: 200,
 };
 
 function enhanceError(error, defaultMessage) {
@@ -173,12 +176,13 @@ class UltimateLiveService {
         };
       }
 
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
       const streamsRef = collection(this.firestore, 'live_streams');
       const activeQuery = query(
         streamsRef,
         where('userId', '==', userId),
-        where('status', '==', 'live')
+        where('status', '==', 'live'),
+        limit(LIVE_CONFIG.MAX_STREAM_READ)
       );
       
       const snapshot = await getDocs(activeQuery);
@@ -194,7 +198,8 @@ class UltimateLiveService {
       const endedQuery = query(
         streamsRef,
         where('userId', '==', userId),
-        where('status', '==', 'ended')
+        where('status', '==', 'ended'),
+        limit(LIVE_CONFIG.MAX_STREAM_READ)
       );
       
       const endedSnapshot = await getDocs(endedQuery);
@@ -505,12 +510,9 @@ class UltimateLiveService {
         streamsRef,
         where('status', '==', 'live'),
         where('isDeleted', '==', false),
-        orderBy('startTime', 'desc')
+        orderBy('startTime', 'desc'),
+        limit(Math.min(Number(options.limit) || 50, LIVE_CONFIG.MAX_STREAM_READ))
       );
-      
-      if (options.limit) {
-        q = query(q, limit(options.limit));
-      }
       
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({
@@ -540,11 +542,7 @@ class UltimateLiveService {
         q = query(q, where('status', '==', options.status));
       }
       
-      q = query(q, orderBy('createdAt', 'desc'));
-      
-      if (options.limit) {
-        q = query(q, limit(options.limit));
-      }
+      q = query(q, orderBy('createdAt', 'desc'), limit(Math.min(Number(options.limit) || 50, LIVE_CONFIG.MAX_STREAM_READ)));
       
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({
@@ -984,7 +982,7 @@ class UltimateLiveService {
   async getUserLiveAnalytics(userId, days = 30) {
     try {
       await this._ensureInitialized();
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
       
       const streamsRef = collection(this.firestore, 'live_streams');
       const startDate = new Date();
@@ -994,7 +992,8 @@ class UltimateLiveService {
         streamsRef,
         where('userId', '==', userId),
         where('status', '==', 'ended'),
-        where('createdAt', '>=', startDate)
+        where('createdAt', '>=', startDate),
+        limit(LIVE_CONFIG.MAX_STREAM_READ)
       );
       
       const snapshot = await getDocs(q);

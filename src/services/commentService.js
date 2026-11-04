@@ -6,6 +6,7 @@ const COMMENTS_CONFIG = {
   MIN_COMMENT_LENGTH: 1,
   CACHE_EXPIRY: 5 * 60 * 1000,
   PAGINATION_LIMIT: 50,
+  MAX_FETCH_LIMIT: 200,
   REAL_TIME_UPDATE_INTERVAL: 2000,
   SPAM_CHECK_THRESHOLD: 3,
   MENTION_LIMIT: 10,
@@ -309,7 +310,9 @@ class UltimateCommentService {
           this.firestoreMethods.where('moderationStatus', 'in', ['approved', 'pending']),
           this.firestoreMethods.orderBy('createdAt', 'desc')
         ];
-        if (options.limit) conditions.push(this.firestoreMethods.limit(options.limit));
+        conditions.push(this.firestoreMethods.limit(
+          Math.min(Number(options.limit) || COMMENTS_CONFIG.PAGINATION_LIMIT, COMMENTS_CONFIG.MAX_FETCH_LIMIT)
+        ));
         const q = this.firestoreMethods.query(commentsRef, ...conditions);
         snapshot = await this.firestoreMethods.getDocs(q);
       } catch (indexErr) {
@@ -317,7 +320,8 @@ class UltimateCommentService {
         try {
           const simpleQ = this.firestoreMethods.query(
             commentsRef,
-            this.firestoreMethods.where('postId', '==', postId)
+            this.firestoreMethods.where('postId', '==', postId),
+            this.firestoreMethods.limit(COMMENTS_CONFIG.MAX_FETCH_LIMIT)
           );
           snapshot = await this.firestoreMethods.getDocs(simpleQ);
         } catch (innerErr) {

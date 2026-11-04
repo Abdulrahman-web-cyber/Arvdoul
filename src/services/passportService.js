@@ -12,7 +12,7 @@ import {
 } from './levelSystemService.js';
 import { getProfileUrl, getPassportUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
-import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag } from './profileReadModel.js';
+import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag, readStandingScore } from './profileReadModel.js';
 import { logger } from '../utils/Logger.js';
 
 class PassportService {
@@ -62,16 +62,6 @@ class PassportService {
     const citizenTier = level !== null ? getCitizenTier(level, activeDaysCount || 0) : null;
     const rankTitle = level !== null ? getRankTitle(level) : null;
 
-    const readScore = (...candidates) => {
-      for (const value of candidates) {
-        if (value !== undefined && value !== null && value !== '') {
-          const num = Number(value);
-          if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
-        }
-      }
-      return null;
-    };
-
     const dimension = (score, bandFn) => (
       score === null
         ? { score: null, band: null, color: null, available: false }
@@ -82,9 +72,9 @@ class PassportService {
     // may not see achievements also may not read the (achievement-derived)
     // standing scores. Absent data is reported unavailable, never defaulted.
     const canSeeStanding = Boolean(capabilities.canViewAchievements || isOwner);
-    const reputation = canSeeStanding ? dimension(readScore(profile.reputationScore, profile.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
-    const influence = canSeeStanding ? dimension(readScore(profile.influenceScore, profile.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
-    const contribution = canSeeStanding ? dimension(readScore(profile.contributionScore, profile.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
+    const reputation = canSeeStanding ? dimension(readStandingScore(profile.reputationScore, profile.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
+    const influence = canSeeStanding ? dimension(readStandingScore(profile.influenceScore, profile.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
+    const contribution = canSeeStanding ? dimension(readStandingScore(profile.contributionScore, profile.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
 
     // Achievements: only if the viewer is permitted.
     let verifiedAchievements = [];

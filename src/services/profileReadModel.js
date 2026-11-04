@@ -93,6 +93,21 @@ export function resolveLevelValue(...candidates) {
 }
 
 /**
+ * First numeric standing candidate clamped to 0..100, else null. Used by every
+ * surface that renders reputation/influence/contribution bands (passport,
+ * reputation screen). Absent data stays `null` so the surface can show an
+ * explicit unavailable state instead of a fabricated score.
+ */
+export function readStandingScore(...candidates) {
+  for (const value of candidates) {
+    if (value === undefined || value === null || value === '') continue;
+    const num = Number(value);
+    if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
+  }
+  return null;
+}
+
+/**
  * Creator standing. An explicit `isCreator`/`creatorStatus` on the profile or
  * the signed-in viewer wins; otherwise the canonical level gate decides.
  */
@@ -152,6 +167,7 @@ export default {
   resolveAvatarUrl,
   resolveCount,
   resolveLevelValue,
+  readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
   projectProfileForViewer,

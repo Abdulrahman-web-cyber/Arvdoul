@@ -315,6 +315,14 @@ service cloud.firestore {
       // Only the two parties may read a block edge. A world-readable block
       // collection lets anyone enumerate who blocks whom (a privacy leak);
       // every client read of this collection is already party-scoped.
+      //
+      // This rule (and the mute/restrict rules below) is `resource.data`-based,
+      // so a `get` of a *missing* edge (`resource == null`) evaluates to a
+      // permission error. Clients must therefore never answer "are we blocked?"
+      // with a point read — they read the actor-scoped list query instead
+      // (`socialGraphService._actorScopedIds`), which returns zero rows for an
+      // absent edge and cannot be denied. Allowing `get` on a null `resource`
+      // would instead leak edge existence for arbitrary pairs.
       allow read: if isSignedIn() &&
         (resource.data.blockerId == uid() || resource.data.blockedId == uid());
       // On create `resource` is null, so the blocker must be asserted from the
