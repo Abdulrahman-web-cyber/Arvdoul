@@ -117,7 +117,10 @@ describe('profileReadModel - standing flags', () => {
 });
 
 describe('profileReadModel - capability projection', () => {
-  const profile = { id: 'u1', coins: 500, links: ['a'], presence: { isOnline: true, status: 'online', lastActive: 1 } };
+  const profile = {
+    id: 'u1', coins: 500, links: ['a'], bio: 'hi', location: 'Rome', website: 'https://e.dev',
+    presence: { isOnline: true, status: 'online', lastActive: 1 },
+  };
 
   it('masks economic status, links and presence when the engine denies them', () => {
     const projected = projectProfileForViewer(profile, {
@@ -130,6 +133,27 @@ describe('profileReadModel - capability projection', () => {
     expect(projected.presence).toEqual(OFFLINE_PRESENCE);
   });
 
+  it('masks the identity card (profileInfo scope) when canViewIdentity is denied', () => {
+    const projected = projectProfileForViewer(profile, {
+      canViewIdentity: false,
+      canViewLinks: true,
+    });
+    expect(projected.bio).toBe('');
+    expect(projected.location).toBe('');
+    expect(projected.website).toBe('');
+    expect(projected.canViewIdentity).toBe(false);
+    // `links` has its own scope and stays when that scope allows it.
+    expect(projected.links).toEqual(['a']);
+    // The account identity is never masked — only the descriptive card.
+    expect(projected.id).toBe('u1');
+  });
+
+  it('fails closed on the identity card when the capability map is absent', () => {
+    const projected = projectProfileForViewer(profile, {});
+    expect(projected.bio).toBe('');
+    expect(projected.location).toBe('');
+  });
+
   it('passes sections through when the engine allows them', () => {
     const projected = projectProfileForViewer(profile, {
       canViewEconomicStatus: true,
@@ -137,17 +161,21 @@ describe('profileReadModel - capability projection', () => {
       canViewPresence: true,
       canViewActivity: true,
       canViewFollowers: true,
+      canViewIdentity: true,
     });
     expect(projected.coins).toBe(500);
     expect(projected.links).toEqual(['a']);
+    expect(projected.bio).toBe('hi');
     expect(projected.presence).toEqual(profile.presence);
     expect(projected.canViewActivity).toBe(true);
     expect(projected.canViewFollowersList).toBe(true);
   });
 
-  it('owner always sees economic status even in a simulated public view', () => {
-    const projected = projectProfileForViewer(profile, { canViewEconomicStatus: false }, { isOwner: true });
+  it('owner always sees economic status and the identity card even in a simulated public view', () => {
+    const projected = projectProfileForViewer(profile, { canViewEconomicStatus: false, canViewIdentity: false }, { isOwner: true });
     expect(projected.coins).toBe(500);
+    expect(projected.bio).toBe('hi');
+    expect(projected.location).toBe('Rome');
   });
 
   it('null profile projects to null', () => {
@@ -213,6 +241,18 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
     }
     // reputationService must read the profile through the canonical service.
     expect(read('src/services/reputationService.js')).not.toContain("getDoc(doc(db, 'users'");
+  });
+
+  it('AboutScreen applies the projection so the profileInfo scope is enforced', () => {
+    // AboutScreen rendered bio/location/website/links straight from the raw
+    // profile, so the `profileInfo` scope ("who can view your profile info")
+    // controlled nothing. It now resolves capabilities and renders the projected
+    // profile, so a narrowed scope actually hides the card.
+    const src = read('src/screens/Profile/AboutScreen.jsx');
+    expect(src).toContain('projectProfileForViewer');
+    expect(src).toContain('resolveCapabilities(');
+    expect(src).toContain('profile={displayedProfile}');
+    expect(src).not.toContain('profile={effectiveProfile}');
   });
 });
 

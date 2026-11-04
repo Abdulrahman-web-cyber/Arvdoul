@@ -178,6 +178,11 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
   const canViewContent = (!isPrivateAccount || hasAccessToPrivateProfile) && isAccountActive;
 
   // Section-specific granular permissions using authoritative profileContracts
+  // `profileInfo` gates the descriptive identity card (bio/location/website/
+  // links/pronouns/…). It is NOT tied to canViewContent: on a private account a
+  // follower has content access anyway, and a public viewer may read the card
+  // unless the owner narrowed the scope. The owner always sees their own card.
+  const canViewIdentity = isSimulatedOwner || canViewProfileSection('profileInfo', targetPrivacy, effectiveRelation);
   const canViewFollowers = canViewProfileSection('followersList', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewFollowing = canViewProfileSection('followingList', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewActivity = canViewProfileSection('activity', targetPrivacy, effectiveRelation) && canViewContent;
@@ -213,7 +218,7 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
     isOwner: isSimulatedOwner,
     perspective,
     canViewProfile: true,
-    canViewIdentity: true,
+    canViewIdentity,
     canViewContent,
     canViewFollowers,
     canViewFollowing,

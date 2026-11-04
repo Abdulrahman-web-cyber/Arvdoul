@@ -231,6 +231,37 @@ describe('getUserProfile privacy projection', () => {
     expect(profile.canViewActivity).toBe(true);
   });
 
+  it('honours the profileInfo scope: a public viewer sees the card by default', async () => {
+    const svc = await serviceWith({ displayName: 'Elena', bio: 'hello', location: 'Rome', website: 'https://e.dev' });
+    const profile = await svc.getUserProfile(TARGET, VIEWER);
+    expect(profile.canViewIdentity).toBe(true);
+    expect(profile.bio).toBe('hello');
+    expect(profile.location).toBe('Rome');
+  });
+
+  it('hides the identity card when the owner narrowed profileInfo to connections', async () => {
+    const svc = await serviceWith({
+      displayName: 'Elena', bio: 'hello', location: 'Rome', website: 'https://e.dev',
+      links: ['https://e.dev'], privacy: { profileInfo: 'CONNECTIONS' },
+    });
+    const profile = await svc.getUserProfile(TARGET, VIEWER);
+    expect(profile.canViewIdentity).toBe(false);
+    expect(profile.bio).toBe('');
+    expect(profile.location).toBe('');
+    expect(profile.website).toBe('');
+    // Identity of the *account* survives so the screen can still offer Follow.
+    expect(profile.displayName).toBe('Elena');
+  });
+
+  it('still shows the identity card to the owner when profileInfo is ONLY_ME', async () => {
+    const svc = await serviceWith({
+      displayName: 'Elena', bio: 'hello', privacy: { profileInfo: 'ONLY_ME' },
+    });
+    const profile = await svc.getUserProfile(TARGET, TARGET);
+    expect(profile.canViewIdentity).toBe(true);
+    expect(profile.bio).toBe('hello');
+  });
+
   it('denies content for a suspended account', async () => {
     const svc = await serviceWith({ displayName: 'Elena', accountStatus: 'suspended' });
 

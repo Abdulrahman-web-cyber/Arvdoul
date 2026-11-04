@@ -36,7 +36,13 @@ are expected — only treat errors as failures.
   (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
   `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
   `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
-  re-implement the `user_`/`creator` placeholder filter. `userService.getUserProfile` resolves
+  re-implement the `user_`/`creator` placeholder filter. Every privacy scope the UI exposes
+  must be resolved by `resolveCapabilities` and masked by the projection — a scope that is
+  settable but never read (as `profileInfo` once was) is a dead control. `projectProfileForViewer`
+  masks the descriptive identity card (`IDENTITY_INFO_FIELDS`: bio/location/website/… via
+  `canViewIdentity`) and the account identity (`displayName`/`username`/`photoURL`) is never
+  masked, so the follow/block affordance keeps working. `AboutScreen` renders the projected
+  profile, not the raw one. `userService.getUserProfile` resolves
   only the relation flags and delegates the decision to the engine + projection — it must not
   call `canViewProfileSection` itself. `profileReadModel.test.js` and
   `userServicePrivacyProjection.test.js` fail CI if any surface regresses; both are in the

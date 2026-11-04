@@ -16,11 +16,13 @@ import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Lin
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getLevelInfo, getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
+import { resolveCapabilities } from '../../services/profileCapabilityEngine.js';
 import {
   pickHandle,
   deriveHandle,
   pickDisplayName,
   resolveLevelValue,
+  projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 
 /**
@@ -61,6 +63,20 @@ export default function AboutScreen() {
       level: resolveLevelValue(base.level),
     };
   }, [storeProfile, storeUser, authUser, targetId, isActualOwner]);
+
+  // The About screen renders the descriptive identity card (bio/location/website/
+  // links), so it must honour the `profileInfo` scope. It resolves the capability
+  // decision and applies the single projection — it does not re-derive privacy.
+  const capabilities = useMemo(() => resolveCapabilities({
+    viewer: currentUserId ? { uid: currentUserId } : null,
+    target: effectiveProfile,
+    relationship: { isOwner: isActualOwner },
+  }), [currentUserId, effectiveProfile, isActualOwner]);
+
+  const displayedProfile = useMemo(
+    () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isActualOwner }),
+    [effectiveProfile, capabilities, isActualOwner]
+  );
 
   const hasStanding = effectiveProfile?.level != null || effectiveProfile?.experience != null || effectiveProfile?.xp != null;
 
@@ -126,9 +142,9 @@ export default function AboutScreen() {
             </button>
           </div>
         )}
-        {/* Profile Card & Info */}
+        {/* Profile Card & Info — projected, so a narrowed profileInfo scope hides the card */}
         <ProfileAbout
-          profile={effectiveProfile}
+          profile={displayedProfile}
           isOwner={isActualOwner}
           onEdit={handleEdit}
           theme={theme}

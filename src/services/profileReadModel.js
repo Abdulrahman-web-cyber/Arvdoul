@@ -124,6 +124,23 @@ export function resolveVerifiedFlag(profile = {}) {
 }
 
 /**
+ * Extended identity-card fields gated by the `profileInfo` scope. The public
+ * projection (`displayName`, `username`, `photoURL`) is intentionally NOT in
+ * this list — a viewer must always be able to identify whom they are looking at
+ * so the follow/block affordance works; only the descriptive card is gated.
+ */
+export const IDENTITY_INFO_FIELDS = Object.freeze([
+  'bio',
+  'location',
+  'website',
+  'pronouns',
+  'profession',
+  'education',
+  'birthday',
+  'gender',
+]);
+
+/**
  * Apply the capability decision exactly once. The view layer must consume the
  * result rather than re-checking privacy, so a section can never render while
  * the engine reports it hidden.
@@ -133,7 +150,11 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   const caps = capabilities || {};
   const mayViewEconomic = isOwner || Boolean(caps.canViewEconomicStatus);
   const blocked = Boolean(caps.isBlocked);
-  return {
+  // Absent capability map (a component that forgot to pass it) must fail closed
+  // for the identity card, matching the sections below. The owner always sees it.
+  const mayViewIdentity = isOwner || Boolean(caps.canViewIdentity);
+  const hideIdentity = blocked || !mayViewIdentity;
+  const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
     // Safety flags come from the engine so the UI reflects the same decision
@@ -142,10 +163,10 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     isBlockedByTarget: Boolean(caps.isBlockedBy),
     isBlockedByViewer: Boolean(caps.isBlocking),
     isRestricted: blocked || Boolean(caps.isRestricted),
-    bio: blocked ? '' : profile.bio,
     followerCount: blocked ? 0 : profile.followerCount,
     followingCount: blocked ? 0 : profile.followingCount,
     postCount: blocked ? 0 : profile.postCount,
+    canViewIdentity: Boolean(caps.canViewIdentity),
     canViewActivity: Boolean(caps.canViewActivity),
     canViewAchievements: Boolean(caps.canViewAchievements),
     canViewTitles: Boolean(caps.canViewTitles),
@@ -154,6 +175,15 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     links: caps.canViewLinks ? (profile.links || []) : [],
     presence: caps.canViewPresence ? profile.presence : OFFLINE_PRESENCE,
   };
+  // The `profileInfo` scope gates the descriptive identity card. Masking it here
+  // (rather than in each screen) is what makes the control real: the About screen
+  // renders bio/location/website/links straight from the projected profile.
+  if (hideIdentity) {
+    for (const field of IDENTITY_INFO_FIELDS) {
+      if (field in projected) projected[field] = '';
+    }
+  }
+  return projected;
 }
 
 export default {
