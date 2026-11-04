@@ -604,8 +604,13 @@ function applyLocationPrivacy(sanitized) {
     sanitized.location = '';
     sanitized.locationCoordinates = null;
   } else if (sanitized.locationPrivacy === 'country_only') {
-    const loc = typeof sanitized.location === 'string' ? sanitized.location : '';
-    sanitized.location = loc.includes(',') ? loc.split(',').pop().trim() : loc;
+    // Only narrow a location that was actually sent with this update; a partial
+    // privacy-only write must not blank an existing stored city.
+    if (typeof sanitized.location === 'string' && sanitized.location) {
+      sanitized.location = sanitized.location.includes(',')
+        ? sanitized.location.split(',').pop().trim()
+        : sanitized.location;
+    }
     sanitized.locationCoordinates = null;
   }
 }
