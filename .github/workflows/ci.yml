@@ -233,6 +233,7 @@ jobs:
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/profileReadModel.test.js
           src/__tests__/userServicePrivacyProjection.test.js
+          src/__tests__/serviceReachability.test.js
 
   # ========== SECURITY CHECK ==========
   security:

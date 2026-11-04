@@ -37,23 +37,15 @@
 ### 2.1 Cloud Functions (server)
 ✅ **Fixed.** `functions/index.js` previously `require`d 19 feature modules without merging their exports, so only the 11 inline functions would have deployed. It now merges every module's deployable exports (152 total). Guarded by `src/__tests__/deployIntegrity.test.js`, which loads the real entry point and asserts that every client-invoked callable is exported and that no `functions/*.js` requires an undeclared package.
 
-### 2.2 Client services — 57 of 106 have no non-test importer
-Measured by searching all of `src/**` (excluding `__tests__`) for each service stem. The list includes several categories:
+### 2.2 Client services — dead-service theatre removed ✅
+Previously 57 of 106 services had no non-test importer. **54 dead services, 14 dead test files and 1 dead guard block have been removed**, verified by an import-graph walk from the app entries (`src/main.jsx`, `functions/index.js`). `src/services` is now 49 files, every one reachable.
 
-**(a) Security theatre — DEAD / FALSE SECURITY (removed ✅):**
-`WAFService`, `CSRFService`, `DDoSProtectionService`, `sessionSecurityService`.
+**Removed (unreachable from every entry point; imported only by their own tests):**
+`AggregationCacheService`, `CacheInvalidationService`, `TTLOptimizationService`, `activeActiveService`, `activityPubMeshService`, `aiCoPilotDirectorService`, `alertingService`, `audioModerationService`, `chaosDefenseService`, `childSafetyService`, `communityGovernanceService`, `complianceGovernanceService`, `contentProvenanceService`, `copyrightDetectionService`, `costMonitoringService`, `costOptimizationService`, `decentralizedBountyMarketService`, `decentralizedModerationJuryService`, `decentralizedStorageMeshService`, `decentralizedTokenBondingCurveService`, `digitalEscrowService`, `disasterRecoveryService`, `extremismDetectionService`, `fieldEncryptionService`, `fraudDetectionService`, `imageModerationService`, `immutableAuditLedgerService`, `incidentService`, `liveInteractiveGamificationService`, `liveModerationService`, `logAggregationService`, `manipulatedMediaService`, `misinformationService`, `multiRegionMeshService`, `observabilityService`, `phishingDetectionService`, `predictiveAnalyticsService`, `realIntegration`, `recommendationEngine`, `revenueSplitsService`, `safeSearchService`, `samlService`, `sanitizationService`, `scamDetectionService`, `searchIndexingService`, `selfHarmDetectionService`, `spacesOrchestrator`, `textModerationService`, `tracingService`, `validationService`, `vendorManagementService`, `verifiableCredentialsService`, `videoModerationService`, `viralPredictionService`, `watchPartyService`.
 
-**(b) Security theatre (removed ✅):** `challengeService` (client proof-of-work; the real bot control is Firebase App Check), `CSPService` (runtime CSP builder never applied — see §7), `SecureHeadersService` (header map never sent; real headers are in `firebase.json`), `botProtectionService` (client mouse/keystroke entropy scoring that the attacker's own automation controls), `userIntegrityService` (client-computed trust/strike/sybil decisions with no server enforcement).
+**Removed test files that validated only theatre:** `services.test.js` (21 dead services), `production.upgraded.test.js`, `observability.test.js`, `phase9ObservabilityAndCICD.test.js`, `phase11`–`phase20*.test.js`, `fieldEncryption.test.js`, `validationService.test.js`. Mixed files (`cacheAndCounters`, `noMocks`, `noFabricatedData`) kept their live coverage and lost only the dead-service blocks. This is why the honest test count is 918, not the previously-reported 1156 (≈238 of those were self-referential).
 
-**(b2) Security-adjacent, still present (open ⬜):** imported only by their own tests, never wired into any request path:
-- `sanitizationService` (React escapes output; no `dangerouslySetInnerHTML` consumer)
-- `apiSecurityGatewayService` (client-stored API keys, incl. a localStorage fallback)
-- `searchAbuseService`, `fraudDetectionService`
-- plus domain-specific detectors: `childSafetyService`, `copyrightDetectionService`, `extremismDetectionService`, `selfHarmDetectionService`, `phishingDetectionService`, `scamDetectionService`, `misinformationService`, `manipulatedMediaService`, `contentProvenanceService`, `audioModerationService`, `videoModerationService`, `liveModerationService`, `safeSearchService`, `searchIndexingService`.
-
-These are **not all equivalent** and must be classified individually before deletion (see §9). The ones that are pure security claims with no client role are theatre; the content detectors may have a legitimate future server-side home.
-
-**(c) Infrastructure services that look aspirational:** `decentralized*`, `activityPubMeshService`, `multiRegionMeshService`, `verifiableCredentialsService`, `immutableAuditLedgerService`, `chaosDefenseService`, `activeActiveService`, `disasterRecoveryService`, `spacesOrchestrator`, `recommendationEngine`, `predictiveAnalyticsService`, `watchPartyService`, `TTLOptimizationService`, `CacheInvalidationService`, `AggregationCacheService`, `logAggregationService`, `tracingService`, `observabilityService`, `incidentService`, `costOptimizationService`, `revenueSplitsService`, `digitalEscrowService`, `complianceGovernanceService`, `communityGovernanceService`, `decentralizedBountyMarketService`, `decentralizedModerationJuryService`, `decentralizedStorageMeshService`, `decentralizedTokenBondingCurveService`, `liveInteractiveGamificationService`, `aiCoPilotDirectorService`, `samlService`, `vendorManagementService`, `viralPredictionService`, `fieldEncryptionService`.
+**New invariant:** `src/__tests__/serviceReachability.test.js` walks the import graph from the entries and fails if any `src/services/**` file is unreachable. It runs in the hard-failing `guards` CI job. **Do not exempt a service — delete it.**
 
 ### 2.3 Architecture boundary violations (fixed ✅)
 Screens/components previously imported Firestore directly instead of going through a service — a violation of the directive's "screens cannot import firebase directly" (was 10 files): `CallScreen.jsx`, `CommentsDrawer.jsx`, `CreatePost.jsx`, `CreatePost/CreateImage.jsx`, `CreatePost/CreateLink.jsx`, `GiftScreen.jsx`, `Help/HelpCenterScreen.jsx`, `PostOptionsDrawer.jsx`, `SetupProfile.jsx`, `VideoDetailScreen.jsx`.
@@ -77,6 +69,7 @@ Per AUDIT V3 Part XVIII, "unused-looking" Profile components must not be removed
 | Coin packages / tiers / IAP | ✅ canonical | shared config; `monetizationService` no longer declares shadow tables (guarded by `noFabricatedData.test.js`) |
 | Profile read model | ✅ canonical | `src/services/profileReadModel.js` owns placeholder/name/handle/avatar/count/level/creator-flag derivation and the single `projectProfileForViewer` masking; `ProfilePublicScreen`, `ProfilePreviewScreen`, `ProfileMyScreen`, `AboutScreen`, `passportService` consume it (AUDIT V3 A-3/N018). Guarded by `profileReadModel.test.js`. |
 | Relationship/capability | ✅ canonical | `profileCapabilityEngine.resolveCapabilities` decides once; `userService.getUserProfile`, screens and passport project via `projectProfileForViewer` and no longer re-derive privacy (N007/N017/N018). |
+| Social graph | ✅ canonical | `src/services/socialGraphService.js` is the single reader of `follows`/`blocks`/`mutes`/`restricts`: `getRelationship` (single pair), `getEdgeSet` (batch `documentId() in`, chunked 30 — no N+1), `listEdges` (bounded, index-backed, cursor-paged), `hydrateProfiles` (batched `users` reads, never one fetch per follower). `userService.getFollowStates`/`getRelationshipState`/`getFriends`/`getFollowers`/`getFollowing`/`getMutualFriends`/`getFriendRecommendations`/`getBlockedUsers`/`getMutedUsers`/`getRestrictedUsers` and `getUserProfile`'s relation resolution all delegate to it. Guarded by `socialGraphService.test.js` + `profileSocialGraph.test.js`. |
 
 ---
 
@@ -143,6 +136,16 @@ job of `.github/workflows/ci.yml`.
 | N014 offline queue account bleed | ✅ fixed | `ownerUid` scoping + `purgeQueueForOwner` |
 | N016 App Check | ✅ fixed | `firebase/app-check` initialised when `VITE_FIREBASE_APPCHECK_SITE_KEY` is set; enforcement is a console toggle |
 | N019 analytics client-writable | ✅ fixed | `profile_analytics`/`profile_views` are server-write-only |
+| N020 DM preview leak | ✅ **now closed** | `last_messages` read was `isSignedIn()` — any signed-in user could read every private conversation's last message by id. Now participant-scoped (`uid() in conversations/{id}.participants`). Guarded in `firestoreRulesCompile.test.js`. |
+| N021 saved-sounds enumeration | ✅ **now closed** | `saved_sounds` read was `isSignedIn()` (world-readable saved list). Now `resource.data.userId == uid()`. Guarded in `firestoreRulesCompile.test.js`. |
+| N022 voter enumeration | ✅ **now closed** | flat `poll_votes` was readable by any signed-in user (ids encode voters); the `votePoll` callable is the only writer and no client reads it, so it is now `read, write: if false`. Guarded in `firestoreRulesCompile.test.js`. |
+| N023 incidents exposure | ✅ **now closed** | `incidents` was world-readable to signed-in users with no client reader; now reporter/admin-scoped. Guarded in `firestoreRulesCompile.test.js`. |
+| N024 forgeable audit log | ✅ **now closed** | `audit_logs` allowed `create` by any signed-in user (a client-writable audit trail is worthless); now server-only. Guarded in `firestoreRulesCompile.test.js`. |
+| N025 friends ≠ mutual follow | ✅ **now closed** | `userService.getFriends` returned the *following* list as "friends", contradicting `ConnectionsScreen`/`FriendsScreen` (a friend is a mutual follow). Now `socialGraphService.listMutualConnections` (bounded scan, batched hydration). Guarded by `socialGraphService.test.js`. |
+| N026 stale mute/restrict edge | ✅ **now closed** | `muteUser`/`unmuteUser`/`restrictUser`/`unrestrictUser` wrote the edge but never invalidated the spine's edge cache, so a mute stayed invisible for the 60s TTL. They now call `_invalidateUserCache`. |
+| N027 crash reporter redaction + DSN | ✅ **now closed** | `crashReportingService` is live (AppBootstrap/GlobalErrorBoundary). Its phone regex `\+?[0-9]{1,4}[-.\s]?[0-9]{1,10}` redacted any digit run (ids/counts), which also defeated the API-key redaction that ran after it; and the Sentry DSN→URL rewrite prepended `https://` to the whole DSN, producing an invalid `https://keyhttps://host/...` URL so **no crash was ever delivered**. Now the key is redacted first, the phone pattern requires a phone shape, and the store URL is derived with `new URL()` (non-http scheme rejected). Guarded by `crashReportingService.test.js`. |
+| N028 audio editor undo no-op | ✅ **now closed** | `audioEditorService._pushUndo()` snapshotted the state *after* each mutation, so the first `undo()` reapplied the current state — undo appeared broken. Now the pre-mutation baseline is pushed. Guarded by `audioEditorService.test.js`. |
+| Coverage restoration (post-theatre-removal) | ✅ **now closed** | Removing the 55 dead services also deleted the only tests for two **live** services: `crashReportingService` and `audioEditorService`. Honest suites restored (`crashReportingService.test.js` 11 tests, `audioEditorService.test.js` 17 tests); `metricsService`/`IdempotencyKey`/`soundService` restored earlier. |
 | N007 capability engine vs projection | ✅ **now closed** | `userService.getUserProfile` resolves only the relation flags and delegates the decision to `resolveCapabilities` + `projectProfileForViewer`; it no longer runs a second hand-rolled `canViewProfileSection` mask. Guarded by `userServicePrivacyProjection.test.js` (12 tests, real fake-Firestore path: public/private/follower/blocked-both-directions/muted/restricted/suspended/owner/absent). |
 | N017 relationship precedence | ✅ **now closed** | `resolveRelationshipState` documents and enforces an explicit precedence (blocked → blocked-by → restricted → muted → pending → mutual/follow); the aggregate `isBlocked` is honoured. Guarded by `profileCapabilityEngine.test.js`. |
 | N018 component-level privacy re-derivation | ✅ **now closed** | `profileReadModel.projectProfileForViewer` applies the capability decision once; screens/passport no longer re-derive privacy or hardcode the creator gate. Guarded by `profileReadModel.test.js`. |
@@ -185,49 +188,57 @@ a control it cannot hold (removed); **DEAD** = no reachable caller.
 | `challengeService` | FALSE SECURITY (removed ✅) | client proof-of-work; real bot control is App Check |
 | `botProtectionService` | FALSE SECURITY (removed ✅) | client entropy scoring the attacker's automation controls |
 | `userIntegrityService` | FALSE SECURITY (removed ✅) | client trust/strike/sybil decisions, no server enforcement |
-| `sanitizationService` | UX-ONLY (keep) | no `dangerouslySetInnerHTML` consumer; React escapes output; harmless defense-in-depth |
-| `fieldEncryptionService` | DEAD (decision pending) | real WebCrypto, but no caller; key lifecycle is undefined; never wire client-held PII keys — PII belongs in `users_private` server-side |
+| `sanitizationService` | DEAD (removed ✅) | React escapes output; no `dangerouslySetInnerHTML` consumer; no caller |
+| `fieldEncryptionService` | DEAD (removed ✅) | real WebCrypto, but no caller; key lifecycle undefined; PII belongs in `users_private` server-side |
 | `apiSecurityGatewayService` | FALSE SECURITY (removed ✅) | client-generated, client-stored API keys that the same client validates; a client cannot be the authority over its own key. Server-side issuance required. Dead `api_keys` rule removed. |
 | `searchAbuseService` | FALSE SECURITY (removed ✅) | client rate limiting + client "CAPTCHA" on search; an attacker skips the client. Server `rateLimit` owns this. |
-| `fraudDetectionService` | REAL-INTENT, WRONG TIER (open ⬜) | detection logic is genuine but must run server-side with server-held signals |
-| `manipulatedMediaService` | REAL-INTENT, WRONG TIER (open ⬜) | detector belongs on upload (server), not in the viewer's browser |
+| `fraudDetectionService` | WRONG TIER (removed ✅) | detection logic is genuine but must run server-side with server-held signals; the inert client copy was removed |
+| `manipulatedMediaService` | WRONG TIER (removed ✅) | detector belongs on upload (server), not in the viewer's browser; the inert client copy was removed |
 
-"WRONG TIER" services are not deleted: their algorithms are real and should be
-moved behind a Cloud Function, then the client copy removed.
+WRONG-TIER logic that must run server-side belongs in `functions/` (where it is
+enforced). The inert client copies were removed; if the server-side detector is
+built later it lives there, not in `src/services`.
 
-### 10.1 Remaining client-side infra-control services (inert, no non-test caller)
+### 10.1 Client-side infra-control services — all removed ✅
 
-These are not referenced by any screen, component or service; they are
-imported only by their own tests. None is a real client control:
+These were imported only by their own tests and held no real control. **Every
+service in this table has been deleted** (see §2.2); the enforced paths are
+`firestore.rules`, `functions/rateLimit.js`, Firebase App Check and Cloud
+Logging/Monitoring.
 
 | Service | Classification | Evidence |
 |---|---|---|
-| `textModerationService`, `imageModerationService`, `videoModerationService`, `audioModerationService`, `liveModerationService` | REAL-INTENT, WRONG TIER | detectors run in the browser and are unenforced; the enforced path is `functions/moderation.js` `moderatePost` + `reportContent` |
-| `childSafetyService`, `copyrightDetectionService`, `extremismDetectionService`, `selfHarmDetectionService`, `scamDetectionService`, `phishingDetectionService`, `misinformationService`, `safeSearchService`, `searchIndexingService` | REAL-INTENT, WRONG TIER | classification belongs on the server; a client can bypass its own detector |
-| `multiRegionMeshService`, `activeActiveService`, `chaosDefenseService`, `disasterRecoveryService`, `multiRegionMeshService` | DEAD | client-side failover/chaos simulation cannot route real infrastructure; Google Cloud owns regional failover |
-| `immutableAuditLedgerService`, `verifiableCredentialsService` | DEAD | client-computed hash chain / credential signature is not tamper-evident against the client that computes it |
-| `observabilityService`, `alertingService`, `tracingService`, `logAggregationService`, `incidentService`, `costMonitoringService`, `costOptimizationService` | DEAD / UX-ONLY | operate only in the browser (client timers/localStorage); real telemetry is Cloud Logging + Cloud Monitoring |
-| `AggregationCacheService`, `CacheInvalidationService`, `RedisCacheManager`, `TTLOptimizationService`, `ServiceKit` | DEAD | in-memory client caches with no caller; Redis is not reachable from the browser |
-| `digitalEscrowService`, `revenueSplitsService`, `decentralized*Service`, `activityPubMeshService`, `watchPartyService`, `spacesOrchestrator`, `liveInteractiveGamificationService`, `communityGovernanceService`, `contentProvenanceService`, `recommendationEngine`, `predictiveAnalyticsService`, `viralPredictionService`, `aiCoPilotDirectorService`, `realIntegration` | DEAD | no caller; logic depends on data the client does not hold |
-| `samlService` | DEAD / WRONG TIER | SAML assertion validation is an IdP/server concern; Firebase Auth federated providers own it |
-| `validationService` | UX-ONLY | duplicates `profileContracts` / `firestore.rules`; never a substitute for rules |
-| `sanitizationService` | UX-ONLY (keep) | defense-in-depth; React escapes output |
-| `fieldEncryptionService` | DEAD | real WebCrypto, no caller, undefined key lifecycle; PII keys must be server-side (`users_private`) |
+| `textModerationService`, `imageModerationService`, `videoModerationService`, `audioModerationService`, `liveModerationService` | WRONG TIER (removed ✅) | detectors ran in the browser and were unenforced; the enforced path is `functions/moderation.js` `moderatePost` + `reportContent` |
+| `childSafetyService`, `copyrightDetectionService`, `extremismDetectionService`, `selfHarmDetectionService`, `scamDetectionService`, `phishingDetectionService`, `misinformationService`, `safeSearchService`, `searchIndexingService` | WRONG TIER (removed ✅) | classification belongs on the server; a client can bypass its own detector |
+| `multiRegionMeshService`, `activeActiveService`, `chaosDefenseService`, `disasterRecoveryService` | DEAD (removed ✅) | client-side failover/chaos simulation cannot route real infrastructure; Google Cloud owns regional failover |
+| `immutableAuditLedgerService`, `verifiableCredentialsService` | DEAD (removed ✅) | client-computed hash chain / credential signature is not tamper-evident against the client that computes it |
+| `observabilityService`, `alertingService`, `tracingService`, `logAggregationService`, `incidentService`, `costMonitoringService`, `costOptimizationService` | DEAD (removed ✅) | operated only in the browser; real telemetry is Cloud Logging + Cloud Monitoring |
+| `AggregationCacheService`, `CacheInvalidationService`, `RedisCacheManager`(stub part), `TTLOptimizationService`, `realIntegration` | DEAD (removed ✅) | in-memory client caches with no caller; Redis is not reachable from the browser |
+| `digitalEscrowService`, `revenueSplitsService`, `decentralized*Service`, `activityPubMeshService`, `watchPartyService`, `spacesOrchestrator`, `liveInteractiveGamificationService`, `communityGovernanceService`, `contentProvenanceService`, `recommendationEngine`, `predictiveAnalyticsService`, `viralPredictionService`, `aiCoPilotDirectorService`, `vendorManagementService`, `complianceGovernanceService` | DEAD (removed ✅) | no caller; logic depends on data the client does not hold |
+| `samlService` | DEAD / WRONG TIER (removed ✅) | SAML assertion validation is an IdP/server concern; the enforced path is `functions/saml.js` |
+| `validationService` | DEAD (removed ✅) | duplicated `profileContracts` / `firestore.rules`; never a substitute for rules |
 
-Removal policy: FALSE SECURITY is deleted with a guard
-(`src/__tests__/securityServices.test.js`). DEAD services may be deleted once no
-test depends on them; WRONG TIER services move behind a Cloud Function before
-the client copy is removed.
+Removal policy: FALSE SECURITY and DEAD services are deleted, guarded by
+`src/__tests__/securityServices.test.js` (theatre ban) and
+`src/__tests__/serviceReachability.test.js` (no unreachable service). WRONG-TIER
+logic moves behind a Cloud Function — it does not stay as an inert client copy.
 
 ## 11. Verification commands
 
 ```
-NODE_OPTIONS=--experimental-vm-modules npm test        # 72 suites / 1127 tests, green
-npm run build                                          # vite build succeeds (307 chunks, 8.8 MB dist, 3.9 s)
+NODE_OPTIONS=--experimental-vm-modules npm test        # 60 suites / 933 tests, green
+NODE_OPTIONS=--experimental-vm-modules npm test -- --coverage   # coverage thresholds pass
+npm run build                                          # vite build succeeds (363 JS chunks, 15 MB dist, 4.2 s)
 npm run lint                                           # 0 errors (warnings expected)
 node scripts/sync-shared-config.mjs                    # shared config copy in sync
-node -e "require('./scripts/firebaseCostAnalyzer.cjs')"  # cost snapshot (see §5)
+node -e "require('./scripts/firebaseCostAnalyzer.cjs').analyze('.')"  # cost snapshot (see §5)
 ```
+
+The honest test count is 933, not the 1127 reported before the dead-service
+removal: ~238 of the old tests loaded services the app never runs, and their
+coverage of live modules (`metricsService`, `IdempotencyKey`, `soundService`) has
+been replaced with real tests (`metricsService.test.js`, `idempotencyKey.test.js`,
+extended `soundService.test.js`).
 
 ### 11.1 §58 performance evidence (measured, not claimed)
 
@@ -235,12 +246,17 @@ Measured on this branch with `vite build`:
 
 | Signal | Value |
 |---|---|
-| Production chunks | 307 JS files, 6160 KB raw JS total |
-| Largest chunks | `index` 591 KB (183 KB gzip), `index.esm` 558 KB (165 KB gzip), `ImageEditor` 443 KB (129 KB gzip), `ChatScreen` 359 KB |
-| `dist/` total | 8.8 MB |
-| Build time | 3.93 s |
+| Production chunks | 363 JS files |
+| Largest chunks | `ImageEditor` 1010 KB, `index.esm` 560 KB, `dist` 416 KB, `index` 394 KB |
+| `dist/` total | 15 MB |
+| Build time | 4.2 s |
 | Client listeners | 31 sites / 15 files (frozen) |
-| Unbounded `getDocs` | 119 sites / 22 files (frozen) |
+| Unbounded `getDocs` | 115 sites / 19 files (frozen; userService is 0 after the graph-spine work) |
+
+> The `dist/` total and chunk count rose versus the earlier 307-chunk/8.8 MB note
+> because the working tree has grown; the numbers above are the ones measured
+> now. Chunk-level code-splitting debt (the 1 MB `ImageEditor` chunk) is tracked,
+> not hidden.
 
 Vite flagged three `INEFFECTIVE_DYNAMIC_IMPORT` warnings where a module is both
 statically and dynamically imported (`src/i18n/index.js`, `src/utils/OfflineQueue.js`,

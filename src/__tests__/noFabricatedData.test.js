@@ -992,15 +992,6 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
   });
 });
 
-describe('Compliance export - no fabricated personal data', () => {
-  test('exportUserData never invents an email/username/createdAt for the subject', () => {
-    const src = fs.readFileSync(path.join(root, 'src/services/complianceGovernanceService.js'), 'utf8');
-    expect(src).not.toContain("email: 'user@example.com'");
-    expect(src).not.toContain('timestamp - 86400000 * 30');
-    expect(src).toContain('async exportUserData(userId, dataSources = {})');
-  });
-});
-
 describe('Auth - signup never grants fabricated coins/levels', () => {
   test('authService creates profiles without a hardcoded starting balance', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/authService.js'), 'utf8');

@@ -56,6 +56,7 @@ import {
   PROFILE_CONSTRAINTS, 
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
+import { isPlaceholderHandle, resolveCreatorFlag } from '../../services/profileReadModel.js';
 import { LEVEL_GATES, getRoyalEligibility } from '../../shared/levelConfig.cjs';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
@@ -106,12 +107,10 @@ export default function EditProfileScreen() {
   const rawLevel = userProfile?.level ?? user?.level;
   const userLevel = rawLevel != null ? Number(rawLevel) : null;
 
-  // Progressive unlock flags derived authoritatively from LEVEL_GATES
-  const isCreatorAccount = Boolean(
-    userProfile?.isCreator || 
-    userProfile?.creatorStatus === 'approved' || 
-    (userLevel != null && userLevel >= LEVEL_GATES.creatorProfile)
-  );
+  // Progressive unlock flags. Creator standing comes from the canonical read
+  // model (explicit flags first, then the level gate) so this form cannot drift
+  // from the profile surfaces.
+  const isCreatorAccount = resolveCreatorFlag(userProfile || {}, user || {}, userLevel);
 
   const isRoyalOrNoble = Boolean(
     userProfile?.isRoyalFamily ||
@@ -171,7 +170,7 @@ export default function EditProfileScreen() {
     const checks = [
       { id: 'avatar', label: 'Citizen Avatar', completed: Boolean(avatarPreview && !avatarPreview.includes('default') && !avatarPreview.includes('placeholder')), weight: 20 },
       { id: 'displayName', label: 'Display Name', completed: Boolean(formData.displayName?.trim()), weight: 20 },
-      { id: 'username', label: 'Unique Handle', completed: Boolean(formData.username?.trim() && !formData.username.startsWith('user_')), weight: 20 },
+      { id: 'username', label: 'Unique Handle', completed: Boolean(formData.username?.trim() && !isPlaceholderHandle(formData.username)), weight: 20 },
       { id: 'bio', label: 'Civic Bio', completed: Boolean(formData.bio?.trim()), weight: 20 },
       { id: 'details', label: 'Coordinates or Links', completed: Boolean(formData.location?.trim() || formData.website?.trim() || formData.links?.length > 0), weight: 20 },
     ];
@@ -189,7 +188,7 @@ export default function EditProfileScreen() {
       const p = src.privacy || {};
       
       let initialUsername = src.username || '';
-      if (!initialUsername || initialUsername.startsWith('user_') || initialUsername === 'user' || initialUsername === 'creator') {
+      if (isPlaceholderHandle(initialUsername)) {
         const fromEmail = src.email?.split('@')[0]?.toLowerCase().replace(/[^a-z0-9._]/g, '');
         const fromName = src.displayName?.toLowerCase().replace(/[^a-z0-9._]/g, '');
         initialUsername = fromEmail || fromName || '';
@@ -267,8 +266,9 @@ export default function EditProfileScreen() {
       const cleanBase = base.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'creator';
       let uniqueUser = await userService.generateUniqueUsername(cleanBase, userProfile?.uid);
       
-      if (uniqueUser.startsWith('user_')) {
-        uniqueUser = uniqueUser.replace(/^user_/, `${cleanBase}_`);
+      if (isPlaceholderHandle(uniqueUser)) {
+        const suffix = uniqueUser.replace(/^user_/, '') || Math.random().toString(36).slice(2, 7);
+        uniqueUser = `${cleanBase}_${suffix}`;
       }
       setFormData(prev => ({ ...prev, username: uniqueUser }));
       setUsernameAvailability('available');

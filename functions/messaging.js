@@ -35,6 +35,7 @@ if (USE_ALGOLIA) {
 }
 
 const { enqueuePush } = require('./pushQueue');
+const { checkRateLimit } = require('./rateLimit');
 
 // ----------------------------------------------------------------------
 //  LOGGING
@@ -75,41 +76,10 @@ function createConcurrencyLimiter(maxConcurrent) {
 const messageLimiter = createConcurrencyLimiter(5);
 
 // ----------------------------------------------------------------------
-//  SHARDED RATE LIMITER
+//  SHARDED RATE LIMITER — shared implementation in ./rateLimit.js.
+//  This module previously carried its own copy; the shared limiter keeps a
+//  single shard algorithm and error contract across every endpoint.
 // ----------------------------------------------------------------------
-const NUM_RATE_SHARDS = 5;
-async function checkRateLimit(userId, action, maxOps, windowMs = 60000) {
-  const now = Date.now();
-  const windowStart = now - windowMs;
-  const parentRef = db.collection('rate_limits').doc(`${userId}_${action}`);
-
-  await db.runTransaction(async (t) => {
-    const shardRefs = Array.from({ length: NUM_RATE_SHARDS }, (_, i) =>
-      parentRef.collection('shards').doc(String(i))
-    );
-    const snaps = await Promise.all(shardRefs.map(ref => t.get(ref)));
-    let total = 0;
-    snaps.forEach(snap => {
-      if (snap.exists) {
-        const d = snap.data();
-        const ws = d.windowStart || 0;
-        if (ws >= windowStart) total += d.count || 0;
-      }
-    });
-    if (total >= maxOps) {
-      throw new functions.https.HttpsError('resource-exhausted', `Rate limit exceeded for ${action}`);
-    }
-    const shardId = Math.floor(Math.random() * NUM_RATE_SHARDS);
-    const shardRef = shardRefs[shardId];
-    let shardData = snaps[shardId].exists ? snaps[shardId].data() : { count: 0, windowStart: 0 };
-    if ((shardData.windowStart || 0) < windowStart) {
-      shardData = { count: 1, windowStart: now, expireAt: new Date(now + windowMs * 2) };
-    } else {
-      shardData.count += 1;
-    }
-    t.set(shardRef, shardData, { merge: true });
-  });
-}
 
 // ----------------------------------------------------------------------
 //  TRANSACTION RETRY WRAPPER

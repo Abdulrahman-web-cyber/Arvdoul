@@ -32,7 +32,7 @@ if (typeof globalThis.TextEncoder === 'undefined' || typeof globalThis.TextDecod
 }
 
 // ---------------------------------------------------------------------------
-// WebCrypto (crypto.subtle) - required by fieldEncryptionService, messagesService
+// WebCrypto (crypto.subtle) - required by messagesService and storage helpers
 // ---------------------------------------------------------------------------
 if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
   Object.defineProperty(globalThis, 'crypto', {

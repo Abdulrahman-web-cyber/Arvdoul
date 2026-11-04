@@ -39,4 +39,4 @@ async function checkRateLimit(userId, action, maxOps, windowMs = 60000) {
   });
 }
 
-module.exports = { checkRateLimit, NUM_RATE_SHARDS };
+module.exports = { checkRateLimit, NUM_RATE_SHARDS, RATE_LIMIT_NUM_SHARDS: NUM_RATE_SHARDS };

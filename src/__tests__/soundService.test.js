@@ -190,6 +190,41 @@ describe('soundService', () => {
     expect(saved[0].id).toBe('snd-sample-1');
   });
 
+  test('getSavedSounds returns an empty array when Firestore is unavailable', async () => {
+    const { getFirestoreInstance } = await import('../firebase/firebase.js');
+    getFirestoreInstance.mockRejectedValueOnce(new Error('offline'));
+    expect(await soundService.getSavedSounds('user-1')).toEqual([]);
+  });
+
+  test('uploadCustomSound decodes real duration + waveform when the audio context exists', async () => {
+    const original = globalThis.OfflineAudioContext;
+    globalThis.OfflineAudioContext = class {
+      async decodeAudioData() {
+        return { duration: 95, getChannelData: () => new Float32Array(1300).fill(0.5) };
+      }
+    };
+    try {
+      const fakeFile = {
+        name: 'beat.wav',
+        size: 4096,
+        arrayBuffer: async () => new ArrayBuffer(16),
+      };
+      const uploaded = await soundService.uploadCustomSound({
+        title: 'Decoded Track',
+        genre: 'House',
+        creatorId: 'usr-decode',
+        file: fakeFile,
+      });
+      expect(uploaded.durationSec).toBe(95);
+      expect(uploaded.duration).toBe('1:35');
+      expect(Array.isArray(uploaded.waveformData)).toBe(true);
+      expect(uploaded.waveformData).toHaveLength(13);
+    } finally {
+      if (original === undefined) delete globalThis.OfflineAudioContext;
+      else globalThis.OfflineAudioContext = original;
+    }
+  });
+
   test('uploadCustomSound uploads the REAL file and persists an honest record', async () => {
     const fakeFile = {
       name: 'my-beat.mp3',

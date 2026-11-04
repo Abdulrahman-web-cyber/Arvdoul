@@ -41,13 +41,12 @@ module.exports = {
     'src/scalability/**/*.js',
     'src/offline/**/*.js',
     '!src/**/Gaps.js',
-    '!src/**/realIntegration.js',
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'json-summary', 'lcov'],
   // ENFORCED coverage floor. Ramps up per quarter; do not lower without a
-  // documented engineering decision. Baselines verified 2026-08-20 with the
-  // full-service collectCoverageFrom (all 104 services counted).
+  // documented engineering decision. Baselines verified against the current
+  // 49-service tree (the 54 dead services were removed).
   coverageThreshold: {
     global: {
       statements: 11,
@@ -62,21 +61,6 @@ module.exports = {
     'src/utils/IdempotencyKey.js': { statements: 75 },
     'src/utils/Logger.js': { statements: 70 },
     'src/services/metricsService.js': { statements: 80 },
-    'src/services/fraudDetectionService.js': { statements: 80 },
-    'src/services/costOptimizationService.js': { statements: 80 },
-    'src/services/extremismDetectionService.js': { statements: 80 },
-    'src/services/viralPredictionService.js': { statements: 80 },
-    'src/services/vendorManagementService.js': { statements: 80 },
-    'src/services/validationService.js': { statements: 80 },
     'src/services/soundService.js': { statements: 80 },
-    'src/services/selfHarmDetectionService.js': { statements: 80 },
-    'src/services/searchIndexingService.js': { statements: 75 },
-    'src/services/safeSearchService.js': { statements: 75 },
-    'src/services/phishingDetectionService.js': { statements: 75 },
-    'src/services/textModerationService.js': { statements: 70 },
-    'src/services/sanitizationService.js': { statements: 70 },
-    'src/services/copyrightDetectionService.js': { statements: 70 },
-    'src/services/AggregationCacheService.js': { statements: 75 },
-    'src/services/disasterRecoveryService.js': { statements: 75 },
   },
 };

@@ -128,13 +128,15 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           return;
         }
 
-        // 3. Fetch all 3 connection graphs in parallel
+        // 3. Fetch all 3 connection graphs in parallel. Pass the viewer so each
+        // row's follow state is resolved from the viewer's perspective (the
+        // spine hydrates + projects with `viewerId`), not the target's.
         const [followersRes, followingRes, friendsRes] = await Promise.allSettled([
-          userService.getFollowers(targetUserId),
-          userService.getFollowing(targetUserId),
+          userService.getFollowers(targetUserId, { viewerId: currentUserId }),
+          userService.getFollowing(targetUserId, { viewerId: currentUserId }),
           currentUserId && currentUserId !== targetUserId
             ? userService.getMutualFriends(currentUserId, targetUserId)
-            : userService.getFollowers(targetUserId).then((r) => ({
+            : userService.getFollowers(targetUserId, { viewerId: currentUserId }).then((r) => ({
                 mutualFriends: (r.followers || []).filter((f) => f.isFollowing),
               })),
         ]);

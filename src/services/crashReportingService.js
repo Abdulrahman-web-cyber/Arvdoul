@@ -101,8 +101,12 @@ class CrashReportingService {
     if (typeof input === 'string') {
       return input
         .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]')
-        .replace(/\+?[0-9]{1,4}[-.\s]?[0-9]{1,10}/g, '[REDACTED_PHONE]')
-        .replace(/AIzaSy[a-zA-Z0-9-_]{33}/g, '[REDACTED_API_KEY]');
+        // API keys first: a bare digit-run phone pattern would otherwise eat the
+        // key's trailing digits and defeat this redaction.
+        .replace(/AIzaSy[a-zA-Z0-9-_]{33}/g, '[REDACTED_API_KEY]')
+        // Phone shape (optional country code + 3+3+4 with separators) rather than
+        // any digit run, so ids/timestamps/counts are not redacted as "phones".
+        .replace(/(\+?\d{1,3}[\s.-]?)?(\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g, '[REDACTED_PHONE]');
     }
     if (typeof input === 'object') {
       const copy = {};
@@ -174,9 +178,15 @@ class CrashReportingService {
     if (!dsnVal) return;
 
     try {
-      const sentryUrl = dsnVal.replace(/@([^/]+)\/(\d+)/, (match, host, id) => {
-        return 'https://' + host + '/api/' + id + '/store/';
-      });
+      // Sentry DSN: https://<key>@<host>/<projectId>. Derive the ingestion URL
+      // from its parts instead of string-replacing, which produced an invalid
+      // URL (the `https://` scheme was prepended to the whole DSN). A non-http
+      // scheme or empty host is rejected before any request (SSRF, CWE-918).
+      const parsed = new URL(dsnVal);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
+      if (!parsed.host) return;
+      const projectId = parsed.pathname.replace(/^\//, '');
+      const sentryUrl = `https://${parsed.host}/api/${projectId}/store/`;
 
       if (this._isValidUrl(sentryUrl)) {
         await fetch(sentryUrl, {

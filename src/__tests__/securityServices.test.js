@@ -1,36 +1,16 @@
 /**
  * src/__tests__/securityServices.test.js
- * Real assertions for the one security utility that has a genuine client
- * responsibility (input sanitization). The enforcement points that are NOT
- * real client controls were removed — see the architecture guard below.
+ * Guards that no client-side security theatre is reintroduced. A browser cannot
+ * be a WAF, a CSRF authority, a DDoS scrubbing layer or an impossible-travel
+ * engine; the real controls are `firestore.rules`, `functions/rateLimit.js`,
+ * Firebase App Check and the `index.html` CSP.
  */
 
-import { sanitizationService } from '../services/sanitizationService.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-
-describe('SanitizationService', () => {
-  test('strips script tags from HTML', () => {
-    const clean = sanitizationService.sanitizeHTML('<p>Hello</p><script>alert(1)</script>');
-    expect(clean).not.toContain('<script');
-    expect(clean).toContain('Hello');
-  });
-
-  test('escapes HTML entities', () => {
-    const escaped = sanitizationService.escapeHTML('<b>&"\'</b>');
-    expect(escaped).not.toContain('<b>');
-  });
-
-  test('rejects unsafe URLs and allows safe ones', () => {
-    expect(sanitizationService.sanitizeURL('javascript:alert(1)')).toBe('');
-    expect(sanitizationService.sanitizeURL('data:text/html,<script>1</script>')).toBe('');
-    expect(sanitizationService.sanitizeURL('https://arvdoul.com/path?q=1')).toBe('https://arvdoul.com/path?q=1');
-    expect(sanitizationService.sanitizeURL('mailto:hello@arvdoul.com')).toBe('mailto:hello@arvdoul.com');
-  });
-});
 
 describe('no client-side security theatre', () => {
   // A browser cannot be a WAF, a CSRF authority, a DDoS scrubbing layer or an

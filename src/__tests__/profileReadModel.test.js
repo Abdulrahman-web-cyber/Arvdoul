@@ -194,3 +194,51 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
     expect(src).not.toContain('canViewProfileSection(');
   });
 });
+
+describe('profile components fail closed on capabilities', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  it('ProfileMetricsGrid does not default a capability to visible', () => {
+    const src = read('src/components/profile/ProfileMetricsGrid.jsx');
+    // A missing capabilities prop must hide sections, never reveal them.
+    expect(src).not.toMatch(/canView\w+\s*\?\?\s*true/);
+    expect(src).not.toMatch(/canViewEconomicStatus\s*\?\?/);
+  });
+
+  it('ProfilePreviewScreen does not fabricate a follow relationship', () => {
+    const src = read('src/screens/Profile/ProfilePreviewScreen.jsx');
+    // The visitor perspective must resolve the real relationship, not assert
+    // isFollowing/isFollower: true.
+    expect(src).not.toMatch(/isFollowing:\s*!isOwnerMode/);
+  });
+
+  it('no profile surface re-implements the placeholder handle filter', () => {
+    for (const file of [
+      'src/screens/Profile/EditProfileScreen.jsx',
+      'src/screens/Profile/ProfileMyScreen.jsx',
+      'src/screens/Profile/ProfilePublicScreen.jsx',
+      'src/screens/Profile/ProfilePreviewScreen.jsx',
+      'src/screens/Profile/AboutScreen.jsx',
+    ]) {
+      expect(read(file)).not.toContain("startsWith('user_')");
+    }
+  });
+
+  it('EditProfileScreen uses the canonical creator flag, not a raw level gate', () => {
+    const src = read('src/screens/Profile/EditProfileScreen.jsx');
+    expect(src).toContain('resolveCreatorFlag(');
+    expect(src).not.toContain('LEVEL_GATES.creatorProfile');
+  });
+
+  it('no dead profile components linger', () => {
+    for (const gone of [
+      'src/components/profile/ProfileHeader.jsx',
+      'src/components/profile/ProfileStats.jsx',
+      'src/components/profile/ProfileCivicCard.jsx',
+    ]) {
+      expect(fs.existsSync(path.join(root, gone))).toBe(false);
+    }
+  });
+});
+

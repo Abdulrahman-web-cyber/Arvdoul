@@ -20,14 +20,22 @@ jest.unstable_mockModule('firebase/firestore', () => ({
   where: (field, op, value) => ({ __type: 'where', field, op, value }),
   getDocs: async (q) => {
     const filters = (q.constraints || []).filter((c) => c.__type === 'where');
+    const idOf = (d) => `${d.followerId}_${d.followingId}`;
     const matched = followsDocs.filter((d) =>
-      filters.every((f) => d[f.field] === f.value)
+      filters.every((f) => {
+        if (f.op === 'in') {
+          const values = Array.isArray(f.value) ? f.value : [f.value];
+          return f.field === '__name__' ? values.includes(idOf(d)) : values.includes(d[f.field]);
+        }
+        return d[f.field] === f.value;
+      })
     );
+    const docs = matched.map((d) => ({ id: idOf(d), data: () => d }));
     return {
-      docs: matched.map((d) => ({
-        id: `${d.followerId}_${d.followingId}`,
-        data: () => d,
-      })),
+      docs,
+      forEach: (cb) => docs.forEach(cb),
+      empty: docs.length === 0,
+      size: docs.length,
     };
   },
   doc: () => ({}),
@@ -43,6 +51,7 @@ jest.unstable_mockModule('firebase/firestore', () => ({
   arrayRemove: (...a) => a,
   writeBatch: () => ({ set() {}, update() {}, delete() {}, commit: async () => {} }),
   limit: (n) => ({ __type: 'limit', n }),
+  documentId: () => '__name__',
   orderBy: (f, d) => ({ __type: 'orderBy', f, d }),
   startAfter: (c) => ({ __type: 'startAfter', c }),
   onSnapshot: () => () => {},

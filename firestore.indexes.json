@@ -83,6 +83,20 @@
       ]
     },
     {
+      "collectionGroup": "blocks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "blockerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "blockedId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "calls",
       "queryScope": "COLLECTION",
       "fields": [
@@ -751,6 +765,20 @@
       ]
     },
     {
+      "collectionGroup": "follows",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "followingId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "followerId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "friend_requests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1017,6 +1045,20 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "mutes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "muterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mutedId",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -1469,6 +1511,20 @@
       ]
     },
     {
+      "collectionGroup": "restricts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "restricterId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "restrictedId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "saved_posts",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -1726,6 +1782,20 @@
       "fields": [
         {
           "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "support_tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
@@ -2039,20 +2109,6 @@
         {
           "fieldPath": "lockExpiresAt",
           "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "support_tickets",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
         }
       ]
     }

@@ -8,6 +8,7 @@ import messagingService from '../services/messagesService';
 import userService from '../services/userService';
 import useMessagingStore from '../store/messagingStore';
 import { cn } from '../lib/utils';
+import { getProfileUrl, getProfileHandle } from '../utils/shareUtils';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 import { X, Search, UserPlus, Loader2, ArrowLeft } from 'lucide-react';
@@ -61,12 +62,11 @@ const NewConversationScreen = () => {
           }
           if (shareProfileId) {
             try {
-              const origin = typeof window !== 'undefined' ? window.location.origin : '';
               const targetProfile = await userService.getUserProfile(shareProfileId).catch(() => null);
-              const targetHandle = targetProfile?.username || shareProfileId;
+              const targetHandle = getProfileHandle(targetProfile) || shareProfileId;
               await messagingService.sendMessage(result.conversation.id, {
                 type: 'text',
-                content: `Check out @${targetHandle}'s profile on ARVDOUL: ${origin}/profile/${targetHandle}`,
+                content: `Check out @${targetHandle}'s profile on ARVDOUL: ${getProfileUrl(targetProfile || shareProfileId)}`,
               });
             } catch (err) {
               console.warn('Profile share failed:', err);
@@ -187,12 +187,11 @@ const NewConversationScreen = () => {
         }
         if (shareProfileId) {
           try {
-            const origin = typeof window !== 'undefined' ? window.location.origin : '';
             const targetProfile = await userService.getUserProfile(shareProfileId).catch(() => null);
-            const targetHandle = targetProfile?.username || shareProfileId;
+            const targetHandle = getProfileHandle(targetProfile) || shareProfileId;
             await messagingService.sendMessage(result.conversation.id, {
               type: 'text',
-              content: `Check out @${targetHandle}'s profile on ARVDOUL: ${origin}/profile/${targetHandle}`,
+              content: `Check out @${targetHandle}'s profile on ARVDOUL: ${getProfileUrl(targetProfile || shareProfileId)}`,
             });
             toast.success('Profile shared');
           } catch (shareErr) {

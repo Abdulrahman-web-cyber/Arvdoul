@@ -34,7 +34,7 @@ const STALE_TASK_AGE_MS = 24 * 60 * 60_000;
 const FAILED_TASK_RETRY_AGE_MS = 60 * 60_000;
 const STUCK_TASK_TIMEOUT_MS = 10 * 60_000;
 const MODERATION_VIDEO_TIMEOUT_MS = 8 * 60 * 1000;
-const RATE_LIMIT_NUM_SHARDS = 5;
+const { checkRateLimit } = require('./rateLimit');
 
 // ----------------------------------------------------------------------
 //  CLOUD TASKS CONFIG (with deduplication)
@@ -74,30 +74,10 @@ async function commitBatchWithRetry(batch, maxRetries = 5) {
 }
 
 // ----------------------------------------------------------------------
-//  SHARDED RATE LIMITER (fixed sequential reads)
+//  SHARDED RATE LIMITER — shared implementation in ./rateLimit.js.
+//  This module previously used deterministic single-shard selection, which
+//  diverged from every other endpoint's shard algorithm.
 // ----------------------------------------------------------------------
-async function checkRateLimit(userId, action, maxOps, windowMs = 60000) {
-  const now = Date.now();
-  const windowStart = now - windowMs;
-  const parentRef = db.collection('rate_limits').doc(`${userId}_${action}`);
-
-  // Deterministic shard selection (1 shard per user per action) – reduces contention
-  const shardId = Math.floor(Math.abs(parseInt(userId.slice(0, 8), 36)) % RATE_LIMIT_NUM_SHARDS);
-  const shardRef = parentRef.collection('shards').doc(String(shardId));
-
-  await db.runTransaction(async (t) => {
-    const snap = await t.get(shardRef);
-    let data = snap.exists ? snap.data() : { count: 0, windowStart: 0 };
-    if (data.windowStart < windowStart) {
-      data = { count: 1, windowStart: now, expireAt: new Date(now + windowMs * 2) };
-    } else if (data.count >= maxOps) {
-      throw new functions.https.HttpsError('resource-exhausted', 'Rate limit exceeded');
-    } else {
-      data.count += 1;
-    }
-    t.set(shardRef, data, { merge: true });
-  });
-}
 
 // ----------------------------------------------------------------------
 //  ENQUEUE VIDEO MODERATION TASK (with idempotent task name)

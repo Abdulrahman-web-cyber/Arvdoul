@@ -1214,12 +1214,28 @@ class UltimateMessagingService {
       }, conv.conversation.disappearAfter * 1000);
     }
 
-    // Push notifications
+    // Push notifications — routed through the server `sendNotification`
+    // callable, which writes push_queue for the sendPushNotification trigger to
+    // deliver. Previously this block was an empty shell (no push was ever
+    // sent) and the only helper called a Firestore trigger as if it were a
+    // callable. Best-effort: a push failure must never fail the send.
     const recipients = conv.conversation.participants.filter(p => p !== currentUser.uid);
     const mentionedIds = message.mentions || [];
+    const senderName = currentUser.displayName || 'Someone';
+    const preview = this._getMessagePreview(message);
     recipients.forEach(async uid => {
       if (!conv.conversation.mutedBy?.includes(uid) && await this._shouldSendPushNotification(uid)) {
         if (mentionedIds.length === 0 || mentionedIds.includes(uid)) {
+          this._getNotificationsService()
+            .then((notificationsService) => notificationsService.sendNotification({
+              recipientId: uid,
+              senderId: currentUser.uid,
+              type: 'message',
+              title: `Message from ${senderName}`,
+              message: preview,
+              metadata: { conversationId, messageId: idempotencyKey, kind: 'message' },
+            }))
+            .catch(() => { /* push is best-effort */ });
         }
       }
     });
@@ -2983,33 +2999,6 @@ class UltimateMessagingService {
     const enabled = settings.pushEnabled !== false;
     this.notificationSettingsCache.set(cacheKey, enabled);
     return enabled;
-  }
-
-  async _sendPushNotification(messageId, conversationId, userId, message) {
-    if (!MESSAGING_CONFIG.PUSH_NOTIFICATIONS.ENABLED) return { sent: false };
-    if (!(await this._shouldSendPushNotification(userId))) return { sent: false, skipped: true };
-
-    const maxRetries = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.RETRY_ATTEMPTS;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        const sendPush = this.fn.httpsCallable(this.functions, 'sendPushNotification');
-        const result = await sendPush({
-          messageId,
-          conversationId,
-          userId,
-          messagePreview: this._getMessagePreview(message),
-          senderName: message.senderName,
-        });
-        return { sent: true, result: result.data };
-      } catch (err) {
-        if (i === maxRetries - 1) {
-          return { sent: false, error: err };
-        }
-        const delay = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.INITIAL_DELAY_MS *
-          Math.pow(MESSAGING_CONFIG.PUSH_NOTIFICATIONS.BACKOFF_FACTOR, i);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
   }
 
   async _notifyAdmins(conversationId, event, data) {

@@ -63,6 +63,13 @@ const VIEWER = 'viewer-user';
 
 async function serviceWith(docData) {
   const { getUserService } = await import('../services/userService.js');
+  const { getSocialGraphService } = await import('../services/socialGraphService.js');
+  // getUserProfile resolves its relationship through the graph spine, so each
+  // case must start from a cold graph cache.
+  const graph = getSocialGraphService();
+  graph.firestore = fakeFirestore;
+  graph.initialized = true;
+  graph.clearCache();
   const svc = getUserService();
   svc.firestore = fakeFirestore;
   svc.initialized = true;

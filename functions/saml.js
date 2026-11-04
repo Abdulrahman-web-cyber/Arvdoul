@@ -1,9 +1,9 @@
 /**
  * functions/saml.js - ARVDOUL SAML ASSERTION VERIFICATION (server-side)
  *
- * The client samlService REFUSES to trust a browser-verified assertion; it
- * requires a server endpoint (VITE_SAML_VERIFY_URL) and fails closed
- * otherwise. This function is that endpoint:
+ * SAML assertion validation is a server/IdP concern and can never be trusted to
+ * a browser, so there is no client samlService: the app calls this endpoint and
+ * fails closed if it is not configured. This function:
  *
  *   - loads the enterprise tenant config (issuer/audience/cert) from
  *     Firestore `enterprise_tenants/{tenantId}`

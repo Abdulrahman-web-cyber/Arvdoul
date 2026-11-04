@@ -745,11 +745,11 @@ class UltimateAnalyticsService {
 
       const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
       
-      const transactionsRef = collection(this.firestore, 'transactions');
+      const transactionsRef = collection(this.firestore, 'coin_transactions');
       const q = query(
         transactionsRef,
         where('userId', '==', userId),
-        where('type', 'in', ['earn', 'receive_gift', 'receive_tip', 'ad_reward']),
+        where('type', '==', 'credit'),
         orderBy('createdAt', 'desc'),
         limit(limitCount)
       );
@@ -789,16 +789,16 @@ class UltimateAnalyticsService {
       auditLogger.log('analytics.read', { userId, meta: { resource: 'coin_earning_history', limit: limitCount, cursor } });
 
       const { collection, query, where, orderBy, limit, getDocs, startAfter, doc: fDoc, getDoc } = await import('firebase/firestore');
-      const transactionsRef = collection(this.firestore, 'transactions');
+      const transactionsRef = collection(this.firestore, 'coin_transactions');
       let q = query(
         transactionsRef,
         where('userId', '==', userId),
-        where('type', 'in', ['earn', 'receive_gift', 'receive_tip', 'ad_reward']),
+        where('type', '==', 'credit'),
         orderBy('createdAt', 'desc'),
         limit(limitCount)
       );
       if (cursor) {
-        const cursorRef = fDoc(this.firestore, 'transactions', cursor);
+        const cursorRef = fDoc(this.firestore, 'coin_transactions', cursor);
         const cursorSnap = await getDoc(cursorRef);
         if (cursorSnap.exists()) q = query(q, startAfter(cursorSnap));
       }
@@ -836,11 +836,11 @@ class UltimateAnalyticsService {
 
       const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
       
-      const transactionsRef = collection(this.firestore, 'transactions');
+      const transactionsRef = collection(this.firestore, 'coin_transactions');
       const q = query(
         transactionsRef,
         where('userId', '==', userId),
-        where('type', 'in', ['spend', 'send_gift', 'send_tip', 'purchase', 'boost']),
+        where('type', '==', 'debit'),
         orderBy('createdAt', 'desc'),
         limit(limitCount)
       );
@@ -879,16 +879,16 @@ class UltimateAnalyticsService {
       auditLogger.log('analytics.read', { userId, meta: { resource: 'coin_spending_history', limit: limitCount, cursor } });
 
       const { collection, query, where, orderBy, limit, getDocs, startAfter, doc: fDoc, getDoc } = await import('firebase/firestore');
-      const transactionsRef = collection(this.firestore, 'transactions');
+      const transactionsRef = collection(this.firestore, 'coin_transactions');
       let q = query(
         transactionsRef,
         where('userId', '==', userId),
-        where('type', 'in', ['spend', 'send_gift', 'send_tip', 'purchase', 'boost']),
+        where('type', '==', 'debit'),
         orderBy('createdAt', 'desc'),
         limit(limitCount)
       );
       if (cursor) {
-        const cursorRef = fDoc(this.firestore, 'transactions', cursor);
+        const cursorRef = fDoc(this.firestore, 'coin_transactions', cursor);
         const cursorSnap = await getDoc(cursorRef);
         if (cursorSnap.exists()) q = query(q, startAfter(cursorSnap));
       }
