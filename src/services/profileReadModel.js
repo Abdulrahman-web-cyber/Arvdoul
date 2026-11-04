@@ -154,6 +154,11 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   // for the identity card, matching the sections below. The owner always sees it.
   const mayViewIdentity = isOwner || Boolean(caps.canViewIdentity);
   const hideIdentity = blocked || !mayViewIdentity;
+  // Presence has its own scope; a blocked viewer never sees it. The raw
+  // `isOnline`/`lastActive` fields are masked alongside the `presence` object so
+  // a consumer cannot read around the gate (ProfileHeroSection reads
+  // `profile.isOnline` directly).
+  const presenceVisible = !blocked && (isOwner || Boolean(caps.canViewPresence));
   const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
@@ -173,7 +178,9 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     canViewFollowersList: Boolean(caps.canViewFollowers),
     canViewFollowingList: Boolean(caps.canViewFollowing),
     links: caps.canViewLinks ? (profile.links || []) : [],
-    presence: caps.canViewPresence ? profile.presence : OFFLINE_PRESENCE,
+    presence: presenceVisible ? profile.presence : OFFLINE_PRESENCE,
+    isOnline: presenceVisible ? profile.isOnline : false,
+    lastActive: presenceVisible ? profile.lastActive : null,
   };
   // The `profileInfo` scope gates the descriptive identity card. Masking it here
   // (rather than in each screen) is what makes the control real: the About screen

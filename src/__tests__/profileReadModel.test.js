@@ -154,6 +154,18 @@ describe('profileReadModel - capability projection', () => {
     expect(projected.location).toBe('');
   });
 
+  it('masks raw isOnline/lastActive alongside presence so a consumer cannot read around the gate', () => {
+    const raw = { id: 'u1', isOnline: true, lastActive: '2026-01-01T00:00:00.000Z' };
+    const denied = projectProfileForViewer(raw, { canViewPresence: false });
+    expect(denied.isOnline).toBe(false);
+    expect(denied.lastActive).toBeNull();
+    expect(denied.presence).toEqual(OFFLINE_PRESENCE);
+
+    const allowed = projectProfileForViewer(raw, { canViewPresence: true });
+    expect(allowed.isOnline).toBe(true);
+    expect(allowed.lastActive).toBe('2026-01-01T00:00:00.000Z');
+  });
+
   it('passes sections through when the engine allows them', () => {
     const projected = projectProfileForViewer(profile, {
       canViewEconomicStatus: true,
