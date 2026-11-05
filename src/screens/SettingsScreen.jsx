@@ -406,48 +406,48 @@ export default function SettingsScreen() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {(() => {
-                  const gates = LEVEL_GATES || { customBadge: 12, verifiedPriority: 15, sovereign: 50, transcendent: 100 };
+                  const gates = LEVEL_GATES;
                   return (
                     <>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= 2 
+                        levelInfo.level >= gates.advancedEditor 
                           ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < 2 && "• Unlocks Lvl 2"}
+                        <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < gates.advancedEditor && `• Unlocks Lvl ${gates.advancedEditor}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.customBadge ?? 12)
+                        levelInfo.level >= gates.customBadge
                           ? "bg-amber-500/15 border-amber-500/30 text-amber-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>🏷️</span> Custom Badge {levelInfo.level < (gates.customBadge ?? 12) && `• Unlocks Lvl ${gates.customBadge ?? 12}`}
+                        <span>🏷️</span> Custom Badge {levelInfo.level < gates.customBadge && `• Unlocks Lvl ${gates.customBadge}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.verifiedPriority ?? 15)
+                        levelInfo.level >= gates.verifiedPriority
                           ? "bg-blue-500/15 border-blue-500/30 text-blue-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>🎨</span> Custom Profile Accent {levelInfo.level < (gates.verifiedPriority ?? 15) && `• Unlocks Lvl ${gates.verifiedPriority ?? 15}`}
+                        <span>🎨</span> Custom Profile Accent {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.sovereign ?? 50)
+                        levelInfo.level >= gates.sovereign
                           ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>💎</span> Cornerstone Aura Glow {levelInfo.level < (gates.sovereign ?? 50) && `• Unlocks Lvl ${gates.sovereign ?? 50}`}
+                        <span>💎</span> Cornerstone Aura Glow {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.transcendent ?? 100)
+                        levelInfo.level >= gates.transcendent
                           ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>👑</span> Monarch Halo {levelInfo.level < (gates.transcendent ?? 100) && `• Unlocks Lvl ${gates.transcendent ?? 100}`}
+                        <span>👑</span> Monarch Halo {levelInfo.level < gates.transcendent && `• Unlocks Lvl ${gates.transcendent}`}
                       </span>
                     </>
                   );

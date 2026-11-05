@@ -253,6 +253,7 @@ jobs:
           src/__tests__/deployIntegrity.test.js
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
+          src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js
           src/__tests__/userServicePrivacyProjection.test.js
           src/__tests__/profileSystemHardening.test.js
