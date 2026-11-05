@@ -605,6 +605,8 @@ export default function ProfilePublicScreen() {
                 profile={effectiveProfile}
                 posts={posts}
                 theme={theme}
+                isOwner={false}
+                capabilities={capabilities}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
               />
 

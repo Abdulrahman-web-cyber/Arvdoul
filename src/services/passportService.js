@@ -61,12 +61,12 @@ class PassportService {
     // must never be handed to the view layer).
     const projected = projectProfileForViewer(profile, capabilities, { isOwner });
 
-    const hasLevel = profile.level !== undefined && profile.level !== null;
-    const level = hasLevel ? Number(profile.level) : null;
-    const hasActiveDays = profile.activeDaysCount !== undefined && profile.activeDaysCount !== null;
-    const activeDaysCount = hasActiveDays ? Number(profile.activeDaysCount) : null;
-    const activeStreak = profile.activeStreak !== undefined && profile.activeStreak !== null
-      ? Number(profile.activeStreak)
+    const hasLevel = projected.level !== undefined && projected.level !== null;
+    const level = hasLevel ? Number(projected.level) : null;
+    const hasActiveDays = projected.activeDaysCount !== undefined && projected.activeDaysCount !== null;
+    const activeDaysCount = hasActiveDays ? Number(projected.activeDaysCount) : null;
+    const activeStreak = projected.activeStreak !== undefined && projected.activeStreak !== null
+      ? Number(projected.activeStreak)
       : null;
 
     const citizenTier = level !== null ? getCitizenTier(level, activeDaysCount || 0) : null;
@@ -82,15 +82,15 @@ class PassportService {
     // may not see achievements also may not read the (achievement-derived)
     // standing scores. Absent data is reported unavailable, never defaulted.
     const canSeeStanding = Boolean(capabilities.canViewAchievements || isOwner);
-    const reputation = canSeeStanding ? dimension(readStandingScore(profile.reputationScore, profile.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
-    const influence = canSeeStanding ? dimension(readStandingScore(profile.influenceScore, profile.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
-    const contribution = canSeeStanding ? dimension(readStandingScore(profile.contributionScore, profile.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
+    const reputation = canSeeStanding ? dimension(readStandingScore(projected.reputationScore, projected.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
+    const influence = canSeeStanding ? dimension(readStandingScore(projected.influenceScore, projected.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
+    const contribution = canSeeStanding ? dimension(readStandingScore(projected.contributionScore, projected.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
 
     // Achievements: only if the viewer is permitted.
     let verifiedAchievements = [];
     if (capabilities.canViewAchievements || isOwner) {
-      if (Array.isArray(profile.achievements)) {
-        verifiedAchievements = profile.achievements;
+      if (Array.isArray(projected.achievements)) {
+        verifiedAchievements = projected.achievements;
       } else {
         try {
           const { default: achievementService } = await import('./achievementService.js');
@@ -105,8 +105,8 @@ class PassportService {
     // Titles: only if the viewer is permitted.
     let earnedTitles = [];
     if (capabilities.canViewTitles || isOwner) {
-      if (Array.isArray(profile.titles)) {
-        earnedTitles = profile.titles;
+      if (Array.isArray(projected.titles)) {
+        earnedTitles = projected.titles;
       } else {
         try {
           const { default: titleService } = await import('./titleService.js');

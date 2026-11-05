@@ -168,6 +168,35 @@ export const ECONOMIC_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Standing fields gated by the `activity` scope ("Civic Standing & Badges" in
+ * settings). `canViewActivity` was resolved by the engine and exposed on the
+ * projection but applied to nothing, so the scope hid no level, reputation,
+ * streak or badge. Absent standing stays null/empty so the surface renders an
+ * unavailable state rather than a fabricated Level 1.
+ */
+export const STANDING_FIELDS = Object.freeze([
+  'level',
+  'levelBand',
+  'experience',
+  'xp',
+  'experienceToNextLevel',
+  'activeStreak',
+  'longestStreak',
+  'activeDays',
+  'activeDaysCount',
+  'reputation',
+  'reputationScore',
+  'reputationTier',
+  'influence',
+  'influenceScore',
+  'contribution',
+  'contributionScore',
+  'achievements',
+  'titles',
+  'activeTitle',
+]);
+
+/**
  * Apply the capability decision exactly once. The view layer must consume the
  * result rather than re-checking privacy, so a section can never render while
  * the engine reports it hidden.
@@ -187,6 +216,7 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   // `profile.isOnline` directly).
   const presenceVisible = !blocked && (isOwner || Boolean(caps.canViewPresence));
   const mayViewCreator = isOwner || Boolean(caps.canViewCreatorInfo);
+  const mayViewStanding = isOwner || Boolean(caps.canViewActivity);
   const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
@@ -230,6 +260,15 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   if (!mayViewEconomic) {
     for (const field of ECONOMIC_FIELDS) {
       if (field in projected) projected[field] = null;
+    }
+  }
+  // `activity` gates civic standing (level, reputation, streak, badges). Without
+  // this the scope was resolved but enforced nowhere, so the "Civic Standing &
+  // Badges" control hid nothing.
+  if (!mayViewStanding) {
+    for (const field of STANDING_FIELDS) {
+      if (!(field in projected)) continue;
+      projected[field] = Array.isArray(projected[field]) ? [] : null;
     }
   }
   return projected;

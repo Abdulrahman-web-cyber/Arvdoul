@@ -219,6 +219,38 @@ describe('profileReadModel - capability projection', () => {
       expect(allowed.coins).toBe(500);
     });
 
+    it('gates civic standing (level/reputation/streak/badges) on the activity scope', () => {
+      // canViewActivity was resolved and exposed but applied to nothing, so the
+      // "Civic Standing & Badges" scope hid no level, reputation or streak.
+      const raw = {
+        id: 'u1', level: 7, experience: 3400, activeStreak: 12, activeDaysCount: 90,
+        reputationScore: 88, reputation: 88, achievements: ['a'], titles: ['t'], activeTitle: { name: 'X' },
+      };
+      const denied = projectProfileForViewer(raw, { canViewActivity: false });
+      expect(denied.level).toBeNull();
+      expect(denied.experience).toBeNull();
+      expect(denied.activeStreak).toBeNull();
+      expect(denied.reputationScore).toBeNull();
+      expect(denied.achievements).toEqual([]);
+      expect(denied.titles).toEqual([]);
+      expect(denied.activeTitle).toBeNull();
+
+      const allowed = projectProfileForViewer(raw, { canViewActivity: true });
+      expect(allowed.level).toBe(7);
+      expect(allowed.reputationScore).toBe(88);
+      expect(allowed.achievements).toEqual(['a']);
+    });
+
+    it('owner bypasses the standing gate', () => {
+      const projected = projectProfileForViewer(
+        { id: 'u1', level: 7, activeStreak: 12 },
+        { canViewActivity: false },
+        { isOwner: true }
+      );
+      expect(projected.level).toBe(7);
+      expect(projected.activeStreak).toBe(12);
+    });
+
     it('passes sections through when the engine allows them', () => {
       const projected = projectProfileForViewer(profile, {
       canViewEconomicStatus: true,
@@ -316,6 +348,15 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       // It must read through the canonical service, not a raw doc fetch.
       expect(src).toContain('getUserService().getUserProfile(');
       expect(src).not.toContain("doc(this.firestore, 'users'");
+    });
+
+    it('the featured "More Handpicked" card is owner-gated and links to a real route', () => {
+      // The card linked to `/profile/:id/collections`, which has no route (it fell
+      // through to the 404 screen), and collections are owner-only anyway.
+      const src = read('src/components/profile/ProfileFeaturedSection.jsx');
+      expect(src).toContain("navigate('/collections')");
+      expect(src).toContain('showCollectionsCard');
+      expect(src).not.toContain('/collections`)}');
     });
 
     it('AboutScreen applies the projection so the profileInfo scope is enforced', () => {
