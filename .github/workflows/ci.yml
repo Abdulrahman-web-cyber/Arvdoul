@@ -234,7 +234,7 @@ jobs:
       # test both miss. `--quiet` fails on errors while allowing the existing
       # warning backlog.
       - name: Lint the crash-bug gate (errors only)
-        run: npx eslint src/ functions/ --ext .js,.jsx --quiet
+        run: npx --no-install eslint src/ functions/ --ext .js,.jsx --quiet
 
       # The Firestore emulator is a JVM process. firebase-tools requires
       # Java 21+; the JVM refuses to boot on older runtimes.

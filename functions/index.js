@@ -173,14 +173,24 @@ async function readCapped(res, maxBytes) {
   return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8').slice(0, maxBytes);
 }
 
-exports.scrapeLink = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  await checkRateLimit(context.auth.uid, 'scrapeLink', 30, 60000);
+function extractMeta(html, prop) {
+  const a = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'));
+  const b = html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
+  return (a && a[1]) || (b && b[1]) || null;
+}
 
-  const url = data && data.url;
-  if (typeof url !== 'string' || !url) {
-    throw new functions.https.HttpsError('invalid-argument', 'url is required');
-  }
+function buildLinkPreview(html, parsed) {
+  const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return {
+    url: parsed.href,
+    title: (extractMeta(html, 'og:title') || (titleTag && titleTag[1]) || '').trim(),
+    description: (extractMeta(html, 'og:description') || extractMeta(html, 'description') || '').trim(),
+    image: (extractMeta(html, 'og:image') || '').trim(),
+    siteName: (extractMeta(html, 'og:site_name') || parsed.hostname || '').trim(),
+  };
+}
+
+function parseHttpUrl(url) {
   let parsed;
   try {
     parsed = new URL(url);
@@ -190,33 +200,25 @@ exports.scrapeLink = functions.https.onCall(async (data, context) => {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new functions.https.HttpsError('invalid-argument', 'unsupported protocol');
   }
+  return parsed;
+}
+
+exports.scrapeLink = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  await checkRateLimit(context.auth.uid, 'scrapeLink', 30, 60000);
+
+  const url = data && data.url;
+  if (typeof url !== 'string' || !url) {
+    throw new functions.https.HttpsError('invalid-argument', 'url is required');
+  }
+  const parsed = parseHttpUrl(url);
 
   try {
     const res = await safeFetch(parsed.href);
     if (!res.ok) {
       throw new functions.https.HttpsError('unavailable', 'Could not fetch link preview');
     }
-    const html = await readCapped(res, 512 * 1024);
-
-    const meta = (prop) => {
-      const a = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'));
-      const b = html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
-      return (a && a[1]) || (b && b && b[1]) || null;
-    };
-
-    const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const title = (meta('og:title') || (titleTag && titleTag[1]) || '').trim();
-    const description = (meta('og:description') || meta('description') || '').trim();
-    const image = (meta('og:image') || '').trim();
-    const siteName = (meta('og:site_name') || parsed.hostname || '').trim();
-
-    return {
-      url: parsed.href,
-      title,
-      description,
-      image,
-      siteName,
-    };
+    return buildLinkPreview(await readCapped(res, 512 * 1024), parsed);
   } catch (err) {
     if (err instanceof functions.https.HttpsError) throw err;
     throw new functions.https.HttpsError('unavailable', 'Could not fetch link preview');
