@@ -1750,3 +1750,16 @@ describe('Profile gates read the shared level config, never a restated literal',
     expect(s).not.toContain('activeDays >= 7');
   });
 });
+
+describe('Profile edit forms never reset on a whole-profile effect', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileQuickEditModal keys its reset on the target id, not the profile object', () => {
+    const s = read('src/components/profile/ProfileQuickEditModal.jsx');
+    // AGENTS.md: "Never reset a form from an effect keyed on the whole profile
+    // object; key on uid so in-progress edits are not discarded by realtime
+    // snapshots."
+    expect(s).not.toContain('}, [isOpen, profile]);');
+    expect(s).toContain('}, [isOpen, profileId]);');
+  });
+});
