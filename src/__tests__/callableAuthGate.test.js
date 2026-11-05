@@ -137,3 +137,39 @@ describe('video pipeline endpoints are owner/admin gated and not fetched over HT
     expect(clientSrc).not.toContain("'updateViralScore'");
   });
 });
+
+describe('server-side callers never fetch a callable endpoint over HTTP', () => {
+  const callableNames = callableBodies().map((c) => c.name);
+
+  test('no functions/*.js POSTs to a cloudfunctions.net callable path', () => {
+    // A callable can only be invoked through the Firebase callable protocol
+    // (a JSON `data` envelope + an ID token); a plain HTTP POST — Cloud Tasks,
+    // fetch, etc. — is rejected. Two pipelines did this and silently no-opped
+    // (the Mux webhook, and the story moderation worker). Server code must call
+    // the shared internal function instead.
+    const offenders = [];
+    for (const file of fs.readdirSync(functionsDir)) {
+      if (!file.endsWith('.js')) continue;
+      const src = fs.readFileSync(path.join(functionsDir, file), 'utf8');
+      for (const m of src.matchAll(/cloudfunctions\.net\/(\w+)/g)) {
+        if (callableNames.includes(m[1])) offenders.push(`${file} -> ${m[1]}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('Cloud Tasks workers verify the token the queue actually sends', () => {
+  const storiesSrc = fs.readFileSync(path.join(functionsDir, 'stories.js'), 'utf8');
+
+  test('processVideoModeration verifies OIDC, not a Firebase ID token', () => {
+    // enqueueModerationTask attaches an OIDC token (oidcToken). Verifying a
+    // Firebase ID token instead rejected every task with 403.
+    expect(storiesSrc).toMatch(/OAuth2Client/);
+    expect(storiesSrc).toMatch(/verifyIdToken\s*\(/);
+    const start = storiesSrc.indexOf('exports.processVideoModeration');
+    const body = storiesSrc.slice(start, storiesSrc.indexOf('});', start));
+    expect(body).toMatch(/assertOidcTask\s*\(/);
+    expect(body).not.toMatch(/admin\.auth\(\)\.verifyIdToken/);
+  });
+});
