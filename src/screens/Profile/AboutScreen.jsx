@@ -15,7 +15,7 @@ import { cn } from '../../lib/utils';
 import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Link as LinkIcon, Briefcase, Mail, HeartHandshake, Palette } from 'lucide-react';
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { getStoredUid, getStoredUser } from '../../utils/security';
-import { getLevelInfo, getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
+import { getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine.js';
 import {
   pickHandle,
@@ -36,7 +36,7 @@ export default function AboutScreen() {
 
   const { user: authUser } = useAuth();
   const storeUser = useAppStore((state) => state.currentUser);
-  const { profile: storeProfile, loadProfile, loading } = useProfileStore();
+  const { profile: storeProfile, loadProfile } = useProfileStore();
 
   const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
   const targetId = userId || currentUserId;
@@ -78,42 +78,23 @@ export default function AboutScreen() {
     [effectiveProfile, capabilities, isActualOwner]
   );
 
-  const hasStanding = effectiveProfile?.level != null || effectiveProfile?.experience != null || effectiveProfile?.xp != null;
-
-  const levelInfo = useMemo(() => {
-    if (!hasStanding) return null;
-    try {
-      const xp = effectiveProfile?.experience ?? effectiveProfile?.xp;
-      if (xp != null) return getLevelInfo(Number(xp));
-      if (effectiveProfile?.level != null) {
-        return {
-          level: effectiveProfile.level,
-          title: getRankTitle(effectiveProfile.level) || null,
-        };
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }, [effectiveProfile, hasStanding]);
-
   const rankTitle = useMemo(() => {
-    if (effectiveProfile?.level == null) return null;
+    if (displayedProfile?.level == null) return null;
     try {
-      return getRankTitle(effectiveProfile.level);
+      return getRankTitle(displayedProfile.level);
     } catch {
       return null;
     }
-  }, [effectiveProfile?.level]);
+  }, [displayedProfile?.level]);
 
   const perks = useMemo(() => {
-    if (effectiveProfile?.level == null) return [];
+    if (displayedProfile?.level == null) return [];
     try {
-      return getPerksForLevel(effectiveProfile.level) || [];
+      return getPerksForLevel(displayedProfile.level) || [];
     } catch {
       return [];
     }
-  }, [effectiveProfile?.level]);
+  }, [displayedProfile?.level]);
 
   const handleEdit = () => {
     navigate('/profile/edit');
@@ -207,8 +188,8 @@ export default function AboutScreen() {
                   Citizen Standing & Privileges
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {effectiveProfile?.level != null ? (
-                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || 'Citizen'}</span> · Level {effectiveProfile.level}</>
+                  {displayedProfile?.level != null ? (
+                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || 'Citizen'}</span> · Level {displayedProfile.level}</>
                   ) : (
                     <span>Standing unavailable</span>
                   )}

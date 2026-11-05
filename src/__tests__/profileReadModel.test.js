@@ -383,6 +383,12 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       const pub = read('src/screens/Profile/ProfilePublicScreen.jsx');
       expect(pub).not.toContain('experience={effectiveProfile?.experience || 0}');
       expect(pub).not.toContain('streak={effectiveProfile?.activeStreak ?? 0}');
+      const about = read('src/screens/Profile/AboutScreen.jsx');
+      expect(about).not.toContain('effectiveProfile?.level != null');
+      expect(about).toContain('displayedProfile?.level != null');
+      const preview = read('src/screens/Profile/ProfilePreviewScreen.jsx');
+      expect(preview).not.toContain('level={effectiveProfile?.level ?? null}');
+      expect(preview).toContain('level={projectedProfile?.level ?? null}');
     });
 
     it('the featured "More Handpicked" card is owner-gated and links to a real route', () => {

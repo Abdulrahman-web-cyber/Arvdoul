@@ -216,7 +216,7 @@ export default function ProfilePreviewScreen({
         <ProfileHeroSection
           profile={projectedProfile}
           isOwner={isOwnerMode}
-          level={effectiveProfile?.level ?? null}
+          level={projectedProfile?.level ?? null}
           theme={theme}
           onBack={handleBack}
           onEditProfile={handleEdit}
@@ -260,7 +260,7 @@ export default function ProfilePreviewScreen({
           activeTab={activeTab}
           loading={false}
           theme={theme}
-          profile={effectiveProfile}
+          profile={projectedProfile}
           isOwner={isOwnerMode}
         />
       </div>
