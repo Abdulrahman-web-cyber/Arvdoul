@@ -1,13 +1,13 @@
 // functions/video.js — video processing and delivery
 //
 // Implemented internals: watermarkVideoInternal, moderateVideoInternal,
-// generateAudioFingerprintInternal. Vertex AI embeddings, Pinecone
-// integration, and viral scoring via Cloud Tasks. FFmpeg commands escape
-// their arguments. Mux is the transcoding/CDN provider.
+// generateAudioFingerprintInternal, updateViralScoreInternal. The pipeline
+// internals are called in-process (the Mux webhook) and by owner-or-admin /
+// admin-only callables; they are never fetched over HTTP. FFmpeg commands
+// escape their arguments. Mux is the transcoding/CDN provider.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { Mux } = require('@mux/mux-node');
-const { CloudTasksClient } = require('@google-cloud/tasks');
 const { Storage } = require('@google-cloud/storage');
 const { VideoIntelligenceServiceClient } = require('@google-cloud/video-intelligence');
 const { SpeechClient } = require('@google-cloud/speech');
@@ -35,6 +35,7 @@ const { onCall, onRequest } = functions.https;
 const { pubsub } = functions;
 const logger = functions.logger;
 const { checkRateLimit } = require('./rateLimit');
+const { assertAdmin, checkIsAdmin, getUserIdFromContext } = require('./auth');
 
 // ----------------------------------------------------------------------
 //  MUX CLIENTS
@@ -46,36 +47,9 @@ const mux = new Mux({
 const Video = mux.Video;
 
 // ----------------------------------------------------------------------
-//  CLOUD TASKS (for async notifications and viral scoring)
+//  ASYNC NOTIFICATIONS
 // ----------------------------------------------------------------------
-const tasksClient = new CloudTasksClient();
 const { enqueuePush } = require('./pushQueue');
-const projectId = process.env.GCLOUD_PROJECT;
-const location = process.env.CLOUD_TASKS_LOCATION || 'us-central1';
-const queueName = process.env.PUSH_QUEUE_NAME || 'push-queue';
-
-async function enqueueTask(url, payload, taskName = null) {
-  const parent = tasksClient.queuePath(projectId, location, queueName);
-  const task = {
-    httpRequest: {
-      httpMethod: 'POST',
-      url,
-      body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'application/json' },
-      oidcToken: {
-        serviceAccountEmail: `${projectId}@appspot.gserviceaccount.com`,
-      },
-    },
-  };
-  if (taskName) {
-    task.name = `${parent}/tasks/${taskName}`;
-  }
-  try {
-    await tasksClient.createTask({ parent, task });
-  } catch (err) {
-    logger.error('Failed to enqueue task', err);
-  }
-}
 
 // ----------------------------------------------------------------------
 //  HELPER: AUTHENTICATED USER
@@ -85,6 +59,19 @@ function validateAuth(context) {
     throw new functions.https.HttpsError('unauthenticated', 'You must be logged in.');
   }
   return context.auth.uid;
+}
+
+/**
+ * The per-video pipeline endpoints (watermark, moderation) act on a video the
+ * caller must own — or an admin may act on any video. The export first
+ * authenticates via `getUserIdFromContext`, then this gate authorises
+ * ownership. Without it any signed-in user could re-run moderation /
+ * watermarking on someone else's video (an availability + storage-cost lever).
+ */
+async function assertVideoOwnerOrAdmin(video, uid, context) {
+  if (video.userId === uid) return uid;
+  if (await checkIsAdmin(context)) return uid;
+  throw new functions.https.HttpsError('permission-denied', 'Only the video owner can perform this action.');
 }
 
 // ----------------------------------------------------------------------
@@ -341,17 +328,15 @@ exports.handleMuxWebhook = onRequest(async (req, res) => {
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      // Trigger audio fingerprinting and viral scoring
-      await enqueueTask(
-        `https://${process.env.GCLOUD_PROJECT}.cloudfunctions.net/generateAudioFingerprint`,
-        { videoId: passthrough },
-        `fingerprint_${passthrough}`
-      );
-      await enqueueTask(
-        `https://${process.env.GCLOUD_PROJECT}.cloudfunctions.net/updateViralScore`,
-        { videoId: passthrough },
-        `viral_${passthrough}`
-      );
+      // Trigger audio fingerprinting and viral scoring. These are internal
+      // functions, not callables: enqueuing them as Cloud Tasks POSTed to the
+      // callable endpoint with no auth header, so the request could never be
+      // authorised (a callable requires the Firebase callable protocol) and the
+      // pipeline silently no-opped. Call them in-process instead.
+      await Promise.allSettled([
+        generateAudioFingerprintInternal(passthrough),
+        updateViralScoreInternal(passthrough),
+      ]);
     } else if (event.type === 'video.asset.errored') {
       const asset = event.data;
       const passthrough = asset.passthrough;
@@ -729,49 +714,59 @@ exports.getVideoRecommendations = onCall(async (data, context) => {
 });
 
 // ======================================================================
-//  14. watermarkVideoInternal (FFmpeg, visible + invisible)
+//  14. watermarkVideo (FFmpeg, visible + invisible)
 // ======================================================================
-// onCall variant (the client wires this via httpsCallable — an onRequest
-// endpoint would never work with the callable protocol).
+// The pipeline is an internal that the client invokes as a callable: an
+// onRequest endpoint would never speak the callable protocol. Owner-or-admin
+// is enforced in the export; the internal is shared so the Mux webhook can
+// watermark an asset it just received without an unauthenticated round-trip.
+async function watermarkVideoInternal(videoId) {
+  const videoRef = db.collection('videos').doc(videoId);
+  const doc = await videoRef.get();
+  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+  const video = doc.data();
+  if (video.watermarkDisabled && video.userId !== 'system') {
+    return { status: 'skipped' };
+  }
+
+  const playbackId = video.muxPlaybackId;
+  if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
+
+  const sourceUrl = `https://stream.mux.com/${playbackId}/high.mp4`;
+  const tempInput = path.join(os.tmpdir(), `${videoId}_input.mp4`);
+  const tempOutput = path.join(os.tmpdir(), `${videoId}_watermarked.mp4`);
+  const watermarkUrl = 'https://storage.googleapis.com/arvdoul-assets/logo.png';
+
+  // Download source
+  const response = await fetch(sourceUrl);
+  const buffer = await response.buffer();
+  fs.writeFileSync(tempInput, buffer);
+
+  // Build FFmpeg command with escaped arguments
+  const watermarkFilter = `drawtext=text='Arvdoul':fontcolor=white:fontsize=24:x=w-tw-10:y=h-th-10:alpha=0.8`;
+  const forensicMetadata = `${video.userId}|${videoId}|${Date.now()}`;
+  const forensicFilter = `drawtext=text='${forensicMetadata.replace(/'/g, "\\'")}':fontcolor=white:fontsize=8:x=w-tw-10:y=10:alpha=0.2`;
+
+  const cmd = `ffmpeg -i "${tempInput}" -i "${watermarkUrl}" -filter_complex "[1:v]scale=100:-1[wm];[0:v][wm]overlay=W-w-10:H-h-10,${watermarkFilter},${forensicFilter}" -c:a copy "${tempOutput}"`;
+  await execPromise(cmd, { shell: true });
+
+  const bucket = admin.storage().bucket(process.env.WATERMARK_BUCKET);
+  await bucket.upload(tempOutput, { destination: `watermarked/${videoId}.mp4` });
+  const signedUrl = await bucket.file(`watermarked/${videoId}.mp4`).getSignedUrl({ action: 'read', expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+
+  await videoRef.update({ watermarkedUrl: signedUrl[0], watermarkedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  return { success: true, watermarkedUrl: signedUrl[0] };
+}
+
 exports.watermarkVideo = onCall(async (data, context) => {
   const { videoId } = data || {};
   if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const doc = await videoRef.get();
+    const uid = getUserIdFromContext(context);
+    const doc = await db.collection('videos').doc(videoId).get();
     if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    const video = doc.data();
-    if (video.watermarkDisabled && video.userId !== 'system') {
-      return { status: 'skipped' };
-    }
-
-    const playbackId = video.muxPlaybackId;
-    if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
-
-    const sourceUrl = `https://stream.mux.com/${playbackId}/high.mp4`;
-    const tempInput = path.join(os.tmpdir(), `${videoId}_input.mp4`);
-    const tempOutput = path.join(os.tmpdir(), `${videoId}_watermarked.mp4`);
-    const watermarkUrl = 'https://storage.googleapis.com/arvdoul-assets/logo.png';
-
-    // Download source
-    const response = await fetch(sourceUrl);
-    const buffer = await response.buffer();
-    fs.writeFileSync(tempInput, buffer);
-
-    // Build FFmpeg command with escaped arguments
-    const watermarkFilter = `drawtext=text='Arvdoul':fontcolor=white:fontsize=24:x=w-tw-10:y=h-th-10:alpha=0.8`;
-    const forensicMetadata = `${video.userId}|${videoId}|${Date.now()}`;
-    const forensicFilter = `drawtext=text='${forensicMetadata.replace(/'/g, "\\'")}':fontcolor=white:fontsize=8:x=w-tw-10:y=10:alpha=0.2`;
-
-    const cmd = `ffmpeg -i "${tempInput}" -i "${watermarkUrl}" -filter_complex "[1:v]scale=100:-1[wm];[0:v][wm]overlay=W-w-10:H-h-10,${watermarkFilter},${forensicFilter}" -c:a copy "${tempOutput}"`;
-    await execPromise(cmd, { shell: true });
-
-    const bucket = admin.storage().bucket(process.env.WATERMARK_BUCKET);
-    await bucket.upload(tempOutput, { destination: `watermarked/${videoId}.mp4` });
-    const signedUrl = await bucket.file(`watermarked/${videoId}.mp4`).getSignedUrl({ action: 'read', expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
-
-    await videoRef.update({ watermarkedUrl: signedUrl[0], watermarkedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-    return { success: true, watermarkedUrl: signedUrl[0] };
+    await assertVideoOwnerOrAdmin(doc.data(), uid, context);
+    return await watermarkVideoInternal(videoId);
   } catch (error) {
     logger.error('watermarkVideo', error);
     throw new functions.https.HttpsError('internal', error.message);
@@ -779,45 +774,52 @@ exports.watermarkVideo = onCall(async (data, context) => {
 });
 
 // ======================================================================
-//  15. moderateVideoInternal (Google Video Intelligence + custom rules)
+//  15. moderateVideo (Google Video Intelligence + custom rules)
 // ======================================================================
-// onCall variant (client calls via httpsCallable).
+async function moderateVideoInternal(videoId) {
+  const videoRef = db.collection('videos').doc(videoId);
+  const doc = await videoRef.get();
+  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+  const video = doc.data();
+  const playbackId = video.muxPlaybackId;
+  if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
+
+  const gcsUri = `gs://${process.env.WATERMARK_BUCKET}/source/${videoId}.mp4`;
+  const [operation] = await videoIntelligenceClient.annotateVideo({
+    inputUri: gcsUri,
+    features: ['EXPLICIT_CONTENT_DETECTION', 'LABEL_DETECTION'],
+  });
+  const [result] = await operation.promise();
+  const explicitFrames = result.annotationResults[0]?.explicitAnnotation?.frames || [];
+  const badLikelihoods = ['LIKELY', 'VERY_LIKELY', 'POSSIBLE'];
+  const hasExplicit = explicitFrames.some(f => badLikelihoods.includes(f.likelihood));
+
+  let moderationStatus = 'approved';
+  let moderationNotes = '';
+  if (hasExplicit) {
+    moderationStatus = 'rejected';
+    moderationNotes = 'Explicit content detected';
+  }
+
+  await videoRef.update({
+    moderationStatus,
+    moderationNotes,
+    moderatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(moderationStatus === 'rejected' && { isDeleted: true, status: 'failed' }),
+  });
+  return { success: true, moderationStatus };
+}
+
 exports.moderateVideo = onCall(async (data, context) => {
   const { videoId } = data || {};
   if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const doc = await videoRef.get();
+    const uid = getUserIdFromContext(context);
+    const doc = await db.collection('videos').doc(videoId).get();
     if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    const video = doc.data();
-    const playbackId = video.muxPlaybackId;
-    if (!playbackId) throw new functions.https.HttpsError('failed-precondition', 'No playbackId');
-
-    const gcsUri = `gs://${process.env.WATERMARK_BUCKET}/source/${videoId}.mp4`;
-    const [operation] = await videoIntelligenceClient.annotateVideo({
-      inputUri: gcsUri,
-      features: ['EXPLICIT_CONTENT_DETECTION', 'LABEL_DETECTION'],
-    });
-    const [result] = await operation.promise();
-    const explicitFrames = result.annotationResults[0]?.explicitAnnotation?.frames || [];
-    const badLikelihoods = ['LIKELY', 'VERY_LIKELY', 'POSSIBLE'];
-    const hasExplicit = explicitFrames.some(f => badLikelihoods.includes(f.likelihood));
-
-    let moderationStatus = 'approved';
-    let moderationNotes = '';
-    if (hasExplicit) {
-      moderationStatus = 'rejected';
-      moderationNotes = 'Explicit content detected';
-    }
-
-    await videoRef.update({
-      moderationStatus,
-      moderationNotes,
-      moderatedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      ...(moderationStatus === 'rejected' && { isDeleted: true, status: 'failed' }),
-    });
-    return { success: true, moderationStatus };
+    await assertVideoOwnerOrAdmin(doc.data(), uid, context);
+    return await moderateVideoInternal(videoId);
   } catch (error) {
     logger.error('moderateVideo', error);
     throw new functions.https.HttpsError('internal', error.message);
@@ -830,27 +832,36 @@ exports.moderateVideo = onCall(async (data, context) => {
 //  ffmpeg + chromaprint. Until that pipeline is configured, the function
 //  records status 'unavailable' and NEVER stores a fabricated hash as an
 //  audio fingerprint (a sha256 of the id is not a fingerprint).
+//  Internal: invoked by the Mux webhook (and any admin tooling), never by a
+//  client, so it is not an exported callable.
 // ======================================================================
+async function generateAudioFingerprintInternal(videoId) {
+  const videoRef = db.collection('videos').doc(videoId);
+  const doc = await videoRef.get();
+  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+
+  const fingerprintPipelineConfigured = false; // flip when chromaprint is wired
+  if (!fingerprintPipelineConfigured) {
+    await videoRef.update({
+      audioFingerprint: null,
+      audioFingerprintStatus: 'unavailable',
+      audioFingerprintNote: 'Acoustic fingerprinting requires the ffmpeg/chromaprint pipeline (not configured)',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { success: false, status: 'unavailable', reason: 'chromaprint pipeline not configured' };
+  }
+
+  return { success: true, status: 'pending' };
+}
+
+// Admin-only callable: a manual re-run lever for operators. Never exposed to
+// ordinary clients (see the Mux webhook, which calls the internal directly).
 exports.generateAudioFingerprint = onCall(async (data, context) => {
+  await assertAdmin(context);
   const { videoId } = data || {};
   if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const doc = await videoRef.get();
-    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-
-    const fingerprintPipelineConfigured = false; // flip when chromaprint is wired
-    if (!fingerprintPipelineConfigured) {
-      await videoRef.update({
-        audioFingerprint: null,
-        audioFingerprintStatus: 'unavailable',
-        audioFingerprintNote: 'Acoustic fingerprinting requires the ffmpeg/chromaprint pipeline (not configured)',
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return { success: false, status: 'unavailable', reason: 'chromaprint pipeline not configured' };
-    }
-
-    return { success: true, status: 'pending' };
+    return await generateAudioFingerprintInternal(videoId);
   } catch (error) {
     logger.error('generateAudioFingerprint', error);
     throw new functions.https.HttpsError('internal', error.message);
@@ -859,31 +870,37 @@ exports.generateAudioFingerprint = onCall(async (data, context) => {
 
 // ======================================================================
 //  17. updateViralScore (compute viralScore based on velocity)
+//  Internal: driven by the Mux webhook / Cloud Tasks, never by a client.
+//  Exposed only as an admin-only callable for a manual re-run.
 // ======================================================================
-// onCall variant (client calls via httpsCallable).
+async function updateViralScoreInternal(videoId) {
+  const videoRef = db.collection('videos').doc(videoId);
+  const doc = await videoRef.get();
+  if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
+  const video = doc.data();
+  const stats = video.stats || {};
+  const views = stats.views || 0;
+  const likes = stats.likes || 0;
+  const shares = stats.shares || 0;
+  const createdAt = video.createdAt?.toMillis?.() || Date.now();
+  const ageHours = Math.max(0.01, (Date.now() - createdAt) / 3600000);
+
+  const viewsVelocity = views / ageHours;
+  const sharesVelocity = shares / ageHours;
+  const likeRatio = (likes / Math.max(views, 1));
+  const completionRate = (stats.totalWatchTime || 0) / Math.max(views, 1) / (video.duration || 1);
+
+  const viralScore = (viewsVelocity * 0.35) + (sharesVelocity * 0.25) + (completionRate * 0.25) + (likeRatio * 0.15);
+  await videoRef.update({ viralScore: Math.min(1000, viralScore), updatedAt: FieldValue.serverTimestamp() });
+  return { success: true, viralScore };
+}
+
 exports.updateViralScore = onCall(async (data, context) => {
+  await assertAdmin(context);
   const { videoId } = data || {};
   if (!videoId) throw new functions.https.HttpsError('invalid-argument', 'videoId required');
   try {
-    const videoRef = db.collection('videos').doc(videoId);
-    const doc = await videoRef.get();
-    if (!doc.exists) throw new functions.https.HttpsError('not-found', 'Video not found');
-    const video = doc.data();
-    const stats = video.stats || {};
-    const views = stats.views || 0;
-    const likes = stats.likes || 0;
-    const shares = stats.shares || 0;
-    const createdAt = video.createdAt?.toMillis?.() || Date.now();
-    const ageHours = Math.max(0.01, (Date.now() - createdAt) / 3600000);
-
-    const viewsVelocity = views / ageHours;
-    const sharesVelocity = shares / ageHours;
-    const likeRatio = (likes / Math.max(views, 1));
-    const completionRate = (stats.totalWatchTime || 0) / Math.max(views, 1) / (video.duration || 1);
-
-    const viralScore = (viewsVelocity * 0.35) + (sharesVelocity * 0.25) + (completionRate * 0.25) + (likeRatio * 0.15);
-    await videoRef.update({ viralScore: Math.min(1000, viralScore), updatedAt: FieldValue.serverTimestamp() });
-    return { success: true, viralScore };
+    return await updateViralScoreInternal(videoId);
   } catch (error) {
     logger.error('updateViralScore', error);
     throw new functions.https.HttpsError('internal', error.message);

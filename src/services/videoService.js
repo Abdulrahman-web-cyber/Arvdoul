@@ -364,8 +364,6 @@ class UltimateVideoService {
       processVideoEvent: null,
       watermarkVideo: null,
       moderateVideo: null,
-      generateAudioFingerprint: null,
-      updateViralScore: null,
     };
   }
 
@@ -395,8 +393,6 @@ class UltimateVideoService {
         this.fns.processVideoEvent = httpsCallable(this.functions, 'processVideoEvent');
         this.fns.watermarkVideo = httpsCallable(this.functions, 'watermarkVideo');
         this.fns.moderateVideo = httpsCallable(this.functions, 'moderateVideo');
-        this.fns.generateAudioFingerprint = httpsCallable(this.functions, 'generateAudioFingerprint');
-        this.fns.updateViralScore = httpsCallable(this.functions, 'updateViralScore');
 
         this.initialized = true;
       } catch (err) {
@@ -502,11 +498,6 @@ class UltimateVideoService {
         logger.warn('[Video] watermarkVideo unavailable (needs deployment):', err.message)
       );
     }
-    // 4. Audio fingerprint (honest: reports unavailable until chromaprint is
-    //    configured — never stores a fabricated hash).
-    this.fns.generateAudioFingerprint({ videoId }).catch((err) =>
-      logger.warn('[Video] generateAudioFingerprint unavailable:', err.message)
-    );
 
     this.cache.invalidateVideo(videoId);
     auditLogger.log('content.video_upload', {
