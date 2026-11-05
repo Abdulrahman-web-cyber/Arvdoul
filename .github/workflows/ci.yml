@@ -228,12 +228,13 @@ jobs:
       - name: Install Cloud Functions dependencies
         run: npm ci --prefix functions
 
-      # The Firestore emulator is a JVM process.
+      # The Firestore emulator is a JVM process. firebase-tools requires
+      # Java 21+; the JVM refuses to boot on older runtimes.
       - name: Setup Java (Firestore emulator)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Run architecture + cost guards
         run: >-
