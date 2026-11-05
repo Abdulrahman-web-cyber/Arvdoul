@@ -59,17 +59,18 @@ const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
 const getRoyalEligibility = LevelModule.getRoyalEligibility || (() => ({ eligible: false }));
 
-// Format joined date nicely
+// Format joined date nicely. Returns null when the timestamp is absent or
+// unparseable so the caller renders nothing rather than a fabricated date.
 const formatJoinedDate = (createdAt) => {
-  if (!createdAt) return 'Joined May 2022';
+  if (!createdAt) return null;
   try {
     const d = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
-    if (isNaN(d.getTime())) return 'Joined May 2022';
+    if (isNaN(d.getTime())) return null;
     const month = d.toLocaleString('default', { month: 'short' });
     const year = d.getFullYear();
     return `Joined ${month} ${year}`;
   } catch {
-    return 'Joined May 2022';
+    return null;
   }
 };
 
@@ -363,7 +364,9 @@ export const ProfileHeroSection = memo(({
     return kingCheck.eligible;
   }, [profile, level]);
 
-  const isOnline = Boolean(profile?.presence?.state === 'online' || profile?.isOnline === true);
+  // `presence.status` is the field the projection/read model writes; `state`
+  // was never set anywhere, so the dot only ever lit via the raw `isOnline`.
+  const isOnline = Boolean(profile?.presence?.status === 'online' || profile?.isOnline === true);
 
   // Copy handle to clipboard
   const handleCopyHandle = useCallback(async (e) => {

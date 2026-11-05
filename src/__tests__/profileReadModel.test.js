@@ -498,3 +498,25 @@ describe('profile components fail closed on capabilities', () => {
   });
 });
 
+
+describe('ConnectionsScreen gates each list on its own scope (N046)', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
+
+  it('resolves the following scope, not only the followers scope', () => {
+    expect(src).toContain('canViewFollowing');
+    expect(src).toContain('canViewFriends');
+  });
+
+  it('does not fetch a list the viewer may not see', () => {
+    // The denied branch must resolve to an empty result instead of a real read.
+    expect(src).toContain('Promise.resolve({ followers: [] })');
+    expect(src).toContain('Promise.resolve({ following: [] })');
+  });
+
+  it('renders each tab only when its scope allows it', () => {
+    expect(src).toContain('tabVisible.followers &&');
+    expect(src).toContain('tabVisible.following &&');
+    expect(src).toContain('tabVisible.friends &&');
+  });
+});

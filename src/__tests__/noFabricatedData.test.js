@@ -1698,3 +1698,30 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
   });
 });
 
+
+describe('Profile hero - no fabricated join date or presence field', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('formatJoinedDate returns null instead of an invented "Joined May 2022"', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(s).not.toContain('Joined May 2022');
+  });
+
+  test('the online dot reads presence.status, the field the projection writes', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    // `presence.state` is never written anywhere; the read model writes `status`.
+    expect(s).toContain("profile?.presence?.status === 'online'");
+    expect(s).not.toContain("profile?.presence?.state === 'online'");
+  });
+});
+
+describe('Profile progression - masked standing is never re-defaulted to 0', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileMyScreen passes the projected streak through un-defaulted', () => {
+    const s = read('src/screens/Profile/ProfileMyScreen.jsx');
+    // `?? 0` turned a masked null back into a real-looking 0-day streak (N041/N044).
+    expect(s).not.toContain('streak={displayedProfile?.activeStreak ?? 0}');
+    expect(s).toContain('streak={displayedProfile?.activeStreak}');
+  });
+});

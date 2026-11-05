@@ -88,3 +88,39 @@ describe('profile feed pagination', () => {
     expect(useProfileStore.getState().posts.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
   });
 });
+
+describe('profileStore follow/unfollow rollback', () => {
+  beforeEach(() => {
+    useProfileStore.getState().clear();
+  });
+
+  test('a failed follow restores the real previous follow status, not the optimistic one', async () => {
+    // Seed a known previous state, then make the service call fail.
+    useProfileStore.setState({ followStatus: { isFollowing: false }, profile: { followerCount: 10 } });
+    const userServiceModule = await import('../services/userService.js');
+    const userService = userServiceModule.getUserService();
+    const spy = jest.spyOn(userService, 'followUser').mockRejectedValue(new Error('offline'));
+
+    await useProfileStore.getState().follow('viewer', 'target');
+
+    const state = useProfileStore.getState();
+    // A failed follow must roll back to the true previous state.
+    expect(state.followStatus.isFollowing).toBe(false);
+    expect(state.profile.followerCount).toBe(10);
+    spy.mockRestore();
+  });
+
+  test('a failed unfollow restores the real previous follow status', async () => {
+    useProfileStore.setState({ followStatus: { isFollowing: true }, profile: { followerCount: 10 } });
+    const userServiceModule = await import('../services/userService.js');
+    const userService = userServiceModule.getUserService();
+    const spy = jest.spyOn(userService, 'unfollowUser').mockRejectedValue(new Error('offline'));
+
+    await useProfileStore.getState().unfollow('viewer', 'target');
+
+    const state = useProfileStore.getState();
+    expect(state.followStatus.isFollowing).toBe(true);
+    expect(state.profile.followerCount).toBe(10);
+    spy.mockRestore();
+  });
+});

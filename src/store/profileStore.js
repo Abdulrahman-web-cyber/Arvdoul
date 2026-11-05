@@ -718,7 +718,8 @@ export const useProfileStore = create(
       if (get().followStatus?.isFollowing === true) return;
 
       // Snapshot before the optimistic write so rollback restores the
-      // real previous state instead of a hard-coded guess.
+      // real previous state instead of a hard-coded guess. Immer copy-on-writes
+      // the draft, so the reference is not mutated by the optimistic `set`.
       const previousFollowStatus = get().followStatus;
       const previousFollowerCount = get().profile?.followerCount || 0;
 
@@ -770,7 +771,8 @@ export const useProfileStore = create(
       // optimistic counter a second time.
       if (get().followStatus?.isFollowing === false) return;
       
-      // Store previous state for rollback
+      // Store previous state for rollback. Immer copy-on-writes the draft, so
+      // the reference is not mutated by the optimistic `set`.
       const previousFollowStatus = get().followStatus;
       const previousFollowerCount = get().profile?.followerCount || 0;
       

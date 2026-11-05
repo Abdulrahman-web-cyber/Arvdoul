@@ -417,7 +417,7 @@ export default function ProfileMyScreen() {
               <ProfileProgression
                 level={displayedProfile?.level}
                 experience={displayedProfile?.experience}
-                streak={displayedProfile?.activeStreak ?? 0}
+                streak={displayedProfile?.activeStreak}
                 reputation={displayedProfile?.reputation}
                 showLevel={displayedProfile?.showLevel !== false}
                 showReputation={displayedProfile?.showReputation !== false}
@@ -486,7 +486,7 @@ export default function ProfileMyScreen() {
                 viewMode={viewMode}
                 loading={postsLoading || savedLoading}
                 theme={theme}
-                profile={effectiveProfile}
+                profile={displayedProfile}
                 isOwner={viewAs === 'owner'}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
                 hasMore={Boolean(postsCursor && postsHasMore)}

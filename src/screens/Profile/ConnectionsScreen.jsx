@@ -57,6 +57,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   // Loading & privacy state
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  // Capability map resolved once from the engine. Each tab has its own scope
+  // (`followersList` / `followingList`), so a viewer denied one list must not
+  // reach the other through a shared screen-level gate.
+  const [capabilities, setCapabilities] = useState(null);
 
   // Basic level users start with community Friends; Level 3+ unlocks public Followers
   const rawLvl = targetProfile?.level ?? userProfile?.level ?? currentUser?.level;
@@ -113,32 +117,39 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           setTargetProfile(profile);
         }
 
-        // 2. Resolve capability permissions
+        // 2. Resolve capability permissions. Owner always sees their own lists.
         const caps = resolveCapabilities({
           viewer: currentUser,
           target: profile,
           relationship: rel || {},
         });
+        const canViewFollowers = isOwner || caps.canViewFollowers !== false;
+        const canViewFollowing = isOwner || caps.canViewFollowing !== false;
+        // A friend is a mutual follow, so the friends tab needs BOTH lists.
+        const canViewFriends = canViewFollowers && canViewFollowing;
 
-        if (caps && caps.canViewFollowers === false && !isOwner) {
-          if (isMounted) {
-            setPermissionDenied(true);
-            setLoading(false);
-          }
-          return;
-        }
+        if (isMounted) setCapabilities({ ...caps, canViewFollowers, canViewFollowing, canViewFriends });
 
-        // 3. Fetch all 3 connection graphs in parallel. Pass the viewer so each
-        // row's follow state is resolved from the viewer's perspective (the
-        // spine hydrates + projects with `viewerId`), not the target's.
+        // 3. Fetch only the graphs the viewer is allowed to see. Fetching a
+        // denied list and hiding the tab would still read (and hydrate) it.
+        const followersPromise = canViewFollowers
+          ? userService.getFollowers(targetUserId, { viewerId: currentUserId })
+          : Promise.resolve({ followers: [] });
+        const followingPromise = canViewFollowing
+          ? userService.getFollowing(targetUserId, { viewerId: currentUserId })
+          : Promise.resolve({ following: [] });
+        const friendsPromise = canViewFriends
+          ? (currentUserId && currentUserId !== targetUserId
+              ? userService.getMutualFriends(currentUserId, targetUserId)
+              : userService.getFollowers(targetUserId, { viewerId: currentUserId }).then((r) => ({
+                  mutualFriends: (r.followers || []).filter((f) => f.isFollowing),
+                })))
+          : Promise.resolve({ mutualFriends: [] });
+
         const [followersRes, followingRes, friendsRes] = await Promise.allSettled([
-          userService.getFollowers(targetUserId, { viewerId: currentUserId }),
-          userService.getFollowing(targetUserId, { viewerId: currentUserId }),
-          currentUserId && currentUserId !== targetUserId
-            ? userService.getMutualFriends(currentUserId, targetUserId)
-            : userService.getFollowers(targetUserId, { viewerId: currentUserId }).then((r) => ({
-                mutualFriends: (r.followers || []).filter((f) => f.isFollowing),
-              })),
+          followersPromise,
+          followingPromise,
+          friendsPromise,
         ]);
 
         if (isMounted) {
@@ -151,6 +162,8 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           if (friendsRes.status === 'fulfilled') {
             setFriends(friendsRes.value?.mutualFriends || friendsRes.value?.friends || []);
           }
+          // Only a viewer with no visible list at all sees the protected state.
+          if (!canViewFollowers && !canViewFollowing) setPermissionDenied(true);
         }
       } catch (err) {
         console.error('Failed to load connection graph:', err);
@@ -193,12 +206,35 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
     }
   }, [currentUserId, follow, unfollow]);
 
+  // Per-tab visibility. Owner sees every tab; a non-owner tab is only shown
+  // when the engine grants its scope. The screen-level `permissionDenied` state
+  // is not enough: a viewer denied `followingList` but allowed `followersList`
+  // would otherwise still reach the Following list through the shared screen.
+  const tabVisible = useMemo(() => ({
+    followers: isOwner || capabilities?.canViewFollowers !== false,
+    following: isOwner || capabilities?.canViewFollowing !== false,
+    friends: isOwner || capabilities?.canViewFriends !== false,
+  }), [isOwner, capabilities]);
+
+  const visibleTabs = useMemo(
+    () => ['followers', 'following', 'friends'].filter((k) => tabVisible[k]),
+    [tabVisible]
+  );
+
+  // Keep the active tab on a visible one (a denied route/default must not leak).
+  useEffect(() => {
+    if (!tabVisible[activeTab]) {
+      const fallback = ['followers', 'following', 'friends'].find((k) => tabVisible[k]);
+      if (fallback) setActiveTab(fallback);
+    }
+  }, [tabVisible, activeTab]);
+
   // Filter current active list by search query
   const currentItems = useMemo(() => {
     let rawList = [];
-    if (activeTab === 'followers') rawList = followers;
-    else if (activeTab === 'following') rawList = following;
-    else if (activeTab === 'friends') rawList = friends;
+    if (activeTab === 'followers' && tabVisible.followers) rawList = followers;
+    else if (activeTab === 'following' && tabVisible.following) rawList = following;
+    else if (activeTab === 'friends' && tabVisible.friends) rawList = friends;
 
     if (!searchQuery.trim()) return rawList;
     const q = searchQuery.toLowerCase().trim();
@@ -224,8 +260,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           "p-1 rounded-2xl border backdrop-blur-xl transition-all shadow-sm",
           isDark ? "bg-white/[0.04] border-white/10" : "bg-white border-slate-200"
         )}>
-          <div className="grid grid-cols-3 gap-1">
+          <div className={cn('grid gap-1', visibleTabs.length === 1 ? 'grid-cols-1' : visibleTabs.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
             {/* Tab 1: Followers */}
+            {tabVisible.followers && (
             <button
               type="button"
               onClick={() => {
@@ -250,8 +287,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 {followers.length}
               </span>
             </button>
+            )}
 
             {/* Tab 2: Following */}
+            {tabVisible.following && (
             <button
               type="button"
               onClick={() => {
@@ -276,8 +315,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 {following.length}
               </span>
             </button>
+            )}
 
             {/* Tab 3: Friends */}
+            {tabVisible.friends && (
             <button
               type="button"
               onClick={() => {
@@ -302,6 +343,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                 {friends.length}
               </span>
             </button>
+            )}
           </div>
         </div>
 
