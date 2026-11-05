@@ -350,6 +350,19 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       expect(src).not.toContain("doc(this.firestore, 'users'");
     });
 
+    it('profile surfaces do not read standing around the projection', () => {
+      // The hero received the raw store `level` (MyScreen) and the public screen
+      // hardcoded `|| 0` / `?? 0` for XP and streak, so a viewer denied the
+      // activity scope still saw the standing. The screens must pass the
+      // projected values through, un-defaulted.
+      const my = read('src/screens/Profile/ProfileMyScreen.jsx');
+      expect(my).not.toContain('level={level || effectiveProfile.level}');
+      expect(my).toContain('level={displayedProfile?.level}');
+      const pub = read('src/screens/Profile/ProfilePublicScreen.jsx');
+      expect(pub).not.toContain('experience={effectiveProfile?.experience || 0}');
+      expect(pub).not.toContain('streak={effectiveProfile?.activeStreak ?? 0}');
+    });
+
     it('the featured "More Handpicked" card is owner-gated and links to a real route', () => {
       // The card linked to `/profile/:id/collections`, which has no route (it fell
       // through to the 404 screen), and collections are owner-only anyway.

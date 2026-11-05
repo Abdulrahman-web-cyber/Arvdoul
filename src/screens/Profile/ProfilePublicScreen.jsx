@@ -582,8 +582,8 @@ export default function ProfilePublicScreen() {
                   reputation — each gated by the owner's show* privacy toggles) */}
               <ProfileProgression
                 level={effectiveProfile?.level}
-                experience={effectiveProfile?.experience || 0}
-                streak={effectiveProfile?.activeStreak ?? 0}
+                experience={effectiveProfile?.experience}
+                streak={effectiveProfile?.activeStreak}
                 reputation={effectiveProfile?.reputation}
                 showLevel={effectiveProfile?.showLevel !== false}
                 showReputation={effectiveProfile?.showReputation !== false}

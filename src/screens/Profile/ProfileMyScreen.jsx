@@ -359,7 +359,7 @@ export default function ProfileMyScreen() {
             profile={displayedProfile}
             isOwner={viewAs === 'owner'}
             viewAs={viewAs}
-            level={level || effectiveProfile.level}
+            level={displayedProfile?.level}
             position={position}
             theme={theme}
             onOpenQrCode={() => setShowQrModal(true)}
@@ -416,7 +416,7 @@ export default function ProfileMyScreen() {
                   reputation — each gated by the owner's show* privacy toggles) */}
               <ProfileProgression
                 level={displayedProfile?.level}
-                experience={displayedProfile?.experience || 0}
+                experience={displayedProfile?.experience}
                 streak={displayedProfile?.activeStreak ?? 0}
                 reputation={displayedProfile?.reputation}
                 showLevel={displayedProfile?.showLevel !== false}
@@ -440,8 +440,8 @@ export default function ProfileMyScreen() {
                 <ProfileCreatorDashboard
                   analytics={analytics}
                   ranking={ranking}
-                  userLevel={level ?? effectiveProfile?.level ?? null}
-                  userXp={effectiveProfile?.experience || 0}
+                  userLevel={effectiveProfile?.level ?? null}
+                  userXp={effectiveProfile?.experience}
                   isCreator={effectiveProfile?.isCreator}
                   theme={theme}
                   timeframe={timeframe}
