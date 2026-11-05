@@ -228,6 +228,14 @@ jobs:
       - name: Install Cloud Functions dependencies
         run: npm ci --prefix functions
 
+      # `no-undef` is the crash-bug gate: it catches identifiers used but never
+      # defined (e.g. comments.js referenced `db`/`FieldValue`, monetization.js
+      # referenced `boostedExpiresAt`), which `node --check` and the deploy
+      # test both miss. `--quiet` fails on errors while allowing the existing
+      # warning backlog.
+      - name: Lint the crash-bug gate (errors only)
+        run: npx eslint src/ functions/ --ext .js,.jsx --quiet
+
       # The Firestore emulator is a JVM process. firebase-tools requires
       # Java 21+; the JVM refuses to boot on older runtimes.
       - name: Setup Java (Firestore emulator)

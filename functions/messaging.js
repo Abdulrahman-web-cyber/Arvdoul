@@ -148,7 +148,7 @@ exports.searchMessages = functions.https.onCall(async (data, context) => {
       'conversationId and query are required.');
   }
 
-  try { await checkRateLimit(userId, 'searchMessages', 10, 60000); } catch (e) { throw e; }
+  await checkRateLimit(userId, 'searchMessages', 10, 60000);
 
   const convRef = db.collection('conversations').doc(conversationId);
   const convSnap = await convRef.get();
@@ -382,7 +382,7 @@ exports.callSignaling = functions.https.onCall(async (data, context) => {
       'callId, sdp, and type (offer|answer|ice-candidate) are required.');
   }
 
-  try { await checkRateLimit(userId, 'callSignaling', 30, 60000); } catch (e) { throw e; }
+  await checkRateLimit(userId, 'callSignaling', 30, 60000);
 
   try {
     const callRef = db.collection('calls').doc(callId);

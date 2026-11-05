@@ -8,9 +8,28 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'functions/**', '.ultra_backups/**', 'public/**', '*.config.js', '*.config.cjs'],
+    ignores: ['dist/**', 'node_modules/**', '.ultra_backups/**', 'public/**', '*.config.js', '*.config.cjs'],
   },
   js.configs.recommended,
+  {
+    // Cloud Functions run on Node (CommonJS). They were excluded from ESLint,
+    // which let the `no-undef` crash gate miss real runtime bugs — e.g.
+    // `functions/comments.js` referenced `db`/`FieldValue` without defining
+    // either, so every moderation path threw ReferenceError in production.
+    files: ['functions/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-undef': 'error',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-empty': ['warn', { allowEmptyCatch: true }],
+    },
+  },
   {
     files: ['**/__tests__/**', '**/*.test.{js,jsx}', '**/*.spec.{js,jsx}'],
     languageOptions: {

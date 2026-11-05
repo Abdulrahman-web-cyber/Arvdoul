@@ -638,7 +638,7 @@ exports.boostPost = functions.https.onCall(async (data, context) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      const resultData = { success: true, newBalance, boostedExpiresAt };
+      const resultData = { success: true, newBalance, boostedExpiresAt: boostExpiresAt };
       t.set(ledgerRef, {
         function: 'boostPost',
         userId: uid,
@@ -965,7 +965,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   const db = admin.firestore();
 
   switch (event.type) {
-    case 'invoice.payment_succeeded':
+    case 'invoice.payment_succeeded': {
       const invoice = event.data.object;
       const customerId = invoice.customer;
       // Find user by stripeCustomerId (stored on the private doc)
@@ -1020,8 +1020,9 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
         }
       }
       break;
+    }
 
-    case 'customer.subscription.deleted':
+    case 'customer.subscription.deleted': {
       const subscription = event.data.object;
       // Resolve the uid-keyed doc (see the invoice case above).
       const delQuery = await db.collection('users_private')
@@ -1034,6 +1035,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
         }, { merge: true });
       }
       break;
+    }
 
     default:
       console.log(`Unhandled event type ${event.type}`);
