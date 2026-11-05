@@ -84,8 +84,9 @@ export const ProfileVerificationModal = memo(({
   if (!isOpen) return null;
 
   const userLevel = typeof profile?.level === 'number' ? profile.level : null;
-  const requiredLevel = LEVEL_GATES?.verifiedPriority ?? 15;
-  const isLevelEligible = userLevel !== null && userLevel >= requiredLevel;
+  // Threshold comes from the shared level config; never restate the literal.
+  const requiredLevel = LEVEL_GATES.verifiedPriority;
+  const isLevelEligible = userLevel !== null && requiredLevel != null && userLevel >= requiredLevel;
 
   const handleSubmit = async (e) => {
     e?.preventDefault();

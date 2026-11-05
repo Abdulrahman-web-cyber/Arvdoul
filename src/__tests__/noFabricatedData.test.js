@@ -1725,3 +1725,28 @@ describe('Profile progression - masked standing is never re-defaulted to 0', () 
     expect(s).toContain('streak={displayedProfile?.activeStreak}');
   });
 });
+
+describe('Profile gates read the shared level config, never a restated literal', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the hero verification badge does not hardcode the gate level', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    // AGENTS.md: "A literal like LEVEL >= 10 in JSX is a bug."
+    expect(s).not.toContain('Level 15 to Verify');
+    expect(s).toContain('LEVEL_GATES?.verifiedPriority');
+  });
+
+  test('the verification modal reads the gate from the shared config', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain('?? 15');
+    expect(s).toContain('LEVEL_GATES.verifiedPriority');
+  });
+
+  test('the roadmap modal derives citizenship criteria from CITIZEN_TIERS', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    expect(s).toContain("CITIZEN_TIERS.find((t) => t.tier === 'Citizen')");
+    // The level/days criteria must not be restated as literals in the JSX.
+    expect(s).not.toContain('currentLevel >= 5');
+    expect(s).not.toContain('activeDays >= 7');
+  });
+});

@@ -331,7 +331,10 @@ export const ProfileHeroSection = memo(({
   const isPremium = Boolean(profile?.isPremium || profile?.subscription);
 
   const userLevel = typeof profile?.level === 'number' ? profile.level : (typeof level === 'number' ? level : null);
-  const isLevelEligibleForVerification = userLevel !== null && userLevel >= (LevelModule.LEVEL_GATES?.verifiedPriority || 15);
+  // The verification gate threshold lives in the shared level config; the
+  // "Level N to Verify" copy below must read it, not restate a literal.
+  const verificationLevelGate = LevelModule.LEVEL_GATES?.verifiedPriority ?? null;
+  const isLevelEligibleForVerification = userLevel !== null && verificationLevelGate !== null && userLevel >= verificationLevelGate;
 
   // Dynamic level appearance & crest aura unlocked at higher levels / royal standing
   const crestAuraRing = useMemo(() => {
@@ -509,7 +512,7 @@ export const ProfileHeroSection = memo(({
                   ) : (
                     <>
                       <Lock className="w-3 h-3 text-purple-400" />
-                      <span>Level 15 to Verify</span>
+                      <span>Level {verificationLevelGate} to Verify</span>
                     </>
                   )}
                 </button>
