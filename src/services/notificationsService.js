@@ -1,11 +1,11 @@
 // src/services/notificationsService.js
 
-import { getFirestoreInstance, getAuthInstance, getMessagingInstance } from '../firebase/firebase.js';
+import { getFirestoreInstance, getAuthInstance, getMessagingInstance, getFunctionsInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import {
   collection,
   doc,
@@ -214,7 +214,6 @@ const NOTIFICATIONS_CONFIG = {
     OLD_TOKEN_CLEANUP_DAYS: 30,
     REFRESH_INTERVAL_MS: 24 * 60 * 60 * 1000,
   },
-  REGION: 'europe-west1',
 };
 
 //  LRU CACHE with TTL
@@ -279,7 +278,6 @@ class UltimateNotificationsService {
     this.fs = null;
     this.initialized = false;
     this.initPromise = null;
-    this.region = NOTIFICATIONS_CONFIG.REGION;
 
     // Cloud Functions references
     this.cfSendNotification = null;
@@ -327,7 +325,7 @@ class UltimateNotificationsService {
         this.firestore = await getFirestoreInstance();
         this.auth = await getAuthInstance();
         this.messaging = await getMessagingInstance();
-        this.functions = getFunctions(undefined, this.region);
+        this.functions = await getFunctionsInstance();
 
         this.fs = {
           collection: firebase.collection,

@@ -250,6 +250,7 @@ jobs:
           src/__tests__/architectureBoundaries.test.js
           src/__tests__/firebaseCostGuard.test.js
           src/__tests__/securityServices.test.js
+          src/__tests__/callableAuthGate.test.js
           src/__tests__/deployIntegrity.test.js
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js

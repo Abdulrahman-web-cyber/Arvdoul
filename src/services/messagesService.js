@@ -882,13 +882,6 @@ class UltimateMessagingService {
   async rejectFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.rejectFriendRequest(uid, reqId); }
   async removeFriend(uid, fid) { const us = await this._getUserService(); return us.unfollowUser(uid, fid); }
 
-  async reportUser(reporterId, reportedId, reason, details = '') {
-    await this.ensureInitialized();
-    if (!MESSAGING_CONFIG.REPORTING.REASONS.includes(reason)) throw new Error('Invalid reason');
-    const reportRef = this.fs.collection(this.firestore, 'user_reports');
-    await this.fs.addDoc(reportRef, { reporterId, reportedId, reason, details, status: 'pending', createdAt: this.fs.serverTimestamp() });
-    return { success: true };
-  }
 
   async createConversation(participants, options = {}) {
     await this.ensureInitialized();
@@ -3281,7 +3274,6 @@ const messagingService = {
   acceptFriendRequest: (userId, requesterId) => getMessagingService().acceptFriendRequest(userId, requesterId),
   rejectFriendRequest: (userId, requesterId) => getMessagingService().rejectFriendRequest(userId, requesterId),
   removeFriend: (userId, friendId) => getMessagingService().removeFriend(userId, friendId),
-  reportUser: (reporterId, reportedId, reason, details) => getMessagingService().reportUser(reporterId, reportedId, reason, details),
   addParticipants: (cid, uids, admin) => getMessagingService().addParticipants(cid, uids, admin),
   removeParticipants: (cid, uids, admin) => getMessagingService().removeParticipants(cid, uids, admin),
   updateGroupInfo: (cid, updates, admin) => getMessagingService().updateGroupInfo(cid, updates, admin),

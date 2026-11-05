@@ -268,8 +268,24 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if true;
       allow create: if isSignedIn() && authoredBy('authorId');
-      // Moderators may remove/restore content (admin console).
-      allow update, delete: if (isSignedIn() && request.auth.uid == resource.data.authorId) || isAdmin();
+      // Two legitimate updates, nothing else:
+      //  - the author editing their own post, minus the moderation fields. Those
+      //    belong to the server (reportContent / adminModerateContent); without
+      //    this an author could clear `moderationStatus` / `reportCount` on
+      //    their own flagged content — "moderation fields changed by the owner".
+      //  - any signed-in user touching ONLY the engagement fields. Reactions,
+      //    gifts and poll votes live on the post doc, so an author-only rule
+      //    silently denied every non-author reaction/gift/vote.
+      allow update: if isAdmin() || (isSignedIn() && (
+        (request.auth.uid == resource.data.authorId &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore', 'reportCount'
+          ])) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'stats', 'gifts', 'poll', 'updatedAt'
+        ])
+      ));
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.authorId);
       // post subcollections (likes, saves, gifts, reactions): the doc id encodes
       // the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) — enforce it.
       match /{subcollection}/{docId} {
@@ -283,7 +299,26 @@ service cloud.firestore {
     match /comments/{commentId} {
       allow read: if true;
       allow create: if isSignedIn() && authoredBy('userId');
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+      // Two legitimate updates, nothing else:
+      //  - the author editing their own comment, minus the moderation verdict
+      //    (moderation is server-only: the moderateComment onCreate trigger and
+      //    adminModerateContent). The client scan that used to write those
+      //    fields is gone, so the rules and the write paths now agree.
+      //  - any signed-in user updating ONLY the reaction fields. The reaction
+      //    arrays live on the comment doc, so without this a like by anyone but
+      //    the author was denied and `likeComment` aborted.
+      allow update: if isAdmin() || (isSignedIn() && (
+        (request.auth.uid == resource.data.userId &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'moderationStatus', 'moderatedBy', 'moderatedAt', 'moderationScore',
+            'moderationNotes', 'isHidden', 'hiddenAt', 'hiddenReason',
+            'autoModeratedAt', 'reports'
+          ])) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'likes', 'likesBy', 'dislikes', 'dislikesBy', 'updatedAt', 'lastActivityAt'
+        ])
+      ));
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
       match /likes/{likerId} {
         allow read: if true;
         allow write: if isSignedIn() && likerId == uid();
@@ -788,13 +823,15 @@ service cloud.firestore {
     match /comment_reports/{reportId} {
       allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
-      allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      // A reporter must not be able to resolve or rewrite their own report —
+      // triage state is a moderator decision, not a client one.
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     match /user_reports/{reportId} {
       allow read: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
       allow create: if isSignedIn() && request.resource.data.reporterId == uid();
-      allow update: if isSignedIn() && (resource.data.reporterId == uid() || isAdmin());
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     match /video_reports/{reportId} {

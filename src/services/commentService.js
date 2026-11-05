@@ -10,16 +10,7 @@ const COMMENTS_CONFIG = {
   REAL_TIME_UPDATE_INTERVAL: 2000,
   SPAM_CHECK_THRESHOLD: 3,
   MENTION_LIMIT: 10,
-  AUTO_MODERATION: true,
   REPLY_DEPTH_LIMIT: 4,
-  TOXIC_WORDS: ['idiot', 'stupid', 'retard', 'hate', 'kill yourself'],
-  SPAM_PATTERNS: [
-    /buy now|cheap|discount|click here|limited time/gi,
-    /bit\.ly|goo\.gl|tinyurl|shorturl/gi,
-    /casino|poker|betting|gambling/gi,
-    /viagra|cialis|levitra/gi,
-    /follow me|like for like|follow for follow/gi
-  ],
   SPAM_COUNTER_SHARDS: 10,
   REACTION_ARRAY_CAP: 200,
 };
@@ -237,12 +228,6 @@ class UltimateCommentService {
           userName: options.userName,
           content: content.substring(0, 100)
         }).catch(() => {});
-      }
-
-      if (COMMENTS_CONFIG.AUTO_MODERATION) {
-        setTimeout(() => {
-          this._autoModerate(commentId, content, userId).catch(() => {});
-        }, 1000);
       }
 
       // Social loop: notify the post author (top-level comments only - replies
@@ -930,11 +915,6 @@ class UltimateCommentService {
         updatedAt: this.firestoreMethods.serverTimestamp()
       });
 
-      const comment = await this.getComment(commentId);
-      if (comment.success && comment.comment.reports >= 3) {
-        this._autoHideComment(commentId).catch(() => {});
-      }
-
       return { success: true, commentId, reported: true };
 
     } catch (error) {
@@ -943,51 +923,6 @@ class UltimateCommentService {
     }
   }
 
-  async moderateComment(commentId, action, moderatorId, notes = '') {
-    try {
-      await this._ensureInitialized();
-
-      const allowedActions = ['approve', 'reject', 'hide', 'delete', 'warn', 'pin', 'lock'];
-      if (!allowedActions.includes(action)) {
-        throw new Error(`Invalid moderation action: ${action}`);
-      }
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      const updates = {
-        moderatedAt: this.firestoreMethods.serverTimestamp(),
-        moderatedBy: moderatorId,
-        moderationNotes: notes,
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      };
-
-      if (action === 'approve') updates.moderationStatus = 'approved';
-      if (action === 'reject') updates.moderationStatus = 'rejected';
-
-      if (action === 'pin') {
-        updates.isPinned = true;
-      } else if (action === 'lock') {
-        updates.isLocked = true;
-      } else if (action === 'hide') {
-        updates.isHidden = true;
-        updates.moderationStatus = 'hidden';
-      } else if (action === 'delete') {
-        updates.isDeleted = true;
-        updates.deletedBy = moderatorId;
-        updates.deletedReason = 'moderation';
-      }
-
-      await this.firestoreMethods.updateDoc(commentRef, updates);
-      await this._updateReportStatus(commentId, action, moderatorId);
-
-      this._invalidateCommentCache(commentId);
-
-      return { success: true, commentId, action };
-
-    } catch (error) {
-      logger.error(`❌ Moderate comment ${commentId} failed:`, error);
-      throw this._enhanceError(error, 'Failed to moderate comment');
-    }
-  }
 
   _validateComment(content, userId) {
     const errors = [];
@@ -1253,93 +1188,8 @@ class UltimateCommentService {
     }
   }
 
-  async _autoModerate(commentId, content, userId) {
-    try {
-      await this._ensureInitialized();
 
-      let moderationScore = 0;
-      let moderationStatus = 'approved';
-      let isHidden = false;
 
-      COMMENTS_CONFIG.SPAM_PATTERNS.forEach(pattern => {
-        if (pattern.test(content)) {
-          moderationScore += 10;
-        }
-      });
-
-      COMMENTS_CONFIG.TOXIC_WORDS.forEach(word => {
-        if (content.toLowerCase().includes(word)) {
-          moderationScore += 5;
-        }
-      });
-
-      if (moderationScore >= 15) {
-        moderationStatus = 'rejected';
-        isHidden = true;
-      } else if (moderationScore >= 10) {
-        moderationStatus = 'pending_review';
-      }
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      await this.firestoreMethods.updateDoc(commentRef, {
-        moderationScore,
-        moderationStatus,
-        isHidden,
-        autoModeratedAt: this.firestoreMethods.serverTimestamp(),
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      });
-
-    } catch (error) {
-      // Auto-moderation failed
-    }
-  }
-
-  async _autoHideComment(commentId) {
-    try {
-      await this._ensureInitialized();
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      await this.firestoreMethods.updateDoc(commentRef, {
-        isHidden: true,
-        hiddenAt: this.firestoreMethods.serverTimestamp(),
-        hiddenReason: 'auto_hide_report_threshold',
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      });
-
-    } catch (error) {
-      // Auto-hide failed
-    }
-  }
-
-  async _updateReportStatus(commentId, action, moderatorId) {
-    try {
-      await this._ensureInitialized();
-
-      const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
-      const q = this.firestoreMethods.query(
-        reportsRef,
-        this.firestoreMethods.where('commentId', '==', commentId)
-      );
-
-      const snapshot = await this.firestoreMethods.getDocs(q);
-      const batch = this.firestoreMethods.writeBatch(this.firestore);
-
-      snapshot.forEach(reportDoc => {
-        const reportRef = this.firestoreMethods.doc(this.firestore, 'comment_reports', reportDoc.id);
-        batch.update(reportRef, {
-          status: 'resolved',
-          reviewedAt: this.firestoreMethods.serverTimestamp(),
-          reviewedBy: moderatorId,
-          actionTaken: action
-        });
-      });
-
-      await batch.commit();
-
-    } catch (error) {
-      // Update report status failed
-    }
-  }
 
   _invalidateCommentCache(commentId) {
     this.cache.delete(`comment_${commentId}`);
@@ -1595,8 +1445,6 @@ const commentService = {
     getCommentService().unsubscribe(subscriptionId),
   reportComment: (commentId, userId, reason, details) =>
     getCommentService().reportComment(commentId, userId, reason, details),
-  moderateComment: (commentId, action, moderatorId, notes) =>
-    getCommentService().moderateComment(commentId, action, moderatorId, notes),
   batchDeleteComments: (commentIds, userId, isAdmin) =>
     getCommentService().batchDeleteComments(commentIds, userId, isAdmin),
   getCommentStats: (postId, userId) =>

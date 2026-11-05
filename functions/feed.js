@@ -14,6 +14,8 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 
+const { assertAdmin } = require('./auth');
+
 // ----------------------------------------------------------------------
 // CONSTANTS
 // ----------------------------------------------------------------------
@@ -716,6 +718,9 @@ exports.getFollowingFeed = functions.https.onCall(async (data, context) => {
 // 9. FEED HEALTH CHECK
 // ----------------------------------------------------------------------
 exports.feedHealthCheck = functions.https.onCall(async (data, context) => {
+  // Operational telemetry over server-only `fanout_tasks`: admin-only. It was
+  // callable by anyone (signed in or not) and leaked queue health.
+  await assertAdmin(context);
   try {
     const [pendingCount, failedCount, processingCount] = await Promise.all([
       db.collection('fanout_tasks').where('status', '==', 'processing').count().get().then(c => c.data().count),

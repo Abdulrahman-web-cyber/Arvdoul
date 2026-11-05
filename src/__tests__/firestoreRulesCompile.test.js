@@ -115,6 +115,38 @@ describe('firestore.rules privacy invariants (regression guards)', () => {
   });
 });
 
+describe('firestore.rules content-moderation ownership (regression guards)', () => {
+  // A content owner must not be able to change the moderation verdict on their
+  // own flagged content (clear `moderationStatus` / `reportCount`), and a
+  // reporter must not be able to resolve their own report. The client services
+  // that used to write these fields have been removed, so the rules are now the
+  // only thing standing between a user and their own moderation record.
+  test('posts: the author update path excludes the moderation fields', () => {
+    const body = blockBody('posts');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/moderationStatus[\s\S]*moderatedBy[\s\S]*reportCount/);
+    expect(body).toMatch(/hasOnly\(\[\s*'stats', 'gifts', 'poll', 'updatedAt'\s*\]\)/);
+  });
+
+  test('comments: the author update path excludes the moderation fields', () => {
+    const body = blockBody('comments');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/moderationStatus[\s\S]*moderatedBy[\s\S]*autoModeratedAt/);
+    // Reaction-only updates must remain allowed for non-authors, since the
+    // reaction arrays live on the comment document.
+    expect(body).toMatch(/hasOnly\(\[\s*'likes', 'likesBy', 'dislikes', 'dislikesBy', 'updatedAt', 'lastActivityAt'\s*\]\)/);
+  });
+
+  test('reports are resolved by moderators only, never by the reporter', () => {
+    for (const name of ['comment_reports', 'user_reports']) {
+      const body = blockBody(name);
+      expect(body).toBeTruthy();
+      expect(body).toMatch(/allow update: if isAdmin\(\)/);
+      expect(body).not.toMatch(/allow update: if isSignedIn\(\) && \(resource\.data\.reporterId == uid\(\)/);
+    }
+  });
+});
+
 describe('firestore.rules adversarial checks (emulator)', () => {
   let reachable = false;
   beforeAll(async () => { reachable = await emulatorReachable(); });
