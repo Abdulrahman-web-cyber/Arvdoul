@@ -96,7 +96,7 @@ function ArvdoulNationalCrest({ className = 'w-16 h-16', color = 'gold' }) {
 export default function PassportScreen() {
   const { userId: paramUserId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { theme } = useTheme();
 
   const isDark = theme === 'dark' || theme === 'midnight';
@@ -113,14 +113,19 @@ export default function PassportScreen() {
   const loadPassport = useCallback(async () => {
     if (!targetUserId) return;
     try {
-      const data = await passportService.getPassport(targetUserId, user?.uid, targetUserId === user?.uid ? user : null);
+      // Pass the hydrated `userProfile` (the `users/{uid}` document) as the
+      // owner's cache, never the Firebase auth `user` — the auth object has no
+      // level, counts or standing, so the owner's own passport would render
+      // empty standing while a visitor's rendered correctly.
+      const ownerCache = targetUserId === user?.uid ? (userProfile || null) : null;
+      const data = await passportService.getPassport(targetUserId, user?.uid, ownerCache);
       setPassport(data);
     } catch (err) {
       toast.error('Could not issue digital passport');
     } finally {
       setLoading(false);
     }
-  }, [targetUserId, user]);
+  }, [targetUserId, user?.uid, userProfile]);
 
   useEffect(() => {
     loadPassport();

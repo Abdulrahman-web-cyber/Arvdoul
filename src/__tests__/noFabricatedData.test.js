@@ -1763,3 +1763,17 @@ describe('Profile edit forms never reset on a whole-profile effect', () => {
     expect(s).toContain('}, [isOpen, profileId]);');
   });
 });
+
+describe('TitlesScreen never invents the standing it evaluates against', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('eligibility is evaluated with the real scores, not 25/50/20 defaults', () => {
+    const s = read('src/screens/Titles/TitlesScreen.jsx');
+    // A fabricated qualifying score made a locked title look claimable while the
+    // server (the authority) would reject the claim.
+    expect(s).not.toContain('reputationScore: Number(profile?.reputationScore || profile?.reputation) || 50');
+    expect(s).not.toContain('contributionScore: Number(profile?.contributionScore || profile?.contribution) || 25');
+    expect(s).not.toContain('influenceScore: Number(profile?.influenceScore || profile?.influence) || 20');
+    expect(s).toContain('reputationScore: profile?.reputationScore ?? profile?.reputation ?? null');
+  });
+});

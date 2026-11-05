@@ -199,12 +199,15 @@ export default function TitlesScreen() {
           {titlesList.map((t) => {
             const isEarned = earnedMap.has(t.id);
             const isActive = activeTitleId === t.id;
+            // Pass the real standing through un-invented. Defaulting missing
+            // scores to 25/50/20 made a title look claimable when the server
+            // (the authority) would reject it; absent standing must read as 0.
             const evalResult = titleService.checkEligibility(t.id, {
-              level: Number(profile?.level) || 1,
-              activeDaysCount: Number(profile?.activeDaysCount || profile?.activeDays) || 1,
-              contributionScore: Number(profile?.contributionScore || profile?.contribution) || 25,
-              reputationScore: Number(profile?.reputationScore || profile?.reputation) || 50,
-              influenceScore: Number(profile?.influenceScore || profile?.influence) || 20,
+              level: profile?.level ?? null,
+              activeDaysCount: profile?.activeDaysCount ?? profile?.activeDays ?? null,
+              contributionScore: profile?.contributionScore ?? profile?.contribution ?? null,
+              reputationScore: profile?.reputationScore ?? profile?.reputation ?? null,
+              influenceScore: profile?.influenceScore ?? profile?.influence ?? null,
               isCreator: Boolean(profile?.isCreator),
               isVerified: Boolean(profile?.isVerified || profile?.verified),
               isFounder: Boolean(profile?.isFounder),
