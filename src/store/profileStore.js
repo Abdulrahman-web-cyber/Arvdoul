@@ -141,7 +141,9 @@ export const useProfileStore = create(
         if (!isOwner && currentUserId) {
           try {
             const mutualResult = await userService.getMutualFriends(currentUserId, userId);
-            mutualFriends = mutualResult?.users?.slice(0, 5) || [];
+            // userService returns `{ success, mutualFriends }`; reading `.users`
+            // here always produced [] so the social-context bar never rendered.
+            mutualFriends = mutualResult?.mutualFriends?.slice(0, 5) || [];
           } catch (e) {
             console.warn('Could not fetch mutual friends:', e);
           }
@@ -692,7 +694,7 @@ export const useProfileStore = create(
         const result = await userService.getMutualFriends(userId, otherUserId);
         if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
-          state.mutualFriends = result?.users?.slice(0, 5) || [];
+          state.mutualFriends = result?.mutualFriends?.slice(0, 5) || [];
           state.mutualFriendsLoading = false;
         });
       } catch (error) {

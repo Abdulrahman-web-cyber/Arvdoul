@@ -362,6 +362,16 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       expect(src).not.toContain("doc(this.firestore, 'users'");
     });
 
+    it('the store reads the mutualFriends key the service actually returns', () => {
+      // userService.getMutualFriends resolves `{ success, mutualFriends }`, but
+      // the store read `mutualResult?.users`, so the social-context bar always
+      // rendered an empty mutual list.
+      const src = read('src/store/profileStore.js');
+      expect(src).toContain('mutualResult?.mutualFriends?.slice(0, 5)');
+      expect(src).toContain('result?.mutualFriends?.slice(0, 5)');
+      expect(src).not.toContain('mutualResult?.users');
+    });
+
     it('profile surfaces do not read standing around the projection', () => {
       // The hero received the raw store `level` (MyScreen) and the public screen
       // hardcoded `|| 0` / `?? 0` for XP and streak, so a viewer denied the
