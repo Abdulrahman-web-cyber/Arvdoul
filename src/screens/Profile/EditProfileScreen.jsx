@@ -134,6 +134,7 @@ export default function EditProfileScreen() {
     links: [],
     privacy: {
       profileInfo: DEFAULT_PROFILE_PRIVACY.profileInfo,
+      creatorInfo: DEFAULT_PROFILE_PRIVACY.creatorInfo,
       presence: DEFAULT_PROFILE_PRIVACY.presence,
       followersList: DEFAULT_PROFILE_PRIVACY.followersList,
       activity: DEFAULT_PROFILE_PRIVACY.activity,
@@ -208,6 +209,7 @@ export default function EditProfileScreen() {
         links: Array.isArray(src.links) ? src.links : [],
         privacy: {
           profileInfo: p.profileInfo || (p.profileVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.profileVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
+          creatorInfo: p.creatorInfo || DEFAULT_PROFILE_PRIVACY.creatorInfo,
           presence: p.presence || (p.onlinePresence === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.onlinePresence === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : p.onlinePresence === 'public' ? VISIBILITY_SCOPES.EVERYONE : VISIBILITY_SCOPES.FOLLOWERS),
           followersList: p.followersList || (p.followersVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.followersVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
           activity: p.activity || (p.activityVisibility === 'private' ? VISIBILITY_SCOPES.ONLY_ME : p.activityVisibility === 'connections' ? VISIBILITY_SCOPES.CONNECTIONS : VISIBILITY_SCOPES.EVERYONE),
@@ -1235,6 +1237,27 @@ export default function EditProfileScreen() {
                     : "bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-rose-400"
                 )}
               />
+            </div>
+
+            {/* Creator Suite visibility (the `creatorInfo` scope) */}
+            <div className="flex items-center justify-between gap-3 pt-2">
+              <div>
+                <div className="text-xs sm:text-sm font-semibold">Creator Suite Visibility</div>
+                <div className="text-[11px] text-slate-400">Who can see your discipline, business contact and patronage note</div>
+              </div>
+              <select
+                value={formData.privacy.creatorInfo || VISIBILITY_SCOPES.EVERYONE}
+                onChange={(e) => handlePrivacyChange('creatorInfo', e.target.value)}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-semibold outline-none border",
+                  isDark ? "bg-slate-900 border-white/10 text-white" : "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <option value={VISIBILITY_SCOPES.EVERYONE}>Everyone</option>
+                <option value={VISIBILITY_SCOPES.FOLLOWERS}>Followers</option>
+                <option value={VISIBILITY_SCOPES.CONNECTIONS}>Connections Only</option>
+                <option value={VISIBILITY_SCOPES.ONLY_ME}>Only Me</option>
+              </select>
             </div>
           </div>
         </section>

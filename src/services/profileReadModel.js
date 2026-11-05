@@ -141,6 +141,33 @@ export const IDENTITY_INFO_FIELDS = Object.freeze([
 ]);
 
 /**
+ * Creator-suite fields gated by the `creatorInfo` scope: the creative
+ * classification, the public business contact and the patronage note. Without
+ * this the scope was a dead control (settable in EditProfile/Settings, enforced
+ * nowhere) and a creator's business email was world-readable.
+ */
+export const CREATOR_INFO_FIELDS = Object.freeze([
+  'creatorCategory',
+  'inquiriesEmail',
+  'tipMessage',
+]);
+
+/**
+ * Financial fields. `economicStatus` (default ONLY_ME) gates the coin treasury,
+ * but the spread left every other money field on the object, so a viewer denied
+ * economic status still read earnings/totalEarned/coinBalance off the profile.
+ */
+export const ECONOMIC_FIELDS = Object.freeze([
+  'coins',
+  'coinBalance',
+  'balance',
+  'earnings',
+  'totalEarned',
+  'lifetimeEarnings',
+  'withdrawableBalance',
+]);
+
+/**
  * Apply the capability decision exactly once. The view layer must consume the
  * result rather than re-checking privacy, so a section can never render while
  * the engine reports it hidden.
@@ -159,6 +186,7 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   // a consumer cannot read around the gate (ProfileHeroSection reads
   // `profile.isOnline` directly).
   const presenceVisible = !blocked && (isOwner || Boolean(caps.canViewPresence));
+  const mayViewCreator = isOwner || Boolean(caps.canViewCreatorInfo);
   const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
@@ -172,6 +200,7 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     followingCount: blocked ? 0 : profile.followingCount,
     postCount: blocked ? 0 : profile.postCount,
     canViewIdentity: Boolean(caps.canViewIdentity),
+    canViewCreatorInfo: Boolean(caps.canViewCreatorInfo),
     canViewActivity: Boolean(caps.canViewActivity),
     canViewAchievements: Boolean(caps.canViewAchievements),
     canViewTitles: Boolean(caps.canViewTitles),
@@ -188,6 +217,19 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   if (hideIdentity) {
     for (const field of IDENTITY_INFO_FIELDS) {
       if (field in projected) projected[field] = '';
+    }
+  }
+  // `creatorInfo` gates the creator suite; mask at the same single point so a
+  // narrowed scope hides the business contact and patronage note everywhere.
+  if (!mayViewCreator) {
+    for (const field of CREATOR_INFO_FIELDS) {
+      if (field in projected) projected[field] = '';
+    }
+  }
+  // `economicStatus` gates the whole money surface, not just `coins`.
+  if (!mayViewEconomic) {
+    for (const field of ECONOMIC_FIELDS) {
+      if (field in projected) projected[field] = null;
     }
   }
   return projected;

@@ -1051,7 +1051,9 @@ describe('Passport - no synthetic holder identity', () => {
   test('passportService reports an absent displayName as null', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/passportService.js'), 'utf8');
     expect(src).not.toContain("'Citizen of Arvdoul'");
-    expect(src).toContain('pickDisplayName([profile.displayName, profile.name], { fallback: null })');
+    // The passport reads the projected profile, so the invariant is now pinned to
+    // the projected variable — still no synthetic fallback for an absent name.
+    expect(src).toContain('pickDisplayName([projected.displayName, projected.name], { fallback: null })');
   });
 });
 

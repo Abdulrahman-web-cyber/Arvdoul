@@ -166,8 +166,61 @@ describe('profileReadModel - capability projection', () => {
     expect(allowed.lastActive).toBe('2026-01-01T00:00:00.000Z');
   });
 
-  it('passes sections through when the engine allows them', () => {
-    const projected = projectProfileForViewer(profile, {
+    it('masks the creator suite (creatorInfo scope) so the business contact cannot leak', () => {
+      // creatorInfo was a dead control: saved/validated, enforced nowhere, so a
+      // creator's business email was world-readable on users/{uid}.
+      const raw = { id: 'u1', creatorCategory: 'Musician', inquiriesEmail: 'mgmt@x.com', tipMessage: 'tip me' };
+      const denied = projectProfileForViewer(raw, { canViewCreatorInfo: false });
+      expect(denied.creatorCategory).toBe('');
+      expect(denied.inquiriesEmail).toBe('');
+      expect(denied.tipMessage).toBe('');
+      expect(denied.canViewCreatorInfo).toBe(false);
+
+      const allowed = projectProfileForViewer(raw, { canViewCreatorInfo: true });
+      expect(allowed.creatorCategory).toBe('Musician');
+      expect(allowed.inquiriesEmail).toBe('mgmt@x.com');
+      expect(allowed.tipMessage).toBe('tip me');
+    });
+
+    it('fails closed on the creator suite when the capability map is absent', () => {
+      const projected = projectProfileForViewer(
+        { id: 'u1', creatorCategory: 'Musician', inquiriesEmail: 'mgmt@x.com' },
+        {}
+      );
+      expect(projected.creatorCategory).toBe('');
+      expect(projected.inquiriesEmail).toBe('');
+    });
+
+    it('owner always sees the creator suite', () => {
+      const projected = projectProfileForViewer(
+        { id: 'u1', creatorCategory: 'Musician', inquiriesEmail: 'mgmt@x.com' },
+        { canViewCreatorInfo: false },
+        { isOwner: true }
+      );
+      expect(projected.creatorCategory).toBe('Musician');
+      expect(projected.inquiriesEmail).toBe('mgmt@x.com');
+    });
+
+    it('masks every money field when economic status is denied, not just coins', () => {
+      // The spread left earnings/totalEarned/coinBalance on the projected object,
+      // so a viewer denied economicStatus could still read the creator's income.
+      const raw = {
+        id: 'u1', coins: 500, coinBalance: 500, balance: 500,
+        earnings: 1200, totalEarned: 1200, lifetimeEarnings: 1200, withdrawableBalance: 900,
+      };
+      const denied = projectProfileForViewer(raw, { canViewEconomicStatus: false });
+      for (const field of ['coins', 'coinBalance', 'balance', 'earnings', 'totalEarned', 'lifetimeEarnings', 'withdrawableBalance']) {
+        expect(denied[field]).toBeNull();
+      }
+
+      const allowed = projectProfileForViewer(raw, { canViewEconomicStatus: true });
+      expect(allowed.earnings).toBe(1200);
+      expect(allowed.totalEarned).toBe(1200);
+      expect(allowed.coins).toBe(500);
+    });
+
+    it('passes sections through when the engine allows them', () => {
+      const projected = projectProfileForViewer(profile, {
       canViewEconomicStatus: true,
       canViewLinks: true,
       canViewPresence: true,
@@ -255,8 +308,18 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
     expect(read('src/services/reputationService.js')).not.toContain("getDoc(doc(db, 'users'");
   });
 
-  it('AboutScreen applies the projection so the profileInfo scope is enforced', () => {
-    // AboutScreen rendered bio/location/website/links straight from the raw
+    it('passportService applies the canonical projection instead of the raw profile', () => {
+      // The passport read `users/{uid}` (world-readable) and rendered raw fields
+      // without the capability decision, so a narrowed scope was bypassed.
+      const src = read('src/services/passportService.js');
+      expect(src).toContain('projectProfileForViewer');
+      // It must read through the canonical service, not a raw doc fetch.
+      expect(src).toContain('getUserService().getUserProfile(');
+      expect(src).not.toContain("doc(this.firestore, 'users'");
+    });
+
+    it('AboutScreen applies the projection so the profileInfo scope is enforced', () => {
+      // AboutScreen rendered bio/location/website/links straight from the raw
     // profile, so the `profileInfo` scope ("who can view your profile info")
     // controlled nothing. It now resolves capabilities and renders the projected
     // profile, so a narrowed scope actually hides the card.
@@ -265,6 +328,29 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
     expect(src).toContain('resolveCapabilities(');
     expect(src).toContain('profile={displayedProfile}');
     expect(src).not.toContain('profile={effectiveProfile}');
+  });
+});
+
+describe('creatorInfo scope is wired end to end (N038)', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  it('the engine exposes canViewCreatorInfo from the creatorInfo scope', () => {
+    expect(read('src/services/profileCapabilityEngine.js')).toContain("canViewProfileSection('creatorInfo'");
+  });
+
+  it('the projection masks the creator suite fields', () => {
+    const src = read('src/services/profileReadModel.js');
+    expect(src).toContain('CREATOR_INFO_FIELDS');
+    expect(src).toContain('mayViewCreator');
+  });
+
+  it('a surface renders the creator suite and both editors can set the scope', () => {
+    // A dead control is a field that is writable but read nowhere. It must be
+    // rendered by a surface AND settable from the settings UI.
+    expect(read('src/screens/Profile/AboutScreen.jsx')).toContain('creatorCategory');
+    expect(read('src/screens/SettingsScreen.jsx')).toContain("handleUpdateProfilePrivacyScope('creatorInfo'");
+    expect(read('src/screens/Profile/EditProfileScreen.jsx')).toContain("handlePrivacyChange('creatorInfo'");
   });
 });
 

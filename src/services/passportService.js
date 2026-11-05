@@ -12,7 +12,7 @@ import {
 } from './levelSystemService.js';
 import { getProfileUrl, getPassportUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
-import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag, readStandingScore } from './profileReadModel.js';
+import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag, readStandingScore, projectProfileForViewer } from './profileReadModel.js';
 import { logger } from '../utils/Logger.js';
 
 class PassportService {
@@ -32,11 +32,16 @@ class PassportService {
     if (!profile) {
       try {
         const { getUserService } = await import('./userService.js');
-        profile = await getUserService().getUserProfile(targetUserId);
+        // Read through the canonical service so the passport sees the same
+        // projected document (masked presence, deleted fields, sharded counts)
+        // that every other surface consumes — never the raw `users/{uid}` doc.
+        profile = await getUserService().getUserProfile(targetUserId, viewerUserId);
       } catch (err) {
         logger.warn('[PassportService] Failed to load target profile', { targetUserId, error: err?.message });
-        profile = { id: targetUserId };
       }
+      // `getUserProfile` returns null for a missing document; never synthesize an
+      // identity, but keep the passport shape renderable with an explicit stub.
+      if (!profile) profile = { id: targetUserId, uid: targetUserId };
     }
 
     // Resolve the relationship (owner / follower / connection / blocked)
@@ -50,6 +55,11 @@ class PassportService {
       target: profile,
       relationship,
     });
+
+    // Apply the single projection once, so the passport renders only fields the
+    // viewer may see (the `users/{uid}` doc is world-readable and its raw fields
+    // must never be handed to the view layer).
+    const projected = projectProfileForViewer(profile, capabilities, { isOwner });
 
     const hasLevel = profile.level !== undefined && profile.level !== null;
     const level = hasLevel ? Number(profile.level) : null;
@@ -150,11 +160,11 @@ class PassportService {
       userId: targetUserId,
       citizenId,
       issueDate,
-      displayName: pickDisplayName([profile.displayName, profile.name], { fallback: null }),
-      username: profile.username || null,
-      photoURL: profile.photoURL || null,
-      primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier?.tier || null,
-      activeTitle: profile.activeTitle || null,
+      displayName: pickDisplayName([projected.displayName, projected.name], { fallback: null }),
+      username: projected.username || null,
+      photoURL: projected.photoURL || null,
+      primaryTitle: projected.primaryTitle || projected.activeTitle?.name || citizenTier?.tier || null,
+      activeTitle: projected.activeTitle || null,
       rankTitle,
       citizenTier,
       level,
@@ -170,7 +180,8 @@ class PassportService {
       capabilities,
       isVerified,
       isCreator,
-      creatorTier: profile.creatorTier || null,
+      // The creator suite is gated by the `creatorInfo` scope.
+      creatorTier: capabilities.canViewCreatorInfo || isOwner ? (projected.creatorTier || null) : null,
       royalEligibility: {
         duke: dukeEligibility,
         king: kingEligibility,

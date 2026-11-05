@@ -123,6 +123,22 @@ describe('profileCapabilityEngine (Digital Nation Identity Specification)', () =
       .toBe(RELATIONSHIP_STATES.FOLLOWED_BY);
   });
 
+  it('resolves canViewCreatorInfo from the creatorInfo scope (N038)', () => {
+    const visitor = { uid: 'user-visitor' };
+    // Default scope is EVERYONE.
+    const open = resolveCapabilities({ viewer: visitor, target: mockTarget, relationship: {} });
+    expect(open.canViewCreatorInfo).toBe(true);
+
+    // Narrowed to ONLY_ME: the public viewer is denied.
+    const narrowedTarget = { ...mockTarget, privacy: { creatorInfo: 'ONLY_ME' } };
+    const denied = resolveCapabilities({ viewer: visitor, target: narrowedTarget, relationship: {} });
+    expect(denied.canViewCreatorInfo).toBe(false);
+
+    // The owner always sees their own creator suite.
+    const owner = resolveCapabilities({ viewer: mockOwner, target: mockOwner, relationship: { isOwner: true } });
+    expect(owner.canViewCreatorInfo).toBe(true);
+  });
+
   it('gates links/presence/economic on content visibility (N007)', () => {
     const privateTarget = { ...mockTarget, isPrivate: true };
     const visitor = { uid: 'user-visitor' };

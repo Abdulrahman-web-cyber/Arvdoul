@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Link as LinkIcon, Briefcase, Mail, HeartHandshake, Palette } from 'lucide-react';
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getLevelInfo, getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
@@ -149,6 +149,48 @@ export default function AboutScreen() {
           onEdit={handleEdit}
           theme={theme}
         />
+
+        {/* Creator Suite — gated by the `creatorInfo` scope (was a dead control:
+            the fields were saved and validated but rendered nowhere, and the
+            business contact was world-readable in users/{uid}). The projection
+            blanks the fields, so this only renders when the scope allows them. */}
+        {displayedProfile?.canViewCreatorInfo !== false && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
+          <div className={cn(
+            'p-5 rounded-2xl border space-y-4 shadow-sm',
+            isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
+          )}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Creator Suite</h3>
+            </div>
+            <div className="space-y-2.5">
+              {displayedProfile?.creatorCategory && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Palette className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Discipline:</span>
+                  <span className="text-slate-900 dark:text-white font-medium">{displayedProfile.creatorCategory}</span>
+                </div>
+              )}
+              {displayedProfile?.inquiriesEmail && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Business contact:</span>
+                  <a href={`mailto:${displayedProfile.inquiriesEmail}`} className="text-indigo-500 hover:underline truncate">
+                    {displayedProfile.inquiriesEmail}
+                  </a>
+                </div>
+              )}
+              {displayedProfile?.tipMessage && (
+                <div className="flex items-start gap-3 text-sm">
+                  <HeartHandshake className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-slate-600 dark:text-slate-300 italic">{displayedProfile.tipMessage}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Citizenship & Standing Strip */}
         <div className={cn(

@@ -137,6 +137,7 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
       perspective,
       canViewProfile: isActualOwner && !isBlockedBy,
       canViewIdentity: isActualOwner && !isBlockedBy,
+      canViewCreatorInfo: isActualOwner && !isBlockedBy,
       canViewContent: false,
       canViewFollowers: false,
       canViewFollowing: false,
@@ -182,19 +183,23 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
   // links/pronouns/…). It is NOT tied to canViewContent: on a private account a
   // follower has content access anyway, and a public viewer may read the card
   // unless the owner narrowed the scope. The owner always sees their own card.
-  const canViewIdentity = isSimulatedOwner || canViewProfileSection('profileInfo', targetPrivacy, effectiveRelation);
-  const canViewFollowers = canViewProfileSection('followersList', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewFollowing = canViewProfileSection('followingList', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewActivity = canViewProfileSection('activity', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewAchievements = canViewProfileSection('achievements', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewTitles = canViewProfileSection('titles', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewCommunities = canViewProfileSection('communities', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewCollections = canViewProfileSection('collections', targetPrivacy, effectiveRelation) && canViewContent;
-  // All gated sections require canViewContent so the capability map can never
-  // report a section visible while content itself is restricted.
-  const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation) && canViewContent;
-  const canViewEconomicStatus = isSimulatedOwner || (canViewProfileSection('economicStatus', targetPrivacy, effectiveRelation) && canViewContent);
+    const canViewIdentity = isSimulatedOwner || canViewProfileSection('profileInfo', targetPrivacy, effectiveRelation);
+    // `creatorInfo` gates the creator suite surface (category, business contact,
+    // patronage note, creator standing). Like `profileInfo` it is a standalone
+    // scope, not tied to canViewContent.
+    const canViewCreatorInfo = isSimulatedOwner || canViewProfileSection('creatorInfo', targetPrivacy, effectiveRelation);
+    const canViewFollowers = canViewProfileSection('followersList', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewFollowing = canViewProfileSection('followingList', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewActivity = canViewProfileSection('activity', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewAchievements = canViewProfileSection('achievements', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewTitles = canViewProfileSection('titles', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewCommunities = canViewProfileSection('communities', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewCollections = canViewProfileSection('collections', targetPrivacy, effectiveRelation) && canViewContent;
+    // All gated sections require canViewContent so the capability map can never
+    // report a section visible while content itself is restricted.
+    const canViewLinks = canViewProfileSection('links', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewPresence = canViewProfileSection('presence', targetPrivacy, effectiveRelation) && canViewContent;
+    const canViewEconomicStatus = isSimulatedOwner || (canViewProfileSection('economicStatus', targetPrivacy, effectiveRelation) && canViewContent);
 
   // Follow / Unfollow actions
   const isFollowing = Boolean(relationship.isFollowing);
@@ -219,6 +224,7 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
     perspective,
     canViewProfile: true,
     canViewIdentity,
+    canViewCreatorInfo,
     canViewContent,
     canViewFollowers,
     canViewFollowing,
