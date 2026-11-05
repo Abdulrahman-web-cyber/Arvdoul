@@ -226,7 +226,7 @@ describe('profileReadModel - capability projection', () => {
         id: 'u1', level: 7, experience: 3400, activeStreak: 12, activeDaysCount: 90,
         reputationScore: 88, reputation: 88, achievements: ['a'], titles: ['t'], activeTitle: { name: 'X' },
       };
-      const denied = projectProfileForViewer(raw, { canViewActivity: false });
+      const denied = projectProfileForViewer(raw, { canViewActivity: false, canViewAchievements: false, canViewTitles: false });
       expect(denied.level).toBeNull();
       expect(denied.experience).toBeNull();
       expect(denied.activeStreak).toBeNull();
@@ -235,10 +235,22 @@ describe('profileReadModel - capability projection', () => {
       expect(denied.titles).toEqual([]);
       expect(denied.activeTitle).toBeNull();
 
-      const allowed = projectProfileForViewer(raw, { canViewActivity: true });
+      const allowed = projectProfileForViewer(raw, { canViewActivity: true, canViewAchievements: true, canViewTitles: true });
       expect(allowed.level).toBe(7);
       expect(allowed.reputationScore).toBe(88);
       expect(allowed.achievements).toEqual(['a']);
+    });
+
+    it('gates badges and titles on their own scopes, independent of the level', () => {
+      // The settings UI writes `achievements` and `titles` separately, so a
+      // viewer allowed the level but denied badges must not read the badges.
+      const raw = { id: 'u1', level: 7, achievements: ['a'], titles: ['t'] };
+      const projected = projectProfileForViewer(raw, {
+        canViewActivity: true, canViewAchievements: false, canViewTitles: false,
+      });
+      expect(projected.level).toBe(7);
+      expect(projected.achievements).toEqual([]);
+      expect(projected.titles).toEqual([]);
     });
 
     it('owner bypasses the standing gate', () => {

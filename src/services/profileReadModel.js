@@ -191,10 +191,13 @@ export const STANDING_FIELDS = Object.freeze([
   'influenceScore',
   'contribution',
   'contributionScore',
-  'achievements',
-  'titles',
-  'activeTitle',
 ]);
+
+/** Badge fields gated by their own `achievements` scope. */
+export const ACHIEVEMENT_FIELDS = Object.freeze(['achievements', 'achievementsCount']);
+
+/** Title fields gated by their own `titles` scope. */
+export const TITLE_FIELDS = Object.freeze(['titles', 'activeTitle', 'primaryTitle']);
 
 /**
  * Apply the capability decision exactly once. The view layer must consume the
@@ -217,6 +220,8 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   const presenceVisible = !blocked && (isOwner || Boolean(caps.canViewPresence));
   const mayViewCreator = isOwner || Boolean(caps.canViewCreatorInfo);
   const mayViewStanding = isOwner || Boolean(caps.canViewActivity);
+  const mayViewAchievements = isOwner || Boolean(caps.canViewAchievements);
+  const mayViewTitles = isOwner || Boolean(caps.canViewTitles);
   const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
@@ -262,11 +267,26 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
       if (field in projected) projected[field] = null;
     }
   }
-  // `activity` gates civic standing (level, reputation, streak, badges). Without
-  // this the scope was resolved but enforced nowhere, so the "Civic Standing &
+  // `activity` gates civic standing (level, reputation, streak). Without this
+  // the scope was resolved but enforced nowhere, so the "Civic Standing &
   // Badges" control hid nothing.
   if (!mayViewStanding) {
     for (const field of STANDING_FIELDS) {
+      if (!(field in projected)) continue;
+      projected[field] = Array.isArray(projected[field]) ? [] : null;
+    }
+  }
+  // Badges and titles are separate scopes (the settings UI writes `achievements`
+  // and `titles` alongside `activity`), so they are masked independently — a
+  // viewer allowed the level but denied badges must not read the badges.
+  if (!mayViewAchievements) {
+    for (const field of ACHIEVEMENT_FIELDS) {
+      if (!(field in projected)) continue;
+      projected[field] = Array.isArray(projected[field]) ? [] : null;
+    }
+  }
+  if (!mayViewTitles) {
+    for (const field of TITLE_FIELDS) {
       if (!(field in projected)) continue;
       projected[field] = Array.isArray(projected[field]) ? [] : null;
     }
