@@ -117,6 +117,16 @@ are expected — only treat errors as failures.
 - **Callables from the client**: go through `src/services/callableService.js`
   (`callFunction`, `FUNCTIONS`) rather than inlining `httpsCallable(getFunctions(), ...)`,
   so app binding and error normalisation stay consistent.
+- **Callables are only reachable through the callable protocol.** A server-side
+  `fetch`/Cloud Tasks POST to `cloudfunctions.net/<callable>` is rejected (a
+  callable needs the JSON `data` envelope and an ID token), so such a pipeline
+  silently no-ops. Server code must call the shared internal function in-process.
+  `callableAuthGate.test.js` fails if any `functions/*.js` references a
+  `cloudfunctions.net/<callable>` path, and if any callable (either export shape —
+  `functions.https.onCall(` or destructured `onCall(`) lacks an auth check. When a
+  Cloud Task calls an `onRequest` worker, verify the token the queue actually
+  mints: an `oidcToken` is an OIDC token (`google-auth-library`), not a Firebase
+  ID token.
 - **Profile view analytics**: `functions/analytics.js` (`trackProfileView`) is the only
   writer of `profile_views` / `profile_analytics`; rules deny all client writes. Its
   shard key must stay byte-identical to `hashString()` in
