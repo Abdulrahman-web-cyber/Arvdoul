@@ -22,13 +22,7 @@ import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import {
-  pickHandle,
-  deriveHandle,
-  pickDisplayName,
-  resolveAvatarUrl,
-  resolveCount,
-  resolveLevelValue,
-  resolveVerifiedFlag,
+  deriveProfileIdentity,
   projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
@@ -72,27 +66,29 @@ export default function ProfilePreviewScreen({
   const effectiveProfile = useMemo(() => {
     if (!rawProfile && !currentUserId) return null;
     const p = rawProfile || {};
-    const safeDisplayName = pickDisplayName([p.displayName, p.name], { fallback: 'Arvdoul Citizen' });
-    const safeUsername = pickHandle([p.username]) || deriveHandle(authUser?.email) || 'citizen';
+    const identity = deriveProfileIdentity(p, {
+      viewer: authUser || storeUser || {},
+      handleCandidates: [p.username],
+      handleFallbacks: [authUser?.email],
+      handleFallback: 'citizen',
+      displayCandidates: [p.displayName, p.name],
+      displayFallback: 'Arvdoul Citizen',
+      followerCandidates: [p.followerCount, p.followersCount],
+      followingCandidates: [p.followingCount],
+      postCandidates: [p.postCount, storePosts?.length],
+      levelCandidates: [p.level, p.creatorLevel],
+      coinCandidates: [p.coins, p.coinBalance],
+      userId: currentUserId,
+    });
     return {
       ...p,
-      id: p.id || p.uid || currentUserId,
-      uid: p.uid || p.id || currentUserId,
-      displayName: safeDisplayName,
-      username: safeUsername,
+      ...identity,
       bio: p.bio || '',
       location: p.location || '',
       website: p.website || '',
-      level: resolveLevelValue(p.level, p.creatorLevel),
-      photoURL: resolveAvatarUrl(p.photoURL || authUser?.photoURL, safeDisplayName, currentUserId),
-      followerCount: resolveCount(p.followerCount, p.followersCount),
-      followingCount: resolveCount(p.followingCount),
-      postCount: resolveCount(p.postCount, storePosts?.length),
-      coins: resolveCount(p.coins, p.coinBalance),
-      isVerified: resolveVerifiedFlag(p),
       isPrivate: Boolean(p.isPrivate),
     };
-  }, [rawProfile, currentUserId, authUser, storePosts?.length]);
+  }, [rawProfile, currentUserId, authUser, storeUser, storePosts?.length]);
 
   const isOwnerMode = viewPerspective === 'owner';
 

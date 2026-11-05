@@ -25,6 +25,7 @@ import {
   readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
+  deriveProfileIdentity,
   projectProfileForViewer,
   OFFLINE_PRESENCE,
 } from '../services/profileReadModel.js';
@@ -113,6 +114,54 @@ describe('profileReadModel - standing flags', () => {
     expect(typeof url).toBe('string');
     expect(url.length).toBeGreaterThan(0);
     expect(resolveAvatarUrl('https://cdn/x.png', 'Elena', 'u1')).toBe('https://cdn/x.png');
+  });
+});
+
+describe('profileReadModel - canonical identity derivation', () => {
+  it('rejects placeholders for the handle and display name, and derives from fallbacks', () => {
+    const identity = deriveProfileIdentity(
+      { id: 'u1', username: 'user_123', displayName: 'User' },
+      {
+        handleCandidates: ['user_123'],
+        handleFallbacks: ['Elena.Marchetti@example.com'],
+        handleFallback: 'citizen',
+        displayCandidates: ['User', 'Creator'],
+        displayFallback: 'Citizen',
+        userId: 'u1',
+      },
+    );
+    expect(identity.username).toBe('elenamarchetti');
+    expect(identity.displayName).toBe('Citizen');
+    expect(identity.id).toBe('u1');
+  });
+
+  it('coerces counts, keeps absent level null, and resolves creator/verified from level + flags', () => {
+    const identity = deriveProfileIdentity(
+      { id: 'u1', isVerified: true, level: 30 },
+      {
+        handleCandidates: ['elena'],
+        displayCandidates: ['Elena'],
+        followerCandidates: [undefined, '12'],
+        followingCandidates: [null],
+        postCandidates: [3],
+        levelCandidates: [undefined, 30],
+        coinCandidates: [undefined, 0],
+        userId: 'u1',
+      },
+    );
+    expect(identity.followerCount).toBe(12);
+    expect(identity.followingCount).toBe(0);
+    expect(identity.postCount).toBe(3);
+    expect(identity.level).toBe(30);
+    expect(identity.coins).toBe(0);
+    expect(identity.isVerified).toBe(true);
+    expect(identity.isCreator).toBe(true);
+  });
+
+  it('leaves level null and coins absent when nothing is stored', () => {
+    const identity = deriveProfileIdentity({ id: 'u1' }, { userId: 'u1', withCoins: false });
+    expect(identity.level).toBeNull();
+    expect(identity).not.toHaveProperty('coins');
   });
 });
 
@@ -306,6 +355,21 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
   it('every profile surface imports the canonical read model', () => {
     for (const file of surfaces) {
       expect(read(file)).toContain('profileReadModel');
+    }
+  });
+
+  it('the three profile screens derive identity through deriveProfileIdentity', () => {
+    // Each screen used to chain pickHandle/deriveHandle/pickDisplayName/
+    // resolveAvatarUrl/resolveCount/resolveLevelValue/resolveCreatorFlag/
+    // resolveVerifiedFlag by hand, in a different order, with a different
+    // fallback. deriveProfileIdentity owns that chain now; a screen that drops
+    // it has gone back to a private copy.
+    for (const file of [
+      'src/screens/Profile/ProfilePublicScreen.jsx',
+      'src/screens/Profile/ProfilePreviewScreen.jsx',
+      'src/screens/Profile/ProfileMyScreen.jsx',
+    ]) {
+      expect(read(file)).toContain('deriveProfileIdentity(');
     }
   });
 

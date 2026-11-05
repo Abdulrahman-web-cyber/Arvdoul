@@ -21,15 +21,9 @@ import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBa
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import {
-  pickHandle,
   deriveHandle,
-  pickDisplayName,
-  resolveAvatarUrl,
-  resolveCount,
-  resolveLevelValue,
-  resolveCreatorFlag,
-  resolveVerifiedFlag,
   isPlaceholderHandle,
+  deriveProfileIdentity,
   projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
@@ -150,67 +144,37 @@ export default function ProfileMyScreen() {
     return () => { cancelled = true; };
   }, [currentUserId, profile?.username, currentUser?.displayName, profile?.displayName]);
 
-  // Clean unique username by userService (never displaying signing method name)
-  const cleanUsername = useMemo(() => {
-    const candidate = pickHandle([profile?.username, currentUser?.username]);
-    if (candidate) return candidate;
-    const fromDisplay = deriveHandle(currentUser?.displayName || profile?.displayName);
-    if (fromDisplay && !isPlaceholderHandle(fromDisplay)) return fromDisplay;
-    const fromEmail = deriveHandle(currentUser?.email || profile?.email);
-    if (fromEmail && !isPlaceholderHandle(fromEmail)) return fromEmail;
-    return 'citizen';
-  }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
-
-  // Server-authoritative composite profile
+  // Server-authoritative composite profile. The identity/count derivation is
+  // the shared `deriveProfileIdentity` (profileReadModel) so the owner screen
+  // cannot drift from the public/preview screens; the owner-only extras
+  // (viewer fallbacks for bio/location/website, coins) are applied here.
   const effectiveProfile = useMemo(() => {
-    const safeDisplayName = pickDisplayName(
-      [currentUser?.displayName, currentUser?.name, profile?.displayName, profile?.name],
-      { fallback: deriveHandle(currentUser?.email) || 'Citizen' }
-    );
-    const safeBio = (typeof profile?.bio === 'string' ? profile.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
-    const safeLocation = typeof profile?.location === 'string' ? profile.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
-    const safeWebsite = typeof profile?.website === 'string' ? profile.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
-    const safeLevel = resolveLevelValue(level, profile?.level, currentUser?.level);
-
-    if (profile && typeof profile === 'object') {
-      return {
-        ...profile,
-        id: profile.id || profile.uid || currentUserId || 'creator',
-        uid: profile.uid || profile.id || currentUserId || 'creator',
-        username: cleanUsername,
-        displayName: safeDisplayName,
-        bio: safeBio,
-        location: safeLocation,
-        website: safeWebsite,
-        level: safeLevel,
-        photoURL: resolveAvatarUrl(profile.photoURL || currentUser?.photoURL, safeDisplayName, currentUserId),
-        followerCount: resolveCount(profile.followerCount, profile.followersCount, currentUser?.followerCount),
-        followingCount: resolveCount(profile.followingCount, currentUser?.followingCount),
-        postCount: resolveCount(profile.postCount, posts?.length),
-        coins: resolveCount(profile.coins, profile.coinBalance, balance, currentUser?.coins),
-        isVerified: resolveVerifiedFlag(profile) || Boolean(currentUser?.isVerified),
-        isCreator: resolveCreatorFlag(profile, currentUser, safeLevel),
-      };
-    }
-
+    const base = profile && typeof profile === 'object' ? profile : {};
+    const identity = deriveProfileIdentity(base, {
+      viewer: currentUser || {},
+      handleCandidates: [base.username, currentUser?.username],
+      handleFallbacks: [currentUser?.displayName, base.displayName, currentUser?.email, base.email],
+      handleFallback: 'citizen',
+      displayCandidates: [currentUser?.displayName, currentUser?.name, base.displayName, base.name],
+      displayFallback: deriveHandle(currentUser?.email) || 'Citizen',
+      followerCandidates: [base.followerCount, base.followersCount, currentUser?.followerCount],
+      followingCandidates: [base.followingCount, currentUser?.followingCount],
+      postCandidates: [base.postCount, posts?.length],
+      levelCandidates: [level, base.level, currentUser?.level],
+      coinCandidates: [base.coins, base.coinBalance, balance, currentUser?.coins],
+      userId: currentUserId,
+    });
+    const safeBio = (typeof base.bio === 'string' ? base.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
+    const safeLocation = typeof base.location === 'string' ? base.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
+    const safeWebsite = typeof base.website === 'string' ? base.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
     return {
-      id: currentUserId || 'creator',
-      uid: currentUserId || 'creator',
-      username: cleanUsername,
-      displayName: safeDisplayName,
+      ...base,
+      ...identity,
       bio: safeBio,
-      photoURL: resolveAvatarUrl(currentUser?.photoURL, safeDisplayName, currentUserId),
-      followerCount: resolveCount(currentUser?.followerCount, currentUser?.followersCount),
-      followingCount: resolveCount(currentUser?.followingCount),
-      postCount: resolveCount(posts?.length),
-      coins: resolveCount(currentUser?.coins, balance),
-      isVerified: resolveVerifiedFlag(currentUser),
-      isCreator: resolveCreatorFlag({}, currentUser, safeLevel),
-      level: safeLevel,
       location: safeLocation,
       website: safeWebsite,
     };
-  }, [profile, cleanUsername, currentUser, currentUserId, posts?.length, balance, level]);
+  }, [profile, currentUser, currentUserId, posts?.length, balance, level]);
 
   // Centrally resolved Action Capabilities adhering strictly to active viewAs perspective
   const capabilities = useMemo(() => {
@@ -286,7 +250,7 @@ export default function ProfileMyScreen() {
   // Handle Share
   const handleShare = useCallback(async () => {
     try {
-      const target = effectiveProfile || { id: currentUserId, uid: currentUserId, username: cleanUsername };
+      const target = effectiveProfile || { id: currentUserId, uid: currentUserId };
       const result = await shareProfile(target);
       if (result.copied) {
         toast.success('Profile link copied to clipboard!');
@@ -294,7 +258,7 @@ export default function ProfileMyScreen() {
     } catch (err) {
       toast.error('Could not share profile');
     }
-  }, [effectiveProfile, currentUserId, cleanUsername]);
+  }, [effectiveProfile, currentUserId]);
 
   // Cross-component event listeners for TopAppBar & Header actions
   useEffect(() => {

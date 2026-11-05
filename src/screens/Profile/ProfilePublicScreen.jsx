@@ -17,14 +17,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import {
-  pickHandle,
-  deriveHandle,
-  pickDisplayName,
-  resolveAvatarUrl,
   resolveCount,
-  resolveLevelValue,
-  resolveCreatorFlag,
-  resolveVerifiedFlag,
+  deriveProfileIdentity,
   projectProfileForViewer,
   OFFLINE_PRESENCE,
 } from '../../services/profileReadModel.js';
@@ -264,38 +258,31 @@ export default function ProfilePublicScreen() {
     }
   }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
 
-  // Clean public username resolution
-  const cleanPublicUsername = useMemo(() => (
-    pickHandle([profileData?.username, profileData?.handle])
-    || deriveHandle(profileData?.displayName)
-    || deriveHandle(profileData?.email)
-    || 'creator'
-  ), [profileData?.username, profileData?.handle, profileData?.displayName, profileData?.email]);
-
   // Base profile: real data only, no mock fallbacks and no privacy decisions.
   // Privacy is applied once, from the capability engine, in `effectiveProfile`
-  // below: components must not re-derive fail-open privacy flags.
+  // below: components must not re-derive fail-open privacy flags. Identity and
+  // counts come from the shared `deriveProfileIdentity` so this screen cannot
+  // drift from the owner/preview screens.
   const baseProfile = useMemo(() => {
     if (!profileData) return null;
-    const safeDisplayName = pickDisplayName([profileData.displayName, profileData.name], { fallback: 'Creator' });
-    // No stored level => unknown, not a fabricated Level 1.
-    const safeLevel = resolveLevelValue(profileData.level);
-
+    const identity = deriveProfileIdentity(profileData, {
+      handleCandidates: [profileData.username, profileData.handle],
+      handleFallbacks: [profileData.displayName, profileData.email],
+      handleFallback: 'creator',
+      displayCandidates: [profileData.displayName, profileData.name],
+      displayFallback: 'Creator',
+      followerCandidates: [profileData.followerCount, profileData.followersCount],
+      followingCandidates: [profileData.followingCount],
+      postCandidates: [posts?.length, profileData.postCount],
+      levelCandidates: [profileData.level],
+      coinCandidates: [profileData.coins, profileData.coinBalance],
+      userId,
+    });
     return {
       ...profileData,
-      id: profileData.id || profileData.uid || userId,
-      uid: profileData.uid || profileData.id || userId,
-      username: cleanPublicUsername,
-      displayName: safeDisplayName,
+      ...identity,
       bio: typeof profileData.bio === 'string' ? profileData.bio : '',
-      photoURL: resolveAvatarUrl(profileData.photoURL, safeDisplayName, userId),
-      followerCount: resolveCount(profileData.followerCount, profileData.followersCount),
-      followingCount: resolveCount(profileData.followingCount),
-      postCount: resolveCount(posts?.length, profileData.postCount),
       likesReceived: resolveCount(profileData.likesReceived, profileData.likesCount),
-      coins: resolveCount(profileData.coins, profileData.coinBalance),
-      isVerified: resolveVerifiedFlag(profileData),
-      isCreator: resolveCreatorFlag(profileData, {}, safeLevel),
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
       links: Array.isArray(profileData.links) ? profileData.links : [],
@@ -303,11 +290,10 @@ export default function ProfilePublicScreen() {
       profession: typeof profileData.profession === 'string' ? profileData.profession : '',
       education: typeof profileData.education === 'string' ? profileData.education : '',
       presence: profileData.presence || OFFLINE_PRESENCE,
-      level: safeLevel,
       location: typeof profileData.location === 'string' ? profileData.location : (typeof profileData.city === 'string' ? profileData.city : ''),
       website: typeof profileData.website === 'string' ? profileData.website : (typeof profileData.link === 'string' ? profileData.link : ''),
     };
-  }, [profileData, userId, posts?.length, cleanPublicUsername]);
+  }, [profileData, userId, posts?.length]);
 
   const capabilities = useMemo(() => {
     return resolveCapabilities({

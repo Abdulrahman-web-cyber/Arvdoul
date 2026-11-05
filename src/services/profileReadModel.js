@@ -124,6 +124,79 @@ export function resolveVerifiedFlag(profile = {}) {
 }
 
 /**
+ * The canonical identity/count derivation shared by every profile surface.
+ * ProfileMyScreen, ProfilePublicScreen and ProfilePreviewScreen each grew their
+ * own copy of the same chain (id/uid, handle, display name, avatar, follower /
+ * following / post counts, level, verified + creator flags, coins) with subtly
+ * different candidate ordering and fallbacks — the drift AGENTS.md warns about.
+ * Callers now supply only their own candidate ordering and the two literal
+ * fallbacks; the ordering rules (placeholder rejection, `user_` handle
+ * rejection, `deriveHandle` on email/display name) live here once.
+ *
+ * @param {object} profile  The raw profile document.
+ * @param {object} opts
+ * @param {object} [opts.viewer]            Auth/store user, for owner-side fallbacks.
+ * @param {string[]} [opts.handleCandidates] Explicit handle candidates, in priority order.
+ * @param {string[]} [opts.handleFallbacks]  Values to run through `deriveHandle` if no candidate wins.
+ * @param {string} [opts.handleFallback]     Literal last-resort handle.
+ * @param {string[]} [opts.displayCandidates]
+ * @param {string} [opts.displayFallback]    Literal last-resort display name.
+ * @param {string[]} [opts.followerCandidates]
+ * @param {string[]} [opts.followingCandidates]
+ * @param {string[]} [opts.postCandidates]
+ * @param {Array<*>} [opts.levelCandidates]
+ * @param {Array<*>} [opts.coinCandidates]
+ * @param {string}  [opts.userId]            Route/owner uid, used when the profile has none.
+ * @param {boolean} [opts.withCoins]         Include the `coins` count (false for surfaces that never show it).
+ */
+export function deriveProfileIdentity(profile = {}, opts = {}) {
+  const {
+    viewer = {},
+    handleCandidates = [],
+    handleFallbacks = [],
+    handleFallback = 'citizen',
+    displayCandidates = [],
+    displayFallback = 'Citizen',
+    followerCandidates = [],
+    followingCandidates = [],
+    postCandidates = [],
+    levelCandidates = [],
+    coinCandidates = [],
+    userId = null,
+    withCoins = true,
+  } = opts;
+
+  const resolvedId = profile.id || profile.uid || viewer.uid || userId || null;
+  let handle = pickHandle(handleCandidates);
+  if (!handle) {
+    for (const value of handleFallbacks) {
+      handle = deriveHandle(value);
+      if (handle) break;
+    }
+  }
+  if (!handle) handle = handleFallback;
+
+  const displayName = pickDisplayName(displayCandidates, { fallback: displayFallback });
+  const level = resolveLevelValue(...levelCandidates);
+
+  const identity = {
+    id: resolvedId,
+    uid: profile.uid || profile.id || viewer.uid || userId || null,
+    username: handle,
+    displayName,
+    level,
+    photoURL: resolveAvatarUrl(profile.photoURL || viewer.photoURL, displayName, resolvedId),
+    followerCount: resolveCount(...followerCandidates),
+    followingCount: resolveCount(...followingCandidates),
+    postCount: resolveCount(...postCandidates),
+    isVerified: resolveVerifiedFlag(profile) || Boolean(viewer.isVerified),
+    isCreator: resolveCreatorFlag(profile, viewer, level),
+  };
+  if (withCoins) identity.coins = resolveCount(...coinCandidates);
+  return identity;
+}
+
+/**
  * Extended identity-card fields gated by the `profileInfo` scope. The public
  * projection (`displayName`, `username`, `photoURL`) is intentionally NOT in
  * this list — a viewer must always be able to identify whom they are looking at
@@ -308,5 +381,6 @@ export default {
   readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
+  deriveProfileIdentity,
   projectProfileForViewer,
 };
