@@ -11,6 +11,16 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { enqueuePush } = require('./pushQueue');
+const { checkRateLimit } = require('./rateLimit');
+
+// A single shared Admin SDK instance. This module previously referenced a bare
+// `db` that was never defined (no `admin.initializeApp()` either), so every
+// moderation and mention-resolution path threw `ReferenceError: db is not
+// defined` at runtime — invisible to the deploy test, which only loads modules.
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
 
 // ----------------------------------------------------------------------
 //  Structured Logging Helper
@@ -25,36 +35,11 @@ function log(level, message, data = {}) {
 }
 
 // ----------------------------------------------------------------------
-//  Sharded rate limiter (reads all shards)
+//  Sharded rate limiter — the shared implementation in ./rateLimit.js.
+//  This module previously carried its own copy that threw a plain `Error`
+//  (so clients saw a generic failure instead of `resource-exhausted`) and
+//  read 5 shards while the shared limiter reads 10.
 // ----------------------------------------------------------------------
-const NUM_RATE_SHARDS = 5;
-
-async function checkRateLimit(userId, action, maxOps, windowMs = 60000) {
-  const now = Date.now();
-  const windowStart = now - windowMs;
-  const parentRef = db.collection('rate_limits').doc(`${userId}_${action}`);
-
-  await db.runTransaction(async (t) => {
-    const shards = [];
-    for (let i = 0; i < NUM_RATE_SHARDS; i++) {
-      const snap = await t.get(parentRef.collection('shards').doc(String(i)));
-      shards.push(snap.exists ? snap.data() : { count: 0, windowStart: 0 });
-    }
-    const total = shards.reduce((sum, d) => (d.windowStart >= windowStart ? sum + d.count : 0), 0);
-    if (total >= maxOps) {
-      throw new Error('RATE_LIMIT_EXCEEDED');
-    }
-    const shardId = Math.floor(Math.random() * NUM_RATE_SHARDS);
-    const shardRef = parentRef.collection('shards').doc(String(shardId));
-    let data = shards[shardId];
-    if (data.windowStart < windowStart) {
-      data = { count: 1, windowStart: now, expireAt: new Date(now + windowMs * 2) };
-    } else {
-      data.count += 1;
-    }
-    t.set(shardRef, data, { merge: true });
-  });
-}
 
 // ----------------------------------------------------------------------
 // 1. moderateComment (onCreate) – idempotent, per‑user rate limited

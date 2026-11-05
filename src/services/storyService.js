@@ -1768,13 +1768,13 @@ class UltimateStoryService {
       return false;
     }
     if (story.userId === viewerId) return true;
-    // Blocked in either direction = no access (spec §28).
+    // Blocked in either direction = no access (spec §28). Actor-scoped list
+    // read via the graph spine: a point read of an absent block edge is denied
+    // by the `resource.data` rule, which would silently skip the check (N033).
     try {
-      const [b1, b2] = await Promise.all([
-        this.fs.getDoc(this.fs.doc(this.firestore, 'blocks', `${viewerId}_${story.userId}`)),
-        this.fs.getDoc(this.fs.doc(this.firestore, 'blocks', `${story.userId}_${viewerId}`)),
-      ]);
-      if (b1.exists() || b2.exists()) return false;
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(viewerId, story.userId);
+      if (edge.isBlocking || edge.isBlockedBy) return false;
     } catch { /* block check best-effort; rules enforce authoritatively */ }
     if (story.visibility === STORY_CONFIG.VISIBILITY.PUBLIC) return true;
     if (story.visibility === STORY_CONFIG.VISIBILITY.FOLLOWERS) {

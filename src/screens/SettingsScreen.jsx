@@ -662,6 +662,29 @@ export default function SettingsScreen() {
               </div>
             </div>
 
+            {/* Creator Suite Scope (creatorInfo) */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-bold text-sm">Creator Suite</p>
+                <p className="text-xs text-gray-400 mt-0.5">Who can see your creator discipline, business contact and patronage note</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group">
+                {[
+                  { id: VISIBILITY_SCOPES.EVERYONE, label: 'Everyone' },
+                  { id: VISIBILITY_SCOPES.FOLLOWERS, label: 'Followers' },
+                  { id: VISIBILITY_SCOPES.CONNECTIONS, label: 'Connections' },
+                  { id: VISIBILITY_SCOPES.ONLY_ME, label: 'Only Me' }
+                ].map((s) => (
+                  <OptionPill
+                    key={s.id}
+                    label={s.label}
+                    active={(profilePrivacy.creatorInfo || VISIBILITY_SCOPES.EVERYONE) === s.id}
+                    onClick={() => handleUpdateProfilePrivacyScope('creatorInfo', s.id)}
+                  />
+                ))}
+              </div>
+            </div>
+
           </div>
 
           <div className="w-full py-3.5">

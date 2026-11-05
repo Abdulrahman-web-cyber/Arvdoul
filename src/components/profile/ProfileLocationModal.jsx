@@ -52,6 +52,7 @@ const ProfileLocationModal = memo(({
   isOpen,
   onClose,
   currentLocation = '',
+  currentPrivacy = 'public',
   userId,
   theme = 'light',
   onLocationUpdated,
@@ -59,7 +60,7 @@ const ProfileLocationModal = memo(({
   const isDark = theme === 'dark';
   const [selectedLocation, setSelectedLocation] = useState(currentLocation || '');
   const [searchQuery, setSearchQuery] = useState('');
-  const [privacy, setPrivacy] = useState('public'); // 'public', 'country_only', 'hidden'
+  const [privacy, setPrivacy] = useState(currentPrivacy || 'public'); // 'public', 'country_only', 'hidden'
   const [isDetecting, setIsDetecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [coords, setCoords] = useState(null);
@@ -68,8 +69,9 @@ const ProfileLocationModal = memo(({
     if (isOpen) {
       setSelectedLocation(currentLocation || '');
       setSearchQuery('');
+      setPrivacy(currentPrivacy || 'public');
     }
-  }, [isOpen, currentLocation]);
+  }, [isOpen, currentLocation, currentPrivacy]);
 
   if (!isOpen) return null;
 
@@ -154,16 +156,25 @@ const ProfileLocationModal = memo(({
     setIsSaving(true);
     try {
       const userService = getUserService();
-      const finalLocation = privacy === 'hidden' ? '' : selectedLocation.trim();
-      
+      let finalLocation = privacy === 'hidden' ? '' : selectedLocation.trim();
+      // `country_only` keeps the country, not the city.
+      if (privacy === 'country_only' && finalLocation.includes(',')) {
+        finalLocation = finalLocation.split(',').pop().trim();
+      }
+
       const payload = {
         location: finalLocation,
         locationPrivacy: privacy,
         updatedAt: new Date().toISOString(),
       };
 
-      if (coords) {
+      // Coordinates are only ever stored for a `public` city selection; any other
+      // choice actively clears them so a previous precise location cannot linger
+      // in the world-readable users/{uid} document.
+      if (privacy === 'public' && coords) {
         payload.locationCoordinates = coords;
+      } else {
+        payload.locationCoordinates = null;
       }
 
       await userService.updateUserProfile(userId, payload);

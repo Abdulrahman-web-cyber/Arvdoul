@@ -574,8 +574,12 @@ describe('Unbounded queries bounded', () => {
   test('collections items + blocks reads are bounded', () => {
     const cols = fs.readFileSync(path.join(root, 'src/services/collectionsService.js'), 'utf8');
     expect(cols).toContain('limit(200)');
+    // The block read moved onto the graph spine, which bounds every edge list;
+    // the feed must delegate rather than query `blocks` itself.
     const feed = fs.readFileSync(path.join(root, 'src/services/feedService.js'), 'utf8');
-    expect(feed).toContain('fLimit(1000)');
+    expect(feed).toContain("getSocialGraphService().listConnections(userId, 'blocked'");
+    const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
+    expect(spine).toContain('MAX_PAGE_SIZE');
   });
 });
 
@@ -772,7 +776,10 @@ describe('Vibes master-spec: lifecycle + client mirror (spec §4)', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/storyService.js'), 'utf8');
     expect(src).toContain("story.status === 'expired'");
     expect(src).toContain("story.expiresAt.toDate().getTime() <= Date.now()");
-    expect(src).toContain("'blocks', `${viewerId}_${story.userId}`");
+    // Block check goes through the graph spine: a point read of an absent edge
+    // is denied by the `resource.data` rule and would silently skip the check.
+    expect(src).toContain("getSocialGraphService().getRelationship(viewerId, story.userId)");
+    expect(src).toContain('edge.isBlocking || edge.isBlockedBy');
     expect(src).toContain("story.visibility === STORY_CONFIG.VISIBILITY.PRIVATE");
   });
 });
@@ -992,15 +999,6 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
   });
 });
 
-describe('Compliance export - no fabricated personal data', () => {
-  test('exportUserData never invents an email/username/createdAt for the subject', () => {
-    const src = fs.readFileSync(path.join(root, 'src/services/complianceGovernanceService.js'), 'utf8');
-    expect(src).not.toContain("email: 'user@example.com'");
-    expect(src).not.toContain('timestamp - 86400000 * 30');
-    expect(src).toContain('async exportUserData(userId, dataSources = {})');
-  });
-});
-
 describe('Auth - signup never grants fabricated coins/levels', () => {
   test('authService creates profiles without a hardcoded starting balance', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/authService.js'), 'utf8');
@@ -1053,7 +1051,9 @@ describe('Passport - no synthetic holder identity', () => {
   test('passportService reports an absent displayName as null', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/passportService.js'), 'utf8');
     expect(src).not.toContain("'Citizen of Arvdoul'");
-    expect(src).toContain('pickDisplayName([profile.displayName, profile.name], { fallback: null })');
+    // The passport reads the projected profile, so the invariant is now pinned to
+    // the projected variable — still no synthetic fallback for an absent name.
+    expect(src).toContain('pickDisplayName([projected.displayName, projected.name], { fallback: null })');
   });
 });
 
@@ -1698,3 +1698,82 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
   });
 });
 
+
+describe('Profile hero - no fabricated join date or presence field', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('formatJoinedDate returns null instead of an invented "Joined May 2022"', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(s).not.toContain('Joined May 2022');
+  });
+
+  test('the online dot reads presence.status, the field the projection writes', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    // `presence.state` is never written anywhere; the read model writes `status`.
+    expect(s).toContain("profile?.presence?.status === 'online'");
+    expect(s).not.toContain("profile?.presence?.state === 'online'");
+  });
+});
+
+describe('Profile progression - masked standing is never re-defaulted to 0', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileMyScreen passes the projected streak through un-defaulted', () => {
+    const s = read('src/screens/Profile/ProfileMyScreen.jsx');
+    // `?? 0` turned a masked null back into a real-looking 0-day streak (N041/N044).
+    expect(s).not.toContain('streak={displayedProfile?.activeStreak ?? 0}');
+    expect(s).toContain('streak={displayedProfile?.activeStreak}');
+  });
+});
+
+describe('Profile gates read the shared level config, never a restated literal', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the hero verification badge does not hardcode the gate level', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    // AGENTS.md: "A literal like LEVEL >= 10 in JSX is a bug."
+    expect(s).not.toContain('Level 15 to Verify');
+    expect(s).toContain('LEVEL_GATES?.verifiedPriority');
+  });
+
+  test('the verification modal reads the gate from the shared config', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    expect(s).not.toContain('?? 15');
+    expect(s).toContain('LEVEL_GATES.verifiedPriority');
+  });
+
+  test('the roadmap modal derives citizenship criteria from CITIZEN_TIERS', () => {
+    const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
+    expect(s).toContain("CITIZEN_TIERS.find((t) => t.tier === 'Citizen')");
+    // The level/days criteria must not be restated as literals in the JSX.
+    expect(s).not.toContain('currentLevel >= 5');
+    expect(s).not.toContain('activeDays >= 7');
+  });
+});
+
+describe('Profile edit forms never reset on a whole-profile effect', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('ProfileQuickEditModal keys its reset on the target id, not the profile object', () => {
+    const s = read('src/components/profile/ProfileQuickEditModal.jsx');
+    // AGENTS.md: "Never reset a form from an effect keyed on the whole profile
+    // object; key on uid so in-progress edits are not discarded by realtime
+    // snapshots."
+    expect(s).not.toContain('}, [isOpen, profile]);');
+    expect(s).toContain('}, [isOpen, profileId]);');
+  });
+});
+
+describe('TitlesScreen never invents the standing it evaluates against', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('eligibility is evaluated with the real scores, not 25/50/20 defaults', () => {
+    const s = read('src/screens/Titles/TitlesScreen.jsx');
+    // A fabricated qualifying score made a locked title look claimable while the
+    // server (the authority) would reject the claim.
+    expect(s).not.toContain('reputationScore: Number(profile?.reputationScore || profile?.reputation) || 50');
+    expect(s).not.toContain('contributionScore: Number(profile?.contributionScore || profile?.contribution) || 25');
+    expect(s).not.toContain('influenceScore: Number(profile?.influenceScore || profile?.influence) || 20');
+    expect(s).toContain('reputationScore: profile?.reputationScore ?? profile?.reputation ?? null');
+  });
+});

@@ -42,8 +42,8 @@ merge(require('./polls.js'));
 merge(require('./userExport.js'));
 // AI gateway (client aiStudioService calls this via VITE_AI_GATEWAY_URL).
 merge(require('./ai.js'));
-// SAML assertion verification (client samlService requires
-// VITE_SAML_VERIFY_URL and fails closed without it).
+// SAML assertion verification (server-only; a browser cannot validate a SAML
+// assertion, so there is no client samlService — the app fails closed without it).
 merge(require('./saml.js'));
 // Level system (server-authoritative XP; client prefers this callable).
 merge(require('./levelSystem.js'));

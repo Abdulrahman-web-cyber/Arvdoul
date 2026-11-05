@@ -410,9 +410,10 @@ class UltimateFeedService {
     if (cached && Date.now() - cached.ts < FEED_CONFIG.BLOCK_CACHE_TTL) return cached.data;
     try {
       await this._ensureInitialized();
-      const { collection, query, where, getDocs, limit: fLimit } = this.firestoreMethods;
-      const snap = await getDocs(query(collection(this.firestore, 'blocks'), where('blockerId', '==', userId), fLimit(1000)));
-      const blocked = new Set(snap.docs.map(d => d.data().blockedId));
+      // Single graph reader: the spine owns the rules-provable block query.
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const { connections } = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 500 });
+      const blocked = new Set(connections.map((c) => c.id || c.uid).filter(Boolean));
       this.blockCache.set(key, { data: blocked, ts: Date.now() });
       return blocked;
     } catch (e) { return new Set(); }
@@ -544,7 +545,10 @@ class UltimateFeedService {
         const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch {
-        snapshot = await getDocs(postsRef);
+        // The ordered query can fail (missing index / field); fall back to an
+        // unordered read, but keep the limit — an unbounded `getDocs(postsRef)`
+        // reads the entire posts collection (bill + latency cliff).
+        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
       }
       const posts = [];
       snapshot.forEach(doc => {
@@ -679,7 +683,7 @@ class UltimateFeedService {
         const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch {
-        snapshot = await getDocs(postsRef);
+        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -715,7 +719,7 @@ class UltimateFeedService {
         const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 4));
         snapshot = await getDocs(q);
       } catch {
-        snapshot = await getDocs(postsRef);
+        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 4)));
       }
       
       const posts = [];

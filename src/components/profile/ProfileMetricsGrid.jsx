@@ -53,9 +53,12 @@ const ProfileMetricsGrid = memo(({
   const profileViews = analytics?.totalViews ?? profile?.profileViews ?? profile?.viewsCount ?? 0;
   const likesCount = profile?.likesReceived ?? profile?.likesCount ?? 0;
 
-  const canShowFollowers = capabilities?.canViewFollowers ?? true;
-  const canShowFollowing = capabilities?.canViewFollowing ?? true;
-  const canShowEconomic = capabilities?.canViewEconomicStatus ?? (isOwner || Boolean(profile?.coins !== undefined && profile?.coins !== null));
+  // Fail CLOSED when the capability map is absent: a section the engine did not
+  // explicitly grant must not render. `?? true` / `?? isOwner` previously made a
+  // missing capabilities prop leak follower counts and economic status.
+  const canShowFollowers = Boolean(capabilities?.canViewFollowers);
+  const canShowFollowing = Boolean(capabilities?.canViewFollowing);
+  const canShowEconomic = isOwner || Boolean(capabilities?.canViewEconomicStatus);
 
   // Growth percentages strictly from analytics (no fake default growth numbers)
   const followerGrowth = analytics?.followerGrowth ? Number(analytics.followerGrowth) : null;

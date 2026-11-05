@@ -30,24 +30,65 @@ are expected — only treat errors as failures.
   access (`resolveCapabilities`); `src/services/profileReadModel.js` owns the derivation every
   profile surface needs — placeholder name/handle rejection (`pickHandle`, `pickDisplayName`,
   `deriveHandle`), avatar fallback (`resolveAvatarUrl`), count/level coercion
-  (`resolveCount`, `resolveLevelValue`), creator/verified flags (`resolveCreatorFlag`,
+  (`resolveCount`, `resolveLevelValue`), the standing-score clamp (`readStandingScore`),
+  creator/verified flags (`resolveCreatorFlag`,
   `resolveVerifiedFlag`) — and applies the capability decision exactly once
   (`projectProfileForViewer`). `ProfilePublicScreen`, `ProfilePreviewScreen`,
   `ProfileMyScreen` and `passportService` must consume these, never re-derive privacy with a
   `capabilities.canViewX ? … : null` ternary, hardcode `LEVEL_GATES.creatorProfile`, or
-  re-implement the `user_`/`creator` placeholder filter. `userService.getUserProfile` resolves
+  re-implement the `user_`/`creator` placeholder filter. Every privacy scope the UI exposes
+  must be resolved by `resolveCapabilities` and masked by the projection — a scope that is
+  settable but never read (as `profileInfo` once was) is a dead control. `projectProfileForViewer`
+  masks the descriptive identity card (`IDENTITY_INFO_FIELDS`: bio/location/website/… via
+  `canViewIdentity`) and the account identity (`displayName`/`username`/`photoURL`) is never
+  masked, so the follow/block affordance keeps working. `AboutScreen` renders the projected
+  profile, not the raw one. `userService.getUserProfile` resolves
   only the relation flags and delegates the decision to the engine + projection — it must not
   call `canViewProfileSection` itself. `profileReadModel.test.js` and
   `userServicePrivacyProjection.test.js` fail CI if any surface regresses; both are in the
   hard-failing `guards` CI job.
+- **Profile surfaces fail closed.** A profile component must treat an absent capability map
+  as "denied", never `capabilities?.canViewX ?? true` / `?? isOwner` — a missing prop must not
+  leak follower counts or economic status (`ProfileMetricsGrid` is the reference). A "view as
+  public" preview must resolve the *real* relationship from `profileStore.followStatus`; it
+  must never assert `isFollowing: true` to fake a viewer, which reports `canUnfollow` for a
+  stranger and hides the Follow button. `EditProfileScreen` resolves creator standing through
+  `resolveCreatorFlag`, not a raw `userLevel >= LEVEL_GATES.creatorProfile` check.
+  `ProfileHeader.jsx` / `ProfileStats.jsx` / `ProfileCivicCard.jsx` were removed as dead
+  (superseded by `ProfileHeroSection`); do not resurrect them.
 - **Friendship**: `userService.areFriends(a, b)` is canonical. `_areMutualFriends` only
   delegates to it; treat both names as one implementation, never fork the logic.
+- **Social graph**: `src/services/socialGraphService.js` is the single source for
+  relationship resolution and graph lists. Use `getRelationship` (one pair), `getEdgeSet`
+  (batch; it chunks `documentId() in` to 30 and never scans the viewer's whole graph),
+  `listEdges`/`listConnections` (bounded, index-backed, cursor-paged) or `hydrateProfiles`
+  (batched `users` reads — never one `getUserProfile` per follower). Never write a new
+  `getDocs` that scans `follows`/`blocks`/`mutes`/`restricts` or the viewer's graph. A
+  single existence check may still be a direct point read (`userService.getFollowStatus`,
+  `isBlocked`, `isMuted`, `isRestricted`) — that is one read, not a scan. `userService`
+  delegates every graph *list*/batch method to the spine and `getUserProfile` resolves its
+  relation through it. Every graph mutation funnels through `_invalidateUserCache`, which
+  calls `socialGraphService.invalidate` — do not add a mutation that skips it.
+  Blocks/mutes/restricts are party-readable only (`firestore.rules`); a world-readable
+  safety collection is an enumeration leak.
 - **Account deletion**: `userService.deleteAccount(uid)` schedules deletion locally and calls
   the `deleteUserData` cloud function. The cloud function name and the client method name are
   intentionally different — do not rename one to match the other.
 - **Firestore rules must cover every collection the client reads/writes.** Notably
   `previous_usernames` (old username -> userId) is read when resolving share/QR links, so it
   needs an explicit `match` block; a missing block silently denies those reads.
+- **Graph edge reads must be the shape the rules can prove.** `blocks`/`mutes`/
+  `restricts` authorise on `resource.data.<actorField> == uid()`; Firestore rules are
+  not filters. A `documentId() in [...]` list read cannot prove that condition, and a
+  point read of a *missing* edge (`resource == null`) makes `resource.data.<field>`
+  throw, so the read is denied. Never list-read these collections by id, and never
+  point-read a possibly-absent safety edge — a denied `get` fails open to "not
+  blocked". Answer "is there an edge?" with an actor-equality + other-party `in` list
+  read (empty result = no edge). Use `socialGraphService.getEdgeSet`/
+  `getRelationship`; if you add a collection read, use that shape, add the composite
+  index, and cover it in `socialGraphEdgeReadRules.test.js`. Do not "fix" this by
+  allowing `get` on a null `resource` in the rules — that turns a point read into an
+  edge-existence oracle for arbitrary pairs.
 - **Avatar field**: `photoURL` is the only stored avatar field on `users/{uid}`.
   `profilePicture` is accepted as an input alias by `validateProfileUpdate` and folded onto
   `photoURL` — never write `profilePicture` to Firestore.
@@ -230,6 +271,19 @@ that is now **empty** (all offenders migrated): callables go through
 mutations through `firestoreService`, and follows/mutes/profile through
 `userService`. Do not re-add direct SDK imports in UI — add a service method
 and a `FUNCTIONS` key instead. Never add an allowlist entry.
+
+## No dead service theatre
+`src/services/**` must be reachable from an app entry point (`src/main.jsx` or
+`functions/index.js`). A service that no screen/hook/service imports is not "ready
+for later" — it is dead weight that makes the test count lie, because its own test
+is the only thing that loads it. 54 such services (client-side chaos/failover
+meshes, decentralized token curves, client audit ledgers, observability stacks,
+saml validation, content detectors that belong on the server) and the ~238 tests
+that validated them were removed. `src/__tests__/serviceReachability.test.js`
+walks the import graph and fails CI if a service becomes unreachable; it runs in
+the hard-failing `guards` job. If a service is dead, delete it and its test —
+never add an exemption. If logic is real but must run server-side, put it in
+`functions/` (where it is actually enforced) rather than leaving an inert client copy.
 
 ## Reconstruction deliverable
 `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/

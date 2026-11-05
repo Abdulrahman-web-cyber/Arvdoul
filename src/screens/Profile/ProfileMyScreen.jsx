@@ -110,6 +110,7 @@ export default function ProfileMyScreen() {
   const posts = useProfileStore((state) => state.posts);
   const postsLoading = useProfileStore((state) => state.postsLoading);
   const postsHasMore = useProfileStore((state) => state.postsHasMore);
+  const postsCursor = useProfileStore((state) => state.postsCursor);
   const savedPosts = useProfileStore((state) => state.savedPosts);
   const savedLoading = useProfileStore((state) => state.savedLoading);
   const highlights = useProfileStore((state) => state.highlights);
@@ -248,6 +249,12 @@ export default function ProfileMyScreen() {
     analyticsStore.loadAnalytics(currentUserId, timeframe);
   }, [currentUserId, timeframe]);
 
+  // Paginate the profile feed. Without this the grid stopped at the first page.
+  const handleLoadMorePosts = useCallback(() => {
+    if (!currentUserId) return;
+    useProfileStore.getState().loadMorePosts(currentUserId);
+  }, [currentUserId]);
+
   // Tab change handler
   const handleTabChange = useCallback((tab) => {
     setActiveTab(tab);
@@ -352,7 +359,7 @@ export default function ProfileMyScreen() {
             profile={displayedProfile}
             isOwner={viewAs === 'owner'}
             viewAs={viewAs}
-            level={level || effectiveProfile.level}
+            level={displayedProfile?.level}
             position={position}
             theme={theme}
             onOpenQrCode={() => setShowQrModal(true)}
@@ -405,7 +412,21 @@ export default function ProfileMyScreen() {
             </div>
           ) : (
             <>
-              {/* 3. Story Highlights Carousel */}
+              {/* 3. Citizen Progression & Civic Standing (level / XP / streak /
+                  reputation — each gated by the owner's show* privacy toggles) */}
+              <ProfileProgression
+                level={displayedProfile?.level}
+                experience={displayedProfile?.experience}
+                streak={displayedProfile?.activeStreak}
+                reputation={displayedProfile?.reputation}
+                showLevel={displayedProfile?.showLevel !== false}
+                showReputation={displayedProfile?.showReputation !== false}
+                showStreak={displayedProfile?.showStreak !== false}
+                isOwner={viewAs === 'owner'}
+                theme={theme}
+              />
+
+              {/* 4. Story Highlights Carousel */}
               <ProfileHighlightsSection
                 highlights={highlights}
                 userId={currentUserId}
@@ -419,8 +440,8 @@ export default function ProfileMyScreen() {
                 <ProfileCreatorDashboard
                   analytics={analytics}
                   ranking={ranking}
-                  userLevel={level ?? effectiveProfile?.level ?? null}
-                  userXp={effectiveProfile?.experience || 0}
+                  userLevel={effectiveProfile?.level ?? null}
+                  userXp={effectiveProfile?.experience}
                   isCreator={effectiveProfile?.isCreator}
                   theme={theme}
                   timeframe={timeframe}
@@ -465,9 +486,12 @@ export default function ProfileMyScreen() {
                 viewMode={viewMode}
                 loading={postsLoading || savedLoading}
                 theme={theme}
-                profile={effectiveProfile}
+                profile={displayedProfile}
                 isOwner={viewAs === 'owner'}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
+                hasMore={Boolean(postsCursor && postsHasMore)}
+                loadingMore={postsLoading}
+                onLoadMore={handleLoadMorePosts}
               />
             </>
           )}
@@ -519,6 +543,7 @@ export default function ProfileMyScreen() {
             isOpen={showLocationModal}
             onClose={() => setShowLocationModal(false)}
             currentLocation={effectiveProfile?.location}
+            currentPrivacy={effectiveProfile?.locationPrivacy}
             userId={currentUserId}
             theme={theme}
             onLocationUpdated={(newLoc) => {

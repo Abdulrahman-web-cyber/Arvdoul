@@ -32,6 +32,11 @@ export const ProfileQuickEditModal = memo(({
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // Keyed on `isOpen` and the target id — never the whole profile object. A
+  // realtime snapshot replaces the object identity mid-edit, and an effect
+  // keyed on `profile` would then wipe the user's in-progress typing
+  // (AGENTS.md convention).
+  const profileId = profile?.uid || profile?.id || userId || null;
   useEffect(() => {
     if (isOpen) {
       setDisplayName(profile?.displayName || '');
@@ -40,7 +45,8 @@ export const ProfileQuickEditModal = memo(({
       setWebsite(profile?.website || '');
       setErrors({});
     }
-  }, [isOpen, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, profileId]);
 
   if (!isOpen) return null;
 

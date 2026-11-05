@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
+import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 
 // Clean SVG Sparklines matching image curves
 const Sparkline = ({ color = '#8B1EF3', data = [0, 0, 0, 0, 0, 0, 0] }) => {
@@ -76,7 +77,9 @@ const ProfileCreatorDashboard = memo(({
   const explicitLevel = Number(userLevel);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
   const effectiveLevel = hasLevel ? explicitLevel : null;
-  const isEligibleCreator = isCreator || (hasLevel && effectiveLevel >= LEVEL_GATES.creatorProfile);
+  // Creator standing resolves through the canonical read model (explicit flag
+  // first, then the level gate). LEVEL_GATES below only drives the unlock copy.
+  const isEligibleCreator = resolveCreatorFlag({ isCreator }, {}, effectiveLevel);
 
   // If user is not yet level 5 creator, show unlock card
   if (!isEligibleCreator) {

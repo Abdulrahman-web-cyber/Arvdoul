@@ -25,6 +25,7 @@ import {
 } from '../config/profileContracts.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { projectProfileForViewer } from './profileReadModel.js';
+import { socialGraphService } from './socialGraphService.js';
 
 const USER_CONFIG = {
   MAX_USERNAME_ATTEMPTS: 50,
@@ -116,6 +117,10 @@ class ProfessionalUserService {
     keysToDelete.forEach(k => this.cache.delete(k));
     this.avatarCache.delete(`avatar_${userId}`);
     this.recommendationCache.delete(userId);
+    // Every graph mutation (follow/unfollow/block/mute/restrict/accept-request)
+    // funnels through here, so this is the single point that keeps the spine's
+    // edge + list caches from going stale.
+    socialGraphService.invalidate(userId);
     // Centralized cross-service invalidation (CacheManager).
     cacheManager.invalidateUser(userId);
   }
@@ -530,24 +535,16 @@ class ProfessionalUserService {
     }
 
     if (requesterId && !isOwner) {
-      const [targetBlockedViewer, viewerBlockedTarget, muted, restricted, followStatus, isFriend] = await Promise.all([
-        this.isBlocked(targetUid, requesterId),
-        this.isBlocked(requesterId, targetUid),
-        this.isMuted(requesterId, targetUid),
-        this.isRestricted(requesterId, targetUid),
-        this.getFollowStatus(requesterId, targetUid),
-        this._areMutualFriends(targetUid, requesterId)
-      ]);
-
-      // `isBlocking` = the viewer blocked the target; `isBlockedBy` = the
-      // target blocked the viewer. The engine derives the aggregate `isBlocked`
-      // from these two, so direction is preserved (N007).
-      relationshipFlags.isBlocking = Boolean(viewerBlockedTarget?.success && viewerBlockedTarget?.blocked);
-      relationshipFlags.isBlockedBy = Boolean(targetBlockedViewer?.success && targetBlockedViewer?.blocked);
-      relationshipFlags.isMuted = Boolean(muted?.muted);
-      relationshipFlags.isRestricted = Boolean(restricted?.restricted);
-      relationshipFlags.isFollowing = Boolean(followStatus?.isFollowing);
-      relationshipFlags.isMutualFriend = Boolean(isFriend);
+      // Single graph read. `isBlocking` = the viewer blocked the target;
+      // `isBlockedBy` = the target blocked the viewer. The engine derives the
+      // aggregate `isBlocked` from these two, so direction is preserved (N007).
+      const edge = await socialGraphService.getRelationship(requesterId, targetUid);
+      relationshipFlags.isBlocking = edge.isBlocking;
+      relationshipFlags.isBlockedBy = edge.isBlockedBy;
+      relationshipFlags.isMuted = edge.isMuted;
+      relationshipFlags.isRestricted = edge.isRestricted;
+      relationshipFlags.isFollowing = edge.isFollowing;
+      relationshipFlags.isMutualFriend = edge.isMutualFriend;
     }
 
     // Single decision: the engine resolves capabilities from the relation,
@@ -791,7 +788,7 @@ class ProfessionalUserService {
 
   async updateUserProfile(userId, updates) {
     await this._ensureInitialized();
-    const { doc, updateDoc, serverTimestamp, runTransaction } = await import('firebase/firestore');
+    const { doc, updateDoc, serverTimestamp, runTransaction, deleteField } = await import('firebase/firestore');
 
     // Run schema validation and sanitization
     const validation = validateProfileUpdate(updates);
@@ -857,11 +854,17 @@ class ProfessionalUserService {
     }
 
     const userRef = doc(this.firestore, 'users', userId);
-    await updateDoc(userRef, {
+    const updatePayload = {
       ...sanitizedUpdates,
       updatedAt: serverTimestamp(),
       lastActive: serverTimestamp()
-    });
+    };
+    // A null `locationCoordinates` is an explicit clear (privacy switched to
+    // hidden/country_only) — delete the field rather than storing null.
+    if (sanitizedUpdates.locationCoordinates === null) {
+      updatePayload.locationCoordinates = deleteField();
+    }
+    await updateDoc(userRef, updatePayload);
 
     // Keep Firebase Auth current user in sync if displayName or photoURL was updated
     try {
@@ -1016,11 +1019,9 @@ class ProfessionalUserService {
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
 
     const result = await runTransaction(this.firestore, async (transaction) => {
-      // Re-check block inside transaction to avoid race
-      const blockForward = await transaction.get(doc(this.firestore, 'blocks', `${followerId}_${followingId}`));
-      const blockBackward = await transaction.get(doc(this.firestore, 'blocks', `${followingId}_${followerId}`));
-      if (blockForward.exists() || blockBackward.exists()) throw new Error('Blocked by or against user');
-
+      // The block gate ran in `_assertNotBlocked` via the spine's actor-scoped
+      // read; a point read of an absent block edge here would be denied by the
+      // `resource.data` rule and abort the follow (N033).
       const snap = await transaction.get(followRef);
       if (snap.exists()) return { success: true, alreadyFollowing: true };
       transaction.set(followRef, { followerId, followingId, createdAt: serverTimestamp() });
@@ -1119,38 +1120,23 @@ class ProfessionalUserService {
     const states = new Map();
     const targets = [...new Set((targetIds || []).filter(Boolean))];
 
-    for (const id of targets) {
-      if (id === viewerId) {
-        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
-      }
-    }
-
     if (!viewerId || targets.length === 0) return states;
 
     try {
-      await this._ensureInitialized();
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const followsRef = collection(this.firestore, 'follows');
-
-      const [outgoing, incoming] = await Promise.all([
-        getDocs(query(followsRef, where('followerId', '==', viewerId))),
-        getDocs(query(followsRef, where('followingId', '==', viewerId))),
-      ]);
-
-      const following = new Set(outgoing.docs.map((d) => d.data().followingId));
-      const followers = new Set(incoming.docs.map((d) => d.data().followerId));
-
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edgeMap = await getSocialGraphService().getEdgeSet(viewerId, targets, { include: ['follow'] });
       for (const id of targets) {
-        if (id === viewerId) continue;
-        const isFollowing = following.has(id);
-        const isFollower = followers.has(id);
-        states.set(id, { isFollowing, isFollower, isMutualFriend: isFollowing && isFollower });
+        const edge = edgeMap.get(id) || {};
+        states.set(id, {
+          isFollowing: Boolean(edge.isFollowing),
+          isFollower: Boolean(edge.isFollower),
+          isMutualFriend: Boolean(edge.isMutualFriend),
+        });
       }
-    } catch {
+    } catch (err) {
+      logger.warn('[UserService] getFollowStates failed', { viewerId, error: err?.message });
       for (const id of targets) {
-        if (id !== viewerId && !states.has(id)) {
-          states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
-        }
+        states.set(id, { isFollowing: false, isFollower: false, isMutualFriend: false });
       }
     }
 
@@ -1191,210 +1177,116 @@ class ProfessionalUserService {
       };
     }
 
-    const [fAtoB, fBtoA, bAtoB, bBtoA, mAtoB, rAtoB] = await Promise.all([
-      this.getFollowStatus(userA, userB),
-      this.getFollowStatus(userB, userA),
-      this.isBlocked(userA, userB),
-      this.isBlocked(userB, userA),
-      this.isMuted(userA, userB),
-      this.isRestricted(userA, userB)
-    ]);
-
-    const isFollowing = Boolean(fAtoB?.isFollowing);
-    const isFollower = Boolean(fBtoA?.isFollowing);
-    const isMutualFriend = isFollowing && isFollower;
-    const isBlocking = Boolean(bAtoB?.success && bAtoB?.blocked);
-    const isBlockedBy = Boolean(bBtoA?.success && bBtoA?.blocked);
-    const isBlocked = isBlocking || isBlockedBy;
-    const isMuted = Boolean(mAtoB?.muted);
-    const isRestricted = Boolean(rAtoB?.restricted);
-
-    return {
-      isOwner: false,
-      isFollowing,
-      isFollower,
-      isMutualFriend,
-      isBlocking,
-      isBlockedBy,
-      isBlocked,
-      isMuted,
-      isRestricted,
-      canMessage: !isBlocked && !isRestricted,
-      canViewPrivate: !isBlocked && (isMutualFriend || isFollowing)
-    };
+    // Single graph read; the spine owns follow/block/mute/restrict resolution.
+    try {
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(userA, userB);
+      return {
+        isOwner: false,
+        isFollowing: edge.isFollowing,
+        isFollower: edge.isFollower,
+        isMutualFriend: edge.isMutualFriend,
+        isBlocking: edge.isBlocking,
+        isBlockedBy: edge.isBlockedBy,
+        isBlocked: edge.isBlocked,
+        isMuted: edge.isMuted,
+        isRestricted: edge.isRestricted,
+        canMessage: !edge.isBlocked && !edge.isRestricted,
+        canViewPrivate: !edge.isBlocked && (edge.isMutualFriend || edge.isFollowing)
+      };
+    } catch (err) {
+      logger.warn('[UserService] getRelationshipState failed', { userA, userB, error: err?.message });
+      return {
+        isOwner: false, isFollowing: false, isFollower: false, isMutualFriend: false,
+        isBlocking: false, isBlockedBy: false, isBlocked: false, isMuted: false,
+        isRestricted: false, canMessage: false, canViewPrivate: false
+      };
+    }
   }
 
   async getFriends(userId, options = {}) {
-    await this._ensureInitialized();
-    const { limit = USER_CONFIG.FRIENDS_PAGE_SIZE, startAfter = null } = options;
-    const { collection, query, where, getDocs, limit: fLimit, orderBy, startAfter: startAfterDoc } = await import('firebase/firestore');
-
-    const followsRef = collection(this.firestore, 'follows');
-    let q = query(followsRef, where('followerId', '==', userId), orderBy('followingId'), fLimit(limit));
-    let lastSnapshot = null;
-
-    if (startAfter) {
-      // startAfter is a DocumentSnapshot (should be passed from previous query)
-      q = query(q, startAfterDoc(startAfter));
-    }
-
-    let snap;
-    try {
-      snap = await getDocs(q);
-    } catch (err) {
-      // Fallback in case composite index (followerId + followingId) is pending
-      const fallbackQ = query(followsRef, where('followerId', '==', userId), fLimit(limit));
-      snap = await getDocs(fallbackQ);
-    }
-    if (snap.empty) return { success: true, friends: [], hasMore: false, nextCursor: null };
-
-    const friendIds = snap.docs.map(d => d.data().followingId);
-    // Load profiles in parallel
-    const profiles = await Promise.all(friendIds.map(id => this.getUserProfile(id).catch(() => null)));
-    const friends = profiles.filter(Boolean);
-
-    const hasMore = snap.docs.length === limit;
-    const nextCursor = hasMore ? snap.docs[snap.docs.length - 1] : null;
-
-    return { success: true, friends, hasMore, nextCursor, total: friends.length };
+    // A friend is a MUTUAL follow (matching ConnectionsScreen/FriendsScreen),
+    // not merely someone the user follows. The spine pages the following edges,
+    // keeps follow-backs, and hydrates them in one batch.
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listMutualConnections(userId, {
+      viewerId: options.viewerId || userId,
+      limit: options.limit || USER_CONFIG.FRIENDS_PAGE_SIZE,
+      cursor: options.startAfter || null,
+    });
+    return {
+      success: true,
+      friends: res.connections,
+      hasMore: res.hasMore,
+      nextCursor: res.nextCursor,
+      total: res.count,
+    };
   }
 
   /**
-   * Get followers list for a user
+   * Get followers list for a user (bounded, index-backed, batched hydration).
    * @param {string} userId - User ID
-   * @param {Object} options - Query options { limit, startAfter }
+   * @param {Object} options - Query options { limit, startAfter, viewerId }
    * @returns {Object} { success, followers, hasMore, nextCursor, total }
    */
   async getFollowers(userId, options = {}) {
-    await this._ensureInitialized();
-    const { limit = USER_CONFIG.FRIENDS_PAGE_SIZE, startAfter = null } = options;
-    const { collection, query, where, getDocs, limit: fLimit, orderBy, startAfter: startAfterDoc } = await import('firebase/firestore');
-
-    const followsRef = collection(this.firestore, 'follows');
-    let q = query(followsRef, where('followingId', '==', userId), orderBy('followerId'), fLimit(limit));
-    let lastSnapshot = null;
-
-    if (startAfter) {
-      q = query(q, startAfterDoc(startAfter));
-    }
-
-    let snap;
-    try {
-      snap = await getDocs(q);
-    } catch (err) {
-      // Fallback in case composite index (followingId + followerId) is pending
-      const fallbackQ = query(followsRef, where('followingId', '==', userId), fLimit(limit));
-      snap = await getDocs(fallbackQ);
-    }
-    if (snap.empty) return { success: true, followers: [], hasMore: false, nextCursor: null };
-
-    const followerIds = snap.docs.map(d => d.data().followerId);
-    // Load profiles in parallel
-    const profiles = await Promise.all(followerIds.map(id => this.getUserProfile(id).catch(() => null)));
-    const followers = profiles.filter(Boolean);
-
-    const hasMore = snap.docs.length === limit;
-    const nextCursor = hasMore ? snap.docs[snap.docs.length - 1] : null;
-
-    return { success: true, followers, hasMore, nextCursor, total: followers.length };
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'followers', {
+      viewerId: options.viewerId || userId,
+      limit: options.limit || USER_CONFIG.FRIENDS_PAGE_SIZE,
+      cursor: options.startAfter || null,
+    });
+    return {
+      success: true,
+      followers: res.connections,
+      hasMore: res.hasMore,
+      nextCursor: res.nextCursor,
+      total: res.count,
+    };
   }
 
   /**
-   * Get following list for a user
+   * Get following list for a user (bounded, index-backed, batched hydration).
    * @param {string} userId - User ID
-   * @param {Object} options - Query options { limit, startAfter }
+   * @param {Object} options - Query options { limit, startAfter, viewerId }
    * @returns {Object} { success, following, hasMore, nextCursor, total }
    */
   async getFollowing(userId, options = {}) {
-    const res = await this.getFriends(userId, options);
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'following', {
+      viewerId: options.viewerId || userId,
+      limit: options.limit || USER_CONFIG.FRIENDS_PAGE_SIZE,
+      cursor: options.startAfter || null,
+    });
     return {
-      ...res,
-      following: res.friends || [],
-      friends: res.friends || []
+      success: true,
+      following: res.connections,
+      hasMore: res.hasMore,
+      nextCursor: res.nextCursor,
+      total: res.count,
     };
   }
 
   async getMutualFriends(userId, otherUserId) {
-    await this._ensureInitialized();
-    try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const functions = getFunctions();
-      const func = httpsCallable(functions, 'getMutualFriends');
-      const res = await func({ userId, otherUserId });
-      return { success: true, mutualFriends: res.data.mutualFriends || [] };
-    } catch (cloudError) {
-      const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
-      const followsRef = collection(this.firestore, 'follows');
-      const max = USER_CONFIG.MUTUAL_FRIENDS_MAX_FOLLOWS;
-      const [snap1, snap2] = await Promise.all([
-        getDocs(query(followsRef, where('followerId', '==', userId), limit(max))),
-        getDocs(query(followsRef, where('followerId', '==', otherUserId), limit(max)))
-      ]);
-      const s1 = new Set(snap1.docs.map(d => d.data().followingId));
-      const s2 = new Set(snap2.docs.map(d => d.data().followingId));
-      const mutualIds = [...s1].filter(id => s2.has(id)).slice(0, 50);
-      const profiles = await Promise.all(mutualIds.map(id => this.getUserProfile(id).catch(() => null)));
-      return { success: true, mutualFriends: profiles.filter(Boolean) };
-    }
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const mutualFriends = await getSocialGraphService().getMutualConnections(userId, otherUserId);
+    return { success: true, mutualFriends };
   }
 
   async getFriendRecommendations(userId, limit = USER_CONFIG.DEFAULT_RECOMMENDATIONS_LIMIT) {
-    await this._ensureInitialized();
-
     const now = Date.now();
     const cached = this.recommendationCache.get(userId);
     if (cached && (now - cached.timestamp) < USER_CONFIG.RECOMMENDATION_CACHE_MS) {
       return { success: true, recommendations: cached.recommendations };
     }
 
+    let recommendations = [];
     try {
-      const { collection, query, getDocs, limit: fLimit } = await import('firebase/firestore');
-      const recsRef = collection(this.firestore, 'user_recommendations', userId, 'users');
-      const recSnap = await getDocs(query(recsRef, fLimit(limit)));
-      if (recSnap.size > 0) {
-        const recs = await Promise.all(recSnap.docs.map(d => this.getUserProfile(d.data().userId || d.id).catch(() => null)));
-        const valid = recs.filter(Boolean);
-        if (valid.length > 0) {
-          this.recommendationCache.set(userId, { timestamp: now, recommendations: valid });
-          return { success: true, recommendations: valid };
-        }
-      }
-    } catch (_) { /* fallback */ }
-
-    // Using local algorithm
-    const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
-    const followsRef = collection(this.firestore, 'follows');
-
-    const myFollowsSnap = await getDocs(query(followsRef, where('followerId', '==', userId), fLimit(USER_CONFIG.FRIENDS_OF_FRIENDS_MAX_FRIENDS)));
-    const myFriendIds = new Set(myFollowsSnap.docs.map(d => d.data().followingId));
-    if (myFriendIds.size === 0) {
-      const empty = [];
-      this.recommendationCache.set(userId, { timestamp: now, recommendations: empty });
-      return { success: true, recommendations: empty };
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      recommendations = await getSocialGraphService().getSuggestions(userId, { limit });
+    } catch (err) {
+      logger.warn('[UserService] recommendations failed', { userId, error: err?.message });
     }
-
-    const candidateMap = new Map();
-    const promises = [];
-    for (const fid of myFriendIds) {
-      const p = getDocs(query(followsRef, where('followerId', '==', fid), fLimit(USER_CONFIG.FRIENDS_OF_FRIENDS_MAX_CANDIDATES)));
-      promises.push(p.then(snap => {
-        snap.forEach(d => {
-          const candId = d.data().followingId;
-          if (candId !== userId && !myFriendIds.has(candId)) {
-            candidateMap.set(candId, (candidateMap.get(candId) || 0) + 1);
-          }
-        });
-      }));
-    }
-    await Promise.all(promises);
-
-    const sorted = Array.from(candidateMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(e => e[0]);
-
-    const profiles = await Promise.all(sorted.map(id => this.getUserProfile(id).catch(() => null)));
-    const recommendations = profiles.filter(Boolean);
     this.recommendationCache.set(userId, { timestamp: now, recommendations });
     return { success: true, recommendations };
   }
@@ -1532,11 +1424,14 @@ class ProfessionalUserService {
 
   async getFriendRequests(userId, type = 'received') {
     await this._ensureInitialized();
-    const { collection, query, where, getDocs } = await import('firebase/firestore');
-    const ref = collection(this.firestore, 'friend_requests');
+    const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
     const field = type === 'received' ? 'toUserId' : 'fromUserId';
-    const q = query(ref, where(field, '==', userId), where('status', '==', 'pending'));
-    const snap = await getDocs(q);
+    const snap = await getDocs(query(
+      collection(this.firestore, 'friend_requests'),
+      where(field, '==', userId),
+      where('status', '==', 'pending'),
+      fLimit(200)
+    ));
     return { success: true, requests: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
   }
 
@@ -1587,19 +1482,22 @@ class ProfessionalUserService {
 
   async unblockUser(blockerId, blockedId) {
     await this._ensureInitialized();
-    const { doc, runTransaction } = await import('firebase/firestore');
-    const ref = doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
-    const result = await runTransaction(this.firestore, async (transaction) => {
-      const snap = await transaction.get(ref);
-      if (!snap.exists()) return { success: true, alreadyUnblocked: true };
-      transaction.delete(ref);
-      return { success: true };
-    });
+    // A point read/delete of an absent block edge is denied by the
+    // `resource.data` rule, so the idempotent "already unblocked" answer comes
+    // from the spine's actor-scoped read (N033).
+    const { blocked } = await this.isBlocked(blockerId, blockedId);
+    if (!blocked) {
+      this._invalidateUserCache(blockerId);
+      this._invalidateUserCache(blockedId);
+      return { success: true, alreadyUnblocked: true };
+    }
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
     this.cache.delete(`block_${blockerId}_${blockedId}`);
     this.cache.delete(`block_${blockedId}_${blockerId}`);
     this._invalidateUserCache(blockerId);
     this._invalidateUserCache(blockedId);
-    return result;
+    return { success: true };
   }
 
   async isBlocked(blockerId, blockedId) {
@@ -1613,9 +1511,11 @@ class ProfessionalUserService {
     }
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`));
-      const result = { success: true, blocked: snap ? snap.exists() : false };
+      // Actor-scoped list read (not a point read): a missing block edge denies a
+      // point read under the `resource.data` rule, which would fail open here.
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(blockerId, blockedId);
+      const result = { success: true, blocked: edge.isBlocking };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (err) {
@@ -1625,13 +1525,9 @@ class ProfessionalUserService {
   }
 
   async getBlockedUsers(userId) {
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
-    const q = query(collection(this.firestore, 'blocks'), where('blockerId', '==', userId), limit(100));
-    const snap = await getDocs(q);
-    const ids = snap.docs.map(d => d.data().blockedId);
-    const profiles = await Promise.all(ids.map(id => this.getUserProfile(id).catch(() => null)));
-    return { success: true, blockedUsers: profiles.filter(Boolean) };
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 100 });
+    return { success: true, blockedUsers: res.connections };
   }
 
   async muteUser(muterId, mutedId) {
@@ -1640,6 +1536,9 @@ class ProfessionalUserService {
     const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'mutes', `${muterId}_${mutedId}`);
     await setDoc(ref, { muterId, mutedId, createdAt: serverTimestamp() });
+    // Drop the spine's cached edge so the mute is visible immediately, then
+    // record the local answer for the fast isMuted() path.
+    this._invalidateUserCache(muterId);
     const cacheKey = `mute_${muterId}_${mutedId}`;
     this.cache.set(cacheKey, { data: { success: true, muted: true }, timestamp: Date.now() });
     return { success: true };
@@ -1650,6 +1549,7 @@ class ProfessionalUserService {
     const { doc, deleteDoc } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'mutes', `${muterId}_${mutedId}`);
     await deleteDoc(ref);
+    this._invalidateUserCache(muterId);
     const cacheKey = `mute_${muterId}_${mutedId}`;
     this.cache.set(cacheKey, { data: { success: true, muted: false }, timestamp: Date.now() });
     return { success: true };
@@ -1664,9 +1564,9 @@ class ProfessionalUserService {
     }
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'mutes', `${muterId}_${mutedId}`));
-      const result = { success: true, muted: snap.exists() };
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(muterId, mutedId);
+      const result = { success: true, muted: edge.isMuted };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch {
@@ -1675,13 +1575,9 @@ class ProfessionalUserService {
   }
 
   async getMutedUsers(userId) {
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
-    const q = query(collection(this.firestore, 'mutes'), where('muterId', '==', userId), limit(100));
-    const snap = await getDocs(q);
-    const ids = snap.docs.map(d => d.data().mutedId);
-    const profiles = await Promise.all(ids.map(id => this.getUserProfile(id).catch(() => null)));
-    return { success: true, mutedUsers: profiles.filter(Boolean) };
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'muted', { viewerId: userId, limit: 100 });
+    return { success: true, mutedUsers: res.connections };
   }
 
   async restrictUser(restricterId, restrictedId) {
@@ -1690,6 +1586,7 @@ class ProfessionalUserService {
     const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`);
     await setDoc(ref, { restricterId, restrictedId, createdAt: serverTimestamp() });
+    this._invalidateUserCache(restricterId);
     const cacheKey = `restrict_${restricterId}_${restrictedId}`;
     this.cache.set(cacheKey, { data: { success: true, restricted: true }, timestamp: Date.now() });
     return { success: true };
@@ -1700,6 +1597,7 @@ class ProfessionalUserService {
     const { doc, deleteDoc } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`);
     await deleteDoc(ref);
+    this._invalidateUserCache(restricterId);
     const cacheKey = `restrict_${restricterId}_${restrictedId}`;
     this.cache.set(cacheKey, { data: { success: true, restricted: false }, timestamp: Date.now() });
     return { success: true };
@@ -1714,9 +1612,9 @@ class ProfessionalUserService {
     }
     try {
       await this._ensureInitialized();
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(this.firestore, 'restricts', `${restricterId}_${restrictedId}`));
-      const result = { success: true, restricted: snap.exists() };
+      const { getSocialGraphService } = await import('./socialGraphService.js');
+      const edge = await getSocialGraphService().getRelationship(restricterId, restrictedId);
+      const result = { success: true, restricted: edge.isRestricted };
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch {
@@ -1725,13 +1623,9 @@ class ProfessionalUserService {
   }
 
   async getRestrictedUsers(userId) {
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, limit } = await import('firebase/firestore');
-    const q = query(collection(this.firestore, 'restricts'), where('restricterId', '==', userId), limit(100));
-    const snap = await getDocs(q);
-    const ids = snap.docs.map(d => d.data().restrictedId);
-    const profiles = await Promise.all(ids.map(id => this.getUserProfile(id).catch(() => null)));
-    return { success: true, restrictedUsers: profiles.filter(Boolean) };
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'restricted', { viewerId: userId, limit: 100 });
+    return { success: true, restrictedUsers: res.connections };
   }
 
   // Routed through the reportContent callable so rate limiting, de-duplication
@@ -1778,18 +1672,20 @@ class ProfessionalUserService {
       const tokens = queryStr.toLowerCase().split(/\s+/).filter(t => t.length > 2).slice(0, 5);
       let users = [];
       if (tokens.length) {
-        const q = query(collection(this.firestore, 'users'), where('searchTokens', 'array-contains-any', tokens), limit(options.limit || 10));
-        const snap = await getDocs(q);
+        const snap = await getDocs(query(
+          collection(this.firestore, 'users'),
+          where('searchTokens', 'array-contains-any', tokens),
+          limit(options.limit || 10)
+        ));
         users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       } else {
-        const q = query(
+        const snap = await getDocs(query(
           collection(this.firestore, 'users'),
           where('username', '>=', queryStr.toLowerCase()),
           where('username', '<=', queryStr.toLowerCase() + '\uf8ff'),
           orderBy('username'),
           limit(options.limit || 10)
-        );
-        const snap = await getDocs(q);
+        ));
         users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       }
       // Hydrate avatars

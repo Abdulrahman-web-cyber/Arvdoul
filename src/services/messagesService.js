@@ -803,9 +803,15 @@ class UltimateMessagingService {
     await this.ensureInitialized();
     if (blockerId === blockedId) throw new Error('Cannot block yourself');
     const blockRef = this.fs.doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
-    const existing = await this.fs.getDoc(blockRef);
-    if (existing.exists()) return { success: true, alreadyBlocked: true };
+    // Actor-scoped list read (not a point read): a point read of an absent block
+    // edge is denied by the `resource.data` rule and would abort the block.
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const graph = getSocialGraphService();
+    const edge = await graph.getRelationship(blockerId, blockedId);
+    if (edge.isBlocking) return { success: true, alreadyBlocked: true };
     await this.fs.setDoc(blockRef, { blockerId, blockedId, createdAt: this.fs.serverTimestamp() });
+    graph.invalidate(blockerId);
+    graph.invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
     return { success: true };
@@ -813,8 +819,17 @@ class UltimateMessagingService {
 
   async unblockUser(blockerId, blockedId) {
     await this.ensureInitialized();
+    // A delete of an absent block edge is evaluated against a null `resource`
+    // and denied by the `resource.data` rule, so resolve existence through the
+    // spine first (N033).
+    if (!(await this.isBlocked(blockerId, blockedId))) {
+      return { success: true, alreadyUnblocked: true };
+    }
     const blockRef = this.fs.doc(this.firestore, 'blocks', `${blockerId}_${blockedId}`);
     await this.fs.deleteDoc(blockRef);
+    const { getSocialGraphService: getGraph } = await import('./socialGraphService.js');
+    getGraph().invalidate(blockerId);
+    getGraph().invalidate(blockedId);
     this.blockCache.delete(`block_${blockerId}_${blockedId}`);
     this.blockCache.delete(`block_${blockedId}_${blockerId}`);
     return { success: true };
@@ -824,9 +839,12 @@ class UltimateMessagingService {
     const cacheKey = `block_${userId}_${otherUserId}`;
     const cached = this.blockCache.get(cacheKey);
     if (cached !== undefined) return cached;
-    const blockRef = this.fs.doc(this.firestore, 'blocks', `${userId}_${otherUserId}`);
-    const snap = await this.fs.getDoc(blockRef);
-    const blocked = snap.exists();
+    // Actor-scoped list read via the graph spine: a point read of an absent
+    // block edge is denied by the `resource.data` rule, which would wrongly
+    // report "not blocked" (N033).
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const edge = await getSocialGraphService().getRelationship(userId, otherUserId);
+    const blocked = edge.isBlocking;
     this.blockCache.set(cacheKey, blocked);
     return blocked;
   }
@@ -854,11 +872,9 @@ class UltimateMessagingService {
   }
 
   async getBlockedUsers(userId) {
-    await this.ensureInitialized();
-    const blocksRef = this.fs.collection(this.firestore, 'blocks');
-    const q = this.fs.query(blocksRef, this.fs.where('blockerId', '==', userId));
-    const snap = await this.fs.getDocs(q);
-    return snap.docs.map(d => d.data().blockedId);
+    const { getSocialGraphService } = await import('./socialGraphService.js');
+    const res = await getSocialGraphService().listConnections(userId, 'blocked', { viewerId: userId, limit: 100 });
+    return res.connections.map((c) => c.id || c.uid).filter(Boolean);
   }
 
   async sendFriendRequest(fromId, toId) { const us = await this._getUserService(); return us.sendFriendRequest(fromId, toId); }
@@ -1214,12 +1230,28 @@ class UltimateMessagingService {
       }, conv.conversation.disappearAfter * 1000);
     }
 
-    // Push notifications
+    // Push notifications — routed through the server `sendNotification`
+    // callable, which writes push_queue for the sendPushNotification trigger to
+    // deliver. Previously this block was an empty shell (no push was ever
+    // sent) and the only helper called a Firestore trigger as if it were a
+    // callable. Best-effort: a push failure must never fail the send.
     const recipients = conv.conversation.participants.filter(p => p !== currentUser.uid);
     const mentionedIds = message.mentions || [];
+    const senderName = currentUser.displayName || 'Someone';
+    const preview = this._getMessagePreview(message);
     recipients.forEach(async uid => {
       if (!conv.conversation.mutedBy?.includes(uid) && await this._shouldSendPushNotification(uid)) {
         if (mentionedIds.length === 0 || mentionedIds.includes(uid)) {
+          this._getNotificationsService()
+            .then((notificationsService) => notificationsService.sendNotification({
+              recipientId: uid,
+              senderId: currentUser.uid,
+              type: 'message',
+              title: `Message from ${senderName}`,
+              message: preview,
+              metadata: { conversationId, messageId: idempotencyKey, kind: 'message' },
+            }))
+            .catch(() => { /* push is best-effort */ });
         }
       }
     });
@@ -2414,6 +2446,36 @@ class UltimateMessagingService {
     return { success: true, status: 'pending' };
   }
 
+  /**
+   * Opens a 1:1 conversation, falling back to a message request when the
+   * recipient's allowDMs preference refuses the caller (the rules reject the
+   * conversation create). Returns a discriminated result so the UI can tell
+   * the outcomes apart.
+   * @returns {Promise<{status:'conversation'|'request', conversationId?:string, requestStatus?:string}>}
+   */
+  async startDirectConversation(recipientId, senderId) {
+    await this.ensureInitialized();
+    if (!recipientId || !senderId || recipientId === senderId) throw new Error('Invalid request');
+
+    const directId = `direct_${[senderId, recipientId].sort().join('_')}`;
+    const existing = await this.fs.getDoc(this.fs.doc(this.firestore, 'conversations', directId));
+    if (existing.exists()) return { status: 'conversation', conversationId: directId };
+
+    try {
+      const conv = await this.createConversation([senderId, recipientId]);
+      if (conv?.success && conv.conversation?.id) {
+        return { status: 'conversation', conversationId: conv.conversation.id };
+      }
+    } catch (err) {
+      // A permission-denied create is the allowDMs gate (firestore.rules
+      // dmAllowedTo); any other failure is real and must surface.
+      if (err?.code && !String(err.code).includes('permission-denied')) throw err;
+    }
+
+    const req = await this.sendMessageRequest(recipientId, senderId);
+    return { status: 'request', requestStatus: req?.status || 'pending' };
+  }
+
   async getMessageRequests(userId, options = {}) {
     await this.ensureInitialized();
     const colRef = this.fs.collection(this.firestore, 'message_requests');
@@ -2985,33 +3047,6 @@ class UltimateMessagingService {
     return enabled;
   }
 
-  async _sendPushNotification(messageId, conversationId, userId, message) {
-    if (!MESSAGING_CONFIG.PUSH_NOTIFICATIONS.ENABLED) return { sent: false };
-    if (!(await this._shouldSendPushNotification(userId))) return { sent: false, skipped: true };
-
-    const maxRetries = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.RETRY_ATTEMPTS;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        const sendPush = this.fn.httpsCallable(this.functions, 'sendPushNotification');
-        const result = await sendPush({
-          messageId,
-          conversationId,
-          userId,
-          messagePreview: this._getMessagePreview(message),
-          senderName: message.senderName,
-        });
-        return { sent: true, result: result.data };
-      } catch (err) {
-        if (i === maxRetries - 1) {
-          return { sent: false, error: err };
-        }
-        const delay = MESSAGING_CONFIG.PUSH_NOTIFICATIONS.INITIAL_DELAY_MS *
-          Math.pow(MESSAGING_CONFIG.PUSH_NOTIFICATIONS.BACKOFF_FACTOR, i);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-
   async _notifyAdmins(conversationId, event, data) {
     const conv = await this.getConversation(conversationId);
     const adminIds = conv.conversation.admins || [];
@@ -3223,6 +3258,7 @@ const messagingService = {
   sendTypingIndicator: (cid, uid, typing) => getMessagingService().sendTypingIndicator(cid, uid, typing),
   subscribeToTyping: (cid, uid, cb) => getMessagingService().subscribeToTyping(cid, uid, cb),
   createConversation: (participants, opts) => getMessagingService().createConversation(participants, opts),
+  startDirectConversation: (recipientId, senderId) => getMessagingService().startDirectConversation(recipientId, senderId),
   getConversation: (cid, opts) => getMessagingService().getConversation(cid, opts),
   getUserConversations: (uid, opts) => getMessagingService().getUserConversations(uid, opts),
   sendMessage: (cid, data, opts) => getMessagingService().sendMessage(cid, data, opts),

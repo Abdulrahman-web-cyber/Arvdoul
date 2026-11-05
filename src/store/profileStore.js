@@ -18,6 +18,7 @@ import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
 import { getStoredUser, getStoredUid } from '../utils/security.js';
+import { pickDisplayName, pickHandle, deriveHandle } from '../services/profileReadModel.js';
 
 const initialState = {
   // Profile data
@@ -140,7 +141,9 @@ export const useProfileStore = create(
         if (!isOwner && currentUserId) {
           try {
             const mutualResult = await userService.getMutualFriends(currentUserId, userId);
-            mutualFriends = mutualResult?.users?.slice(0, 5) || [];
+            // userService returns `{ success, mutualFriends }`; reading `.users`
+            // here always produced [] so the social-context bar never rendered.
+            mutualFriends = mutualResult?.mutualFriends?.slice(0, 5) || [];
           } catch (e) {
             console.warn('Could not fetch mutual friends:', e);
           }
@@ -168,29 +171,29 @@ export const useProfileStore = create(
           console.warn('Could not fetch position:', e);
         }
         
-        // Resolve profile with safe fallback guarantee & real auth user linkage
+        // Resolve profile with safe fallback guarantee & real auth user linkage.
+        // Identity fallbacks go through the canonical read model so a
+        // placeholder handle/name is never surfaced as if it were real (the
+        // read model returns null and the UI shows an honest unavailable state).
         const appCurrentUser = useAppStore.getState().currentUser || getStoredUser();
         const storedUid = getStoredUid();
         const effectiveUid = currentUserId || storedUid;
         const fallbackDisplayName = isOwner
-          ? (typeof appCurrentUser?.displayName === 'string' && appCurrentUser.displayName ? appCurrentUser.displayName : (typeof appCurrentUser?.name === 'string' && appCurrentUser.name ? appCurrentUser.name : (typeof appCurrentUser?.email === 'string' ? appCurrentUser.email.split('@')[0] : 'Member')))
+          ? pickDisplayName([appCurrentUser?.displayName, appCurrentUser?.name, deriveHandle(appCurrentUser?.email)], { fallback: 'Member' })
           : 'Creator';
         const fallbackUsername = isOwner
-          ? (typeof appCurrentUser?.username === 'string' && appCurrentUser.username ? appCurrentUser.username : (typeof appCurrentUser?.email === 'string' ? appCurrentUser.email.split('@')[0] : (effectiveUid ? `user_${effectiveUid.slice(0, 6)}` : 'creator')))
-          : (typeof userId === 'string' && userId.startsWith('user_') ? userId : `user_${(typeof userId === 'string' ? userId : 'creator').slice(0, 7)}`);
+          ? pickHandle([appCurrentUser?.username, deriveHandle(appCurrentUser?.email)])
+          : null;
 
         const resolvedProfile = profile ? {
           ...profile,
-          displayName: (profile.displayName && profile.displayName !== 'User' && profile.displayName !== 'Creator')
-            ? profile.displayName
-            : fallbackDisplayName,
-          username: (profile.username && !profile.username.startsWith('user_'))
-            ? profile.username
-            : fallbackUsername,
+          displayName: pickDisplayName([profile.displayName, appCurrentUser?.displayName], { fallback: fallbackDisplayName }),
+          username: pickHandle([profile.username]) || fallbackUsername,
         } : {
           // No profile document was returned. Never invent standing: omit
           // coins/level/reputation and deny every viewer-gated section rather
-          // than rendering fabricated values as real.
+          // than rendering fabricated values as real. A null username tells the
+          // UI to show an unavailable state instead of a synthetic `user_*` id.
           id: userId || effectiveUid || null,
           uid: userId || effectiveUid || null,
           username: fallbackUsername,
@@ -233,13 +236,12 @@ export const useProfileStore = create(
         const localAuth = getStoredUser() || {};
 
         const rawDisplayName = localAuth.displayName || localAuth.name;
-        const rawEmail = typeof localAuth.email === 'string' ? localAuth.email : '';
         const fallbackDisplayName = isOwner
-          ? (typeof rawDisplayName === 'string' && rawDisplayName ? rawDisplayName : (rawEmail ? rawEmail.split('@')[0] : 'Member'))
+          ? pickDisplayName([rawDisplayName, deriveHandle(localAuth.email)], { fallback: 'Member' })
           : 'Creator';
         const fallbackUsername = isOwner
-          ? (typeof localAuth.username === 'string' && localAuth.username ? localAuth.username : (rawEmail ? rawEmail.split('@')[0] : (effectiveUid ? `user_${effectiveUid.slice(0, 6)}` : 'creator')))
-          : (typeof userId === 'string' && userId.startsWith('user_') ? userId : `user_${(typeof userId === 'string' ? userId : 'creator').slice(0, 7)}`);
+          ? pickHandle([localAuth.username, deriveHandle(localAuth.email)])
+          : null;
 
         const fallbackProfile = {
           // Load failed: surface a not-found state instead of inventing
@@ -373,7 +375,10 @@ export const useProfileStore = create(
         try {
           if (typeof window !== 'undefined' && window.localStorage) {
             const localPosts = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
-            const localUserPosts = localPosts.filter(p => p && (p.authorId === userId || !p.authorId));
+            // Match only this author's posts. The previous `|| !p.authorId`
+            // clause injected another account's (or an unattributed) cached
+            // post into every profile's feed.
+            const localUserPosts = localPosts.filter(p => p && p.authorId === userId);
             if (localUserPosts.length > 0) {
               const existingIds = new Set(userPosts.map(p => p.id));
               for (const lp of localUserPosts) {
@@ -411,27 +416,34 @@ export const useProfileStore = create(
       const { postsCursor, postsHasMore, postsLoading } = get();
       
       if (!postsHasMore || postsLoading || !postsCursor) return;
-      
+
+      const __seq = get()._startLoad('posts');
       set((state) => {
         state.postsLoading = true;
       });
-      
+
       try {
         const firestoreService = (await import('../services/firestoreService.js')).firestoreService;
-        
+
         const result = await firestoreService.getPostsByUser(userId, {
           limit: 12,
           cursor: postsCursor,
         });
-        
+
+        if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
-          state.posts = [...state.posts, ...(result.posts || [])];
+          // Drop ids already in the feed: a post created between pages can
+          // reappear on the next cursor page and would otherwise duplicate.
+          const seen = new Set(state.posts.map((p) => p.id));
+          const fresh = (result.posts || []).filter((p) => p && !seen.has(p.id));
+          state.posts = [...state.posts, ...fresh];
           state.postsLoading = false;
           state.postsHasMore = result.hasMore || false;
           state.postsCursor = result.nextCursor || null;
         });
       } catch (error) {
         console.error('❌ Load more posts failed:', error);
+        if (!get()._isLoadCurrent('posts', __seq)) return;
         set((state) => {
           state.postsLoading = false;
           state.postsError = error.message || 'Failed to load more posts';
@@ -682,7 +694,7 @@ export const useProfileStore = create(
         const result = await userService.getMutualFriends(userId, otherUserId);
         if (!get()._isLoadCurrent('mutualFriends', __seq)) return;
         set((state) => {
-          state.mutualFriends = result?.users?.slice(0, 5) || [];
+          state.mutualFriends = result?.mutualFriends?.slice(0, 5) || [];
           state.mutualFriendsLoading = false;
         });
       } catch (error) {
@@ -706,7 +718,8 @@ export const useProfileStore = create(
       if (get().followStatus?.isFollowing === true) return;
 
       // Snapshot before the optimistic write so rollback restores the
-      // real previous state instead of a hard-coded guess.
+      // real previous state instead of a hard-coded guess. Immer copy-on-writes
+      // the draft, so the reference is not mutated by the optimistic `set`.
       const previousFollowStatus = get().followStatus;
       const previousFollowerCount = get().profile?.followerCount || 0;
 
@@ -758,7 +771,8 @@ export const useProfileStore = create(
       // optimistic counter a second time.
       if (get().followStatus?.isFollowing === false) return;
       
-      // Store previous state for rollback
+      // Store previous state for rollback. Immer copy-on-writes the draft, so
+      // the reference is not mutated by the optimistic `set`.
       const previousFollowStatus = get().followStatus;
       const previousFollowerCount = get().profile?.followerCount || 0;
       

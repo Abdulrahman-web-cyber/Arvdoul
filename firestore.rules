@@ -61,6 +61,29 @@ service cloud.firestore {
       return request.resource.data[field] == uid();
     }
 
+    // ---------- direct-message privacy ----------
+    // The recipient's allowDMs preference (users/{uid}.settings.privacy.allowDMs,
+    // written by the Settings screen) governs who may open a 1:1 conversation
+    // with them: 'everyone' | 'friends' (mutual follow) | 'none'. Messages are
+    // written straight from the client, so this is the only real enforcement
+    // point. Absent settings default to 'everyone' (current behaviour).
+    function followEdgeExists(a, b) {
+      return exists(/databases/$(database)/documents/follows/$(a + '_' + b));
+    }
+    function dmAllowedTo(senderUid, recipientUid) {
+      let pref = get(/databases/$(database)/documents/users/$(recipientUid)).data
+        .get('settings', {}).get('privacy', {}).get('allowDMs', 'everyone');
+      return pref == 'everyone' ||
+        (pref == 'friends' &&
+          followEdgeExists(senderUid, recipientUid) &&
+          followEdgeExists(recipientUid, senderUid));
+    }
+    // The recipient explicitly consenting (accepting a pending request) overrides
+    // their own allowDMs preference — otherwise a 'none' user could never accept.
+    function dmRequestFrom(senderUid, recipientUid) {
+      return exists(/databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid));
+    }
+
     // Fields that must never appear on the world-readable `users/{uid}` doc.
     // They live in `users_private/{uid}` instead (owner/admin only). Mirrors
     // PRIVATE_PROFILE_FIELDS in src/config/profileContracts.js.
@@ -289,19 +312,33 @@ service cloud.firestore {
         (resource.data.followerId == uid() || resource.data.followingId == uid());
     }
     match /blocks/{blockId} {
-      allow read: if isSignedIn();
+      // Only the two parties may read a block edge. A world-readable block
+      // collection lets anyone enumerate who blocks whom (a privacy leak);
+      // every client read of this collection is already party-scoped.
+      //
+      // This rule (and the mute/restrict rules below) is `resource.data`-based,
+      // so a `get` of a *missing* edge (`resource == null`) evaluates to a
+      // permission error. Clients must therefore never answer "are we blocked?"
+      // with a point read — they read the actor-scoped list query instead
+      // (`socialGraphService._actorScopedIds`), which returns zero rows for an
+      // absent edge and cannot be denied. Allowing `get` on a null `resource`
+      // would instead leak edge existence for arbitrary pairs.
+      allow read: if isSignedIn() &&
+        (resource.data.blockerId == uid() || resource.data.blockedId == uid());
       // On create `resource` is null, so the blocker must be asserted from the
       // incoming payload; on delete it must match the stored owner.
       allow create: if isSignedIn() && request.resource.data.blockerId == uid();
       allow delete: if isSignedIn() && resource.data.blockerId == uid();
     }
     match /mutes/{muteId} {
-      allow read: if isSignedIn();
+      // A mute is private to the muter; the muted user must not be able to read it.
+      allow read: if isSignedIn() && resource.data.muterId == uid();
       allow create: if isSignedIn() && request.resource.data.muterId == uid();
       allow delete: if isSignedIn() && resource.data.muterId == uid();
     }
     match /restricts/{restrictId} {
-      allow read: if isSignedIn();
+      // A restrict is private to the restricter.
+      allow read: if isSignedIn() && resource.data.restricterId == uid();
       allow create: if isSignedIn() && request.resource.data.restricterId == uid();
       allow delete: if isSignedIn() && resource.data.restricterId == uid();
     }
@@ -465,7 +502,22 @@ service cloud.firestore {
          request.resource.data.createdBy == resource.data.createdBy)
       );
       allow delete: if isSignedIn() && (uid() in resource.data.participants && isConvAdmin());
-      allow create: if isSignedIn() && uid() in request.resource.data.participants;
+      // A 1:1 conversation may only be opened if the *other* participant's
+      // allowDMs preference admits the caller. Groups/channels (>2) are
+      // unaffected. This is the enforcement point for the allowDMs setting,
+      // which was previously a dead control (writable in Settings, checked
+      // nowhere) that let anyone open a DM with anyone.
+      allow create: if isSignedIn() &&
+        uid() in request.resource.data.participants &&
+        (
+          request.resource.data.participants.size() != 2 ||
+          (request.resource.data.participants[0] == uid() &&
+            (dmAllowedTo(uid(), request.resource.data.participants[1]) ||
+             dmRequestFrom(request.resource.data.participants[1], uid()))) ||
+          (request.resource.data.participants[1] == uid() &&
+            (dmAllowedTo(uid(), request.resource.data.participants[0]) ||
+             dmRequestFrom(request.resource.data.participants[0], uid())))
+        );
 
       // MESSAGES — ownership enforced:
       //  - create: the message must be authored by the caller
@@ -501,13 +553,18 @@ service cloud.firestore {
       }
     }
     match /message_dedupe/{key} {
-      // Opaque idempotency keys; any signed-in user may write their own
-      // dedupe record — the key encodes sender+conversation so collisions
-      // cannot be weaponized across users.
+      // Opaque idempotency keys. The client writes its own record and reads it
+      // back in `_checkDuplicate` to detect a duplicate send, so read must stay
+      // open to the sender; the key is sha256(sender:conversation:type:content)
+      // so it leaks nothing and cannot be forged for another user's message.
       allow read, write: if isSignedIn();
     }
     match /last_messages/{conversationId} {
-      allow read: if isSignedIn();
+      // The preview text is the conversation's own content: readable only by a
+      // participant. (It was `isSignedIn()`, so any signed-in user could read
+      // every private conversation's last message by id.)
+      allow read: if isSignedIn() && uid() in
+        get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
       // Only participants may write the last-message preview (prevents
       // spoofing what a conversation shows in the inbox).
       allow write: if isSignedIn() && uid() in
@@ -903,8 +960,9 @@ service cloud.firestore {
 
     // ==================== SAVED SOUNDS ====================
     match /saved_sounds/{docId} {
-      // Doc id encodes the owner: `${userId}_${soundId}`.
-      allow read: if isSignedIn();
+      // Doc id encodes the owner: `${userId}_${soundId}`. Reads are owner-scoped
+      // too — a saved-sounds list is private and must not be world-readable.
+      allow read: if isSignedIn() && resource.data.userId == uid();
       allow create, delete: if isSignedIn() && docId.startsWith(uid() + '_');
       allow update: if false; // append-only (toggle = create/delete)
     }
@@ -963,7 +1021,9 @@ service cloud.firestore {
 
     // ==================== INCIDENTS ====================
     match /incidents/{incidentId} {
-      allow read: if isSignedIn();
+      // An incident report carries a description and reporter identity; it is
+      // private to the reporter (and admins). No client reads the whole queue.
+      allow read: if isSignedIn() && (resource.data.reporterId == uid() || resource.data.userId == uid() || isAdmin());
       allow create: if isSignedIn() && (request.resource.data.reporterId == uid() || request.resource.data.userId == uid());
       allow update, delete: if isSignedIn() && (resource.data.reporterId == uid() || resource.data.userId == uid() || isAdmin());
     }
@@ -993,11 +1053,11 @@ service cloud.firestore {
 
     // ==================== POLL VOTES (flat) ====================
     match /poll_votes/{voteId} {
-      // Vote ids encode the voter (`${userId}_${pollId}`) - create-only so
-      // votes cannot be changed or deleted by clients.
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && voteId.startsWith(uid() + '_');
-      allow update, delete: if false;
+      // Vote ids encode the voter (`${userId}_${pollId}`). The `votePoll`
+      // callable writes these with the Admin SDK and no client ever reads the
+      // flat collection (vote history is kept locally in pollService), so this
+      // is server-only — otherwise any signed-in user could enumerate voters.
+      allow read, write: if false;
     }
 
     // ==================== STORY REPLIES ====================
@@ -1112,7 +1172,9 @@ service cloud.firestore {
     // ==================== AUDIT LOGS (immutable security trail) ====================
     match /audit_logs/{logId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn(); // client and server-side auditing
+      // Server-only: the Admin SDK writes audit entries. A client-writable audit
+      // log is forgeable and therefore worthless as a trail.
+      allow create: if false;
       allow update, delete: if false; // strictly immutable
     }
 

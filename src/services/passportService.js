@@ -12,7 +12,7 @@ import {
 } from './levelSystemService.js';
 import { getProfileUrl, getPassportUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
-import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag } from './profileReadModel.js';
+import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag, readStandingScore, projectProfileForViewer } from './profileReadModel.js';
 import { logger } from '../utils/Logger.js';
 
 class PassportService {
@@ -32,11 +32,16 @@ class PassportService {
     if (!profile) {
       try {
         const { getUserService } = await import('./userService.js');
-        profile = await getUserService().getUserProfile(targetUserId);
+        // Read through the canonical service so the passport sees the same
+        // projected document (masked presence, deleted fields, sharded counts)
+        // that every other surface consumes — never the raw `users/{uid}` doc.
+        profile = await getUserService().getUserProfile(targetUserId, viewerUserId);
       } catch (err) {
         logger.warn('[PassportService] Failed to load target profile', { targetUserId, error: err?.message });
-        profile = { id: targetUserId };
       }
+      // `getUserProfile` returns null for a missing document; never synthesize an
+      // identity, but keep the passport shape renderable with an explicit stub.
+      if (!profile) profile = { id: targetUserId, uid: targetUserId };
     }
 
     // Resolve the relationship (owner / follower / connection / blocked)
@@ -51,26 +56,21 @@ class PassportService {
       relationship,
     });
 
-    const hasLevel = profile.level !== undefined && profile.level !== null;
-    const level = hasLevel ? Number(profile.level) : null;
-    const hasActiveDays = profile.activeDaysCount !== undefined && profile.activeDaysCount !== null;
-    const activeDaysCount = hasActiveDays ? Number(profile.activeDaysCount) : null;
-    const activeStreak = profile.activeStreak !== undefined && profile.activeStreak !== null
-      ? Number(profile.activeStreak)
+    // Apply the single projection once, so the passport renders only fields the
+    // viewer may see (the `users/{uid}` doc is world-readable and its raw fields
+    // must never be handed to the view layer).
+    const projected = projectProfileForViewer(profile, capabilities, { isOwner });
+
+    const hasLevel = projected.level !== undefined && projected.level !== null;
+    const level = hasLevel ? Number(projected.level) : null;
+    const hasActiveDays = projected.activeDaysCount !== undefined && projected.activeDaysCount !== null;
+    const activeDaysCount = hasActiveDays ? Number(projected.activeDaysCount) : null;
+    const activeStreak = projected.activeStreak !== undefined && projected.activeStreak !== null
+      ? Number(projected.activeStreak)
       : null;
 
     const citizenTier = level !== null ? getCitizenTier(level, activeDaysCount || 0) : null;
     const rankTitle = level !== null ? getRankTitle(level) : null;
-
-    const readScore = (...candidates) => {
-      for (const value of candidates) {
-        if (value !== undefined && value !== null && value !== '') {
-          const num = Number(value);
-          if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
-        }
-      }
-      return null;
-    };
 
     const dimension = (score, bandFn) => (
       score === null
@@ -82,15 +82,15 @@ class PassportService {
     // may not see achievements also may not read the (achievement-derived)
     // standing scores. Absent data is reported unavailable, never defaulted.
     const canSeeStanding = Boolean(capabilities.canViewAchievements || isOwner);
-    const reputation = canSeeStanding ? dimension(readScore(profile.reputationScore, profile.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
-    const influence = canSeeStanding ? dimension(readScore(profile.influenceScore, profile.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
-    const contribution = canSeeStanding ? dimension(readScore(profile.contributionScore, profile.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
+    const reputation = canSeeStanding ? dimension(readStandingScore(projected.reputationScore, projected.reputation), getReputationBand) : { score: null, band: null, color: null, available: false };
+    const influence = canSeeStanding ? dimension(readStandingScore(projected.influenceScore, projected.influence), getInfluenceBand) : { score: null, band: null, color: null, available: false };
+    const contribution = canSeeStanding ? dimension(readStandingScore(projected.contributionScore, projected.contribution), getContributionBand) : { score: null, band: null, color: null, available: false };
 
     // Achievements: only if the viewer is permitted.
     let verifiedAchievements = [];
     if (capabilities.canViewAchievements || isOwner) {
-      if (Array.isArray(profile.achievements)) {
-        verifiedAchievements = profile.achievements;
+      if (Array.isArray(projected.achievements)) {
+        verifiedAchievements = projected.achievements;
       } else {
         try {
           const { default: achievementService } = await import('./achievementService.js');
@@ -105,8 +105,8 @@ class PassportService {
     // Titles: only if the viewer is permitted.
     let earnedTitles = [];
     if (capabilities.canViewTitles || isOwner) {
-      if (Array.isArray(profile.titles)) {
-        earnedTitles = profile.titles;
+      if (Array.isArray(projected.titles)) {
+        earnedTitles = projected.titles;
       } else {
         try {
           const { default: titleService } = await import('./titleService.js');
@@ -160,11 +160,11 @@ class PassportService {
       userId: targetUserId,
       citizenId,
       issueDate,
-      displayName: pickDisplayName([profile.displayName, profile.name], { fallback: null }),
-      username: profile.username || null,
-      photoURL: profile.photoURL || null,
-      primaryTitle: profile.primaryTitle || profile.activeTitle?.name || citizenTier?.tier || null,
-      activeTitle: profile.activeTitle || null,
+      displayName: pickDisplayName([projected.displayName, projected.name], { fallback: null }),
+      username: projected.username || null,
+      photoURL: projected.photoURL || null,
+      primaryTitle: projected.primaryTitle || projected.activeTitle?.name || citizenTier?.tier || null,
+      activeTitle: projected.activeTitle || null,
       rankTitle,
       citizenTier,
       level,
@@ -180,7 +180,8 @@ class PassportService {
       capabilities,
       isVerified,
       isCreator,
-      creatorTier: profile.creatorTier || null,
+      // The creator suite is gated by the `creatorInfo` scope.
+      creatorTier: capabilities.canViewCreatorInfo || isOwner ? (projected.creatorTier || null) : null,
       royalEligibility: {
         duke: dukeEligibility,
         king: kingEligibility,

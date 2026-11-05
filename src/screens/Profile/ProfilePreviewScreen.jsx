@@ -52,6 +52,7 @@ export default function ProfilePreviewScreen({
   const storeProfile = useProfileStore((state) => state.profile);
   const storePosts = useProfileStore((state) => state.posts);
   const storeHighlights = useProfileStore((state) => state.highlights);
+  const storeFollowStatus = useProfileStore((state) => state.followStatus);
   const loadProfile = useProfileStore((state) => state.loadProfile);
 
   const [activeTab, setActiveTab] = useState('posts');
@@ -96,17 +97,25 @@ export default function ProfilePreviewScreen({
   const isOwnerMode = viewPerspective === 'owner';
 
   const capabilities = useMemo(() => {
+    // Owner perspective: the owner sees everything. Visitor perspective: use the
+    // REAL relationship between the signed-in user and this profile so the
+    // preview reflects what a public viewer actually sees. We only have a
+    // genuine relation for the viewer's own profile (self => none); for any
+    // other target the store's follow status is the source.
+    const isOwnerView = viewPerspective === 'owner';
     return resolveCapabilities({
       viewer: authUser,
       target: effectiveProfile,
-      relationship: {
-        isOwner: isOwnerMode,
-        isFollowing: !isOwnerMode,
-        isFollower: true,
-      },
-      viewAs: isOwnerMode ? null : 'public',
+      relationship: isOwnerView
+        ? { isOwner: true }
+        : {
+            isFollowing: Boolean(storeFollowStatus?.isFollowing),
+            isFollower: Boolean(storeFollowStatus?.isFollower),
+            isMutualFriend: Boolean(storeFollowStatus?.isMutualFriend),
+          },
+      viewAs: isOwnerView ? null : 'public',
     });
-  }, [authUser, effectiveProfile, isOwnerMode]);
+  }, [authUser, effectiveProfile, viewPerspective, storeFollowStatus]);
 
   // Apply the capability decision once; the view layer never re-derives it.
   const projectedProfile = useMemo(
@@ -207,7 +216,7 @@ export default function ProfilePreviewScreen({
         <ProfileHeroSection
           profile={projectedProfile}
           isOwner={isOwnerMode}
-          level={effectiveProfile?.level ?? null}
+          level={projectedProfile?.level ?? null}
           theme={theme}
           onBack={handleBack}
           onEditProfile={handleEdit}
@@ -251,7 +260,7 @@ export default function ProfilePreviewScreen({
           activeTab={activeTab}
           loading={false}
           theme={theme}
-          profile={effectiveProfile}
+          profile={projectedProfile}
           isOwner={isOwnerMode}
         />
       </div>

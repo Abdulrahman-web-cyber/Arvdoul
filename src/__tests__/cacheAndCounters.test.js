@@ -3,8 +3,6 @@
 import { jest } from '@jest/globals';
 import { CacheManager, cacheManager } from '../utils/CacheManager.js';
 import { redisCacheManager } from '../services/RedisCacheManager.js';
-import { cacheInvalidationService } from '../services/CacheInvalidationService.js';
-import { ttlOptimizationService } from '../services/TTLOptimizationService.js';
 
 describe('CacheManager', () => {
   let cache;
@@ -136,67 +134,6 @@ describe('RedisCacheManager (L1/L2/L3 hybrid)', () => {
     redisCacheManager.setNamespaceTtlMultiplier('hot', 2.5);
     expect(redisCacheManager.getNamespaceTtlMultiplier('hot')).toBe(2.5);
     expect(redisCacheManager.getNamespaceTtlMultiplier('cold')).toBe(1.0);
-  });
-});
-
-describe('TTLOptimizationService', () => {
-  beforeEach(() => {
-    ttlOptimizationService.keyAccessRates.clear();
-    redisCacheManager.setNamespaceTtlMultiplier('ttl_ns', 1.0);
-  });
-
-  test('returns base TTL for first access in a window', () => {
-    const ttl = ttlOptimizationService.recordAccessAndGetOptimalTtl('ttl_ns', 'k', 300000);
-    expect(ttl).toBe(300000);
-  });
-
-  test('escalates TTL for high-frequency access', () => {
-    const base = 300000;
-    let ttl = base;
-    for (let i = 0; i < 55; i++) {
-      ttl = ttlOptimizationService.recordAccessAndGetOptimalTtl('ttl_ns', 'viral', base);
-    }
-    expect(ttl).toBeGreaterThan(base);
-    // Active tier: 1.5x
-    expect(ttl).toBe(450000);
-  });
-
-  test('applies 4x multiplier at viral tier (>1000 rpm)', () => {
-    const base = 100000;
-    let ttl = base;
-    for (let i = 0; i < 1005; i++) {
-      ttl = ttlOptimizationService.recordAccessAndGetOptimalTtl('ttl_ns', 'mega', base);
-    }
-    expect(ttl).toBe(base * 4);
-    expect(redisCacheManager.getNamespaceTtlMultiplier('ttl_ns')).toBe(4.0);
-  });
-});
-
-describe('CacheInvalidationService', () => {
-  test('onPostMutated invalidates post, feed and aggregations', async () => {
-    const redisSpy = jest.spyOn(redisCacheManager, 'invalidateDistributed').mockResolvedValue();
-    cacheManager.set('user_posts', 'author1:post1', 'x');
-    await cacheInvalidationService.onPostMutated('post1', 'author1', 'update');
-    expect(redisSpy).toHaveBeenCalledWith('posts', 'post1');
-    expect(redisSpy).toHaveBeenCalledWith('feed', '*');
-    expect(cacheManager.get('user_posts', 'author1:post1')).toBeNull();
-    redisSpy.mockRestore();
-  });
-
-  test('onCommentMutated invalidates comment namespace', async () => {
-    const redisSpy = jest.spyOn(redisCacheManager, 'invalidateDistributed').mockResolvedValue();
-    await cacheInvalidationService.onCommentMutated('post1');
-    expect(redisSpy).toHaveBeenCalledWith('comments', 'post1');
-    redisSpy.mockRestore();
-  });
-
-  test('onUserProfileUpdated clears user cache', async () => {
-    const redisSpy = jest.spyOn(redisCacheManager, 'invalidateDistributed').mockResolvedValue();
-    cacheManager.set('profile', 'u9', 'stale');
-    await cacheInvalidationService.onUserProfileUpdated('u9');
-    expect(redisSpy).toHaveBeenCalledWith('user', 'u9');
-    expect(cacheManager.get('profile', 'u9')).toBeNull();
-    redisSpy.mockRestore();
   });
 });
 

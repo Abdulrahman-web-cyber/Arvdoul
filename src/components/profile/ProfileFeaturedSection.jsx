@@ -20,6 +20,8 @@ const ProfileFeaturedSection = memo(({
   profile,
   posts = [],
   theme = 'dark',
+  isOwner = false,
+  capabilities = null,
   onPostClick,
 }) => {
   const navigate = useNavigate();
@@ -58,6 +60,14 @@ const ProfileFeaturedSection = memo(({
   if (items.length === 0) {
     return null;
   }
+
+  // Collections are owner-scoped: `firestore.rules` restricts `collections`
+  // reads to `resource.data.userId == uid()` and the only collections route
+  // serves the signed-in user. The "More Handpicked" card is therefore an owner
+  // affordance — for a visitor it is hidden rather than linking to
+  // `/profile/:id/collections`, a route that does not exist (it fell through to
+  // the 404 screen).
+  const showCollectionsCard = Boolean(isOwner);
 
   return (
     <div className={cn(
@@ -125,25 +135,27 @@ const ProfileFeaturedSection = memo(({
         ))}
 
         {/* 4th Card: More Handpicked */}
-        <div
-          onClick={() => navigate(`/profile/${profile?.id || profile?.uid || 'user'}/collections`)}
-          className={cn(
-            "group relative aspect-[16/11] rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]",
-            isDark
-              ? "border-white/15 bg-white/[0.02] hover:bg-white/[0.05] text-white"
-              : "border-slate-300 bg-slate-50/70 hover:bg-slate-100 text-slate-800"
-          )}
-        >
-          <div className="w-9 h-9 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-            <Sparkles className="w-4 h-4 fill-purple-500/20" />
+        {showCollectionsCard && (
+          <div
+            onClick={() => navigate('/collections')}
+            className={cn(
+              "group relative aspect-[16/11] rounded-2xl border border-dashed flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]",
+              isDark
+                ? "border-white/15 bg-white/[0.02] hover:bg-white/[0.05] text-white"
+                : "border-slate-300 bg-slate-50/70 hover:bg-slate-100 text-slate-800"
+            )}
+          >
+            <div className="w-9 h-9 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <Sparkles className="w-4 h-4 fill-purple-500/20" />
+            </div>
+            <div className="text-xs font-bold">
+              More
+            </div>
+            <div className="text-[10px] text-slate-400 dark:text-slate-500">
+              Handpicked
+            </div>
           </div>
-          <div className="text-xs font-bold">
-            More
-          </div>
-          <div className="text-[10px] text-slate-400 dark:text-slate-500">
-            Handpicked
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

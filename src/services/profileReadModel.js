@@ -93,6 +93,21 @@ export function resolveLevelValue(...candidates) {
 }
 
 /**
+ * First numeric standing candidate clamped to 0..100, else null. Used by every
+ * surface that renders reputation/influence/contribution bands (passport,
+ * reputation screen). Absent data stays `null` so the surface can show an
+ * explicit unavailable state instead of a fabricated score.
+ */
+export function readStandingScore(...candidates) {
+  for (const value of candidates) {
+    if (value === undefined || value === null || value === '') continue;
+    const num = Number(value);
+    if (!Number.isNaN(num)) return Math.max(0, Math.min(100, num));
+  }
+  return null;
+}
+
+/**
  * Creator standing. An explicit `isCreator`/`creatorStatus` on the profile or
  * the signed-in viewer wins; otherwise the canonical level gate decides.
  */
@@ -109,6 +124,82 @@ export function resolveVerifiedFlag(profile = {}) {
 }
 
 /**
+ * Extended identity-card fields gated by the `profileInfo` scope. The public
+ * projection (`displayName`, `username`, `photoURL`) is intentionally NOT in
+ * this list — a viewer must always be able to identify whom they are looking at
+ * so the follow/block affordance works; only the descriptive card is gated.
+ */
+export const IDENTITY_INFO_FIELDS = Object.freeze([
+  'bio',
+  'location',
+  'website',
+  'pronouns',
+  'profession',
+  'education',
+  'birthday',
+  'gender',
+]);
+
+/**
+ * Creator-suite fields gated by the `creatorInfo` scope: the creative
+ * classification, the public business contact and the patronage note. Without
+ * this the scope was a dead control (settable in EditProfile/Settings, enforced
+ * nowhere) and a creator's business email was world-readable.
+ */
+export const CREATOR_INFO_FIELDS = Object.freeze([
+  'creatorCategory',
+  'inquiriesEmail',
+  'tipMessage',
+]);
+
+/**
+ * Financial fields. `economicStatus` (default ONLY_ME) gates the coin treasury,
+ * but the spread left every other money field on the object, so a viewer denied
+ * economic status still read earnings/totalEarned/coinBalance off the profile.
+ */
+export const ECONOMIC_FIELDS = Object.freeze([
+  'coins',
+  'coinBalance',
+  'balance',
+  'earnings',
+  'totalEarned',
+  'lifetimeEarnings',
+  'withdrawableBalance',
+]);
+
+/**
+ * Standing fields gated by the `activity` scope ("Civic Standing & Badges" in
+ * settings). `canViewActivity` was resolved by the engine and exposed on the
+ * projection but applied to nothing, so the scope hid no level, reputation,
+ * streak or badge. Absent standing stays null/empty so the surface renders an
+ * unavailable state rather than a fabricated Level 1.
+ */
+export const STANDING_FIELDS = Object.freeze([
+  'level',
+  'levelBand',
+  'experience',
+  'xp',
+  'experienceToNextLevel',
+  'activeStreak',
+  'longestStreak',
+  'activeDays',
+  'activeDaysCount',
+  'reputation',
+  'reputationScore',
+  'reputationTier',
+  'influence',
+  'influenceScore',
+  'contribution',
+  'contributionScore',
+]);
+
+/** Badge fields gated by their own `achievements` scope. */
+export const ACHIEVEMENT_FIELDS = Object.freeze(['achievements', 'achievementsCount']);
+
+/** Title fields gated by their own `titles` scope. */
+export const TITLE_FIELDS = Object.freeze(['titles', 'activeTitle', 'primaryTitle']);
+
+/**
  * Apply the capability decision exactly once. The view layer must consume the
  * result rather than re-checking privacy, so a section can never render while
  * the engine reports it hidden.
@@ -118,7 +209,20 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
   const caps = capabilities || {};
   const mayViewEconomic = isOwner || Boolean(caps.canViewEconomicStatus);
   const blocked = Boolean(caps.isBlocked);
-  return {
+  // Absent capability map (a component that forgot to pass it) must fail closed
+  // for the identity card, matching the sections below. The owner always sees it.
+  const mayViewIdentity = isOwner || Boolean(caps.canViewIdentity);
+  const hideIdentity = blocked || !mayViewIdentity;
+  // Presence has its own scope; a blocked viewer never sees it. The raw
+  // `isOnline`/`lastActive` fields are masked alongside the `presence` object so
+  // a consumer cannot read around the gate (ProfileHeroSection reads
+  // `profile.isOnline` directly).
+  const presenceVisible = !blocked && (isOwner || Boolean(caps.canViewPresence));
+  const mayViewCreator = isOwner || Boolean(caps.canViewCreatorInfo);
+  const mayViewStanding = isOwner || Boolean(caps.canViewActivity);
+  const mayViewAchievements = isOwner || Boolean(caps.canViewAchievements);
+  const mayViewTitles = isOwner || Boolean(caps.canViewTitles);
+  const projected = {
     ...profile,
     coins: mayViewEconomic ? profile.coins : null,
     // Safety flags come from the engine so the UI reflects the same decision
@@ -127,18 +231,67 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     isBlockedByTarget: Boolean(caps.isBlockedBy),
     isBlockedByViewer: Boolean(caps.isBlocking),
     isRestricted: blocked || Boolean(caps.isRestricted),
-    bio: blocked ? '' : profile.bio,
     followerCount: blocked ? 0 : profile.followerCount,
     followingCount: blocked ? 0 : profile.followingCount,
     postCount: blocked ? 0 : profile.postCount,
+    canViewIdentity: Boolean(caps.canViewIdentity),
+    canViewCreatorInfo: Boolean(caps.canViewCreatorInfo),
     canViewActivity: Boolean(caps.canViewActivity),
     canViewAchievements: Boolean(caps.canViewAchievements),
     canViewTitles: Boolean(caps.canViewTitles),
     canViewFollowersList: Boolean(caps.canViewFollowers),
     canViewFollowingList: Boolean(caps.canViewFollowing),
     links: caps.canViewLinks ? (profile.links || []) : [],
-    presence: caps.canViewPresence ? profile.presence : OFFLINE_PRESENCE,
+    presence: presenceVisible ? profile.presence : OFFLINE_PRESENCE,
+    isOnline: presenceVisible ? profile.isOnline : false,
+    lastActive: presenceVisible ? profile.lastActive : null,
   };
+  // The `profileInfo` scope gates the descriptive identity card. Masking it here
+  // (rather than in each screen) is what makes the control real: the About screen
+  // renders bio/location/website/links straight from the projected profile.
+  if (hideIdentity) {
+    for (const field of IDENTITY_INFO_FIELDS) {
+      if (field in projected) projected[field] = '';
+    }
+  }
+  // `creatorInfo` gates the creator suite; mask at the same single point so a
+  // narrowed scope hides the business contact and patronage note everywhere.
+  if (!mayViewCreator) {
+    for (const field of CREATOR_INFO_FIELDS) {
+      if (field in projected) projected[field] = '';
+    }
+  }
+  // `economicStatus` gates the whole money surface, not just `coins`.
+  if (!mayViewEconomic) {
+    for (const field of ECONOMIC_FIELDS) {
+      if (field in projected) projected[field] = null;
+    }
+  }
+  // `activity` gates civic standing (level, reputation, streak). Without this
+  // the scope was resolved but enforced nowhere, so the "Civic Standing &
+  // Badges" control hid nothing.
+  if (!mayViewStanding) {
+    for (const field of STANDING_FIELDS) {
+      if (!(field in projected)) continue;
+      projected[field] = Array.isArray(projected[field]) ? [] : null;
+    }
+  }
+  // Badges and titles are separate scopes (the settings UI writes `achievements`
+  // and `titles` alongside `activity`), so they are masked independently — a
+  // viewer allowed the level but denied badges must not read the badges.
+  if (!mayViewAchievements) {
+    for (const field of ACHIEVEMENT_FIELDS) {
+      if (!(field in projected)) continue;
+      projected[field] = Array.isArray(projected[field]) ? [] : null;
+    }
+  }
+  if (!mayViewTitles) {
+    for (const field of TITLE_FIELDS) {
+      if (!(field in projected)) continue;
+      projected[field] = Array.isArray(projected[field]) ? [] : null;
+    }
+  }
+  return projected;
 }
 
 export default {
@@ -152,6 +305,7 @@ export default {
   resolveAvatarUrl,
   resolveCount,
   resolveLevelValue,
+  readStandingScore,
   resolveCreatorFlag,
   resolveVerifiedFlag,
   projectProfileForViewer,

@@ -20,6 +20,8 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 
 export const COLLABORATION_CONFIG = {
+  // Hard ceiling for any single collaboration list read.
+  MAX_LIST_READ: 200,
   ROLES: {
     OWNER: {
       id: 'owner',
@@ -297,7 +299,7 @@ class CollaborationService {
     await this.ensureInitialized();
 
     const teamRef = collection(this.firestore, 'collaboration_projects', projectId, 'team');
-    const snap = await getDocs(teamRef);
+    const snap = await getDocs(query(teamRef, limit(COLLABORATION_CONFIG.MAX_LIST_READ)));
 
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   }
@@ -436,7 +438,8 @@ class CollaborationService {
       invitesRef,
       where('email', '==', email),
       where('status', '==', 'pending'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(COLLABORATION_CONFIG.MAX_LIST_READ)
     );
 
     const snap = await getDocs(q);
@@ -487,7 +490,7 @@ class CollaborationService {
     await this.ensureInitialized();
 
     const contentRef = collection(this.firestore, 'collaboration_projects', projectId, 'content');
-    const q = query(contentRef, orderBy('createdAt', 'desc'));
+    const q = query(contentRef, orderBy('createdAt', 'desc'), limit(COLLABORATION_CONFIG.MAX_LIST_READ));
     const snap = await getDocs(q);
 
     return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));

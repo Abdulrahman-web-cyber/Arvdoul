@@ -184,6 +184,7 @@ class AudioEditorService {
       markers: [],
     };
     this.currentProject = project;
+    this._baseline = null;
     return project;
   }
 
@@ -192,6 +193,7 @@ class AudioEditorService {
       throw new AudioEditorError('invalid_project', 'Invalid project data');
     }
     this.currentProject = { ...projectData, undoStack: [], redoStack: [] };
+    this._baseline = null;
     return this.currentProject;
   }
 
@@ -670,7 +672,20 @@ class AudioEditorService {
   _pushUndo() {
     if (!this.currentProject) return;
 
-    const snapshot = JSON.stringify({
+    // Push the state as it was BEFORE this mutation. The previous implementation
+    // snapshotted the post-mutation state, so the first undo was a no-op.
+    if (this._baseline != null) {
+      this.currentProject.undoStack.push(this._baseline);
+      if (this.currentProject.undoStack.length > AUDIO_EDITOR_CONFIG.UNDO.MAX_STACK_SIZE) {
+        this.currentProject.undoStack.shift();
+      }
+    }
+    this._baseline = this._snapshotState();
+    this.currentProject.redoStack = [];
+  }
+
+  _snapshotState() {
+    return JSON.stringify({
       trimStart: this.currentProject.trimStart,
       trimEnd: this.currentProject.trimEnd,
       volume: this.currentProject.volume,
@@ -680,12 +695,6 @@ class AudioEditorService {
       effects: this.currentProject.effects,
       markers: this.currentProject.markers,
     });
-
-    this.currentProject.undoStack.push(snapshot);
-    if (this.currentProject.undoStack.length > AUDIO_EDITOR_CONFIG.UNDO.MAX_STACK_SIZE) {
-      this.currentProject.undoStack.shift();
-    }
-    this.currentProject.redoStack = [];
   }
 
   undo() {
@@ -693,21 +702,11 @@ class AudioEditorService {
       return null;
     }
 
-    const current = JSON.stringify({
-      trimStart: this.currentProject.trimStart,
-      trimEnd: this.currentProject.trimEnd,
-      volume: this.currentProject.volume,
-      pan: this.currentProject.pan,
-      fadeIn: this.currentProject.fadeIn,
-      fadeOut: this.currentProject.fadeOut,
-      effects: this.currentProject.effects,
-      markers: this.currentProject.markers,
-    });
-
-    this.currentProject.redoStack.push(current);
+    this.currentProject.redoStack.push(this._snapshotState());
 
     const previous = JSON.parse(this.currentProject.undoStack.pop());
     Object.assign(this.currentProject, previous);
+    this._baseline = this._snapshotState();
 
     return this.currentProject;
   }
@@ -732,6 +731,7 @@ class AudioEditorService {
 
     const next = JSON.parse(this.currentProject.redoStack.pop());
     Object.assign(this.currentProject, next);
+    this._baseline = this._snapshotState();
 
     return this.currentProject;
   }

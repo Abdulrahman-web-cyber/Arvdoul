@@ -470,10 +470,17 @@ export function validateProfileUpdate(rawUpdates = {}) {
       }
 
       case 'locationCoordinates': {
-        if (val && typeof val === 'object' && typeof val.lat === 'number' && typeof val.lng === 'number') {
+        if (val === null) {
+          // Explicit clear (privacy switched to hidden/country-only): the writer
+          // turns null into a field deletion.
+          sanitized.locationCoordinates = null;
+        } else if (val && typeof val === 'object' && typeof val.lat === 'number' && typeof val.lng === 'number') {
+          // Never persist full-precision GPS. `users/{uid}` is world-readable to
+          // any signed-in user, so coordinates are rounded to ~1 km (2 decimals)
+          // here at the contract boundary — a caller cannot bypass it.
           sanitized.locationCoordinates = {
-            lat: Math.max(-90, Math.min(90, val.lat)),
-            lng: Math.max(-180, Math.min(180, val.lng)),
+            lat: Math.round(Math.max(-90, Math.min(90, val.lat)) * 100) / 100,
+            lng: Math.round(Math.max(-180, Math.min(180, val.lng)) * 100) / 100,
           };
         }
         break;
@@ -573,11 +580,39 @@ export function validateProfileUpdate(rawUpdates = {}) {
     }
   }
 
+  applyLocationPrivacy(sanitized);
+
   return {
     valid: errors.length === 0,
     sanitized,
     errors
   };
+}
+
+/**
+ * Enforce the location-privacy choice at the contract boundary.
+ *
+ * `users/{uid}` is world-readable to any signed-in user, so a `hidden` /
+ * `country_only` selection must not leave the precise city or GPS coordinates
+ * behind in the public document. The UI blanks the display string, but the raw
+ * `locationCoordinates` used to persist regardless — this closes that leak for
+ * every caller, not just the modal.
+ */
+function applyLocationPrivacy(sanitized) {
+  if (!sanitized.locationPrivacy) return;
+  if (sanitized.locationPrivacy === 'hidden') {
+    sanitized.location = '';
+    sanitized.locationCoordinates = null;
+  } else if (sanitized.locationPrivacy === 'country_only') {
+    // Only narrow a location that was actually sent with this update; a partial
+    // privacy-only write must not blank an existing stored city.
+    if (typeof sanitized.location === 'string' && sanitized.location) {
+      sanitized.location = sanitized.location.includes(',')
+        ? sanitized.location.split(',').pop().trim()
+        : sanitized.location;
+    }
+    sanitized.locationCoordinates = null;
+  }
 }
 
 /**

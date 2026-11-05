@@ -12,15 +12,17 @@ import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Link as LinkIcon, Briefcase, Mail, HeartHandshake, Palette } from 'lucide-react';
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { getStoredUid, getStoredUser } from '../../utils/security';
-import { getLevelInfo, getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
+import { getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
+import { resolveCapabilities } from '../../services/profileCapabilityEngine.js';
 import {
   pickHandle,
   deriveHandle,
   pickDisplayName,
   resolveLevelValue,
+  projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 
 /**
@@ -34,7 +36,7 @@ export default function AboutScreen() {
 
   const { user: authUser } = useAuth();
   const storeUser = useAppStore((state) => state.currentUser);
-  const { profile: storeProfile, loadProfile, loading } = useProfileStore();
+  const { profile: storeProfile, loadProfile } = useProfileStore();
 
   const currentUserId = authUser?.uid || storeUser?.uid || getStoredUid();
   const targetId = userId || currentUserId;
@@ -62,42 +64,37 @@ export default function AboutScreen() {
     };
   }, [storeProfile, storeUser, authUser, targetId, isActualOwner]);
 
-  const hasStanding = effectiveProfile?.level != null || effectiveProfile?.experience != null || effectiveProfile?.xp != null;
+  // The About screen renders the descriptive identity card (bio/location/website/
+  // links), so it must honour the `profileInfo` scope. It resolves the capability
+  // decision and applies the single projection — it does not re-derive privacy.
+  const capabilities = useMemo(() => resolveCapabilities({
+    viewer: currentUserId ? { uid: currentUserId } : null,
+    target: effectiveProfile,
+    relationship: { isOwner: isActualOwner },
+  }), [currentUserId, effectiveProfile, isActualOwner]);
 
-  const levelInfo = useMemo(() => {
-    if (!hasStanding) return null;
-    try {
-      const xp = effectiveProfile?.experience ?? effectiveProfile?.xp;
-      if (xp != null) return getLevelInfo(Number(xp));
-      if (effectiveProfile?.level != null) {
-        return {
-          level: effectiveProfile.level,
-          title: getRankTitle(effectiveProfile.level) || null,
-        };
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }, [effectiveProfile, hasStanding]);
+  const displayedProfile = useMemo(
+    () => projectProfileForViewer(effectiveProfile, capabilities, { isOwner: isActualOwner }),
+    [effectiveProfile, capabilities, isActualOwner]
+  );
 
   const rankTitle = useMemo(() => {
-    if (effectiveProfile?.level == null) return null;
+    if (displayedProfile?.level == null) return null;
     try {
-      return getRankTitle(effectiveProfile.level);
+      return getRankTitle(displayedProfile.level);
     } catch {
       return null;
     }
-  }, [effectiveProfile?.level]);
+  }, [displayedProfile?.level]);
 
   const perks = useMemo(() => {
-    if (effectiveProfile?.level == null) return [];
+    if (displayedProfile?.level == null) return [];
     try {
-      return getPerksForLevel(effectiveProfile.level) || [];
+      return getPerksForLevel(displayedProfile.level) || [];
     } catch {
       return [];
     }
-  }, [effectiveProfile?.level]);
+  }, [displayedProfile?.level]);
 
   const handleEdit = () => {
     navigate('/profile/edit');
@@ -126,13 +123,55 @@ export default function AboutScreen() {
             </button>
           </div>
         )}
-        {/* Profile Card & Info */}
+        {/* Profile Card & Info — projected, so a narrowed profileInfo scope hides the card */}
         <ProfileAbout
-          profile={effectiveProfile}
+          profile={displayedProfile}
           isOwner={isActualOwner}
           onEdit={handleEdit}
           theme={theme}
         />
+
+        {/* Creator Suite — gated by the `creatorInfo` scope (was a dead control:
+            the fields were saved and validated but rendered nowhere, and the
+            business contact was world-readable in users/{uid}). The projection
+            blanks the fields, so this only renders when the scope allows them. */}
+        {displayedProfile?.canViewCreatorInfo !== false && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
+          <div className={cn(
+            'p-5 rounded-2xl border space-y-4 shadow-sm',
+            isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
+          )}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Creator Suite</h3>
+            </div>
+            <div className="space-y-2.5">
+              {displayedProfile?.creatorCategory && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Palette className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Discipline:</span>
+                  <span className="text-slate-900 dark:text-white font-medium">{displayedProfile.creatorCategory}</span>
+                </div>
+              )}
+              {displayedProfile?.inquiriesEmail && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span className="text-slate-500 dark:text-slate-400">Business contact:</span>
+                  <a href={`mailto:${displayedProfile.inquiriesEmail}`} className="text-indigo-500 hover:underline truncate">
+                    {displayedProfile.inquiriesEmail}
+                  </a>
+                </div>
+              )}
+              {displayedProfile?.tipMessage && (
+                <div className="flex items-start gap-3 text-sm">
+                  <HeartHandshake className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-slate-600 dark:text-slate-300 italic">{displayedProfile.tipMessage}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Citizenship & Standing Strip */}
         <div className={cn(
@@ -149,8 +188,8 @@ export default function AboutScreen() {
                   Citizen Standing & Privileges
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {effectiveProfile?.level != null ? (
-                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || 'Citizen'}</span> · Level {effectiveProfile.level}</>
+                  {displayedProfile?.level != null ? (
+                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || 'Citizen'}</span> · Level {displayedProfile.level}</>
                   ) : (
                     <span>Standing unavailable</span>
                   )}

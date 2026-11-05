@@ -23,6 +23,10 @@ const ProfileProgression = memo(({
   level = null,
   experience = 0,
   streak = 0,
+  reputation = null,
+  showLevel = true,
+  showReputation = true,
+  showStreak = true,
   isOwner = false,
   theme = 'light',
   className = '',
@@ -33,6 +37,9 @@ const ProfileProgression = memo(({
   const explicitLevel = Number(level);
   const hasLevel = Number.isFinite(explicitLevel) && explicitLevel > 0;
   const effectiveLevel = hasLevel ? explicitLevel : null;
+
+  const hasReputation = reputation !== null && reputation !== undefined && Number.isFinite(Number(reputation));
+  const safeReputation = hasReputation ? Number(reputation) : null;
 
   const xpInfo = useMemo(() => {
     if (!hasLevel) return null;
@@ -147,10 +154,22 @@ const ProfileProgression = memo(({
               <Crown className="w-4 h-4 text-amber-500 shrink-0" />
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-              <span>Civic Tier {effectiveLevel}</span>
-              {streak > 0 && (
+              {/* The owner's showLevel/showReputation/showStreak privacy toggles
+                  decide what renders here; a hidden metric is omitted, never
+                  fabricated. */}
+              {showLevel && <span>Civic Tier {effectiveLevel}</span>}
+              {showReputation && safeReputation !== null && (
                 <>
-                  <span aria-hidden="true">·</span>
+                  {showLevel && <span aria-hidden="true">·</span>}
+                  <span className="inline-flex items-center gap-1 text-emerald-500 font-semibold">
+                    <Award className="w-3.5 h-3.5" />
+                    <span>{safeReputation} Reputation</span>
+                  </span>
+                </>
+              )}
+              {showStreak && streak > 0 && (
+                <>
+                  {(showLevel || (showReputation && safeReputation !== null)) && <span aria-hidden="true">·</span>}
                   <span className="inline-flex items-center gap-1 text-amber-500 font-semibold">
                     <Flame className="w-3.5 h-3.5 fill-amber-500" />
                     <span>{streak} Day Streak</span>

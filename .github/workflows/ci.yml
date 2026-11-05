@@ -85,6 +85,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Cloud Functions dependencies
+        run: npm ci --prefix functions
+
       - name: Run unit tests
         run: npm run test -- --coverage --watchAll=false
         continue-on-error: true
@@ -222,6 +225,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Cloud Functions dependencies
+        run: npm ci --prefix functions
+
+      # The Firestore emulator is a JVM process. firebase-tools requires
+      # Java 21+; the JVM refuses to boot on older runtimes.
+      - name: Setup Java (Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Run architecture + cost guards
         run: >-
           npm run test -- --watchAll=false
@@ -233,6 +247,20 @@ jobs:
           src/__tests__/firestoreRulesCompile.test.js
           src/__tests__/profileReadModel.test.js
           src/__tests__/userServicePrivacyProjection.test.js
+          src/__tests__/profileSystemHardening.test.js
+          src/__tests__/serviceReachability.test.js
+          src/__tests__/socialGraphService.test.js
+
+      # The rules/graph adversarial checks only run against a live emulator.
+      # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the
+      # child, so `firestoreRulesCompile`/`socialGraphEdgeReadRules` execute
+      # their live assertions instead of skipping.
+      - name: Run Firestore rules + social-graph adversarial checks (emulator)
+        run: >-
+          npx firebase-tools emulators:exec
+          --only firestore
+          --project demo-arvdoul
+          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js"
 
   # ========== SECURITY CHECK ==========
   security:

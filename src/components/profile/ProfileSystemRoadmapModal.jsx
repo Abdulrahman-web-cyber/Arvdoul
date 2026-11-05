@@ -88,8 +88,15 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
   const currentCitizenTier = useMemo(() => currentLevel !== null ? getCitizenTier(currentLevel, activeDays) : null, [currentLevel, activeDays]);
   const currentRankTitle = useMemo(() => currentLevel !== null ? getRankTitle(currentLevel) : null, [currentLevel]);
 
-  // Is full citizen? (Level 5 + 7 active days)
-  const isFullCitizen = currentLevel !== null && currentLevel >= 5 && activeDays >= 7;
+  // Full-citizenship criteria live in the shared CITIZEN_TIERS table (the
+  // "Citizen" tier). Read them; never restate `Level 5` / `7 active days` in JSX.
+  const citizenCriteria = useMemo(() => {
+    const tier = CITIZEN_TIERS.find((t) => t.tier === 'Citizen') || {};
+    return { minLevel: tier.minLevel ?? null, minDays: tier.minDays ?? null };
+  }, []);
+  const meetsLevelRequirement = currentLevel !== null && citizenCriteria.minLevel !== null && currentLevel >= citizenCriteria.minLevel;
+  const meetsDaysRequirement = citizenCriteria.minDays !== null && activeDays >= citizenCriteria.minDays;
+  const isFullCitizen = meetsLevelRequirement && meetsDaysRequirement;
 
   if (!isOpen) return null;
 
@@ -375,22 +382,22 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className={cn(
                         "p-2.5 rounded-xl border flex items-center justify-between",
-                        currentLevel >= 5
+                        meetsLevelRequirement
                           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                           : "bg-white/5 border-white/10 text-slate-400"
                       )}>
-                        <span>Level 5+ Reached</span>
-                        {currentLevel >= 5 ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                        <span>Level {citizenCriteria.minLevel}+ Reached</span>
+                        {meetsLevelRequirement ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
                       </div>
 
                       <div className={cn(
                         "p-2.5 rounded-xl border flex items-center justify-between",
-                        activeDays >= 7
+                        meetsDaysRequirement
                           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                           : "bg-white/5 border-white/10 text-slate-400"
                       )}>
-                        <span>7 Active Days ({activeDays}/7)</span>
-                        {activeDays >= 7 ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
+                        <span>{citizenCriteria.minDays} Active Days ({activeDays}/{citizenCriteria.minDays})</span>
+                        {meetsDaysRequirement ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Lock className="w-3.5 h-3.5" />}
                       </div>
                     </div>
                   </div>
@@ -410,7 +417,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                       <div className="text-xs text-slate-400">
                         {isFullCitizen
                           ? "Official Stamp Active • Full Democratic Jurisdiction"
-                          : "Resident Dossier • Reach Level 5 with 7 active days to Stamp"}
+                          : `Resident Dossier • Reach Level ${citizenCriteria.minLevel} with ${citizenCriteria.minDays} active days to Stamp`}
                       </div>
                     </div>
                   </div>

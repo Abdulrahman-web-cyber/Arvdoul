@@ -25,7 +25,8 @@ import {
   Volume2,
   Sliders,
   ExternalLink,
-  Plus
+  Plus,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getPerksForLevel } from '../../services/levelSystemService';
@@ -43,6 +44,9 @@ const ProfileFeedGrid = memo(({
   onPostClick,
   onOpenTipModal,
   isOwner = false,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -85,6 +89,31 @@ const ProfileFeedGrid = memo(({
     e.stopPropagation();
     setPlayingAudioId(prev => (prev === trackId ? null : trackId));
   }, []);
+
+  // Shown under every paginated grid (posts/reels/videos/photos/audio/tagged).
+  // Without it the profile feed silently truncated at the first page.
+  const paginationFooter = (onLoadMore && (hasMore || loadingMore)) ? (
+    <div className="w-full flex justify-center py-5">
+      <button
+        type="button"
+        onClick={() => onLoadMore?.()}
+        disabled={loadingMore}
+        className={cn(
+          'inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-xl border transition-all active:scale-95 disabled:opacity-60 disabled:cursor-wait',
+          isDark ? 'bg-white/5 border-white/10 text-white hover:bg-white/10' : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
+        )}
+      >
+        {loadingMore ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Loading…</span>
+          </>
+        ) : (
+          <span>Load more</span>
+        )}
+      </button>
+    </div>
+  ) : null;
 
   // Handle 'citizenship' tab
   if (activeTab === 'citizenship') {
@@ -332,6 +361,7 @@ const ProfileFeedGrid = memo(({
   /* ---------------------------------------------------- */
   if (activeTab === 'audio') {
     return (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 w-full">
         {displayItems.map((item, idx) => {
           const isPlaying = playingAudioId === item.id;
@@ -454,6 +484,8 @@ const ProfileFeedGrid = memo(({
           );
         })}
       </div>
+      {paginationFooter}
+      </>
     );
   }
 
@@ -464,6 +496,7 @@ const ProfileFeedGrid = memo(({
     const isReelsTab = activeTab === 'reels';
 
     return (
+      <>
       <div className={cn(
         "grid gap-2.5 sm:gap-3.5 w-full",
         isReelsTab 
@@ -550,6 +583,8 @@ const ProfileFeedGrid = memo(({
           );
         })}
       </div>
+      {paginationFooter}
+      </>
     );
   }
 
@@ -558,6 +593,7 @@ const ProfileFeedGrid = memo(({
   /* ---------------------------------------------------- */
   if (viewMode === 'masonry') {
     return (
+      <>
       <div className="columns-1 sm:columns-2 lg:columns-2 xl:columns-3 gap-4 space-y-4 w-full">
         {displayItems.map((item, idx) => {
           const isVid = item.type === 'video' || item.type === 'reel';
@@ -663,6 +699,8 @@ const ProfileFeedGrid = memo(({
           );
         })}
       </div>
+      {paginationFooter}
+      </>
     );
   }
 
@@ -670,6 +708,7 @@ const ProfileFeedGrid = memo(({
   /* MODE 3: FULL FEED VIEW                               */
   /* ---------------------------------------------------- */
   return (
+    <>
     <div className="space-y-5 w-full">
       {displayItems.map((item, idx) => {
         const isVid = item.type === 'video' || item.type === 'reel';
@@ -815,6 +854,8 @@ const ProfileFeedGrid = memo(({
         );
       })}
     </div>
+    {paginationFooter}
+    </>
   );
 });
 

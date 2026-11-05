@@ -34,6 +34,7 @@ const speechClient = new SpeechClient();
 const { onCall, onRequest } = functions.https;
 const { pubsub } = functions;
 const logger = functions.logger;
+const { checkRateLimit } = require('./rateLimit');
 
 // ----------------------------------------------------------------------
 //  MUX CLIENTS
@@ -87,36 +88,10 @@ function validateAuth(context) {
 }
 
 // ----------------------------------------------------------------------
-//  SHARDED RATE LIMITER
+//  SHARDED RATE LIMITER — shared implementation in ./rateLimit.js.
+//  This module previously carried its own copy; the shared limiter keeps a
+//  single shard algorithm and error contract across every endpoint.
 // ----------------------------------------------------------------------
-const NUM_RATE_SHARDS = 5;
-
-async function checkRateLimit(userId, action, maxOps, windowMs = 60000) {
-  const now = Date.now();
-  const windowStart = now - windowMs;
-  const parentRef = db.collection('rate_limits').doc(`${userId}_${action}`);
-
-  return db.runTransaction(async (t) => {
-    const shards = [];
-    for (let i = 0; i < NUM_RATE_SHARDS; i++) {
-      const shardSnap = await t.get(parentRef.collection('shards').doc(String(i)));
-      shards.push(shardSnap.exists ? shardSnap.data() : { count: 0, windowStart: 0 });
-    }
-    const total = shards.reduce((sum, d) => (d.windowStart >= windowStart ? sum + d.count : 0), 0);
-    if (total >= maxOps) {
-      throw new functions.https.HttpsError('resource-exhausted', `Rate limit exceeded for ${action}.`);
-    }
-    const shardId = Math.floor(Math.random() * NUM_RATE_SHARDS);
-    const shardRef = parentRef.collection('shards').doc(String(shardId));
-    let data = shards[shardId];
-    if (data.windowStart < windowStart) {
-      data = { count: 1, windowStart: now, expireAt: new Date(now + windowMs * 2) };
-    } else {
-      data.count += 1;
-    }
-    t.set(shardRef, data, { merge: true });
-  });
-}
 
 // ----------------------------------------------------------------------
 //  DOUBLE-ENTRY COIN TRANSFER (idempotent, maintains system supply)

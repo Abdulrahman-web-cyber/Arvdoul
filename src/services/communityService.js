@@ -21,6 +21,9 @@ import {
 } from 'firebase/firestore';
 
 const COMMUNITIES_PER_PAGE = 20;
+// Hard ceiling for any single community read; a per-user membership list is
+// bounded so a user in thousands of communities cannot pull them all at once.
+const MAX_COMMUNITY_READ = 200;
 
 class CommunityService {
   constructor() {
@@ -476,7 +479,8 @@ class CommunityService {
     const q = query(
       collection(this.db, 'communities'),
       where(`members.${userId}.role`, 'in', ['owner', 'admin', 'moderator', 'contributor', 'member']),
-      where('isDeleted', '==', false)
+      where('isDeleted', '==', false),
+      limit(MAX_COMMUNITY_READ)
     );
 
     const snapshot = await getDocs(q);
@@ -489,7 +493,8 @@ class CommunityService {
     const q = query(
       collection(this.db, 'communities'),
       where(`members.${userId}.role`, 'in', ['owner', 'admin', 'moderator']),
-      where('isDeleted', '==', false)
+      where('isDeleted', '==', false),
+      limit(MAX_COMMUNITY_READ)
     );
 
     const snapshot = await getDocs(q);

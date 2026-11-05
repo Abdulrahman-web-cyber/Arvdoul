@@ -25,6 +25,35 @@ const fakeFirestore = {
     const data = docs.get(`${ref.collection}/${ref.id}`);
     return { exists: () => data !== undefined, data: () => data, id: ref.id };
   },
+  documentId: () => '__name__',
+  getDocs: async (q) => {
+    const colName = q.colRef?.name ?? q.name;
+    const constraints = q.constraints || [];
+    const wheres = constraints.filter((c) => c && c.op !== undefined);
+    const cap = constraints.find((c) => c && typeof c.limit === 'number');
+    let rows = [...docs.entries()]
+      .filter(([key]) => key.slice(0, key.indexOf('/')) === colName)
+      .map(([key, data]) => ({ id: key.slice(key.indexOf('/') + 1), data }));
+    rows = rows.filter((r) => wheres.every((w) => {
+      if (w.field === '__name__') {
+        if (w.op === 'in') return w.value.includes(r.id);
+        if (w.op === '==') return r.id === w.value;
+        return true;
+      }
+      const v = r.data?.[w.field];
+      if (w.op === '==') return v === w.value;
+      if (w.op === 'in') return Array.isArray(w.value) && w.value.includes(v);
+      return true;
+    }));
+    if (cap) rows = rows.slice(0, cap.limit);
+    const docsArr = rows.map((r) => ({ id: r.id, data: () => r.data, exists: () => true }));
+    return {
+      docs: docsArr,
+      size: docsArr.length,
+      empty: docsArr.length === 0,
+      forEach: (cb) => docsArr.forEach(cb),
+    };
+  },
   enableIndexedDbPersistence: async () => ({}),
   serverTimestamp: () => ({ __ts: 1 }),
   Timestamp: { fromDate: (d) => ({ toDate: () => d }), now: () => ({ toDate: () => new Date() }) },
@@ -32,7 +61,6 @@ const fakeFirestore = {
   setDoc: async () => {},
   updateDoc: async () => {},
   deleteDoc: async () => {},
-  getDocs: async () => ({ docs: [], forEach: () => {}, size: 0, empty: true }),
   onSnapshot: (_ref, cb) => { cb({ exists: () => false, data: () => null }); return () => {}; },
   writeBatch: () => ({ set: () => {}, update: () => {}, delete: () => {}, commit: async () => {} }),
   runTransaction: async () => {},
@@ -63,6 +91,13 @@ const VIEWER = 'viewer-user';
 
 async function serviceWith(docData) {
   const { getUserService } = await import('../services/userService.js');
+  const { getSocialGraphService } = await import('../services/socialGraphService.js');
+  // getUserProfile resolves its relationship through the graph spine, so each
+  // case must start from a cold graph cache.
+  const graph = getSocialGraphService();
+  graph.firestore = fakeFirestore;
+  graph.initialized = true;
+  graph.clearCache();
   const svc = getUserService();
   svc.firestore = fakeFirestore;
   svc.initialized = true;
@@ -194,6 +229,37 @@ describe('getUserProfile privacy projection', () => {
     expect(profile.isBlocked).toBe(false);
     // Restriction is not a block: content stays visible to the viewer.
     expect(profile.canViewActivity).toBe(true);
+  });
+
+  it('honours the profileInfo scope: a public viewer sees the card by default', async () => {
+    const svc = await serviceWith({ displayName: 'Elena', bio: 'hello', location: 'Rome', website: 'https://e.dev' });
+    const profile = await svc.getUserProfile(TARGET, VIEWER);
+    expect(profile.canViewIdentity).toBe(true);
+    expect(profile.bio).toBe('hello');
+    expect(profile.location).toBe('Rome');
+  });
+
+  it('hides the identity card when the owner narrowed profileInfo to connections', async () => {
+    const svc = await serviceWith({
+      displayName: 'Elena', bio: 'hello', location: 'Rome', website: 'https://e.dev',
+      links: ['https://e.dev'], privacy: { profileInfo: 'CONNECTIONS' },
+    });
+    const profile = await svc.getUserProfile(TARGET, VIEWER);
+    expect(profile.canViewIdentity).toBe(false);
+    expect(profile.bio).toBe('');
+    expect(profile.location).toBe('');
+    expect(profile.website).toBe('');
+    // Identity of the *account* survives so the screen can still offer Follow.
+    expect(profile.displayName).toBe('Elena');
+  });
+
+  it('still shows the identity card to the owner when profileInfo is ONLY_ME', async () => {
+    const svc = await serviceWith({
+      displayName: 'Elena', bio: 'hello', privacy: { profileInfo: 'ONLY_ME' },
+    });
+    const profile = await svc.getUserProfile(TARGET, TARGET);
+    expect(profile.canViewIdentity).toBe(true);
+    expect(profile.bio).toBe('hello');
   });
 
   it('denies content for a suspended account', async () => {
