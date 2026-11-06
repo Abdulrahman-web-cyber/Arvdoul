@@ -197,13 +197,13 @@ const SearchScreen = memo(() => {
     const creators = Array.isArray(trending?.creators) ? trending.creators : [];
     const target = creators.find((c) => (c.id || c.uid) === creatorId);
     const wasFollowing = Boolean(target?.isFollowing);
-    const applyState = (following) => setTrending((prev) => {
-      if (!prev || !Array.isArray(prev.creators)) return prev;
-      return {
-        ...prev,
-        creators: prev.creators.map((c) => ((c.id || c.uid) === creatorId ? { ...c, isFollowing: following } : c)),
-      };
-    });
+    const applyState = (following) => {
+      if (!trending || !Array.isArray(trending.creators)) return;
+      setTrending({
+        ...trending,
+        creators: trending.creators.map((c) => ((c.id || c.uid) === creatorId ? { ...c, isFollowing: following } : c)),
+      });
+    };
     applyState(!wasFollowing);
     try {
       if (wasFollowing) await getUserService().unfollowUser(user.uid, creatorId);

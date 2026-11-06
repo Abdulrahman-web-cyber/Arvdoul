@@ -256,6 +256,7 @@ export function useSearch() {
     
     // Trending
     loadTrending,
+    setTrending,
     
     // Voice search — real Web Speech API (where supported).
     voiceSearch: () => {
