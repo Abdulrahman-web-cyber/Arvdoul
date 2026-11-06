@@ -14,6 +14,21 @@ import { XP_RULES } from '../shared/levelConfig.cjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
 
+describe('CreatorPayoutScreen - real ledger-derived figures only', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatorPayoutScreen.jsx'), 'utf8');
+  test('earnings breakdown is summed from the coin ledger, not a fixed ratio', () => {
+    // `(balance * 0.7)` / `(balance * 0.3)` fabricated a gifts/ad split that no
+    // server ever produced.
+    expect(src).not.toMatch(/balance\s*\*\s*0\.[0-9]/);
+    expect(src).toContain('getCoinEarningHistory');
+    expect(src).toContain('sumCredits');
+  });
+  test('lifetime withdrawn is computed, not a hardcoded $0.00', () => {
+    expect(src).not.toMatch(/>\$0\.00</);
+    expect(src).toContain('lifetimeWithdrawnCoins');
+  });
+});
+
 describe('videoData - no fabricated content', () => {
   test('contains no fabricated users (Zaid/Elena/Marcus...) or Unsplash stock', () => {
     const src = fs.readFileSync(path.join(root, 'src/data/videoData.js'), 'utf8');
