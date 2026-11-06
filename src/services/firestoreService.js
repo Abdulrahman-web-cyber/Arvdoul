@@ -1043,6 +1043,32 @@ class EnterpriseFirestoreService {
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }
 
+  // Post-embedded polls store their options as plain strings (the composer's
+  // `typeData.poll.options` is a string array), but the vote transaction keys
+  // on `option.id`. Normalise once so a vote actually lands on the option the
+  // voter tapped instead of silently no-op'ing.
+  _normalisePollOptions(rawOptions) {
+    if (!Array.isArray(rawOptions)) return [];
+    return rawOptions.map((opt, idx) => {
+      if (typeof opt === 'string') return { id: `opt_${idx}`, text: opt, votes: 0 };
+      return {
+        id: opt.id ?? `opt_${idx}`,
+        text: opt.text ?? 'Option',
+        votes: typeof opt.votes === 'number' ? opt.votes : 0,
+      };
+    });
+  }
+
+  async getUserPollVote(postId, userId) {
+    await this.ensureInitialized();
+    const { doc, getDoc } = this.firestoreMethods;
+    const voteRef = doc(this.firestore, 'posts', postId, 'poll_votes', userId);
+    const snap = await getDoc(voteRef);
+    if (!snap.exists()) return { success: true, optionIndex: null, optionId: null };
+    const data = snap.data();
+    return { success: true, optionIndex: data.optionIndex ?? null, optionId: data.optionId ?? null };
+  }
+
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
     try {
@@ -1057,8 +1083,8 @@ class EnterpriseFirestoreService {
         alreadyVoted = voteSnap.exists();
         if (!isMultiple && alreadyVoted) throw new Error('Already voted');
         if (!alreadyVoted) {
-          const poll = postSnap.data().poll;
-          const newOptions = [...(poll.options || [])];
+          const poll = postSnap.data().poll || {};
+          const newOptions = this._normalisePollOptions(poll.options);
           if (newOptions[optionIndex]) {
             newOptions[optionIndex] = { ...newOptions[optionIndex], votes: (newOptions[optionIndex].votes || 0) + 1 };
           }
@@ -1068,7 +1094,12 @@ class EnterpriseFirestoreService {
             'stats.pollVotes': increment(1),
             updatedAt: serverTimestamp()
           });
-          transaction.set(pollVoteRef, { userId, optionIndex, votedAt: serverTimestamp() });
+          transaction.set(pollVoteRef, {
+            userId,
+            optionIndex,
+            optionId: newOptions[optionIndex]?.id ?? `opt_${optionIndex}`,
+            votedAt: serverTimestamp()
+          });
         }
       });
       this.cache.delete(postId);
@@ -1243,6 +1274,7 @@ const firestoreService = {
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
+  getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
   incrementCommentCount: (pid, delta) => getFirestoreService().incrementCommentCount(pid, delta),
   recordPostView: (pid, uid) => getFirestoreService().recordPostView(pid, uid),
   getPostViewCount: (pid) => getFirestoreService().getPostViewCount(pid),

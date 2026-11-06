@@ -193,6 +193,37 @@ describe('post-surface interaction analytics wiring', () => {
   });
 });
 
+describe('post-embedded poll voting is wired end-to-end', () => {
+  // PollCard is display-only without `onVote` — every tap showed "Voting not
+  // configured". PostCard never passed it, so a poll post could not be voted on.
+  test('PostCard passes onVote and the viewer vote to PollCard', () => {
+    const src = read('src/screens/PostCard.jsx');
+    const m = src.match(/<PollCard\b[^>]*>/);
+    expect(m).not.toBeNull();
+    expect(m[0]).toContain('onVote={handlePollVote}');
+    expect(src).toContain('const handlePollVote = useCallback');
+    expect(src).toContain('firestoreService.voteOnPoll');
+    expect(src).toContain('getUserPollVote');
+  });
+
+  test('voteOnPoll normalises string options so the vote lands', () => {
+    const src = read('src/services/firestoreService.js');
+    const body = src.slice(src.indexOf('async voteOnPoll'), src.indexOf('async recordPostView'));
+    // The composer stores options as plain strings; keying on `option.id` on a
+    // string silently incremented nothing.
+    expect(body).toContain('_normalisePollOptions');
+    expect(body).toContain('optionId:');
+  });
+
+  test('the composer persists poll closesAt + rewardCoins', () => {
+    const src = read('src/screens/CreatePost.jsx');
+    expect(src).toContain('SET_POLL_EXPIRY');
+    expect(src).toContain('SET_POLL_REWARD');
+    expect(src).toMatch(/poll:[\s\S]*?closesAt: current\.pollClosesAt/);
+    expect(src).toMatch(/rewardCoins: Number\(current\.pollReward\)/);
+  });
+});
+
 describe('AudioCard playback state stays in sync', () => {
   // The `<audio>` `onPause` handler was a literal `() => {}` no-op, so a pause
   // that did not go through the card's own button (OS media controls, the

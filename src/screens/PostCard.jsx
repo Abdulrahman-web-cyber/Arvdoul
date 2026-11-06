@@ -637,6 +637,28 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     return () => { cancelled = true; };
   }, [ui.showAnalytics, isAuthor, post.id]);
 
+  // The viewer's own vote on a post-embedded poll. PollCard renders the
+  // selection from `userVote`, but nothing ever supplied it, so a returning
+  // voter always saw an unvoted poll (and could re-tap into a server
+  // "already-exists" error).
+  const [userPollVoteIndex, setUserPollVoteIndex] = useState(null);
+  useEffect(() => {
+    if (post.type !== 'poll' || !post.id || !currentUser?.uid) {
+      setUserPollVoteIndex(null);
+      return undefined;
+    }
+    let cancelled = false;
+    firestoreService.getUserPollVote?.(post.id, currentUser.uid)
+      .then((res) => { if (!cancelled) setUserPollVoteIndex(res?.optionIndex ?? null); })
+      .catch(() => { if (!cancelled) setUserPollVoteIndex(null); });
+    return () => { cancelled = true; };
+  }, [post.type, post.id, currentUser?.uid]);
+
+  const pollWithVote = useMemo(
+    () => (post.poll ? { ...post.poll, userVote: userPollVoteIndex == null ? null : `opt_${userPollVoteIndex}` } : null),
+    [post.poll, userPollVoteIndex],
+  );
+
   // Cleanup timers
   useEffect(() => {
     return () => {
@@ -747,6 +769,38 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       }
     }, 250);
   }, [currentUser, post.id, takeSnapshot]);
+
+  // Post-embedded poll vote. `PollCard` was rendered without `onVote`, so every
+  // tap showed "Voting not configured" — the card was display-only. This routes
+  // the tap to the real transactional writer (normalises string options, records
+  // the per-(post,voter) dedupe doc) and reflects the viewer's vote back.
+  const handlePollVote = useCallback(async (postId, optionId, idempotencyKey) => {
+    const userId = currentUser?.uid || null;
+    if (!userId) {
+      toast.error('Sign in to vote');
+      throw new Error('Sign in to vote');
+    }
+    const options = Array.isArray(post.poll?.options) ? post.poll.options : [];
+    const index = options.findIndex((o, idx) => {
+      const id = typeof o === 'string' ? `opt_${idx}` : (o?.id ?? `opt_${idx}`);
+      return id === optionId;
+    });
+    if (index < 0) throw new Error('Option not found');
+
+    const isMultiple = post.poll?.allowMultiple === true;
+    const res = await firestoreService.voteOnPoll?.(postId, userId, index, isMultiple);
+    if (res?.alreadyVoted) {
+      setUserPollVoteIndex(index);
+      toast.info('You already voted on this poll');
+      return;
+    }
+    setUserPollVoteIndex(index);
+    // Reward is written by the composer's poll payload; it is credited
+    // server-side on vote, never fabricated here.
+    const reward = post.poll?.rewardCoins ?? 0;
+    if (reward > 0) toast.success(`+${reward} coins!`);
+    void idempotencyKey;
+  }, [currentUser, post.poll]);
 
   const handleSave = useCallback(async () => {
     if (!currentUser) return toast.error('Sign in');
@@ -1021,7 +1075,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} onAnalytics={handleAnalytics} />}
       {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} onAnalytics={handleAnalytics} />}
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
-      {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} onAnalytics={handleAnalytics} />}
+      {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={post.question} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} />}
       {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}

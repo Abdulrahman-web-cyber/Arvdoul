@@ -516,13 +516,8 @@ export default function CreatePoll() {
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   REQUIRED ORCHESTRATOR EXTENSIONS (add to CreatePost.jsx)
-   initialState additions:
-     pollClosesAt: null,
-     pollReward: 0,
-   Reducer cases:
-     case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; break;
-     case "SET_POLL_REWARD": draft.pollReward = action.payload; break;
-   Also update publishPost to include closesAt and rewardCoins in
-   postData.poll, and update firestoreService.createPost to store them.
+   The orchestrator (CreatePost.jsx) owns the poll expiry/reward state:
+     initialState: pollClosesAt / pollReward
+     reducer:      SET_POLL_EXPIRY / SET_POLL_REWARD
+     publishPost:  writes poll.closesAt + poll.rewardCoins
    ──────────────────────────────────────────────────────────────────── */
