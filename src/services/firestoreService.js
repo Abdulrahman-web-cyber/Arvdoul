@@ -1044,22 +1044,6 @@ class EnterpriseFirestoreService {
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }
 
-  // Post-embedded polls store their options as plain strings (the composer's
-  // `typeData.poll.options` is a string array), but the vote transaction keys
-  // on `option.id`. Normalise once so a vote actually lands on the option the
-  // voter tapped instead of silently no-op'ing.
-  _normalisePollOptions(rawOptions) {
-    if (!Array.isArray(rawOptions)) return [];
-    return rawOptions.map((opt, idx) => {
-      if (typeof opt === 'string') return { id: `opt_${idx}`, text: opt, votes: 0 };
-      return {
-        id: opt.id ?? `opt_${idx}`,
-        text: opt.text ?? 'Option',
-        votes: typeof opt.votes === 'number' ? opt.votes : 0,
-      };
-    });
-  }
-
   async getUserPollVote(postId, userId) {
     await this.ensureInitialized();
     const { doc, getDoc } = this.firestoreMethods;
@@ -1143,42 +1127,29 @@ class EnterpriseFirestoreService {
     }
   }
 
+  // Post-embedded poll voting is server-authoritative: `functions/polls.js`
+  // `votePostPoll` validates eligibility/expiry/option, records one vote per
+  // viewer in a transaction and credits the reward. The posts update rule lets
+  // any signed-in user write `poll`, so a client transaction here would let a
+  // voter forge counts (the previous implementation did exactly that).
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
+    if (!userId) throw new Error('Sign in to vote');
     try {
-      const { doc, runTransaction, increment, serverTimestamp } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      const pollVoteRef = doc(this.firestore, 'posts', postId, 'poll_votes', userId);
-      let alreadyVoted = false;
-      await runTransaction(this.firestore, async (transaction) => {
-        const postSnap = await transaction.get(postRef);
-        if (!postSnap.exists()) throw new Error('Post not found');
-        const voteSnap = await transaction.get(pollVoteRef);
-        alreadyVoted = voteSnap.exists();
-        if (!isMultiple && alreadyVoted) throw new Error('Already voted');
-        if (!alreadyVoted) {
-          const poll = postSnap.data().poll || {};
-          const newOptions = this._normalisePollOptions(poll.options);
-          if (newOptions[optionIndex]) {
-            newOptions[optionIndex] = { ...newOptions[optionIndex], votes: (newOptions[optionIndex].votes || 0) + 1 };
-          }
-          transaction.update(postRef, {
-            'poll.options': newOptions,
-            'poll.totalVotes': increment(1),
-            'stats.pollVotes': increment(1),
-            updatedAt: serverTimestamp()
-          });
-          transaction.set(pollVoteRef, {
-            userId,
-            optionIndex,
-            optionId: newOptions[optionIndex]?.id ?? `opt_${optionIndex}`,
-            votedAt: serverTimestamp()
-          });
-        }
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const data = await callFunction(FUNCTIONS.VOTE_POST_POLL, {
+        postId,
+        optionId: `opt_${optionIndex}`,
       });
       this.cache.delete(postId);
-      return { success: true, alreadyVoted };
-    } catch (error) { throw enhanceError(error, 'Failed to vote on poll'); }
+      return { success: true, alreadyVoted: false, options: data?.options, totalVotes: data?.totalVotes, rewardCoins: data?.rewardCoins };
+    } catch (error) {
+      const code = error?.code || '';
+      if (String(code).includes('already-exists')) {
+        return { success: true, alreadyVoted: true };
+      }
+      throw enhanceError(error, 'Failed to vote on poll');
+    }
   }
 
   async recordPostView(postId, userId) {

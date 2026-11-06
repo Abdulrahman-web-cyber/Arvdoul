@@ -866,10 +866,8 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       return;
     }
     setUserPollVoteIndex(index);
-    // Reward is written by the composer's poll payload; it is credited
-    // server-side on vote, never fabricated here.
-    const reward = post.poll?.rewardCoins ?? 0;
-    if (reward > 0) toast.success(`+${reward} coins!`);
+    // The reward is credited server-side by `votePostPoll`; PollCard owns the
+    // "+coins" toast so it fires only on the viewer's first vote (and only once).
     void idempotencyKey;
   }, [currentUser, post.poll]);
 

@@ -59,6 +59,7 @@ export const FUNCTIONS = {
 
   // Polls
   VOTE_POLL: 'votePoll',
+  VOTE_POST_POLL: 'votePostPoll',
 
   // Q&A (post-embedded questions)
   ADD_ANSWER: 'addAnswer',

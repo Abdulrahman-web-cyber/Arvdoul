@@ -407,15 +407,17 @@ service cloud.firestore {
         allow read: if true;
         allow write: if false;
       }
-      // post subcollections (likes, saves, gifts, reactions, poll_votes): the doc
-      // id encodes the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) —
-      // enforce it. `answer_votes` is excluded (its own server-write block below)
-      // and `poll_votes` is readable only by the voter, so a signed-in user
-      // cannot enumerate who voted on a poll.
+      // post subcollections (likes, saves, gifts, reactions): the doc id
+      // encodes the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) —
+      // enforce it. `answer_votes` and `poll_votes` are excluded — both are
+      // written only by their callables (castAnswerVote / votePostPoll) with
+      // the Admin SDK, so a client cannot forge a vote or enumerate voters
+      // (poll_votes is readable only by the voter, keyed on their own uid).
       match /{subcollection}/{docId} {
         allow read: if subcollection != 'answer_votes' &&
           (subcollection != 'poll_votes' || docId == uid());
-        allow write: if isSignedIn() && subcollection != 'answer_votes' &&
+        allow write: if isSignedIn() &&
+          subcollection != 'answer_votes' && subcollection != 'poll_votes' &&
           (docId == uid() || docId.startsWith(uid() + '_'));
       }
     }

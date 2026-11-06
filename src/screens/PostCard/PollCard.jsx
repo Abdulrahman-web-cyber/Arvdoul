@@ -192,7 +192,10 @@ const PollCard = React.memo(({
       await onVote(postId, optionId, idempotencyKey);
       if (version !== voteVersionRef.current) return; // stale response
       onAnalytics?.('poll_vote_success', { postId, optionId });
-      if (rewardAmount > 0) {
+      // The reward is credited server-side on the viewer's FIRST vote only, so
+      // only claim it then — a multi-choice second pick credits nothing.
+      const isFirstVote = !prevUserVote || prevUserVote.length === 0;
+      if (rewardAmount > 0 && isFirstVote) {
         if (onReward) onReward(rewardAmount);
         toast.success(`+${rewardAmount} coins!`);
       } else {

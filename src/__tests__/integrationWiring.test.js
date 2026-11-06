@@ -206,13 +206,26 @@ describe('post-embedded poll voting is wired end-to-end', () => {
     expect(src).toContain('getUserPollVote');
   });
 
-  test('voteOnPoll normalises string options so the vote lands', () => {
+  test('voteOnPoll is server-authoritative (delegates to the votePostPoll callable)', () => {
     const src = read('src/services/firestoreService.js');
     const body = src.slice(src.indexOf('async voteOnPoll'), src.indexOf('async recordPostView'));
-    // The composer stores options as plain strings; keying on `option.id` on a
-    // string silently incremented nothing.
-    expect(body).toContain('_normalisePollOptions');
-    expect(body).toContain('optionId:');
+    // The posts update rule lets any signed-in user write `poll`, so a client
+    // transaction here would let a voter forge counts (no expiry check, no
+    // one-vote dedupe). The mutation must go through the callable.
+    expect(body).toContain('VOTE_POST_POLL');
+    expect(body).not.toContain('runTransaction');
+    expect(body).not.toContain("'poll.options'");
+  });
+
+  test('the votePostPoll callable is exported and merged', () => {
+    const fn = read('functions/polls.js');
+    expect(fn).toContain('exports.votePostPoll');
+    expect(fn).toContain('already-exists');
+    expect(fn).toMatch(/poll\.closesAt|closesAt/);
+    const idx = read('functions/index.js');
+    expect(idx).toContain("merge(require('./polls.js'))");
+    const callable = read('src/services/callableService.js');
+    expect(callable).toContain("VOTE_POST_POLL: 'votePostPoll'");
   });
 
   test('the composer persists poll closesAt + rewardCoins', () => {
