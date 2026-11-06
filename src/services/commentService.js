@@ -24,6 +24,14 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 
+// Moderation states a reader may still see. `pending` is the pre-scan state and
+// `pending_manual_review` is "flagged but shown until a human decides" (written
+// with isHidden=false). Only `rejected`/`removed` hide, and those are always
+// written together with isHidden=true. Excluding `pending_manual_review` here
+// made a mildly-flagged comment vanish from the thread the moment the async
+// moderation trigger flipped it off `pending` — a comment-reliability bug.
+const VISIBLE_COMMENT_MODERATION_STATUSES = ['approved', 'pending', 'pending_manual_review'];
+
 const COMMENT_REACTION_ARRAY_CAP = COMMENTS_CONFIG.REACTION_ARRAY_CAP;
 
 class UltimateCommentService {
@@ -292,7 +300,7 @@ class UltimateCommentService {
           this.firestoreMethods.where('postId', '==', postId),
           this.firestoreMethods.where('isDeleted', '==', false),
           this.firestoreMethods.where('isHidden', '==', false),
-          this.firestoreMethods.where('moderationStatus', 'in', ['approved', 'pending']),
+          this.firestoreMethods.where('moderationStatus', 'in', VISIBLE_COMMENT_MODERATION_STATUSES),
           this.firestoreMethods.orderBy('createdAt', 'desc')
         ];
         conditions.push(this.firestoreMethods.limit(

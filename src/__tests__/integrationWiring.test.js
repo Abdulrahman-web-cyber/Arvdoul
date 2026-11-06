@@ -301,6 +301,20 @@ describe('post-embedded Q&A is wired end-to-end', () => {
   });
 });
 
+describe('comment reliability: moderation-visible states stay in the thread', () => {
+  // The top-level comment query filtered `moderationStatus in ['approved','pending']`.
+  // The async moderation trigger flips a comment from `pending` to
+  // `pending_manual_review` (isHidden=false) as soon as Perspective scans it, so
+  // a mildly-flagged comment vanished from the thread it was posted in.
+  test('getCommentsByPost keeps pending_manual_review visible', () => {
+    const src = read('src/services/commentService.js');
+    expect(src).toContain('VISIBLE_COMMENT_MODERATION_STATUSES');
+    expect(src).toContain("'pending_manual_review'");
+    expect(src).not.toMatch(/moderationStatus', 'in', \['approved', 'pending'\]/);
+    expect(src).toMatch(/where\('moderationStatus', 'in', VISIBLE_COMMENT_MODERATION_STATUSES\)/);
+  });
+});
+
 describe('AudioCard playback state stays in sync', () => {
   // The `<audio>` `onPause` handler was a literal `() => {}` no-op, so a pause
   // that did not go through the card's own button (OS media controls, the
