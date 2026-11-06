@@ -337,6 +337,7 @@ const VideoCard = React.memo(({
   onAnalytics,
   currentUser,
   index = 0,
+  isVisible = true,
 }) => {
   // DOM refs
   const containerRef = useRef(null);
@@ -419,13 +420,16 @@ const VideoCard = React.memo(({
   }, [onAnalytics]);
 
   const flushBeacon = useCallback(() => {
-    if (analyticsQueue.current.length && navigator.sendBeacon) {
-      const endpoint = process.env.REACT_APP_ANALYTICS_ENDPOINT || '/api/analytics/batch';
-      const blob = new Blob([JSON.stringify({ events: analyticsQueue.current })], { type: 'application/json' });
-      navigator.sendBeacon(endpoint, blob);
+    if (analyticsQueue.current.length) {
+      // Flush through the real sink (`onAnalytics` -> analyticsService ->
+      // metricsService). The previous implementation beaconed to a
+      // `REACT_APP_ANALYTICS_ENDPOINT` URL, but no such endpoint exists
+      // (Firebase Hosting rewrites everything to index.html), so the queued
+      // events were discarded into the void.
+      onAnalytics?.('batch', { events: analyticsQueue.current });
       analyticsQueue.current = [];
     }
-  }, []);
+  }, [onAnalytics]);
 
   // Visibility change handler (with cleanup)
   const visibilityHandler = useCallback(() => {
@@ -479,6 +483,16 @@ const VideoCard = React.memo(({
     setIsMuted(feedScheduler.globalMuted);
     return () => feedScheduler.unregister(postId);
   }, [postId, nextVideoUrls, prevVideoUrl]);
+
+  // Honor the feed row's visibility signal: a card that scrolled out of the
+  // viewport window must stop playing even if the scheduler has not re-scored it.
+  useEffect(() => {
+    if (isVisible) return;
+    const el = videoRef.current;
+    if (!el) return;
+    el.pause();
+    if (feedScheduler.activeId === postId) feedScheduler.clearActive();
+  }, [isVisible, postId]);
 
   // Gesture registration
   const gestureCallbacks = useMemo(() => ({

@@ -26,6 +26,7 @@ import FollowButton from '../../components/profile/FollowButton';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { pickDisplayName, pickHandle, deriveHandle } from '../../services/profileReadModel.js';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { getRankTitle, getCitizenTier, LEVEL_GATES } from '../../shared/levelConfig.cjs';
@@ -123,10 +124,12 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           target: profile,
           relationship: rel || {},
         });
-        const canViewFollowers = isOwner || caps.canViewFollowers !== false;
-        const canViewFollowing = isOwner || caps.canViewFollowing !== false;
-        // A friend is a mutual follow, so the friends tab needs BOTH lists.
-        const canViewFriends = canViewFollowers && canViewFollowing;
+        // Fail closed: only an explicit grant renders a list. The friends graph
+        // is a mutual follow, so the engine resolves `canViewFriends` once
+        // (both lists) instead of each surface re-deriving it.
+        const canViewFollowers = isOwner || Boolean(caps.canViewFollowers);
+        const canViewFollowing = isOwner || Boolean(caps.canViewFollowing);
+        const canViewFriends = isOwner || Boolean(caps.canViewFriends);
 
         if (isMounted) setCapabilities({ ...caps, canViewFollowers, canViewFollowing, canViewFriends });
 
@@ -211,9 +214,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
   // is not enough: a viewer denied `followingList` but allowed `followersList`
   // would otherwise still reach the Following list through the shared screen.
   const tabVisible = useMemo(() => ({
-    followers: isOwner || capabilities?.canViewFollowers !== false,
-    following: isOwner || capabilities?.canViewFollowing !== false,
-    friends: isOwner || capabilities?.canViewFriends !== false,
+    followers: isOwner || Boolean(capabilities?.canViewFollowers),
+    following: isOwner || Boolean(capabilities?.canViewFollowing),
+    friends: isOwner || Boolean(capabilities?.canViewFriends),
   }), [isOwner, capabilities]);
 
   const visibleTabs = useMemo(
@@ -459,7 +462,9 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
           <div className="space-y-2.5">
             {currentItems.map((citizen) => {
               const citizenId = citizen.id || citizen.uid;
-              const safeAvatar = getSafeAvatarUrl(citizen.photoURL, citizen.displayName, citizenId);
+              const citizenName = pickDisplayName([citizen.displayName, citizen.name], { fallback: 'Member' });
+              const citizenHandle = pickHandle([citizen.username]) || deriveHandle(citizenName);
+              const safeAvatar = getSafeAvatarUrl(citizen.photoURL, citizenName, citizenId);
               const rank = citizen.level ? getRankTitle(citizen.level) : null;
               const isSelf = Boolean(currentUserId && citizenId === currentUserId);
 
@@ -482,10 +487,10 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                       <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/20 dark:border-white/10 shadow-sm bg-slate-800">
                         <img
                           src={safeAvatar}
-                          alt={citizen.displayName || 'Citizen'}
+                          alt={citizenName}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.target.src = getSafeAvatarUrl(null, citizen.displayName, citizenId);
+                            e.target.src = getSafeAvatarUrl(null, citizenName, citizenId);
                           }}
                         />
                       </div>
@@ -500,7 +505,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                          {citizen.displayName || 'Citizen'}
+                          {citizenName}
                         </span>
                         {citizen.isVerified && (
                           <span className="w-3.5 h-3.5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[9px] font-black shrink-0">
@@ -515,7 +520,7 @@ export default function ConnectionsScreen({ initialTab: propInitialTab }) {
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                        <span className="truncate">@{citizen.username || 'citizen'}</span>
+                        {citizenHandle && <span className="truncate">@{citizenHandle}</span>}
                         {rank && (
                           <>
                             <span>·</span>

@@ -10,16 +10,7 @@ const COMMENTS_CONFIG = {
   REAL_TIME_UPDATE_INTERVAL: 2000,
   SPAM_CHECK_THRESHOLD: 3,
   MENTION_LIMIT: 10,
-  AUTO_MODERATION: true,
   REPLY_DEPTH_LIMIT: 4,
-  TOXIC_WORDS: ['idiot', 'stupid', 'retard', 'hate', 'kill yourself'],
-  SPAM_PATTERNS: [
-    /buy now|cheap|discount|click here|limited time/gi,
-    /bit\.ly|goo\.gl|tinyurl|shorturl/gi,
-    /casino|poker|betting|gambling/gi,
-    /viagra|cialis|levitra/gi,
-    /follow me|like for like|follow for follow/gi
-  ],
   SPAM_COUNTER_SHARDS: 10,
   REACTION_ARRAY_CAP: 200,
 };
@@ -237,12 +228,6 @@ class UltimateCommentService {
           userName: options.userName,
           content: content.substring(0, 100)
         }).catch(() => {});
-      }
-
-      if (COMMENTS_CONFIG.AUTO_MODERATION) {
-        setTimeout(() => {
-          this._autoModerate(commentId, content, userId).catch(() => {});
-        }, 1000);
       }
 
       // Social loop: notify the post author (top-level comments only - replies
@@ -691,6 +676,132 @@ class UltimateCommentService {
     }
   }
 
+  /**
+   * Persist an emoji reaction on a comment. The per-user choice lives in the
+   * `reactions/{userId}` subcollection (mirroring post reactions) and the
+   * aggregate `reactionCounts` map lives on the comment doc. Selecting the
+   * same emoji again removes it. `CommentsDrawer` had called a
+   * `commentService.addReaction` that did not exist, so every emoji tap was
+   * dropped after the optimistic local update.
+   */
+  async addReaction(commentId, userId, emoji) {
+    if (!commentId || !userId) throw new Error('commentId and userId are required');
+    if (!emoji || typeof emoji !== 'string') throw new Error('A reaction emoji is required');
+    try {
+      await this._ensureInitialized();
+
+      const rl = rateLimiter.checkAndHit(`comment:react:${userId}`, { max: 120, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Too many reactions. Please slow down.'), { code: 5001, defaultMessage: 'Too many reactions. Please slow down.' });
+      }
+
+      const { doc, runTransaction, serverTimestamp } = this.firestoreMethods;
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      const reactionRef = doc(this.firestore, 'comments', commentId, 'reactions', userId);
+
+      let action = 'added';
+      let previous = null;
+      await runTransaction(this.firestore, async (transaction) => {
+        const reactionSnap = await transaction.get(reactionRef);
+        previous = reactionSnap.exists() ? reactionSnap.data().emoji : null;
+        const commentSnap = await transaction.get(commentRef);
+        if (!commentSnap.exists()) throw new Error('Comment not found');
+
+        const counts = { ...(commentSnap.data().reactionCounts || {}) };
+        if (previous) counts[previous] = Math.max(0, (counts[previous] || 0) - 1);
+        if (previous === emoji) {
+          transaction.delete(reactionRef);
+          action = 'removed';
+        } else {
+          transaction.set(reactionRef, { userId, emoji, updatedAt: serverTimestamp() }, { merge: true });
+          counts[emoji] = (counts[emoji] || 0) + 1;
+          action = previous ? 'changed' : 'added';
+        }
+        transaction.update(commentRef, {
+          reactionCounts: counts,
+          updatedAt: serverTimestamp(),
+          lastActivityAt: serverTimestamp(),
+        });
+      });
+
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, action, emoji };
+    } catch (error) {
+      logger.error('Add comment reaction failed', { error: error.message, commentId, userId });
+      throw this._enhanceError(error, 'Failed to react to comment');
+    }
+  }
+
+  /**
+   * Read the edit-history subcollection written by `updateComment`.
+   * `CommentsDrawer`'s edit-history modal called a
+   * `commentService.getCommentHistoryUI` that did not exist, so the modal
+   * always showed an empty list.
+   */
+  async getCommentHistoryUI(commentId) {
+    try {
+      await this._ensureInitialized();
+      const { collection, query, orderBy, limit, getDocs } = this.firestoreMethods;
+      const historyRef = collection(this.firestore, 'comments', commentId, 'history');
+      let snapshot;
+      try {
+        snapshot = await getDocs(query(historyRef, orderBy('editedAt', 'desc'), limit(20)));
+      } catch {
+        snapshot = await getDocs(query(historyRef, limit(20)));
+      }
+      const edits = snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          editedAt: data.editedAt?.toDate?.() || (data.editedAt ? new Date(data.editedAt) : null),
+        };
+      });
+      return { success: true, edits };
+    } catch (error) {
+      logger.error('Get comment history failed', { error: error.message, commentId });
+      return { success: true, edits: [] };
+    }
+  }
+
+  /**
+   * Pin/unpin a comment on its parent target. The pin marker is stored on the
+   * TARGET document (`pinnedCommentId`) rather than on the comment, because a
+   * post author pinning another user's comment is denied by the comment update
+   * rule (non-authors may only touch reaction fields). The drawer had called a
+   * `commentService.pinCommentToTarget` that did not exist, so pins were
+   * local-only and vanished on reload.
+   */
+  async pinCommentToTarget(targetType, targetId, commentId, userId, pinned = true) {
+    if (targetType !== 'post') throw new Error('Only post comments can be pinned');
+    try {
+      await this._ensureInitialized();
+      const { doc, updateDoc, serverTimestamp } = this.firestoreMethods;
+      const targetRef = doc(this.firestore, 'posts', targetId);
+      await updateDoc(targetRef, {
+        pinnedCommentId: pinned ? commentId : null,
+        updatedAt: serverTimestamp(),
+      });
+      this.cache.delete(targetId);
+      this._invalidatePostCache(targetId);
+      return { success: true, targetId, commentId, pinned };
+    } catch (error) {
+      logger.error('Pin comment failed', { error: error.message, targetId, commentId });
+      throw this._enhanceError(error, 'Failed to pin comment');
+    }
+  }
+
+  /**
+   * Comment read aliased to a generic target. The feed's inline comment
+   * preview (`PostCard`) called `commentService.getCommentsByTarget`, which did
+   * not exist, so the preview silently never rendered.
+   */
+  async getCommentsByTarget(targetType, targetId, options = {}, extra = {}) {
+    if (targetType !== 'post') return { success: true, comments: [] };
+    if (extra?.signal?.aborted) return { success: true, comments: [] };
+    return this.getCommentsByPost(targetId, options);
+  }
+
   async replyToComment(parentCommentId, userId, content, options = {}) {
     try {
       await this._ensureInitialized();
@@ -930,11 +1041,6 @@ class UltimateCommentService {
         updatedAt: this.firestoreMethods.serverTimestamp()
       });
 
-      const comment = await this.getComment(commentId);
-      if (comment.success && comment.comment.reports >= 3) {
-        this._autoHideComment(commentId).catch(() => {});
-      }
-
       return { success: true, commentId, reported: true };
 
     } catch (error) {
@@ -943,51 +1049,6 @@ class UltimateCommentService {
     }
   }
 
-  async moderateComment(commentId, action, moderatorId, notes = '') {
-    try {
-      await this._ensureInitialized();
-
-      const allowedActions = ['approve', 'reject', 'hide', 'delete', 'warn', 'pin', 'lock'];
-      if (!allowedActions.includes(action)) {
-        throw new Error(`Invalid moderation action: ${action}`);
-      }
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      const updates = {
-        moderatedAt: this.firestoreMethods.serverTimestamp(),
-        moderatedBy: moderatorId,
-        moderationNotes: notes,
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      };
-
-      if (action === 'approve') updates.moderationStatus = 'approved';
-      if (action === 'reject') updates.moderationStatus = 'rejected';
-
-      if (action === 'pin') {
-        updates.isPinned = true;
-      } else if (action === 'lock') {
-        updates.isLocked = true;
-      } else if (action === 'hide') {
-        updates.isHidden = true;
-        updates.moderationStatus = 'hidden';
-      } else if (action === 'delete') {
-        updates.isDeleted = true;
-        updates.deletedBy = moderatorId;
-        updates.deletedReason = 'moderation';
-      }
-
-      await this.firestoreMethods.updateDoc(commentRef, updates);
-      await this._updateReportStatus(commentId, action, moderatorId);
-
-      this._invalidateCommentCache(commentId);
-
-      return { success: true, commentId, action };
-
-    } catch (error) {
-      logger.error(`❌ Moderate comment ${commentId} failed:`, error);
-      throw this._enhanceError(error, 'Failed to moderate comment');
-    }
-  }
 
   _validateComment(content, userId) {
     const errors = [];
@@ -1253,93 +1314,8 @@ class UltimateCommentService {
     }
   }
 
-  async _autoModerate(commentId, content, userId) {
-    try {
-      await this._ensureInitialized();
 
-      let moderationScore = 0;
-      let moderationStatus = 'approved';
-      let isHidden = false;
 
-      COMMENTS_CONFIG.SPAM_PATTERNS.forEach(pattern => {
-        if (pattern.test(content)) {
-          moderationScore += 10;
-        }
-      });
-
-      COMMENTS_CONFIG.TOXIC_WORDS.forEach(word => {
-        if (content.toLowerCase().includes(word)) {
-          moderationScore += 5;
-        }
-      });
-
-      if (moderationScore >= 15) {
-        moderationStatus = 'rejected';
-        isHidden = true;
-      } else if (moderationScore >= 10) {
-        moderationStatus = 'pending_review';
-      }
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      await this.firestoreMethods.updateDoc(commentRef, {
-        moderationScore,
-        moderationStatus,
-        isHidden,
-        autoModeratedAt: this.firestoreMethods.serverTimestamp(),
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      });
-
-    } catch (error) {
-      // Auto-moderation failed
-    }
-  }
-
-  async _autoHideComment(commentId) {
-    try {
-      await this._ensureInitialized();
-
-      const commentRef = this.firestoreMethods.doc(this.firestore, 'comments', commentId);
-      await this.firestoreMethods.updateDoc(commentRef, {
-        isHidden: true,
-        hiddenAt: this.firestoreMethods.serverTimestamp(),
-        hiddenReason: 'auto_hide_report_threshold',
-        updatedAt: this.firestoreMethods.serverTimestamp()
-      });
-
-    } catch (error) {
-      // Auto-hide failed
-    }
-  }
-
-  async _updateReportStatus(commentId, action, moderatorId) {
-    try {
-      await this._ensureInitialized();
-
-      const reportsRef = this.firestoreMethods.collection(this.firestore, 'comment_reports');
-      const q = this.firestoreMethods.query(
-        reportsRef,
-        this.firestoreMethods.where('commentId', '==', commentId)
-      );
-
-      const snapshot = await this.firestoreMethods.getDocs(q);
-      const batch = this.firestoreMethods.writeBatch(this.firestore);
-
-      snapshot.forEach(reportDoc => {
-        const reportRef = this.firestoreMethods.doc(this.firestore, 'comment_reports', reportDoc.id);
-        batch.update(reportRef, {
-          status: 'resolved',
-          reviewedAt: this.firestoreMethods.serverTimestamp(),
-          reviewedBy: moderatorId,
-          actionTaken: action
-        });
-      });
-
-      await batch.commit();
-
-    } catch (error) {
-      // Update report status failed
-    }
-  }
 
   _invalidateCommentCache(commentId) {
     this.cache.delete(`comment_${commentId}`);
@@ -1585,6 +1561,14 @@ const commentService = {
     getCommentService().dislikeComment(commentId, userId),
   removeLikeDislike: (commentId, userId) =>
     getCommentService().removeLikeDislike(commentId, userId),
+  addReaction: (commentId, userId, emoji) =>
+    getCommentService().addReaction(commentId, userId, emoji),
+  getCommentHistoryUI: (commentId) =>
+    getCommentService().getCommentHistoryUI(commentId),
+  pinCommentToTarget: (targetType, targetId, commentId, userId, pinned) =>
+    getCommentService().pinCommentToTarget(targetType, targetId, commentId, userId, pinned),
+  getCommentsByTarget: (targetType, targetId, options, extra) =>
+    getCommentService().getCommentsByTarget(targetType, targetId, options, extra),
   replyToComment: (parentCommentId, userId, content, options) =>
     getCommentService().replyToComment(parentCommentId, userId, content, options),
   getReplies: (commentId, options) =>
@@ -1595,8 +1579,6 @@ const commentService = {
     getCommentService().unsubscribe(subscriptionId),
   reportComment: (commentId, userId, reason, details) =>
     getCommentService().reportComment(commentId, userId, reason, details),
-  moderateComment: (commentId, action, moderatorId, notes) =>
-    getCommentService().moderateComment(commentId, action, moderatorId, notes),
   batchDeleteComments: (commentIds, userId, isAdmin) =>
     getCommentService().batchDeleteComments(commentIds, userId, isAdmin),
   getCommentStats: (postId, userId) =>

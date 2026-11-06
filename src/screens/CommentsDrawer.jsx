@@ -871,7 +871,7 @@ const CommentItem = memo(({
   if (!comment) return null;
 
   const isVoice = comment.type === 'voice';
-  const likedByArray = comment.likedBy ?? [];
+  const likedByArray = comment.likesBy ?? [];
 
   const handleSaveEdit = async () => { await onEdit(commentId, editContent); setIsEditing(false); };
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
@@ -1163,6 +1163,12 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     }
   }, [isOpen, postId, postState.loadingInitial, postState.ids.length, loadComments]);
 
+  // Restore the server-persisted pin (`posts/{id}.pinnedCommentId`) so a pinned
+  // comment stays pinned across reloads instead of only within the session.
+  useEffect(() => {
+    if (isOpen && postId && post?.pinnedCommentId) setPinned(postId, post.pinnedCommentId);
+  }, [isOpen, postId, post?.pinnedCommentId, setPinned]);
+
   // ── Real‑time Subscription ──────────────────────────
   useEffect(() => {
     if (!isOpen || !postId) return;
@@ -1250,7 +1256,7 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
       userAvatar: activeUser.photoURL,
       likes: 0,
       repliesCount: 0,
-      likedBy: [],
+      likesBy: [],
       parentId: parentId || null,
     };
     if (!parentId) prependRoot(postId, optimistic);
@@ -1387,12 +1393,12 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     triggerHaptic('light');
     const comment = useCommentsStore.getState().getPostState(postId).byId[commentId];
     if (!comment) { pendingLikes.current.delete(commentId); return; }
-    const wasLiked = (comment.likedBy ?? []).includes(currentUser.uid);
+    const wasLiked = (comment.likesBy ?? []).includes(currentUser.uid);
     const newLikes = wasLiked ? comment.likes - 1 : comment.likes + 1;
     const newLikedBy = wasLiked
-      ? (comment.likedBy ?? []).filter(id => id !== currentUser.uid)
-      : [...(comment.likedBy ?? []), currentUser.uid];
-    updateComment(postId, commentId, { likes: newLikes, likedBy: newLikedBy });
+      ? (comment.likesBy ?? []).filter(id => id !== currentUser.uid)
+      : [...(comment.likesBy ?? []), currentUser.uid];
+    updateComment(postId, commentId, { likes: newLikes, likesBy: newLikedBy });
     try {
       if (!wasLiked) await commentService.likeComment(commentId, currentUser.uid);
       else await commentService.removeLikeDislike(commentId, currentUser.uid);

@@ -1,19 +1,46 @@
 // src/layouts/MainLayout.jsx
 
-import { useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@context/ThemeContext";
 import TopAppBar from "@components/Shared/TopAppBar";
 import BottomNav from "@components/Shared/BottomNav";
 import useScreenView from "../hooks/useScreenView.js";
 import { cn } from "../lib/utils";
 
+/** Accept only same-origin, in-app paths from an event payload. */
+function safeInternalPath(url) {
+  if (typeof url !== "string" || !url) return null;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.origin !== window.location.origin) return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 export default function MainLayout({ children }) {
   const { theme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const isDark = theme === "dark";
 
   // Screen-view analytics + RUM route timing for every routed screen
   useScreenView();
+
+  // Deep links from a foreground notification click. notificationsService
+  // dispatches `arvdoul:navigate` with the target URL; without this listener
+  // the click focused the tab but never moved — the notification was a dead
+  // link.
+  useEffect(() => {
+    const handleNavigate = (event) => {
+      const path = safeInternalPath(event?.detail?.url);
+      if (path) navigate(path);
+    };
+    window.addEventListener("arvdoul:navigate", handleNavigate);
+    return () => window.removeEventListener("arvdoul:navigate", handleNavigate);
+  }, [navigate]);
 
   const isImmersiveVideo = location.pathname.startsWith("/videos") || location.pathname.startsWith("/reels");
   const isIndividualChat = location.pathname.startsWith("/messages/") && location.pathname !== "/messages/new";

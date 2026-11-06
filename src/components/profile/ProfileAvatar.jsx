@@ -10,12 +10,15 @@
  * @property {string} [name] - User display name for initials
  * @property {number} [size=120] - Avatar size in pixels
  * @property {number} [level] - User level
+ * @property {boolean} [isVerified] - Show the verified badge
  * @property {Function} [onPress] - Click handler
  * @property {boolean} [isOwner=false] - Whether viewing own profile
  * @property {string} [theme='light'] - Current theme
  */
 
 import React, { memo, useCallback, useState, useMemo } from 'react';
+import PropTypes from 'prop-types';
+import { BadgeCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../../utils/avatarUtils.js';
 
@@ -29,6 +32,7 @@ const ProfileAvatar = memo(({
   userId = '',
   size = 120,
   level,
+  isVerified = false,
   onPress,
   isOwner = false,
   theme = 'light',
@@ -135,6 +139,21 @@ const ProfileAvatar = memo(({
         )}
       </button>
       
+      {/* Verified Badge */}
+      {isVerified && (
+        <div
+          className={cn(
+            'absolute -top-0.5 -right-0.5',
+            'flex items-center justify-center rounded-full',
+            'bg-white dark:bg-gray-900 shadow-lg'
+          )}
+          style={{ width: levelBadgeSize * 0.8, height: levelBadgeSize * 0.8 }}
+          aria-label="Verified account"
+        >
+          <BadgeCheck className="w-full h-full text-sky-500" />
+        </div>
+      )}
+
       {/* Level Badge */}
       {level && (
         <div 
@@ -160,5 +179,17 @@ const ProfileAvatar = memo(({
 });
 
 ProfileAvatar.displayName = 'ProfileAvatar';
+
+ProfileAvatar.propTypes = {
+  src: PropTypes.string,
+  name: PropTypes.string,
+  userId: PropTypes.string,
+  size: PropTypes.number,
+  level: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+  isVerified: PropTypes.bool,
+  onPress: PropTypes.func,
+  isOwner: PropTypes.bool,
+  theme: PropTypes.string,
+};
 
 export default ProfileAvatar;

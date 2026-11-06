@@ -150,6 +150,7 @@ const mockLevelSystem = {
 jest.unstable_mockModule('../firebase/firebase.js', () => ({
   getFirestoreInstance: jest.fn(async () => ({ fake: true })),
   getAuthInstance: jest.fn(async () => ({ currentUser: { uid: 'u1' } })),
+  getFunctionsInstance: jest.fn(async () => ({ __mock: true })),
   // firebase.js exports a live `auth` singleton used by some services
   auth: { currentUser: { uid: 'u1' } },
   db: { type: 'mock-db' },
@@ -240,7 +241,7 @@ describe('gifts - validation + notification + XP wiring', () => {
     ).rejects.toThrow('Unknown gift type');
   });
 
-  test('_afterGiftSent notifies the author and awards gift_received XP', async () => {
+  test('_afterGiftSent notifies the author but does not award XP client-side', async () => {
     seedUser('u_author');
     state.posts.set('p1', { id: 'p1', authorId: 'u_author', content: 'x' });
     const { getMonetizationService } = await import('../services/monetizationService.js');
@@ -249,8 +250,10 @@ describe('gifts - validation + notification + XP wiring', () => {
 
     await monetizationService._afterGiftSent('u_sender', 'p1', 'rose', 5);
     expect(mockNotifications.createGiftNotification).toHaveBeenCalledWith('u_sender', 'u_author', 'p1', 'rose', 5);
-    expect(mockLevelSystem.awardExperience).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u_author', action: 'gift_received', source: 'p1' })
+    // gift_received is credited server-side in sendGift (the only place that can
+    // prove a gift happened); the client must not attempt it.
+    expect(mockLevelSystem.awardExperience).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'gift_received' })
     );
   });
 });

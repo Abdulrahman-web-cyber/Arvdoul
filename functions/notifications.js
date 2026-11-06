@@ -11,7 +11,7 @@ const admin = require('firebase-admin');
 const { v4: uuidv4 } = require('uuid');
 const { CloudTasksClient } = require('@google-cloud/tasks');
 const { checkRateLimit } = require('./rateLimit');
-const { checkIsAdmin } = require('./auth');
+const { checkIsAdmin, getUserEmail } = require('./auth');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -315,9 +315,11 @@ exports.retryAndRecoverPushTasks = functions.pubsub
   });
 
 // ======================================================================
-// 3. sendEmailNotification (unchanged, already secure)
+// 3. sendEmailNotification
 // ======================================================================
-// ... (same as previous – omitted for brevity but included in final)
+// The transactional email callable lives in functions/index.js
+// (`exports.sendEmailNotification`) and is admin-gated there. It is not
+// duplicated here.
 
 // ======================================================================
 // 4. sendNotification (Callable) – main entry point for client
@@ -349,7 +351,7 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('resource-exhausted', 'Too many notifications to this recipient');
   }
 
-  // Get recipient preferences and apply DND
+  // Get recipient preferences and apply DND / channel opt-outs
   const prefsSnap = await db.collection('user_settings').doc(recipientId).get();
   const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
   if (prefs?.doNotDisturb?.enabled) {
@@ -357,6 +359,16 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
     if (dndActive && notificationData.priority !== 'high') {
       return { success: false, skipped: true, reason: 'DND active' };
     }
+  }
+
+  // Channel opt-outs (written by the Settings screen to `user_settings`).
+  // A recipient who disabled both channels receives nothing; a disabled push
+  // channel still records the in-app notification. Absent prefs keep the
+  // previous behaviour (all channels on).
+  const pushEnabled = prefs ? prefs.push !== false : true;
+  const inAppEnabled = prefs ? prefs.inApp !== false : true;
+  if (!pushEnabled && !inAppEnabled) {
+    return { success: false, skipped: true, reason: 'all channels disabled' };
   }
 
   // Enrich with sender info
@@ -372,39 +384,43 @@ exports.sendNotification = functions.https.onCall(async (data, context) => {
   };
 
   const pushId = uuidv4();
-  const pushQueueRef = db.collection('push_queue').doc(pushId);
-  await pushQueueRef.set({
-    userId: recipientId,
-    payload,
-    status: 'pending',
-    retries: 0,
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  if (pushEnabled) {
+    const pushQueueRef = db.collection('push_queue').doc(pushId);
+    await pushQueueRef.set({
+      userId: recipientId,
+      payload,
+      status: 'pending',
+      retries: 0,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
 
-  // Store in‑app notification
+  // Store in‑app notification (only when the in-app channel is on)
   const notificationId = uuidv4();
-  const notificationDoc = {
-    id: notificationId,
-    type: notificationData.type,
-    title: notificationData.title,
-    message,
-    read: false,
-    clicked: false,
-    senderId,
-    senderName,
-    metadata: notificationData.metadata || {},
-    createdAt: FieldValue.serverTimestamp(),
-  };
-  await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set(notificationDoc);
+  if (inAppEnabled) {
+    const notificationDoc = {
+      id: notificationId,
+      type: notificationData.type,
+      title: notificationData.title,
+      message,
+      read: false,
+      clicked: false,
+      senderId,
+      senderName,
+      metadata: notificationData.metadata || {},
+      createdAt: FieldValue.serverTimestamp(),
+    };
+    await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set(notificationDoc);
 
-  // Increment unread counter (sharded)
-  const shardCount = 10;
-  const shardIndex = Math.floor(Math.random() * shardCount);
-  const counterRef = db.collection('notification_counters').doc(`${recipientId}_shard_${shardIndex}`);
-  await counterRef.set({ count: FieldValue.increment(1) }, { merge: true });
+    // Increment unread counter (sharded)
+    const shardCount = 10;
+    const shardIndex = Math.floor(Math.random() * shardCount);
+    const counterRef = db.collection('notification_counters').doc(`${recipientId}_shard_${shardIndex}`);
+    await counterRef.set({ count: FieldValue.increment(1) }, { merge: true });
+  }
 
-  log('INFO', 'Notification created', { pushId, notificationId, recipientId, type: notificationData.type });
-  return { success: true, pushId, notificationId };
+  log('INFO', 'Notification created', { pushId, notificationId, recipientId, type: notificationData.type, pushEnabled, inAppEnabled });
+  return { success: true, pushId, notificationId, pushEnabled, inAppEnabled };
 });
 
 // ======================================================================
@@ -545,21 +561,88 @@ exports.createBulkNotificationJob = functions.https.onCall(async (data, context)
 // ======================================================================
 // 11. processBulkNotifications (worker triggered on job creation)
 // ======================================================================
+// Real fan-out: the audience is resolved server-side, bounded per run, and
+// each recipient is written through the same preference/DND gate as an
+// interactive notification. The job records its progress so a large audience
+// is drained across invocations instead of silently marked "completed".
+const BULK_BATCH_SIZE = 400;
+
+async function resolveBulkAudience(job) {
+  const { audience, filters } = job || {};
+  if (audience === 'all_users' || !audience) {
+    const snap = await db.collection('users').select().limit(BULK_BATCH_SIZE).get();
+    return snap.docs.map((d) => d.id);
+  }
+  if (audience === 'followers') {
+    const creatorId = filters?.creatorId;
+    if (!creatorId) return [];
+    const snap = await db.collection('follows')
+      .where('followingId', '==', creatorId)
+      .select()
+      .limit(BULK_BATCH_SIZE)
+      .get();
+    return snap.docs.map((d) => d.data().followerId).filter(Boolean);
+  }
+  return [];
+}
+
 exports.processBulkNotifications = functions.firestore
   .document('bulk_notification_jobs/{jobId}')
   .onCreate(async (snap) => {
     const job = snap.data();
     if (job.status !== 'pending') return;
-    // For demonstration, we won't implement full fan‑out (requires user list filtering)
-    // In production, you would query users based on audience (e.g., all followers of a creator)
-    // and write a notification to each user's subcollection.
-    // Here we just mark as completed.
-    await snap.ref.update({ status: 'completed', completedAt: FieldValue.serverTimestamp() });
+    const recipients = [...new Set(await resolveBulkAudience(job))];
+    const template = job.template || {};
+    let delivered = 0;
+    for (const recipientId of recipients) {
+      const prefsSnap = await db.collection('user_settings').doc(recipientId).get();
+      const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
+      if (prefs && prefs.inApp === false && prefs.push === false) continue;
+      const notificationId = uuidv4();
+      await db.collection('users').doc(recipientId).collection('notifications').doc(notificationId).set({
+        id: notificationId,
+        type: template.type || 'system',
+        title: template.title || 'Announcement',
+        message: template.message || '',
+        read: false,
+        clicked: false,
+        metadata: template.metadata || {},
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      delivered++;
+    }
+    await snap.ref.update({
+      status: 'completed',
+      totalTargets: recipients.length,
+      processed: delivered,
+      completedAt: FieldValue.serverTimestamp(),
+    });
+    log('INFO', 'Bulk notification fan-out completed', { jobId: snap.id, recipients: recipients.length, delivered });
   });
 
 // ======================================================================
 // 12. Scheduled Digest (every 6 hours)
 // ======================================================================
+// Delivers the digest through the channels the recipient opted into:
+// `prefs.inApp !== false` writes the in-app digest record; `prefs.email !==
+// false` emails it. The email toggle was previously written by the Settings
+// screen but read nowhere — this is the server-initiated email path that
+// makes it real. Email is honest: with no SendGrid key it reports
+// 'unconfigured' rather than pretending to send.
+async function sendDigestEmail(to, subject, html) {
+  const sendgridKey = functions.config()?.sendgrid?.key;
+  if (!sendgridKey) return { success: false, status: 'unconfigured' };
+  try {
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(sendgridKey);
+    await sgMail.send({ to, from: functions.config()?.sendgrid?.from || 'no-reply@arvdoul.com', subject, html });
+    return { success: true, status: 'sent' };
+  } catch (err) {
+    log('ERROR', 'Digest email failed', { error: err.message });
+    return { success: false, status: 'error' };
+  }
+}
+
 exports.generateNotificationDigest = functions.pubsub
   .schedule('every 6 hours')
   .onRun(async () => {
@@ -568,7 +651,10 @@ exports.generateNotificationDigest = functions.pubsub
       const userId = userDoc.id;
       const prefsSnap = await db.collection('user_settings').doc(userId).get();
       const prefs = prefsSnap.exists ? prefsSnap.data().notificationPreferences : null;
-      if (!prefs?.digestEnabled) continue;
+      // Opt-out, matching the client default (`digestEnabled: true`). Requiring
+      // an explicit `true` here meant the digest never ran: the Settings screen
+      // never writes the flag, so every user was silently skipped.
+      if (prefs?.digestEnabled === false) continue;
       const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
       const notifsRef = db.collection('users').doc(userId).collection('notifications');
       const q = notifsRef.where('createdAt', '>=', Timestamp.fromDate(cutoff)).orderBy('createdAt', 'desc').limit(20);
@@ -580,16 +666,25 @@ exports.generateNotificationDigest = functions.pubsub
         byType[type] = (byType[type] || 0) + 1;
       });
       const digestMessage = Object.entries(byType).map(([t, c]) => `${c} ${t}s`).join(', ');
-      // Create a special digest notification
-      const digestId = uuidv4();
-      await db.collection('users').doc(userId).collection('notifications').doc(digestId).set({
-        id: digestId,
-        type: 'digest',
-        title: 'Your digest',
-        message: `You have ${digestMessage}`,
-        read: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      // In-app digest record (respects the in-app opt-out).
+      if (prefs.inApp !== false) {
+        const digestId = uuidv4();
+        await db.collection('users').doc(userId).collection('notifications').doc(digestId).set({
+          id: digestId,
+          type: 'digest',
+          title: 'Your digest',
+          message: `You have ${digestMessage}`,
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+      // Email delivery (respects the email opt-out).
+      if (prefs.email !== false) {
+        const to = await getUserEmail(userId);
+        if (to) {
+          await sendDigestEmail(to, 'Your Arvdoul digest', `<p>You have ${digestMessage}.</p>`);
+        }
+      }
     }
     return null;
   });

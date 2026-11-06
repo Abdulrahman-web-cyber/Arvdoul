@@ -21,6 +21,10 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
+// `FieldValue.serverTimestamp()` is used throughout the moderation/mention
+// writes below; without this binding every one of them threw
+// `ReferenceError: FieldValue is not defined` at runtime.
+const FieldValue = admin.firestore.FieldValue;
 
 // ----------------------------------------------------------------------
 //  Structured Logging Helper

@@ -16,7 +16,6 @@ import {
   Timestamp, enableIndexedDbPersistence
 } from 'firebase/firestore';
 import { getDatabase, ref, onValue, set, remove, onDisconnect, push as rtdbPush } from 'firebase/database';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase';
@@ -243,7 +242,6 @@ function enhanceError(error, defaultMessage) {
     'messaging/privacy': 'This user does not accept messages from you.',
     'messaging/rate-limited': 'Too many messages. Please wait.',
     'messaging/duplicate': 'Duplicate message detected.',
-    'messaging/encryption-not-implemented': 'E2EE not yet implemented.',
     'messaging/encryption-key-required': 'Private key not unlocked.',
     'messaging/not-moderator': 'Moderator or admin required.',
     'messaging/not-admin': 'Admin privileges required.',
@@ -421,70 +419,34 @@ class OfflineMessageQueue {
   }
 }
 
-class SecureSessionKeyMap {
+/**
+ * In-memory holder for the user's *unlocked* E2EE private key.
+ *
+ * The key is already protected at rest by the password-derived AES-GCM
+ * wrapper in IndexedDB (`unlockPrivateKey`); it only lives here once the user
+ * has supplied their password. XOR-ing it against a session key that sits in
+ * the same heap added no protection (an XSS that can read one map can read
+ * the other) and made the code *look* encrypted when it was not. It is kept
+ * in memory in the clear and dropped on lock/sign-out.
+ */
+class SessionPrivateKeyMap {
   constructor() {
-    this.sessionKeys = new Map(); // ephemeral in-memory keys
-    this.encryptedPrivateKeys = new Map(); // obfuscated encrypted private keys
+    this.keys = new Map(); // userId -> unlocked private key (plaintext, in-memory only)
   }
 
   set(userId, privateKey) {
     if (!userId || !privateKey) return;
-
-    // Generate an ephemeral key for this session
-    const byteLength = 32;
-    const ephemeralKeyBytes = new Uint8Array(byteLength);
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-      crypto.getRandomValues(ephemeralKeyBytes);
-    } else {
-      for (let i = 0; i < byteLength; i++) {
-        ephemeralKeyBytes[i] = (Date.now() + i) % 256;
-      }
-    }
-    this.sessionKeys.set(userId, ephemeralKeyBytes);
-
-    // XOR encrypt the private key
-    const privateKeyBytes = new TextEncoder().encode(privateKey);
-    const encryptedBytes = new Uint8Array(privateKeyBytes.length);
-    for (let i = 0; i < privateKeyBytes.length; i++) {
-      encryptedBytes[i] = privateKeyBytes[i] ^ ephemeralKeyBytes[i % byteLength];
-    }
-
-    // Convert to hex
-    const hex = Array.from(encryptedBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-    this.encryptedPrivateKeys.set(userId, hex);
+    this.keys.set(userId, privateKey);
   }
 
   get(userId) {
     if (!userId) return null;
-    const hex = this.encryptedPrivateKeys.get(userId);
-    const ephemeralKeyBytes = this.sessionKeys.get(userId);
-    if (!hex || !ephemeralKeyBytes) return null;
-
-    try {
-      // Convert hex to bytes
-      const len = hex.length / 2;
-      const encryptedBytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        encryptedBytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-      }
-
-      // XOR decrypt
-      const decryptedBytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        decryptedBytes[i] = encryptedBytes[i] ^ ephemeralKeyBytes[i % ephemeralKeyBytes.length];
-      }
-
-      return new TextDecoder().decode(decryptedBytes);
-    } catch (err) {
-      logger.error('[SecureSessionKeyMap] Failed to decrypt private key', { error: err.message });
-      return null;
-    }
+    return this.keys.get(userId) || null;
   }
 
   delete(userId) {
     if (!userId) return;
-    this.sessionKeys.delete(userId);
-    this.encryptedPrivateKeys.delete(userId);
+    this.keys.delete(userId);
   }
 }
 
@@ -495,11 +457,9 @@ class UltimateMessagingService {
     this.rtdb = null;
     this.storage = null;
     this.auth = null;
-    this.functions = null;
     this.fs = null;
     this.rt = null;
     this.st = null;
-    this.fn = null;
     this.initialized = false;
     this.initPromise = null;
 
@@ -524,7 +484,7 @@ class UltimateMessagingService {
     this._userServicePromise = null;
     this._notificationsServicePromise = null;
     this.offlineQueue = new OfflineMessageQueue(this);
-    this.unlockedPrivateKeys = new SecureSessionKeyMap();
+    this.unlockedPrivateKeys = new SessionPrivateKeyMap();
     this.usernameToIdCache = new Map();
     this.metrics = {
       cacheHits: 0,
@@ -551,7 +511,6 @@ class UltimateMessagingService {
         this.storage = getStorage();
         this.auth = await getAuthInstance();
         this.rtdb = getDatabase();
-        this.functions = getFunctions();
 
         try {
           await enableIndexedDbPersistence(this.firestore, { synchronizeTabs: true });
@@ -566,7 +525,6 @@ class UltimateMessagingService {
         };
         this.st = { ref: storageRef, uploadBytesResumable, getDownloadURL, deleteObject };
         this.rt = { ref, onValue, set, remove, onDisconnect, push: rtdbPush };
-        this.fn = { httpsCallable };
 
         this._watchUserSettings();
         await this.offlineQueue.sync();
@@ -590,6 +548,15 @@ class UltimateMessagingService {
       this.notificationSettingsCache.delete(`push_${userId}`);
     });
     this.firestoreListeners.set(`user_settings_${userId}`, unsub);
+  }
+
+  // Broadcast that the unread totals changed so the bottom-nav badges refresh.
+  // The badge hook listens for this event; without it a read would only clear
+  // on the next window focus.
+  _notifyUnreadChanged() {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('arvdoul:messages-read'));
+    }
   }
 
   async _getUserService() {
@@ -688,9 +655,12 @@ class UltimateMessagingService {
     return snap.exists() && snap.data().publicKey ? snap.data().publicKey : null;
   }
 
-  _getSessionPrivateKey(userId) {
+  _getSessionPrivateKey(userId, { silent = false } = {}) {
     const key = this.unlockedPrivateKeys.get(userId);
-    if (!key) throw enhanceError({ code: 'messaging/encryption-key-required' }, 'Private key not unlocked');
+    if (!key) {
+      if (silent) return null;
+      throw enhanceError({ code: 'messaging/encryption-key-required' }, 'Private key not unlocked');
+    }
     return key;
   }
 
@@ -777,14 +747,29 @@ class UltimateMessagingService {
     const cached = this.profileCache.get(cacheKey);
     if (cached) return cached;
 
-    const settingsRef = this.fs.doc(this.firestore, 'user_settings', userId);
-    const snap = await this.fs.getDoc(settingsRef);
-    const settings = snap.exists() ? snap.data() : {
-      messagePermission: MESSAGING_CONFIG.PRIVACY.DEFAULT_MESSAGE_SETTING,
-      groupInvitePermission: MESSAGING_CONFIG.PRIVACY.DEFAULT_GROUP_INVITE_SETTING,
-      showOnline: true,
-      allowDiscovery: true,
-      pushEnabled: true,
+    // `users/{uid}.settings.privacy.allowDMs` is the single source of truth:
+    // the Settings screen writes it and `firestore.rules` `dmAllowedTo()`
+    // enforces it on the client message write. `user_settings/{uid}` only
+    // carries the notification preference mirror.
+    const settingsRef = this.fs.doc(this.firestore, 'users', userId);
+    const [snap, prefsSnap] = await Promise.all([
+      this.fs.getDoc(settingsRef),
+      this.fs.getDoc(this.fs.doc(this.firestore, 'user_settings', userId)),
+    ]);
+    const stored = snap.exists() ? (snap.data().settings || {}) : {};
+    const privacy = stored.privacy || {};
+    const prefs = prefsSnap.exists() ? (prefsSnap.data().notificationPreferences || {}) : {};
+    const allowDMs = privacy.allowDMs || 'everyone';
+    const permissionMap = { everyone: 'everyone', friends: 'friends_only', none: 'nobody' };
+    const settings = {
+      allowDMs,
+      // Legacy field name consumed by checkMessagePermission; kept in sync so
+      // the two vocabularies cannot disagree.
+      messagePermission: permissionMap[allowDMs] || MESSAGING_CONFIG.PRIVACY.DEFAULT_MESSAGE_SETTING,
+      groupInvitePermission: stored.groupInvitePermission || MESSAGING_CONFIG.PRIVACY.DEFAULT_GROUP_INVITE_SETTING,
+      showOnline: privacy.showActiveStatus !== false,
+      allowDiscovery: stored.allowDiscovery !== false,
+      pushEnabled: prefs.push !== false,
     };
     this.profileCache.set(cacheKey, settings);
     return settings;
@@ -792,8 +777,26 @@ class UltimateMessagingService {
 
   async updatePrivacySettings(userId, updates) {
     await this.ensureInitialized();
-    const settingsRef = this.fs.doc(this.firestore, 'user_settings', userId);
-    await this.fs.updateDoc(settingsRef, { ...updates, updatedAt: this.fs.serverTimestamp() });
+    // Normalise the legacy vocabulary onto the canonical `privacy.allowDMs`
+    // the Settings screen and `firestore.rules` use, and write it to the
+    // document those readers read (`users/{uid}.settings`).
+    const reversePermissionMap = { everyone: 'everyone', friends_only: 'friends', nobody: 'none' };
+    const allowDMs = updates.allowDMs
+      || (updates.messagePermission ? reversePermissionMap[updates.messagePermission] : undefined);
+    if (allowDMs) {
+      await this.fs.setDoc(
+        this.fs.doc(this.firestore, 'users', userId),
+        { settings: { privacy: { allowDMs } } },
+        { merge: true },
+      );
+    }
+    if (typeof updates.pushEnabled === 'boolean') {
+      await this.fs.setDoc(
+        this.fs.doc(this.firestore, 'user_settings', userId),
+        { notificationPreferences: { push: updates.pushEnabled } },
+        { merge: true },
+      );
+    }
     this.profileCache.delete(`privacy_${userId}`);
     this.notificationSettingsCache.delete(`push_${userId}`);
     return { success: true };
@@ -882,13 +885,6 @@ class UltimateMessagingService {
   async rejectFriendRequest(uid, reqId) { const us = await this._getUserService(); return us.rejectFriendRequest(uid, reqId); }
   async removeFriend(uid, fid) { const us = await this._getUserService(); return us.unfollowUser(uid, fid); }
 
-  async reportUser(reporterId, reportedId, reason, details = '') {
-    await this.ensureInitialized();
-    if (!MESSAGING_CONFIG.REPORTING.REASONS.includes(reason)) throw new Error('Invalid reason');
-    const reportRef = this.fs.collection(this.firestore, 'user_reports');
-    await this.fs.addDoc(reportRef, { reporterId, reportedId, reason, details, status: 'pending', createdAt: this.fs.serverTimestamp() });
-    return { success: true };
-  }
 
   async createConversation(participants, options = {}) {
     await this.ensureInitialized();
@@ -1135,31 +1131,42 @@ class UltimateMessagingService {
 
     let encryptedPayload = null;
     if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
-      const plaintext = validated.content;
-      const symKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-      const symKeyRaw = await crypto.subtle.exportKey('raw', symKey);
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, symKey, new TextEncoder().encode(plaintext));
-
-      const currentPrivateKey = this._getSessionPrivateKey(currentUser.uid);
+      // Best-effort E2EE. Encryption requires the sender's private key to be
+      // unlocked and every participant to have published a public key. Until
+      // key provisioning is wired, an unconditional gate would throw on the
+      // first text of every conversation and no message would ever send; so
+      // encrypt when the keys are present and fall back to plaintext otherwise.
+      const currentPrivateKey = this._getSessionPrivateKey(currentUser.uid, { silent: true });
       const currentPublicKey = await this.getUserPublicKey(currentUser.uid);
-      if (!currentPublicKey) throw new Error('Your public key not found');
-
-      const recipientKeys = {};
-      for (const userId of conv.conversation.participants) {
-        const publicKey = await this.getUserPublicKey(userId);
-        if (!publicKey) throw new Error(`Recipient ${userId} has no public key`);
-        const sharedSecret = await deriveSharedSecret(currentPrivateKey, publicKey);
-        const encryptedKey = await encryptWithSharedSecret(sharedSecret, arrayBufferToBase64(symKeyRaw));
-        recipientKeys[userId] = encryptedKey;
+      const participantPublicKeys = {};
+      let canEncrypt = Boolean(currentPrivateKey && currentPublicKey);
+      if (canEncrypt) {
+        for (const userId of conv.conversation.participants) {
+          const publicKey = await this.getUserPublicKey(userId);
+          if (!publicKey) { canEncrypt = false; break; }
+          participantPublicKeys[userId] = publicKey;
+        }
       }
-      encryptedPayload = {
-        iv: arrayBufferToBase64(iv),
-        data: arrayBufferToBase64(encrypted),
-        recipientKeys,
-        senderPublicKey: currentPublicKey,
-      };
-      validated.content = null;
+      if (canEncrypt) {
+        const plaintext = validated.content;
+        const symKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+        const symKeyRaw = await crypto.subtle.exportKey('raw', symKey);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, symKey, new TextEncoder().encode(plaintext));
+
+        const recipientKeys = {};
+        for (const userId of conv.conversation.participants) {
+          const sharedSecret = await deriveSharedSecret(currentPrivateKey, participantPublicKeys[userId]);
+          recipientKeys[userId] = await encryptWithSharedSecret(sharedSecret, arrayBufferToBase64(symKeyRaw));
+        }
+        encryptedPayload = {
+          iv: arrayBufferToBase64(iv),
+          data: arrayBufferToBase64(encrypted),
+          recipientKeys,
+          senderPublicKey: currentPublicKey,
+        };
+        validated.content = null;
+      }
     }
 
     const message = this._buildMessage(idempotencyKey, conversationId, currentUser, validated, mediaInfo, ttlExpiresAt, encryptedPayload);
@@ -1461,6 +1468,7 @@ class UltimateMessagingService {
       });
     });
     this.conversationsCache.delete(conversationId);
+    this._notifyUnreadChanged();
   }
 
   async setConversationReadReceipts(conversationId, userId, disableReadReceipts) {
@@ -2305,9 +2313,11 @@ class UltimateMessagingService {
 
   async searchMessagesAlgolia(conversationId, query, options = {}) {
     if (!MESSAGING_CONFIG.SEARCH_INDEXING.ENABLED) throw new Error('Search indexing not enabled');
-    const searchMessages = this.fn.httpsCallable(this.functions, 'searchMessages');
-    const result = await searchMessages({ conversationId, query, limit: options.limit || 20 });
-    return { success: true, results: result.data };
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const results = await callFunction(FUNCTIONS.SEARCH_MESSAGES, {
+      conversationId, query, limit: options.limit || 20,
+    });
+    return { success: true, results };
   }
 
   async generateInviteQRCode(inviteId, adminId) {
@@ -3190,59 +3200,6 @@ class UltimateMessagingService {
   }
 }
 
-//  FIRESTORE SECURITY RULES TEMPLATE (deploy these in Firebase Console)
-/*
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    function isAuth() { return request.auth != null; }
-
-    function isParticipant(convId) {
-      return isAuth() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
-    }
-
-    function isSender() { return request.auth.uid == request.resource.data.senderId; }
-
-    match /conversations/{convId} {
-      allow read: if isParticipant(convId);
-      allow create: if isAuth() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isParticipant(convId) && (
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['lastActivity','updatedAt','participants','participantCount','pinnedMessages','archivedBy','hiddenFor','mutedBy','groupSettings','name','photoURL','description','rules','admins','moderators','roles','joinRequests','disableReadReceipts','ephemeral','disappearAfter'])
-      );
-      allow delete: if false;
-    }
-
-    match /conversations/{convId}/messages/{msgId} {
-      allow read: if isParticipant(convId);
-      allow create: if isParticipant(convId) && isSender() && request.resource.data.type in ['text','image','video','audio','file','voice','gif','sticker','location','contact','poll','reaction','reply','forward','system','ad','view_once'];
-      allow update: if isParticipant(convId) && (
-        (request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['content','isEdited','editedAt','editedBy','updatedAt','reactions','readBy','deliveredTo','deletedFor','isDeleted','deletedAt','deletedBy']) && request.auth.uid == resource.data.senderId)
-        ||
-        (request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reactions']) && isParticipant(convId))
-        ||
-        (request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['readBy','deliveredTo']) && request.auth.uid in request.resource.data.diff(resource.data).affectedKeys())
-      );
-      allow delete: if false;
-    }
-
-    match /polls/{pollId}/votes/{userId} {
-      allow read: if isParticipant(get(/databases/$(database)/documents/conversations/{convId}).data.participants);
-      allow write: if request.auth.uid == userId && isParticipant(...);
-    }
-
-    match /calls/{callId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
-    }
-  }
-}
-*/
-
 //  SINGLETON EXPORT
 let instance = null;
 function getMessagingService() {
@@ -3281,7 +3238,6 @@ const messagingService = {
   acceptFriendRequest: (userId, requesterId) => getMessagingService().acceptFriendRequest(userId, requesterId),
   rejectFriendRequest: (userId, requesterId) => getMessagingService().rejectFriendRequest(userId, requesterId),
   removeFriend: (userId, friendId) => getMessagingService().removeFriend(userId, friendId),
-  reportUser: (reporterId, reportedId, reason, details) => getMessagingService().reportUser(reporterId, reportedId, reason, details),
   addParticipants: (cid, uids, admin) => getMessagingService().addParticipants(cid, uids, admin),
   removeParticipants: (cid, uids, admin) => getMessagingService().removeParticipants(cid, uids, admin),
   updateGroupInfo: (cid, updates, admin) => getMessagingService().updateGroupInfo(cid, updates, admin),

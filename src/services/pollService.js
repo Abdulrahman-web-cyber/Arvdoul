@@ -84,12 +84,9 @@ class PollService {
     // by firestore.rules (creator/admin only), so there is no client
     // fallback for the money path.
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const { getApp } = await import('firebase/app');
-      const functions = getFunctions(getApp());
-      const fn = httpsCallable(functions, 'votePoll');
-      const res = await fn({ pollId, optionId, wagerCoins: Number(wagerCoins) || 0 });
-      const poll = res.data?.poll || {};
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const data = await callFunction(FUNCTIONS.VOTE_POLL, { pollId, optionId, wagerCoins: Number(wagerCoins) || 0 });
+      const poll = data?.poll || {};
       this.votedHistory.set(pollId, optionId);
       await this._saveVotes();
       return poll;

@@ -2071,7 +2071,6 @@ function IntroScreen({
           <div className="arv-toggle">
             <ThemeToggle
               variant="icon"
-              size="lg"
             />
           </div>
         )}

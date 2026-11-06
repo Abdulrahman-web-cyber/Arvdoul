@@ -477,13 +477,6 @@ const BOOST_TIERS = [
   { value: "high", label: "High Boost", budget: 200, duration: 3 },
 ];
 
-const CROSS_PLATFORMS = [
-  { id: "twitter", label: "Twitter", icon: Icons.Twitter },
-  { id: "linkedin", label: "LinkedIn", icon: Icons.Linkedin },
-  { id: "youtube", label: "YouTube", icon: Icons.Youtube },
-  { id: "instagram", label: "Instagram", icon: Icons.Instagram },
-];
-
 const MEDIA_LIMITS = {
   maxImages: 10,
   maxVideos: 1,
@@ -526,7 +519,6 @@ const initialState = {
   recurrence: "none",
   coAuthors: [],
   collaborationInvites: [],
-  crossPlatform: [],
   settings: {
     enableComments: true,
     enableGifts: true,
@@ -540,6 +532,8 @@ const initialState = {
     audio: { file: null },
     video: { file: null },
   },
+  pollClosesAt: null,
+  pollReward: 0,
   step: 1,
   loading: false,
   progress: 0,
@@ -625,10 +619,11 @@ function reducer(state, action) {
       }
       case "ADD_COLLABORATION_INVITE": draft.collaborationInvites.push(action.payload); draft.isDirty = true; pushHistory = true; break;
       case "REMOVE_COLLABORATION_INVITE": draft.collaborationInvites = draft.collaborationInvites.filter(i => i.id !== action.payload); draft.isDirty = true; pushHistory = true; break;
-      case "TOGGLE_CROSS_PLATFORM": { const p = action.payload; const idx = draft.crossPlatform.indexOf(p); if (idx !== -1) draft.crossPlatform.splice(idx, 1); else draft.crossPlatform.push(p); draft.isDirty = true; pushHistory = true; break; }
       case "UPDATE_SETTINGS": draft.settings = { ...draft.settings, ...action.payload }; draft.isDirty = true; pushHistory = true; break;
       case "SET_POLL_OPTIONS": draft.typeData.poll.options = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_ALLOW_MULTIPLE": draft.typeData.poll.allowMultiple = action.payload; draft.isDirty = true; pushHistory = true; break;
+      case "SET_POLL_EXPIRY": draft.pollClosesAt = action.payload; draft.isDirty = true; pushHistory = true; break;
+      case "SET_POLL_REWARD": draft.pollReward = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EVENT_DATE": draft.typeData.event.date = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_EVENT_LOCATION": draft.typeData.event.location = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
@@ -1457,11 +1452,10 @@ function CreatePostProvider({ children }) {
         recurrence: current.recurrence || "none",
         settings: current.settings || {},
         coAuthors: current.coAuthors || [],
-        crossPlatform: current.crossPlatform || [],
-        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple } : null,
+        poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null, rewardCoins: Number(current.pollReward) || 0 } : null,
         event: effectiveType === "event" ? { title: effectiveText, date: current.typeData.event.date, location: current.typeData.event.location } : null,
         link: effectiveType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
-        question: effectiveType === "question" ? effectiveText : null,
+        question: effectiveType === "question" ? { text: effectiveText, bounty: 0, closed: false, answers: [] } : null,
         audio: effectiveType === "audio" ? {
           url: instantMedia[0]?.url || current.typeData.audio?.url || "",
           duration: current.typeData.audio?.duration || 0,
@@ -1990,25 +1984,6 @@ export function SchedulingPanel({ defaultOpen = false }) {
           </div>
         </div>
       )}
-    </Panel>
-  );
-}
-
-export function CrossPlatformPanel({ defaultOpen = false }) {
-  const { state, dispatch } = useCreatePostState();
-  return (
-    <Panel icon={Icons.Share2} title="Cross‑Platform" defaultOpen={defaultOpen}>
-      <div className="flex flex-wrap gap-2">
-        {CROSS_PLATFORMS.map(p => {
-          const Icon = p.icon; const selected = state.crossPlatform.includes(p.id);
-          return (
-            <button key={p.id} onClick={() => dispatch({ type: "TOGGLE_CROSS_PLATFORM", payload: p.id })}
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition ${selected ? "bg-purple-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"}`}>
-              <Icon className="w-3 h-3" /> {p.label}
-            </button>
-          );
-        })}
-      </div>
     </Panel>
   );
 }
@@ -2816,7 +2791,6 @@ function EnhancedStep3View() {
           <div className="space-y-4">
             <VisibilityPanel defaultOpen={true} />
             <CoAuthorPanel defaultOpen={true} />
-            <CrossPlatformPanel defaultOpen={false} />
           </div>
         )}
 

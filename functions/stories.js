@@ -3,11 +3,12 @@
 // Hybrid fan-out, atomic moderation, and async video moderation driven by
 // operation.promise() with a timeout (no busy polling). Includes recovery for
 // stories stuck in 'processing', sharded counters, cleanup jobs, and retry
-// handling. Cloud Tasks requests are secured with Firebase ID token
-// verification and fanout tasks are deduplicated by task name.
+// handling. Cloud Tasks requests are secured with OIDC (the token the queue
+// actually mints) and fanout tasks are deduplicated by task name.
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { CloudTasksClient } = require('@google-cloud/tasks');
+const { OAuth2Client } = require('google-auth-library');
 const videoIntelligence = require('@google-cloud/video-intelligence').v1;
 const fetch = require('node-fetch');
 
@@ -22,6 +23,26 @@ const Timestamp = admin.firestore.Timestamp;
 const tasksClient = new CloudTasksClient();
 const videoClient = new videoIntelligence.VideoIntelligenceServiceClient();
 const bucket = admin.storage().bucket();
+
+// Verifies the Google-signed OIDC token that Cloud Tasks attaches to a queued
+// request (the `oidcToken` on the task, see enqueueModerationTask). An ID token
+// cannot be used here: the queue mints an OIDC token, not a Firebase ID token.
+const oauthClient = new OAuth2Client();
+async function assertOidcTask(req) {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) {
+    throw new Error('missing bearer token');
+  }
+  const ticket = await oauthClient.verifyIdToken({
+    idToken: header.slice('Bearer '.length),
+    audience: process.env.CLOUD_TASKS_OIDC_AUDIENCE || videoModerationUrl,
+  });
+  const payload = ticket.getPayload();
+  const expectedSa = `${projectId}@appspot.gserviceaccount.com`;
+  if (payload?.email !== expectedSa) {
+    throw new Error(`unexpected task identity: ${payload?.email}`);
+  }
+}
 
 // ----------------------------------------------------------------------
 //  CONFIGURATION
@@ -386,22 +407,14 @@ exports.moderateStory = functions.firestore
 //  3. processVideoModeration – HTTP worker (OIDC‑authenticated, correct polling)
 // ----------------------------------------------------------------------
 exports.processVideoModeration = functions.https.onRequest(async (req, res) => {
-  // Verify Firebase ID token (correct method)
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(403).send('Forbidden');
-    return;
-  }
-  const token = authHeader.split('Bearer ')[1];
+  // Authenticate the Cloud Tasks request. The queue sends an OIDC token, so
+  // the worker must verify OIDC — verifying a Firebase ID token here (the
+  // previous code) rejected every task with 403 and no story video was ever
+  // moderated.
   try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    // Optionally check decoded.email or custom claims
-    if (!decoded.email_verified && !decoded.admin) {
-      res.status(403).send('Forbidden');
-      return;
-    }
+    await assertOidcTask(req);
   } catch (err) {
-    log('error', 'Token verification failed', { error: err.message });
+    log('warn', 'Rejected video moderation request', { error: err.message });
     res.status(403).send('Forbidden');
     return;
   }

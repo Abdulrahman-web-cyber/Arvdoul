@@ -135,7 +135,7 @@ export default function AboutScreen() {
             the fields were saved and validated but rendered nowhere, and the
             business contact was world-readable in users/{uid}). The projection
             blanks the fields, so this only renders when the scope allows them. */}
-        {displayedProfile?.canViewCreatorInfo !== false && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
+        {displayedProfile?.canViewCreatorInfo === true && (displayedProfile?.creatorCategory || displayedProfile?.inquiriesEmail || displayedProfile?.tipMessage) && (
           <div className={cn(
             'p-5 rounded-2xl border space-y-4 shadow-sm',
             isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
@@ -189,7 +189,7 @@ export default function AboutScreen() {
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {displayedProfile?.level != null ? (
-                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || 'Citizen'}</span> · Level {displayedProfile.level}</>
+                    <>Rank: <span className="font-semibold text-purple-500">{rankTitle || '—'}</span> · Level {displayedProfile.level}</>
                   ) : (
                     <span>Standing unavailable</span>
                   )}

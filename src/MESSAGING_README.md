@@ -1,6 +1,19 @@
 # 🚀 ARVDOUL Messaging Suite - Complete Documentation
 
-> **Production-ready messaging system for ARVDOUL**. Built with React 18, Zustand, Firebase, and Tailwind CSS. Fully scalable, accessible, and performant.
+> **Messaging system for ARVDOUL** — React 18, Zustand, Firebase, Tailwind CSS.
+
+> ⚠️ **Reality check.** Parts of this document were written against a design that
+> was never fully landed. The real files are:
+>
+> - `src/services/messagesService.js` (the service — note the plural, not `messagingService`)
+> - `src/store/messagingStore.js`
+> - `src/components/messaging/MessageBubble.jsx`, `MessageInput.jsx`, `index.js`
+> - `src/screens/MessagingScreen.jsx`, `ChatScreen.jsx`, `NewConversationScreen.jsx`, `ConversationSettingsScreen.jsx`
+>
+> Components named `ConversationItem`, `TypingIndicator`, and the
+> `GroupInfoScreen` / `lib/messagingIntegration.js` / `lib/messagingQualityChecklist.js`
+> paths referenced below **do not exist**. Treat any such reference as a
+> to-do, not as a shipped feature.
 
 ## 📋 Table of Contents
 

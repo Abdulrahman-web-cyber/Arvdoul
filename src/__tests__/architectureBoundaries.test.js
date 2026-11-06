@@ -90,3 +90,45 @@ describe('architecture boundary: lower layers must not import UI', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// AGENTS.md: "Callables from the client: go through src/services/callableService.js
+// (callFunction, FUNCTIONS) rather than inlining httpsCallable(getFunctions(), ...),
+// so app binding and error normalisation stay consistent." The service layer must
+// follow the same rule as UI — the single name registry lives in callableService.
+const FUNCTIONS_IMPORT = /(from\s+|import\(\s*)['"]firebase\/functions['"]/;
+
+describe('architecture boundary: services reach callables through callableService', () => {
+  test('no service imports firebase/functions directly', () => {
+    const offenders = [];
+    for (const full of walk(path.join(root, 'src', 'services'))) {
+      const rel = path.relative(root, full);
+      if (rel === 'src/services/callableService.js') continue;
+      if (FUNCTIONS_IMPORT.test(fs.readFileSync(full, 'utf8'))) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+// Two sibling directories whose names differ only by case (`components/UI` vs
+// `components/ui`) collapse into one on macOS/Windows, so imports silently
+// resolve to whichever copy the filesystem kept. Keep one canonical path.
+describe('architecture boundary: no case-only duplicate paths', () => {
+  test('no two sibling entries under src differ only by case', () => {
+    const collisions = [];
+    const check = (dir) => {
+      const seen = new Map();
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules') continue;
+        const lower = entry.name.toLowerCase();
+        if (seen.has(lower)) {
+          collisions.push(`${path.relative(root, dir)}: ${seen.get(lower)} vs ${entry.name}`);
+        } else {
+          seen.set(lower, entry.name);
+        }
+        if (entry.isDirectory()) check(path.join(dir, entry.name));
+      }
+    };
+    check(path.join(root, 'src'));
+    expect(collisions).toEqual([]);
+  });
+});

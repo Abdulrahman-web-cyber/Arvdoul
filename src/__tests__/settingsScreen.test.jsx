@@ -34,18 +34,18 @@ const mockUpdateSetting = jest.fn(async () => ({ success: true }));
 jest.mock('../services/settingsService.js', () => ({
   settingsService: {
     getSettings: jest.fn(async () => ({
-      notifications: { push: true, email: true, soundFx: true, spatialAudio: false },
-      privacy: { profilePrivate: false, allowDMs: 'everyone', showActiveStatus: true },
-      playback: { autoPlayVideos: true, streamQuality: 'auto' },
+      notifications: { push: true, email: true, soundFx: true },
+      privacy: { allowDMs: 'everyone', showActiveStatus: true },
+      playback: { autoPlayVideos: true },
       appearance: { reduceMotion: false, language: 'en' },
     })),
     updateSetting: mockUpdateSetting,
     clearApplicationCache: jest.fn(async () => ({ success: true, cleared: ['a', 'b'] })),
   },
   DEFAULT_SETTINGS: {
-    notifications: { push: true, email: true, soundFx: true, spatialAudio: true },
-    privacy: { profilePrivate: false, allowDMs: 'everyone', showActiveStatus: true },
-    playback: { autoPlayVideos: true, streamQuality: 'auto' },
+    notifications: { push: true, email: true, soundFx: true },
+    privacy: { allowDMs: 'everyone', showActiveStatus: true },
+    playback: { autoPlayVideos: true },
     appearance: { reduceMotion: false, language: 'en' },
   },
 }));
@@ -113,7 +113,6 @@ i18n.use(initReactI18next).init({
           pushNotifs: 'Push notifications',
           emailNotifs: 'Email notifications',
           soundFx: 'Sound effects',
-          spatialAudio: 'Spatial audio',
           privacySection: 'Privacy & Security',
           privateProfile: 'Private profile',
           privateProfileDesc: 'Only followers.',
@@ -122,7 +121,6 @@ i18n.use(initReactI18next).init({
           dmOption: { everyone: 'Everyone', friends: 'Friends', none: 'No one' },
           playbackSection: 'Playback',
           autoPlay: 'Auto-play videos',
-          streamQuality: 'Stream quality',
           dataSection: 'Data & Cache',
           clearCache: 'Clear application cache',
           clearCacheDesc: 'Removes cached content.',

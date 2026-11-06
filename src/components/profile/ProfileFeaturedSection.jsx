@@ -13,7 +13,7 @@
 
 import React, { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Pin, Play, Images, ChevronRight, Heart } from 'lucide-react';
+import { Sparkles, Pin, Play, Images, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const ProfileFeaturedSection = memo(({
@@ -21,7 +21,6 @@ const ProfileFeaturedSection = memo(({
   posts = [],
   theme = 'dark',
   isOwner = false,
-  capabilities = null,
   onPostClick,
 }) => {
   const navigate = useNavigate();

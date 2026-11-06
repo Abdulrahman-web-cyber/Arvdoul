@@ -1,7 +1,7 @@
 // src/components/profile/ProfileSkeleton.jsx
 
 import React from 'react';
-import { Skeleton } from '../ui/Skeleton';
+import { Skeleton } from '../UI/Skeleton';
 import { cn } from '../../lib/utils';
 
 export default function ProfileSkeleton({ theme = 'light' }) {

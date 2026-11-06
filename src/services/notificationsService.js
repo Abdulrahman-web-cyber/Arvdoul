@@ -5,7 +5,6 @@ import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   collection,
   doc,
@@ -214,7 +213,6 @@ const NOTIFICATIONS_CONFIG = {
     OLD_TOKEN_CLEANUP_DAYS: 30,
     REFRESH_INTERVAL_MS: 24 * 60 * 60 * 1000,
   },
-  REGION: 'europe-west1',
 };
 
 //  LRU CACHE with TTL
@@ -275,11 +273,9 @@ class UltimateNotificationsService {
     this.firestore = null;
     this.auth = null;
     this.messaging = null;
-    this.functions = null;
     this.fs = null;
     this.initialized = false;
     this.initPromise = null;
-    this.region = NOTIFICATIONS_CONFIG.REGION;
 
     // Cloud Functions references
     this.cfSendNotification = null;
@@ -327,8 +323,6 @@ class UltimateNotificationsService {
         this.firestore = await getFirestoreInstance();
         this.auth = await getAuthInstance();
         this.messaging = await getMessagingInstance();
-        this.functions = getFunctions(undefined, this.region);
-
         this.fs = {
           collection: firebase.collection,
           doc: firebase.doc,
@@ -365,14 +359,18 @@ class UltimateNotificationsService {
           isSupported: messagingMod.isSupported
         };
 
-        // Cloud Functions
-        this.cfSendNotification = httpsCallable(this.functions, 'sendNotification');
-        this.cfMarkRead = httpsCallable(this.functions, 'markNotificationRead');
-        this.cfMarkAllRead = httpsCallable(this.functions, 'markAllNotificationsRead');
-        this.cfDeleteNotification = httpsCallable(this.functions, 'deleteNotification');
-        this.cfGetNotifications = httpsCallable(this.functions, 'getUserNotifications');
-        this.cfGetNotificationStats = httpsCallable(this.functions, 'getNotificationStats');
-        this.cfCreateBulkJob = httpsCallable(this.functions, 'createBulkNotificationJob');
+        // Cloud Functions — all through the canonical callableService. `cf`
+        // re-wraps the data-returning helper in the `{ data }` envelope the
+        // call sites below destructure.
+        const { makeCallable, FUNCTIONS } = await import('./callableService.js');
+        const cf = makeCallable;
+        this.cfSendNotification = cf(FUNCTIONS.SEND_NOTIFICATION);
+        this.cfMarkRead = cf(FUNCTIONS.MARK_NOTIFICATION_READ);
+        this.cfMarkAllRead = cf(FUNCTIONS.MARK_ALL_NOTIFICATIONS_READ);
+        this.cfDeleteNotification = cf(FUNCTIONS.DELETE_NOTIFICATION);
+        this.cfGetNotifications = cf(FUNCTIONS.GET_USER_NOTIFICATIONS);
+        this.cfGetNotificationStats = cf(FUNCTIONS.GET_NOTIFICATION_STATS);
+        this.cfCreateBulkJob = cf(FUNCTIONS.CREATE_BULK_NOTIFICATION_JOB);
 
         this.offlineQueue = new OfflineNotificationQueue(this);
 
@@ -488,10 +486,19 @@ class UltimateNotificationsService {
     try {
       const result = await this.cfMarkRead({ notificationId, userId });
       this._invalidateUserCache(userId);
+      this._notifyCountChanged();
       return result.data;
     } catch (err) {
       await this.offlineQueue.add('markAsRead', { notificationId, userId });
       throw enhanceError(err, 'Failed to mark read');
+    }
+  }
+
+  // Broadcast that the unread notification count changed so the bottom-nav
+  // badge refreshes immediately instead of waiting for the next focus event.
+  _notifyCountChanged() {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('arvdoul:notification-read'));
     }
   }
 
@@ -507,6 +514,7 @@ class UltimateNotificationsService {
     await this.ensureInitialized();
     const result = await this.cfMarkAllRead({ userId });
     this._invalidateUserCache(userId);
+    this._notifyCountChanged();
     return result.data;
   }
 
@@ -738,7 +746,9 @@ class UltimateNotificationsService {
     const current = await this.getUserNotificationPreferences(userId);
     const merged = deepMerge(current, updates);
     const prefsRef = this.fs.doc(this.firestore, 'user_settings', userId);
-    await this.fs.updateDoc(prefsRef, { notificationPreferences: merged });
+    // Upsert: a first-ever preference change must create `user_settings/{uid}`
+    // (the server reads it on every dispatch), not fail with not-found.
+    await this.fs.setDoc(prefsRef, { notificationPreferences: merged }, { merge: true });
     this.userPreferencesCache.delete(userId);
     cacheManager.invalidateUser(userId);
     auditLogger.log('notification.preferences_updated', { userId, meta: { keys: Object.keys(updates) } });
@@ -978,7 +988,9 @@ class UltimateNotificationsService {
       senderId: fromUserId,
       title: 'New friend request',
       message: `${fromDisplayName || 'Someone'} sent you a friend request`,
-      metadata: { fromUserId },
+      // requestId is the friend_requests doc id, so the recipient's Accept /
+      // Decline buttons act on the real request document.
+      metadata: { fromUserId, requestId: `${fromUserId}_${toUserId}` },
       priority: 'normal',
     });
   }

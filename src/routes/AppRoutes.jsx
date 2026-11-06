@@ -10,7 +10,6 @@ import SplashScreen from "../screens/SplashScreen.jsx";
 
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
 const SubscriptionScreen = lazy(() => import("../screens/SubscriptionScreen.jsx"));
-const BadgeScreen = lazy(() => import("../screens/BadgeScreen.jsx"));
 const DataUsageScreen = lazy(() => import("../screens/DataUsageScreen.jsx"));
 const ProjectDashboardScreen = lazy(() => import("../screens/Collaboration/ProjectDashboardScreen.jsx"));
 const ProjectDetailScreen = lazy(() => import("../screens/Collaboration/ProjectDetailScreen.jsx"));
@@ -30,7 +29,6 @@ const NewConversationScreen = lazy(() => import("../screens/NewConversationScree
 const GroupInfoScreen = lazy(() => import("../screens/GroupInfoScreen.jsx"));
 const ConversationSettingsScreen = lazy(() => import("../screens/ConversationSettingsScreen.jsx"));
 const CreatePost = lazy(() => import("../screens/CreatePost.jsx"));
-const NetworkScreen = lazy(() => import("../screens/NetworkScreen.jsx"));
 const CoinsScreen = lazy(() => import("../screens/CoinsScreen.jsx"));
 const NotificationsScreen = lazy(() => import("../screens/NotificationsScreen.jsx"));
 const CreateStory = lazy(() => import("../screens/CreateStory.jsx"));
@@ -111,7 +109,6 @@ const CreatorOnboardingScreen = lazy(() => import("../screens/Creator/CreatorOnb
 const WalletScreen = lazy(() => import("../screens/Economy/WalletScreen.jsx"));
 
 // Collaboration Screen
-const CollaborationScreen = lazy(() => import("../screens/Collaboration/CollaborationScreen.jsx"));
 
 // Menu Screen
 const MenuScreen = lazy(() => import("../screens/Menu/MenuScreen.jsx"));

@@ -27,7 +27,6 @@ const ProfileHighlightsSection = memo(({
   const isDark = theme === 'dark';
 
   const [realHighlights, setRealHighlights] = useState([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,15 +35,12 @@ const ProfileHighlightsSection = memo(({
     async function loadHighlights() {
       if (!targetUserId) return;
       try {
-        setLoading(true);
         const res = await storyService.getHighlights(targetUserId).catch(() => ({ highlights: [] }));
         if (isMounted && res?.highlights && Array.isArray(res.highlights) && res.highlights.length > 0) {
           setRealHighlights(res.highlights);
         }
       } catch (err) {
         console.warn('Highlights load note:', err);
-      } finally {
-        if (isMounted) setLoading(false);
       }
     }
 
@@ -52,23 +48,19 @@ const ProfileHighlightsSection = memo(({
     return () => { isMounted = false; };
   }, [userId, isOwner]);
 
-  // Combine passed props or fetched real highlights (strictly NO fake Unsplash images)
+  // Combine passed props or fetched real highlights (strictly NO fake Unsplash images).
+  // A highlight without a resolvable cover is dropped: rendering it would paint a
+  // broken image tile rather than an honest empty state.
   const items = React.useMemo(() => {
-    if (realHighlights.length > 0) {
-      return realHighlights.map(h => ({
+    const source = realHighlights.length > 0 ? realHighlights : (Array.isArray(highlights) ? highlights : []);
+    const fallbackTitle = realHighlights.length > 0 ? 'Moment' : 'Highlight';
+    return source
+      .map(h => ({
         id: h.id,
-        title: h.title || 'Moment',
+        title: h.title || fallbackTitle,
         cover: h.cover || h.coverUrl || h.thumbnailUrl || h.mediaURL,
-      }));
-    }
-    if (Array.isArray(highlights) && highlights.length > 0) {
-      return highlights.map(h => ({
-        id: h.id,
-        title: h.title || 'Highlight',
-        cover: h.cover || h.coverUrl || h.thumbnailUrl || h.mediaURL,
-      }));
-    }
-    return [];
+      }))
+      .filter(item => Boolean(item.cover));
   }, [realHighlights, highlights]);
 
   // If a visitor is viewing and there are no highlights, don't show an empty or fake box

@@ -61,6 +61,7 @@ const EventCard = React.memo(({
   distanceKm = null,
   attendanceVelocity = 0,
   matchScore = 0,
+  onOpenEvent,
 }) => {
   // Optimistic UI state
   const [optimisticStatus, setOptimisticStatus] = useState(userStatus);
@@ -108,6 +109,12 @@ const EventCard = React.memo(({
   // RSVP handler with lock + optimistic + rollback + micro animation
   const handleRSVP = useCallback(async (newStatus) => {
     if (!currentUser || isLoading || rsvpLock.current) return;
+    if (typeof onRSVP !== 'function') {
+      // No RSVP mutation is wired in this surface; never fake a success or
+      // claim a failure — send the viewer to the real event screen instead.
+      onOpenEvent?.(event);
+      return;
+    }
     rsvpLock.current = true;
     setIsLoading(true);
 
@@ -136,7 +143,7 @@ const EventCard = React.memo(({
       setIsLoading(false);
       rsvpLock.current = false;
     }
-  }, [currentUser, isLoading, optimisticStatus, onRSVP]);
+  }, [currentUser, isLoading, optimisticStatus, onRSVP, onOpenEvent, event]);
 
   // Dynamic glow based on emotional state
   const glowIntensity = (urgent || isLive) ? 'high' : gravityLevel;

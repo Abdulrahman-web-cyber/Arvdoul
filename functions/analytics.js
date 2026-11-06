@@ -113,3 +113,75 @@ exports.trackProfileView = functions.https.onCall(async (data, context) => {
 
   return { success: true, counted };
 });
+
+  // ---------------------------------------------------------------------
+  // Post view analytics — server-authoritative, mirroring trackProfileView.
+  //
+  // `posts/{postId}/view_shards`, `/view_aggregate` and `/daily_stats` are not
+  // writable by clients (the posts `{subcollection}` rule binds every child id
+  // to the caller's uid), so a client `recordPostView` was always denied and
+  // the author analytics panel could only ever read 0 views. Counting lives
+  // here instead:
+  //   * one view per (post, viewer) per day, claimed in a transaction;
+  //   * the author's own views are never counted;
+  //   * blocked viewers are not counted;
+  //   * the total is written to the same `counter_shards` layout the client's
+  //     CountersManager reads, so `getPostAnalytics` needs no change.
+  const MAX_POST_VIEWS_PER_MINUTE = 240;
+
+  exports.recordPostView = functions.https.onCall(async (data, context) => {
+    const viewerId = getUserIdFromContext(context);
+    const { postId } = data || {};
+    if (!postId || typeof postId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'postId is required.');
+    }
+
+    await checkRateLimit(viewerId, 'recordPostView', MAX_POST_VIEWS_PER_MINUTE, 60000);
+
+    const postRef = db.collection('posts').doc(postId);
+    const postSnap = await postRef.get();
+    if (!postSnap.exists) return { success: true, counted: false };
+
+    const authorId = postSnap.data().authorId;
+    // Self-views are never counted.
+    if (authorId && authorId === viewerId) return { success: true, counted: false };
+
+    // A block is mutual and absolute: a blocked viewer's visit is not analytics.
+    if (authorId) {
+      const blocked = await db.doc(`blocks/${viewerId}_${authorId}`).get();
+      if (blocked.exists) return { success: true, counted: false };
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const viewerRef = postRef.collection('viewers').doc(viewerId);
+    const dailyStatRef = postRef.collection('daily_stats').doc(today);
+
+    const counted = await db.runTransaction(async (transaction) => {
+      const viewerSnap = await transaction.get(viewerRef);
+      if (viewerSnap.exists) return false;
+
+      transaction.set(viewerRef, { userId: viewerId, viewedAt: FieldValue.serverTimestamp() });
+
+      const dailySnap = await transaction.get(dailyStatRef);
+      if (!dailySnap.exists) {
+        transaction.set(dailyStatRef, {
+          date: today,
+          views: 1,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        transaction.update(dailyStatRef, { views: FieldValue.increment(1) });
+      }
+      return true;
+    });
+
+    if (counted) {
+      await incrementShardedCounter(`posts/${postId}`, 'views');
+    }
+
+    return { success: true, counted };
+  });
+

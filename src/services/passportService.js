@@ -9,6 +9,7 @@ import {
   getInfluenceBand,
   getContributionBand,
   getRoyalEligibility,
+  LEVEL_GATES,
 } from './levelSystemService.js';
 import { getProfileUrl, getPassportUrl } from '../utils/shareUtils.js';
 import { resolveCapabilities } from './profileCapabilityEngine.js';
@@ -134,7 +135,7 @@ class PassportService {
       influenceScore: influence?.score ?? 0,
       contributionScore: contribution?.score ?? 0,
       achievementsCount: verifiedAchievements.length,
-      policyStanding: profile.policyStanding || 'good',
+      policyStanding: profile.policyStanding || profile.accountStatus || null,
     };
     const dukeEligibility = getRoyalEligibility('duke', royalStats);
     const kingEligibility = getRoyalEligibility('king', royalStats);
@@ -241,7 +242,7 @@ class PassportService {
     });
 
     // 3. Civic Vanguard Stamp (Level 10+ or 7+ day streak)
-    const hasVanguard = (level !== null && level >= 10) || (activeStreak !== null && activeStreak >= 7);
+    const hasVanguard = (level !== null && level >= LEVEL_GATES.civicVanguard) || (activeStreak !== null && activeStreak >= 7);
     stamps.push({
       id: 'stamp_vanguard',
       code: 'ARV-CVG-010',
@@ -275,7 +276,7 @@ class PassportService {
     });
 
     // 5. Diplomatic Envoy Stamp (Level 15+ or verified citizen)
-    const hasDiplomatic = isVerified || (level !== null && level >= 15);
+    const hasDiplomatic = isVerified || (level !== null && level >= LEVEL_GATES.diplomaticEnvoy);
     stamps.push({
       id: 'stamp_diplomatic',
       code: 'ARV-DIP-015',

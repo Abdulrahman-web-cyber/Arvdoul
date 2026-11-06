@@ -9,6 +9,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
 const { getUserIdFromContext } = require('./auth');
+const { awardXpSafe } = require('./xpAward');
 
 const db = admin.firestore();
 
@@ -98,6 +99,10 @@ exports.votePoll = functions.https.onCall(async (data, context) => {
         hasVoted: optionId,
       };
     });
+
+    // Casting a civic vote grants XP. The vote is already committed, so the
+    // award is best-effort; `pollId` makes it idempotent (one vote per poll).
+    await awardXpSafe(uid, 'civic_vote_cast', { source: pollId });
 
     return { success: true, poll: result };
   } catch (err) {

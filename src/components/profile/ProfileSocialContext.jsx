@@ -19,10 +19,26 @@ const ProfileSocialContext = memo(({
   isFollowing = false,
   targetName = 'Creator',
   theme = 'dark',
+  capabilities = null,
   onFriendClick,
   onCommunityClick,
 }) => {
   const isDark = theme === 'dark';
+
+  // Fail CLOSED: mutual friends are mutual follows and shared communities are
+  // the target's community memberships, so both leak the graphs the capability
+  // engine gates behind followersList/followingList/communities. A missing map
+  // must not render either list (this card previously bypassed the engine).
+  const communitiesCount = Array.isArray(sharedCommunities) ? sharedCommunities.length : 0;
+  const canShowFriends = capabilities?.canViewFriends === true;
+  // No shared-community source is wired yet, so the card only renders when real
+  // shared memberships exist; an empty card would advertise a dead feature.
+  const canShowCommunities = capabilities?.canViewCommunities === true && communitiesCount > 0;
+  const canShowRelationship = Boolean(relationship) || isFollowing;
+
+  if (!canShowFriends && !canShowCommunities && !canShowRelationship) {
+    return null;
+  }
 
   // Mutual friends derivation
   const friendsCount = Array.isArray(mutualFriends) ? mutualFriends.length : 0;
@@ -33,11 +49,11 @@ const ProfileSocialContext = memo(({
     .slice(0, 2)
     .join(', ');
 
-  // Communities derivation
-  const communitiesCount = Array.isArray(sharedCommunities) ? sharedCommunities.length : 0;
-  const communitiesSnippet = communitiesCount > 0
-    ? sharedCommunities.map(c => c.name || c.title || '').filter(Boolean).slice(0, 2).join(', ')
-    : 'Join interest spaces & clubs';
+  const communitiesSnippet = sharedCommunities
+    .map(c => c.name || c.title || '')
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(', ');
 
   // Reciprocal follow status
   const followsYou = Boolean(relationship?.isFollower || relationship?.followsYou);
@@ -51,6 +67,7 @@ const ProfileSocialContext = memo(({
         : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_6px_20px_rgba(15,23,42,0.04)]"
     )}>
       {/* 1. Mutual Friends Card */}
+      {canShowFriends && (
       <div 
         onClick={() => onFriendClick?.()}
         className={cn(
@@ -96,8 +113,10 @@ const ProfileSocialContext = memo(({
           </div>
         </div>
       </div>
+      )}
 
       {/* 2. Shared Communities Card */}
+      {canShowCommunities && (
       <div 
         onClick={() => onCommunityClick?.()}
         className={cn(
@@ -114,15 +133,17 @@ const ProfileSocialContext = memo(({
 
         <div className="min-w-0">
           <div className="text-xs sm:text-sm font-bold truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-            {communitiesCount > 0 ? `${communitiesCount} shared communities` : 'Communities'}
+            {communitiesCount} shared {communitiesCount === 1 ? 'community' : 'communities'}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             {communitiesSnippet}
           </div>
         </div>
       </div>
+      )}
 
       {/* 3. Follows You / Connection Status Card */}
+      {canShowRelationship && (
       <div className={cn(
         "flex items-center gap-3 p-2.5 rounded-xl sm:rounded-2xl transition-all",
         mutualFollow || followsYou
@@ -175,6 +196,7 @@ const ProfileSocialContext = memo(({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 });

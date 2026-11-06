@@ -26,11 +26,11 @@ import { useTheme } from '../context/ThemeContext';
 import { getMessagingService, MESSAGING_CONFIG } from '../services/messagesService.js';
 import MessageInput from '../components/messaging/MessageInput.jsx';
 import MessageBubble from '../components/messaging/MessageBubble.jsx';
-import { Skeleton } from '../components/ui/Skeleton.jsx';
+import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Lock, Users, Phone, Video, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark } from 'lucide-react';
+import { ArrowLeft, Users, Phone, Video, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark } from 'lucide-react';
 import { format, isSameDay, isSameMinute } from 'date-fns';
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -539,9 +539,6 @@ export default function ChatScreen() {
                 : '')}
             </p>
           </div>
-          {conversation?.type === 'direct' && (
-            <Lock className="w-4 h-4 text-emerald-400" aria-label="End-to-end encrypted" />
-          )}
           {conversation?.participantCount > 2 && <Users className="w-4 h-4 opacity-60" aria-hidden="true" />}
           <button
             onClick={openInfoPanel}

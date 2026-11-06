@@ -389,7 +389,7 @@ const QuestionCard = React.memo(({
           <HelpCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: tokens.primary }} />
           <div>
             <h4 className="font-bold text-base" style={{ color: tokens.text }}>
-              {question.text || 'Untitled Question'}
+              {(typeof question === 'string' ? question : question.text) || 'Untitled Question'}
             </h4>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               {bountyAmount > 0 && !actualClosed && (
@@ -415,7 +415,9 @@ const QuestionCard = React.memo(({
       {currentUser && (
         <div className="flex items-center gap-2 text-xs pb-1" style={{ color: tokens.textSecondary }}>
           <span>Your reputation:</span>
-          <span className="font-bold" style={{ color: tokens.gold }}>{userReputation}</span>
+          <span className="font-bold" style={{ color: tokens.gold }}>
+            {typeof userReputation === 'number' ? userReputation : '—'}
+          </span>
           {reputationLevel && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${reputationLevel.color}20`, color: reputationLevel.color }}>
               {reputationLevel.label}

@@ -12,7 +12,6 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getMessagingService } from './messagesService.js';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
 //  CONFIGURATION – tuned for global scale
 const STORY_CONFIG = {
@@ -220,7 +219,7 @@ class StoryUploadQueue {
 class UltimateStoryService {
   constructor() {
     this.firestore = null; this.storage = null; this.auth = null;
-    this.fs = null; this.st = null; this.functions = null;
+    this.fs = null; this.st = null;
     this.initialized = false; this.initPromise = null;
     this.rateLimiter = new RateLimiter();
     this.uploadQueue = new StoryUploadQueue();
@@ -316,7 +315,6 @@ class UltimateStoryService {
       const storage = await getStorageInstance();
       const auth = await getAuthInstance();
       this.firestore = firestore; this.storage = storage; this.auth = auth;
-      this.functions = getFunctions();
       this.fs = {
         collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
         query, where, orderBy, limit, startAfter, serverTimestamp,
@@ -355,9 +353,11 @@ class UltimateStoryService {
     // AI caption if image and no content
     if (STORY_CONFIG.AI_CAPTION.ENABLED && storyData.type === 'image' && !storyData.content && storyData.mediaFile) {
       try {
-        const callable = httpsCallable(this.functions, STORY_CONFIG.AI_CAPTION.CLOUD_FUNCTION);
-        const result = await callable({ imageUrl: URL.createObjectURL(storyData.mediaFile) });
-        storyData.content = result.data.caption;
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        const data = await callFunction(FUNCTIONS.GENERATE_CAPTION_FOR_IMAGE, {
+          imageUrl: URL.createObjectURL(storyData.mediaFile),
+        });
+        storyData.content = data.caption;
       } catch (err) { logger.warn('// AI caption failed', err); }
     }
 
@@ -445,6 +445,16 @@ class UltimateStoryService {
     if (storyData.taggedUsers?.length) this._notifyTaggedUsers(storyId, currentUser.uid, storyData.taggedUsers);
     this.metrics.storiesCreated++;
     auditLogger.log('story.created', { userId: currentUser.uid, meta: { storyId, type: storyData.type || null } });
+    // Best-effort XP; the story is already published, so a failure must not
+    // fail creation. `source` makes the award idempotent server-side.
+    try {
+      const { levelSystemService } = await import('./levelSystemService.js');
+      levelSystemService
+        .awardExperience({ userId: currentUser.uid, action: 'story_created', source: storyId })
+        .catch(() => {});
+    } catch (e) {
+      // XP award is best-effort
+    }
     return { success: true, storyId, story };
   }
 

@@ -24,7 +24,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL } from '../../shared/levelConfig.cjs';
+import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, LEVEL_GATES, getCreatorCapabilities } from '../../shared/levelConfig.cjs';
 
 // Package amounts/prices come from the shared COIN_PACKAGES (the same table the
 // server prices from). The server credits `coins` exactly, so no bonus is
@@ -37,6 +37,34 @@ const COIN_PACKAGES = COIN_PACKAGES_CANONICAL.map((pkg, i) => ({
 }));
 
 const MIN_WITHDRAWAL_USD = coinsToUsd(MIN_WITHDRAWAL_COINS).toFixed(2);
+
+// The canonical gate the server enforces (`functions/monetization.js`
+// requestWithdrawal). Keep both ends reading the shared table.
+const WITHDRAWAL_MIN_LEVEL = LEVEL_GATES.withdrawals;
+
+/**
+ * A user may request a payout when the canonical capability helper says so
+ * (verified, partner/elite creator, or level >= LEVEL_GATES.withdrawals).
+ * This mirrors `functions/monetization.js` so a low-level user is told *why*
+ * instead of submitting a request the server will reject.
+ */
+function resolveWithdrawEligibility(wallet) {
+  if (!wallet) return { allowed: false, reason: 'Wallet not loaded.' };
+  const capabilities = getCreatorCapabilities({
+    level: wallet.level,
+    isVerified: wallet.isVerified,
+    isCreator: wallet.isCreator,
+    creatorTier: wallet.creatorTier,
+  });
+  if (capabilities.canWithdraw) return { allowed: true, reason: null };
+  const hasLevel = wallet.level != null && Number.isFinite(Number(wallet.level));
+  return {
+    allowed: false,
+    reason: hasLevel
+      ? `Withdrawals unlock at Level ${WITHDRAWAL_MIN_LEVEL} (you are Level ${wallet.level}).`
+      : `Withdrawals unlock at Level ${WITHDRAWAL_MIN_LEVEL} (your level is not yet available).`,
+  };
+}
 
 export default function WalletScreen() {
   const navigate = useNavigate();
@@ -100,6 +128,11 @@ export default function WalletScreen() {
 
   const handleWithdrawal = async (e) => {
     e.preventDefault();
+    const eligibility = resolveWithdrawEligibility(wallet);
+    if (!eligibility.allowed) {
+      toast.error(eligibility.reason);
+      return;
+    }
     const amount = Number(withdrawAmount);
     if (!amount || amount < MIN_WITHDRAWAL_COINS) {
       toast.error(`Minimum withdrawal amount is ${MIN_WITHDRAWAL_COINS.toLocaleString()} coins ($${MIN_WITHDRAWAL_USD} USD).`);
@@ -245,26 +278,39 @@ export default function WalletScreen() {
               Convert earned creator revenue into fiat currency via Stripe Connect. Minimum threshold: {MIN_WITHDRAWAL_COINS.toLocaleString()} coins (${MIN_WITHDRAWAL_USD} USD).
             </p>
 
-            <form onSubmit={handleWithdrawal} className="mt-4 flex items-center space-x-2">
-              <input
-                type="number"
-                min={MIN_WITHDRAWAL_COINS}
-                step="100"
-                placeholder={`Coins to withdraw (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className={`p-2.5 rounded-xl border text-xs flex-1 outline-none ${
-                  isDark ? 'bg-black border-gray-800 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
-                }`}
-              />
-              <button
-                type="submit"
-                disabled={withdrawing}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                {withdrawing ? 'Submitting...' : 'Request Payout'}
-              </button>
-            </form>
+            {(() => {
+              const eligibility = resolveWithdrawEligibility(wallet);
+              if (!eligibility.allowed) {
+                return (
+                  <div className={`mt-4 flex items-start gap-2 p-3 rounded-xl text-xs ${isDark ? 'bg-amber-950/30 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{eligibility.reason}</span>
+                  </div>
+                );
+              }
+              return (
+                <form onSubmit={handleWithdrawal} className="mt-4 flex items-center space-x-2">
+                  <input
+                    type="number"
+                    min={MIN_WITHDRAWAL_COINS}
+                    step="100"
+                    placeholder={`Coins to withdraw (min ${MIN_WITHDRAWAL_COINS.toLocaleString()})`}
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    className={`p-2.5 rounded-xl border text-xs flex-1 outline-none ${
+                      isDark ? 'bg-black border-gray-800 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={withdrawing}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {withdrawing ? 'Submitting...' : 'Request Payout'}
+                  </button>
+                </form>
+              );
+            })()}
           </section>
         )}
 

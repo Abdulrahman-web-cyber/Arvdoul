@@ -192,7 +192,7 @@ export default function ConversationSettingsScreen() {
 
             <div className="flex items-center justify-center gap-2 pt-2">
               <Settings className="w-4 h-4 text-gray-400" />
-              <p className={cn("text-xs", colors.secondary)}>Arvdoul messaging • E2EE protected</p>
+              <p className={cn("text-xs", colors.secondary)}>Arvdoul messaging</p>
             </div>
           </>
         )}

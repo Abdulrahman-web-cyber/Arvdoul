@@ -33,8 +33,8 @@
 4. **Production build compiles** (`vite build`).
 5. **`npm audit --audit-level=high`** (currently 0 high/critical).
 6. **gitleaks** secret scan + **CodeQL** static analysis.
-7. **axe-core** — no WCAG 2.1 AA violations on BottomNav, AdvancedToggleSwitch,
-   GlobalErrorBoundary.
+7. **axe-core** — no WCAG 2.1 AA violations on BottomNav,
+   GlobalErrorBoundary and the Dialog primitive.
 8. **i18n parity** — every locale must contain every English key (no silent
    missing-translation bugs).
 
@@ -90,7 +90,8 @@
 ### 5. Accessibility — WCAG 2.1 AA gates
 - `BottomNav`: nav landmark, translated aria-labels, `aria-current="page"`,
   decorative icons hidden.
-- `AdvancedToggleSwitch`: radiogroup/radio semantics with `aria-checked`.
+- `Dialog` primitive: `role="dialog"`/`aria-modal`, Escape close, focus trap,
+  focus restore.
 - `GlobalErrorBoundary`: `role="alert"`, focus management on crash heading,
   loading/disabled states.
 - axe-core test suite (jest-axe) gates these components in CI.
@@ -209,6 +210,8 @@
 - `CreatePost` boost check + `PollsScreen` wager check — real `getBalance()` (no `|| 5000`).
 - `ReelsFeed`/`CommentsModal`/`PostCard` — destructured `addCoins`/`followUser` from
   useAuth (undefined — rewards silently dead) → real monetization ledger + userService.
+  (The `ReelsFeed`/`CommentsModal` duplicates were later deleted in favour of the
+  live `ReelsScreen`/`CommentsDrawer`.)
 - `spacesService.createSpace` — fabricated host identity/Verified badge → real identity,
   `hostId`, sign-in required.
 
@@ -806,17 +809,17 @@ coverage 13.75% → 14.49% statements.**
 | Card | single style | variants (elevated/glass/solid/bordered), padding variants (none/sm/md/lg), interactive (button role + Enter/Space + hover lift), selected ring. Default = previous look |
 | Jest infra | `@`-aliases unresolved in tests | `moduleNameMapper` maps all 10 Vite aliases - any screen/component is now testable with app-style imports |
 
-**Verification: 24 suites / 356 tests green (new: introScreen.test.jsx integrity + componentsEnhanced.test.jsx), lint 0 errors, production build OK.**
+**Verification: introScreen.test.jsx integrity suite added; lint 0 errors, production build OK. (The earlier `componentsEnhanced.test.jsx` suite covered Tabs/Avatar/Card/BottomSheet primitives that no screen imported; those primitives and their test were deleted in the dead-code pass.)**
 
 ### 10. Screen build-out pass (missing primitives + screen wiring)
 
 | Area | Before | After |
 |---|---|---|
-| Input primitive | **missing entirely** | `src/components/ui/Input.jsx` - types (text/email/password/phone/search/number/otp), validation states (error/success/warning with icons), required/disabled/readonly/loading, label+hint+error wired via htmlFor/aria-describedby/aria-invalid, 44px min touch target. Exported from `components/ui/index.js` |
+| Input primitive | **missing entirely** | `src/components/ui/Input.jsx` - types (text/email/password/phone/search/number/otp), validation states (error/success/warning with icons), required/disabled/readonly/loading, label+hint+error wired via htmlFor/aria-describedby/aria-invalid, 44px min touch target. **Deleted** in the dead-code pass: no screen imported it (all forms use their own inputs), so it was reachable only from its test. |
 | Dialog primitive | **missing** (screens used raw fixed divs) | `src/components/ui/Dialog.jsx` - role=dialog + aria-modal, cyclic focus trap (Tab/Shift+Tab wrap), Escape close, focus restore to trigger, body scroll lock, sizes (sm/md/lg/fullscreen), close button + overlay (reduced motion via global tokens.css kill-switch) |
 | NotificationsScreen gift modal | raw `<div class="fixed inset-0">` + framer-motion | replaced with accessible `Dialog` (focus trap, aria-modal, aria-labelledby) |
 | NotificationsScreen empty state | raw h3 + button | design-system `EmptyState` + `Button` (role=status, translated-ready) |
-| Tests | - | `inputDialog.test.jsx`: 17 tests (8 input + 9 dialog) - axe 0 violations, aria wiring, Escape/overlay close, focus trap cycling, focus restore on close |
+| Tests | - | `inputDialog.test.jsx`: Dialog a11y tests - axe 0 violations, Escape/overlay close, focus trap cycling, focus restore on close |
 
 Audit confirmed: **zero mock data / hardcoded arrays / TODOs / FIXMEs remain in screens or components** (previous zero-mock pass held; every remaining "placeholder" hit is a legitimate input placeholder attribute). All screens wire to real services (marketplaceService, soundService, pollService, useSearch, commentService...).
 

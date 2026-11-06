@@ -168,7 +168,6 @@ const FilterTool = memo(({
   setFilter,
   filterIntensity,
   setFilterIntensity,
-  pushUndo,
   favorites: externalFavorites = [],
   setFavorites,
   previewImage,
@@ -233,8 +232,7 @@ const FilterTool = memo(({
   const handleSelect = useCallback((filterItem) => {
     setFilter(filterItem.value);
     setShowIntensity(filterItem.value !== 'none');
-    pushUndo?.();
-  }, [setFilter, pushUndo]);
+  }, [setFilter]);
 
   const handleToggleFavorite = useCallback((filterId) => {
     setActiveFavorites(prev => {
@@ -399,7 +397,6 @@ const FilterTool = memo(({
                 max={100}
                 value={filterIntensity}
                 onChange={(e) => setFilterIntensity(Number(e.target.value))}
-                onPointerUp={() => pushUndo?.()}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 aria-label="Filter intensity"
               />
@@ -439,8 +436,6 @@ FilterTool.propTypes = {
   filterIntensity: PropTypes.number,
   /** Function to set filter intensity */
   setFilterIntensity: PropTypes.func,
-  /** Function to push current state to history */
-  pushUndo: PropTypes.func,
   /** Array of favorite filter IDs (external) */
   favorites: PropTypes.arrayOf(PropTypes.string),
   /** Function to set favorites (external) */

@@ -1,8 +1,14 @@
 /**
- * AdjustTool.jsx - Professional Image Adjustment Component
- * @description Provides comprehensive image adjustments including exposure, temperature, tint, and more
+ * AdjustTool.jsx - Image adjustment panel
+ * @description Sliders over the ImageEditor document's adjustment model.
+ *
+ * The contract is `adjustments` + `setAdjustment(key, value)`. Values are the
+ * editor's deltas: brightness/contrast/saturation/temperature/hue are signed
+ * offsets around 0, blur 0-20, vignette 0-100. The caller (ImageEditor) applies
+ * them in `renderProcessed`, so this component must not assume a 0-200 or
+ * 100-centered scale — doing so made every slider a no-op in the old version.
+ *
  * @module Shared/AdjustTool
- * @requires React, framer-motion, lucide-react, prop-types
  */
 
 import React, { useState, useCallback, useMemo, memo } from "react";
@@ -15,142 +21,26 @@ import {
   Droplets,
   Thermometer,
   Palette,
-  Sunrise,
-  Moon,
   Sparkles,
+  Moon,
   Focus,
-  Haze,
-  Layers,
-  CircleDot,
-  Grid3x3,
   RotateCcw,
   ChevronDown,
   ChevronUp,
-  Wand2,
+  Aperture,
 } from "lucide-react";
-
-// ARVDOUL Design System
-const DNA_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
-const DNA_SHADOW = '0 0 20px rgba(147,51,234,0.4)';
 
 /**
  * Adjustment presets for quick fixes
  */
 const PRESETS = [
-  { name: 'Original', values: { brightness: 100, contrast: 100, saturation: 100, exposure: 0, temperature: 0, tint: 0 } },
-  { name: 'Portrait', values: { brightness: 105, contrast: 110, saturation: 90, exposure: 0, temperature: -5, tint: 5 } },
-  { name: 'Landscape', values: { brightness: 105, contrast: 115, saturation: 120, exposure: 5, temperature: 10, tint: 0 } },
-  { name: 'Dramatic', values: { brightness: 90, contrast: 130, saturation: 110, exposure: -5, temperature: 0, tint: 0 } },
-  { name: 'Muted', values: { brightness: 105, contrast: 90, saturation: 60, exposure: 0, temperature: 0, tint: 0 } },
-  { name: 'Vibrant', values: { brightness: 105, contrast: 120, saturation: 140, exposure: 5, temperature: 5, tint: 0 } },
+  { name: 'Original', values: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, hue: 0, blur: 0, vignette: 0 } },
+  { name: 'Portrait', values: { brightness: 6, contrast: 8, saturation: -8, temperature: -6, hue: 0, blur: 0, vignette: 0 } },
+  { name: 'Landscape', values: { brightness: 6, contrast: 12, saturation: 18, temperature: 10, hue: 0, blur: 0, vignette: 0 } },
+  { name: 'Dramatic', values: { brightness: -8, contrast: 26, saturation: 8, temperature: 0, hue: 0, blur: 0, vignette: 20 } },
+  { name: 'Muted', values: { brightness: 4, contrast: -10, saturation: -35, temperature: 0, hue: 0, blur: 0, vignette: 0 } },
+  { name: 'Vibrant', values: { brightness: 5, contrast: 16, saturation: 35, temperature: 5, hue: 0, blur: 0, vignette: 0 } },
 ];
-
-/**
- * Individual slider component with ARVDOUL styling
- */
-const AdjustmentSlider = memo(({
-  icon: Icon,
-  label,
-  value,
-  min,
-  max,
-  defaultValue,
-  onChange,
-  onPointerUp,
-  step = 1,
-  showPercentage = false,
-  showDegrees = false,
-}) => {
-    const { isDark } = useTheme();
-  const percentage = useMemo(() => {
-    return Math.round(((value - min) / (max - min)) * 100);
-  }, [value, min, max]);
-
-  const isModified = value !== defaultValue;
-  
-  const displayValue = useMemo(() => {
-    if (showPercentage) return `${percentage}%`;
-    if (showDegrees) return `${value > 0 ? '+' : ''}${value}°`;
-    return value;
-  }, [value, showPercentage, showDegrees, percentage]);
-
-  const handleReset = useCallback(() => {
-    onChange(defaultValue);
-    onPointerUp?.();
-  }, [onChange, defaultValue, onPointerUp]);
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon className={`w-4 h-4 ${isModified ? 'text-purple-400' : 'text-white/50'}`} />
-          <span className={`text-xs font-medium ${isModified ? 'text-white' : 'text-white/70'}`}>
-            {label}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-white/50 tabular-nums">{displayValue}</span>
-          {isModified && (
-            <button
-              onClick={handleReset}
-              className={`p-0.5 rounded hover:${isDark ? 'bg-white/10' : 'bg-black/5'} transition-colors`}
-              aria-label={`Reset ${label}`}
-            >
-              <RotateCcw className="w-3 h-3 text-purple-400" />
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="relative h-8 flex items-center">
-        <div className={`absolute inset-x-0 h-1.5 rounded-full \${isDark ? 'bg-white/10' : 'bg-black/5'} overflow-hidden`}>
-          <div
-            className="h-full rounded-full transition-all duration-75"
-            style={{
-              width: `${percentage}%`,
-              background: DNA_GRADIENT,
-              boxShadow: isModified ? DNA_SHADOW : 'none',
-            }}
-          />
-        </div>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          onPointerUp={onPointerUp}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          aria-label={`${label}: ${value}`}
-        />
-        {/* Custom thumb */}
-        <div
-          className="absolute w-4 h-4 rounded-full bg-white shadow-lg pointer-events-none transition-all duration-75"
-          style={{
-            left: `calc(${percentage}% - 8px)`,
-            boxShadow: isModified ? DNA_SHADOW : '0 2px 4px rgba(0,0,0,0.3)',
-          }}
-        />
-      </div>
-    </div>
-  );
-});
-
-AdjustmentSlider.displayName = 'AdjustmentSlider';
-
-AdjustmentSlider.propTypes = {
-  icon: PropTypes.elementType.isRequired,
-  label: PropTypes.string.isRequired,
-  value: PropTypes.number.isRequired,
-  min: PropTypes.number.isRequired,
-  max: PropTypes.number.isRequired,
-  defaultValue: PropTypes.number.isRequired,
-  onChange: PropTypes.func.isRequired,
-  onPointerUp: PropTypes.func,
-  step: PropTypes.number,
-  showPercentage: PropTypes.bool,
-  showDegrees: PropTypes.bool,
-};
 
 /**
  * Main AdjustTool component
@@ -160,43 +50,27 @@ const AdjustTool = memo(({
   setAdjustment,
   resetAdjustments,
   pushUndo,
-  presets = PRESETS,
 }) => {
     const { isDark } = useTheme();
   const [expandedSections, setExpandedSections] = useState({
-    basic: true,
+    light: true,
     color: true,
     effects: false,
-    details: false,
   });
   const [activePreset, setActivePreset] = useState(null);
 
-  // Destructure all adjustment values with defaults
   const {
-    brightness = 100,
-    contrast = 100,
-    saturation = 100,
-    exposure = 0,
+    brightness = 0,
+    contrast = 0,
+    saturation = 0,
     temperature = 0,
-    tint = 0,
-    highlights = 0,
-    shadows = 0,
-    whites = 0,
-    blacks = 0,
-    clarity = 0,
-    sharpness = 0,
-    dehaze = 0,
-    fade = 0,
-    grain = 0,
+    hue = 0,
+    blur = 0,
     vignette = 0,
-    gamma = 100,
   } = adjustments;
 
   const toggleSection = useCallback((section) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   }, []);
 
   const handlePresetClick = useCallback((preset) => {
@@ -204,26 +78,20 @@ const AdjustTool = memo(({
       resetAdjustments();
       setActivePreset(null);
     } else {
-      Object.entries(preset.values).forEach(([key, value]) => {
-        setAdjustment(key, value);
-      });
+      Object.entries(preset.values).forEach(([key, value]) => setAdjustment(key, value));
       setActivePreset(preset.name);
     }
-    pushUndo?.();
-  }, [setAdjustment, resetAdjustments, pushUndo]);
+  }, [setAdjustment, resetAdjustments]);
 
   const handleAdjustmentChange = useCallback((key, value) => {
     setAdjustment(key, value);
     setActivePreset(null);
   }, [setAdjustment]);
 
-  // Count modified adjustments
-  const modifiedCount = useMemo(() => {
-    return Object.entries(adjustments).filter(([key, value]) => {
-      const defaultValue = PRESETS[0].values[key];
-      return value !== (defaultValue ?? 100);
-    }).length;
-  }, [adjustments]);
+  const modifiedCount = useMemo(
+    () => Object.values(adjustments).filter((v) => Number(v) !== 0).length,
+    [adjustments]
+  );
 
   return (
     <div className="w-full space-y-4 text-white">
@@ -233,22 +101,21 @@ const AdjustTool = memo(({
           <span className={`text-xs font-semibold ${isDark ? 'text-white/60' : 'text-gray-500'} uppercase tracking-wider`}>
             Presets
           </span>
-          <Wand2 className="w-4 h-4 text-white/40" />
+          <Sparkles className="w-4 h-4 text-white/40" />
         </div>
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((preset) => (
             <motion.button
               key={preset.name}
+              type="button"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => handlePresetClick(preset)}
-              className={`
-                px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200
-                ${activePreset === preset.name
+              className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 ${
+                activePreset === preset.name
                   ? 'bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg'
                   : 'bg-white/10 text-white/80 hover:bg-white/20'
-                }
-              `}
+              }`}
             >
               {preset.name}
             </motion.button>
@@ -256,259 +123,119 @@ const AdjustTool = memo(({
         </div>
       </div>
 
-      {/* Basic Adjustments */}
+      {/* Light */}
       <Section
         title="Light"
         icon={Sun}
-        expanded={expandedSections.basic}
-        onToggle={() => toggleSection('basic')}
-        count={3}
-        modified={[
-          brightness !== 100,
-          contrast !== 100,
-          saturation !== 100,
-        ].filter(Boolean).length}
+        expanded={expandedSections.light}
+        onToggle={() => toggleSection('light')}
+        count={2}
       >
-        <div className="space-y-4">
-          <AdjustmentSlider
-            icon={Sun}
-            label="Brightness"
-            value={brightness}
-            min={0}
-            max={200}
-            defaultValue={100}
-            onChange={(v) => handleAdjustmentChange('brightness', v)}
-            onPointerUp={pushUndo}
-          />
-          <AdjustmentSlider
-            icon={Contrast}
-            label="Contrast"
-            value={contrast}
-            min={0}
-            max={200}
-            defaultValue={100}
-            onChange={(v) => handleAdjustmentChange('contrast', v)}
-            onPointerUp={pushUndo}
-          />
-          <AdjustmentSlider
-            icon={Sparkles}
-            label="Exposure"
-            value={exposure}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('exposure', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-        </div>
+        <AdjustmentSlider
+          icon={Sun}
+          label="Brightness"
+          value={brightness}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('brightness', v)}
+          onPointerUp={pushUndo}
+        />
+        <AdjustmentSlider
+          icon={Contrast}
+          label="Contrast"
+          value={contrast}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('contrast', v)}
+          onPointerUp={pushUndo}
+        />
       </Section>
 
-      {/* Color Adjustments */}
+      {/* Color */}
       <Section
         title="Color"
         icon={Palette}
         expanded={expandedSections.color}
         onToggle={() => toggleSection('color')}
         count={3}
-        modified={[
-          saturation !== 100,
-          temperature !== 0,
-          tint !== 0,
-        ].filter(Boolean).length}
       >
-        <div className="space-y-4">
-          <AdjustmentSlider
-            icon={Droplets}
-            label="Saturation"
-            value={saturation}
-            min={0}
-            max={200}
-            defaultValue={100}
-            onChange={(v) => handleAdjustmentChange('saturation', v)}
-            onPointerUp={pushUndo}
-          />
-          <AdjustmentSlider
-            icon={Thermometer}
-            label="Temperature"
-            value={temperature}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('temperature', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-          <AdjustmentSlider
-            icon={Palette}
-            label="Tint"
-            value={tint}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('tint', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-        </div>
+        <AdjustmentSlider
+          icon={Droplets}
+          label="Saturation"
+          value={saturation}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('saturation', v)}
+          onPointerUp={pushUndo}
+        />
+        <AdjustmentSlider
+          icon={Thermometer}
+          label="Temperature"
+          value={temperature}
+          min={-100}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('temperature', v)}
+          onPointerUp={pushUndo}
+        />
+        <AdjustmentSlider
+          icon={Aperture}
+          label="Hue"
+          value={hue}
+          min={-180}
+          max={180}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('hue', v)}
+          onPointerUp={pushUndo}
+          showDegrees
+        />
       </Section>
 
-      {/* Tone Adjustments */}
+      {/* Effects */}
       <Section
-        title="Tone"
+        title="Effects"
         icon={Moon}
         expanded={expandedSections.effects}
         onToggle={() => toggleSection('effects')}
-        count={4}
-        modified={[
-          highlights !== 0,
-          shadows !== 0,
-          whites !== 0,
-          blacks !== 0,
-        ].filter(Boolean).length}
+        count={2}
       >
-        <div className="space-y-4">
-          <AdjustmentSlider
-            icon={Sunrise}
-            label="Highlights"
-            value={highlights}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('highlights', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-          <AdjustmentSlider
-            icon={Moon}
-            label="Shadows"
-            value={shadows}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('shadows', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-          <AdjustmentSlider
-            icon={Sun}
-            label="Whites"
-            value={whites}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('whites', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-          <AdjustmentSlider
-            icon={CircleDot}
-            label="Blacks"
-            value={blacks}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('blacks', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-        </div>
-      </Section>
-
-      {/* Detail Adjustments */}
-      <Section
-        title="Detail"
-        icon={Focus}
-        expanded={expandedSections.details}
-        onToggle={() => toggleSection('details')}
-        count={6}
-        modified={[
-          clarity !== 0,
-          sharpness !== 0,
-          dehaze !== 0,
-          fade !== 0,
-          grain !== 0,
-          vignette !== 0,
-        ].filter(Boolean).length}
-      >
-        <div className="space-y-4">
-          <AdjustmentSlider
-            icon={Focus}
-            label="Clarity"
-            value={clarity}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('clarity', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-          <AdjustmentSlider
-            icon={Layers}
-            label="Sharpness"
-            value={sharpness}
-            min={0}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('sharpness', v)}
-            onPointerUp={pushUndo}
-          />
-          <AdjustmentSlider
-            icon={Haze}
-            label="Dehaze"
-            value={dehaze}
-            min={-100}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('dehaze', v)}
-            onPointerUp={pushUndo}
-            showDegrees
-          />
-          <AdjustmentSlider
-            icon={Layers}
-            label="Fade"
-            value={fade}
-            min={0}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('fade', v)}
-            onPointerUp={pushUndo}
-          />
-          <AdjustmentSlider
-            icon={Grid3x3}
-            label="Grain"
-            value={grain}
-            min={0}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('grain', v)}
-            onPointerUp={pushUndo}
-          />
-          <AdjustmentSlider
-            icon={CircleDot}
-            label="Vignette"
-            value={vignette}
-            min={0}
-            max={100}
-            defaultValue={0}
-            onChange={(v) => handleAdjustmentChange('vignette', v)}
-            onPointerUp={pushUndo}
-          />
-        </div>
+        <AdjustmentSlider
+          icon={Focus}
+          label="Blur"
+          value={blur}
+          min={0}
+          max={20}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('blur', v)}
+          onPointerUp={pushUndo}
+        />
+        <AdjustmentSlider
+          icon={Moon}
+          label="Vignette"
+          value={vignette}
+          min={0}
+          max={100}
+          defaultValue={0}
+          onChange={(v) => handleAdjustmentChange('vignette', v)}
+          onPointerUp={pushUndo}
+        />
       </Section>
 
       {/* Reset Button */}
-      <div className={`flex items-center justify-between pt-2 border-t \${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+      <div className={`flex items-center justify-between pt-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
         <span className="text-xs text-white/50">
           {modifiedCount > 0 ? `${modifiedCount} adjustments modified` : 'No changes'}
         </span>
         <motion.button
+          type="button"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => {
             resetAdjustments();
             setActivePreset(null);
-            pushUndo?.();
           }}
           className={`px-4 py-2 text-xs font-medium rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 text-white/80 transition-colors flex items-center gap-2`}
         >
@@ -523,21 +250,13 @@ const AdjustTool = memo(({
 AdjustTool.displayName = 'AdjustTool';
 
 AdjustTool.propTypes = {
-  /** Object containing all adjustment values */
+  /** Adjustment deltas, e.g. { brightness, contrast, saturation, temperature, hue, blur, vignette } */
   adjustments: PropTypes.objectOf(PropTypes.number),
-  /** Function to update a single adjustment value */
+  /** Update a single adjustment by key */
   setAdjustment: PropTypes.func.isRequired,
-  /** Function to reset all adjustments to default */
+  /** Reset all adjustments to their defaults */
   resetAdjustments: PropTypes.func.isRequired,
-  /** Function to push current state to history stack */
-  pushUndo: PropTypes.func,
-  /** Array of preset configurations */
-  presets: PropTypes.arrayOf(
-    PropTypes.shape({
-      name: PropTypes.string.isRequired,
-      values: PropTypes.objectOf(PropTypes.number).isRequired,
-    })
-  ),
+  /** Push current state to the history stack */
 };
 
 /**

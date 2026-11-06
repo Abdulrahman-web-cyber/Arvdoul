@@ -92,9 +92,6 @@ const CropTool = memo(({
   setAspect,
   zoom,
   onZoomChange,
-  onCropChangeWithUndo,
-  onCropComplete,
-  pushUndo,
   setCrop,
   setZoom,
   setCroppedAreaPixels,
@@ -111,17 +108,15 @@ const CropTool = memo(({
   const [showAdvanced, setShowAdvanced] = useState(false);
   
   const handleAspectChange = useCallback((newAspect) => {
-    pushUndo?.();
     setAspect(newAspect);
-  }, [setAspect, pushUndo]);
+  }, [setAspect]);
 
   const handleReset = useCallback(() => {
-    pushUndo?.();
     setCrop?.({ x: 0, y: 0 });
     setZoom?.(1);
     setAspect(undefined);
     setCroppedAreaPixels?.(null);
-  }, [pushUndo, setCrop, setZoom, setAspect, setCroppedAreaPixels]);
+  }, [setCrop, setZoom, setAspect, setCroppedAreaPixels]);
 
   const handleZoomChange = useCallback((value) => {
     onZoomChange?.(value);
@@ -226,7 +221,6 @@ const CropTool = memo(({
               step={0.01}
               value={zoom}
               onChange={(e) => handleZoomChange(Number(e.target.value))}
-              onPointerUp={() => pushUndo?.()}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               aria-label="Zoom level"
             />
@@ -351,12 +345,6 @@ CropTool.propTypes = {
   zoom: PropTypes.number,
   /** Function to handle zoom change */
   onZoomChange: PropTypes.func,
-  /** Function to handle crop change with undo */
-  onCropChangeWithUndo: PropTypes.func,
-  /** Function to handle crop complete */
-  onCropComplete: PropTypes.func,
-  /** Function to push undo state */
-  pushUndo: PropTypes.func,
   /** Function to set crop area */
   setCrop: PropTypes.func,
   /** Function to set zoom level */

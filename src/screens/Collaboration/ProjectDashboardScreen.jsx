@@ -237,7 +237,7 @@ export default function ProjectDashboardScreen() {
                   <div className="flex items-center justify-between">
                     {/* Team Avatars */}
                     <div className="flex -space-x-2">
-                      {(project.team || []).slice(0, 3).map((member) => (
+                      {(project.team || []).slice(0, 3).map((member, idx) => (
                         member?.avatar ? (
                           <img
                             key={member.id}
@@ -247,7 +247,7 @@ export default function ProjectDashboardScreen() {
                           />
                         ) : (
                           <div
-                            key={member?.id || Math.random()}
+                            key={member?.id || `team-member-${idx}`}
                             className="w-7 h-7 rounded-full bg-arvdoul-purple flex items-center justify-center text-xs text-white border-2 border-arvdoul-surface"
                           >
                             {(member?.name || '?').charAt(0).toUpperCase()}

@@ -17,6 +17,7 @@ import {
 import { getSafeAvatarUrl } from "../utils/avatarUtils.js";
 import { cacheManager } from "../utils/CacheManager.js";
 import { PRIVATE_PROFILE_FIELDS } from "../config/profileContracts.js";
+import { useUserSettings } from "../hooks/useUserSettings.js";
 
 const AuthContext = createContext(null);
 
@@ -258,6 +259,10 @@ export function AuthProvider({ children }) {
   const [authService, setAuthService] = useState(null);
   const [userService, setUserService] = useState(null);
   const [authState, setAuthState] = useState(AuthState.BOOTING);
+
+  // Apply the signed-in user's persisted settings document-wide (reduce-motion
+  // etc.) for the whole session, not just while the Settings screen is mounted.
+  useUserSettings(user?.uid);
   
   const [isSignupInProgress, setIsSignupInProgress] = useState(false);
   const [authInitialized, setAuthInitialized] = useState(false);

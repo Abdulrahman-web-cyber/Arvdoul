@@ -17,20 +17,15 @@ import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
 import {
-  pickHandle,
-  deriveHandle,
-  pickDisplayName,
-  resolveAvatarUrl,
   resolveCount,
-  resolveLevelValue,
-  resolveCreatorFlag,
-  resolveVerifiedFlag,
+  deriveProfileIdentity,
   projectProfileForViewer,
   OFFLINE_PRESENCE,
 } from '../../services/profileReadModel.js';
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { PROFILE_TABS } from '../../config/profileContracts.js';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -264,38 +259,31 @@ export default function ProfilePublicScreen() {
     }
   }, [currentUser?.uid, friendshipStatus, pendingRequestId, profileData?.username, userId, navigate]);
 
-  // Clean public username resolution
-  const cleanPublicUsername = useMemo(() => (
-    pickHandle([profileData?.username, profileData?.handle])
-    || deriveHandle(profileData?.displayName)
-    || deriveHandle(profileData?.email)
-    || 'creator'
-  ), [profileData?.username, profileData?.handle, profileData?.displayName, profileData?.email]);
-
   // Base profile: real data only, no mock fallbacks and no privacy decisions.
   // Privacy is applied once, from the capability engine, in `effectiveProfile`
-  // below: components must not re-derive fail-open privacy flags.
+  // below: components must not re-derive fail-open privacy flags. Identity and
+  // counts come from the shared `deriveProfileIdentity` so this screen cannot
+  // drift from the owner/preview screens.
   const baseProfile = useMemo(() => {
     if (!profileData) return null;
-    const safeDisplayName = pickDisplayName([profileData.displayName, profileData.name], { fallback: 'Creator' });
-    // No stored level => unknown, not a fabricated Level 1.
-    const safeLevel = resolveLevelValue(profileData.level);
-
+    const identity = deriveProfileIdentity(profileData, {
+      handleCandidates: [profileData.username, profileData.handle],
+      handleFallbacks: [profileData.displayName, profileData.email],
+      handleFallback: 'creator',
+      displayCandidates: [profileData.displayName, profileData.name],
+      displayFallback: 'Creator',
+      followerCandidates: [profileData.followerCount, profileData.followersCount],
+      followingCandidates: [profileData.followingCount],
+      postCandidates: [posts?.length, profileData.postCount],
+      levelCandidates: [profileData.level],
+      coinCandidates: [profileData.coins, profileData.coinBalance],
+      userId,
+    });
     return {
       ...profileData,
-      id: profileData.id || profileData.uid || userId,
-      uid: profileData.uid || profileData.id || userId,
-      username: cleanPublicUsername,
-      displayName: safeDisplayName,
+      ...identity,
       bio: typeof profileData.bio === 'string' ? profileData.bio : '',
-      photoURL: resolveAvatarUrl(profileData.photoURL, safeDisplayName, userId),
-      followerCount: resolveCount(profileData.followerCount, profileData.followersCount),
-      followingCount: resolveCount(profileData.followingCount),
-      postCount: resolveCount(posts?.length, profileData.postCount),
       likesReceived: resolveCount(profileData.likesReceived, profileData.likesCount),
-      coins: resolveCount(profileData.coins, profileData.coinBalance),
-      isVerified: resolveVerifiedFlag(profileData),
-      isCreator: resolveCreatorFlag(profileData, {}, safeLevel),
       isPrivate: Boolean(profileData.isPrivate),
       isRestricted: Boolean(profileData.isRestricted),
       links: Array.isArray(profileData.links) ? profileData.links : [],
@@ -303,11 +291,10 @@ export default function ProfilePublicScreen() {
       profession: typeof profileData.profession === 'string' ? profileData.profession : '',
       education: typeof profileData.education === 'string' ? profileData.education : '',
       presence: profileData.presence || OFFLINE_PRESENCE,
-      level: safeLevel,
       location: typeof profileData.location === 'string' ? profileData.location : (typeof profileData.city === 'string' ? profileData.city : ''),
       website: typeof profileData.website === 'string' ? profileData.website : (typeof profileData.link === 'string' ? profileData.link : ''),
     };
-  }, [profileData, userId, posts?.length, cleanPublicUsername]);
+  }, [profileData, userId, posts?.length]);
 
   const capabilities = useMemo(() => {
     return resolveCapabilities({
@@ -328,6 +315,21 @@ export default function ProfilePublicScreen() {
     () => projectProfileForViewer(baseProfile, capabilities, { isOwner }),
     [baseProfile, capabilities, isOwner]
   );
+
+  // Honour the owner's chosen default tab ("the tab visitors see first"). The
+  // field was persisted and validated but never read, so every profile opened on
+  // Posts. Apply once per target so a later snapshot cannot override the viewer's
+  // own tab choice.
+  const appliedDefaultTabFor = React.useRef(null);
+  useEffect(() => {
+    const targetKey = effectiveProfile?.id || effectiveProfile?.uid;
+    if (!targetKey || appliedDefaultTabFor.current === targetKey) return;
+    const preferred = effectiveProfile?.defaultTab;
+    if (preferred && PROFILE_TABS.includes(preferred)) {
+      setActiveTab(preferred);
+      appliedDefaultTabFor.current = targetKey;
+    }
+  }, [effectiveProfile?.id, effectiveProfile?.uid, effectiveProfile?.defaultTab]);
 
   const handleUnblock = useCallback(async () => {
     const targetUid = effectiveProfile?.id || effectiveProfile?.uid || userId;
@@ -497,7 +499,6 @@ export default function ProfilePublicScreen() {
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
           {/* 1. Master Identity Card with Level Badge, Passport & Public Action Buttons */}
           <ProfileHeroSection
-            variant="identity"
             profile={effectiveProfile}
             isOwner={false}
             level={effectiveProfile.level}
@@ -521,7 +522,6 @@ export default function ProfilePublicScreen() {
             onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
             capabilities={capabilities}
-            analytics={null}
           />
 
           {/* 2. Social Context Bar (Mutual Friends, Shared Communities, Follows You) */}
@@ -531,6 +531,7 @@ export default function ProfilePublicScreen() {
             isFollowing={isFollowing}
             targetName={effectiveProfile?.displayName || 'Creator'}
             theme={theme}
+            capabilities={capabilities}
             onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
           />
 
@@ -606,7 +607,6 @@ export default function ProfilePublicScreen() {
                 posts={posts}
                 theme={theme}
                 isOwner={false}
-                capabilities={capabilities}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
               />
 

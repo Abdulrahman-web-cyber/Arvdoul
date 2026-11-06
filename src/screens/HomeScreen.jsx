@@ -15,6 +15,7 @@ import feedService from '../services/feedService';
 import userService from '../services/userService';
 import { getBalance, watchAd, getAd } from '../services/monetizationService.js';
 import { AD_REWARD_COINS } from '../shared/levelConfig.cjs';
+import { trackAnalyticsEvent } from '../services/analyticsService';
 import PostCard from './PostCard';
 import CommentsDrawer from './CommentsDrawer';
 import PostOptionsDrawer from './PostOptionsDrawer';
@@ -27,10 +28,11 @@ import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { TopAppLoadingBanner } from '../components/Navigation/RouteProgressBar.jsx';
 import { FeedSkeleton } from '../components/UI/SkeletonLoaders.jsx';
+import { getAdaptiveTuning } from '../utils/deviceCapabilities.js';
+import { scheduleIdleTask, cancelIdleTask } from '../performance/optimizer.js';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
-const FEED_PAGE_SIZE = 15;
 const RETRY_MAX = 3;
 const RETRY_BASE_DELAY = 1000;
 const SAFETY_TIMEOUT_MS = 12000;
@@ -74,20 +76,6 @@ function getDevicePerformanceTier() {
   if (memory >= 8 && cores >= 8) return 'high';
   return 'mid';
 }
-
-const safeRequestIdleCallback = (callback, options) => {
-  if (typeof window !== 'undefined' && window.requestIdleCallback) {
-    return window.requestIdleCallback(callback, options);
-  }
-  return setTimeout(callback, options?.timeout || 500);
-};
-const safeCancelIdleCallback = (id) => {
-  if (typeof window !== 'undefined' && window.cancelIdleCallback) {
-    window.cancelIdleCallback(id);
-  } else {
-    clearTimeout(id);
-  }
-};
 
 function getRetryDelay(attempt) {
   const base = RETRY_BASE_DELAY * Math.pow(2, attempt - 1);
@@ -320,6 +308,14 @@ const feedReducer = (state, action) => {
         byId: { ...state.byId, [postId]: { ...state.byId[postId], ...updates } },
         order: state.order,
       };
+    }
+    case 'REPLACE_POST_ID': {
+      const { oldId, newId } = action.payload;
+      if (!oldId || !newId || !state.byId[oldId]) return state;
+      const byId = { ...state.byId };
+      byId[newId] = { ...byId[oldId], id: newId };
+      delete byId[oldId];
+      return { byId, order: state.order.map(id => (id === oldId ? newId : id)) };
     }
     case 'CLEAR':
       return { byId: {}, order: [] };
@@ -582,16 +578,12 @@ const PostWithTracking = React.memo(({
   const { register, unregister } = useContext(VisibilityContext);
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef(null);
-  const impressionRecorded = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const handleVisibility = (visible) => {
       setIsVisible(prev => (prev !== visible ? visible : prev));
-      if (visible && !impressionRecorded.current) {
-        impressionRecorded.current = true;
-      }
     };
     register(el, handleVisibility);
     return () => unregister(el);
@@ -626,6 +618,14 @@ export default function HomeScreen() {
   const { user, isAuthenticated, loading: authLoading, authInitialized } = useAuth();
   const isDark = theme === 'dark';
   const deviceTier = useMemo(() => getDevicePerformanceTier(), []);
+  // Adaptive tuning (Lite Mode / low-end device) - the canonical device heuristics
+  // module owns the thresholds; re-read when the preference changes at runtime.
+  const [tuning, setTuning] = useState(() => getAdaptiveTuning());
+  useEffect(() => {
+    const refresh = () => setTuning(getAdaptiveTuning());
+    window.addEventListener('arvdoul-litemode-change', refresh);
+    return () => window.removeEventListener('arvdoul-litemode-change', refresh);
+  }, []);
 
   // Consolidated runtime refs (single source of truth)
   const feedRuntimeRef = useRef({
@@ -849,7 +849,7 @@ export default function HomeScreen() {
       if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
       if (unsubscribeRef.current) unsubscribeRef.current();
-      if (idleCallbackIdRef.current) safeCancelIdleCallback(idleCallbackIdRef.current);
+      if (idleCallbackIdRef.current) cancelIdleTask(idleCallbackIdRef.current);
       if (onlineRefreshDebounceRef.current) clearTimeout(onlineRefreshDebounceRef.current);
       if (cacheWriteDebounceRef.current) clearTimeout(cacheWriteDebounceRef.current);
       mediaPreloaderRef.current.clear();
@@ -931,7 +931,7 @@ export default function HomeScreen() {
         try {
           const [result, blockedIds] = await Promise.all([
             feedService.getSmartFeed(effectiveUserId, {
-              limit: FEED_PAGE_SIZE,
+              limit: tuning.feedPageSize,
               lastDoc: reset ? null : nextCursorRef.current,
               forceRefresh: skipCache,
               feedType: activeFeedTab,
@@ -1058,7 +1058,7 @@ export default function HomeScreen() {
       activeRequestKeyRef.current = requestKey;
       return await wrappedPromise;
     },
-    [user?.uid, isOnline, authInitialized, getBlockedUserIds]
+    [user?.uid, isOnline, authInitialized, getBlockedUserIds, tuning.feedPageSize]
   );
 
   const loadFeedRef = useRef(loadFeed);
@@ -1072,10 +1072,10 @@ export default function HomeScreen() {
     if (total === 0) return;
     const progress = endIndex / total;
     if (progress > PREDICTIVE_PRELOAD_SCROLL_RATIO && !preloadLockRef.current) {
-      if (idleCallbackIdRef.current) safeCancelIdleCallback(idleCallbackIdRef.current);
-      idleCallbackIdRef.current = safeRequestIdleCallback(() => {
+      if (idleCallbackIdRef.current) cancelIdleTask(idleCallbackIdRef.current);
+      idleCallbackIdRef.current = scheduleIdleTask(() => {
         loadFeedRef.current?.(false, false, true);
-      }, { timeout: 2000 });
+      }, 2000);
     }
     if (endIndex < total - 1) {
       mediaPreloaderRef.current.preloadNext(feed, endIndex);
@@ -1189,6 +1189,24 @@ export default function HomeScreen() {
     window.addEventListener('arvdoul:new_post_published', handleNewPost);
     return () => window.removeEventListener('arvdoul:new_post_published', handleNewPost);
   }, [hydratePost]);
+
+  // The optimistic post is published with a temporary id, then the server
+  // returns the real Firestore doc id. Without this the feed kept the temp id,
+  // so likes/comments/deep links on the just-published post targeted a doc
+  // that does not exist.
+  useEffect(() => {
+    const handleIdSynced = (e) => {
+      const { oldId, newId } = e.detail || {};
+      if (!oldId || !newId) return;
+      dispatchFeed({ type: 'REPLACE_POST_ID', payload: { oldId, newId } });
+      feedRuntimeRef.current.seenIds.delete(oldId);
+      feedRuntimeRef.current.seenIds.add(newId);
+      feedRuntimeRef.current.insertedIds.delete(oldId);
+      feedRuntimeRef.current.insertedIds.add(newId);
+    };
+    window.addEventListener('arvdoul:post_id_synced', handleIdSynced);
+    return () => window.removeEventListener('arvdoul:post_id_synced', handleIdSynced);
+  }, []);
 
   // Online/offline with debounced refresh
   useEffect(() => {
@@ -1559,7 +1577,7 @@ export default function HomeScreen() {
           <CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={activePost} currentUser={user} theme={theme} />
         )}
         {showOptions && activePost && (
-          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} />
+          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} onAnalytics={trackAnalyticsEvent} />
         )}
 
         {/* Sponsored Reward Ad Modal for In-Feed Monetization */}

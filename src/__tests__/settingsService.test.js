@@ -25,11 +25,11 @@ describe('settings merge (pure)', () => {
   });
 
   test('merges partial docs over defaults without losing groups', () => {
-    const merged = mergeSettings({ privacy: { profilePrivate: true } });
-    expect(merged.privacy.profilePrivate).toBe(true);
-    expect(merged.privacy.allowDMs).toBe('everyone');
+    const merged = mergeSettings({ privacy: { allowDMs: 'friends' } });
+    expect(merged.privacy.allowDMs).toBe('friends');
+    expect(merged.privacy.showActiveStatus).toBe(true);
     expect(merged.notifications.push).toBe(true);
-    expect(merged.playback.streamQuality).toBe('auto');
+    expect(merged.playback.autoPlayVideos).toBe(true);
   });
 
   test('ignores unknown groups', () => {
@@ -109,11 +109,11 @@ describe('updateSetting (mocked Firestore)', () => {
     // Break persistence via the flag (closure is read at call time)
     failWrites = true;
     await expect(
-      fresh.settingsService.updateSetting('uid1', 'playback.streamQuality', '1080p')
+      fresh.settingsService.updateSetting('uid1', 'notifications.email', false)
     ).rejects.toThrow('SETTINGS_SAVE_FAILED');
     // Cache must still hold the previous value (no lying UI)
     const after = await fresh.settingsService.getSettings('uid1');
-    expect(after.playback.streamQuality).toBe('auto');
+    expect(after.notifications.email).toBe(true);
     expect(after.notifications.push).toBe(false);
   });
 });

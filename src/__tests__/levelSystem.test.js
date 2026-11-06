@@ -113,7 +113,9 @@ describe('awardExperience contract (server-authoritative)', () => {
       action: 'post_created',
     });
     expect(res).toEqual({ success: true, xpAwarded: 10, leveledUp: false, newLevel: 1, coinReward: 0 });
-    expect(seen).toEqual([{ action: 'post_created', count: 1, source: null }]);
+    // userId is forwarded so the server can resolve a received action (like /
+    // follow) to the real recipient.
+    expect(seen).toEqual([{ action: 'post_created', count: 1, source: null, userId: 'uid1' }]);
   });
 
   test('surfaces the server level-up payload untouched', async () => {

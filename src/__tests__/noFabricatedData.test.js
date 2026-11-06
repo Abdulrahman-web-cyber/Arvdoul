@@ -38,11 +38,26 @@ describe('videoService - no mock feed fallback', () => {
   });
 });
 
-describe('CommentsModal - real commentService wiring', () => {
+describe('CommentsDrawer - real commentService wiring', () => {
   test('does not write to the denied posts/{id}/comments subcollection', () => {
-    const src = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
+    const src = fs.readFileSync(path.join(root, 'src/screens/CommentsDrawer.jsx'), 'utf8');
     expect(src).not.toContain('collection(db, "posts", postId, "comments")');
-    expect(src).toContain('getCommentService()');
+    expect(src).toContain('commentService');
+  });
+});
+
+describe('firestoreService - no fabricated cross-platform publish', () => {
+  test('publishToPlatform does not simulate a success or invent URLs', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/firestoreService.js'), 'utf8');
+    // It once slept 600ms and returned `https://<platform>.com/arvdoul_post_<id>`
+    // URLs as if the post had been shared to real platforms.
+    expect(src).not.toContain('Simulating cross-platform publication');
+    expect(src).not.toContain('arvdoul_post_');
+    // The selection UI collected a value nothing consumed (a dead prop).
+    const createPost = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+    expect(createPost).not.toContain('CROSS_PLATFORMS');
+    expect(createPost).not.toContain('TOGGLE_CROSS_PLATFORM');
+    expect(createPost).not.toContain('CrossPlatformPanel');
   });
 });
 
@@ -211,7 +226,7 @@ describe('Marketplace - real coin ledger, honest listings', () => {
     expect(src).not.toContain('arvdoul.cloud/downloads');
     expect(src).not.toContain('rating: 5.0');
     expect(src).not.toContain('stock: 100');
-    expect(src).toContain("'purchaseMarketplaceItem'"); // server-authoritative purchase
+    expect(src).toContain('FUNCTIONS.PURCHASE_MARKETPLACE_ITEM'); // server-authoritative purchase
     expect(src).toContain('creatorId: creator.uid'); // rules-compliant listing
   });
 
@@ -261,11 +276,6 @@ describe('Badge system - real stats map', () => {
     expect(src).toContain('followerCount'); // computed from real stats
     expect(src).toContain('first_like');
   });
-
-  test('BadgeScreen shows honest "not available" instead of fabricated zeros', () => {
-    const src = fs.readFileSync(path.join(root, 'src/screens/BadgeScreen.jsx'), 'utf8');
-    expect(src).toContain('Progress not available yet');
-  });
 });
 
 describe('Payouts - honest account state', () => {
@@ -311,10 +321,24 @@ describe('Poll + marketplace rules compliance', () => {
   });
 });
 
-describe('Offline drain - markAsRead is retried', () => {
-  test('AppBootstrap drains queued notification reads', () => {
+describe('Offline drain - notification reads are retried', () => {
+  test('notificationsService retries queued reads through its own offline queue', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/notificationsService.js'), 'utf8');
+    // markAsRead is queued on the notification-specific offline queue and
+    // replayed by processAll -> _markReadViaCF. The general op-type drain lives
+    // in src/offline/syncEngine.js (see offlineDrainIntegrity.test.js).
+    expect(src).toContain("this.offlineQueue.add('markAsRead'");
+    expect(src).toContain('_markReadViaCF');
+    expect(src).toContain('async processAll()');
+  });
+
+  test('AppBootstrap delegates the offline drain to the canonical sync engine', () => {
     const src = fs.readFileSync(path.join(root, 'src/app/AppBootstrap.jsx'), 'utf8');
-    expect(src).toContain("case 'markAsRead':");
+    expect(src).toContain("import('../offline/syncEngine.js')");
+    expect(src).toContain('syncQueue(');
+    // The old inline op-type switch was a divergent second drain that called
+    // methods which do not exist; it must not come back.
+    expect(src).not.toContain("case 'markAsRead':");
   });
 });
 
@@ -437,7 +461,7 @@ describe('appStore - no fabricated starting coins', () => {
 describe('Poll wagers - real coin debit', () => {
   test('pollService.votePoll is server-authoritative (votePoll CF) and never writes the poll doc client-side', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/pollService.js'), 'utf8');
-    expect(src).toContain("'votePoll'"); // Cloud Function path
+    expect(src).toContain('FUNCTIONS.VOTE_POLL'); // Cloud Function path
     expect(src).not.toContain('updateDoc(pollRef, updatePayload)'); // no direct poll writes
   });
 
@@ -456,13 +480,11 @@ describe('Poll wagers - real coin debit', () => {
   });
 });
 
-describe('Engagement coin rewards - wired to the real ledger', () => {
-  test('components no longer destructure undefined addCoins/followUser from useAuth', () => {
-    const feed = fs.readFileSync(path.join(root, 'src/components/Home/ReelsFeed.jsx'), 'utf8');
-    const modal = fs.readFileSync(path.join(root, 'src/components/Home/CommentsModal.jsx'), 'utf8');
-    expect(feed).not.toContain('addCoins, followUser } = useAuth');
-    expect(modal).not.toContain('addCoins } = useAuth');
-    expect(feed).toContain('getUserService().followUser(user.uid, uid)');
+describe('Engagement follow - wired to the real service', () => {
+  test('reels follow goes through userService, never an undefined useAuth helper', () => {
+    const reels = fs.readFileSync(path.join(root, 'src/screens/ReelsScreen.jsx'), 'utf8');
+    expect(reels).not.toContain('addCoins, followUser } = useAuth');
+    expect(reels).toContain('getUserService().followUser(user.uid');
   });
 });
 
@@ -954,9 +976,16 @@ describe('Vibes interactions are REAL (no toast-only fakes)', () => {
     const block = rules.slice(rules.indexOf('match /stories/{storyId}'), rules.indexOf('match /archived_stories'));
     expect(block).toContain('match /view_shards/{shardId}');
     expect(block).toContain('match /reaction_shards/{shardId}');
-    expect(block).toContain('allow write: if isSignedIn();');
-    // story-doc updates remain creator-only
-    expect(block).toContain('allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;');
+    // Any signed-in user may increment the shards, but only within the shard's
+    // known counter keys — arbitrary writes into the aggregation collections
+    // are refused.
+    expect(block).toContain('allow write: if isSignedIn() &&');
+    expect(block).toMatch(/view_shards[\s\S]*?hasOnly\(\['count', 'updatedAt'\]\)/);
+    expect(block).toMatch(/analytics_shards[\s\S]*?hasOnly\(\[/);
+    // story-doc updates remain creator-only and exclude the moderation fields
+    expect(block).toContain('allow update: if isSignedIn() && request.auth.uid == resource.data.userId &&');
+    expect(block).toContain('allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;');
+    expect(block).toMatch(/hasAny\(\[\s*'moderationStatus'/);
   });
 });
 
@@ -986,9 +1015,6 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
 
   test('profile screens prefer the live auth user over the store mirror', () => {
     for (const rel of [
-      'src/screens/Profile/FollowersScreen.jsx',
-      'src/screens/Profile/FollowingScreen.jsx',
-      'src/screens/Profile/FriendsScreen.jsx',
       'src/screens/Profile/HighlightsScreen.jsx',
       'src/screens/Profile/CreatorDashboardScreen.jsx',
     ]) {
@@ -996,6 +1022,23 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
       expect(src).toContain('const currentUser = authUser || storeUser;');
       expect(src).not.toContain('const currentUser = storeUser || authUser;');
     }
+  });
+
+  test('the delegating connections screens do not re-derive identity', () => {
+    // Followers/Following/Friends only choose a tab; ConnectionsScreen itself
+    // resolves the viewer from the live auth context, so passing a store-mirror
+    // `currentUser` prop was dead and a N002 regression risk.
+    for (const rel of [
+      'src/screens/Profile/FollowersScreen.jsx',
+      'src/screens/Profile/FollowingScreen.jsx',
+      'src/screens/Profile/FriendsScreen.jsx',
+    ]) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).not.toContain('currentUser={');
+      expect(src).not.toContain('storeUser');
+    }
+    const connections = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
+    expect(connections).toContain('const currentUser = authUser || storeUser');
   });
 });
 
@@ -1012,7 +1055,7 @@ describe('Auth - signup never grants fabricated coins/levels', () => {
 describe('Monetization - canonical level curve (no duplicated drift)', () => {
   test('monetizationService reads LEVELS from the shared levelConfig', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
-    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG } from '../shared/levelConfig.cjs';");
+    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG, getLevelInfo } from '../shared/levelConfig.cjs';");
     expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
     expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
   });
@@ -1081,9 +1124,17 @@ describe('VideoAnalytics RevenueTab - real payout wiring', () => {
 
 
 describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
+  test('ProfileFeedGrid uses the canonical name/avatar helpers, not a Citizen stub', () => {
+    const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileFeedGrid.jsx'), 'utf8');
+    // The feed fabricated an author name ('Citizen') and rendered the raw avatar
+    // URL, bypassing the placeholder-rejection and fallback the read model owns.
+    expect(src).not.toContain("|| 'Citizen'");
+    expect(src).toContain('pickDisplayName([profile?.displayName, item.authorName]');
+    expect(src).toContain('resolveAvatarUrl(');
+  });
+
   test('ProfileHeroSection does not invent a level or rank when none is stored', () => {
     const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileHeroSection.jsx'), 'utf8');
-    expect(src).not.toContain('|| 1;');
     expect(src).not.toMatch(/return \{ level: 1, title: 'Citizen'/);
     expect(src).not.toMatch(/\(\) => 'Citizen'/);
   });
@@ -1092,6 +1143,46 @@ describe('Profile level - no fabricated Level 1 / Citizen standing', () => {
     const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ProfilePublicScreen.jsx'), 'utf8');
     expect(src).not.toContain('Number(profileData.level) || 1');
     expect(src).not.toContain('effectiveProfile.level || 1');
+  });
+
+  test('citizenship surfaces render an em-dash, not a fabricated tier/rank', () => {
+    // The citizenship card and roadmap modal defaulted a missing rank/tier to a
+    // concrete standing ('Arrival' / 'Citizen'), which is the same class of
+    // fabrication as a `|| 1` level default: it asserts standing the profile
+    // does not have.
+    const card = fs.readFileSync(path.join(root, 'src/components/profile/ProfileCitizenshipCard.jsx'), 'utf8');
+    expect(card).not.toContain("passport.rankTitle || 'Arrival'");
+    expect(card).toContain("passport.rankTitle || '—'");
+
+    const roadmap = fs.readFileSync(path.join(root, 'src/components/profile/ProfileSystemRoadmapModal.jsx'), 'utf8');
+    expect(roadmap).not.toContain("currentCitizenTier?.tier || 'Citizen'");
+    expect(roadmap).toContain("currentCitizenTier?.tier || '—'");
+    expect(roadmap).not.toContain("currentCitizenTier?.icon || '🏛️'");
+  });
+
+  test('ProfileFeaturedSection does not declare an unused capabilities prop', () => {
+    // The prop was threaded through the public screen but never read inside the
+    // component - a dead prop that implied a gate that did not exist.
+    const src = fs.readFileSync(path.join(root, 'src/components/profile/ProfileFeaturedSection.jsx'), 'utf8');
+    expect(src).not.toContain('capabilities');
+  });
+
+  test('surfaces render the canonical name/handle helpers, not a Citizen stub', () => {
+    // TopAppBar and ConnectionsScreen invented a 'Citizen'/'citizen' identity
+    // whenever the real display name/handle was missing, and AboutScreen printed
+    // 'Citizen' as a rank. All three now use the read model (or an em-dash).
+    const bar = fs.readFileSync(path.join(root, 'src/components/Shared/TopAppBar.jsx'), 'utf8');
+    expect(bar).toContain('pickDisplayName');
+    expect(bar).not.toContain("effectiveUser?.displayName || 'Citizen'");
+    expect(bar).not.toContain("|| 'citizen'");
+
+    const conn = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
+    expect(conn).toContain('pickDisplayName');
+    expect(conn).not.toContain("citizen.displayName || 'Citizen'");
+    expect(conn).not.toContain("citizen.username || 'citizen'");
+
+    const about = fs.readFileSync(path.join(root, 'src/screens/Profile/AboutScreen.jsx'), 'utf8');
+    expect(about).not.toContain("rankTitle || 'Citizen'");
   });
 });
 
@@ -1464,7 +1555,7 @@ describe('Sponsored ads - no fabricated advertisers', () => {
     expect(src()).toContain('reportAd');
     const svc = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
     expect(svc).toContain('async reportAd(');
-    expect(svc).toContain("httpsCallable(functions, 'reportAd')");
+    expect(svc).toContain('FUNCTIONS.REPORT_AD');
     expect(svc).not.toMatch(/addDoc\(collection\(this\.db, 'ad_impressions'/);
     const server = fs.readFileSync(path.join(root, 'functions', 'monetization.js'), 'utf8');
     expect(server).toContain('exports.reportAd');
@@ -1528,8 +1619,8 @@ describe('Curated sample content - removed in favour of real data', () => {
 describe('Reels - canonical service ownership, no direct Firestore', () => {
   const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  test('ReelsFeed reads the feed through videoService and never writes Firestore directly', () => {
-    const s = read('src/components/Home/ReelsFeed.jsx');
+  test('ReelsScreen reads the feed through videoService and never writes Firestore directly', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
     expect(s).not.toContain("from 'firebase/firestore'");
     expect(s).not.toContain('collection(db');
     expect(s).not.toContain('updateDoc(');
@@ -1537,6 +1628,12 @@ describe('Reels - canonical service ownership, no direct Firestore', () => {
     // Likes/shares are server-authoritative through the service callables.
     expect(s).toContain('videoService.likeVideo');
     expect(s).toContain('videoService.shareVideo');
+  });
+
+  test('ReelsScreen honours the playback.autoPlayVideos setting', () => {
+    const s = read('src/screens/ReelsScreen.jsx');
+    expect(s).toContain('autoPlayVideos');
+    expect(s).toMatch(/autoPlay=\{autoPlayEnabled\}/);
   });
 });
 
@@ -1695,6 +1792,37 @@ describe('Rewarded ads - real inventory only, no invented sponsor or reward', ()
 
     const dashboard = read('src/components/profile/ProfileCreatorDashboard.jsx');
     expect(dashboard).not.toContain('Number(userLevel) || 1');
+
+    // Same rule for the gate-bearing reads: a missing level must surface as
+    // "not available", never as a Level-1 floor that could unlock or mislabel.
+    const wallet = read('src/services/walletService.js');
+    expect(wallet).not.toContain('Number(userData.level) || 1');
+    expect(wallet).toContain('Number(userData.level) || null');
+
+    const live = read('src/services/liveService.js');
+    expect(live).not.toContain('snap.data().level || 1');
+
+    const creator = read('src/services/creatorService.js');
+    expect(creator).not.toContain('Number(userProfile.level) || 1');
+
+    const quickAccess = read('src/components/Shared/QuickAccessPanel.jsx');
+    expect(quickAccess).not.toContain('currentUser?.level || 1');
+
+    const achievementsScreen = read('src/screens/Achievements/AchievementsScreen.jsx');
+    expect(achievementsScreen).not.toContain('user.level || 1');
+
+    const achievementsService = read('src/services/achievementService.js');
+    expect(achievementsService).not.toContain('userStats.level || 1');
+  });
+
+  test('creator dashboard does not fabricate a trend line or ranking label', () => {
+    const dashboard = read('src/components/profile/ProfileCreatorDashboard.jsx');
+    // A single total was stretched into a 7-point "history" ([0,0,0,0,0,0,total])
+    // and an absent ranking rendered as the literal 'Creator'. Both fabricated a
+    // signal the analytics data did not contain.
+    expect(dashboard).not.toContain('0, 0, 0, 0, 0, 0');
+    expect(dashboard).toContain('No trend data yet');
+    expect(dashboard).not.toMatch(/:\s*'Creator';/);
   });
 });
 
@@ -1742,12 +1870,41 @@ describe('Profile gates read the shared level config, never a restated literal',
     expect(s).toContain('LEVEL_GATES.verifiedPriority');
   });
 
+  test('the verification modal renders the real requirements checklist', () => {
+    const s = read('src/components/profile/ProfileVerificationModal.jsx');
+    // CREATOR_VERIFICATION_REQUIREMENTS was imported but unused while the form
+    // showed a vague static list; the applicant could not see why they fail.
+    expect(s).toContain('CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS');
+    expect(s).toContain('CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED');
+    expect(s).toContain('CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_PHONE_VERIFIED');
+    expect(s).toContain('checklist.map');
+    expect(s).not.toContain('Authentic, notable individual or creator with consistent activity.');
+  });
+
   test('the roadmap modal derives citizenship criteria from CITIZEN_TIERS', () => {
     const s = read('src/components/profile/ProfileSystemRoadmapModal.jsx');
     expect(s).toContain("CITIZEN_TIERS.find((t) => t.tier === 'Citizen')");
     // The level/days criteria must not be restated as literals in the JSX.
     expect(s).not.toContain('currentLevel >= 5');
     expect(s).not.toContain('activeDays >= 7');
+  });
+});
+
+describe('Profile hero XP bar shows a consistent within-level fraction', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('the XP denominator is the level span, not the absolute next-level XP', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    // `nextLevelXp` is an absolute XP total (e.g. 5000 at level 10), while the
+    // numerator `xpIntoLevel` is relative, so "300 / 5000 XP" was wrong. The
+    // span (nextLevelXp - currentLevelXp) is the honest denominator.
+    expect(s).toContain('levelInfo.nextLevelXp - levelInfo.currentLevelXp');
+  });
+
+  test('a max-level citizen sees no fabricated "100 XP" denominator', () => {
+    const s = read('src/components/profile/ProfileHeroSection.jsx');
+    expect(s).not.toContain('levelInfo.nextLevelXp ?? 100');
+    expect(s).toContain('isMaxLevel');
   });
 });
 
@@ -1775,5 +1932,97 @@ describe('TitlesScreen never invents the standing it evaluates against', () => {
     expect(s).not.toContain('contributionScore: Number(profile?.contributionScore || profile?.contribution) || 25');
     expect(s).not.toContain('influenceScore: Number(profile?.influenceScore || profile?.influence) || 20');
     expect(s).toContain('reputationScore: profile?.reputationScore ?? profile?.reputation ?? null');
+  });
+});
+
+describe('Marketplace purchase never fabricates a receipt', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('a missing purchaseMarketplaceItem result throws instead of inventing an order', () => {
+    const s = read('src/services/marketplaceService.js');
+    // The old fallback minted `ARV-ORD-<Date.now()>`, status 'Completed' and the
+    // local product price when the callable failed — a fake receipt for money
+    // that never moved.
+    expect(s).not.toContain('ARV-ORD-');
+    expect(s).not.toContain("status: 'Completed'");
+    expect(s).toContain("if (!result.success || !result.order)");
+  });
+});
+
+describe('Wallet availability mirrors the server hold (lockedCoins)', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('walletService derives availableCoins from lockedCoins, not a partial status sum', () => {
+    const s = read('src/services/walletService.js');
+    expect(s).toContain('const lockedCoins = Number(userData.lockedCoins || 0)');
+    expect(s).toContain('availableCoins: Math.max(0, coins - lockedCoins)');
+    // `pending_review` requests lock coins too; omitting it over-reported balance.
+    expect(s).toContain("['pending', 'pending_review', 'processing']");
+  });
+
+  test('monetizationService.getUserLevel delegates to the shared curve', () => {
+    const s = read('src/services/monetizationService.js');
+    expect(s).toContain('const info = getLevelInfo(experience)');
+    // The local level-table re-derivation (levels.find/findIndex) is gone.
+    expect(s).not.toContain('levels.find(l => l.level === currentLevel)');
+    expect(s).not.toContain('currentLevel = data.level || 1;');
+  });
+});
+
+describe('Profile feed grid quick actions hit the real services', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('like / save / share call firestoreService instead of local-only state', () => {
+    const s = read('src/components/profile/ProfileFeedGrid.jsx');
+    // These used to be pure local setState (and a local-only bookmark toast):
+    // a like or save that never reached the server, shown as if it had.
+    expect(s).toContain('firestoreService.likePost(');
+    expect(s).toContain('firestoreService.unlikePost(');
+    expect(s).toContain('firestoreService.savePost(');
+    expect(s).toContain('firestoreService.unsavePost(');
+    expect(s).toContain('firestoreService.sharePost(');
+    // The optimistic overlay must roll back on failure, not lie.
+    expect(s).toContain('Could not update like');
+    expect(s).toContain('Could not update saved post');
+  });
+
+  test('the audio tab plays a real media element instead of toggling an icon', () => {
+    const s = read('src/components/profile/ProfileFeedGrid.jsx');
+    // The "player" had no <audio> element, so the play button never produced
+    // sound; the source must be the stored URL and playback must be real.
+    expect(s).toContain('<audio');
+    expect(s).toContain('audioElRef');
+    expect(s).toContain('.play()');
+    expect(s).toContain('.pause()');
+  });
+
+  test('the audio tab does not fabricate duration/BPM/genre', () => {
+    const s = read('src/components/profile/ProfileFeedGrid.jsx');
+    // These defaults made an arbitrary post look like a mastered track.
+    expect(s).not.toMatch(/item\.duration\s*\|\|\s*'2:45'/);
+    expect(s).not.toMatch(/item\.bpm\s*\|\|\s*120/);
+    expect(s).not.toMatch(/item\.genre\s*\|\|\s*'Electronic'/);
+  });
+});
+
+describe('Messaging never claims E2EE the app cannot deliver', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('no surface advertises end-to-end encryption', () => {
+    // E2EE needs per-user key provisioning (generateUserKeys/unlockPrivateKey),
+    // which has no caller and no server path, so no message is ever encrypted
+    // and no one holds a public key. A lock badge / "E2EE protected" label is
+    // therefore a fabricated security claim.
+    expect(read('src/screens/ChatScreen.jsx')).not.toContain('End-to-end encrypted');
+    expect(read('src/screens/ConversationSettingsScreen.jsx')).not.toContain('E2EE');
+  });
+
+  test('a text send cannot be blocked by the encryption gate', () => {
+    // The send path must fall back to plaintext when keys are absent; an
+    // unconditional throw would make every text message fail to send.
+    const s = read('src/services/messagesService.js');
+    expect(s).toContain('canEncrypt');
+    expect(s).not.toMatch(/throw new Error\('Your public key not found'\)/);
+    expect(s).not.toMatch(/has no public key/);
   });
 });

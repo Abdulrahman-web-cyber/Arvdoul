@@ -8,8 +8,6 @@ Arvdoul ships a real, runnable observability stack — not stubs.
 |---|---|---|
 | Metrics collector | `src/services/metricsService.js` | ✅ counters, gauges, histograms, percentiles, Prometheus text export, CRLF-injection-safe names |
 | RUM (Core Web Vitals) | `src/services/rumService.js` | ✅ LCP, CLS, INP, TTFB, long tasks, route timings, `attachToMetrics()` |
-| Distributed tracing | `src/services/tracingService.js` | ✅ span lifecycle, W3C traceparent headers, Jaeger HTTP export when `jaegerEndpoint` is configured |
-| Error budget / SLO | `src/services/observabilityService.js` | ✅ SLI math, burn-rate alerts, Firestore cost accounting |
 | Dev scrape endpoint | Vite plugin in `vite.config.js` | ✅ `GET /metrics` on the dev server |
 | Prometheus + alerts | `ops/prometheus/` | ✅ scrape config + SLO/error/cost alert rules |
 | Grafana dashboard | `ops/grafana/` | ✅ provisioned "Arvdoul Overview" dashboard |
@@ -63,5 +61,4 @@ production is the Cloud Functions layer. Recommended production wiring:
 
 `src/utils/Logger.js` emits structured JSON with `correlationId`; pass the
 same id through client → Cloud Function → Firestore writes to trace a
-request end-to-end. Tracing spans are exported to Jaeger when
-`tracingService.jaegerEndpoint` is set.
+request end-to-end. Server-side telemetry is Cloud Logging + Cloud Monitoring.

@@ -24,9 +24,18 @@ import { cn } from '../../lib/utils';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import { resolveCreatorFlag } from '../../services/profileReadModel.js';
 
-// Clean SVG Sparklines matching image curves
-const Sparkline = ({ color = '#8B1EF3', data = [0, 0, 0, 0, 0, 0, 0] }) => {
-  const safeData = Array.isArray(data) && data.length > 0 ? data : [0, 0, 0, 0, 0, 0, 0];
+// Clean SVG Sparklines matching image curves. `data === null` means the trend
+// is genuinely unknown (fewer than two daily points), so we render an explicit
+// placeholder instead of drawing a line through fabricated zeros.
+const Sparkline = ({ color = '#8B1EF3', data = null }) => {
+  const safeData = Array.isArray(data) && data.length >= 2 ? data : null;
+  if (!safeData) {
+    return (
+      <div className="w-full max-w-[120px] h-9 flex items-center text-[10px] font-medium text-slate-400 dark:text-slate-500">
+        No trend data yet
+      </div>
+    );
+  }
   const min = Math.min(...safeData);
   const max = Math.max(...safeData);
   const range = max - min || 1;
@@ -64,7 +73,6 @@ const ProfileCreatorDashboard = memo(({
   analytics,
   ranking,
   userLevel = null,
-  userXp = 0,
   isCreator = false,
   theme = 'light',
   timeframe = '7d',
@@ -142,12 +150,15 @@ const ProfileCreatorDashboard = memo(({
   const engagementTrend = analytics?.changes?.engagement ?? analytics?.engagementGrowth ?? 0;
   const coinsTrend = analytics?.changes?.coins ?? analytics?.coinsGrowth ?? 0;
 
-  // Extract real daily stats for sparklines if available
+  // Extract real daily stats for sparklines if available. With fewer than two
+  // points there is no trend to draw: we render an explicit "no trend data"
+  // placeholder rather than a fabricated flat-then-spike series.
   const dailyStats = Array.isArray(analytics?.dailyStats) ? analytics.dailyStats : [];
-  const viewsSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.views) || 0) : [0, 0, 0, 0, 0, 0, views > 0 ? views : 0];
-  const reachSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.reach) || 0) : [0, 0, 0, 0, 0, 0, reach > 0 ? reach : 0];
-  const engagementSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.engagement) || 0) : [0, 0, 0, 0, 0, 0, engagement > 0 ? engagement : 0];
-  const coinsSeries = dailyStats.length >= 2 ? dailyStats.map(d => Number(d.coins) || 0) : [0, 0, 0, 0, 0, 0, coins > 0 ? coins : 0];
+  const hasTrend = dailyStats.length >= 2;
+  const viewsSeries = hasTrend ? dailyStats.map(d => Number(d.views) || 0) : null;
+  const reachSeries = hasTrend ? dailyStats.map(d => Number(d.reach) || 0) : null;
+  const engagementSeries = hasTrend ? dailyStats.map(d => Number(d.engagement) || 0) : null;
+  const coinsSeries = hasTrend ? dailyStats.map(d => Number(d.coins) || 0) : null;
 
   const formatTrend = (trend) => {
     const num = Number(trend) || 0;
@@ -161,14 +172,15 @@ const ProfileCreatorDashboard = memo(({
   const eTrend = formatTrend(engagementTrend);
   const cTrend = formatTrend(coinsTrend);
 
-  // Real ranking calculation from ranking prop
+  // Real ranking calculation from ranking prop; absent ranking is reported as
+  // unavailable, never as a fabricated 'Creator' label.
   const rankLabel = ranking?.percentile
     ? `Top ${ranking.percentile}%`
     : ranking?.position || ranking?.rank
     ? `#${ranking.position || ranking.rank}`
     : ranking?.label
     ? ranking.label
-    : 'Creator';
+    : '—';
 
   return (
     <div className={cn(

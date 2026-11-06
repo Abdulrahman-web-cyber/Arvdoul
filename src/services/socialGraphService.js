@@ -463,10 +463,9 @@ class SocialGraphService {
   async getMutualConnections(viewerId, targetId, { limit = 20 } = {}) {
     if (!viewerId || !targetId || viewerId === targetId) return [];
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const fn = httpsCallable(getFunctions(), 'getMutualFriends');
-      const res = await fn({ userId: viewerId, otherUserId: targetId });
-      return res.data?.mutualFriends || [];
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const data = await callFunction(FUNCTIONS.GET_MUTUAL_FRIENDS, { userId: viewerId, otherUserId: targetId });
+      return data?.mutualFriends || [];
     } catch (err) {
       logger.debug('[SocialGraph] mutual fallback', { error: err?.message });
     }
@@ -483,10 +482,9 @@ class SocialGraphService {
   async getSuggestions(userId, { limit = 20 } = {}) {
     if (!userId) return [];
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const fn = httpsCallable(getFunctions(), 'generateFriendRecommendations');
-      const res = await fn({ userId, limit });
-      const recs = res.data?.recommendations || [];
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const data = await callFunction(FUNCTIONS.GENERATE_FRIEND_RECOMMENDATIONS, { userId, limit });
+      const recs = data?.recommendations || [];
       if (recs.length > 0) {
         const ids = recs.map((r) => r.userId || r.id || r.uid).filter(Boolean);
         return ids.length ? await this.hydrateProfiles(ids, { viewerId: userId }) : recs;

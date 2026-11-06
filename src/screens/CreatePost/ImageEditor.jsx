@@ -2345,14 +2345,9 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
               </button>
               <div className="ie-tool-host">
                 <AdjustTool
-                  brightness={adj.brightness}
-                  setBrightness={setAdj('brightness')}
-                  contrast={adj.contrast}
-                  setContrast={setAdj('contrast')}
-                  saturation={adj.saturation}
-                  setSaturation={setAdj('saturation')}
+                  adjustments={adj}
+                  setAdjustment={(key, value) => setAdj(key)(value)}
                   resetAdjustments={() => dispatchDoc({ type: 'RESET_ADJUSTMENTS' })}
-                  pushUndo={() => {}}
                 />
               </div>
               <div className="ie-divider" />
@@ -2404,7 +2399,6 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                   setFilter={(v) => dispatchDoc({ type: 'SET_FILTER', payload: { filter: v } })}
                   filterIntensity={doc.filterIntensity}
                   setFilterIntensity={(v) => dispatchDoc({ type: 'SET_FILTER_INTENSITY', payload: { intensity: v } })}
-                  pushUndo={() => {}}
                 />
               </div>
             </div>
@@ -2451,7 +2445,6 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                   handleDeleteText={() => { if (selectedText) delObj(selectedText.id); }}
                   handleQuickAddText={() => { const c = viewCenterWorld(); addTextAt(c.x, c.y); }}
                   imageElement={doc.originalImage}
-                  pushUndo={() => {}}
                 />
               </div>
             </div>
@@ -2771,9 +2764,6 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
                   setAspect={(aspect) => dispatchDoc({ type: 'SET_CROP_ASPECT', payload: { aspect } })}
                   zoom={doc.crop.zoom}
                   onZoomChange={(z) => dispatchDoc({ type: 'SET_CROP_ZOOM', payload: { zoom: z } })}
-                  onCropChangeWithUndo={() => {}}
-                  onCropComplete={handleCropComplete}
-                  pushUndo={() => {}}
                   setCrop={(pos) => dispatchDoc({ type: 'SET_CROP', payload: { position: pos } })}
                   setZoom={(z) => dispatchDoc({ type: 'SET_CROP_ZOOM', payload: { zoom: z } })}
                   setCroppedAreaPixels={(p) => dispatchDoc({ type: 'SET_CROP_AREA_PIXELS', payload: { areaPixels: p } })}

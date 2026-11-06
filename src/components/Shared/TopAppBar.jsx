@@ -33,6 +33,7 @@ import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
+import { pickHandle, deriveHandle, pickDisplayName } from "../../services/profileReadModel.js";
 import { backgroundSyncService } from "../../services/BackgroundSyncService.js";
 import { ArvdoulEmblem, ArvdoulWordmark } from "./ArvdoulLogo";
 
@@ -351,10 +352,13 @@ export const TopAppBar = ({
   const profileStoreProfile = useProfileStore((state) => state.profile);
   const effectiveUser = profileStoreProfile || appStoreUser || authUser;
   const rawUsername = effectiveUser?.username || '';
-  const cleanUsername = rawUsername && !rawUsername.startsWith('user_')
-    ? rawUsername
-    : (effectiveUser?.displayName?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'citizen');
-  const userDisplayName = effectiveUser?.displayName || 'Citizen';
+  const cleanUsername = pickHandle([rawUsername])
+    || deriveHandle(effectiveUser?.displayName)
+    || null;
+  const userDisplayName = pickDisplayName(
+    [effectiveUser?.displayName, effectiveUser?.name],
+    { fallback: 'Member' }
+  );
   const userAvatarUrl = getSafeAvatarUrl(effectiveUser?.photoURL, userDisplayName, effectiveUser?.uid || '');
 
   // Determine mode
@@ -679,9 +683,11 @@ export const TopAppBar = ({
                         <h2 className="text-base sm:text-lg font-black truncate leading-tight tracking-tight">
                           Profile
                         </h2>
-                        <span className="font-mono text-xs font-semibold text-purple-600 dark:text-purple-300 truncate">
-                          @{cleanUsername}
-                        </span>
+                        {cleanUsername && (
+                          <span className="font-mono text-xs font-semibold text-purple-600 dark:text-purple-300 truncate">
+                            @{cleanUsername}
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-none">
                         Citizen Dashboard
@@ -902,7 +908,7 @@ export const TopAppBar = ({
                 )}
                 onClick={() => {
                   if (!isOnline) {
-                    navigate('/offline-status');
+                    navigate('/offline');
                   }
                 }}
               >

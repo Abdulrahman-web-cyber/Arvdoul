@@ -9,7 +9,7 @@ import { AuthProvider } from '../context/AuthContext.jsx';
 import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
-import OfflineIndicator from '../components/ui/OfflineIndicator.jsx';
+import OfflineIndicator from '../components/UI/OfflineIndicator.jsx';
 import PageLoader from '../components/UI/PageLoader.jsx';
 import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
 import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
@@ -90,111 +90,21 @@ const SystemInitializer = ({ onReady }) => {
         };
         rumInit();
 
-        // Wire the global offline-queue drain: every queued operation
-        // (comments, live joins/leaves, gift/upload retries, welcome
-        // notifications, search analytics) is retried when connectivity
-        // returns, with per-type handlers dispatching to the services.
+        // Wire the global offline-queue drain. The op-type → service map lives
+        // in the canonical sync engine (`src/offline/syncEngine.js`); this call
+        // only starts the startup drain — the engine already drains on
+        // reconnect. A previous inline switch here was a SECOND, divergent copy:
+        // it called methods that do not exist (messagesService.getMessagesService,
+        // feedService.addReaction, videoService.createReel) and competed with the
+        // engine's own drain, so queued ops failed and retried forever.
         const wireOfflineDrain = async () => {
           try {
-            const { offlineQueue } = await import('../utils/OfflineQueue.js');
-            const drain = async (op) => {
-              try {
-                switch (op.type) {
-                  case 'comment.create':
-                    await import('../services/commentService.js').then(m =>
-                      m.getCommentService().createComment(op.payload.postId, op.payload.userId, op.payload.content, op.payload.options || {}));
-                    break;
-                  case 'live.join':
-                    await import('../services/liveService.js').then(m =>
-                      m.getLiveService().joinLiveStream(op.payload.streamId, op.payload.viewerId));
-                    break;
-                  case 'live.leave':
-                    await import('../services/liveService.js').then(m =>
-                      m.getLiveService().leaveLiveStream(op.payload.streamId, op.payload.viewerId));
-                    break;
-                  case 'live_gift':
-                  case 'live.gift':
-                  case 'sendLiveGift':
-                    await import('../services/liveService.js').then(m =>
-                      m.getLiveService().sendLiveGift(
-                        op.payload.streamId,
-                        op.payload.senderId,
-                        op.payload.recipientId,
-                        op.payload.giftType
-                      ));
-                    break;
-                  case 'post.create':
-                    await import('../services/firestoreService.js').then(m =>
-                      m.getFirestoreService().createPost(op.payload));
-                    break;
-                  case 'reel.create':
-                    await import('../services/videoService.js').then(m =>
-                      m.getVideoService().createReel(op.payload));
-                    break;
-                  case 'reaction.create':
-                    await import('../services/feedService.js').then(m =>
-                      m.getFeedService().addReaction(op.payload.postId, op.payload.userId, op.payload.emoji));
-                    break;
-                  case 'message.send':
-                    await import('../services/messagesService.js').then(m =>
-                      m.getMessagesService().sendMessage(op.payload.conversationId, op.payload.content, op.payload.senderId));
-                    break;
-                  case 'notification.welcome':
-                    await import('../services/notificationsService.js').then(m =>
-                      m.getNotificationsService().sendNotification({
-                        type: 'welcome',
-                        recipientId: op.payload.userId,
-                        title: 'Welcome to Arvdoul!',
-                        message: `Hi ${op.payload.userName || 'there'}! Start exploring, connect with friends, and enjoy the experience.`,
-                        priority: 'normal',
-                        channel: 'in_app',
-                      }));
-                    break;
-                  case 'markAsRead':
-                    await import('../services/notificationsService.js').then(m =>
-                      m.getNotificationsService().markNotificationAsRead(op.payload.notificationId, op.payload.userId));
-                    break;
-                  case 'user.follow':
-                    await import('../services/userService.js').then(m =>
-                      m.getUserService().followUser(op.payload.followerId, op.payload.followingId));
-                    break;
-                  case 'user.unfollow':
-                    await import('../services/userService.js').then(m =>
-                      m.getUserService().unfollowUser(op.payload.followerId, op.payload.followingId));
-                    break;
-                  case 'search.analytics':
-                    // Analytics events are best-effort; dropping after retry is acceptable.
-                    return true;
-                  case 'purchaseCoins':
-                    await import('../services/monetizationService.js').then((m) =>
-                      m.getMonetizationService().purchaseCoins(op.payload.packageId, op.payload.paymentMethodId, op.payload.deviceMetadata || {}));
-                    break;
-                  case 'watchAd':
-                    await import('../services/monetizationService.js').then((m) =>
-                      m.getMonetizationService().watchAd(op.payload.placement, op.payload.adId, op.payload.watchDurationSeconds, op.payload.deviceMetadata || {}));
-                    break;
-                  case 'gift':
-                  case 'sendGift':
-                    await import('../services/monetizationService.js').then((m) =>
-                      m.getMonetizationService().sendGift(
-                        op.payload.senderId,
-                        op.payload.recipientId,
-                        op.payload.giftType,
-                        op.payload.context || {}
-                      )
-                    );
-                    break;
-                  default:
-                    return true; // unknown ops are dropped (not retried forever)
-                }
-                return true;
-              } catch (err) {
-                return false; // will retry with backoff
-              }
-            };
-            // Drain on startup (after Firebase is ready) and whenever we come online.
-            offlineQueue.process(drain).catch(() => {});
-            offlineQueue.onOnline(drain);
+            const { syncQueue } = await import('../offline/syncEngine.js');
+            const uid =
+              typeof window !== 'undefined'
+                ? window._arvdoul_auth?.currentUser?.uid || null
+                : null;
+            if (uid) syncQueue({ ownerUid: uid }).catch(() => {});
           } catch (err) {
             console.warn('Offline drain wiring skipped:', err.message);
           }

@@ -21,18 +21,13 @@ import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBa
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import {
-  pickHandle,
   deriveHandle,
-  pickDisplayName,
-  resolveAvatarUrl,
-  resolveCount,
-  resolveLevelValue,
-  resolveCreatorFlag,
-  resolveVerifiedFlag,
   isPlaceholderHandle,
+  deriveProfileIdentity,
   projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { PROFILE_TABS } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 
 // Modular Profile Components
@@ -64,7 +59,6 @@ export default function ProfileMyScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
-  const [showScannerModal, setShowScannerModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [showQuickEditModal, setShowQuickEditModal] = useState(false);
@@ -116,7 +110,6 @@ export default function ProfileMyScreen() {
   const highlights = useProfileStore((state) => state.highlights);
   const level = useProfileStore((state) => state.level);
   const balance = useProfileStore((state) => state.balance);
-  const position = useProfileStore((state) => state.position);
 
   // Analytics store - reactive state selectors
   const analytics = useAnalyticsStore((state) => state.analytics);
@@ -150,67 +143,37 @@ export default function ProfileMyScreen() {
     return () => { cancelled = true; };
   }, [currentUserId, profile?.username, currentUser?.displayName, profile?.displayName]);
 
-  // Clean unique username by userService (never displaying signing method name)
-  const cleanUsername = useMemo(() => {
-    const candidate = pickHandle([profile?.username, currentUser?.username]);
-    if (candidate) return candidate;
-    const fromDisplay = deriveHandle(currentUser?.displayName || profile?.displayName);
-    if (fromDisplay && !isPlaceholderHandle(fromDisplay)) return fromDisplay;
-    const fromEmail = deriveHandle(currentUser?.email || profile?.email);
-    if (fromEmail && !isPlaceholderHandle(fromEmail)) return fromEmail;
-    return 'citizen';
-  }, [profile?.username, currentUser?.username, currentUser?.email, profile?.email, currentUser?.displayName, profile?.displayName]);
-
-  // Server-authoritative composite profile
+  // Server-authoritative composite profile. The identity/count derivation is
+  // the shared `deriveProfileIdentity` (profileReadModel) so the owner screen
+  // cannot drift from the public/preview screens; the owner-only extras
+  // (viewer fallbacks for bio/location/website, coins) are applied here.
   const effectiveProfile = useMemo(() => {
-    const safeDisplayName = pickDisplayName(
-      [currentUser?.displayName, currentUser?.name, profile?.displayName, profile?.name],
-      { fallback: deriveHandle(currentUser?.email) || 'Citizen' }
-    );
-    const safeBio = (typeof profile?.bio === 'string' ? profile.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
-    const safeLocation = typeof profile?.location === 'string' ? profile.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
-    const safeWebsite = typeof profile?.website === 'string' ? profile.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
-    const safeLevel = resolveLevelValue(level, profile?.level, currentUser?.level);
-
-    if (profile && typeof profile === 'object') {
-      return {
-        ...profile,
-        id: profile.id || profile.uid || currentUserId || 'creator',
-        uid: profile.uid || profile.id || currentUserId || 'creator',
-        username: cleanUsername,
-        displayName: safeDisplayName,
-        bio: safeBio,
-        location: safeLocation,
-        website: safeWebsite,
-        level: safeLevel,
-        photoURL: resolveAvatarUrl(profile.photoURL || currentUser?.photoURL, safeDisplayName, currentUserId),
-        followerCount: resolveCount(profile.followerCount, profile.followersCount, currentUser?.followerCount),
-        followingCount: resolveCount(profile.followingCount, currentUser?.followingCount),
-        postCount: resolveCount(profile.postCount, posts?.length),
-        coins: resolveCount(profile.coins, profile.coinBalance, balance, currentUser?.coins),
-        isVerified: resolveVerifiedFlag(profile) || Boolean(currentUser?.isVerified),
-        isCreator: resolveCreatorFlag(profile, currentUser, safeLevel),
-      };
-    }
-
+    const base = profile && typeof profile === 'object' ? profile : {};
+    const identity = deriveProfileIdentity(base, {
+      viewer: currentUser || {},
+      handleCandidates: [base.username, currentUser?.username],
+      handleFallbacks: [currentUser?.displayName, base.displayName, currentUser?.email, base.email],
+      handleFallback: 'citizen',
+      displayCandidates: [currentUser?.displayName, currentUser?.name, base.displayName, base.name],
+      displayFallback: deriveHandle(currentUser?.email) || 'Citizen',
+      followerCandidates: [base.followerCount, base.followersCount, currentUser?.followerCount],
+      followingCandidates: [base.followingCount, currentUser?.followingCount],
+      postCandidates: [base.postCount, posts?.length],
+      levelCandidates: [level, base.level, currentUser?.level],
+      coinCandidates: [base.coins, base.coinBalance, balance, currentUser?.coins],
+      userId: currentUserId,
+    });
+    const safeBio = (typeof base.bio === 'string' ? base.bio : (typeof currentUser?.bio === 'string' ? currentUser.bio : '')).trim();
+    const safeLocation = typeof base.location === 'string' ? base.location : (typeof currentUser?.location === 'string' ? currentUser.location : '');
+    const safeWebsite = typeof base.website === 'string' ? base.website : (typeof currentUser?.website === 'string' ? currentUser.website : '');
     return {
-      id: currentUserId || 'creator',
-      uid: currentUserId || 'creator',
-      username: cleanUsername,
-      displayName: safeDisplayName,
+      ...base,
+      ...identity,
       bio: safeBio,
-      photoURL: resolveAvatarUrl(currentUser?.photoURL, safeDisplayName, currentUserId),
-      followerCount: resolveCount(currentUser?.followerCount, currentUser?.followersCount),
-      followingCount: resolveCount(currentUser?.followingCount),
-      postCount: resolveCount(posts?.length),
-      coins: resolveCount(currentUser?.coins, balance),
-      isVerified: resolveVerifiedFlag(currentUser),
-      isCreator: resolveCreatorFlag({}, currentUser, safeLevel),
-      level: safeLevel,
       location: safeLocation,
       website: safeWebsite,
     };
-  }, [profile, cleanUsername, currentUser, currentUserId, posts?.length, balance, level]);
+  }, [profile, currentUser, currentUserId, posts?.length, balance, level]);
 
   // Centrally resolved Action Capabilities adhering strictly to active viewAs perspective
   const capabilities = useMemo(() => {
@@ -234,6 +197,19 @@ export default function ProfileMyScreen() {
     if (viewAs === 'owner') return effectiveProfile;
     return projectProfileForViewer(effectiveProfile, capabilities);
   }, [effectiveProfile, capabilities, viewAs]);
+
+  // Open on the owner's chosen default tab (the Edit Profile "Default Starting
+  // Tab"). Applied once per mount so it cannot override the owner's own tab
+  // clicks on a later store update.
+  const appliedDefaultTabRef = useRef(false);
+  useEffect(() => {
+    if (appliedDefaultTabRef.current) return;
+    const preferred = displayedProfile?.defaultTab;
+    if (preferred && PROFILE_TABS.includes(preferred)) {
+      setActiveTab(preferred);
+      appliedDefaultTabRef.current = true;
+    }
+  }, [displayedProfile?.defaultTab]);
 
   // Load user data on mount
   useEffect(() => {
@@ -264,6 +240,7 @@ export default function ProfileMyScreen() {
   }, [currentUserId, savedPosts]);
 
   // Pull to refresh
+  const pullStartYRef = useRef(null);
   const handleRefresh = useCallback(async () => {
     if (!currentUserId) return;
     setIsRefreshing(true);
@@ -283,10 +260,31 @@ export default function ProfileMyScreen() {
     }
   }, [currentUserId, timeframe]);
 
+  // Pull-to-refresh: a downward drag from the top of the page triggers
+  // handleRefresh(). Without this the refresh handler (and its pill) was
+  // unreachable — the state could never be set.
+  const PULL_THRESHOLD = 70;
+  const handleTouchStart = useCallback((e) => {
+    const el = scrollRef.current;
+    if (!el || el.scrollTop > 0 || isRefreshing) return;
+    pullStartYRef.current = e.touches?.[0]?.clientY ?? null;
+  }, [isRefreshing]);
+  const handleTouchMove = useCallback((e) => {
+    if (pullStartYRef.current == null) return;
+    const currentY = e.touches?.[0]?.clientY ?? 0;
+    if (currentY - pullStartYRef.current > PULL_THRESHOLD) {
+      pullStartYRef.current = null;
+      handleRefresh();
+    }
+  }, [handleRefresh]);
+  const handleTouchEnd = useCallback(() => {
+    pullStartYRef.current = null;
+  }, []);
+
   // Handle Share
   const handleShare = useCallback(async () => {
     try {
-      const target = effectiveProfile || { id: currentUserId, uid: currentUserId, username: cleanUsername };
+      const target = effectiveProfile || { id: currentUserId, uid: currentUserId };
       const result = await shareProfile(target);
       if (result.copied) {
         toast.success('Profile link copied to clipboard!');
@@ -294,7 +292,7 @@ export default function ProfileMyScreen() {
     } catch (err) {
       toast.error('Could not share profile');
     }
-  }, [effectiveProfile, currentUserId, cleanUsername]);
+  }, [effectiveProfile, currentUserId]);
 
   // Cross-component event listeners for TopAppBar & Header actions
   useEffect(() => {
@@ -336,6 +334,9 @@ export default function ProfileMyScreen() {
     <ErrorBoundary>
       <div
         ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className={cn(
           "min-h-screen pb-24 transition-colors duration-200",
           isDark
@@ -355,17 +356,12 @@ export default function ProfileMyScreen() {
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
           {/* 1. Master Identity Card with Level Badge, Passport & 6 Action Buttons */}
           <ProfileHeroSection
-            variant="identity"
             profile={displayedProfile}
             isOwner={viewAs === 'owner'}
-            viewAs={viewAs}
             level={displayedProfile?.level}
-            position={position}
             theme={theme}
             onOpenQrCode={() => setShowQrModal(true)}
-            onOpenQrScanner={() => setShowScannerModal(true)}
             onOpenLocationSetup={() => setShowLocationModal(true)}
-            onOpenPerspective={() => setShowPerspectiveModal(true)}
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowAvatarModal(true)}
             onShare={handleShare}
@@ -377,7 +373,6 @@ export default function ProfileMyScreen() {
             onOpenVerificationModal={() => setShowVerificationModal(true)}
             onInsightsPress={() => navigate('/profile/analytics')}
             capabilities={capabilities}
-            analytics={analytics}
           />
 
           {/* 2. 6-Card Metrics Grid */}
@@ -441,7 +436,6 @@ export default function ProfileMyScreen() {
                   analytics={analytics}
                   ranking={ranking}
                   userLevel={effectiveProfile?.level ?? null}
-                  userXp={effectiveProfile?.experience}
                   isCreator={effectiveProfile?.isCreator}
                   theme={theme}
                   timeframe={timeframe}
@@ -528,14 +522,9 @@ export default function ProfileMyScreen() {
           theme={theme}
         />
 
-        {/* QR Scanner Modal */}
-        {showScannerModal && (
-          <ProfileQRScannerModal
-            isOpen={showScannerModal}
-            onClose={() => setShowScannerModal(false)}
-            theme={theme}
-          />
-        )}
+        {/* QR Scanner is reachable from within ProfileQRCodeModal (scan a
+            friend's code). The screen-level scanner state was never settable
+            once the hero dropped its onOpenQrScanner prop, so it is removed. */}
 
         {/* Location Setup Modal */}
         {showLocationModal && (

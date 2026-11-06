@@ -22,12 +22,14 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';
-import { GIFT_CATALOG, GIFT_VALUES } from '../shared/levelConfig.cjs';
+import { GIFT_CATALOG, GIFT_VALUES, LEVEL_GATES } from '../shared/levelConfig.cjs';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase.js';
 import { secureRandom } from '../lib/utils.js';
 
 const LIVE_CONFIG = {
-  MIN_LEVEL_TO_START: 5,
+  // Read the gate from the shared config so live streaming can never require a
+  // different level than `getCreatorCapabilities().canStreamLive` reports.
+  MIN_LEVEL_TO_START: LEVEL_GATES.liveStreaming,
   VIEWER_LIMITS: {
     5: 50,
     10: 100,
@@ -141,12 +143,15 @@ class UltimateLiveService {
       const { doc, getDoc } = await import('firebase/firestore');
       const userRef = doc(this.firestore, 'users', userId);
       const snap = await getDoc(userRef);
-      
-      const level = snap.exists() ? (snap.data().level || 1) : 1;
+
+      // An unknown level is returned as null (never a fabricated Level 1); the
+      // live gate below then denies, which is the safe direction.
+      const raw = snap.exists() ? snap.data().level : null;
+      const level = Number.isFinite(Number(raw)) && Number(raw) > 0 ? Number(raw) : null;
       this._userLevelCache.set(userId, level);
       return level;
     } catch {
-      return 1;
+      return null;
     }
   }
 
@@ -625,6 +630,7 @@ class UltimateLiveService {
         return { success: true, offlineQueued: true };
       }
       
+      let watchedMinutes = 0;
       const viewerRef = doc(this.firestore, 'live_viewers', `${streamId}_${viewerId}`);
       const streamRef = doc(this.firestore, 'live_streams', streamId);
       
@@ -636,6 +642,7 @@ class UltimateLiveService {
           const viewerData = viewerSnap.data();
           const joinedAt = viewerData.joinedAt?.toDate?.() || new Date();
           const watchDuration = Math.floor((Date.now() - joinedAt.getTime()) / 60000);
+          watchedMinutes = watchDuration;
           
           transaction.update(viewerRef, {
             leftAt: serverTimestamp(),
@@ -649,6 +656,21 @@ class UltimateLiveService {
         }
       });
       countersManager.invalidate({ docPath: `live_streams/${streamId}`, field: 'viewerCount' });
+
+      // Watching a live stream grants live_minute XP, one unit per real minute
+      // watched (best-effort; the viewer has already left). The action's daily
+      // cap bounds a long stream; `source` makes the award idempotent per
+      // viewer+stream.
+      if (watchedMinutes > 0) {
+        try {
+          const { levelSystemService } = await import('./levelSystemService.js');
+          levelSystemService
+            .awardExperience({ userId: viewerId, action: 'live_minute', count: Math.min(watchedMinutes, 100), source: `${streamId}_${viewerId}` })
+            .catch(() => {});
+        } catch (e) {
+          // XP award is best-effort
+        }
+      }
     } catch (error) {
       logger.debug('Leave live stream failed', { error: error.message, streamId, viewerId });
     }

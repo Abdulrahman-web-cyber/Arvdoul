@@ -14,6 +14,7 @@ import videoService from '../services/videoService';
 import VideoCreatorInfo from '../components/Videos/VideoCreatorInfo';
 import VideoActionRail from '../components/Videos/VideoActionRail';
 import VideoComments from '../components/Videos/VideoComments';
+import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import { cn } from '../lib/utils';
 import { ArrowLeft, Volume2, VolumeX, Loader2, Play, Pause } from 'lucide-react';
 
@@ -34,6 +35,8 @@ export default function VideoDetailScreen() {
   const [showComments, setShowComments] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [saved, setSaved] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const viewedRef = useRef(false);
 
   useEffect(() => {
@@ -79,6 +82,16 @@ export default function VideoDetailScreen() {
           viewedRef.current = true;
           videoService.recordVideoView(data.id, { duration: 3 }).catch(() => {});
         }
+
+        // Resolve this viewer's like/save state (the public doc only carries
+        // aggregate counters, so the rail otherwise always shows unliked).
+        if (user?.uid && data.id) {
+          try {
+            const state = await videoService.getViewerVideoState(data.id, user.uid);
+            setLiked(state.liked);
+            setSaved(state.saved);
+          } catch (e) { /* viewer state optional */ }
+        }
       } catch (err) {
         setError(err?.message || 'Could not load this video.');
       } finally {
@@ -106,7 +119,26 @@ export default function VideoDetailScreen() {
       if (navigator.share) await navigator.share({ title: video.title || 'Video', url });
       else { await navigator.clipboard.writeText(url); toast.success('Link copied!'); }
     } catch (err) { /* canceled */ }
+    // Server-owned share counter (best-effort, never a local guess).
+    videoService.shareVideo(video.id).catch(() => {});
   };
+
+  const handleSave = async () => {
+    if (!user?.uid) { toast.info('Sign in to save videos.'); return; }
+    if (!video?.id) return;
+    const wasSaved = saved;
+    setSaved(!wasSaved);
+    try {
+      if (wasSaved) await videoService.unsaveVideo(video.id, user.uid);
+      else await videoService.saveVideo(video.id, user.uid);
+      toast.success(wasSaved ? 'Removed from saved' : 'Saved to your collection');
+    } catch (err) {
+      setSaved(wasSaved);
+      toast.error(err?.message || 'Could not sync save');
+    }
+  };
+
+  const handleMore = () => setShowMoreMenu(true);
 
   const togglePlay = () => {
     const el = videoRef.current;
@@ -212,11 +244,16 @@ export default function VideoDetailScreen() {
             {/* Engagement rail */}
             <div className={cn('rounded-2xl p-4 border flex items-center justify-around', colors.card)}>
               <VideoActionRail
-                video={video}
+                likes={likeCount}
+                comments={video.stats?.comments || 0}
+                shares={video.stats?.shares || 0}
+                isLiked={liked}
+                isSaved={saved}
                 onLike={handleLike}
                 onComment={() => setShowComments(true)}
                 onShare={handleShare}
-                theme={theme}
+                onSave={handleSave}
+                onMore={handleMore}
               />
             </div>
 
@@ -226,6 +263,14 @@ export default function VideoDetailScreen() {
               onClose={() => setShowComments(false)}
               video={video}
               theme={theme}
+            />
+
+            {/* Report / share sheet opened from the rail's "more" action */}
+            <VideoBottomSheet
+              isOpen={showMoreMenu}
+              onClose={() => setShowMoreMenu(false)}
+              video={video}
+              initialView="report"
             />
           </div>
         )}

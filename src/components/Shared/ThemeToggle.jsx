@@ -1,4 +1,3 @@
-import PropTypes from 'prop-types';
 import { useState, useEffect } from "react";
 import { Moon, Sun, Monitor } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -6,7 +5,7 @@ import { useTheme } from "@context/ThemeContext";
 import { cn } from "../../lib/utils";
 
 export default function ThemeToggle({ variant = "default" }) {
-  const { theme, toggleTheme, systemTheme } = useTheme(); // <-- fixed systemTheme name
+  const { theme, toggleTheme, systemTheme } = useTheme();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -26,13 +25,6 @@ export default function ThemeToggle({ variant = "default" }) {
 
   // Determine actual applied theme (resolves 'system' to systemTheme)
   const currentTheme = theme === "system" ? systemTheme : theme;
-
-  // Optional: function to get next theme (not currently used)
-  const getNextTheme = (current) => {
-    const cycle = ["light", "dark", "system"];
-    const currentIndex = cycle.indexOf(current);
-    return cycle[(currentIndex + 1) % cycle.length];
-  };
 
   // Show icon based on actual applied theme
   const icon = {

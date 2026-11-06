@@ -51,6 +51,18 @@ describe('Cloud Functions deploy contract', () => {
     [...clientSources.matchAll(/(?:getFunctions|functions)\([^)]*\)\s*,\s*'([a-zA-Z_]+)'/g)].map((m) => m[1])
   );
   for (const name of calledViaName) called.add(name);
+
+  // Services now route through callableService via `FUNCTIONS.<CONSTANT>`
+  // (the single name registry). Resolve those constants back to callable
+  // names so the contract still sees every call the client makes.
+  const callableServiceSrc = read(path.join(srcDir, 'services', 'callableService.js'));
+  const constantToName = {};
+  for (const m of callableServiceSrc.matchAll(/^\s*([A-Z_]+):\s*'([a-zA-Z_]+)'/gm)) {
+    constantToName[m[1]] = m[2];
+  }
+  for (const m of clientSources.matchAll(/FUNCTIONS\.([A-Z_]+)/g)) {
+    if (constantToName[m[1]]) called.add(constantToName[m[1]]);
+  }
   // deleteUserData is invoked via httpsCallable(functions, 'deleteUserData') in userService
   const userService = read(path.join(srcDir, 'services', 'userService.js'));
   const extra = [...userService.matchAll(/httpsCallable\([^)]*,\s*'([a-zA-Z_]+)'\)/g)].map((m) => m[1]);
@@ -84,7 +96,9 @@ describe('Cloud Functions deploy contract', () => {
     // rateLimit.js and withdrawalSettlement.js are shared utility modules (no
     // exports.* functions) — required by the modules that use them, never
     // deployed standalone.
-    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js']);
+    // xpAward.js is the shared XP-award routine required by levelSystem.js,
+    // monetization.js and polls.js (no exports.* of its own).
+    const shared = new Set(['rateLimit.js', 'withdrawalSettlement.js', 'xpAward.js']);
     const missing = modules.filter((m) => !required.has(m) && m !== 'index.js' && m !== 'userDelete.js' && !shared.has(m));
     expect(missing).toEqual([]);
     // rateLimit.js must be required by at least the money-path modules.
@@ -202,13 +216,20 @@ describe('Monetization server invariants (ledger + idempotency)', () => {
     const levelSystem = fs.readFileSync(
       path.join(root, 'functions', 'levelSystem.js'), 'utf8'
     );
+    // The award transaction lives in xpAward.js (the single server XP routine
+    // that awardExperience delegates to); levelSystem.js must still route
+    // through it rather than mutating XP inline.
+    const xpAward = fs.readFileSync(
+      path.join(root, 'functions', 'xpAward.js'), 'utf8'
+    );
+    expect(levelSystem).toContain("require('./xpAward')");
     // Rewards used to go to a coin_ledger collection nothing reads and skipped
     // the supply counter, so the wallet never showed them and the ledger and
     // supply totals disagreed.
-    expect(levelSystem).toContain("db.collection('coin_transactions').doc()");
-    expect(levelSystem).toContain("reason: 'level_up_reward'");
-    expect(levelSystem).toContain("doc('coin_supply')");
-    expect(levelSystem).not.toContain('coin_ledger/${uid}_levelup');
+    expect(xpAward).toContain("db.collection('coin_transactions').doc()");
+    expect(xpAward).toContain("reason: 'level_up_reward'");
+    expect(xpAward).toContain("doc('coin_supply')");
+    expect(xpAward).not.toContain('coin_ledger/${uid}_levelup');
   });
 
   test('the level ledgers are server-write-only in the rules', () => {

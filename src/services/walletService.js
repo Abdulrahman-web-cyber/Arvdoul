@@ -24,14 +24,22 @@ class WalletService {
       const totalEarned = Number(userData.totalEarned || userData.lifetimeCoinsEarned || 0);
       const totalSpent = Number(userData.totalSpent || 0);
 
-      // Fetch pending withdrawals to compute held balance
+      // `lockedCoins` is the server's authoritative hold (functions/monetization.js
+      // requestWithdrawal increments it in the same transaction that writes the
+      // request). Availability MUST be derived from it, not by summing request
+      // rows: the previous query only counted ['pending','processing'] and so
+      // ignored `pending_review`, letting the wallet advertise more spendable
+      // coins than the server would actually allow. The query is now display-only.
+      const lockedCoins = Number(userData.lockedCoins || 0);
+
+      // Fetch pending withdrawals for the itemised breakdown only.
       let pendingWithdrawals = 0;
       try {
         const wCol = collection(db, 'withdrawal_requests');
         const wQ = query(
           wCol,
           where('userId', '==', userId),
-          where('status', 'in', ['pending', 'processing']),
+          where('status', 'in', ['pending', 'pending_review', 'processing']),
           limit(100)
         );
         const wSnap = await getDocs(wQ);
@@ -45,12 +53,22 @@ class WalletService {
       return {
         userId,
         coins,
-        availableCoins: Math.max(0, coins - pendingWithdrawals),
+        availableCoins: Math.max(0, coins - lockedCoins),
         pendingCoins: pendingWithdrawals,
-        heldCoins: 0,
+        heldCoins: lockedCoins,
         totalEarned,
         totalSpent,
         monetizationEligible: Boolean(userData.monetizationEligible || userData.isCreator),
+        // Raw identity fields the withdrawal gate needs. The level gate itself
+        // is evaluated with the canonical `getCreatorCapabilities`, never a
+        // local `level >= N` comparison.
+        // Null (not 1) when the profile has no level, so the screen's honest
+        // "your level is not yet available" branch is reachable instead of a
+        // fabricated "you are Level 1".
+        level: Number(userData.level) || null,
+        isVerified: Boolean(userData.isVerified || userData.verified),
+        isCreator: Boolean(userData.isCreator),
+        creatorTier: userData.creatorTier || userData.creatorStatus || null,
         currency: 'COINS',
       };
     } catch (err) {

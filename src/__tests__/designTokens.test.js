@@ -88,7 +88,7 @@ describe('design tokens - JSON parity', () => {
 
 describe('design-system components - token hygiene', () => {
   test('no hardcoded brand hex colors in design-system components', () => {
-    const componentFiles = ['Button.jsx', 'EmptyState.jsx', 'ErrorState.jsx', 'Skeleton.jsx'];
+    const componentFiles = ['Button.jsx', 'EmptyState.jsx', 'ErrorState.jsx'];
     const brandHexes = ['#8B5CF6', '#6366F1', '#3B82F6', '#22D3EE', '#EC4899', '#C026D3'];
     for (const file of componentFiles) {
       const p = path.join(designSystemDir, file);

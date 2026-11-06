@@ -19,6 +19,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { checkRateLimit } = require('./rateLimit');
+const { awardXp, awardXpSafe } = require('./xpAward');
 const {
   LEVELS,
   XP_RULES,
@@ -34,6 +35,48 @@ const {
 
 const db = admin.firestore();
 
+// XP actions whose credit belongs to a *different* user than the caller. The
+// client cannot name an arbitrary beneficiary: the server proves the real
+// relationship (a like edge, a follow edge) and credits the recipient. Before
+// this, the callable credited `context.auth.uid` unconditionally, so
+// `like_received`/`follow_received`/`gift_received` all paid the *actor* — the
+// exact opposite of the action's name.
+const RECIPIENT_XP_ACTIONS = new Set(['like_received', 'follow_received', 'gift_received']);
+
+/**
+ * Resolve the real beneficiary of a received-XP action, verified against the
+ * edge that the action created. Returns `{ uid, source }` (source is the
+ * idempotency key so a repeat cannot re-pay) or `null` when the relationship
+ * does not exist (fail closed — no award).
+ */
+async function resolveRecipientXp(action, actorUid, source, hintUserId) {
+  if (action === 'like_received') {
+    // `source` is the liked post; the caller's own like edge must exist.
+    if (!source) return null;
+    const postSnap = await db.doc(`posts/${source}`).get();
+    if (!postSnap.exists) return null;
+    const authorId = postSnap.data().authorId || postSnap.data().userId;
+    if (!authorId || authorId === actorUid) return null;
+    const likeSnap = await db.doc(`posts/${source}/likes/${actorUid}`).get();
+    if (!likeSnap.exists) return null;
+    return { uid: authorId, source: `${source}_${actorUid}` };
+  }
+  if (action === 'follow_received') {
+    // `source` is the follower, `hintUserId` the followed user. The edge is
+    // verified, so this works from either session (the follower's follow, or
+    // the owner's acceptance of a request) and cannot be forged.
+    const follower = source;
+    const following = hintUserId;
+    if (!follower || !following || follower === following) return null;
+    const edge = await db.doc(`follows/${follower}_${following}`).get();
+    if (!edge.exists) return null;
+    return { uid: following, source: `${follower}_${following}` };
+  }
+  // gift_received is credited by `sendGift`, which holds the gift transaction
+  // id; a bare client call cannot prove a gift happened.
+  return null;
+}
+
 exports.awardExperience = functions
   .runWith({ memory: '256MB', timeoutSeconds: 60 })
   .https.onCall(async (data, context) => {
@@ -46,6 +89,7 @@ exports.awardExperience = functions
     const action = data && data.action;
     const count = Number((data && data.count) || 1);
     const source = data && data.source ? String(data.source).slice(0, 120) : null;
+    const hintUserId = data && data.userId ? String(data.userId).slice(0, 128) : null;
 
     const rule = XP_RULES[action];
     if (!rule) {
@@ -55,87 +99,27 @@ exports.awardExperience = functions
       throw new functions.https.HttpsError('invalid-argument', 'count must be 1-100');
     }
 
-    const idempotencyKey = source ? `${action}:${source}` : null;
-    const userRef = db.doc(`users/${uid}`);
-
     try {
-      let result = null;
-      await db.runTransaction(async (tx) => {
-        const userSnap = await tx.get(userRef);
-        const dataDoc = userSnap.exists ? userSnap.data() : {};
-
-        // Daily cap (XP-tracked)
-        const today = new Date().toISOString().slice(0, 10);
-        const counters = dataDoc.xpCounters || {};
-        const todayEntry = counters[today] || {};
-        const usedTodayXp = todayEntry[action] || 0;
-        const allowed = Math.max(0, Math.min(count, Math.floor((rule.dailyCap - usedTodayXp) / rule.xp)));
-        if (allowed <= 0) {
-          result = { success: true, xpAwarded: 0, leveledUp: false, newLevel: dataDoc.level || 1, coinReward: 0, capped: true };
-          return;
+      if (RECIPIENT_XP_ACTIONS.has(action)) {
+        const resolved = await resolveRecipientXp(action, uid, source, hintUserId);
+        if (!resolved) {
+          // No verified relationship means no award; this is a no-op, not an
+          // error the caller must handle.
+          return { success: true, xpAwarded: 0, leveledUp: false, noRecipient: true };
         }
+        return await awardXp(resolved.uid, action, { count, source: resolved.source });
+      }
 
-        // Idempotency
-        const recent = dataDoc.xpAwards || {};
-        if (idempotencyKey && recent[idempotencyKey] === today) {
-          result = { success: true, xpAwarded: 0, leveledUp: false, newLevel: dataDoc.level || 1, coinReward: 0, duplicate: true };
-          return;
-        }
-
-        const xpAwarded = allowed * rule.xp;
-        const experience = (dataDoc.experience || 0) + xpAwarded;
-        const before = computeLevelInfo(dataDoc.experience || 0);
-        const after = computeLevelInfo(experience);
-        const leveledUp = after.level > before.level;
-        const coinReward = leveledUp ? getLevelUpReward(before.level, after.level) : 0;
-
-        const patch = {
-          experience,
-          level: after.level,
-          experienceToNextLevel: after.nextLevelXp === null ? null : Math.max(0, after.nextLevelXp - experience),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        if (idempotencyKey) patch[`xpAwards.${idempotencyKey}`] = today;
-        const nextCounters = { ...counters };
-        nextCounters[today] = { ...todayEntry, [action]: usedTodayXp + xpAwarded };
-        patch.xpCounters = nextCounters;
-        if (leveledUp) patch.lastLevelUpAt = admin.firestore.FieldValue.serverTimestamp();
-
-        tx.set(userRef, patch, { merge: true });
-
-        if (coinReward > 0) {
-          // The reward is a real coin credit, so it lands in the same
-          // coin_transactions ledger the wallet reads (the old coin_ledger
-          // collection was never surfaced to the user) and increments the
-          // system supply, keeping the ledger and supply counters consistent.
-          const rewardTxRef = db.collection('coin_transactions').doc();
-          tx.set(rewardTxRef, {
-            userId: uid,
-            type: 'credit',
-            amount: coinReward,
-            reason: 'level_up_reward',
-            metadata: { level: after.level },
-            balanceAfter: (dataDoc.coins || 0) + coinReward,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-          });
-          tx.set(db.collection('system').doc('coin_supply'),
-            { totalCoins: admin.firestore.FieldValue.increment(coinReward) }, { merge: true });
-          tx.set(userRef, { coins: admin.firestore.FieldValue.increment(coinReward) }, { merge: true });
-        }
-
-        result = {
-          success: true,
-          xpAwarded,
-          leveledUp,
-          newLevel: after.level,
-          coinReward,
-          info: { level: after.level, progress: after.progress, xpToNext: after.xpToNext },
-        };
-      });
-
-      return result;
+      // Self-credit actions must not name a different beneficiary.
+      if (hintUserId && hintUserId !== uid) {
+        throw new functions.https.HttpsError(
+          'permission-denied',
+          `Cannot award "${action}" XP to another user`
+        );
+      }
+      return await awardXp(uid, action, { count, source });
     } catch (err) {
+      if (err instanceof functions.https.HttpsError) throw err;
       functions.logger.error('awardExperience failed', { uid, action, error: err.message });
       throw new functions.https.HttpsError('internal', 'Could not award XP');
     }
@@ -214,6 +198,18 @@ exports.recordActiveDay = functions
           lastActiveDay: today,
         };
       });
+
+      // The first active day counts as the daily login and grants its XP. The
+      // award is keyed on the date, so re-opening the app cannot farm it; the
+      // 7-day (and longer) streak milestones grant the separate streak XP.
+      // Post-commit and best-effort: the day is already recorded, so a failed
+      // award must not turn a successful record into an error.
+      if (result && !result.alreadyRecordedToday) {
+        await awardXpSafe(uid, 'daily_login', { source: today });
+        if (result.activeStreak > 0 && result.activeStreak % 7 === 0) {
+          await awardXpSafe(uid, 'streak_milestone', { source: `${result.activeStreak}_${today}` });
+        }
+      }
 
       return result;
     } catch (err) {

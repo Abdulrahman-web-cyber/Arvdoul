@@ -136,7 +136,10 @@ class LevelSystemService {
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         const { callFunction, FUNCTIONS } = await import('./callableService.js');
-        const data = await callFunction(FUNCTIONS.AWARD_EXPERIENCE, { action, count, source });
+        // `userId` is forwarded so the server can resolve a *received* action
+        // (like/follow) to the real recipient; the server re-verifies the
+        // relationship and ignores this hint for self-credit actions.
+        const data = await callFunction(FUNCTIONS.AWARD_EXPERIENCE, { action, count, source, userId });
         if (data && data.success) {
           this._cache.delete(this._cacheKey(userId));
           if (data.leveledUp) {

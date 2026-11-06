@@ -1,7 +1,8 @@
 // src/components/profile/ProfileFeedGrid.jsx
 
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Heart, 
   MessageCircle, 
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { getPerksForLevel } from '../../services/levelSystemService';
+import { pickDisplayName, resolveAvatarUrl } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import ProfileCitizenshipCard from './ProfileCitizenshipCard';
 
@@ -49,46 +51,189 @@ const ProfileFeedGrid = memo(({
   onLoadMore,
 }) => {
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  const currentUserId = currentUser?.uid || null;
   const isDark = theme === 'dark';
   const [likedPosts, setLikedPosts] = useState({});
   const [savedMap, setSavedMap] = useState({});
+  // The server's reported like state per post. The displayed count must be
+  // `serverCount + (viewerLiked - serverLiked)`: the server count already
+  // includes the viewer's own like, so adding +1 for a pre-liked post
+  // double-counted it. Only a like that flips this session moves the number.
+  const [likeBaseline, setLikeBaseline] = useState({});
   const [playingAudioId, setPlayingAudioId] = useState(null);
+  const audioElRef = useRef(null);
+  // Ids the viewer has toggled this session. The server flag in `posts` is a
+  // snapshot that can lag (or simply not change on a mocked/local write), so it
+  // must never clobber a like the viewer just made.
+  const touchedLikesRef = useRef(new Set());
 
-  const handleQuickLike = (e, postId) => {
-    e.stopPropagation();
-    setLikedPosts(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
-  };
+  // Seed like/save state from the real posts (and the viewer's own liked/saved
+  // snapshots) instead of assuming nothing is liked. `likedPosts` is only an
+  // overlay for the current session, so it never invents a like the server did
+  // not record. Keyed on a content signature because the `posts`/`savedPosts`
+  // arrays are new identities every render (default `[]` props included) and an
+  // identity-keyed effect would re-run forever and revert session likes.
+  const seedSignature = useMemo(() => {
+    const likeSig = (posts || []).map((p) => `${p?.id}:${p?.isLiked || p?.likedByMe || p?.hasLiked ? 1 : 0}`).join(',');
+    const savedSig = (savedPosts || []).map((p) => p?.id).join(',');
+    return `${likeSig}|${savedSig}`;
+  }, [posts, savedPosts]);
 
-  const handleQuickBookmark = (e, postId) => {
-    e.stopPropagation();
-    setSavedMap(prev => {
-      const isNowSaved = !prev[postId];
-      toast.success(isNowSaved ? 'Post bookmarked' : 'Post removed from saved');
-      return { ...prev, [postId]: isNowSaved };
+  useEffect(() => {
+    const liked = {};
+    const baseline = {};
+    for (const post of [...(posts || []), ...(savedPosts || [])]) {
+      if (!post || !post.id) continue;
+      const serverLiked = Boolean(post.isLiked || post.likedByMe || post.hasLiked);
+      baseline[post.id] = serverLiked;
+      if (serverLiked && !touchedLikesRef.current.has(post.id)) liked[post.id] = true;
+    }
+    setLikeBaseline((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, value] of Object.entries(baseline)) {
+        if (next[id] !== value) { next[id] = value; changed = true; }
+      }
+      return changed ? next : prev;
     });
-  };
+    setLikedPosts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, value] of Object.entries(liked)) {
+        if (!next[id]) { next[id] = value; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+    // Every entry in `savedPosts` is, by definition, saved by the viewer.
+    const saved = {};
+    for (const post of savedPosts || []) {
+      if (post?.id) saved[post.id] = true;
+    }
+    setSavedMap((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, value] of Object.entries(saved)) {
+        if (!next[id]) { next[id] = value; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [seedSignature]);
 
-  const handleQuickShare = (e, post) => {
+
+  const handleQuickLike = useCallback(async (e, post) => {
     e.stopPropagation();
+    const postId = typeof post === 'string' ? post : post?.id;
+    if (!postId) return;
+    // Identity comes from the live session only; a stale uid can belong to a
+    // previous account on a shared device.
+    if (!currentUserId) {
+      toast.error('Please sign in to like posts');
+      return;
+    }
+    const currentlyLiked = Boolean(likedPosts[postId]);
+    const nextLiked = !currentlyLiked;
+    // Optimistic overlay first, then the real write; roll back on failure so a
+    // failed like never looks successful.
+    touchedLikesRef.current.add(postId);
+    setLikedPosts((prev) => ({ ...prev, [postId]: nextLiked }));
+    try {
+      const { firestoreService } = await import('../../services/firestoreService.js');
+      const res = nextLiked
+        ? await firestoreService.likePost(postId, currentUserId)
+        : await firestoreService.unlikePost(postId, currentUserId);
+      if (res && res.success === false) {
+        throw new Error(res.error || 'Could not update like');
+      }
+    } catch {
+      setLikedPosts((prev) => ({ ...prev, [postId]: currentlyLiked }));
+      toast.error('Could not update like');
+    }
+  }, [currentUserId, likedPosts]);
+
+  const handleQuickBookmark = useCallback(async (e, post) => {
+    e.stopPropagation();
+    const postId = typeof post === 'string' ? post : post?.id;
+    if (!postId) return;
+    if (!currentUserId) {
+      toast.error('Please sign in to save posts');
+      return;
+    }
+    const currentlySaved = Boolean(savedMap[postId]);
+    const nextSaved = !currentlySaved;
+    setSavedMap((prev) => ({ ...prev, [postId]: nextSaved }));
+    try {
+      const { firestoreService } = await import('../../services/firestoreService.js');
+      const res = nextSaved
+        ? await firestoreService.savePost(postId, currentUserId)
+        : await firestoreService.unsavePost(postId, currentUserId);
+      if (res && res.success === false) {
+        throw new Error(res.error || 'Could not update saved post');
+      }
+      toast.success(nextSaved ? 'Post saved' : 'Post removed from saved');
+    } catch {
+      setSavedMap((prev) => ({ ...prev, [postId]: currentlySaved }));
+      toast.error('Could not update saved post');
+    }
+  }, [currentUserId, savedMap]);
+
+  // Displayed like count = server count + (session like state - server baseline).
+  // The server count already contains the viewer's like, so a post that arrived
+  // pre-liked shows no change; a like toggled this session moves it by one.
+  const likeCount = useCallback((item) => {
+    const base = Number(item?.likes ?? item?.likesCount ?? 0);
+    const serverLiked = Boolean(likeBaseline[item?.id]);
+    const viewerLiked = Boolean(likedPosts[item?.id]);
+    return base + (viewerLiked ? 1 : 0) - (serverLiked ? 1 : 0);
+  }, [likeBaseline, likedPosts]);
+
+  const handleQuickShare = useCallback(async (e, post) => {
+    e.stopPropagation();
+    const postId = typeof post === 'string' ? post : post?.id;
+    if (!postId) return;
+    const url = `${window.location.origin}/post/${postId}`;
+    // Fire the real share counter for the signed-in viewer; the share itself is
+    // best-effort UI, the count is the side effect that must reach the server.
+    if (currentUserId && postId) {
+      import('../../services/firestoreService.js')
+        .then(({ firestoreService }) => firestoreService.sharePost(postId, currentUserId))
+        .catch(() => {});
+    }
     if (navigator.share) {
       navigator.share({
-        title: post.title || 'Arvdoul Post',
-        text: post.content || post.caption || '',
-        url: `${window.location.origin}/post/${post.id}`
+        title: post?.title || 'Arvdoul Post',
+        text: post?.content || post?.caption || '',
+        url,
       }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
       toast.success('Post link copied to clipboard');
     }
-  };
+  }, [currentUserId]);
 
-  const handleToggleAudio = useCallback((e, trackId) => {
+  // Play/pause a real track. Without a media element the button only toggled an
+  // icon, so the "player" never produced sound; the source is the post's stored
+  // audio URL (no fallback — a track with no URL cannot be played).
+  const handleToggleAudio = useCallback((e, item) => {
     e.stopPropagation();
-    setPlayingAudioId(prev => (prev === trackId ? null : trackId));
-  }, []);
+    const src = item?.audioURL || item?.audioUrl || item?.soundUrl;
+    if (!src) {
+      toast.error('This track has no audio file attached.');
+      return;
+    }
+    const el = audioElRef.current;
+    if (!el) return;
+    if (playingAudioId === item.id) {
+      el.pause();
+      setPlayingAudioId(null);
+      return;
+    }
+    if (el.src !== src) el.src = src;
+    el.play().then(() => setPlayingAudioId(item.id)).catch(() => {
+      setPlayingAudioId(null);
+      toast.error('Could not play this track.');
+    });
+  }, [playingAudioId]);
 
   // Shown under every paginated grid (posts/reels/videos/photos/audio/tagged).
   // Without it the profile feed silently truncated at the first page.
@@ -362,13 +507,28 @@ const ProfileFeedGrid = memo(({
   if (activeTab === 'audio') {
     return (
       <>
+      {/* Single hidden media element drives every track (only one plays at a
+          time). It is required for the play/pause button to actually produce
+          sound; the card previously toggled an icon with no audio source. */}
+      <audio
+        ref={audioElRef}
+        onEnded={() => setPlayingAudioId(null)}
+        onPause={() => setPlayingAudioId(null)}
+        className="hidden"
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 w-full">
         {displayItems.map((item, idx) => {
           const isPlaying = playingAudioId === item.id;
           const trackTitle = item.title || item.name || 'Untitled Audio Track';
-          const duration = item.duration || '2:45';
-          const bpm = item.bpm || 120;
-          const genre = item.genre || 'Electronic';
+          // Only render metadata that is actually stored; inventing a duration,
+          // BPM or genre made an arbitrary post look like a mastered track.
+          const duration = item.duration || null;
+          const bpm = item.bpm || null;
+          const genre = item.genre || null;
+          const waveform = Array.isArray(item.waveform) && item.waveform.length
+            ? item.waveform
+            : null;
+          const hasAudio = Boolean(item.audioURL || item.audioUrl || item.soundUrl);
 
           return (
             <div
@@ -385,10 +545,12 @@ const ProfileFeedGrid = memo(({
                 {/* Play Button & Vinyl Disc */}
                 <button
                   type="button"
-                  onClick={(e) => handleToggleAudio(e, item.id)}
+                  onClick={(e) => handleToggleAudio(e, item)}
+                  disabled={!hasAudio}
                   aria-label={isPlaying ? "Pause track" : "Play track"}
                   className={cn(
                     "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md transition-all",
+                    !hasAudio && "opacity-40 cursor-not-allowed",
                     isPlaying
                       ? "bg-gradient-to-tr from-pink-500 to-indigo-600 text-white animate-pulse"
                       : "bg-indigo-600 text-white group-hover:scale-105"
@@ -403,11 +565,18 @@ const ProfileFeedGrid = memo(({
                     {trackTitle}
                   </h4>
                   <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    <span>{genre}</span>
-                    <span>·</span>
-                    <span>{bpm} BPM</span>
-                    <span>·</span>
-                    <span>{duration}</span>
+                    {[genre, bpm ? `${bpm} BPM` : null, duration].filter(Boolean).length > 0 ? (
+                      [genre, bpm ? `${bpm} BPM` : null, duration]
+                        .filter(Boolean)
+                        .map((part, i) => (
+                          <React.Fragment key={part}>
+                            {i > 0 && <span>·</span>}
+                            <span>{part}</span>
+                          </React.Fragment>
+                        ))
+                    ) : (
+                      <span>{hasAudio ? 'Audio track' : 'No audio attached'}</span>
+                    )}
                   </div>
                 </div>
 
@@ -425,22 +594,25 @@ const ProfileFeedGrid = memo(({
                 </button>
               </div>
 
-              {/* Animated Waveform Visualization */}
+              {/* Waveform: the stored bars when the track has them, otherwise a
+                  flat idle line. A hardcoded decorative pattern made every track
+                  look like it had real waveform data. */}
               <div className="flex items-end gap-1 h-8 px-2 py-1 bg-black/5 dark:bg-white/5 rounded-xl overflow-hidden">
-                {[40, 65, 85, 30, 95, 70, 50, 80, 45, 90, 60, 35, 75, 100, 55, 80, 45, 60, 75, 90, 40].map((h, i) => (
-                  <span
-                    key={i}
-                    className={cn(
-                      "flex-1 rounded-full transition-all duration-300",
-                      isPlaying
-                        ? "bg-gradient-to-t from-indigo-500 to-pink-500 animate-pulse"
-                        : (isDark ? "bg-slate-700" : "bg-slate-300")
-                    )}
-                    style={{
-                      height: isPlaying ? `${Math.max(20, (h * ((i % 3) + 1)) % 100)}%` : `${h * 0.6}%`,
-                    }}
-                  />
-                ))}
+                {(waveform || new Array(21).fill(12)).map((h, i) => {
+                  const value = Number(h) || 0;
+                  return (
+                    <span
+                      key={i}
+                      className={cn(
+                        "flex-1 rounded-full transition-all duration-300",
+                        isPlaying
+                          ? "bg-gradient-to-t from-indigo-500 to-pink-500 animate-pulse"
+                          : (isDark ? "bg-slate-700" : "bg-slate-300")
+                      )}
+                      style={{ height: `${Math.max(4, Math.min(100, value))}%` }}
+                    />
+                  );
+                })}
               </div>
 
               {/* Track Footer */}
@@ -448,14 +620,15 @@ const ProfileFeedGrid = memo(({
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={(e) => handleQuickLike(e, item.id)}
+                    data-testid={`like-button-${item.id}`}
+                    onClick={(e) => handleQuickLike(e, item)}
                     className={cn(
                       "flex items-center gap-1 hover:text-rose-500 transition-colors",
                       likedPosts[item.id] && "text-rose-500"
                     )}
                   >
                     <Heart className={cn("w-3.5 h-3.5", likedPosts[item.id] && "fill-rose-500")} />
-                    <span>{(item.likes || 0) + (likedPosts[item.id] ? 1 : 0)}</span>
+                    <span data-testid={`like-count-${item.id}`}>{likeCount(item)}</span>
                   </button>
                   <div className="flex items-center gap-1">
                     <MessageCircle className="w-3.5 h-3.5" />
@@ -466,7 +639,7 @@ const ProfileFeedGrid = memo(({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={(e) => handleQuickBookmark(e, item.id)}
+                    onClick={(e) => handleQuickBookmark(e, item)}
                     className="p-1 text-slate-400 hover:text-indigo-500 transition-colors"
                   >
                     <Bookmark className={cn("w-3.5 h-3.5", savedMap[item.id] && "fill-indigo-500 text-indigo-500")} />
@@ -557,7 +730,7 @@ const ProfileFeedGrid = memo(({
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-1.5 text-xs font-bold">
                     <Heart className="w-4 h-4 fill-white text-white" />
-                    <span>{(item.likes || item.likesCount || 0) + (likedPosts[item.id] ? 1 : 0)}</span>
+                    <span>{likeCount(item)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-xs font-bold">
                     <MessageCircle className="w-4 h-4 fill-white text-white" />
@@ -641,14 +814,16 @@ const ProfileFeedGrid = memo(({
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={(e) => handleQuickLike(e, item.id)}
+                      data-testid={`like-button-${item.id}`}
+                      aria-pressed={isLiked}
+                      onClick={(e) => handleQuickLike(e, item)}
                       className={cn(
                         "flex items-center gap-1 hover:text-rose-500 transition-colors",
                         isLiked && "text-rose-500"
                       )}
                     >
                       <Heart className={cn("w-3.5 h-3.5", isLiked && "fill-rose-500")} />
-                      <span>{(item.likes || item.likesCount || 0) + (isLiked ? 1 : 0)}</span>
+                      <span data-testid={`like-count-${item.id}`}>{likeCount(item)}</span>
                     </button>
                     <div className="flex items-center gap-1">
                       <MessageCircle className="w-3.5 h-3.5" />
@@ -674,7 +849,7 @@ const ProfileFeedGrid = memo(({
 
                     <button
                       type="button"
-                      onClick={(e) => handleQuickBookmark(e, item.id)}
+                      onClick={(e) => handleQuickBookmark(e, item)}
                       className={cn(
                         "p-1 rounded hover:bg-slate-500/10 transition-colors",
                         savedMap[item.id] ? "text-indigo-500" : "text-slate-400"
@@ -714,8 +889,8 @@ const ProfileFeedGrid = memo(({
         const isVid = item.type === 'video' || item.type === 'reel';
         const mediaUrl = item.mediaURL || item.thumbnailUrl || item.mediaUrl || item.coverImage || item.image;
         const isLiked = Boolean(likedPosts[item.id]);
-        const authorName = profile?.displayName || item.authorName || 'Citizen';
-        const authorAvatar = profile?.photoURL || item.authorAvatar;
+        const authorName = pickDisplayName([profile?.displayName, item.authorName], { fallback: 'Creator' });
+        const authorAvatar = resolveAvatarUrl(profile?.photoURL || item.authorAvatar, authorName, profile?.id || profile?.uid || item.authorId);
         const handle = profile?.username ? `@${profile.username}` : '';
 
         return (
@@ -796,14 +971,14 @@ const ProfileFeedGrid = memo(({
               <div className="flex items-center gap-5">
                 <button
                   type="button"
-                  onClick={(e) => handleQuickLike(e, item.id)}
+                  onClick={(e) => handleQuickLike(e, item)}
                   className={cn(
                     "flex items-center gap-1.5 text-xs font-semibold hover:text-rose-500 transition-colors",
                     isLiked && "text-rose-500"
                   )}
                 >
                   <Heart className={cn("w-4 h-4", isLiked && "fill-rose-500")} />
-                  <span>{(item.likes || item.likesCount || 0) + (isLiked ? 1 : 0)}</span>
+                  <span>{likeCount(item)}</span>
                 </button>
 
                 <div className="flex items-center gap-1.5 text-xs font-semibold">
@@ -830,7 +1005,7 @@ const ProfileFeedGrid = memo(({
 
                 <button
                   type="button"
-                  onClick={(e) => handleQuickBookmark(e, item.id)}
+                  onClick={(e) => handleQuickBookmark(e, item)}
                   className={cn(
                     "p-1.5 rounded-lg hover:bg-slate-500/10 transition-colors",
                     savedMap[item.id] ? "text-indigo-500" : "text-slate-400"

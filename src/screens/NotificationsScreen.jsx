@@ -18,7 +18,7 @@ import notificationsService from '../services/notificationsService';
 import { getMonetizationService } from '../services/monetizationService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
-import { Dialog } from '../components/ui/Dialog.jsx';
+import { Dialog } from '../components/UI/Dialog.jsx';
 
 const FILTERS = [
   { id: 'All', label: 'All' },
@@ -153,8 +153,10 @@ export default function NotificationsScreen() {
         setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
         toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
       } catch {
-        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'connected' }));
-        toast.success(`Connected with ${targetUser.displayName || targetUser.username || 'user'}`);
+        // Both the friend request and the follow failed — do not claim a
+        // connection that was never made.
+        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'idle' }));
+        toast.error(`Could not connect with ${targetUser.displayName || targetUser.username || 'user'}`);
       }
     }
   };
@@ -225,12 +227,16 @@ export default function NotificationsScreen() {
                 type: fn.type || 'system',
                 timeGroup: createdAt ? (Date.now() - createdAt.getTime() < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
                 user: {
+                  id: fn.senderId || null,
                   name: fn.senderName || fn.title || '',
                   username: fn.senderUsername || '',
                   avatar: fn.senderAvatar || '/assets/default-profile.png',
                   verified: !!fn.senderVerified,
                 },
                 message: fn.body || fn.message || '',
+                // Friend requests must carry the friend_requests doc id (not the
+                // notification id) so accept/decline can hit the right document.
+                requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
                 // Real gift metadata only — never invent an amount. The gift
                 // modal hides the amount block when the payload omits it.
                 amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
@@ -279,21 +285,43 @@ export default function NotificationsScreen() {
   };
 
   // Handle Friend Request Action
-  const handleFriendRequest = async (notifId, action, targetUser) => {
+  const handleFriendRequest = async (notifId, action, targetUser, requestId) => {
+    const rid = requestId || notifId;
+    if (!user?.uid || friendActions[notifId]) return;
     setFriendActions((prev) => ({ ...prev, [notifId]: action }));
-    handleMarkRead(notifId);
-    
-    if (action === 'accepted') {
-      toast.success(`You are now friends with ${targetUser.name}! 🎉`);
-    } else {
-      toast.info(`Declined friend request from ${targetUser.name}`);
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      const svc = getUserService();
+      if (action === 'accepted') {
+        await svc.acceptFriendRequest(rid, user.uid);
+        toast.success(`You are now friends with ${targetUser?.name || 'this user'}! 🎉`);
+      } else {
+        await svc.declineFriendRequest(rid, user.uid);
+        toast.info(`Declined friend request from ${targetUser?.name || 'this user'}`);
+      }
+      handleMarkRead(notifId);
+    } catch (err) {
+      // Roll the button state back — the request was NOT processed.
+      setFriendActions((prev) => {
+        const next = { ...prev };
+        delete next[notifId];
+        return next;
+      });
+      toast.error(err?.message || 'Could not update the friend request.');
     }
   };
 
-  // Handle Thank Creator for Coins
-  const handleThankCreator = async (notif) => {
-    toast.success(`Sent a special Thank You note to ${notif.user.name}! 💜`);
+  // Handle Thank Creator for Coins — there is no "thank you note" backend, so
+  // the honest action is to open a real direct message to the gifter rather
+  // than toast a note that was never sent.
+  const handleThankCreator = (notif) => {
+    const recipientId = notif?.user?.id || notif?.user?.uid;
+    if (!recipientId) {
+      toast.error('Could not open a message for this creator.');
+      return;
+    }
     handleMarkRead(notif.id);
+    navigate(`/messages/new?to=${recipientId}`);
   };
 
   // Filtered Notifications
@@ -1111,7 +1139,7 @@ export default function NotificationsScreen() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleFriendRequest(item.id, 'accepted', item.user);
+                                      handleFriendRequest(item.id, 'accepted', item.user, item.requestId);
                                     }}
                                     className="px-4 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md hover:from-violet-500 hover:to-indigo-500 active:scale-95 transition-all"
                                   >
@@ -1120,7 +1148,7 @@ export default function NotificationsScreen() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleFriendRequest(item.id, 'declined', item.user);
+                                      handleFriendRequest(item.id, 'declined', item.user, item.requestId);
                                     }}
                                     className={cn(
                                       "px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors",

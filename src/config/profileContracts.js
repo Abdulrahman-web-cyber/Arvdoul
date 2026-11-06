@@ -27,6 +27,14 @@ export const VISIBILITY_SCOPES = {
 };
 
 /**
+ * The tabs a profile can open on. `profile.defaultTab` is validated against this
+ * list in `validateProfileUpdate`, chosen in Edit Profile ("The tab visitors see
+ * first"), and consumed by the profile screens — a tab id added here must render
+ * in ProfileTabsBar/ProfileFeedGrid.
+ */
+export const PROFILE_TABS = Object.freeze(['posts', 'reels', 'audio', 'citizenship', 'about']);
+
+/**
  * Private profile fields.
  *
  * `users/{uid}` is readable by every signed-in user (it is the public profile
@@ -558,7 +566,7 @@ export function validateProfileUpdate(rawUpdates = {}) {
       }
 
       case 'defaultTab': {
-        if (typeof val === 'string' && ['posts', 'reels', 'audio', 'citizenship', 'about'].includes(val)) {
+        if (typeof val === 'string' && PROFILE_TABS.includes(val)) {
           sanitized.defaultTab = val;
         }
         break;

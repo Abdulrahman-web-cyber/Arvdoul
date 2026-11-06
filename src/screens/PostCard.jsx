@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService';
+import { trackAnalyticsEvent } from '../services/analyticsService';
 import commentService from '../services/commentService';
 import * as userService from '../services/userService';
 import * as monetizationService from '../services/monetizationService';
@@ -63,82 +64,31 @@ const getDesignTokens = (theme) => {
   };
 };
 
-// 3. OFFLINE QUEUE (safe, with crypto‑strong IDs, collapse by action)
-let offlineQueueDB = null;
-let offlineQueueInitPromise = null;
-
-const idbRequestPromise = (req) => new Promise((resolve, reject) => {
-  req.onsuccess = () => resolve(req.result);
-  req.onerror = () => reject(req.error);
-});
-
-const openOfflineQueue = () => {
-  if (offlineQueueDB) return Promise.resolve(offlineQueueDB);
-  if (offlineQueueInitPromise) return offlineQueueInitPromise;
-  offlineQueueInitPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open('arvdoul_offline_queue', 5);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('actions')) {
-        db.createObjectStore('actions', { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => {
-      offlineQueueDB = request.result;
-      resolve(offlineQueueDB);
-    };
-    request.onerror = () => reject(request.error);
-  });
-  return offlineQueueInitPromise;
-};
+// 3. OFFLINE QUEUE — the canonical `syncEngine`/`OfflineQueue` singleton owns
+// persistence and replay. PostCard previously opened its OWN IndexedDB under the
+// canonical queue's database name at version 5 (the canonical queue opens it at
+// version 1). In a real browser the second open fails with a VersionError, so
+// every queued like/reaction/save silently vanished and the canonical queue
+// could never be opened at all. Route everything through the canonical engine.
 
 async function addToOfflineQueue(action, data) {
-  const db = await openOfflineQueue();
-  const tx = db.transaction('actions', 'readwrite');
-  const store = tx.objectStore('actions');
-  // Use crypto.randomUUID if available, fallback to Date.now + random
-  const id = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${data.postId}_${data.userId}_${action}_${Date.now()}_${Math.random().toString(36)}`;
-  // ownerUid partitions the queue by account so a later session cannot replay
-  // this user's pending writes.
-  const request = store.put({ id, action, data, ownerUid: data.userId || null, timestamp: Date.now() });
-  await idbRequestPromise(request);
-}
-
-async function replayOfflineQueue(currentUid = null) {
-  if (!navigator.onLine) return;
-  const db = await openOfflineQueue();
-  const tx = db.transaction('actions', 'readonly');
-  const store = tx.objectStore('actions');
-  const items = await idbRequestPromise(store.getAll());
-  if (!items.length) return;
-
-  const deleteTx = db.transaction('actions', 'readwrite');
-  const deleteStore = deleteTx.objectStore('actions');
-  for (const item of items) {
-    const { action, data } = item;
-    // Never replay another account's queued action.
-    if (!currentUid || item.ownerUid !== currentUid || data.userId !== currentUid) continue;
-    try {
-      if (action === 'like') {
-        await firestoreService.likePost?.(data.postId, data.userId);
-      } else if (action === 'unlike') {
-        await firestoreService.unlikePost?.(data.postId, data.userId);
-      } else if (action === 'save') {
-        await firestoreService.savePost?.(data.postId, data.userId);
-      } else if (action === 'unsave') {
-        await firestoreService.unsavePost?.(data.postId, data.userId);
-      } else if (action === 'reaction') {
-        await firestoreService.addReaction?.(data.postId, data.userId, data.reaction);
-      } else if (action === 'removeReaction') {
-        await firestoreService.removeReaction?.(data.postId, data.userId);
-      }
-      await idbRequestPromise(deleteStore.delete(item.id));
-    } catch (err) {
-      console.warn('Offline replay failed', err);
-    }
-  }
+  const { enqueueAction } = await import('../offline/syncEngine.js');
+  const typeByAction = {
+    like: 'post.like',
+    unlike: 'post.unlike',
+    save: 'post.save',
+    unsave: 'post.unsave',
+    reaction: 'post.reaction',
+    removeReaction: 'post.removeReaction',
+  };
+  const type = typeByAction[action];
+  if (!type) return;
+  await enqueueAction({
+    type,
+    payload: { postId: data.postId, userId: data.userId, reaction: data.reaction },
+    priority: 'high',
+    ownerUid: data.userId || null,
+  });
 }
 
 // 4. ERROR BOUNDARY (dev/prod friendly)
@@ -203,16 +153,22 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
 
   const repost = useCallback(async () => {
     if (!postId) return;
+    if (!currentUser?.uid) {
+      toast.error('Sign in to repost');
+      return;
+    }
     try {
-      const res = await firestoreService.repostPost?.(postId);
+      const res = await firestoreService.repostPost(postId, currentUser.uid);
       if (res?.alreadyReposted) {
         toast.info('You already reposted this');
       } else {
         toast.success('Reposted to your profile! 🔁');
       }
-    } catch { toast.error('Failed to repost'); }
+    } catch (err) {
+      toast.error(err?.message || 'Failed to repost');
+    }
     onClose();
-  }, [postId, onClose]);
+  }, [postId, currentUser?.uid, onClose]);
 
   const quotePost = useCallback(() => {
     if (!postId || !navigate) return;
@@ -532,6 +488,12 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const tokens = useMemo(() => getDesignTokens(theme), [theme]);
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Post-surface interaction telemetry sink. The sub-cards emit
+  // `onAnalytics(event, data)`; without a real handler every emit was a no-op.
+  // `trackAnalyticsEvent` is a stable module-level function so the memoised
+  // sub-cards are not re-rendered by a fresh prop identity.
+  const handleAnalytics = trackAnalyticsEvent;
+
   // Sponsored / ad detection
   const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined;
   const [adDetails, setAdDetails] = useState(null);
@@ -581,7 +543,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, []);
 
   const [ui, setUi] = useState({
-    expanded: false,
     showAnalytics: false,
     showShareSheet: false,
     showReactionsPicker: false,
@@ -646,13 +607,128 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // Pause subscriptions when card not visible
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
 
-  // Online listener for offline queue. Keyed on uid so an account switch
-  // re-binds the handler to the current session.
+  // Record a real view impression once per mounted card, through the canonical
+  // writer. `posts/{id}/view_aggregate` + `daily_stats` are only ever written
+  // here; without this the author analytics panel's view count is always 0.
+  // The author's own views are not counted.
+  const viewRecordedRef = useRef(false);
   useEffect(() => {
-    const onlineHandler = () => replayOfflineQueue(currentUser?.uid || null);
-    window.addEventListener('online', onlineHandler);
-    return () => window.removeEventListener('online', onlineHandler);
-  }, [currentUser?.uid]);
+    if (!isVisible || !post.id || viewRecordedRef.current) return;
+    const uid = currentUser?.uid;
+    if (!uid || uid === post.authorId) return;
+    viewRecordedRef.current = true;
+    firestoreService.recordPostView?.(post.id, uid).catch(() => {});
+  }, [isVisible, post.id, post.authorId, currentUser?.uid]);
+
+  // Real post analytics for the author panel. The panel used to read
+  // `post.analytics.{views,reach,watchTime,completionRate,earnings}`, a shape
+  // nothing ever wrote, so every row rendered blank. Only the author may read
+  // it, and only while the analytics panel is open.
+  const [postAnalytics, setPostAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  useEffect(() => {
+    if (!ui.showAnalytics || !isAuthor || !post.id) return undefined;
+    let cancelled = false;
+    setAnalyticsLoading(true);
+    firestoreService.getPostAnalytics?.(post.id)
+      .then((res) => { if (!cancelled) setPostAnalytics(res?.success ? res.analytics : null); })
+      .catch(() => { if (!cancelled) setPostAnalytics(null); })
+      .finally(() => { if (!cancelled) setAnalyticsLoading(false); });
+    return () => { cancelled = true; };
+  }, [ui.showAnalytics, isAuthor, post.id]);
+
+  // The viewer's own vote on a post-embedded poll. PollCard renders the
+  // selection from `userVote`, but nothing ever supplied it, so a returning
+  // voter always saw an unvoted poll (and could re-tap into a server
+  // "already-exists" error).
+  const [userPollVoteIndex, setUserPollVoteIndex] = useState(null);
+  useEffect(() => {
+    if (post.type !== 'poll' || !post.id || !currentUser?.uid) {
+      setUserPollVoteIndex(null);
+      return undefined;
+    }
+    let cancelled = false;
+    firestoreService.getUserPollVote?.(post.id, currentUser.uid)
+      .then((res) => { if (!cancelled) setUserPollVoteIndex(res?.optionIndex ?? null); })
+      .catch(() => { if (!cancelled) setUserPollVoteIndex(null); });
+    return () => { cancelled = true; };
+  }, [post.type, post.id, currentUser?.uid]);
+
+  const pollWithVote = useMemo(
+    () => (post.poll ? { ...post.poll, userVote: userPollVoteIndex == null ? null : `opt_${userPollVoteIndex}` } : null),
+    [post.poll, userPollVoteIndex],
+  );
+
+  // The viewer's own up/down votes on this question's answers. QuestionCard
+  // renders the per-answer selection from `answer.userVote`, which nothing
+  // supplied; without it a returning voter could re-vote (and the server would
+  // toggle it off).
+  const [answerVotes, setAnswerVotes] = useState({});
+  useEffect(() => {
+    if (post.type !== 'question' || !post.id || !currentUser?.uid) {
+      setAnswerVotes({});
+      return undefined;
+    }
+    let cancelled = false;
+    firestoreService.getMyAnswerVotes?.(post.id, currentUser.uid)
+      .then((res) => { if (!cancelled) setAnswerVotes(res?.votes || {}); })
+      .catch(() => { if (!cancelled) setAnswerVotes({}); });
+    return () => { cancelled = true; };
+  }, [post.type, post.id, currentUser?.uid]);
+
+  const questionWithVotes = useMemo(() => {
+    const q = post.question;
+    if (!q || typeof q !== 'object') return q;
+    const answers = Array.isArray(q.answers)
+      ? q.answers.map((a) => ({ ...a, userVote: answerVotes[a.id] ?? null }))
+      : q.answers;
+    return { ...q, answers };
+  }, [post.question, answerVotes]);
+
+  const handleAddAnswer = useCallback(async (answerText, idempotencyKey) => {
+    if (!currentUser?.uid) throw new Error('Sign in to answer');
+    await firestoreService.addAnswer?.(post.id, answerText, idempotencyKey);
+  }, [currentUser, post.id]);
+
+  const handleAnswerVote = useCallback(async (answerId, direction) => {
+    if (!currentUser?.uid) throw new Error('Sign in to vote');
+    const res = await firestoreService.voteAnswer?.(post.id, answerId, direction);
+    setAnswerVotes((prev) => {
+      const next = { ...prev };
+      if (res?.vote) next[answerId] = res.vote;
+      else delete next[answerId];
+      return next;
+    });
+  }, [currentUser, post.id]);
+
+  const handleEditAnswer = useCallback(async (answerId, answerText) => {
+    await firestoreService.editAnswer?.(post.id, answerId, answerText);
+  }, [post.id]);
+
+  const handleDeleteAnswer = useCallback(async (answerId) => {
+    await firestoreService.deleteAnswer?.(post.id, answerId);
+  }, [post.id]);
+
+  const handleMarkBest = useCallback(async (answerId) => {
+    await firestoreService.acceptAnswer?.(post.id, answerId);
+  }, [post.id]);
+
+  // Reporting an answer reports its parent question post through the canonical
+  // reportContent path (rate-limited + de-duplicated server-side); the flag
+  // button was otherwise a dead control.
+  const handleReportAnswer = useCallback(async () => {
+    try {
+      const { callFunction, FUNCTIONS } = await import('../services/callableService.js');
+      await callFunction(FUNCTIONS.REPORT_POST, {
+        targetId: post.id,
+        reason: 'Inappropriate answer',
+        details: 'Reported from a Q&A answer',
+      });
+      toast.success('Report submitted');
+    } catch (err) {
+      toast.error(err.message || 'Report failed');
+    }
+  }, [post.id]);
 
   // Cleanup timers
   useEffect(() => {
@@ -764,6 +840,38 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       }
     }, 250);
   }, [currentUser, post.id, takeSnapshot]);
+
+  // Post-embedded poll vote. `PollCard` was rendered without `onVote`, so every
+  // tap showed "Voting not configured" — the card was display-only. This routes
+  // the tap to the real transactional writer (normalises string options, records
+  // the per-(post,voter) dedupe doc) and reflects the viewer's vote back.
+  const handlePollVote = useCallback(async (postId, optionId, idempotencyKey) => {
+    const userId = currentUser?.uid || null;
+    if (!userId) {
+      toast.error('Sign in to vote');
+      throw new Error('Sign in to vote');
+    }
+    const options = Array.isArray(post.poll?.options) ? post.poll.options : [];
+    const index = options.findIndex((o, idx) => {
+      const id = typeof o === 'string' ? `opt_${idx}` : (o?.id ?? `opt_${idx}`);
+      return id === optionId;
+    });
+    if (index < 0) throw new Error('Option not found');
+
+    const isMultiple = post.poll?.allowMultiple === true;
+    const res = await firestoreService.voteOnPoll?.(postId, userId, index, isMultiple);
+    if (res?.alreadyVoted) {
+      setUserPollVoteIndex(index);
+      toast.info('You already voted on this poll');
+      return;
+    }
+    setUserPollVoteIndex(index);
+    // Reward is written by the composer's poll payload; it is credited
+    // server-side on vote, never fabricated here.
+    const reward = post.poll?.rewardCoins ?? 0;
+    if (reward > 0) toast.success(`+${reward} coins!`);
+    void idempotencyKey;
+  }, [currentUser, post.poll]);
 
   const handleSave = useCallback(async () => {
     if (!currentUser) return toast.error('Sign in');
@@ -882,6 +990,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const isQuestion = post.type === 'question' && post.question;
   const isEvent = post.type === 'event' && post.event;
   const isLink = post.type === 'link' && post.link;
+  const isRepost = post.type === 'repost' && Boolean(post.originalPostId);
 
   if (!post.id) return null;
 
@@ -994,9 +1103,39 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         </div>
       )}
 
+      {/* REPOST CONTEXT */}
+      {isRepost && (
+        <div className="px-3 pt-1 flex items-center gap-1.5 text-xs" style={{ color: tokens.textSecondary }}>
+          <RefreshCw className="w-3 h-3 text-green-500" />
+          <span>
+            {post.authorName} reposted
+            {post.originalAuthorName ? ` ${post.originalAuthorName}'s post` : ' a post'}
+          </span>
+        </div>
+      )}
+
       {/* CONTENT */}
-      {isTextOnly && <TextCard content={post.content} bgClass={getRandomTextBg(post.id, currentUser?.uid)} expanded={ui.expanded} setExpanded={(val) => setUi(prev => ({ ...prev, expanded: val }))} tokens={tokens} currentUser={currentUser} postId={post.id} onAnalytics={() => {}} />}
-      {!isTextOnly && post.content && (
+      {isRepost && (
+        <div className="mx-3 my-2 rounded-2xl border p-3" style={{ borderColor: tokens.border }}>
+          <div className="flex items-center gap-2 mb-1">
+            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || 'Original author'} className="w-6 h-6 rounded-full object-cover" />
+            <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || 'Original author'}</span>
+          </div>
+          {post.originalContent && (
+            <p className="text-sm whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.originalContent}</p>
+          )}
+          {post.originalMedia?.length > 0 && (
+            <img src={post.originalMedia[0]?.url || post.originalMedia[0]?.thumbnail} alt="" className="mt-2 rounded-xl w-full max-h-60 object-cover" loading="lazy" />
+          )}
+          {post.originalPostId && (
+            <button onClick={() => navigate(`/post/${post.originalPostId}`)} className="mt-2 text-xs font-medium" style={{ color: tokens.primary }}>
+              View original post
+            </button>
+          )}
+        </div>
+      )}
+      {isTextOnly && <TextCard content={post.content} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
+      {!isRepost && !isTextOnly && post.content && (
         <p className="px-3 pb-1 text-sm leading-relaxed whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.content}</p>
       )}
       {post.hashtags?.length > 0 && (
@@ -1004,13 +1143,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
         </div>
       )}
-      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} />}
-      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} />}
+      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} onAnalytics={handleAnalytics} />}
+      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} onAnalytics={handleAnalytics} />}
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
-      {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} />}
-      {isQuestion && <QuestionCard question={post.question} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} />}
-      {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} />}
-      {isLink && <LinkCard link={post.link} tokens={tokens} />}
+      {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
+      {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
+      {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
+      {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}
       <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} />
@@ -1024,16 +1163,25 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         )}
       </div>
 
-      {/* ANALYTICS PANEL */}
+      {/* ANALYTICS PANEL — real counters only (views/likes/comments/shares).
+          Reach, watch-time, completion-rate and earnings are not tracked for
+          posts, so they are not shown rather than rendered as fabricated zeros. */}
       <AnimatePresence>
         {ui.showAnalytics && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-2 overflow-hidden">
             <div className="bg-black/20 rounded-xl p-2 space-y-1 text-xs" style={{ color: tokens.textSecondary }}>
-              <div className="flex justify-between"><span>Views</span><span>{post.analytics?.views?.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Reach</span><span>{post.analytics?.reach?.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Watch Time (avg)</span><span>{post.analytics?.watchTime || 'N/A'}</span></div>
-              <div className="flex justify-between"><span>Completion Rate</span><span>{post.analytics?.completionRate || 0}%</span></div>
-              <div className="flex justify-between"><span>Earnings</span><span style={{ color: tokens.gold }}>+{post.analytics?.earnings || 0} Coins</span></div>
+              {analyticsLoading ? (
+                <div className="py-1 text-center">Loading analytics…</div>
+              ) : postAnalytics ? (
+                <>
+                  <div className="flex justify-between"><span>Views</span><span>{(postAnalytics.totalViews || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Likes</span><span>{(postAnalytics.totalLikes || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Comments</span><span>{(postAnalytics.totalComments || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Shares</span><span>{(postAnalytics.totalShares || 0).toLocaleString()}</span></div>
+                </>
+              ) : (
+                <div className="py-1 text-center">Analytics unavailable</div>
+              )}
             </div>
           </motion.div>
         )}
@@ -1222,17 +1370,6 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
     </motion.div>
   );
 };
-
-function getRandomTextBg(postId, userId) {
-  const palette = [
-    'from-blue-700 via-purple-600 to-orange-500',
-    'from-emerald-700 via-teal-600 to-cyan-500',
-    'from-rose-700 via-pink-600 to-purple-500',
-    'from-indigo-700 via-blue-600 to-violet-500',
-  ];
-  const hash = (postId + (userId || '')).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  return palette[Math.abs(hash) % palette.length];
-}
 
 export default function PostCard(props) {
   return (

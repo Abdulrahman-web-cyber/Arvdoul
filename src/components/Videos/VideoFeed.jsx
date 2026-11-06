@@ -14,6 +14,7 @@ import VideoBottomSheet from './VideoBottomSheet';
 import VideoGiftModal from './VideoGiftModal';
 import VideoTopBar from './VideoTopBar';
 import videoService from '../../services/videoService';
+import settingsService from '../../services/settingsService';
 import { Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
@@ -44,7 +45,47 @@ const VideoFeed = memo(({
 
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
+  // `playback.autoPlayVideos` gate: read synchronously from the settings cache
+  // (populated at sign-in). Off means a video only starts when the user taps it,
+  // so the toggle is a real behaviour change, not a persisted no-op.
+  const autoPlayEnabled = settingsService.getCachedSettings(user?.uid)?.playback?.autoPlayVideos !== false;
   const { setCurrentIndex: storeSetIndex, updateVideo, addToWatchLater, removeFromWatchLater } = useVideoStore();
+
+  // Record a real, server-deduplicated view for the video that is actually on
+  // screen (the short-video feed previously never reported views). Keyed on the
+  // video id (not the array identity) so pagination does not fire a spurious
+  // view.
+  const viewStartRef = useRef(null);
+  const activeVideoId = videos[currentIndex]?.id;
+  useEffect(() => {
+    if (!activeVideoId || !user?.uid) return undefined;
+    viewStartRef.current = Date.now();
+    return () => {
+      const seconds = Math.round((Date.now() - viewStartRef.current) / 1000);
+      viewStartRef.current = null;
+      if (seconds >= 1) videoService.recordVideoView(activeVideoId, { duration: seconds }).catch(() => {});
+    };
+  }, [activeVideoId, user?.uid]);
+
+  // Resolve the viewer's real follow state for the loaded creators so the
+  // follow badge reflects the server, not a hardcoded false (which made every
+  // already-followed creator render as "+ Follow").
+  const [followingIds, setFollowingIds] = useState(() => new Set());
+  useEffect(() => {
+    if (!user?.uid || videos.length === 0) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getUserService } = await import('../../services/userService.js');
+        const res = await getUserService().getFollowing(user.uid, { limit: 200 });
+        if (cancelled) return;
+        setFollowingIds(new Set((res.following || res.friends || []).map((f) => f.uid || f.id)));
+      } catch (err) {
+        console.warn('Could not resolve follow state:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid, videos.length]);
 
   // Keep selected video in sync
   const currentVideo = videos[currentIndex] || videos[0] || null;
@@ -248,13 +289,18 @@ const VideoFeed = memo(({
               <VideoCard
                 video={video}
                 isActive={index === currentIndex}
-                autoPlay={index === currentIndex}
+                autoPlay={autoPlayEnabled && index === currentIndex}
+                followedByViewer={followingIds.has(video.userId || video.authorId || video.creator?.id)}
                 onLike={() => handleLike(video)}
                 onComment={() => handleComment(video)}
                 onShare={() => handleShare(video)}
                 onSave={() => handleSave(video)}
                 onGift={() => handleGift(video)}
                 onReport={() => handleReport(video)}
+                onFollow={() => {
+                  const creatorId = video.userId || video.authorId || video.creator?.id;
+                  if (creatorId) setFollowingIds((prev) => new Set(prev).add(creatorId));
+                }}
               />
             </div>
           ))

@@ -32,7 +32,7 @@ const DOMAINS = [
 
 export default function TitlesScreen() {
   const navigate = useNavigate();
-  const { user, userProfile, refreshUser } = useAuth();
+  const { user, userProfile } = useAuth();
   const { theme } = useTheme();
 
   const [loading, setLoading] = useState(true);
@@ -44,6 +44,21 @@ export default function TitlesScreen() {
 
   const isDark = theme === 'dark' || theme === 'midnight';
   const profile = userProfile || user;
+
+  // The active title is read from the profile document, so after a claim /
+  // activation we must re-pull it. AuthContext exposes no `refreshUser`; the
+  // canonical refresh is the profile store (`refreshProfile`), which the
+  // users/{uid} snapshot listener is already streaming into.
+  const refreshProfile = useCallback(async () => {
+    const uid = profile?.uid || user?.uid;
+    if (!uid) return;
+    try {
+      const { useProfileStore } = await import('../../store/profileStore.js');
+      await useProfileStore.getState().refreshProfile(uid, uid);
+    } catch {
+      /* best-effort refresh; the realtime listener will reconcile */
+    }
+  }, [profile, user]);
 
   const catalog = useMemo(() => titleService.getCatalog(), []);
 
@@ -78,7 +93,7 @@ export default function TitlesScreen() {
     try {
       await titleService.setActiveTitle(titleId);
       toast.success('Active title updated across your identity');
-      if (refreshUser) await refreshUser();
+      await refreshProfile();
     } catch (err) {
       toast.error(err?.message || 'Could not update active title');
     } finally {
@@ -93,7 +108,7 @@ export default function TitlesScreen() {
       await titleService.claimTitle(titleId);
       toast.success('Title claimed with full provenance!');
       await loadTitles();
-      if (refreshUser) await refreshUser();
+      await refreshProfile();
     } catch (err) {
       toast.error(err?.message || 'Criteria not met for this title');
     } finally {
@@ -212,7 +227,7 @@ export default function TitlesScreen() {
               isVerified: Boolean(profile?.isVerified || profile?.verified),
               isFounder: Boolean(profile?.isFounder),
               isPioneer: Boolean(profile?.isPioneer),
-              policyStanding: profile?.policyStanding || 'good',
+              policyStanding: profile?.policyStanding || profile?.accountStatus || null,
             });
 
             return (

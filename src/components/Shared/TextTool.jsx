@@ -237,7 +237,6 @@ const FontSelector = memo(({
   onChange,
   fontSize,
   onSizeChange,
-  pushUndo,
 }) => {
     const { isDark } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -324,7 +323,6 @@ FontSelector.propTypes = {
   onChange: PropTypes.func.isRequired,
   fontSize: PropTypes.number,
   onSizeChange: PropTypes.func,
-  pushUndo: PropTypes.func,
 };
 
 /**
@@ -335,7 +333,6 @@ const TextTool = memo(({
   updateSelectedText,
   handleDeleteText,
   handleQuickAddText,
-  pushUndo,
   textLayers = [],
   onSelectLayer,
   onDuplicateLayer,
@@ -368,13 +365,9 @@ const TextTool = memo(({
     }
   }, [quickText, handleQuickAddText]);
 
-  // Update text property with optional undo
-  const handleUpdate = useCallback((updates, shouldPushUndo = false) => {
+  const handleUpdate = useCallback((updates) => {
     updateSelectedText?.(updates);
-    if (shouldPushUndo) {
-      pushUndo?.();
-    }
-  }, [updateSelectedText, pushUndo]);
+  }, [updateSelectedText]);
 
   // Toggle style
   const toggleStyle = useCallback((style) => {
@@ -403,8 +396,7 @@ const TextTool = memo(({
     }
     
     updateSelectedText?.({ fontStyle: newStyle, fontWeight: newWeight });
-    pushUndo?.();
-  }, [selectedText, updateSelectedText, pushUndo]);
+  }, [selectedText, updateSelectedText]);
 
   // Check if style is active
   const isStyleActive = useCallback((style) => {
@@ -462,7 +454,6 @@ const TextTool = memo(({
               type="text"
               value={selectedText.text || ''}
               onChange={(e) => handleUpdate({ text: e.target.value })}
-              onBlur={() => pushUndo?.()}
               className={`w-full px-4 py-3 rounded-xl \${isDark ? 'bg-white/10' : 'bg-black/5'} text-white border \${isDark ? 'border-white/10' : 'border-gray-200'} focus:border-purple-500 outline-none text-lg`}
               aria-label="Edit text content"
               placeholder="Enter text..."
@@ -481,7 +472,7 @@ const TextTool = memo(({
               <label className={`text-xs ${isDark ? 'text-white/60' : 'text-gray-500'} font-medium`}>Font Family</label>
               <FontSelector
                 fontFamily={selectedText.fontFamily || 'Poppins'}
-                onChange={(font) => handleUpdate({ fontFamily: font }, true)}
+                onChange={(font) => handleUpdate({ fontFamily: font })}
               />
             </div>
 
@@ -498,7 +489,6 @@ const TextTool = memo(({
                   max={300}
                   value={selectedText.fontSize || 48}
                   onChange={(e) => handleUpdate({ fontSize: Number(e.target.value) })}
-                  onPointerUp={() => pushUndo?.()}
                   className="flex-1 accent-purple-500"
                 />
               </div>
@@ -609,7 +599,6 @@ const TextTool = memo(({
                 max={100}
                 value={selectedText.opacity ?? 100}
                 onChange={(e) => handleUpdate({ opacity: Number(e.target.value) })}
-                onPointerUp={() => pushUndo?.()}
                 className="w-full accent-purple-500"
               />
             </div>
@@ -626,7 +615,6 @@ const TextTool = memo(({
                 max={20}
                 value={selectedText.letterSpacing ?? 0}
                 onChange={(e) => handleUpdate({ letterSpacing: Number(e.target.value) })}
-                onPointerUp={() => pushUndo?.()}
                 className="w-full accent-purple-500"
               />
             </div>
@@ -644,7 +632,6 @@ const TextTool = memo(({
                 step={0.1}
                 value={selectedText.lineHeight ?? 1.2}
                 onChange={(e) => handleUpdate({ lineHeight: Number(e.target.value) })}
-                onPointerUp={() => pushUndo?.()}
                 className="w-full accent-purple-500"
               />
             </div>
@@ -667,7 +654,6 @@ const TextTool = memo(({
                   onChange={(e) =>
                     handleUpdate({ rotation: (Number(e.target.value) * Math.PI) / 180 })
                   }
-                  onPointerUp={() => pushUndo?.()}
                   className="flex-1 accent-purple-500"
                 />
               </div>
@@ -880,8 +866,6 @@ TextTool.propTypes = {
   handleDeleteText: PropTypes.func,
   /** Function to add new text */
   handleQuickAddText: PropTypes.func,
-  /** Function to push undo state */
-  pushUndo: PropTypes.func,
   /** Array of all text layers */
   textLayers: PropTypes.arrayOf(PropTypes.object),
   /** Function to select a layer by ID */

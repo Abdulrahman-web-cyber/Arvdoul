@@ -6,11 +6,12 @@
  * • Does not obstruct app interactions, respects safe-area-inset
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wifi, WifiOff, RefreshCw, CheckCircle2, Cloud, ArrowUpCircle } from 'lucide-react';
 import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
+import { subscribeSyncStatus } from '../../offline/syncEngine.js';
 import { useTheme } from '../../context/ThemeContext';
 
 export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
@@ -25,44 +26,40 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
   const [showOnlinePill, setShowOnlinePill] = useState(false);
   const prevOnlineRef = useRef(isOnline);
 
-  const updateStatus = useCallback(() => {
-    const currentOnline = navigator.onLine;
-    setIsOnline(currentOnline);
-    const count = backgroundSyncService.getPendingCount?.() || 0;
-    setPendingCount(count);
-
-    // Detect reconnection transition
-    if (!prevOnlineRef.current && currentOnline) {
-      setShowOnlinePill(true);
-      setTimeout(() => setShowOnlinePill(false), 3600);
-    }
-    prevOnlineRef.current = currentOnline;
-  }, []);
-
+  // Single source of truth for sync state: the canonical offline engine emits
+  // `arvdoul-sync-status` on every queue change and drain start/end. Polling a
+  // second copy (`backgroundSyncService.getPendingCount`) could not see the
+  // "syncing" transition, so the banner never showed it.
   useEffect(() => {
-    updateStatus();
-
-    const handleOnline = () => {
-      setIsOnline(true);
-      updateStatus();
+    const applyStatus = (status) => {
+      if (!status) return;
+      const currentOnline = status.isOnline !== false;
+      setIsOnline(currentOnline);
+      setPendingCount(status.pendingCount || 0);
+      setIsSyncing(Boolean(status.isSyncing));
+      if (!prevOnlineRef.current && currentOnline) {
+        setShowOnlinePill(true);
+        setTimeout(() => setShowOnlinePill(false), 3600);
+      }
+      prevOnlineRef.current = currentOnline;
     };
 
+    const unsubscribe = subscribeSyncStatus(applyStatus);
+
+    const handleOnline = () => setIsOnline(true);
     const handleOffline = () => {
       setIsOnline(false);
       setShowOnlinePill(false);
-      updateStatus();
     };
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    const interval = setInterval(updateStatus, 3000);
 
     return () => {
+      unsubscribe?.();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      clearInterval(interval);
     };
-  }, [updateStatus]);
+  }, []);
 
   const handleManualSync = async () => {
     if (!isOnline || isSyncing) return;
@@ -72,7 +69,6 @@ export const OfflineIndicator = ({ id = 'offline-indicator-banner' }) => {
       if (backgroundSyncService.triggerSync) {
         await backgroundSyncService.triggerSync();
       }
-      updateStatus();
       setShowOnlinePill(true);
       setTimeout(() => setShowOnlinePill(false), 3600);
     } catch (err) {

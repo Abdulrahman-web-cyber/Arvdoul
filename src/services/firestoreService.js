@@ -41,9 +41,6 @@ class LRUCache {
 
 const CONFIG = {
   ALLOWED_REACTIONS: ['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉', '👎', '👏', '🚀', '💯'],
-  VIEW_SHARDS: 100,
-  STORE_VIEWERS: true,
-  VIEWERS_SUBCOLLECTION: 'viewers',
   REACTIONS_SUBCOLLECTION: 'reactions',
   DAILY_STATS_SUBCOLLECTION: 'daily_stats',
   POST_VISIBILITY: {
@@ -202,20 +199,16 @@ class EnterpriseFirestoreService {
     }
   }
 
-  async publishToPlatform(postId, platforms = ['instagram', 'tiktok', 'twitter']) {
+  async publishToPlatform(postId, platforms = []) {
     await this.ensureInitialized();
-    try {
-      logger.info('Simulating cross-platform publication', { postId, platforms });
-      await new Promise(r => setTimeout(r, 600)); // Network delay simulation
-      return {
-        success: true,
-        publishedPlatforms: platforms,
-        urls: platforms.map(p => `https://${p}.com/arvdoul_post_${postId}`)
-      };
-    } catch (err) {
-      logger.error('Publish to platform failed:', err);
-      throw enhanceError(err, 'Cross platform publication failed');
-    }
+    // No cross-post provider is integrated, so there is nothing to publish to.
+    // The previous implementation slept 600ms and returned fabricated
+    // `https://<platform>.com/...` URLs as if the post had been shared. Report
+    // the honest state instead of a fake success.
+    logger.warn('publishToPlatform called but no cross-platform provider is integrated', { postId, platforms });
+    throw new Error(
+      'Cross-platform publishing is not available: no provider is integrated.'
+    );
   }
 
   async createPost(postData) {
@@ -261,6 +254,20 @@ class EnterpriseFirestoreService {
       if (!currentUser?.uid) throw new Error('User not authenticated. Please sign in to publish.');
       postData.authorId = currentUser.uid;
       const { collection, addDoc, serverTimestamp } = this.firestoreMethods;
+
+      // Denormalise the author's privacy onto the post: the read rule gates a
+      // private account's content on this field (rules cannot get() a user doc
+      // during a list query). The create rule verifies it equals
+      // users/{uid}.isPrivate, so it cannot be spoofed; a read failure defaults
+      // to public and a genuinely-private author is then rejected (fail closed).
+      let authorIsPrivate = false;
+      try {
+        const { doc: userDoc, getDoc: getUserDoc } = this.firestoreMethods;
+        const authorSnap = await getUserDoc(userDoc(this.firestore, 'users', postData.authorId));
+        if (authorSnap.exists()) authorIsPrivate = authorSnap.data()?.isPrivate === true;
+      } catch (privacyErr) {
+        logger.warn('Author privacy lookup failed; defaulting post to public', { error: privacyErr?.message });
+      }
       
       const scheduledTime = postData.scheduledTime && !isNaN(new Date(postData.scheduledTime).getTime())
         ? new Date(postData.scheduledTime)
@@ -298,9 +305,10 @@ class EnterpriseFirestoreService {
         authorId: postData.authorId,
         authorName: postData.authorName || currentUser.displayName || 'Arvdoul User',
         authorUsername: postData.authorUsername || `user_${postData.authorId?.slice(0,8)}`,
+        authorIsPrivate,
         authorPhoto: getSafeAvatarUrl(postData.authorPhoto, postData.authorName || 'Arvdoul User', postData.authorId),
         ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0, allowMultiple: !!postData.poll?.allowMultiple } }),
-        ...(postData.type === 'question' && { question: postData.question, answers: postData.answers || [] }),
+        ...(postData.type === 'question' && { question: this._normaliseQuestion(postData.question, postData.content) }),
         ...(postData.type === 'link' && { link: postData.link }),
         ...(postData.type === 'event' && { event: postData.event }),
         ...(postData.type === 'video' && { video: postData.video || { url: videoItem?.url || '' } }),
@@ -423,6 +431,21 @@ class EnterpriseFirestoreService {
       ];
       if (options.status) conditions.push(where('status', '==', options.status));
       if (options.type) conditions.push(where('type', '==', options.type));
+
+      // The read rule gates a private author's posts behind a follow edge. A list
+      // query must constrain `authorIsPrivate` unless the viewer is the author or
+      // an approved follower, otherwise Firestore denies the whole query. Only the
+      // owner or a follower may see the private posts, so resolve that first.
+      const viewerId = options.viewerId || null;
+      let canViewPrivate = Boolean(viewerId && viewerId === userId);
+      if (viewerId && !canViewPrivate) {
+        try {
+          const followSnap = await getDoc(doc(this.firestore, 'follows', `${viewerId}_${userId}`));
+          canViewPrivate = followSnap.exists();
+        } catch { /* treat as non-follower (fail closed) */ }
+      }
+      if (!canViewPrivate) conditions.push(where('authorIsPrivate', '==', false));
+
       // Always bound: a caller that omits `limit` must not pull the author's
       // entire post history in one read.
       conditions.push(limit(Math.max(1, Number(options.limit) || 20)));
@@ -774,8 +797,118 @@ class EnterpriseFirestoreService {
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'shares' });
       auditLogger.log('content.share', { userId, meta: { postId } });
+      // Best-effort XP; sharing is already recorded, so a failure must not fail
+      // the share. `source` makes the award idempotent server-side.
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId, action: 'post_shared', source: postId })
+          .catch(() => {});
+      } catch (e) {
+        // XP award is best-effort
+      }
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to share post'); }
+  }
+
+  // A repost is a first-class post authored by the reposter that references the
+  // original. The document id is deterministic (`repost_<uid>_<postId>`) so a
+  // second repost is idempotent instead of a duplicate, and the reposter's post
+  // count and the original's share counter are updated on success. The caller
+  // must not report success unless this resolves — a `?.` call to a missing
+  // method used to toast "Reposted" while nothing was written.
+  async repostPost(postId, userId) {
+    await this.ensureInitialized();
+    try {
+      const auth = await this.getAuthInstance();
+      const uid = userId || auth?.currentUser?.uid;
+      if (!uid) throw new Error('User not authenticated. Please sign in to repost.');
+      if (!postId) throw new Error('A post id is required to repost.');
+
+      const { collection, doc, getDoc, setDoc, addDoc, serverTimestamp } = this.firestoreMethods;
+
+      const originalRef = doc(this.firestore, 'posts', postId);
+      const originalSnap = await getDoc(originalRef);
+      if (!originalSnap.exists() || originalSnap.data().isDeleted) {
+        throw new Error('The original post no longer exists.');
+      }
+      const original = originalSnap.data();
+
+      const repostId = `repost_${uid}_${postId}`;
+      const repostRef = doc(this.firestore, 'posts', repostId);
+      const existing = await getDoc(repostRef);
+      if (existing.exists()) {
+        return { success: true, alreadyReposted: true, postId: repostId };
+      }
+
+      const userSnap = await getDoc(doc(this.firestore, 'users', uid));
+      const me = userSnap.exists() ? userSnap.data() : {};
+      const myName = me.displayName || auth?.currentUser?.displayName || 'Arvdoul User';
+
+      // A repost copies the original's content, so reposting a private account's
+      // post would publish that content to the reposter's (public) followers —
+      // the exact leak the post read gate prevents. Refuse it.
+      if (original.authorIsPrivate === true && original.authorId !== uid) {
+        throw new Error('You cannot repost content from a private account.');
+      }
+
+      const repostDoc = {
+        type: 'repost',
+        content: '',
+        authorId: uid,
+        authorName: myName,
+        authorUsername: me.username || `user_${uid.slice(0, 8)}`,
+        authorPhoto: getSafeAvatarUrl(me.photoURL, myName, uid),
+        // Must mirror users/{uid}.isPrivate (the create rule enforces it).
+        authorIsPrivate: me.isPrivate === true,
+        originalPostId: postId,
+        originalAuthorId: original.authorId || null,
+        originalAuthorName: original.authorName || null,
+        originalContent: (original.content || '').slice(0, 280),
+        originalMedia: Array.isArray(original.media) ? original.media.slice(0, 4) : [],
+        originalType: original.type || 'text',
+        visibility: CONFIG.POST_VISIBILITY.PUBLIC,
+        enableComments: true,
+        enableGifts: true,
+        isDeleted: false,
+        stats: {
+          likes: 0, comments: 0, shares: 0, saves: 0, views: 0, gifts: 0, giftValue: 0,
+          reactions: Object.fromEntries(CONFIG.ALLOWED_REACTIONS.map(r => [r, 0])),
+          pollVotes: 0,
+        },
+        gifts: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        publishedAt: serverTimestamp(),
+        version: 'v5',
+      };
+
+      await setDoc(repostRef, repostDoc);
+      this.cache.set(repostId, { ...repostDoc, id: repostId, _cachedAt: Date.now() });
+      this.invalidateCachePattern(`user_posts_${uid}*`);
+
+      // Secondary metrics: the repost itself already exists, so these are
+      // best-effort and never flip the result to a failure.
+      try {
+        await countersManager.increment({ docPath: `posts/${postId}`, field: 'shares' });
+        countersManager.invalidate({ docPath: `posts/${postId}`, field: 'shares' });
+        await addDoc(collection(this.firestore, 'shares'), {
+          postId, userId: uid, type: 'repost', sharedAt: serverTimestamp(),
+        });
+      } catch (e) { logger.warn('Repost share-counter update failed:', e?.message); }
+      try { await this.updateUserPostCount(uid, 1); } catch (e) {}
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId: uid, action: 'post_created', source: repostId })
+          .catch(() => {});
+      } catch (e) {}
+
+      auditLogger.log('content.repost', { userId: uid, meta: { postId, repostId } });
+      return { success: true, alreadyReposted: false, postId: repostId };
+    } catch (error) {
+      throw enhanceError(error, 'Failed to repost');
+    }
   }
 
   async sendGift(postId, userId, giftType, coinValue) {
@@ -910,6 +1043,105 @@ class EnterpriseFirestoreService {
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }
 
+  // Post-embedded polls store their options as plain strings (the composer's
+  // `typeData.poll.options` is a string array), but the vote transaction keys
+  // on `option.id`. Normalise once so a vote actually lands on the option the
+  // voter tapped instead of silently no-op'ing.
+  _normalisePollOptions(rawOptions) {
+    if (!Array.isArray(rawOptions)) return [];
+    return rawOptions.map((opt, idx) => {
+      if (typeof opt === 'string') return { id: `opt_${idx}`, text: opt, votes: 0 };
+      return {
+        id: opt.id ?? `opt_${idx}`,
+        text: opt.text ?? 'Option',
+        votes: typeof opt.votes === 'number' ? opt.votes : 0,
+      };
+    });
+  }
+
+  async getUserPollVote(postId, userId) {
+    await this.ensureInitialized();
+    const { doc, getDoc } = this.firestoreMethods;
+    const voteRef = doc(this.firestore, 'posts', postId, 'poll_votes', userId);
+    const snap = await getDoc(voteRef);
+    if (!snap.exists()) return { success: true, optionIndex: null, optionId: null };
+    const data = snap.data();
+    return { success: true, optionIndex: data.optionIndex ?? null, optionId: data.optionId ?? null };
+  }
+
+  // ── Q&A (post-embedded questions) ───────────────────────────────────
+  // Answers live on `posts/{id}.question.answers` and are mutated only by the
+  // `functions/questions.js` callables (a direct client write is denied — an
+  // answerer is not the post author — and would let a voter forge `isBest`).
+  // The composer used to publish `question` as a bare string; normalise the
+  // shape so QuestionCard's `question.text`/`answers` reads resolve.
+  _normaliseQuestion(raw, fallbackText) {
+    if (raw && typeof raw === 'object') {
+      return {
+        text: raw.text || raw.question || fallbackText || '',
+        bounty: Number(raw.bounty) || 0,
+        closed: raw.closed === true,
+        acceptedAnswerId: raw.acceptedAnswerId ?? null,
+        answers: Array.isArray(raw.answers) ? raw.answers : [],
+      };
+    }
+    return {
+      text: (typeof raw === 'string' && raw) || fallbackText || '',
+      bounty: 0,
+      closed: false,
+      acceptedAnswerId: null,
+      answers: [],
+    };
+  }
+
+  async addAnswer(postId, answer, idempotencyKey) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const result = await callFunction(FUNCTIONS.ADD_ANSWER, { postId, answer, idempotencyKey });
+    return { success: true, answerId: result?.answerId ?? null };
+  }
+
+  async editAnswer(postId, answerId, answer) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    await callFunction(FUNCTIONS.EDIT_ANSWER, { postId, answerId, answer });
+    return { success: true };
+  }
+
+  async deleteAnswer(postId, answerId) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    await callFunction(FUNCTIONS.DELETE_ANSWER, { postId, answerId });
+    return { success: true };
+  }
+
+  async voteAnswer(postId, answerId, direction) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const result = await callFunction(FUNCTIONS.CAST_ANSWER_VOTE, { postId, answerId, direction });
+    return { success: true, answer: result?.answer ?? null, vote: result?.vote ?? null };
+  }
+
+  async acceptAnswer(postId, answerId) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    await callFunction(FUNCTIONS.ACCEPT_ANSWER, { postId, answerId });
+    return { success: true };
+  }
+
+  // The viewer's own votes on a question's answers, as { answerId: 'up'|'down' }.
+  // Bounded to the (small) answer_votes subcollection for this question.
+  async getMyAnswerVotes(postId, userId) {
+    if (!postId || !userId) return { success: true, votes: {} };
+    await this.ensureInitialized();
+    try {
+      const { collection, query, where, getDocs, limit } = this.firestoreMethods;
+      const ref = collection(this.firestore, 'posts', postId, 'answer_votes');
+      const snap = await getDocs(query(ref, where('userId', '==', userId), limit(100)));
+      const votes = {};
+      snap.forEach((d) => { votes[d.data().answerId] = d.data().direction; });
+      return { success: true, votes };
+    } catch (error) {
+      logger.warn('getMyAnswerVotes failed', { postId, error: error.message });
+      return { success: true, votes: {} };
+    }
+  }
+
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
     try {
@@ -924,8 +1156,8 @@ class EnterpriseFirestoreService {
         alreadyVoted = voteSnap.exists();
         if (!isMultiple && alreadyVoted) throw new Error('Already voted');
         if (!alreadyVoted) {
-          const poll = postSnap.data().poll;
-          const newOptions = [...(poll.options || [])];
+          const poll = postSnap.data().poll || {};
+          const newOptions = this._normalisePollOptions(poll.options);
           if (newOptions[optionIndex]) {
             newOptions[optionIndex] = { ...newOptions[optionIndex], votes: (newOptions[optionIndex].votes || 0) + 1 };
           }
@@ -935,7 +1167,12 @@ class EnterpriseFirestoreService {
             'stats.pollVotes': increment(1),
             updatedAt: serverTimestamp()
           });
-          transaction.set(pollVoteRef, { userId, optionIndex, votedAt: serverTimestamp() });
+          transaction.set(pollVoteRef, {
+            userId,
+            optionIndex,
+            optionId: newOptions[optionIndex]?.id ?? `opt_${optionIndex}`,
+            votedAt: serverTimestamp()
+          });
         }
       });
       this.cache.delete(postId);
@@ -945,57 +1182,31 @@ class EnterpriseFirestoreService {
 
   async recordPostView(postId, userId) {
     await this.ensureInitialized();
+    // Counting is server-authoritative: the per-(post,viewer,day) dedupe
+    // transaction, the daily stat and the sharded total are written by the
+    // `recordPostView` callable. The client no longer writes
+    // `posts/{id}/view_aggregate`, `/daily_stats` or `/view_shards` (rules deny
+    // those writes — the posts `{subcollection}` rule binds every child id to
+    // the caller's uid, so a direct write was always denied).
     try {
-      const { doc, runTransaction, increment, serverTimestamp } = this.firestoreMethods;
-      const shardId = Math.floor(secureRandom() * CONFIG.VIEW_SHARDS);
-      const viewShardRef = doc(this.firestore, 'posts', postId, 'view_shards', `shard_${shardId}`);
-      const viewerRef = doc(this.firestore, 'posts', postId, CONFIG.VIEWERS_SUBCOLLECTION, userId);
-      const today = new Date().toISOString().split('T')[0];
-      const dailyStatRef = doc(this.firestore, 'posts', postId, CONFIG.DAILY_STATS_SUBCOLLECTION, today);
-      const aggregateRef = doc(this.firestore, 'posts', postId, 'view_aggregate', 'total');
-
-      await runTransaction(this.firestore, async (transaction) => {
-        const shardSnap = await transaction.get(viewShardRef);
-        if (shardSnap.exists()) {
-          transaction.update(viewShardRef, { count: increment(1), updatedAt: serverTimestamp() });
-        } else {
-          transaction.set(viewShardRef, { count: 1, updatedAt: serverTimestamp() });
-        }
-        const aggSnap = await transaction.get(aggregateRef);
-        if (aggSnap.exists()) {
-          transaction.update(aggregateRef, { total: increment(1), updatedAt: serverTimestamp() });
-        } else {
-          transaction.set(aggregateRef, { total: 1, updatedAt: serverTimestamp() });
-        }
-        const dailySnap = await transaction.get(dailyStatRef);
-        if (dailySnap.exists()) {
-          transaction.update(dailyStatRef, { views: increment(1), updatedAt: serverTimestamp() });
-        } else {
-          transaction.set(dailyStatRef, {
-            date: today,
-            views: 1,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            createdAt: serverTimestamp()
-          });
-        }
-        if (CONFIG.STORE_VIEWERS) {
-          transaction.set(viewerRef, { userId, viewedAt: serverTimestamp() }, { merge: true });
-        }
-      });
-      return { success: true };
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const result = await callFunction(FUNCTIONS.RECORD_POST_VIEW, { postId });
+      if (result?.counted) {
+        countersManager.invalidate({ docPath: `posts/${postId}`, field: 'views' });
+      }
+      return { success: true, counted: Boolean(result?.counted) };
     } catch (error) {
+      logger.warn('recordPostView failed', { postId, error: error.message });
       return { success: false, error: error.message };
     }
   }
 
   async getPostViewCount(postId) {
     await this.ensureInitialized();
-    const aggregateRef = this.firestoreMethods.doc(this.firestore, 'posts', postId, 'view_aggregate', 'total');
-    const snap = await this.firestoreMethods.getDoc(aggregateRef);
-    const total = snap.exists() ? snap.data().total : 0;
-    return { success: true, views: total };
+    // The total is a sharded counter (`counter_shards`), summed client-side by
+    // CountersManager — the same layout the recordPostView callable writes.
+    const views = await countersManager.get({ docPath: `posts/${postId}`, field: 'views' });
+    return { success: true, views };
   }
 
   async getPostDailyViews(postId, days = 7) {
@@ -1048,6 +1259,23 @@ class EnterpriseFirestoreService {
     });
     this.subscriptions.set(subKey, unsubscribe);
     return unsubscribe;
+  }
+
+  // Engagement-only view of a post, for cards that render counts without the
+  // whole document. Reuses `subscribeToPost` (one listener per post) and maps
+  // the stats block to the shape the card reducer consumes.
+  subscribeToPostStats(postId, callback) {
+    return this.subscribeToPost(postId, (data) => {
+      if (!data) return callback(null);
+      const stats = data.stats || {};
+      callback({
+        likes: stats.likes ?? 0,
+        comments: stats.comments ?? 0,
+        shares: stats.shares ?? 0,
+        gifts: stats.gifts ?? 0,
+        views: stats.views ?? 0,
+      });
+    });
   }
 
   async getAuthInstance() {
@@ -1109,6 +1337,7 @@ const firestoreService = {
   likePost: (pid, uid) => getFirestoreService().likePost(pid, uid),
   unlikePost: (pid, uid) => getFirestoreService().unlikePost(pid, uid),
   sharePost: (pid, uid) => getFirestoreService().sharePost(pid, uid),
+  repostPost: (pid, uid) => getFirestoreService().repostPost(pid, uid),
   savePost: (pid, uid) => getFirestoreService().savePost(pid, uid),
   unsavePost: (pid, uid) => getFirestoreService().unsavePost(pid, uid),
   getSavedPosts: (uid, opts) => getFirestoreService().getSavedPosts(uid, opts),
@@ -1118,6 +1347,13 @@ const firestoreService = {
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
+  getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
+  addAnswer: (pid, answer, key) => getFirestoreService().addAnswer(pid, answer, key),
+  editAnswer: (pid, aid, answer) => getFirestoreService().editAnswer(pid, aid, answer),
+  deleteAnswer: (pid, aid) => getFirestoreService().deleteAnswer(pid, aid),
+  voteAnswer: (pid, aid, dir) => getFirestoreService().voteAnswer(pid, aid, dir),
+  acceptAnswer: (pid, aid) => getFirestoreService().acceptAnswer(pid, aid),
+  getMyAnswerVotes: (pid, uid) => getFirestoreService().getMyAnswerVotes(pid, uid),
   incrementCommentCount: (pid, delta) => getFirestoreService().incrementCommentCount(pid, delta),
   recordPostView: (pid, uid) => getFirestoreService().recordPostView(pid, uid),
   getPostViewCount: (pid) => getFirestoreService().getPostViewCount(pid),

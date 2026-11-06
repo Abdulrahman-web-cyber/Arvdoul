@@ -7,7 +7,7 @@
  *  - Language switcher wired to i18n (7 locales) + persisted
  *  - Reduce-motion override applies a document-level class
  *  - Clear cache actually clears localStorage + IndexedDB + memory caches
- *  - Danger zone: real account deletion via userService.deleteUserData
+ *  - Danger zone: real account deletion via userService.deleteAccount
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -15,7 +15,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Bell, Shield, Globe, HelpCircle, LogOut, Moon, Sun,
-  Lock, Trash2, Smartphone, Volume2, Video, Sparkles, DollarSign,
+  Lock, Trash2, Volume2, Video, Sparkles, DollarSign,
   Database, Info, ChevronRight, Check, AlertTriangle, Eye, User,
   Sliders, ShieldCheck, Key, RefreshCw, Languages, Activity, Trophy,
   Award, Zap, Coins
@@ -30,8 +30,8 @@ import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES }
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
 import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
-import { Dialog } from '../components/ui/Dialog.jsx';
-import { Skeleton } from '../components/ui/Skeleton.jsx';
+import { Dialog } from '../components/UI/Dialog.jsx';
+import { Skeleton } from '../components/UI/Skeleton.jsx';
 import { cn } from '../lib/utils';
 
 /* ---------- Reusable row primitives ---------- */
@@ -149,7 +149,9 @@ export default function SettingsScreen() {
       if (storeProfile?.privacy) {
         setProfilePrivacy({ ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy });
       }
-      setProfileIsPrivate(Boolean(storeProfile?.isPrivate ?? loaded?.privacy?.profilePrivate));
+      // Profile privacy is owned by the user profile (`users/{uid}.isPrivate`),
+      // never by the settings document - read it from the profile store only.
+      setProfileIsPrivate(Boolean(storeProfile?.isPrivate));
       // Apply persisted reduce-motion override
       if (loaded?.appearance?.reduceMotion) {
         document.documentElement.classList.add('arvdoul-reduce-motion');
@@ -199,7 +201,6 @@ export default function SettingsScreen() {
 
   const handleToggleProfilePrivate = useCallback(async (val) => {
     setProfileIsPrivate(val);
-    updateSetting('privacy.profilePrivate', val);
     if (!uid) return;
     try {
       const { getUserService } = await import('../services/userService.js');
@@ -210,9 +211,12 @@ export default function SettingsScreen() {
       }));
       toast.success(val ? 'Profile visibility set to Private' : 'Profile visibility set to Public');
     } catch (err) {
+      // Roll back the optimistic switch - the profile is the source of truth.
+      setProfileIsPrivate(!val);
       console.warn('Failed to sync profile private flag:', err);
+      toast.error(t('settings.saveFailed'));
     }
-  }, [uid, updateSetting]);
+  }, [uid, t]);
 
   const handleUpdateProfilePrivacyScope = useCallback(async (scopeKey, scopeVal) => {
     setProfilePrivacy((cur) => {
@@ -239,6 +243,25 @@ export default function SettingsScreen() {
     document.documentElement.classList.toggle('arvdoul-reduce-motion', value);
     updateSetting('appearance.reduceMotion', value);
   };
+
+  // Push/email toggles persist to `users/{uid}.settings` (so the UI reads a
+  // single document) AND mirror to `user_settings/{uid}.notificationPreferences`
+  // — the document the server actually reads when dispatching a notification.
+  // Without the mirror these switches were inert.
+  const handleNotificationChannel = useCallback(async (path, value) => {
+    updateSetting(path, value);
+    if (!uid) return;
+    const channel = path === 'notifications.push' ? 'push'
+      : path === 'notifications.email' ? 'email'
+        : null;
+    if (!channel) return;
+    try {
+      const { default: notificationsService } = await import('../services/notificationsService.js');
+      await notificationsService.updateUserNotificationPreferences(uid, { [channel]: value });
+    } catch (err) {
+      console.warn('Failed to sync notification preference:', err);
+    }
+  }, [uid, updateSetting]);
 
   const handleLanguage = async (code) => {
     try {
@@ -273,7 +296,7 @@ export default function SettingsScreen() {
     setDeleting(true);
     try {
       const { default: userService } = await import('../services/userService.js');
-      await userService.deleteUserData(uid);
+      await userService.deleteAccount(uid);
       setShowDeleteConfirm(false);
       toast.success(t('settings.accountDeleted'));
       navigate('/login');
@@ -368,7 +391,9 @@ export default function SettingsScreen() {
                     ? t('level.maxLevelDesc')
                     : t('level.xpProgress', {
                         xp: Math.round(levelInfo.xpIntoLevel),
-                        next: levelInfo.nextLevelXp,
+                        // `nextLevelXp` is an absolute total; the numerator is
+                        // relative, so the level span is the honest denominator.
+                        next: levelInfo.nextLevelXp - levelInfo.currentLevelXp,
                       })}
                 </p>
               </div>
@@ -406,48 +431,48 @@ export default function SettingsScreen() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {(() => {
-                  const gates = LEVEL_GATES || { customBadge: 12, verifiedPriority: 15, sovereign: 50, transcendent: 100 };
+                  const gates = LEVEL_GATES;
                   return (
                     <>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= 2 
+                        levelInfo.level >= gates.advancedEditor 
                           ? "bg-purple-500/15 border-purple-500/30 text-purple-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < 2 && "• Unlocks Lvl 2"}
+                        <span>✏️</span> Status &amp; Bio Customization {levelInfo.level < gates.advancedEditor && `• Unlocks Lvl ${gates.advancedEditor}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.customBadge ?? 12)
+                        levelInfo.level >= gates.customBadge
                           ? "bg-amber-500/15 border-amber-500/30 text-amber-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>🏷️</span> Custom Badge {levelInfo.level < (gates.customBadge ?? 12) && `• Unlocks Lvl ${gates.customBadge ?? 12}`}
+                        <span>🏷️</span> Custom Badge {levelInfo.level < gates.customBadge && `• Unlocks Lvl ${gates.customBadge}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.verifiedPriority ?? 15)
+                        levelInfo.level >= gates.verifiedPriority
                           ? "bg-blue-500/15 border-blue-500/30 text-blue-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>🎨</span> Custom Profile Accent {levelInfo.level < (gates.verifiedPriority ?? 15) && `• Unlocks Lvl ${gates.verifiedPriority ?? 15}`}
+                        <span>🎨</span> Custom Profile Accent {levelInfo.level < gates.verifiedPriority && `• Unlocks Lvl ${gates.verifiedPriority}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.sovereign ?? 50)
+                        levelInfo.level >= gates.sovereign
                           ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>💎</span> Cornerstone Aura Glow {levelInfo.level < (gates.sovereign ?? 50) && `• Unlocks Lvl ${gates.sovereign ?? 50}`}
+                        <span>💎</span> Cornerstone Aura Glow {levelInfo.level < gates.sovereign && `• Unlocks Lvl ${gates.sovereign}`}
                       </span>
                       <span className={cn(
                         "px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5",
-                        levelInfo.level >= (gates.transcendent ?? 100)
+                        levelInfo.level >= gates.transcendent
                           ? "bg-yellow-500/15 border-yellow-500/30 text-yellow-300" 
                           : "bg-white/5 border-white/10 text-gray-500"
                       )}>
-                        <span>👑</span> Monarch Halo {levelInfo.level < (gates.transcendent ?? 100) && `• Unlocks Lvl ${gates.transcendent ?? 100}`}
+                        <span>👑</span> Monarch Halo {levelInfo.level < gates.transcendent && `• Unlocks Lvl ${gates.transcendent}`}
                       </span>
                     </>
                   );
@@ -514,10 +539,9 @@ export default function SettingsScreen() {
 
         {/* ============ NOTIFICATIONS ============ */}
         <Section icon={Bell} title={t('settings.notificationsSection')}>
-          <ToggleRow icon={Bell} label={t('settings.pushNotifs')} checked={settings.notifications.push} onChange={(v) => updateSetting('notifications.push', v)} />
-          <ToggleRow icon={MailIcon} label={t('settings.emailNotifs')} checked={settings.notifications.email} onChange={(v) => updateSetting('notifications.email', v)} />
+          <ToggleRow icon={Bell} label={t('settings.pushNotifs')} checked={settings.notifications.push} onChange={(v) => handleNotificationChannel('notifications.push', v)} />
+          <ToggleRow icon={MailIcon} label={t('settings.emailNotifs')} checked={settings.notifications.email} onChange={(v) => handleNotificationChannel('notifications.email', v)} />
           <ToggleRow icon={Volume2} label={t('settings.soundFx')} checked={settings.notifications.soundFx} onChange={(v) => updateSetting('notifications.soundFx', v)} />
-          <ToggleRow icon={Smartphone} label={t('settings.spatialAudio')} checked={settings.notifications.spatialAudio} onChange={(v) => updateSetting('notifications.spatialAudio', v)} />
         </Section>
 
         {/* ============ PRIVACY & AUDIENCE GOVERNANCE ============ */}
@@ -711,24 +735,6 @@ export default function SettingsScreen() {
         {/* ============ PLAYBACK ============ */}
         <Section icon={Video} title={t('settings.playbackSection')}>
           <ToggleRow icon={Video} label={t('settings.autoPlay')} checked={settings.playback.autoPlayVideos} onChange={(v) => updateSetting('playback.autoPlayVideos', v)} />
-          <div className="w-full py-3.5">
-            <div className="flex items-start gap-3 mb-2">
-              <Video className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
-              <div>
-                <p className="font-bold text-sm">{t('settings.streamQuality')}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label={t('settings.streamQuality')}>
-              {['auto', '480p', '720p', '1080p', '4K'].map((q) => (
-                <OptionPill
-                  key={q}
-                  label={q}
-                  active={settings.playback.streamQuality === q}
-                  onClick={() => updateSetting('playback.streamQuality', q)}
-                />
-              ))}
-            </div>
-          </div>
         </Section>
 
         {/* ============ DATA & CACHE ============ */}

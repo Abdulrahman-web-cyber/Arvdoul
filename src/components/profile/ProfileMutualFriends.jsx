@@ -15,6 +15,7 @@ const ProfileMutualFriends = memo(({
   isFollowing = false,
   targetName = 'Creator',
   theme = 'light',
+  capabilities = null,
   onFriendPress,
   onCommunityClick,
 }) => {
@@ -26,6 +27,7 @@ const ProfileMutualFriends = memo(({
       isFollowing={isFollowing}
       targetName={targetName}
       theme={theme}
+      capabilities={capabilities}
       onFriendClick={onFriendPress}
       onCommunityClick={onCommunityClick}
     />

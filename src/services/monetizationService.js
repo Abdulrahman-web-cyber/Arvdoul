@@ -15,7 +15,6 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
 import { openDB } from 'idb';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
@@ -24,7 +23,7 @@ import { svcLogger } from './ServiceKit.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
-import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG } from '../shared/levelConfig.cjs';
+import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG, getLevelInfo } from '../shared/levelConfig.cjs';
 
 const log = svcLogger('monetizationService');
 
@@ -278,24 +277,28 @@ class MonetizationService {
       // create offline queue with reference to this service
       this.offlineQueue = new OfflineMonetizationQueue(this);
 
-      const functions = getFunctions();
-      this.cfAddCoins = httpsCallable(functions, 'addCoins');
-      this.cfSpendCoins = httpsCallable(functions, 'spendCoins');
-      this.cfTransferCoins = httpsCallable(functions, 'transferCoins');
-      this.cfSendGift = httpsCallable(functions, 'sendGift');
-      this.cfBoostPost = httpsCallable(functions, 'boostPost');
-      this.cfRequestWithdrawal = httpsCallable(functions, 'requestWithdrawal');
-      this.cfRecordAdImpression = httpsCallable(functions, 'recordAdImpression');
-      this.cfGetSponsoredSearchResult = httpsCallable(functions, 'getSponsoredSearchResult');
-      this.cfGetAd = httpsCallable(functions, 'getAd');
-      this.cfWatchAd = httpsCallable(functions, 'watchAd');
-      this.cfReportAd = httpsCallable(functions, 'reportAd');
-      this.cfPurchaseCoins = httpsCallable(functions, 'purchaseCoins');
-      this.cfGetSubscriptionStatus = httpsCallable(functions, 'getSubscriptionStatus');
-      this.cfCreateSubscription = httpsCallable(functions, 'createSubscription');
-      this.cfCancelSubscription = httpsCallable(functions, 'cancelSubscription');
-      this.cfGetPayoutSettings = httpsCallable(functions, 'getPayoutSettings');
-      this.cfCreatePayoutAccount = httpsCallable(functions, 'createPayoutAccount');
+      // Every callable goes through the canonical callableService. `cf` re-wraps
+      // the data-returning helper in the `{ data }` envelope the call sites
+      // below destructure.
+      const { makeCallable, FUNCTIONS } = await import('./callableService.js');
+      const cf = makeCallable;
+      this.cfAddCoins = cf(FUNCTIONS.ADD_COINS);
+      this.cfSpendCoins = cf(FUNCTIONS.SPEND_COINS);
+      this.cfTransferCoins = cf(FUNCTIONS.TRANSFER_COINS);
+      this.cfSendGift = cf(FUNCTIONS.SEND_GIFT);
+      this.cfBoostPost = cf(FUNCTIONS.BOOST_POST);
+      this.cfRequestWithdrawal = cf(FUNCTIONS.REQUEST_WITHDRAWAL);
+      this.cfRecordAdImpression = cf(FUNCTIONS.RECORD_AD_IMPRESSION);
+      this.cfGetSponsoredSearchResult = cf(FUNCTIONS.GET_SPONSORED_SEARCH_RESULT);
+      this.cfGetAd = cf(FUNCTIONS.GET_AD);
+      this.cfWatchAd = cf(FUNCTIONS.WATCH_AD);
+      this.cfReportAd = cf(FUNCTIONS.REPORT_AD);
+      this.cfPurchaseCoins = cf(FUNCTIONS.PURCHASE_COINS);
+      this.cfGetSubscriptionStatus = cf(FUNCTIONS.GET_SUBSCRIPTION_STATUS);
+      this.cfCreateSubscription = cf(FUNCTIONS.CREATE_SUBSCRIPTION);
+      this.cfCancelSubscription = cf(FUNCTIONS.CANCEL_SUBSCRIPTION);
+      this.cfGetPayoutSettings = cf(FUNCTIONS.GET_PAYOUT_SETTINGS);
+      this.cfCreatePayoutAccount = cf(FUNCTIONS.CREATE_PAYOUT_ACCOUNT);
 
       // Initialize Stripe SDK asynchronously
       const stripePublicKey = import.meta.env?.VITE_STRIPE_PUBLIC_KEY;
@@ -393,41 +396,31 @@ class MonetizationService {
 
   async getUserLevel(userId) {
     await this._ensureInitialized();
-    let currentLevel = 1;
-    let currentXP = 0;
+    let experience = 0;
+    let hasStanding = false;
     if (userId) {
       try {
         const userRef = doc(this.db, 'users', userId);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
-          currentLevel = data.level || 1;
-          currentXP = data.experience || 0;
+          experience = Number(data.experience) || 0;
+          hasStanding = data.level !== undefined || data.experience !== undefined;
         }
       } catch (e) {
         log.error('Failed to fetch user level info:', e);
       }
     }
-    const levels = this.config.LEVELS;
-    const currentLevelData = levels.find(l => l.level === currentLevel) || levels[0];
-    const nextLevelIndex = levels.findIndex(l => l.level === currentLevel) + 1;
-    const nextLevel = nextLevelIndex < levels.length ? levels[nextLevelIndex] : null;
-
-    let rawProgress = 100;
-    if (nextLevel) {
-      const denominator = nextLevel.xpRequired - currentLevelData.xpRequired;
-      if (denominator > 0) {
-        rawProgress = ((currentXP - currentLevelData.xpRequired) / denominator) * 100;
-      }
-    }
-    const progress = Math.max(0, Math.min(100, rawProgress));
-
+    // Delegate to the canonical curve (src/shared/levelConfig.cjs) rather than
+    // re-deriving level/progress from a locally-held copy of the level table,
+    // which is the drift AGENTS.md forbids. Absent standing stays unknown.
+    const info = getLevelInfo(experience);
     return {
-      level: currentLevel,
-      experience: currentXP,
-      nextLevelXP: nextLevel ? nextLevel.xpRequired : null,
-      xpToNextLevel: nextLevel ? Math.max(0, nextLevel.xpRequired - currentXP) : 0,
-      progress,
+      level: hasStanding ? info.level : null,
+      experience,
+      nextLevelXP: info.nextLevelXp,
+      xpToNextLevel: info.xpToNext,
+      progress: info.progress,
     };
   }
 
@@ -854,8 +847,10 @@ class MonetizationService {
   }
 
   /**
-   * Best-effort social loop after a gift is sent: notify the post author and
-   * award gift_received XP. Never throws into the gift path.
+   * Best-effort social loop after a gift is sent: notify the post author. The
+   * `gift_received` XP is credited server-side in `sendGift` (which holds the
+   * gift transaction id), so it cannot be minted by a client without a real
+   * gift. Never throws into the gift path.
    * @private
    */
   async _afterGiftSent(senderId, postId, giftType, cost) {
@@ -867,11 +862,8 @@ class MonetizationService {
 
       const { getNotificationsService } = await import('./notificationsService.js');
       await getNotificationsService().createGiftNotification(senderId, authorId, postId, giftType, cost);
-
-      const { levelSystemService } = await import('./levelSystemService.js');
-      await levelSystemService.awardExperience({ userId: authorId, action: 'gift_received', source: postId });
     } catch (err) {
-      log.debug('[Gift] Post-gift notification/XP skipped:', { error: err.message });
+      log.debug('[Gift] Post-gift notification skipped:', { error: err.message });
     }
   }
 

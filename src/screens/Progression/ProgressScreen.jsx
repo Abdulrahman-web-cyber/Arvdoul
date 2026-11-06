@@ -74,7 +74,12 @@ export default function ProgressScreen() {
     await loadProgression();
   };
 
-  const level = levelInfo?.level || user?.level || 1;
+  // A missing stored level renders as unavailable, never as a plausible-but-false
+  // "Level 1". `level` is still floored to 1 for gate math (perk/tier lookup),
+  // but `hasLevel` decides what the standing badge claims.
+  const hasLevel = (levelInfo?.level != null && Number.isFinite(Number(levelInfo.level)))
+    || (user?.level != null && Number.isFinite(Number(user.level)));
+  const level = levelInfo?.level ?? user?.level ?? 1;
   const citizenTier = useMemo(() => getCitizenTier(level, activeDaysCount), [level, activeDaysCount]);
   const prestige = useMemo(() => getPrestigeInfo(level), [level]);
 
@@ -92,7 +97,8 @@ export default function ProgressScreen() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
-              {citizenTier.tier} · Level {level} {prestige.isPrestige ? `· Prestige ${prestige.prestigeRoman}` : ''}
+              {hasLevel ? `${citizenTier.tier} · Level ${level}` : 'Standing unavailable'}
+              {hasLevel && prestige.isPrestige ? ` · Prestige ${prestige.prestigeRoman}` : ''}
             </span>
           </div>
 
@@ -136,15 +142,17 @@ export default function ProgressScreen() {
                 Current Standing
               </span>
               <h2 id="progress-overview-heading" className="text-3xl font-extrabold tracking-tight mt-1">
-                Level {level}
-                <span className="text-lg font-medium text-gray-500 ml-2">
-                  {levelInfo?.title || citizenTier.tier}
-                </span>
+                {hasLevel ? `Level ${level}` : 'Level unavailable'}
+                {hasLevel && (
+                  <span className="text-lg font-medium text-gray-500 ml-2">
+                    {levelInfo?.title || citizenTier.tier}
+                  </span>
+                )}
               </h2>
             </div>
             <div className="text-right">
-              <span className="text-2xl">{citizenTier.icon}</span>
-              <p className="text-xs text-gray-500 mt-1">{citizenTier.tier} Tier</p>
+              <span className="text-2xl">{hasLevel ? citizenTier.icon : '—'}</span>
+              <p className="text-xs text-gray-500 mt-1">{hasLevel ? `${citizenTier.tier} Tier` : 'Not yet rated'}</p>
             </div>
           </div>
 
@@ -153,7 +161,11 @@ export default function ProgressScreen() {
             <div className="flex justify-between text-xs text-gray-400">
               <span>{levelInfo?.xpIntoLevel || 0} XP earned this level</span>
               <span>
-                {levelInfo?.isMaxLevel ? 'Ascendant' : `${levelInfo?.xpToNext || 0} XP to Level ${level + 1}`}
+                {!hasLevel
+                  ? 'Progress unavailable'
+                  : levelInfo?.isMaxLevel
+                    ? 'Ascendant'
+                    : `${levelInfo?.xpToNext || 0} XP to Level ${level + 1}`}
               </span>
             </div>
             <div

@@ -19,7 +19,6 @@ import * as userService from '../services/userService.js';
 import { getBalance, sendGift, boostPost, transferCoins, getUserPosition } from '../services/monetizationService.js';
 import feedService from '../services/feedService.js';
 import { callFunction, FUNCTIONS } from '../services/callableService.js';
-import { openDB } from 'idb';
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -34,109 +33,30 @@ const shadows = {
 const authorMetaCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
-let dbPromise = null;
-const MAX_QUEUE_ITEMS = 100;
-const QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-let replayLock = false;
-
-async function getOfflineDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = await openDB('arvdoul_actions_offline_v5', 1, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains('queue')) {
-        const store = db.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
-        store.createIndex('timestamp', 'timestamp');
-        store.createIndex('action_key', ['action', 'data.postId', 'data.userId', 'data.targetId']);
-      }
-    },
-  });
-  return dbPromise;
-}
-
-async function isDuplicate(action, data) {
-  const db = await getOfflineDB();
-  const tx = db.transaction('queue', 'readonly');
-  const index = tx.store.index('action_key');
-  const key = [action, data.postId || null, data.userId || null, data.targetId || null];
-  const range = IDBKeyRange.only(key);
-  const matches = await index.getAll(range);
-  return matches.length > 0;
-}
-
+// Offline persistence/replay is owned by the canonical syncEngine/OfflineQueue
+// singleton. This drawer used to keep a third parallel IndexedDB action queue
+// with its own replay loop, so queued saves and follows were invisible to every
+// other offline path.
 async function addToOfflineQueue(action, data) {
   if (navigator.onLine) return;
-  if (await isDuplicate(action, data)) return;
-  const db = await getOfflineDB();
-  // Prune expired items
-  const txPrune = db.transaction('queue', 'readwrite');
-  const index = txPrune.store.index('timestamp');
-  const cutoff = Date.now() - QUEUE_TTL_MS;
-  let cursor = await index.openCursor();
-  while (cursor) {
-    if (cursor.value.timestamp < cutoff) await cursor.delete();
-    cursor = await cursor.continue();
-  }
-  await txPrune.done;
-  // Remove oldest if queue exceeds limit
-  let count = 0;
-  const countCursor = await db.transaction('queue', 'readonly').store.openCursor();
-  while (countCursor && count < MAX_QUEUE_ITEMS + 1) { count++; await countCursor.continue(); }
-  if (count > MAX_QUEUE_ITEMS) {
-    const oldestCursor = await db.transaction('queue', 'readwrite').store.index('timestamp').openCursor();
-    if (oldestCursor) await oldestCursor.delete();
-  }
-  // ownerUid partitions the queue by account so a later session cannot replay
-  // this user's pending writes.
-  await db.add('queue', { action, data, ownerUid: data.userId || null, timestamp: Date.now(), retries: 0 });
-}
-
-async function replayOfflineQueue(currentUid = null) {
-  if (replayLock) return;
-  if (!navigator.onLine) return;
-  if (typeof navigator !== 'undefined' && navigator.locks) {
-    await navigator.locks.request('arvdoul_offline_replay', { ifAvailable: true }, async () => {
-      replayLock = true;
-      try { await doReplay(currentUid); } finally { replayLock = false; }
+  const { enqueueAction } = await import('../offline/syncEngine.js');
+  if (action === 'save' || action === 'unsave') {
+    await enqueueAction({
+      type: action === 'save' ? 'post.save' : 'post.unsave',
+      payload: { postId: data.postId, userId: data.userId },
+      priority: 'high',
+      ownerUid: data.userId || null,
     });
-  } else {
-    replayLock = true;
-    try { await doReplay(); } finally { replayLock = false; }
+  } else if (action === 'follow' || action === 'unfollow') {
+    await enqueueAction({
+      type: action === 'follow' ? 'user.follow' : 'user.unfollow',
+      payload: { followerId: data.userId, followingId: data.targetId },
+      priority: 'high',
+      ownerUid: data.userId || null,
+    });
   }
 }
 
-async function doReplay(currentUid = null) {
-  const db = await getOfflineDB();
-  const tx = db.transaction('queue', 'readonly');
-  const all = await tx.store.getAll();
-  // Only replay ops owned by the signed-in account.
-  const items = currentUid ? all.filter((item) => item.ownerUid === currentUid) : [];
-  if (!items.length) return;
-  items.sort((a, b) => a.timestamp - b.timestamp);
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    const batch = items.slice(i, i + BATCH_SIZE);
-    await Promise.allSettled(batch.map(async (item) => {
-      if (Date.now() - item.timestamp > QUEUE_TTL_MS) {
-        await db.delete('queue', item.id);
-        return;
-      }
-      try {
-        const { action, data } = item;
-        if (action === 'save') await firestoreService.savePost(data.postId, data.userId);
-        else if (action === 'unsave') await firestoreService.unsavePost(data.postId, data.userId);
-        else if (action === 'follow') await userService.followUser(data.userId, data.targetId);
-        else if (action === 'unfollow') await userService.unfollowUser(data.userId, data.targetId);
-        await db.delete('queue', item.id);
-      } catch (err) {
-        if (item.retries >= 3 || Date.now() - item.timestamp > QUEUE_TTL_MS) {
-          await db.delete('queue', item.id);
-        } else {
-          await db.put('queue', { ...item, retries: (item.retries || 0) + 1 });
-        }
-      }
-    }));
-  }
-}
 
 async function downloadFile(url, filename, maxSizeMB = 50) {
   try {
@@ -354,15 +274,6 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
       getBalance(currentUser.uid).then(setCoinBalance).catch(() => setCoinBalance(null));
     }
   }, [modal, currentUser]);
-
-  // Offline queue listener (re-bound on account switch)
-  useEffect(() => {
-    const handler = async () => {
-      await replayOfflineQueue(currentUser?.uid || null);
-    };
-    window.addEventListener('online', handler);
-    return () => window.removeEventListener('online', handler);
-  }, [currentUser?.uid]);
 
   // Scroll lock & focus trap
   useEffect(() => {

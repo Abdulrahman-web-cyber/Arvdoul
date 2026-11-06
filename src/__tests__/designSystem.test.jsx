@@ -10,7 +10,6 @@ import i18n from 'i18next';
 import Button from '../design-system/Button.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
-import Skeleton, { CardSkeleton } from '../design-system/Skeleton.jsx';
 import NotFoundScreen from '../screens/NotFoundScreen.jsx';
 
 // lib/utils.js is ESM; this .jsx test is transformed to CJS, so stub it.
@@ -106,20 +105,6 @@ describe('design-system ErrorState', () => {
     renderWithI18n(<ErrorState title="Error" onRetry={onRetry} />);
     screen.getByRole('button', { name: 'Retry' }).click();
     expect(onRetry).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('design-system Skeleton', () => {
-  test('has no axe violations and is hidden from assistive tech', async () => {
-    const { container } = renderWithI18n(
-      <div>
-        <CardSkeleton />
-        <Skeleton shape="circle" width="w-10" height="h-10" />
-      </div>
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThan(0);
   });
 });
 

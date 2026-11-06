@@ -27,6 +27,10 @@ jest.mock('../context/ThemeContext.jsx', () => ({
 }));
 jest.mock('../context/AuthContext.jsx', () => ({
   useAuth: () => ({ authInitialized: true, isAuthenticated: false }),
+  // IntroScreen reads the optional context; without this the screen throws into
+  // its error boundary and the assertions below pass against the fallback UI
+  // instead of the real screen.
+  useOptionalAuth: () => ({ authInitialized: true, isAuthenticated: false }),
 }));
 jest.mock('../i18n/index.js', () => {
   const ReactMock = require('react');

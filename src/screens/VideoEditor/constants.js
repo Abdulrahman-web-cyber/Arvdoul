@@ -84,12 +84,12 @@ export const STICKER_CATEGORIES = [
 ];
 
 export const INITIAL_TRACKS = [
-  { id: 'track_video_1', name: 'Video 1', type: 'video', visible: true, locked: false, icon: 'Video' },
-  { id: 'track_video_2', name: 'Video 2', type: 'video', visible: true, locked: false, icon: 'Video' },
-  { id: 'track_overlay', name: 'Overlay', type: 'overlay', visible: true, locked: false, icon: 'Layers' },
-  { id: 'track_text', name: 'Text', type: 'text', visible: true, locked: false, icon: 'Type' },
-  { id: 'track_audio_1', name: 'Audio 1', type: 'audio', visible: true, locked: false, icon: 'Music' },
-  { id: 'track_audio_2', name: 'Audio 2', type: 'audio', visible: true, locked: false, icon: 'Mic' },
+  { id: 'track-video', name: 'Video 1', type: 'video', visible: true, locked: false, muted: false, icon: 'Video', clips: [] },
+  { id: 'track-video-2', name: 'Video 2', type: 'video', visible: true, locked: false, muted: false, icon: 'Video', clips: [] },
+  { id: 'track-overlay', name: 'Overlay', type: 'overlay', visible: true, locked: false, muted: false, icon: 'Layers', clips: [] },
+  { id: 'track-text', name: 'Text', type: 'text', visible: true, locked: false, muted: false, icon: 'Type', clips: [] },
+  { id: 'track-stickers', name: 'Stickers', type: 'sticker', visible: true, locked: false, muted: false, icon: 'Star', clips: [] },
+  { id: 'track-audio', name: 'Audio 1', type: 'audio', visible: true, locked: false, muted: false, icon: 'Music', clips: [] },
 ];
 
 export const STOCK_VIDEOS = [];

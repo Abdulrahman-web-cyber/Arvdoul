@@ -40,6 +40,7 @@ import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatDuration, ARVDOUL_GRADIENT, SPRING_ANIMATION, formatViewCount } from '../../utils/videoUtils';
+import useDoubleTap from '../../hooks/useDoubleTap.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 
@@ -56,6 +57,7 @@ const VideoCard = memo(({
   onGift,
   onReport,
   onFollow,
+  followedByViewer,
   autoPlay = false,
   showControls = true,
   className = '',
@@ -75,7 +77,7 @@ const VideoCard = memo(({
   const [showSettings, setShowSettings] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(video?.creator?.isFollowing || false);
+  const [isFollowing, setIsFollowing] = useState(followedByViewer ?? video?.creator?.isFollowing ?? false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showGestureGuide, setShowGestureGuide] = useState(true);
@@ -176,12 +178,14 @@ const VideoCard = memo(({
     }
   }, [isLooping, addToHistory, video?.id, duration]);
 
-  // Double tap to like with bursting heart animation
+  // Double tap to like with bursting heart animation. `onDoubleClick` never
+  // fires on touch devices, so tap detection goes through `useDoubleTap`
+  // (click-based, one fire per pair); a single tap still toggles play/pause.
   const handleDoubleTap = useCallback((e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = e.currentTarget?.getBoundingClientRect?.() || { left: 0, top: 0 };
     setLikeCoords({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (e.clientX || 0) - rect.left,
+      y: (e.clientY || 0) - rect.top,
     });
 
     setShowLikeAnimation(true);
@@ -191,6 +195,14 @@ const VideoCard = memo(({
       onLike?.();
     }
   }, [onLike, video?.isLiked]);
+
+  const { onClick: detectDoubleTap } = useDoubleTap(handleDoubleTap);
+
+  const handleContainerClick = useCallback((e) => {
+    // A completed double-tap already acted (like); do not also toggle playback.
+    if (detectDoubleTap(e)) return;
+    togglePlayPause();
+  }, [detectDoubleTap, togglePlayPause]);
 
   // Timeline scrubber click/seek
   const handleProgressClick = useCallback((e) => {
@@ -294,8 +306,7 @@ const VideoCard = memo(({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`relative w-full h-full bg-black overflow-hidden select-none flex items-center justify-center ${className}`}
-      onClick={togglePlayPause}
-      onDoubleClick={handleDoubleTap}
+      onClick={handleContainerClick}
     >
       {/* Video Stream Element */}
       <video
@@ -919,6 +930,7 @@ VideoCard.propTypes = {
   onGift: PropTypes.func,
   onReport: PropTypes.func,
   onFollow: PropTypes.func,
+  followedByViewer: PropTypes.bool,
   autoPlay: PropTypes.bool,
   showControls: PropTypes.bool,
   className: PropTypes.string,

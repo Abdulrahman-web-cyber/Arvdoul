@@ -6,7 +6,7 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src/ --ext .js,.jsx",
+    "lint": "eslint src/ functions/ --ext .js,.jsx",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll=false",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll=false --coverage",
     "analyze": "vite-bundle-visualizer",

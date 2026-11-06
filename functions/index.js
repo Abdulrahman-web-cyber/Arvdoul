@@ -8,6 +8,9 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 const db = admin.firestore();
+const dns = require('node:dns');
+const { checkRateLimit } = require('./rateLimit');
+const { assertAdmin, getUserEmail } = require('./auth');
 
 // ==================== FEATURE MODULES ====================
 // Each module self-registers its https.onCall / trigger exports with
@@ -37,6 +40,9 @@ merge(require('./messaging.js'));
 merge(require('./search.js'));
 merge(require('./monetization.js'));
 merge(require('./polls.js'));
+// Q&A: post-embedded questions/answers (server-authoritative answer votes and
+// the question author's accept-best decision).
+merge(require('./questions.js'));
 // GDPR compliance exports - MUST be merged or they never deploy
 // (deleteUserData lives in user.js; exportUserData lives in userExport.js).
 merge(require('./userExport.js'));
@@ -63,6 +69,9 @@ merge(require('./analytics.js'));
 // PII boundary backfill: moves legacy contact/verification/Stripe fields off
 // the world-readable users/{uid} doc into users_private/{uid}.
 merge(require('./privacyMigration.js'));
+// Keeps the denormalised posts.authorIsPrivate flag in step with the author's
+// privacy (the post read rule gates a private account's content on it).
+merge(require('./privacyPropagation.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -81,11 +90,114 @@ const VIDEO_CONFIG = {
 
 // ==================== LINK PREVIEW (scrapeLink) ====================
 // Client invokes this via httpsCallable to render rich link cards.
-exports.scrapeLink = functions.https.onCall(async (data) => {
-  const url = data && data.url;
-  if (typeof url !== 'string' || !url) {
-    throw new functions.https.HttpsError('invalid-argument', 'url is required');
+// Blocks loopback, link-local (incl. cloud metadata 169.254.169.254),
+// private RFC1918 ranges and IPv6 equivalents. An unauthenticated callable
+// that fetches a caller-supplied URL is an SSRF primitive otherwise.
+const BLOCKED_HOST_RE = /^(localhost|\.local|.*\.local|.*\.internal)$/i;
+
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const a = Number(v4[1]);
+    const b = Number(v4[2]);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true;
+    return false;
   }
+  const low = ip.toLowerCase();
+  if (low === '::1' || low === '::') return true;
+  if (low.startsWith('fe80') || low.startsWith('fc') || low.startsWith('fd')) return true;
+  if (low.startsWith('::ffff:')) return isPrivateIp(low.slice(7));
+  return false;
+}
+
+async function assertPublicUrl(parsed) {
+  const host = parsed.hostname;
+  if (BLOCKED_HOST_RE.test(host) || isPrivateIp(host)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Blocked host');
+  }
+  let addrs;
+  try {
+    addrs = await dns.promises.lookup(host, { all: true });
+  } catch (_) {
+    throw new functions.https.HttpsError('invalid-argument', 'Unresolvable host');
+  }
+  if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) {
+    throw new functions.https.HttpsError('invalid-argument', 'Blocked host');
+  }
+}
+
+// Follow redirects by hand so every hop is re-validated; `redirect: 'follow'`
+// would let a public URL bounce to 169.254.169.254.
+async function safeFetch(startUrl) {
+  let current = startUrl;
+  for (let hop = 0; hop <= 3; hop++) {
+    const parsed = new URL(current);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new functions.https.HttpsError('invalid-argument', 'unsupported protocol');
+    }
+    await assertPublicUrl(parsed);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let res;
+    try {
+      res = await fetch(current, {
+        signal: controller.signal,
+        redirect: 'manual',
+        headers: { 'user-agent': 'ArvdoulBot/1.0 (+https://arvdoul.web.app)' },
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) {
+      current = new URL(location, current).href;
+      continue;
+    }
+    return res;
+  }
+  throw new functions.https.HttpsError('unavailable', 'Too many redirects');
+}
+
+async function readCapped(res, maxBytes) {
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    return (await res.text()).slice(0, maxBytes);
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (received < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.length;
+    chunks.push(value);
+  }
+  try { await reader.cancel(); } catch (_) { /* already closed */ }
+  return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8').slice(0, maxBytes);
+}
+
+function extractMeta(html, prop) {
+  const a = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'));
+  const b = html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
+  return (a && a[1]) || (b && b[1]) || null;
+}
+
+function buildLinkPreview(html, parsed) {
+  const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return {
+    url: parsed.href,
+    title: (extractMeta(html, 'og:title') || (titleTag && titleTag[1]) || '').trim(),
+    description: (extractMeta(html, 'og:description') || extractMeta(html, 'description') || '').trim(),
+    image: (extractMeta(html, 'og:image') || '').trim(),
+    siteName: (extractMeta(html, 'og:site_name') || parsed.hostname || '').trim(),
+  };
+}
+
+function parseHttpUrl(url) {
   let parsed;
   try {
     parsed = new URL(url);
@@ -95,37 +207,27 @@ exports.scrapeLink = functions.https.onCall(async (data) => {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new functions.https.HttpsError('invalid-argument', 'unsupported protocol');
   }
+  return parsed;
+}
+
+exports.scrapeLink = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  await checkRateLimit(context.auth.uid, 'scrapeLink', 30, 60000);
+
+  const url = data && data.url;
+  if (typeof url !== 'string' || !url) {
+    throw new functions.https.HttpsError('invalid-argument', 'url is required');
+  }
+  const parsed = parseHttpUrl(url);
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(parsed.href, {
-      signal: controller.signal,
-      headers: { 'user-agent': 'ArvdoulBot/1.0 (+https://arvdoul.web.app)' },
-    });
-    clearTimeout(timeout);
-    const html = await res.text();
-
-    const meta = (prop) => {
-      const a = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, 'i'));
-      const b = html.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
-      return (a && a[1]) || (b && a && b[1]) || null;
-    };
-
-    const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const title = (meta('og:title') || (titleTag && titleTag[1]) || '').trim();
-    const description = (meta('og:description') || meta('description') || '').trim();
-    const image = (meta('og:image') || '').trim();
-    const siteName = (meta('og:site_name') || parsed.hostname || '').trim();
-
-    return {
-      url: parsed.href,
-      title,
-      description,
-      image,
-      siteName,
-    };
+    const res = await safeFetch(parsed.href);
+    if (!res.ok) {
+      throw new functions.https.HttpsError('unavailable', 'Could not fetch link preview');
+    }
+    return buildLinkPreview(await readCapped(res, 512 * 1024), parsed);
   } catch (err) {
+    if (err instanceof functions.https.HttpsError) throw err;
     throw new functions.https.HttpsError('unavailable', 'Could not fetch link preview');
   }
 });
@@ -275,8 +377,17 @@ exports.deleteVideo = functions.https.onCall(async (data, context) => {
 // ==================== PUSH & EMAIL NOTIFICATIONS ====================
 
 exports.sendEmailNotification = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { to, subject, body, notificationId } = data;
+  // Admin-only: this is a server-side transactional-email primitive. An
+  // authenticated-but-unprivileged caller could otherwise use it as an open
+  // relay to send arbitrary HTML to any address from the Arvdoul domain.
+  const uid = await assertAdmin(context);
+  const { subject, body, notificationId } = data;
+
+  // The recipient is derived server-side from the caller's own verified
+  // account (or an explicit `to` an admin supplies for support flows) — never
+  // an arbitrary client-chosen address.
+  const to = data.to || (await getUserEmail(uid));
+  if (!to) throw new functions.https.HttpsError('failed-precondition', 'No recipient email on file.');
 
   // Honest email delivery: real SendGrid call when configured. Without
   // configuration the function reports 'unconfigured' — it NEVER logs a

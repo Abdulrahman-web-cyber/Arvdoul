@@ -89,6 +89,8 @@ const XP_RULES = Object.freeze({
   story_created: { xp: 15, dailyCap: 45 },
   audio_track_created: { xp: 25, dailyCap: 50 },
   comment_created: { xp: 5, dailyCap: 50 },
+  answer_created: { xp: 10, dailyCap: 50 },
+  answer_accepted: { xp: 25, dailyCap: 50 },
   like_received: { xp: 1, dailyCap: 50 },
   follow_received: { xp: 15, dailyCap: 150 },
   daily_login: { xp: 20, dailyCap: 20 },
@@ -114,8 +116,10 @@ const LEVEL_GATES = Object.freeze({
   liveStreaming: 5,
   giftBoost: 7,
   withdrawals: 10,
+  civicVanguard: 10,
   customBadge: 12,
   verifiedPriority: 15,
+  diplomaticEnvoy: 15,
   earlyAccessStudio: 20,
   citizenCouncil: 30,
   sovereign: 50,
@@ -173,7 +177,8 @@ function getRoyalEligibility(titleName, stats = {}) {
       ? stats.achievementsCount
       : (Array.isArray(stats.achievements) ? stats.achievements.length : stats.achievements)
   ) || 0;
-  const standing = stats.policyStanding || stats.accountStanding;
+  const standingRaw = stats.policyStanding || stats.accountStanding || stats.accountStatus;
+  const standing = typeof standingRaw === 'string' ? standingRaw.toLowerCase() : standingRaw;
 
   const missing = [];
   if (level < rule.minLevel) missing.push('level');
@@ -182,7 +187,13 @@ function getRoyalEligibility(titleName, stats = {}) {
   if (contribution < rule.minContribution) missing.push('contribution');
   if (influence < rule.minInfluence) missing.push('influence');
   if (achievements < rule.minAchievements) missing.push('achievements');
-  if (rule.requiresGoodStanding && standing !== undefined && standing !== null && standing !== 'good') {
+  // Fail closed: a royal title requires a standing that is *affirmatively* good.
+  // The account vocabulary (`accountStatus`) says 'active'; the policy
+  // vocabulary (`policyStanding`) says 'good'. An absent signal is NOT good
+  // standing — the previous `standing !== undefined && ...` check let a caller
+  // that forgot to pass a standing silently grant the title.
+  const GOOD_STANDING = ['good', 'active'];
+  if (rule.requiresGoodStanding && !GOOD_STANDING.includes(standing)) {
     missing.push('policyStanding');
   }
 

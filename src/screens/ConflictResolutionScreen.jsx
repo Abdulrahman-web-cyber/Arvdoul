@@ -191,7 +191,7 @@ export const ConflictResolutionScreen = () => {
         <div className="pt-4 flex justify-end">
           <button
             id="btn-complete-conflict-resolution"
-            onClick={() => navigate('/app/feed')}
+            onClick={() => navigate('/home')}
             className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-emerald-500 hover:opacity-90 text-white font-medium rounded-xl text-sm transition shadow-lg"
           >
             Done &amp; Return to Feed
