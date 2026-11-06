@@ -452,14 +452,15 @@ const POST_TYPES = [
   { id: "event", label: "Events", icon: EventIcon, subtitle: "Plan together" },
 ];
 
+// Only scopes with a real backing model are offered. `close_friends`,
+// `subscribers` and `custom_list` had no list/edge/tier collection and no
+// management UI, so choosing them produced a post nobody (or everybody) could
+// see; they are withheld until the model exists.
 const VISIBILITY_OPTIONS = [
   { value: "public", label: "Public" },
   { value: "followers", label: "Followers" },
   { value: "friends", label: "Friends" },
-  { value: "close_friends", label: "Close Friends" },
-  { value: "subscribers", label: "Subscribers" },
   { value: "only_me", label: "Only Me" },
-  { value: "custom_list", label: "Custom List" },
 ];
 
 const MONETIZATION_TYPES = [

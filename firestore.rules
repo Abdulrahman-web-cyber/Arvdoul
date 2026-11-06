@@ -139,7 +139,13 @@ service cloud.firestore {
               (resource.data.visibility == 'public' ||
                 (resource.data.visibility == 'followers' &&
                   isSignedIn() &&
-                  followEdgeExists(uid(), resource.data.authorId))))
+                  followEdgeExists(uid(), resource.data.authorId)) ||
+                // "friends" is a mutual follow; the app has no separate friend
+                // edge, so both directions must exist.
+                (resource.data.visibility == 'friends' &&
+                  isSignedIn() &&
+                  followEdgeExists(uid(), resource.data.authorId) &&
+                  followEdgeExists(resource.data.authorId, uid()))))
           ));
     }
 

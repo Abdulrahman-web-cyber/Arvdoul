@@ -46,9 +46,10 @@ describe('posts per-document visibility rule', () => {
     expect(body).toMatch(/expiresAt/);
   });
 
-  test('requires a permitted visibility (public, followers-with-edge, community)', () => {
+  test('requires a permitted visibility (public, followers-with-edge, friends mutual, community)', () => {
     expect(body).toMatch(/visibility == 'public'/);
     expect(body).toMatch(/visibility == 'followers'/);
+    expect(body).toMatch(/visibility == 'friends'/);
     expect(body).toMatch(/followEdgeExists/);
     expect(body).toMatch(/visibility == 'community'/);
   });
@@ -95,5 +96,22 @@ describe('client post queries constrain a rule-provable shape', () => {
     expect(src).toMatch(/_publicPostFilters\(\)\s*\{/);
     // The helper is the single definition; ad-hoc authorIsPrivate filters are gone.
     expect(src.match(/where\('authorIsPrivate'/g)?.length || 0).toBe(1);
+  });
+
+  test('the composer only offers visibility scopes the rules can honour', () => {
+    const src = fs.readFileSync(path.join(root, 'src/screens/CreatePost.jsx'), 'utf8');
+    const block = src.slice(src.indexOf('const VISIBILITY_OPTIONS'), src.indexOf('const MONETIZATION_TYPES'));
+    const offered = [...block.matchAll(/value:\s*"([a-z_]+)"/g)].map((m) => m[1]);
+    expect(offered.length).toBeGreaterThan(0);
+    // Scopes with no backing model (no list/edge/tier collection, no management
+    // UI) must not be selectable.
+    for (const unsupported of ['close_friends', 'subscribers', 'custom_list']) {
+      expect(offered).not.toContain(unsupported);
+    }
+    // Every offered scope must be honoured by the post visibility rule —
+    // `only_me` is honored implicitly (only the author branch admits it).
+    for (const scope of offered.filter((s) => s !== 'only_me')) {
+      expect(rules).toContain(`visibility == '${scope}'`);
+    }
   });
 });
