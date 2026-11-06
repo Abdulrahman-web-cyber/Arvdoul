@@ -25,16 +25,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
     push: true,
     email: true,
     soundFx: true,
-    spatialAudio: true,
   },
   privacy: {
-    profilePrivate: false,
+    // Profile visibility (`isPrivate`) lives on the user profile, not here.
     allowDMs: 'everyone', // 'everyone' | 'friends' | 'none'
     showActiveStatus: true,
   },
   playback: {
     autoPlayVideos: true,
-    streamQuality: 'auto', // 'auto' | '480p' | '720p' | '1080p' | '4K'
   },
   appearance: {
     reduceMotion: false,

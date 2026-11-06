@@ -17,7 +17,11 @@ are expected — only treat errors as failures.
 - **Settings**: `src/services/settingsService.js` owns persisted user settings
   (`DEFAULT_SETTINGS`, `mergeSettings` deep-merge, `updateSetting` with optimistic write +
   rollback, `subscribeToSettings` realtime sync, `clearApplicationCache`). Always go through
-  this service — do not add parallel local-state settings.
+  this service — do not add parallel local-state settings. Every key here must be *read*
+  somewhere; a toggle that only persists is theatre. `privacy.profilePrivate` and
+  `notifications.spatialAudio` / `playback.streamQuality` were removed for exactly that
+  reason (profile privacy belongs on the profile; there is no spatial-audio graph or
+  bitrate ladder) — do not re-add them.
 - **Settings UI**: `/settings` (`src/screens/SettingsScreen.jsx`) is the canonical settings
   screen. `/profile/settings` redirects there. Do not reintroduce a second settings screen.
 - **Profile field constraints/validation**: `src/config/profileContracts.js`
@@ -208,6 +212,13 @@ with no listener is a silent no-op (`arvdoul:navigate` on a notification click a
 `arvdoul:post_id_synced` on an optimistic-post id swap were both dead). Add the listener
 in the same change that adds the dispatch.
 
+`src/__tests__/orphanModuleGuard.test.js` walks the import graph from the real entry
+point (`src/main.jsx`) and fails if any non-entry `src/**` module is unreachable. A
+module nothing imports can drift and keep stale tests green (whole "phase N"
+subsystems once sat on disk reachable only from their own test). Delete dead modules
+and their tests instead of exempting them; the only allowlisted entry is the
+hand-edited `src/design-system/tokens.js` registry, mirrored into `tokens.css`.
+
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus
   `profile.privacy.*` scopes) — not in the settings document.
@@ -392,5 +403,5 @@ JSX into modules the Functions runtime or a service test loads). Enforced by
 The `lint`/`test` jobs in `.github/workflows/ci.yml` use `continue-on-error: true`
 (advisory). The `guards` job is deliberately hard-failing and runs the invariant
 suites: architecture boundaries, Firebase cost, security-services, deploy
-integrity, shared-config sync, and Firestore rules compile. Add new invariant
-suites to that job.
+integrity, shared-config sync, Firestore rules compile, dead-event and
+orphan-module reachability. Add new invariant suites to that job.

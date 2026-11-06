@@ -52,4 +52,23 @@ describe('settings wiring', () => {
     expect(read('src/screens/ReelsScreen.jsx')).toMatch(/autoPlay=\{autoPlayEnabled\}/);
     expect(read('src/services/settingsService.js')).toContain('getCachedSettings');
   });
+
+  test('profile privacy is owned by the profile, not duplicated into settings', () => {
+    // AGENTS.md: profile privacy lives on users/{uid}.isPrivate + profile.privacy.*
+    expect(read('src/services/settingsService.js')).not.toContain('profilePrivate');
+    const screen = read('src/screens/SettingsScreen.jsx');
+    expect(screen).not.toMatch(/updateSetting\('privacy\.profilePrivate'/);
+    expect(screen).toMatch(/updateUserProfile\(uid, \{ isPrivate: val \}\)/);
+  });
+
+  test('settings expose no toggle the app cannot honour', () => {
+    // spatialAudio had no spatial-audio graph and streamQuality no HLS ladder;
+    // both were persisted and read by nothing. Removed rather than shipped as
+    // theatre (a control that silently does nothing is a lie).
+    const src = read('src/services/settingsService.js');
+    expect(src).not.toContain('spatialAudio');
+    expect(src).not.toContain('streamQuality');
+    expect(read('src/screens/SettingsScreen.jsx')).not.toContain('spatialAudio');
+    expect(read('src/screens/SettingsScreen.jsx')).not.toContain('streamQuality');
+  });
 });

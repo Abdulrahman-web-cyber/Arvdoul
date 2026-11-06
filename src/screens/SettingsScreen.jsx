@@ -15,7 +15,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Bell, Shield, Globe, HelpCircle, LogOut, Moon, Sun,
-  Lock, Trash2, Smartphone, Volume2, Video, Sparkles, DollarSign,
+  Lock, Trash2, Volume2, Video, Sparkles, DollarSign,
   Database, Info, ChevronRight, Check, AlertTriangle, Eye, User,
   Sliders, ShieldCheck, Key, RefreshCw, Languages, Activity, Trophy,
   Award, Zap, Coins
@@ -149,7 +149,9 @@ export default function SettingsScreen() {
       if (storeProfile?.privacy) {
         setProfilePrivacy({ ...DEFAULT_PROFILE_PRIVACY, ...storeProfile.privacy });
       }
-      setProfileIsPrivate(Boolean(storeProfile?.isPrivate ?? loaded?.privacy?.profilePrivate));
+      // Profile privacy is owned by the user profile (`users/{uid}.isPrivate`),
+      // never by the settings document - read it from the profile store only.
+      setProfileIsPrivate(Boolean(storeProfile?.isPrivate));
       // Apply persisted reduce-motion override
       if (loaded?.appearance?.reduceMotion) {
         document.documentElement.classList.add('arvdoul-reduce-motion');
@@ -199,7 +201,6 @@ export default function SettingsScreen() {
 
   const handleToggleProfilePrivate = useCallback(async (val) => {
     setProfileIsPrivate(val);
-    updateSetting('privacy.profilePrivate', val);
     if (!uid) return;
     try {
       const { getUserService } = await import('../services/userService.js');
@@ -210,9 +211,12 @@ export default function SettingsScreen() {
       }));
       toast.success(val ? 'Profile visibility set to Private' : 'Profile visibility set to Public');
     } catch (err) {
+      // Roll back the optimistic switch - the profile is the source of truth.
+      setProfileIsPrivate(!val);
       console.warn('Failed to sync profile private flag:', err);
+      toast.error(t('settings.saveFailed'));
     }
-  }, [uid, updateSetting]);
+  }, [uid, t]);
 
   const handleUpdateProfilePrivacyScope = useCallback(async (scopeKey, scopeVal) => {
     setProfilePrivacy((cur) => {
@@ -538,7 +542,6 @@ export default function SettingsScreen() {
           <ToggleRow icon={Bell} label={t('settings.pushNotifs')} checked={settings.notifications.push} onChange={(v) => handleNotificationChannel('notifications.push', v)} />
           <ToggleRow icon={MailIcon} label={t('settings.emailNotifs')} checked={settings.notifications.email} onChange={(v) => handleNotificationChannel('notifications.email', v)} />
           <ToggleRow icon={Volume2} label={t('settings.soundFx')} checked={settings.notifications.soundFx} onChange={(v) => updateSetting('notifications.soundFx', v)} />
-          <ToggleRow icon={Smartphone} label={t('settings.spatialAudio')} checked={settings.notifications.spatialAudio} onChange={(v) => updateSetting('notifications.spatialAudio', v)} />
         </Section>
 
         {/* ============ PRIVACY & AUDIENCE GOVERNANCE ============ */}
@@ -732,24 +735,6 @@ export default function SettingsScreen() {
         {/* ============ PLAYBACK ============ */}
         <Section icon={Video} title={t('settings.playbackSection')}>
           <ToggleRow icon={Video} label={t('settings.autoPlay')} checked={settings.playback.autoPlayVideos} onChange={(v) => updateSetting('playback.autoPlayVideos', v)} />
-          <div className="w-full py-3.5">
-            <div className="flex items-start gap-3 mb-2">
-              <Video className="w-4 h-4 mt-0.5 text-purple-400" aria-hidden="true" />
-              <div>
-                <p className="font-bold text-sm">{t('settings.streamQuality')}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 pl-7" role="group" aria-label={t('settings.streamQuality')}>
-              {['auto', '480p', '720p', '1080p', '4K'].map((q) => (
-                <OptionPill
-                  key={q}
-                  label={q}
-                  active={settings.playback.streamQuality === q}
-                  onClick={() => updateSetting('playback.streamQuality', q)}
-                />
-              ))}
-            </div>
-          </div>
         </Section>
 
         {/* ============ DATA & CACHE ============ */}
