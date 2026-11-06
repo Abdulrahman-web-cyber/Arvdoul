@@ -173,6 +173,20 @@ class GlobalAudioManager {
     this.store.getState().resetState();
   }
 
+  /**
+   * Sync the store from the live element's paused state.
+   *
+   * The DOM `pause` event is the ground truth: it also fires for pauses the
+   * manager did not initiate (OS media controls, the watchdog, page
+   * visibility), which the button-driven `pause()` path never sees. No-ops when
+   * `audioElement` is not the active element, so a card being torn down or
+   * replaced cannot clobber the active card's state.
+   */
+  syncStateFromElement(audioElement) {
+    if (this.currentElement !== audioElement) return;
+    this._updateStore();
+  }
+
   // Throttled time update to store (max 1 per second for React)
   _startTimeUpdatePolling() {
     if (this._timeUpdateRAF) return;
@@ -658,6 +672,13 @@ const AudioCard = React.memo(({
     globalAudioManager.resetOnEnd();
   }, []);
 
+  const handlePause = useCallback(() => {
+    setIsLoading(false);
+    // Keep the store in sync when playback pauses outside the button path
+    // (OS media controls, watchdog, page visibility).
+    if (audioRef.current) globalAudioManager.syncStateFromElement(audioRef.current);
+  }, []);
+
   const handleWaiting = useCallback(() => setIsLoading(true), []);
   const handleCanPlay = useCallback(() => setIsLoading(false), []);
   const handlePlaying = useCallback(() => setIsLoading(false), []);
@@ -849,7 +870,7 @@ const AudioCard = React.memo(({
         preload={isNearViewport ? 'metadata' : 'none'}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={() => setIsLoading(false)}
-        onPause={() => {}}
+        onPause={handlePause}
         onEnded={handleEnded}
         onWaiting={handleWaiting}
         onCanPlay={handleCanPlay}

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService';
+import { trackAnalyticsEvent } from '../services/analyticsService';
 import commentService from '../services/commentService';
 import * as userService from '../services/userService';
 import * as monetizationService from '../services/monetizationService';
@@ -486,6 +487,12 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const { theme } = useTheme();
   const tokens = useMemo(() => getDesignTokens(theme), [theme]);
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Post-surface interaction telemetry sink. The sub-cards emit
+  // `onAnalytics(event, data)`; without a real handler every emit was a no-op.
+  // `trackAnalyticsEvent` is a stable module-level function so the memoised
+  // sub-cards are not re-rendered by a fresh prop identity.
+  const handleAnalytics = trackAnalyticsEvent;
 
   // Sponsored / ad detection
   const isSponsored = post.isSponsored === true || post.adCampaignId !== undefined;
@@ -1002,7 +1009,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           )}
         </div>
       )}
-      {isTextOnly && <TextCard content={post.content} tokens={tokens} currentUser={currentUser} postId={post.id} onAnalytics={() => {}} />}
+      {isTextOnly && <TextCard content={post.content} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
       {!isRepost && !isTextOnly && post.content && (
         <p className="px-3 pb-1 text-sm leading-relaxed whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.content}</p>
       )}
@@ -1011,13 +1018,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
         </div>
       )}
-      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} />}
-      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} />}
+      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} onAnalytics={handleAnalytics} />}
+      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} onAnalytics={handleAnalytics} />}
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
-      {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} />}
+      {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={post.question} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} />}
       {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
-      {isLink && <LinkCard link={post.link} tokens={tokens} />}
+      {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 
       {/* INLINE COMMENT PREVIEW */}
       <InlineComments postId={post.id} totalComments={engagement.commentCount} onViewAll={() => onOpenComments?.(post)} isVisible={isActiveForSubs} tokens={tokens} />

@@ -420,13 +420,16 @@ const VideoCard = React.memo(({
   }, [onAnalytics]);
 
   const flushBeacon = useCallback(() => {
-    if (analyticsQueue.current.length && navigator.sendBeacon) {
-      const endpoint = process.env.REACT_APP_ANALYTICS_ENDPOINT || '/api/analytics/batch';
-      const blob = new Blob([JSON.stringify({ events: analyticsQueue.current })], { type: 'application/json' });
-      navigator.sendBeacon(endpoint, blob);
+    if (analyticsQueue.current.length) {
+      // Flush through the real sink (`onAnalytics` -> analyticsService ->
+      // metricsService). The previous implementation beaconed to a
+      // `REACT_APP_ANALYTICS_ENDPOINT` URL, but no such endpoint exists
+      // (Firebase Hosting rewrites everything to index.html), so the queued
+      // events were discarded into the void.
+      onAnalytics?.('batch', { events: analyticsQueue.current });
       analyticsQueue.current = [];
     }
-  }, []);
+  }, [onAnalytics]);
 
   // Visibility change handler (with cleanup)
   const visibilityHandler = useCallback(() => {

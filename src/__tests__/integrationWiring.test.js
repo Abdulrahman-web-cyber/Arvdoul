@@ -153,6 +153,59 @@ describe('PostCard analytics panel', () => {
   });
 });
 
+describe('post-surface interaction analytics wiring', () => {
+  // The sub-cards emit `onAnalytics(event, data)`; before this the handler was
+  // a no-op (`() => {}`) or missing, so every emit was silently discarded.
+  test('PostCard passes the real sink to the sub-cards that emit analytics', () => {
+    const src = read('src/screens/PostCard.jsx');
+    expect(src).toContain('trackAnalyticsEvent');
+    // The dead no-op handler must be gone.
+    expect(src).not.toContain('onAnalytics={() => {}}');
+    for (const card of ['TextCard', 'ImageCard', 'VideoCard', 'PollCard', 'LinkCard']) {
+      const m = src.match(new RegExp(`<${card}\\b[^>]*>`));
+      expect(m).not.toBeNull();
+      expect(m[0]).toContain('onAnalytics={handleAnalytics}');
+    }
+  });
+
+  test('the two PostOptionsDrawer call sites supply a handler', () => {
+    for (const file of ['src/screens/HomeScreen.jsx', 'src/screens/PostDetails.jsx']) {
+      const src = read(file);
+      expect(src).toMatch(/<PostOptionsDrawer\b/);
+      // `[^>]*` cannot be used here: the JSX contains `=>` arrows.
+      expect(src).toContain('onAnalytics={trackAnalyticsEvent}');
+    }
+  });
+
+  test('the sink records into metricsService and never fabricates author analytics', () => {
+    const src = read('src/services/analyticsService.js');
+    expect(src).toContain('trackAnalyticsEvent');
+    expect(src).toContain('trackAnalyticsBatch');
+    expect(src).toContain('metricsService.incrementCounter');
+    // A stable module-level dispatcher (keeps sub-card memoisation intact).
+    expect(src).toMatch(/export const trackAnalyticsEvent = /);
+  });
+
+  test('VideoCard does not sendBeacon to a nonexistent endpoint', () => {
+    const src = read('src/screens/PostCard/VideoCard.jsx');
+    expect(src).not.toContain('/api/analytics/batch');
+    expect(src).not.toContain('sendBeacon');
+  });
+});
+
+describe('AudioCard playback state stays in sync', () => {
+  // The `<audio>` `onPause` handler was a literal `() => {}` no-op, so a pause
+  // that did not go through the card's own button (OS media controls, the
+  // watchdog, page visibility) left `isPlaying` true and the UI stuck on Pause.
+  test('onPause is wired to a real handler that syncs the store', () => {
+    const src = read('src/screens/PostCard/AudioCard.jsx');
+    expect(src).not.toContain('onPause={() => {}}');
+    expect(src).toContain('onPause={handlePause}');
+    expect(src).toContain('const handlePause = useCallback');
+    expect(src).toContain('syncStateFromElement');
+  });
+});
+
 describe('router wiring: every lazy screen is actually routed', () => {
   test('no lazy screen is declared without a matching route element', () => {
     // A `const X = lazy(() => import('../screens/X'))` that no `<X />` renders is

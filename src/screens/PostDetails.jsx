@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService.js';
+import { trackAnalyticsEvent } from '../services/analyticsService';
 import PostCard from './PostCard.jsx';
 import { ArrowLeft, Share2 } from 'lucide-react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -84,7 +85,7 @@ export default function PostDetails() {
       </motion.div>
 
       {showComments && <Suspense fallback={<div className="p-4">Loading comments…</div>}><CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={post} currentUser={currentUser} theme={theme} /></Suspense>}
-      {showOptions && <Suspense fallback={null}><PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={post} currentUser={currentUser} onPostDeleted={() => navigate('/home')} /></Suspense>}
+      {showOptions && <Suspense fallback={null}><PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={post} currentUser={currentUser} onPostDeleted={() => navigate('/home')} onAnalytics={trackAnalyticsEvent} /></Suspense>}
     </div>
   );
 }

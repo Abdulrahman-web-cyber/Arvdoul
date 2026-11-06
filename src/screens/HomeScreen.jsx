@@ -15,6 +15,7 @@ import feedService from '../services/feedService';
 import userService from '../services/userService';
 import { getBalance, watchAd, getAd } from '../services/monetizationService.js';
 import { AD_REWARD_COINS } from '../shared/levelConfig.cjs';
+import { trackAnalyticsEvent } from '../services/analyticsService';
 import PostCard from './PostCard';
 import CommentsDrawer from './CommentsDrawer';
 import PostOptionsDrawer from './PostOptionsDrawer';
@@ -1576,7 +1577,7 @@ export default function HomeScreen() {
           <CommentsDrawer isOpen={showComments} onClose={() => setShowComments(false)} post={activePost} currentUser={user} theme={theme} />
         )}
         {showOptions && activePost && (
-          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} />
+          <PostOptionsDrawer isOpen={showOptions} onClose={() => setShowOptions(false)} post={activePost} currentUser={user} navigate={navigate} theme={theme} onAnalytics={trackAnalyticsEvent} />
         )}
 
         {/* Sponsored Reward Ad Modal for In-Feed Monetization */}

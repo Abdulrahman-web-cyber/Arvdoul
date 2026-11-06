@@ -7,6 +7,47 @@ import { rateLimiter } from '../utils/RateLimiter.js';
 import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
+import { metricsService } from './metricsService.js';
+
+// ---------------------------------------------------------------------------
+// Interaction-event sink.
+//
+// The PostCard sub-cards emit `onAnalytics(event, data)` for their own
+// interaction events (`image_load`, `link_click`, `poll_vote_success`,
+// `text_copy`, batched `batch` events, …), but no caller ever supplied a real
+// handler: PostCard passed `() => {}` and the drawers received nothing, so
+// every emit was a silent no-op. `trackAnalyticsEvent` is the handler — it
+// batches the events and folds them into the shared `metricsService` counters
+// (the real in-app metrics registry).
+//
+// This is client-side interaction telemetry, NOT author analytics: post views
+// come from the server-authoritative `recordPostView` callable and
+// likes/comments/shares from the post document, so these device-local counts
+// are never presented as author analytics.
+const INTERACTION_MAX_QUEUE = 200;
+const INTERACTION_NAME_RE = /^[a-z0-9_]{1,40}$/;
+const INTERACTION_POST_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+function normalizeInteractionEvent(event) {
+  if (typeof event !== 'string') return null;
+  const name = event
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return INTERACTION_NAME_RE.test(name) ? name : null;
+}
+
+// Keep only a postId (when it is a plausible doc id) and a coarse error flag —
+// never the raw payload, which can carry URLs and user content.
+function normalizeInteractionData(data) {
+  if (!data || typeof data !== 'object') return {};
+  const out = {};
+  if (typeof data.postId === 'string' && INTERACTION_POST_ID_RE.test(data.postId)) out.postId = data.postId;
+  if (data.error !== undefined) out.error = true;
+  return out;
+}
+
 
 const ANALYTICS_CONFIG = {
   CACHE_TTL: 5 * 60 * 1000, // 5 minutes cache TTL
@@ -127,6 +168,66 @@ class UltimateAnalyticsService {
   async _ensureInitialized() {
     if (!this.initialized || !this.firestore) await this.initialize();
     return this.firestore;
+  }
+
+  /**
+   * Record one post-surface interaction event into the shared metrics registry.
+   * Batches and flushes; never touches Firestore (see the sink note above).
+   * @param {string} event - Event name emitted by a PostCard sub-card
+   * @param {Object} [data] - Event payload (only postId/error are retained)
+   * @returns {boolean} whether the event was accepted
+   */
+  trackAnalyticsEvent(event, data) {
+    const name = normalizeInteractionEvent(event);
+    if (!name) return false;
+
+    if (!this._interactionQueue) {
+      this._interactionQueue = [];
+      this._interactionTimer = null;
+    }
+    this._interactionQueue.push({ name, data: normalizeInteractionData(data) });
+    if (this._interactionQueue.length >= INTERACTION_MAX_QUEUE) this._flushInteractionEvents();
+    else if (!this._interactionTimer && typeof window !== 'undefined') {
+      this._interactionTimer = setTimeout(() => this._flushInteractionEvents(), 5000);
+    }
+    return true;
+  }
+
+  /**
+   * Accept a sub-card batch (`onAnalytics('batch', { events })`).
+   * @param {Array<{event: string, data?: Object}>} events
+   * @returns {number} number of events accepted
+   */
+  trackAnalyticsBatch(events) {
+    if (!Array.isArray(events)) return 0;
+    let accepted = 0;
+    for (const entry of events) {
+      if (entry && typeof entry.event === 'string' && this.trackAnalyticsEvent(entry.event, entry.data)) {
+        accepted += 1;
+      }
+    }
+    return accepted;
+  }
+
+  _flushInteractionEvents() {
+    if (this._interactionTimer) {
+      clearTimeout(this._interactionTimer);
+      this._interactionTimer = null;
+    }
+    const batch = this._interactionQueue || [];
+    this._interactionQueue = [];
+    for (const { name, data } of batch) {
+      metricsService.incrementCounter(`event_${name}`, 1);
+      if (data.postId) metricsService.incrementCounter(`post_event_${name}`, 1);
+    }
+    return batch.length;
+  }
+
+  // Recorded count for one interaction event name (post-flush).
+  getInteractionCount(event) {
+    const name = normalizeInteractionEvent(event);
+    if (!name) return 0;
+    return metricsService.counters.get(`event_${name}`) || 0;
   }
 
   _getDateString(date = new Date()) {
@@ -867,3 +968,12 @@ const analyticsService = new Proxy(getAnalyticsService, {
 });
 
 export default analyticsService;
+
+// Stable, module-level handler for the PostCard sub-cards' `onAnalytics(event,
+// data)` prop. A module-level function keeps the prop identity stable across
+// renders (the sub-cards memoise on it), so passing it does not defeat their
+// `React.memo`.
+export const trackAnalyticsEvent = (event, data) => {
+  if (event === 'batch') return analyticsService.trackAnalyticsBatch(data?.events);
+  return analyticsService.trackAnalyticsEvent(event, data);
+};
