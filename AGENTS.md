@@ -195,6 +195,19 @@ slice for unread counts; the services that change a count emit
 `arvdoul:messages-read` / `arvdoul:notification-read` / `arvdoul:friend-request-changed`
 and the hook refreshes on those plus window focus/visibility.
 
+`src/__tests__/contextContract.test.js` and `src/__tests__/hookContract.test.js`
+extend the same dead-key discipline to `useTheme()` and to every `src/hooks/use*`
+hook: they parse the provider's context value / the hook's returned object literal and
+fail if any destructure reads a key that is not provided (`useAnalytics().trackEvent`
+was `undefined` while only `track` was returned). A hook's telemetry must reach a real
+sink (`metricsService`), never `console.log` dressed up as tracking.
+
+`src/__tests__/deadEventGuard.test.js` fails if any `arvdoul:*` window event is
+dispatched in `src`/`public` with no `addEventListener` anywhere — a dispatched event
+with no listener is a silent no-op (`arvdoul:navigate` on a notification click and
+`arvdoul:post_id_synced` on an optimistic-post id swap were both dead). Add the listener
+in the same change that adds the dispatch.
+
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus
   `profile.privacy.*` scopes) — not in the settings document.

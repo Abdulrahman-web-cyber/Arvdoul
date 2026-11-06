@@ -32,10 +32,17 @@ export const useAnalytics = (userId) => {
     refresh,
   } = useAnalyticsStore();
 
-  // Event tracking function (from original)
+  // Event tracking: forwarded to the real in-app metrics registry so the
+  // counter is observable, not just logged. Exposed as `trackEvent` (the name
+  // nav surfaces destructure) and `track` for existing callers.
   const track = useCallback((event, data) => {
-    // Replace this with Firebase Analytics or your own logger
-    console.log(`📊 Tracking Event: ${event}`, data);
+    try {
+      import('../services/metricsService.js').then(({ metricsService }) => {
+        metricsService.incrementCounter(`event_${event}`, 1);
+      }).catch(() => {});
+    } catch {
+      // analytics must never break a UI interaction
+    }
   }, []);
 
   // Load analytics when userId or timeframe changes
@@ -79,6 +86,7 @@ export const useAnalytics = (userId) => {
   return {
     // Tracking
     track,
+    trackEvent: track,
 
     // Profile Analytics State
     analytics,

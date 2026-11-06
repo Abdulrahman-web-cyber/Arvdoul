@@ -321,6 +321,14 @@ const feedReducer = (state, action) => {
         order: state.order,
       };
     }
+    case 'REPLACE_POST_ID': {
+      const { oldId, newId } = action.payload;
+      if (!oldId || !newId || !state.byId[oldId]) return state;
+      const byId = { ...state.byId };
+      byId[newId] = { ...byId[oldId], id: newId };
+      delete byId[oldId];
+      return { byId, order: state.order.map(id => (id === oldId ? newId : id)) };
+    }
     case 'CLEAR':
       return { byId: {}, order: [] };
     default:
@@ -1189,6 +1197,24 @@ export default function HomeScreen() {
     window.addEventListener('arvdoul:new_post_published', handleNewPost);
     return () => window.removeEventListener('arvdoul:new_post_published', handleNewPost);
   }, [hydratePost]);
+
+  // The optimistic post is published with a temporary id, then the server
+  // returns the real Firestore doc id. Without this the feed kept the temp id,
+  // so likes/comments/deep links on the just-published post targeted a doc
+  // that does not exist.
+  useEffect(() => {
+    const handleIdSynced = (e) => {
+      const { oldId, newId } = e.detail || {};
+      if (!oldId || !newId) return;
+      dispatchFeed({ type: 'REPLACE_POST_ID', payload: { oldId, newId } });
+      feedRuntimeRef.current.seenIds.delete(oldId);
+      feedRuntimeRef.current.seenIds.add(newId);
+      feedRuntimeRef.current.insertedIds.delete(oldId);
+      feedRuntimeRef.current.insertedIds.add(newId);
+    };
+    window.addEventListener('arvdoul:post_id_synced', handleIdSynced);
+    return () => window.removeEventListener('arvdoul:post_id_synced', handleIdSynced);
+  }, []);
 
   // Online/offline with debounced refresh
   useEffect(() => {

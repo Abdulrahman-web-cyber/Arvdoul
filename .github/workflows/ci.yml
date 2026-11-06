@@ -273,6 +273,9 @@ jobs:
           src/__tests__/videoEditorRender.test.jsx
           src/__tests__/authContextContract.test.js
           src/__tests__/storeContract.test.js
+          src/__tests__/contextContract.test.js
+          src/__tests__/hookContract.test.js
+          src/__tests__/deadEventGuard.test.js
           src/__tests__/noFabricatedData.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
