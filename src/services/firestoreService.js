@@ -41,9 +41,6 @@ class LRUCache {
 
 const CONFIG = {
   ALLOWED_REACTIONS: ['👍', '❤️', '😂', '😮', '😢', '😡', '🔥', '🎉', '👎', '👏', '🚀', '💯'],
-  VIEW_SHARDS: 100,
-  STORE_VIEWERS: true,
-  VIEWERS_SUBCOLLECTION: 'viewers',
   REACTIONS_SUBCOLLECTION: 'reactions',
   DAILY_STATS_SUBCOLLECTION: 'daily_stats',
   POST_VISIBILITY: {
@@ -1081,57 +1078,31 @@ class EnterpriseFirestoreService {
 
   async recordPostView(postId, userId) {
     await this.ensureInitialized();
+    // Counting is server-authoritative: the per-(post,viewer,day) dedupe
+    // transaction, the daily stat and the sharded total are written by the
+    // `recordPostView` callable. The client no longer writes
+    // `posts/{id}/view_aggregate`, `/daily_stats` or `/view_shards` (rules deny
+    // those writes — the posts `{subcollection}` rule binds every child id to
+    // the caller's uid, so a direct write was always denied).
     try {
-      const { doc, runTransaction, increment, serverTimestamp } = this.firestoreMethods;
-      const shardId = Math.floor(secureRandom() * CONFIG.VIEW_SHARDS);
-      const viewShardRef = doc(this.firestore, 'posts', postId, 'view_shards', `shard_${shardId}`);
-      const viewerRef = doc(this.firestore, 'posts', postId, CONFIG.VIEWERS_SUBCOLLECTION, userId);
-      const today = new Date().toISOString().split('T')[0];
-      const dailyStatRef = doc(this.firestore, 'posts', postId, CONFIG.DAILY_STATS_SUBCOLLECTION, today);
-      const aggregateRef = doc(this.firestore, 'posts', postId, 'view_aggregate', 'total');
-
-      await runTransaction(this.firestore, async (transaction) => {
-        const shardSnap = await transaction.get(viewShardRef);
-        if (shardSnap.exists()) {
-          transaction.update(viewShardRef, { count: increment(1), updatedAt: serverTimestamp() });
-        } else {
-          transaction.set(viewShardRef, { count: 1, updatedAt: serverTimestamp() });
-        }
-        const aggSnap = await transaction.get(aggregateRef);
-        if (aggSnap.exists()) {
-          transaction.update(aggregateRef, { total: increment(1), updatedAt: serverTimestamp() });
-        } else {
-          transaction.set(aggregateRef, { total: 1, updatedAt: serverTimestamp() });
-        }
-        const dailySnap = await transaction.get(dailyStatRef);
-        if (dailySnap.exists()) {
-          transaction.update(dailyStatRef, { views: increment(1), updatedAt: serverTimestamp() });
-        } else {
-          transaction.set(dailyStatRef, {
-            date: today,
-            views: 1,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            createdAt: serverTimestamp()
-          });
-        }
-        if (CONFIG.STORE_VIEWERS) {
-          transaction.set(viewerRef, { userId, viewedAt: serverTimestamp() }, { merge: true });
-        }
-      });
-      return { success: true };
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const result = await callFunction(FUNCTIONS.RECORD_POST_VIEW, { postId });
+      if (result?.counted) {
+        countersManager.invalidate({ docPath: `posts/${postId}`, field: 'views' });
+      }
+      return { success: true, counted: Boolean(result?.counted) };
     } catch (error) {
+      logger.warn('recordPostView failed', { postId, error: error.message });
       return { success: false, error: error.message };
     }
   }
 
   async getPostViewCount(postId) {
     await this.ensureInitialized();
-    const aggregateRef = this.firestoreMethods.doc(this.firestore, 'posts', postId, 'view_aggregate', 'total');
-    const snap = await this.firestoreMethods.getDoc(aggregateRef);
-    const total = snap.exists() ? snap.data().total : 0;
-    return { success: true, views: total };
+    // The total is a sharded counter (`counter_shards`), summed client-side by
+    // CountersManager — the same layout the recordPostView callable writes.
+    const views = await countersManager.get({ docPath: `posts/${postId}`, field: 'views' });
+    return { success: true, views };
   }
 
   async getPostDailyViews(postId, days = 7) {

@@ -120,6 +120,37 @@ describe('PostCard analytics panel', () => {
     expect(src).not.toContain('post.analytics?.watchTime');
     expect(src).not.toContain('post.analytics?.completionRate');
   });
+
+  test('records a real view so the panel view count is not always zero', () => {
+    const src = read('src/screens/PostCard.jsx');
+    // `posts/{id}/view_aggregate` + `/daily_stats` are only ever written by the
+    // recordPostView path. Without a call site the view row was permanently 0.
+    expect(src).toContain('firestoreService.recordPostView');
+  });
+
+  test('recordPostView is server-authoritative (callable owns the writes)', () => {
+    const svc = read('src/services/firestoreService.js');
+    const body = svc.slice(svc.indexOf('async recordPostView'), svc.indexOf('async getPostDailyViews'));
+    // The client may not write the view collections directly: the posts
+    // `{subcollection}` rule binds every child id to the caller's uid.
+    expect(body).toContain('FUNCTIONS.RECORD_POST_VIEW');
+    expect(body).not.toContain("'view_aggregate'");
+    expect(body).not.toContain("'view_shards'");
+    const fn = read('functions/analytics.js');
+    expect(fn).toContain('exports.recordPostView');
+    expect(fn).toContain('db.runTransaction');
+    expect(fn).toContain("incrementShardedCounter(`posts/${postId}`, 'views')");
+  });
+
+  test('post view subcollections are server-write-only in the rules', () => {
+    const rules = read('firestore.rules');
+    const start = rules.indexOf('match /posts/{postId}');
+    const block = rules.slice(start, rules.indexOf('match /comments/', start));
+    expect(block).toContain('match /viewers/{viewerId}');
+    expect(block).toContain('match /daily_stats/{statId}');
+    expect(block).toMatch(/viewers\/\{viewerId\}[\s\S]*?allow write: if false;/);
+    expect(block).toMatch(/daily_stats\/\{statId\}[\s\S]*?allow write: if false;/);
+  });
 });
 
 describe('router wiring: every lazy screen is actually routed', () => {

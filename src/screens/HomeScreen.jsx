@@ -577,16 +577,12 @@ const PostWithTracking = React.memo(({
   const { register, unregister } = useContext(VisibilityContext);
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef(null);
-  const impressionRecorded = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const handleVisibility = (visible) => {
       setIsVisible(prev => (prev !== visible ? visible : prev));
-      if (visible && !impressionRecorded.current) {
-        impressionRecorded.current = true;
-      }
     };
     register(el, handleVisibility);
     return () => unregister(el);

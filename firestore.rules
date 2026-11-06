@@ -337,6 +337,17 @@ service cloud.firestore {
         ])
       ));
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.authorId);
+      // View analytics are server-authoritative (the `recordPostView` callable
+      // owns the per-(post,viewer,day) dedupe transaction and the sharded
+      // totals). Clients must not be able to inflate a post's views.
+      match /viewers/{viewerId} {
+        allow read: if isAdmin() || (isSignedIn() && viewerId == uid());
+        allow write: if false;
+      }
+      match /daily_stats/{statId} {
+        allow read: if true;
+        allow write: if false;
+      }
       // post subcollections (likes, saves, gifts, reactions): the doc id encodes
       // the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) — enforce it.
       match /{subcollection}/{docId} {

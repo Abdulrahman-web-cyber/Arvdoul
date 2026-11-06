@@ -81,8 +81,7 @@ const AdjustTool = memo(({
       Object.entries(preset.values).forEach(([key, value]) => setAdjustment(key, value));
       setActivePreset(preset.name);
     }
-    pushUndo?.();
-  }, [setAdjustment, resetAdjustments, pushUndo]);
+  }, [setAdjustment, resetAdjustments]);
 
   const handleAdjustmentChange = useCallback((key, value) => {
     setAdjustment(key, value);
@@ -237,7 +236,6 @@ const AdjustTool = memo(({
           onClick={() => {
             resetAdjustments();
             setActivePreset(null);
-            pushUndo?.();
           }}
           className={`px-4 py-2 text-xs font-medium rounded-xl ${isDark ? 'bg-white/10' : 'bg-black/5'} hover:bg-white/20 text-white/80 transition-colors flex items-center gap-2`}
         >
@@ -259,7 +257,6 @@ AdjustTool.propTypes = {
   /** Reset all adjustments to their defaults */
   resetAdjustments: PropTypes.func.isRequired,
   /** Push current state to the history stack */
-  pushUndo: PropTypes.func,
 };
 
 /**

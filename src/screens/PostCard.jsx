@@ -600,6 +600,19 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // Pause subscriptions when card not visible
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
 
+  // Record a real view impression once per mounted card, through the canonical
+  // writer. `posts/{id}/view_aggregate` + `daily_stats` are only ever written
+  // here; without this the author analytics panel's view count is always 0.
+  // The author's own views are not counted.
+  const viewRecordedRef = useRef(false);
+  useEffect(() => {
+    if (!isVisible || !post.id || viewRecordedRef.current) return;
+    const uid = currentUser?.uid;
+    if (!uid || uid === post.authorId) return;
+    viewRecordedRef.current = true;
+    firestoreService.recordPostView?.(post.id, uid).catch(() => {});
+  }, [isVisible, post.id, post.authorId, currentUser?.uid]);
+
   // Real post analytics for the author panel. The panel used to read
   // `post.analytics.{views,reach,watchTime,completionRate,earnings}`, a shape
   // nothing ever wrote, so every row rendered blank. Only the author may read
