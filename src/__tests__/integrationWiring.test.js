@@ -313,6 +313,14 @@ describe('comment reliability: moderation-visible states stay in the thread', ()
     expect(src).not.toMatch(/moderationStatus', 'in', \['approved', 'pending'\]/);
     expect(src).toMatch(/where\('moderationStatus', 'in', VISIBLE_COMMENT_MODERATION_STATUSES\)/);
   });
+
+  test('getReplies accepts the drawer\'s `startAfter` cursor so "load more" works', () => {
+    const src = read('src/services/commentService.js');
+    const drawer = read('src/screens/CommentsDrawer.jsx');
+    // The drawer passes `startAfter`; the service must read that name.
+    expect(drawer).toMatch(/getReplies\([\s\S]*startAfter/);
+    expect(src).toMatch(/const afterId = options\.startAfter \|\| options\.cursor/);
+  });
 });
 
 describe('AudioCard playback state stays in sync', () => {

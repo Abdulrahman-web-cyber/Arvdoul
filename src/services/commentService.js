@@ -877,8 +877,12 @@ class UltimateCommentService {
       const pageSize = options.limit || COMMENTS_CONFIG.PAGINATION_LIMIT;
       conditions.push(this.firestoreMethods.limit(pageSize));
 
-      if (options.cursor) {
-        const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', options.cursor);
+      // Callers pass the cursor as `startAfter` (the drawer's name); accept
+      // `cursor` too. Reading only `cursor` meant the "load more replies"
+      // control re-fetched page 1 forever (deduped, so nothing new appeared).
+      const afterId = options.startAfter || options.cursor;
+      if (afterId) {
+        const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', afterId);
         const cursorSnap = await this.firestoreMethods.getDoc(cursorRef);
         if (cursorSnap.exists()) {
           conditions.push(this.firestoreMethods.startAfter(cursorSnap));
