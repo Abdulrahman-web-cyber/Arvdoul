@@ -63,82 +63,31 @@ const getDesignTokens = (theme) => {
   };
 };
 
-// 3. OFFLINE QUEUE (safe, with crypto‑strong IDs, collapse by action)
-let offlineQueueDB = null;
-let offlineQueueInitPromise = null;
-
-const idbRequestPromise = (req) => new Promise((resolve, reject) => {
-  req.onsuccess = () => resolve(req.result);
-  req.onerror = () => reject(req.error);
-});
-
-const openOfflineQueue = () => {
-  if (offlineQueueDB) return Promise.resolve(offlineQueueDB);
-  if (offlineQueueInitPromise) return offlineQueueInitPromise;
-  offlineQueueInitPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open('arvdoul_offline_queue', 5);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('actions')) {
-        db.createObjectStore('actions', { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => {
-      offlineQueueDB = request.result;
-      resolve(offlineQueueDB);
-    };
-    request.onerror = () => reject(request.error);
-  });
-  return offlineQueueInitPromise;
-};
+// 3. OFFLINE QUEUE — the canonical `syncEngine`/`OfflineQueue` singleton owns
+// persistence and replay. PostCard previously opened its OWN IndexedDB under the
+// canonical queue's database name at version 5 (the canonical queue opens it at
+// version 1). In a real browser the second open fails with a VersionError, so
+// every queued like/reaction/save silently vanished and the canonical queue
+// could never be opened at all. Route everything through the canonical engine.
 
 async function addToOfflineQueue(action, data) {
-  const db = await openOfflineQueue();
-  const tx = db.transaction('actions', 'readwrite');
-  const store = tx.objectStore('actions');
-  // Use crypto.randomUUID if available, fallback to Date.now + random
-  const id = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${data.postId}_${data.userId}_${action}_${Date.now()}_${Math.random().toString(36)}`;
-  // ownerUid partitions the queue by account so a later session cannot replay
-  // this user's pending writes.
-  const request = store.put({ id, action, data, ownerUid: data.userId || null, timestamp: Date.now() });
-  await idbRequestPromise(request);
-}
-
-async function replayOfflineQueue(currentUid = null) {
-  if (!navigator.onLine) return;
-  const db = await openOfflineQueue();
-  const tx = db.transaction('actions', 'readonly');
-  const store = tx.objectStore('actions');
-  const items = await idbRequestPromise(store.getAll());
-  if (!items.length) return;
-
-  const deleteTx = db.transaction('actions', 'readwrite');
-  const deleteStore = deleteTx.objectStore('actions');
-  for (const item of items) {
-    const { action, data } = item;
-    // Never replay another account's queued action.
-    if (!currentUid || item.ownerUid !== currentUid || data.userId !== currentUid) continue;
-    try {
-      if (action === 'like') {
-        await firestoreService.likePost?.(data.postId, data.userId);
-      } else if (action === 'unlike') {
-        await firestoreService.unlikePost?.(data.postId, data.userId);
-      } else if (action === 'save') {
-        await firestoreService.savePost?.(data.postId, data.userId);
-      } else if (action === 'unsave') {
-        await firestoreService.unsavePost?.(data.postId, data.userId);
-      } else if (action === 'reaction') {
-        await firestoreService.addReaction?.(data.postId, data.userId, data.reaction);
-      } else if (action === 'removeReaction') {
-        await firestoreService.removeReaction?.(data.postId, data.userId);
-      }
-      await idbRequestPromise(deleteStore.delete(item.id));
-    } catch (err) {
-      console.warn('Offline replay failed', err);
-    }
-  }
+  const { enqueueAction } = await import('../offline/syncEngine.js');
+  const typeByAction = {
+    like: 'post.like',
+    unlike: 'post.unlike',
+    save: 'post.save',
+    unsave: 'post.unsave',
+    reaction: 'post.reaction',
+    removeReaction: 'post.removeReaction',
+  };
+  const type = typeByAction[action];
+  if (!type) return;
+  await enqueueAction({
+    type,
+    payload: { postId: data.postId, userId: data.userId, reaction: data.reaction },
+    priority: 'high',
+    ownerUid: data.userId || null,
+  });
 }
 
 // 4. ERROR BOUNDARY (dev/prod friendly)
@@ -203,16 +152,22 @@ const CardShareSheet = React.memo(({ url, content, onClose, tokens, postId, post
 
   const repost = useCallback(async () => {
     if (!postId) return;
+    if (!currentUser?.uid) {
+      toast.error('Sign in to repost');
+      return;
+    }
     try {
-      const res = await firestoreService.repostPost?.(postId);
+      const res = await firestoreService.repostPost(postId, currentUser.uid);
       if (res?.alreadyReposted) {
         toast.info('You already reposted this');
       } else {
         toast.success('Reposted to your profile! 🔁');
       }
-    } catch { toast.error('Failed to repost'); }
+    } catch (err) {
+      toast.error(err?.message || 'Failed to repost');
+    }
     onClose();
-  }, [postId, onClose]);
+  }, [postId, currentUser?.uid, onClose]);
 
   const quotePost = useCallback(() => {
     if (!postId || !navigate) return;
@@ -581,7 +536,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   }, []);
 
   const [ui, setUi] = useState({
-    expanded: false,
     showAnalytics: false,
     showShareSheet: false,
     showReactionsPicker: false,
@@ -645,14 +599,6 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
 
   // Pause subscriptions when card not visible
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
-
-  // Online listener for offline queue. Keyed on uid so an account switch
-  // re-binds the handler to the current session.
-  useEffect(() => {
-    const onlineHandler = () => replayOfflineQueue(currentUser?.uid || null);
-    window.addEventListener('online', onlineHandler);
-    return () => window.removeEventListener('online', onlineHandler);
-  }, [currentUser?.uid]);
 
   // Cleanup timers
   useEffect(() => {
@@ -882,6 +828,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   const isQuestion = post.type === 'question' && post.question;
   const isEvent = post.type === 'event' && post.event;
   const isLink = post.type === 'link' && post.link;
+  const isRepost = post.type === 'repost' && Boolean(post.originalPostId);
 
   if (!post.id) return null;
 
@@ -994,9 +941,39 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         </div>
       )}
 
+      {/* REPOST CONTEXT */}
+      {isRepost && (
+        <div className="px-3 pt-1 flex items-center gap-1.5 text-xs" style={{ color: tokens.textSecondary }}>
+          <RefreshCw className="w-3 h-3 text-green-500" />
+          <span>
+            {post.authorName} reposted
+            {post.originalAuthorName ? ` ${post.originalAuthorName}'s post` : ' a post'}
+          </span>
+        </div>
+      )}
+
       {/* CONTENT */}
-      {isTextOnly && <TextCard content={post.content} bgClass={getRandomTextBg(post.id, currentUser?.uid)} expanded={ui.expanded} setExpanded={(val) => setUi(prev => ({ ...prev, expanded: val }))} tokens={tokens} currentUser={currentUser} postId={post.id} onAnalytics={() => {}} />}
-      {!isTextOnly && post.content && (
+      {isRepost && (
+        <div className="mx-3 my-2 rounded-2xl border p-3" style={{ borderColor: tokens.border }}>
+          <div className="flex items-center gap-2 mb-1">
+            <img src={userService.getAvatarUrl(post.originalAuthorId, post.originalAuthorName, null)} alt={post.originalAuthorName || 'Original author'} className="w-6 h-6 rounded-full object-cover" />
+            <span className="text-xs font-semibold" style={{ color: tokens.text }}>{post.originalAuthorName || 'Original author'}</span>
+          </div>
+          {post.originalContent && (
+            <p className="text-sm whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.originalContent}</p>
+          )}
+          {post.originalMedia?.length > 0 && (
+            <img src={post.originalMedia[0]?.url || post.originalMedia[0]?.thumbnail} alt="" className="mt-2 rounded-xl w-full max-h-60 object-cover" loading="lazy" />
+          )}
+          {post.originalPostId && (
+            <button onClick={() => navigate(`/post/${post.originalPostId}`)} className="mt-2 text-xs font-medium" style={{ color: tokens.primary }}>
+              View original post
+            </button>
+          )}
+        </div>
+      )}
+      {isTextOnly && <TextCard content={post.content} tokens={tokens} currentUser={currentUser} postId={post.id} onAnalytics={() => {}} />}
+      {!isRepost && !isTextOnly && post.content && (
         <p className="px-3 pb-1 text-sm leading-relaxed whitespace-pre-line break-words" style={{ color: tokens.text }}>{post.content}</p>
       )}
       {post.hashtags?.length > 0 && (
@@ -1009,7 +986,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
       {isPoll && <PollCard poll={post.poll} postId={post.id} currentUser={currentUser} tokens={tokens} />}
       {isQuestion && <QuestionCard question={post.question} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} />}
-      {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} />}
+      {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} />}
 
       {/* INLINE COMMENT PREVIEW */}
@@ -1222,17 +1199,6 @@ const CardGiftPicker = ({ onSelect, onClose, sending, balance, tokens }) => {
     </motion.div>
   );
 };
-
-function getRandomTextBg(postId, userId) {
-  const palette = [
-    'from-blue-700 via-purple-600 to-orange-500',
-    'from-emerald-700 via-teal-600 to-cyan-500',
-    'from-rose-700 via-pink-600 to-purple-500',
-    'from-indigo-700 via-blue-600 to-violet-500',
-  ];
-  const hash = (postId + (userId || '')).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  return palette[Math.abs(hash) % palette.length];
-}
 
 export default function PostCard(props) {
   return (

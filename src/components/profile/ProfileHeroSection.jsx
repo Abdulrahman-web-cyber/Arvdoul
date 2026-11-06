@@ -189,8 +189,12 @@ export const ProfileLevelProgressCard = memo(({
   }
 
   const currentLevel = levelInfo.level;
-  const currentXp = levelInfo.xpIntoLevel ?? levelInfo.totalXp ?? 0;
-  const nextXp = levelInfo.nextLevelXp ?? 100;
+  // `xpIntoLevel` is XP *within* the level; the denominator must be the level's
+  // XP span, not the absolute `nextLevelXp` (which made level 10 read
+  // "300 / 5000 XP"). At max level there is no next level, so no fabricated 100.
+  const currentXp = levelInfo.xpIntoLevel ?? 0;
+  const isMaxLevel = Boolean(levelInfo.isMaxLevel) || levelInfo.nextLevelXp === null;
+  const levelSpan = isMaxLevel ? null : levelInfo.nextLevelXp - levelInfo.currentLevelXp;
   const progressPercent = Math.min(100, Math.max(0, Math.round(levelInfo.progress ?? 0)));
 
   return (
@@ -259,7 +263,9 @@ export const ProfileLevelProgressCard = memo(({
 
         {/* XP Text */}
         <div className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 text-right tracking-tight">
-          {currentXp.toLocaleString()} / {nextXp.toLocaleString()} XP
+          {isMaxLevel
+            ? `${currentXp.toLocaleString()} XP · Max Level`
+            : `${currentXp.toLocaleString()} / ${levelSpan.toLocaleString()} XP`}
         </div>
       </div>
     </div>
@@ -283,14 +289,11 @@ ProfileMetricsBar.displayName = 'ProfileMetricsBar';
 export const ProfileHeroSection = memo(({
   profile,
   isOwner = false,
-  viewAs = 'owner',
   level = null,
   theme = 'light',
   onBack,
   onOpenQrCode,
-  onOpenQrScanner,
   onOpenLocationSetup,
-  onOpenPerspective,
   onOpenOptions,
   onAvatarClick,
   onShare,
@@ -307,7 +310,6 @@ export const ProfileHeroSection = memo(({
   onOpenTipModal,
   onOpenMessages,
   capabilities,
-  analytics,
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -359,7 +361,7 @@ export const ProfileHeroSection = memo(({
       contributionScore: profile?.contributionScore || profile?.contribution || 0,
       influenceScore: profile?.influenceScore || profile?.influence || 0,
       achievements: profile?.achievements || 0,
-      policyStanding: profile?.policyStanding || 'good',
+      policyStanding: profile?.policyStanding || profile?.accountStatus || null,
     };
     const dukeCheck = getRoyalEligibility('duke', stats);
     if (dukeCheck.eligible) return true;
@@ -398,6 +400,23 @@ export const ProfileHeroSection = memo(({
         ? "bg-[#0b1021]/80 border-white/[0.08] text-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
         : "bg-white/95 border-slate-200/90 text-slate-900 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
     )}>
+      {/* Optional back affordance; the preview and public screens pass onBack
+          but the hero previously ignored it, so those screens had no back control. */}
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className={cn(
+            "inline-flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer -mb-2",
+            isDark ? "text-slate-300 hover:text-white" : "text-slate-500 hover:text-slate-900"
+          )}
+          aria-label="Go back"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>Back</span>
+        </button>
+      )}
+
       {/* Main Hero Profile Area (Avatar + Info + Dedicated Level Card) */}
       <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
         {/* Left Sub-row: Avatar + Details */}
@@ -757,6 +776,49 @@ export const ProfileHeroSection = memo(({
       ) : (
         /* Public Profile: Follow + Message + Call + Gift + More Dropdown */
         <div className="flex items-center gap-2.5 flex-wrap w-full">
+          {/* Friend Request Button (newcomer friendship flow). Previously the
+              screen computed friendshipStatus/pendingRequestId and passed a
+              handler the hero never rendered, so the whole flow was dead. */}
+          {onFriendRequestToggle && (
+            <button
+              type="button"
+              onClick={onFriendRequestToggle}
+              disabled={friendRequestLoading || friendshipStatus === 'friends' || friendshipStatus === 'pending'}
+              className={cn(
+                "flex-1 min-w-[130px] py-2.5 sm:py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all active:scale-95",
+                friendshipStatus === 'friends'
+                  ? (isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" : "bg-emerald-50 border-emerald-200 text-emerald-700")
+                  : friendshipStatus === 'received'
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white shadow-md cursor-pointer"
+                  : friendshipStatus === 'pending'
+                  ? (isDark ? "bg-white/5 border-white/10 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-500")
+                  : (isDark ? "bg-white/5 hover:bg-white/10 border-white/10 text-white cursor-pointer" : "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800 cursor-pointer")
+              )}
+            >
+              {friendshipStatus === 'friends' ? (
+                <>
+                  <UserCheck className="w-4 h-4" />
+                  <span>Friends</span>
+                </>
+              ) : friendshipStatus === 'received' ? (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Accept Request</span>
+                </>
+              ) : friendshipStatus === 'pending' ? (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Request Sent</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Add Friend</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Primary Follow Button */}
           <button
             type="button"

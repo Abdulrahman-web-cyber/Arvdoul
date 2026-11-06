@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import settingsService from '../services/settingsService.js';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import {
@@ -42,7 +43,11 @@ const formatDuration = (seconds) => {
   const [currentReelIndex, setCurrentReelIndex] = useState(0);
   const [reels, setReels] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(true);
+  // Honour the user's playback.autoPlayVideos preference (default on) instead of
+  // hardcoding autoplay. When autoplay is off the reel waits for a tap on the
+  // play overlay before it starts.
+  const autoPlayEnabled = settingsService.getCachedSettings(user?.uid)?.playback?.autoPlayVideos !== false;
+  const [isPlaying, setIsPlaying] = useState(autoPlayEnabled);
   const [isMuted, setIsMuted] = useState(false);
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const [giftModal, setGiftModal] = useState(false);
@@ -396,6 +401,22 @@ const formatDuration = (seconds) => {
     else el.pause();
   }, [isPlaying, currentReelIndex]);
 
+  // Record a real, server-deduplicated view for each reel as the viewer leaves
+  // it, using the on-screen time as the watch duration. The Reels screen
+  // previously reported no views at all. Keyed on the reel id (not the array
+  // identity) so pagination does not fire a spurious view.
+  const reelViewStartRef = useRef(null);
+  const activeReelId = reels[currentReelIndex]?.id;
+  useEffect(() => {
+    if (!activeReelId || !user?.uid) return undefined;
+    reelViewStartRef.current = Date.now();
+    return () => {
+      const seconds = Math.round((Date.now() - reelViewStartRef.current) / 1000);
+      reelViewStartRef.current = null;
+      if (seconds >= 1) videoService.recordVideoView(activeReelId, { duration: seconds }).catch(() => {});
+    };
+  }, [activeReelId, user?.uid]);
+
   if (feedLoading && reels.length === 0) {
     return (
       <div className="h-screen w-full bg-black flex items-center justify-center">
@@ -457,7 +478,7 @@ const formatDuration = (seconds) => {
             ref={videoRef}
             src={currentReel.videoUrl}
             poster={currentReel.thumbnailUrl || undefined}
-            autoPlay
+            autoPlay={autoPlayEnabled}
             loop
             muted={isMuted}
             playsInline
@@ -498,9 +519,14 @@ const formatDuration = (seconds) => {
 
         {/* Play/Pause overlay */}
         {!isPlaying && (
-          <div className="absolute z-20 w-16 h-16 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white">
+          <button
+            type="button"
+            onClick={() => setIsPlaying(true)}
+            aria-label="Play reel"
+            className="absolute z-20 w-16 h-16 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white cursor-pointer"
+          >
             <Play className="w-8 h-8 ml-1 fill-current" />
-          </div>
+          </button>
         )}
       </div>
 

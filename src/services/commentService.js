@@ -676,6 +676,132 @@ class UltimateCommentService {
     }
   }
 
+  /**
+   * Persist an emoji reaction on a comment. The per-user choice lives in the
+   * `reactions/{userId}` subcollection (mirroring post reactions) and the
+   * aggregate `reactionCounts` map lives on the comment doc. Selecting the
+   * same emoji again removes it. `CommentsDrawer` had called a
+   * `commentService.addReaction` that did not exist, so every emoji tap was
+   * dropped after the optimistic local update.
+   */
+  async addReaction(commentId, userId, emoji) {
+    if (!commentId || !userId) throw new Error('commentId and userId are required');
+    if (!emoji || typeof emoji !== 'string') throw new Error('A reaction emoji is required');
+    try {
+      await this._ensureInitialized();
+
+      const rl = rateLimiter.checkAndHit(`comment:react:${userId}`, { max: 120, windowMs: 60000 });
+      if (!rl.allowed) {
+        throw errorHandler.enhance(new Error('Too many reactions. Please slow down.'), { code: 5001, defaultMessage: 'Too many reactions. Please slow down.' });
+      }
+
+      const { doc, runTransaction, serverTimestamp } = this.firestoreMethods;
+      const commentRef = doc(this.firestore, 'comments', commentId);
+      const reactionRef = doc(this.firestore, 'comments', commentId, 'reactions', userId);
+
+      let action = 'added';
+      let previous = null;
+      await runTransaction(this.firestore, async (transaction) => {
+        const reactionSnap = await transaction.get(reactionRef);
+        previous = reactionSnap.exists() ? reactionSnap.data().emoji : null;
+        const commentSnap = await transaction.get(commentRef);
+        if (!commentSnap.exists()) throw new Error('Comment not found');
+
+        const counts = { ...(commentSnap.data().reactionCounts || {}) };
+        if (previous) counts[previous] = Math.max(0, (counts[previous] || 0) - 1);
+        if (previous === emoji) {
+          transaction.delete(reactionRef);
+          action = 'removed';
+        } else {
+          transaction.set(reactionRef, { userId, emoji, updatedAt: serverTimestamp() }, { merge: true });
+          counts[emoji] = (counts[emoji] || 0) + 1;
+          action = previous ? 'changed' : 'added';
+        }
+        transaction.update(commentRef, {
+          reactionCounts: counts,
+          updatedAt: serverTimestamp(),
+          lastActivityAt: serverTimestamp(),
+        });
+      });
+
+      this._invalidateCommentCache(commentId);
+      return { success: true, commentId, action, emoji };
+    } catch (error) {
+      logger.error('Add comment reaction failed', { error: error.message, commentId, userId });
+      throw this._enhanceError(error, 'Failed to react to comment');
+    }
+  }
+
+  /**
+   * Read the edit-history subcollection written by `updateComment`.
+   * `CommentsDrawer`'s edit-history modal called a
+   * `commentService.getCommentHistoryUI` that did not exist, so the modal
+   * always showed an empty list.
+   */
+  async getCommentHistoryUI(commentId) {
+    try {
+      await this._ensureInitialized();
+      const { collection, query, orderBy, limit, getDocs } = this.firestoreMethods;
+      const historyRef = collection(this.firestore, 'comments', commentId, 'history');
+      let snapshot;
+      try {
+        snapshot = await getDocs(query(historyRef, orderBy('editedAt', 'desc'), limit(20)));
+      } catch {
+        snapshot = await getDocs(query(historyRef, limit(20)));
+      }
+      const edits = snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          editedAt: data.editedAt?.toDate?.() || (data.editedAt ? new Date(data.editedAt) : null),
+        };
+      });
+      return { success: true, edits };
+    } catch (error) {
+      logger.error('Get comment history failed', { error: error.message, commentId });
+      return { success: true, edits: [] };
+    }
+  }
+
+  /**
+   * Pin/unpin a comment on its parent target. The pin marker is stored on the
+   * TARGET document (`pinnedCommentId`) rather than on the comment, because a
+   * post author pinning another user's comment is denied by the comment update
+   * rule (non-authors may only touch reaction fields). The drawer had called a
+   * `commentService.pinCommentToTarget` that did not exist, so pins were
+   * local-only and vanished on reload.
+   */
+  async pinCommentToTarget(targetType, targetId, commentId, userId, pinned = true) {
+    if (targetType !== 'post') throw new Error('Only post comments can be pinned');
+    try {
+      await this._ensureInitialized();
+      const { doc, updateDoc, serverTimestamp } = this.firestoreMethods;
+      const targetRef = doc(this.firestore, 'posts', targetId);
+      await updateDoc(targetRef, {
+        pinnedCommentId: pinned ? commentId : null,
+        updatedAt: serverTimestamp(),
+      });
+      this.cache.delete(targetId);
+      this._invalidatePostCache(targetId);
+      return { success: true, targetId, commentId, pinned };
+    } catch (error) {
+      logger.error('Pin comment failed', { error: error.message, targetId, commentId });
+      throw this._enhanceError(error, 'Failed to pin comment');
+    }
+  }
+
+  /**
+   * Comment read aliased to a generic target. The feed's inline comment
+   * preview (`PostCard`) called `commentService.getCommentsByTarget`, which did
+   * not exist, so the preview silently never rendered.
+   */
+  async getCommentsByTarget(targetType, targetId, options = {}, extra = {}) {
+    if (targetType !== 'post') return { success: true, comments: [] };
+    if (extra?.signal?.aborted) return { success: true, comments: [] };
+    return this.getCommentsByPost(targetId, options);
+  }
+
   async replyToComment(parentCommentId, userId, content, options = {}) {
     try {
       await this._ensureInitialized();
@@ -1435,6 +1561,14 @@ const commentService = {
     getCommentService().dislikeComment(commentId, userId),
   removeLikeDislike: (commentId, userId) =>
     getCommentService().removeLikeDislike(commentId, userId),
+  addReaction: (commentId, userId, emoji) =>
+    getCommentService().addReaction(commentId, userId, emoji),
+  getCommentHistoryUI: (commentId) =>
+    getCommentService().getCommentHistoryUI(commentId),
+  pinCommentToTarget: (targetType, targetId, commentId, userId, pinned) =>
+    getCommentService().pinCommentToTarget(targetType, targetId, commentId, userId, pinned),
+  getCommentsByTarget: (targetType, targetId, options, extra) =>
+    getCommentService().getCommentsByTarget(targetType, targetId, options, extra),
   replyToComment: (parentCommentId, userId, content, options) =>
     getCommentService().replyToComment(parentCommentId, userId, content, options),
   getReplies: (commentId, options) =>

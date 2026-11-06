@@ -36,10 +36,14 @@ class CreatorService {
    */
   isEligibleToApply(userProfile) {
     if (!userProfile) return { eligible: false, reasons: ['Sign in required'] };
-    const level = Number(userProfile.level) || 1;
+    // Unknown level is not "Level 1": report it honestly and stay ineligible.
+    const hasLevel = userProfile.level != null && Number.isFinite(Number(userProfile.level));
+    const level = hasLevel ? Number(userProfile.level) : null;
     const reasons = [];
 
-    if (level < LEVEL_GATES.creatorProfile) {
+    if (!hasLevel) {
+      reasons.push(`Requires Level ${LEVEL_GATES.creatorProfile} (your level is not yet available)`);
+    } else if (level < LEVEL_GATES.creatorProfile) {
       reasons.push(`Requires Level ${LEVEL_GATES.creatorProfile} (Current: ${level})`);
     }
     if (userProfile.policyStanding && userProfile.policyStanding !== 'good') {

@@ -2345,12 +2345,8 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
               </button>
               <div className="ie-tool-host">
                 <AdjustTool
-                  brightness={adj.brightness}
-                  setBrightness={setAdj('brightness')}
-                  contrast={adj.contrast}
-                  setContrast={setAdj('contrast')}
-                  saturation={adj.saturation}
-                  setSaturation={setAdj('saturation')}
+                  adjustments={adj}
+                  setAdjustment={(key, value) => setAdj(key)(value)}
                   resetAdjustments={() => dispatchDoc({ type: 'RESET_ADJUSTMENTS' })}
                   pushUndo={() => {}}
                 />

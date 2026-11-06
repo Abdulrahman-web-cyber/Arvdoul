@@ -48,7 +48,9 @@ const ProfileMetricsGrid = memo(({
   const postsCount = profile?.postCount ?? profile?.postsCount ?? profile?.posts?.length ?? 0;
   const followersCount = profile?.followerCount ?? profile?.followersCount ?? 0;
   const followingCount = profile?.followingCount ?? 0;
-  const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? 0;
+  // `friendCount` is not a stored counter; when it is absent the honest value is
+  // "unknown" (—), not a fabricated 0 that claims the account has no friends.
+  const friendsCount = profile?.friendCount ?? profile?.friendsCount ?? null;
   const coinsCount = profile?.coins ?? profile?.coinBalance ?? profile?.balance ?? 0;
   const profileViews = analytics?.totalViews ?? profile?.profileViews ?? profile?.viewsCount ?? 0;
   const likesCount = profile?.likesReceived ?? profile?.likesCount ?? 0;
@@ -58,6 +60,10 @@ const ProfileMetricsGrid = memo(({
   // missing capabilities prop leak follower counts and economic status.
   const canShowFollowers = Boolean(capabilities?.canViewFollowers);
   const canShowFollowing = Boolean(capabilities?.canViewFollowing);
+  // Friends is a mutual follow, so it is visible only when both graphs are
+  // (resolved once in the capability engine). Gating it here stops a viewer
+  // denied the lists from reading the friend count off the metrics grid.
+  const canShowFriends = Boolean(capabilities?.canViewFriends);
   const canShowEconomic = isOwner || Boolean(capabilities?.canViewEconomicStatus);
 
   // Growth percentages strictly from analytics (no fake default growth numbers)
@@ -98,11 +104,11 @@ const ProfileMetricsGrid = memo(({
     {
       key: 'friends',
       label: 'Friends',
-      value: formatNumber(friendsCount),
+      value: canShowFriends && friendsCount !== null ? formatNumber(friendsCount) : '—',
       icon: UserPlus,
       iconColor: 'text-[#3B82F6] dark:text-[#60A5FA]',
       iconBg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
-      clickable: Boolean(onMetricPress),
+      clickable: canShowFriends && friendsCount !== null && Boolean(onMetricPress),
       trend: null,
     },
     {

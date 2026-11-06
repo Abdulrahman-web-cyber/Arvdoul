@@ -134,7 +134,7 @@ describe('firestore.rules content-moderation ownership (regression guards)', () 
     expect(body).toMatch(/moderationStatus[\s\S]*moderatedBy[\s\S]*autoModeratedAt/);
     // Reaction-only updates must remain allowed for non-authors, since the
     // reaction arrays live on the comment document.
-    expect(body).toMatch(/hasOnly\(\[\s*'likes', 'likesBy', 'dislikes', 'dislikesBy', 'updatedAt', 'lastActivityAt'\s*\]\)/);
+    expect(body).toMatch(/hasOnly\(\[\s*'likes', 'likesBy', 'dislikes', 'dislikesBy', 'reactionCounts', 'updatedAt', 'lastActivityAt'\s*\]\)/);
   });
 
   test('reports are resolved by moderators only, never by the reporter', () => {
@@ -144,6 +144,70 @@ describe('firestore.rules content-moderation ownership (regression guards)', () 
       expect(body).toMatch(/allow update: if isAdmin\(\)/);
       expect(body).not.toMatch(/allow update: if isSignedIn\(\) && \(resource\.data\.reporterId == uid\(\)/);
     }
+  });
+
+  test('videos: the owner update path excludes moderation + server-computed fields', () => {
+    const body = blockBody('videos');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/moderationStatus[\s\S]*isDeleted[\s\S]*rankingScore[\s\S]*viralScore/);
+    // The owner may still edit their own video, but only through the exclusion.
+    expect(body).toMatch(/resource\.data\.userId == uid\(\)/);
+  });
+
+  test('stories: the owner update path excludes the moderation verdict', () => {
+    const body = blockBody('stories');
+    expect(body).toBeTruthy();
+    // The exclusion list (not a comment) must name the moderation fields.
+    const exclusion = body.match(/hasAny\(\[([^\]]*)\]\)/);
+    expect(exclusion).toBeTruthy();
+    for (const field of ['moderationStatus', 'moderatedBy', 'moderatedAt', 'processingState']) {
+      expect(exclusion[1]).toContain(field);
+    }
+    expect(body).toMatch(/allow update: if isSignedIn\(\) && request\.auth\.uid == resource\.data\.userId &&/);
+    // Soft-delete is one-way: the owner can set isDeleted true, never back.
+    expect(body).toMatch(/request\.resource\.data\.isDeleted == true/);
+  });
+});
+
+describe('firestore.rules economy accounting (regression guards)', () => {
+  // The coin economy must be server-authoritative: a client that can write a
+  // ledger row, a coin event, a fraud bucket, or rewrite an order's price is a
+  // client that can mint or erase money.
+  test('the double-entry ledger is server-only', () => {
+    const body = blockBody('ledger_entries');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/allow create, update, delete: if false/);
+    expect(body).not.toMatch(/allow (create|write|update): if isSignedIn\(\)/);
+  });
+
+  test('fraud velocity buckets and flags are server-only', () => {
+    const limits = blockBody('fraud_limits');
+    expect(limits).toBeTruthy();
+    expect(limits).toMatch(/allow read, write: if false/);
+    const flags = blockBody('fraud_flags');
+    expect(flags).toBeTruthy();
+    expect(flags).toMatch(/allow write: if false/);
+  });
+
+  test('coin_events cannot be minted by a client', () => {
+    const body = blockBody('coin_events');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/allow create, update, delete: if false/);
+  });
+
+  test('order financial fields are immutable once written', () => {
+    for (const name of ['marketplace_orders', 'orders']) {
+      const body = blockBody(name);
+      expect(body).toBeTruthy();
+      expect(body).toMatch(/amountPaidCoins[\s\S]*buyerId[\s\S]*downloadUrl/);
+    }
+  });
+
+  test('a withdrawal request can only be cancelled by its owner', () => {
+    const body = blockBody('withdrawal_requests');
+    expect(body).toBeTruthy();
+    expect(body).toMatch(/request\.resource\.data\.status in \['cancelled'\]/);
+    expect(body).not.toMatch(/allow update: if isSignedIn\(\) && resource\.data\.userId == uid\(\) && resource\.data\.status == 'pending';\s*$/m);
   });
 });
 

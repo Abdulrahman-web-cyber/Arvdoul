@@ -11,8 +11,7 @@
  *  - updateSetting(path, value): optimistic local update + Firestore write
  *    (merge), offline ops go through the offline queue with idempotency
  *  - clearApplicationCache(): REAL cache clearing - localStorage (preserving
- *    auth/session), IndexedDB (all arvdoul databases), CacheManager,
- *    RedisCacheManager
+ *    auth/session), IndexedDB (all arvdoul databases), CacheManager
  *  - Fully unit-tested with a mocked Firestore layer
  */
 
@@ -114,6 +113,16 @@ class SettingsService {
   }
 
   /**
+   * Synchronous read of the cached settings (defaults before the first load).
+   * Lets components that gate rendering on a preference — e.g. feed autoplay —
+   * read it without a per-render Firestore round trip.
+   */
+  getCachedSettings(userId) {
+    if (!userId) return mergeSettings(null);
+    return this._cache.get(this._cacheKey(userId))?.settings || mergeSettings(null);
+  }
+
+  /**
    * Updates a single setting (dotted path) with optimistic local state and
    * a Firestore merge write. Offline writes queue for retry.
    * @returns {Promise<{success: boolean, settings: Object, offlineQueued?: boolean}>}
@@ -207,7 +216,7 @@ class SettingsService {
    * REAL application cache clearing:
    *  - localStorage entries (auth/session keys preserved)
    *  - all IndexedDB databases created by the app (offline queue, caches)
-   *  - in-memory CacheManager + RedisCacheManager
+   *  - in-memory CacheManager
    * @returns {Promise<{success: boolean, cleared: string[]}>}
    */
   async clearApplicationCache({ preserveKeys = ['arvdoul_locale'] } = {}) {
@@ -257,8 +266,6 @@ class SettingsService {
     // 3. In-memory caches
     try {
       cacheManager.clear();
-      const { redisCacheManager } = await import('./RedisCacheManager.js');
-      redisCacheManager.clear();
       cleared.push('memory:cacheManager');
     } catch {
       /* noop */

@@ -23,7 +23,7 @@ const VideoGiftModal = memo(({
 }) => {
   const { isDark } = useTheme();
   const { user } = useAuth();
-  const { currentUser, updateCurrentUser } = useAppStore();
+  const { currentUser, updateUserProfile } = useAppStore();
   const [selectedGift, setSelectedGift] = useState(VIRTUAL_GIFTS[0]);
   const [sending, setSending] = useState(false);
   const [sentAnimation, setSentAnimation] = useState(null);
@@ -86,8 +86,8 @@ const VideoGiftModal = memo(({
         const b = await getMonetizationService().getBalance(user.uid);
         if (typeof b === 'number') {
           setBalance(b);
-          if (updateCurrentUser && currentUser) {
-            updateCurrentUser({ coins: b });
+          if (updateUserProfile && currentUser) {
+            updateUserProfile({ coins: b });
           }
         }
       } catch { /* best-effort */ }

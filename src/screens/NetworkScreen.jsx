@@ -63,6 +63,18 @@ export default function NetworkScreen() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  const handleFollowSuggestion = useCallback(async (target) => {
+    if (!user?.uid || !target?.id) return false;
+    try {
+      const { getUserService } = await import('../services/userService.js');
+      await getUserService().followUser(user.uid, target.id);
+      return true;
+    } catch (err) {
+      toast.error(err?.message || 'Could not follow.');
+      return false;
+    }
+  }, [user?.uid]);
+
   const handleRequest = async (requestId, accept) => {
     if (!user?.uid || pendingAction) return;
     setPendingAction(requestId);
@@ -84,7 +96,7 @@ export default function NetworkScreen() {
     }
   };
 
-  const PersonRow = ({ person, action, onAction, actionLoading }) => {
+  const PersonRow = ({ person, action, actionLoading }) => {
     const name = person?.displayName || person?.username || 'User';
     return (
       <div className={cn("flex items-center gap-3 p-3 rounded-xl", colors.card, "border")}>
@@ -144,14 +156,14 @@ export default function NetworkScreen() {
           <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-violet-500 animate-spin" /></div>
         ) : tab === 'followers' ? (
           followers.length === 0 ? (
-            <Empty label="No followers yet" recommended={recommended} />
+            <Empty label="No followers yet" recommended={recommended} onFollow={handleFollowSuggestion} />
           ) : followers.map((p) => <PersonRow key={p.id || p.userId} person={p} />)
         ) : tab === 'following' ? (
           following.length === 0 ? (
-            <Empty label="Not following anyone yet" recommended={recommended} />
+            <Empty label="Not following anyone yet" recommended={recommended} onFollow={handleFollowSuggestion} />
           ) : following.map((p) => <PersonRow key={p.id || p.userId} person={p} />)
         ) : requests.length === 0 ? (
-          <Empty label="No pending friend requests" recommended={recommended} />
+          <Empty label="No pending friend requests" recommended={recommended} onFollow={handleFollowSuggestion} />
         ) : (
           requests.map((req) => (
             <div key={req.id} className={cn("flex items-center gap-3 p-3 rounded-xl", colors.card, "border")}>
@@ -185,12 +197,20 @@ export default function NetworkScreen() {
 
 function Empty({ label, onFollow, recommended = [] }) {
   const [followedIds, setFollowedIds] = useState([]);
+  const [pendingId, setPendingId] = useState(null);
 
-  const handleFollowToggle = (id, name) => {
-    setFollowedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-    toast.success(`Followed ${name}! 🚀`);
+  const handleFollowToggle = async (person) => {
+    const id = person?.id;
+    if (!id || pendingId) return;
+    const name = person?.displayName || person?.username || 'this creator';
+    // Following is a server write. The previous version only flipped local
+    // state and toasted "Followed X!" — the follow never reached the server.
+    setPendingId(id);
+    const ok = await onFollow?.(person);
+    setPendingId(null);
+    if (!ok) return;
+    setFollowedIds((prev) => [...prev, id]);
+    toast.success(`Now following ${name}! 🚀`);
   };
 
   return (
@@ -226,9 +246,10 @@ function Empty({ label, onFollow, recommended = [] }) {
                 </div>
               </div>
               <button
-                onClick={() => handleFollowToggle(c.id, c.displayName)}
+                onClick={() => handleFollowToggle(c)}
+                disabled={pendingId === c.id}
                 className={cn(
-                  "px-4 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ml-2",
+                  "px-4 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ml-2 disabled:opacity-60",
                   isFollowing
                     ? "bg-white/10 text-gray-300 border border-white/20"
                     : "bg-purple-600 text-white shadow-md shadow-purple-500/20 hover:bg-purple-700"

@@ -314,6 +314,7 @@ export function projectProfileForViewer(profile, capabilities = {}, { isOwner = 
     canViewTitles: Boolean(caps.canViewTitles),
     canViewFollowersList: Boolean(caps.canViewFollowers),
     canViewFollowingList: Boolean(caps.canViewFollowing),
+    canViewFriendsList: Boolean(caps.canViewFriends),
     links: caps.canViewLinks ? (profile.links || []) : [],
     presence: presenceVisible ? profile.presence : OFFLINE_PRESENCE,
     isOnline: presenceVisible ? profile.isOnline : false,

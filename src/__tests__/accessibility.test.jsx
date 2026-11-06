@@ -7,7 +7,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import i18n from 'i18next';
 import BottomNav from '../components/Shared/BottomNav.jsx';
-import AdvancedToggleSwitch from '../components/AdvancedToggleSwitch.jsx';
 import GlobalErrorBoundary from '../app/GlobalErrorBoundary.jsx';
 
 expect.extend(toHaveNoViolations);
@@ -70,6 +69,9 @@ jest.mock('../hooks/useAnalytics.js', () => ({ useAnalytics: () => ({ track: () 
 jest.mock('../store/appStore.js', () => ({
   useAppStore: () => ({ unreadCounts: {}, currentUser: { uid: 'u1', username: 'tester' } }),
 }));
+jest.mock('../hooks/useNavBadges.js', () => ({
+  useNavBadges: () => ({ messages: 0, notifications: 0, network: 0 }),
+}));
 jest.mock('../components/Shared/QuickAccessPanel.jsx', () => () => null);
 
 function renderWithI18n(ui) {
@@ -101,23 +103,6 @@ describe('accessibility - BottomNav', () => {
   });
 });
 
-describe('accessibility - AdvancedToggleSwitch', () => {
-  test('has no axe violations', async () => {
-    const { container } = renderWithI18n(
-      <AdvancedToggleSwitch method="phone" onToggle={() => {}} theme="dark" />
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-
-  test('implements radiogroup semantics', () => {
-    renderWithI18n(<AdvancedToggleSwitch method="google" onToggle={() => {}} theme="dark" />);
-    expect(screen.getByRole('radiogroup')).toBeInTheDocument();
-    const radios = screen.getAllByRole('radio');
-    expect(radios).toHaveLength(2);
-    expect(radios[1]).toHaveAttribute('aria-checked', 'true');
-  });
-});
 
 describe('accessibility - GlobalErrorBoundary (crashed state)', () => {
   test('renders an alert role and focusable heading', async () => {

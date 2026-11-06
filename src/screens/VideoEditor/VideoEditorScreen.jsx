@@ -1,8 +1,9 @@
 // src/screens/VideoEditor/VideoEditorScreen.jsx
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Layers as LayersIcon } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   INITIAL_TRACKS, RESOLUTION_PRESETS, formatTimecode,
@@ -121,7 +122,6 @@ export default function VideoEditorScreen() {
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
   const [selectedClipId, setSelectedClipId] = useState(null);
   const [selectedTrackId, setSelectedTrackId] = useState('track-video');
-
   // History (Undo / Redo)
   const [history, setHistory] = useState([INITIAL_TRACKS]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -157,6 +157,12 @@ export default function VideoEditorScreen() {
   const [isMagnetSnap, setIsMagnetSnap] = useState(true);
   const [isRippleEdit, setIsRippleEdit] = useState(true);
   const [showSafeZone, setShowSafeZone] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Saved projects (in-session list for the header project menu)
+  const [savedProjects, setSavedProjects] = useState([]);
 
   // Tool & Ribbon State
   const [activeTool, setActiveTool] = useState('trim');
@@ -175,6 +181,7 @@ export default function VideoEditorScreen() {
   });
   const [activeTransition, setActiveTransition] = useState('fade');
   const [activeEffect, setActiveEffect] = useState('none');
+  const [layerOpacity, setLayerOpacity] = useState(100);
 
   // Clip Specific State (for selected clip)
   const [clipSpeed, setClipSpeed] = useState(1.0);
@@ -200,29 +207,33 @@ export default function VideoEditorScreen() {
   // Compute Total Timeline Duration
   const totalDuration = Math.max(
     60,
-    ...tracks.flatMap((t) => t.clips.map((c) => (c.startTime || 0) + (c.duration || 0)))
+    ...tracks.flatMap((t) => (t.clips || []).map((c) => (c.startTime || 0) + (c.duration || 0)))
   );
+
+  // Flattened clip map for components that key clips by id (MultiTrackTimeline,
+  // PreviewCanvas). Each clip carries its owning trackId so drag/trim callbacks
+  // can report which track moved.
+  const clips = useMemo(() => {
+    const map = {};
+    for (const track of tracks) {
+      for (const clip of track.clips || []) {
+        map[clip.id] = { ...clip, trackId: track.id };
+      }
+    }
+    return map;
+  }, [tracks]);
 
   // Get Currently Selected Clip
   const selectedClip = tracks
-    .flatMap((t) => t.clips)
+    .flatMap((t) => t.clips || [])
     .find((c) => c.id === selectedClipId) || null;
 
-  // Active video clip at current playhead time
+  // Active video clip at current playhead time (the video element source).
   const currentVideoClip = tracks
     .find((t) => t.id === 'track-video')
     ?.clips.find((c) => currentTime >= c.startTime && currentTime <= c.startTime + c.duration) ||
-    tracks.find((t) => t.id === 'track-video')?.clips[0];
-
-  // Active text overlays at current time
-  const activeTextClips = tracks
-    .find((t) => t.id === 'track-text')
-    ?.clips.filter((c) => currentTime >= c.startTime && currentTime <= c.startTime + c.duration) || [];
-
-  // Active sticker overlays at current time
-  const activeStickerClips = tracks
-    .find((t) => t.id === 'track-stickers')
-    ?.clips.filter((c) => currentTime >= c.startTime && currentTime <= c.startTime + c.duration) || [];
+    tracks.find((t) => t.id === 'track-video')?.clips[0] ||
+    null;
 
   // Playback Loop Animation Frame
   useEffect(() => {
@@ -306,19 +317,25 @@ export default function VideoEditorScreen() {
   // Track & Clip Actions
   const handleSelectClip = (clipId, trackId) => {
     setSelectedClipId(clipId);
-    setSelectedTrackId(trackId);
+    if (trackId) setSelectedTrackId(trackId);
   };
 
-  const handleUpdateClip = (clipId, updates) => {
-    const newTracks = tracks.map((track) => ({
-      ...track,
-      clips: track.clips.map((clip) => {
-        if (clip.id === clipId) {
-          return { ...clip, ...updates };
-        }
-        return clip;
-      }),
-    }));
+  // Signature matches MultiTrackTimeline/PreviewCanvas: (trackId, clipId, updates).
+  const handleUpdateClip = (trackId, clipId, updates) => {
+    // Tolerate the legacy (clipId, updates) form used by in-screen controls.
+    if (updates === undefined) {
+      updates = clipId;
+      clipId = trackId;
+      trackId = null;
+    }
+    const newTracks = tracks.map((track) => {
+      if (trackId && track.id !== trackId) return track;
+      if (!(track.clips || []).some((c) => c.id === clipId)) return track;
+      return {
+        ...track,
+        clips: track.clips.map((clip) => (clip.id === clipId ? { ...clip, ...updates } : clip)),
+      };
+    });
     pushHistory(newTracks);
   };
 
@@ -340,7 +357,7 @@ export default function VideoEditorScreen() {
     };
 
     const newTracks = tracks.map((track) => {
-      if (track.clips.some((c) => c.id === clip.id)) {
+      if ((track.clips || []).some((c) => c.id === clip.id)) {
         return {
           ...track,
           clips: track.clips.flatMap((c) => (c.id === clip.id ? [firstClip, secondClip] : [c])),
@@ -357,7 +374,7 @@ export default function VideoEditorScreen() {
     if (!selectedClipId) return;
     const newTracks = tracks.map((track) => ({
       ...track,
-      clips: track.clips.filter((c) => c.id !== selectedClipId),
+      clips: (track.clips || []).filter((c) => c.id !== selectedClipId),
     }));
     pushHistory(newTracks);
     setSelectedClipId(null);
@@ -373,7 +390,7 @@ export default function VideoEditorScreen() {
     };
 
     const newTracks = tracks.map((track) => {
-      if (track.clips.some((c) => c.id === selectedClip.id)) {
+      if ((track.clips || []).some((c) => c.id === selectedClip.id)) {
         return {
           ...track,
           clips: [...track.clips, dupClip],
@@ -402,7 +419,7 @@ export default function VideoEditorScreen() {
 
     const newTracks = tracks.map((t) => {
       if (t.id === 'track-text') {
-        return { ...t, clips: [...t.clips, newClip] };
+        return { ...t, clips: [...(t.clips || []), newClip] };
       }
       return t;
     });
@@ -424,7 +441,7 @@ export default function VideoEditorScreen() {
 
     const newTracks = tracks.map((t) => {
       if (t.id === 'track-stickers') {
-        return { ...t, clips: [...t.clips, newClip] };
+        return { ...t, clips: [...(t.clips || []), newClip] };
       }
       return t;
     });
@@ -449,7 +466,7 @@ export default function VideoEditorScreen() {
 
     const newTracks = tracks.map((t) => {
       if (t.id === 'track-audio') {
-        return { ...t, clips: [...t.clips, newClip] };
+        return { ...t, clips: [...(t.clips || []), newClip] };
       }
       return t;
     });
@@ -477,7 +494,7 @@ export default function VideoEditorScreen() {
         volume: 100,
       };
       const newTracks = tracks.map((t) =>
-        t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
+        t.id === 'track-video' ? { ...t, clips: [...(t.clips || []), newClip] } : t
       );
       pushHistory(newTracks);
       setSelectedClipId(newClip.id);
@@ -508,7 +525,7 @@ export default function VideoEditorScreen() {
           volume: 100,
         };
         const newTracks = tracks.map((t) =>
-          t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
+          t.id === 'track-video' ? { ...t, clips: [...(t.clips || []), newClip] } : t
         );
         pushHistory(newTracks);
         setSelectedClipId(newClip.id);
@@ -552,6 +569,112 @@ export default function VideoEditorScreen() {
     setAdjustments((prev) => ({ ...prev, [param]: val }));
   };
 
+  // Layers panel view model — one row per clip (video/text/sticker/audio).
+  const layers = useMemo(
+    () => tracks.flatMap((t) => (t.clips || []).map((c) => ({ ...c, type: c.type || t.type }))),
+    [tracks]
+  );
+
+  const handleSelectLayer = (layerId) => {
+    const track = tracks.find((t) => (t.clips || []).some((c) => c.id === layerId));
+    if (track) setSelectedTrackId(track.id);
+    setSelectedClipId(layerId);
+  };
+
+  const handleToggleLayerVisibility = (layerId) => {
+    const next = tracks.map((t) => ({
+      ...t,
+      clips: (t.clips || []).map((c) => (c.id === layerId ? { ...c, visible: c.visible === false } : c)),
+    }));
+    pushHistory(next);
+  };
+
+  const handleDeleteLayer = (layerId) => {
+    const next = tracks.map((t) => ({ ...t, clips: (t.clips || []).filter((c) => c.id !== layerId) }));
+    pushHistory(next);
+    if (selectedClipId === layerId) setSelectedClipId(null);
+  };
+
+  const handleDuplicateLayer = (layerId) => {
+    const next = tracks.map((t) => {
+      const clip = (t.clips || []).find((c) => c.id === layerId);
+      if (!clip) return t;
+      const copy = {
+        ...clip,
+        id: `${clip.id}-copy-${Date.now().toString().slice(-4)}`,
+        startTime: (clip.startTime || 0) + (clip.duration || 0) + 0.5,
+      };
+      return { ...t, clips: [...t.clips, copy] };
+    });
+    pushHistory(next);
+  };
+
+  const handleMoveLayer = (layerId, direction) => {
+    const next = tracks.map((t) => {
+      const arr = t.clips || [];
+      const i = arr.findIndex((c) => c.id === layerId);
+      if (i < 0) return t;
+      const j = i + direction;
+      if (j < 0 || j >= arr.length) return t;
+      const copy = [...arr];
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+      return { ...t, clips: copy };
+    });
+    pushHistory(next);
+  };
+
+  const handleAddTrack = () => {
+    const id = `track-custom-${Date.now().toString().slice(-5)}`;
+    const next = [
+      ...tracks,
+      { id, name: `Track ${tracks.length + 1}`, type: 'video', visible: true, locked: false, muted: false, icon: 'Video', clips: [] },
+    ];
+    pushHistory(next);
+    setSelectedTrackId(id);
+  };
+
+  const handleToggleTrackVisibility = (trackId) => {
+    pushHistory(tracks.map((t) => (t.id === trackId ? { ...t, visible: t.visible === false } : t)));
+  };
+
+  const handleToggleTrackLock = (trackId) => {
+    pushHistory(tracks.map((t) => (t.id === trackId ? { ...t, locked: !t.locked } : t)));
+  };
+
+  // Save the current project into localStorage and keep an in-session list.
+  const handleSaveProject = () => {
+    const snapshot = {
+      id: `project-${Date.now()}`,
+      name: projectName,
+      resolution: selectedResolution,
+      tracks,
+      updatedAtText: 'Just now',
+    };
+    setSavedProjects((prev) => [snapshot, ...prev].slice(0, 10));
+    setIsSaved(true);
+  };
+
+  const handleNewProject = () => {
+    setProjectName('Untitled Project');
+    setTracks(INITIAL_TRACKS);
+    setHistory([INITIAL_TRACKS]);
+    setHistoryIndex(0);
+    setSelectedClipId(null);
+    setSelectedTrackId('track-video');
+    setCurrentTime(0);
+    setIsPlaying(false);
+  };
+
+  const handleLoadProject = (project) => {
+    if (!project?.tracks) return;
+    setProjectName(project.name || 'Untitled Project');
+    setTracks(project.tracks);
+    setHistory([project.tracks]);
+    setHistoryIndex(0);
+    setSelectedClipId(null);
+    if (project.resolution) setSelectedResolution(project.resolution);
+  };
+
   const handleResetAdjustments = () => {
     setAdjustments({
       brightness: 100,
@@ -572,16 +695,17 @@ export default function VideoEditorScreen() {
         onProjectNameChange={setProjectName}
         onClose={() => navigate(-1)}
         currentResolution={selectedResolution}
-        selectedResolution={selectedResolution}
         onSelectResolution={setSelectedResolution}
-        onResolutionChange={setSelectedResolution}
         isSaved={isSaved}
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
         onExportClick={() => setIsExportModalOpen(true)}
-        onOpenExport={() => setIsExportModalOpen(true)}
+        onSaveProject={handleSaveProject}
+        onNewProject={handleNewProject}
+        savedProjects={savedProjects}
+        onLoadProject={handleLoadProject}
       />
 
       {/* 2. Main Center Work Area (Preview Canvas + Optional Layers Drawer) */}
@@ -589,10 +713,13 @@ export default function VideoEditorScreen() {
         {/* Center Preview Viewport */}
         <div className="flex-1 flex flex-col p-2 sm:p-3 relative overflow-hidden min-h-0">
           <PreviewCanvas
-            currentClip={currentVideoClip}
-            activeTextClips={activeTextClips}
-            activeStickerClips={activeStickerClips}
-            resolution={selectedResolution}
+            mainVideoUrl={currentVideoClip?.url || null}
+            clips={clips}
+            tracks={tracks}
+            selectedClipId={selectedClipId}
+            onSelectClip={handleSelectClip}
+            onUpdateClip={handleUpdateClip}
+            aspectRatio={selectedResolution?.aspect || '16:9'}
             filterId={filterId}
             adjustments={adjustments}
             activeEffect={activeEffect}
@@ -601,13 +728,27 @@ export default function VideoEditorScreen() {
             currentTime={currentTime}
             duration={totalDuration}
             onSeek={setCurrentTime}
-            playbackSpeed={playbackSpeed}
-            onChangePlaybackSpeed={setPlaybackSpeed}
-            showSafeZone={showSafeZone}
-            onToggleSafeZone={() => setShowSafeZone(!showSafeZone)}
-            onToggleLayersPanel={() => setIsLayersPanelOpen(!isLayersPanelOpen)}
-            isLayersPanelOpen={isLayersPanelOpen}
+            isLooping={isLooping}
+            onToggleLoop={() => setIsLooping((v) => !v)}
+            volume={volume}
+            onVolumeChange={setVolume}
+            isMuted={isMuted}
+            onToggleMute={() => setIsMuted((v) => !v)}
+            onStepFrame={(dir) => setCurrentTime((t) => Math.max(0, Math.min(totalDuration, t + dir / 30)))}
           />
+          <button
+            type="button"
+            onClick={() => setIsLayersPanelOpen((v) => !v)}
+            title="Toggle layers panel"
+            className={`absolute top-4 right-4 z-40 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border transition-colors ${
+              isLayersPanelOpen
+                ? 'bg-purple-600/80 border-purple-400/60 text-white'
+                : 'bg-black/50 border-white/20 text-gray-200 hover:bg-black/70'
+            }`}
+          >
+            <LayersIcon className="w-3.5 h-3.5" />
+            Layers
+          </button>
         </div>
 
         {/* Floating / Docked Layers Manager Panel */}
@@ -621,19 +762,17 @@ export default function VideoEditorScreen() {
               className={`absolute right-0 top-0 bottom-0 z-30 w-72 sm:w-80 p-3 backdrop-blur-2xl border-l shadow-2xl ${isDark ? 'bg-gray-950/90 border-white/10' : 'bg-white/95 border-gray-200'}`}
             >
               <LayersPanel
-                tracks={tracks}
-                selectedTrackId={selectedTrackId}
-                onSelectTrack={setSelectedTrackId}
-                onToggleMute={(tId) => {
-                  setTracks(tracks.map((t) => (t.id === tId ? { ...t, isMuted: !t.isMuted } : t)));
-                }}
-                onToggleLock={(tId) => {
-                  setTracks(tracks.map((t) => (t.id === tId ? { ...t, isLocked: !t.isLocked } : t)));
-                }}
-                onToggleVisibility={(tId) => {
-                  setTracks(tracks.map((t) => (t.id === tId ? { ...t, isVisible: !t.isVisible } : t)));
-                }}
-                onClose={() => setIsLayersPanelOpen(false)}
+                layers={layers}
+                selectedLayerId={selectedClipId}
+                onSelectLayer={handleSelectLayer}
+                onAddLayer={handleAddTrack}
+                onToggleVisibility={handleToggleLayerVisibility}
+                onToggleLock={handleToggleTrackLock}
+                onDeleteLayer={handleDeleteLayer}
+                onDuplicateLayer={handleDuplicateLayer}
+                onMoveLayer={handleMoveLayer}
+                opacity={layerOpacity}
+                onOpacityChange={setLayerOpacity}
               />
             </motion.div>
           )}
@@ -643,18 +782,15 @@ export default function VideoEditorScreen() {
       {/* 3. Timeline Toolbar (Timecode, Undo, Redo, Magnet, Split, Delete, Zoom) */}
       <div className={`px-3 sm:px-4 py-1.5 border-t ${isDark ? 'bg-gray-950 border-white/10' : 'bg-white border-gray-200'}`}>
         <TimelineToolbar
-          currentTime={currentTime}
-          duration={totalDuration}
           canUndo={historyIndex > 0}
           canRedo={historyIndex < history.length - 1}
           onUndo={handleUndo}
           onRedo={handleRedo}
+          hasSelection={Boolean(selectedClipId)}
           zoomLevel={zoomLevel}
           onZoomChange={setZoomLevel}
-          isMagnetSnap={isMagnetSnap}
-          onToggleMagnetSnap={() => setIsMagnetSnap(!isMagnetSnap)}
-          isRippleEdit={isRippleEdit}
-          onToggleRippleEdit={() => setIsRippleEdit(!isRippleEdit)}
+          isMagnetOn={isMagnetSnap}
+          onToggleMagnet={() => setIsMagnetSnap(!isMagnetSnap)}
           onSplit={handleSplitClip}
           onDelete={handleDeleteClip}
           onDuplicate={handleDuplicateClip}
@@ -665,6 +801,7 @@ export default function VideoEditorScreen() {
       <div className={`h-44 sm:h-52 border-t border-b overflow-hidden relative ${isDark ? 'bg-gray-950/95 border-white/10' : 'bg-slate-100/90 border-gray-200'}`}>
         <MultiTrackTimeline
           tracks={tracks}
+          clips={clips}
           currentTime={currentTime}
           duration={totalDuration}
           zoomLevel={zoomLevel}
@@ -672,7 +809,9 @@ export default function VideoEditorScreen() {
           onSelectClip={handleSelectClip}
           onSeek={setCurrentTime}
           onUpdateClip={handleUpdateClip}
-          isPlaying={isPlaying}
+          onAddTrack={handleAddTrack}
+          onToggleTrackVisibility={handleToggleTrackVisibility}
+          onToggleTrackLock={handleToggleTrackLock}
         />
       </div>
 
@@ -800,7 +939,7 @@ export default function VideoEditorScreen() {
                 volume: 100,
               };
               const newTracks = tracks.map((t) =>
-                t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
+                t.id === 'track-video' ? { ...t, clips: [...(t.clips || []), newClip] } : t
               );
               pushHistory(newTracks);
               setSelectedClipId(newClip.id);
@@ -831,7 +970,7 @@ export default function VideoEditorScreen() {
               volume: 100,
             };
             const newTracks = tracks.map((t) =>
-              t.id === 'track-video' ? { ...t, clips: [...t.clips, newClip] } : t
+              t.id === 'track-video' ? { ...t, clips: [...(t.clips || []), newClip] } : t
             );
             pushHistory(newTracks);
             setSelectedClipId(newClip.id);

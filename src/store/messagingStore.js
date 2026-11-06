@@ -77,7 +77,7 @@ export const useMessagingStore = create((set, get) => ({
     );
 
     try {
-      const result = await messagingService.getConversationMessages(conversationId, {
+      const result = await messagingService.getMessages(conversationId, {
         limit: options.limit || 30,
         startAfter: options.startAfter || state.messagesNextCursor[conversationId] || null,
       });
@@ -96,8 +96,12 @@ export const useMessagingStore = create((set, get) => ({
               draft.messages[conversationId] = result.messages || [];
             }
             draft.messagesHasMore[conversationId] = result.hasMore || false;
-            draft.messagesNextCursor[conversationId] = result.messages?.length > 0
-              ? result.messages[0].id
+            // The next page is older, so the cursor is the OLDEST loaded
+            // message's timestamp (getMessages paginates by startAfter date).
+            const oldest = result.messages?.[result.messages.length - 1];
+            const oldestAt = oldest?.createdAt?.toDate?.() || oldest?.createdAt;
+            draft.messagesNextCursor[conversationId] = oldestAt
+              ? new Date(oldestAt).toISOString()
               : null;
           })
         );

@@ -90,3 +90,21 @@ describe('architecture boundary: lower layers must not import UI', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// AGENTS.md: "Callables from the client: go through src/services/callableService.js
+// (callFunction, FUNCTIONS) rather than inlining httpsCallable(getFunctions(), ...),
+// so app binding and error normalisation stay consistent." The service layer must
+// follow the same rule as UI — the single name registry lives in callableService.
+const FUNCTIONS_IMPORT = /(from\s+|import\(\s*)['"]firebase\/functions['"]/;
+
+describe('architecture boundary: services reach callables through callableService', () => {
+  test('no service imports firebase/functions directly', () => {
+    const offenders = [];
+    for (const full of walk(path.join(root, 'src', 'services'))) {
+      const rel = path.relative(root, full);
+      if (rel === 'src/services/callableService.js') continue;
+      if (FUNCTIONS_IMPORT.test(fs.readFileSync(full, 'utf8'))) offenders.push(rel);
+    }
+    expect(offenders).toEqual([]);
+  });
+});

@@ -87,7 +87,11 @@ class AchievementService {
       if (!isEarned && ach.criteria) {
         const c = ach.criteria;
         if (c.minLevel) {
-          progress = Math.min(100, Math.round(((userStats.level || 1) / c.minLevel) * 100));
+          // Unknown level -> no progress, never a fabricated Level 1 baseline.
+          const lvl = Number(userStats.level);
+          progress = Number.isFinite(lvl) && lvl > 0
+            ? Math.min(100, Math.round((lvl / c.minLevel) * 100))
+            : 0;
         } else if (c.minStreak) {
           progress = Math.min(100, Math.round(((userStats.activeStreak || 0) / c.minStreak) * 100));
         } else if (c.minPosts) {

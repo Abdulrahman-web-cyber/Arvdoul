@@ -39,7 +39,7 @@ describe('profile feed pagination', () => {
     expect(state.posts.map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(state.postsHasMore).toBe(true);
     expect(state.postsCursor).toBe('p2');
-    expect(spy).toHaveBeenCalledWith('u1', { limit: 12 });
+    expect(spy).toHaveBeenCalledWith('u1', { limit: 12, viewerId: null });
   });
 
   test('loadMorePosts appends the next page and advances the cursor', async () => {
@@ -53,7 +53,7 @@ describe('profile feed pagination', () => {
     });
     await useProfileStore.getState().loadMorePosts('u1');
 
-    expect(spy).toHaveBeenLastCalledWith('u1', { limit: 12, cursor: 'p1' });
+    expect(spy).toHaveBeenLastCalledWith('u1', { limit: 12, cursor: 'p1', viewerId: null });
     const state = useProfileStore.getState();
     expect(state.posts.map((p) => p.id)).toEqual(['p1', 'p2']);
     expect(state.postsHasMore).toBe(false);

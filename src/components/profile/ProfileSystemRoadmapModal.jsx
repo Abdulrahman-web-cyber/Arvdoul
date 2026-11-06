@@ -61,7 +61,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
   const rawLvl = profile?.level;
   const currentLevel = rawLvl !== null && rawLvl !== undefined && !isNaN(Number(rawLvl)) && Number(rawLvl) > 0 ? Number(rawLvl) : null;
   const currentXp = profile?.experience || profile?.xp || 0;
-  const levelInfo = useMemo(() => currentXp > 0 || currentLevel !== null ? getLevelInfo(currentXp) : { level: null, progress: 0, nextLevelXp: 100 }, [currentXp, currentLevel]);
+  const levelInfo = useMemo(() => currentXp > 0 || currentLevel !== null ? getLevelInfo(currentXp) : { level: null, progress: 0, nextLevelXp: null }, [currentXp, currentLevel]);
   const activeDays = Number(profile?.activeDaysCount || profile?.activeDays || 0);
   const reputation = Number(profile?.reputationScore || profile?.reputation || 0);
   const contribution = Number(profile?.contributionScore || profile?.contribution || 0);
@@ -79,7 +79,7 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
     contribution,
     influence,
     achievements,
-    policyStanding: profile?.policyStanding || 'good',
+    policyStanding: profile?.policyStanding || profile?.accountStatus || null,
   }), [currentLevel, activeDays, reputation, contribution, influence, achievements, profile]);
 
   const dukeEligibility = useMemo(() => getRoyalEligibility('duke', stats), [stats]);
@@ -364,14 +364,16 @@ export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal
                         Citizenship — Who You Are
                       </span>
                       <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
-                        {currentCitizenTier?.tier || 'Citizen'}
+                        {currentCitizenTier?.tier || '—'}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                         Every registered member of Arvdoul is a Citizen. Citizenship represents belonging, identity, membership, and participation in the Arvdoul community.
                       </p>
                     </div>
 
-                    <span className="text-3xl shrink-0">{currentCitizenTier?.icon || '🏛️'}</span>
+                    {currentCitizenTier?.icon && (
+                      <span className="text-3xl shrink-0">{currentCitizenTier.icon}</span>
+                    )}
                   </div>
 
                   {/* Requirements Progress Bar */}

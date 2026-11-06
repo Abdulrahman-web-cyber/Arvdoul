@@ -16,9 +16,11 @@ import {
   Film, 
   Image as ImageIcon, 
   Disc, 
+  Music,
   Bookmark, 
   Tag, 
   Info,
+  ShieldCheck,
   LayoutGrid,
   Rows3
 } from 'lucide-react';
@@ -41,8 +43,10 @@ const ProfileTabsBar = memo(({
     { id: 'reels', label: 'Reels', icon: Film },
     { id: 'photos', label: 'Photos', icon: ImageIcon },
     { id: 'stories', label: 'Stories', icon: Disc },
+    { id: 'audio', label: 'Audio', icon: Music },
     ...(isOwner ? [{ id: 'saved', label: 'Saved', icon: Bookmark }] : []),
     { id: 'tagged', label: 'Tagged', icon: Tag },
+    { id: 'citizenship', label: 'Citizenship', icon: ShieldCheck },
     { id: 'about', label: 'About', icon: Info },
   ];
 
@@ -75,6 +79,16 @@ const ProfileTabsBar = memo(({
             >
               <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>{tab.label}</span>
+              {counts[tab.id] > 0 && (
+                <span
+                  className={cn(
+                    "ml-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-full",
+                    isActive ? "bg-white/25 text-white" : (isDark ? "bg-white/10 text-slate-300" : "bg-slate-200/80 text-slate-600")
+                  )}
+                >
+                  {counts[tab.id]}
+                </span>
+              )}
             </button>
           );
         })}

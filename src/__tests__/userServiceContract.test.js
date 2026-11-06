@@ -45,8 +45,14 @@ describe('userService contract', () => {
 
     for (const file of files) {
       const content = readFileSync(file, 'utf8');
-      // Only consider files that import the userService singleton.
-      if (!/from\s+['"][^'"]*services\/userService(\.js)?['"]/.test(content)) continue;
+      // Consider a file if it imports the singleton statically OR pulls the
+      // default export via `await import(...)` (SettingsScreen's account
+      // deletion did the latter and previously slipped past this guard with a
+      // call to the non-existent `deleteUserData`).
+      const importsService =
+        /from\s+['"][^'"]*services\/userService(\.js)?['"]/.test(content) ||
+        /import\(\s*['"][^'"]*services\/userService(\.js)?['"]\s*\)/.test(content);
+      if (!importsService) continue;
 
       for (const call of content.matchAll(/userService\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g)) {
         const method = call[1];

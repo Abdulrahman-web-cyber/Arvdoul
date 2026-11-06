@@ -1,6 +1,6 @@
 // src/screens/AudioEditor/components/StudioHeader.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X, Undo2, Redo2, Download, ChevronDown, Check, Send
 } from 'lucide-react';
@@ -22,6 +22,19 @@ export default function StudioHeader({
 }) {
   const navigate = useNavigate();
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(projectName);
+
+  useEffect(() => {
+    if (!isRenaming) setDraftName(projectName);
+  }, [projectName, isRenaming]);
+
+  const commitRename = () => {
+    const next = draftName.trim();
+    if (next && next !== projectName) setProjectName?.(next);
+    else setDraftName(projectName);
+    setIsRenaming(false);
+  };
 
   // Export is performed by the parent (a real MediaRecorder render). The header
   // only reports progress; it never claims success on a timer.
@@ -56,8 +69,33 @@ export default function StudioHeader({
               <span className="text-xs font-semibold text-purple-400">ARVDOUL</span>
               <span className="text-xs font-bold opacity-60">Audio Studio</span>
             </div>
-            <div className="flex items-center gap-1 cursor-pointer">
-              <span className="text-sm font-bold truncate max-w-[180px] sm:max-w-xs">{projectName}</span>
+            <div className="flex items-center gap-1">
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename();
+                    if (e.key === 'Escape') { setDraftName(projectName); setIsRenaming(false); }
+                  }}
+                  className={cn(
+                    'text-sm font-bold bg-transparent border-b outline-none w-[180px] sm:w-64',
+                    isDark ? 'border-white/30 text-white' : 'border-gray-300 text-gray-900'
+                  )}
+                  aria-label="Session name"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsRenaming(true)}
+                  className="text-sm font-bold truncate max-w-[180px] sm:max-w-xs hover:opacity-80"
+                  title="Rename session"
+                >
+                  {projectName}
+                </button>
+              )}
               <ChevronDown className="w-3.5 h-3.5 opacity-60" />
             </div>
           </div>
@@ -84,18 +122,19 @@ export default function StudioHeader({
         </button>
       </div>
 
-      {/* Right: Saved badge & Export Button */}
+      {/* Right: local session status & Export Button */}
       <div className="flex items-center gap-2.5 relative">
         <div className="hidden md:flex items-center gap-1 text-[11px] font-medium text-emerald-400 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
           <Check className="w-3 h-3" />
-          <span>Saved</span>
+          <span>This session</span>
         </div>
 
         <div className="relative">
           <button
             onClick={() => setShowExportMenu(!showExportMenu)}
-            disabled={isExporting}
-            className="px-4 py-2 rounded-xl font-bold text-xs text-white shadow-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            disabled={isExporting || !hasSource}
+            title={hasSource ? 'Export mix' : 'Load audio into the session first'}
+            className="px-4 py-2 rounded-xl font-bold text-xs text-white shadow-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
           >
             <Download className="w-3.5 h-3.5" />

@@ -98,6 +98,80 @@ function toUnixTimestamp(timestamp) {
 }
 
 // ----------------------------------------------------------------------
+//  HELPER: build index records (shared by triggers and the full reindex so
+//  the two can never drift)
+// ----------------------------------------------------------------------
+function isPostIndexable(data) {
+  return Boolean(data && data.status === 'published' && data.visibility === 'public' && data.isDeleted !== true);
+}
+
+function buildPostRecord(postId, data) {
+  let thumbnail = null;
+  if (Array.isArray(data.media) && data.media.length > 0) {
+    const first = data.media[0];
+    thumbnail = typeof first === 'string' ? first : first?.url || first?.path || null;
+  }
+  const likeCount = data.stats?.likes || 0;
+  const commentCount = data.stats?.comments || 0;
+  return {
+    objectID: postId,
+    content: data.content || '',
+    type: data.type || 'post',
+    mediaThumbnail: thumbnail,
+    authorId: data.authorId || '',
+    authorName: data.authorName || '',
+    hashtags: data.hashtags || [],
+    tags: data.tags || [],
+    likeCount,
+    commentCount,
+    engagementScore: likeCount * 2 + commentCount * 3,
+    personalizationScore: data.personalizationScore || 0,
+    createdAt: toUnixTimestamp(data.createdAt),
+    updatedAt: toUnixTimestamp(data.updatedAt || data.createdAt),
+  };
+}
+
+function isVideoIndexable(data) {
+  return Boolean(data && data.status === 'ready' && data.visibility === 'public' && data.isDeleted !== true);
+}
+
+function buildVideoRecord(videoId, data) {
+  const views = data.stats?.views || 0;
+  const likes = data.stats?.likes || 0;
+  return {
+    objectID: videoId,
+    title: data.title || 'Untitled',
+    description: data.description || '',
+    tags: data.tags || [],
+    category: data.tags?.[0] || data.category || 'General',
+    duration: data.duration || 0,
+    views,
+    likes,
+    thumbnailUrl: data.thumbnailUrl || null,
+    rankingScore: data.rankingScore || 0,
+    engagementScore: views + likes * 5,
+    createdAt: toUnixTimestamp(data.createdAt),
+    updatedAt: toUnixTimestamp(data.updatedAt || data.createdAt),
+  };
+}
+
+function buildUserRecord(userId, data) {
+  return {
+    objectID: userId,
+    username: data.username || '',
+    displayName: data.displayName || '',
+    bio: data.bio || '',
+    photoURL: data.photoURL || null,
+    followerCount: data.followerCount || 0,
+    isVerified: !!data.isVerified,
+    isCreator: !!data.isCreator,
+    location: data.location || '',
+    createdAt: toUnixTimestamp(data.createdAt),
+    updatedAt: toUnixTimestamp(data.updatedAt || data.createdAt),
+  };
+}
+
+// ----------------------------------------------------------------------
 //  1. indexUser – triggered on users/{userId}
 // ----------------------------------------------------------------------
 exports.indexUser = functions.firestore
@@ -114,19 +188,7 @@ exports.indexUser = functions.firestore
       return;
     }
 
-    const record = {
-      objectID: userId,
-      username: afterData.username || '',
-      displayName: afterData.displayName || '',
-      bio: afterData.bio || '',
-      photoURL: afterData.photoURL || null,
-      followerCount: afterData.followerCount || 0,
-      isVerified: !!afterData.isVerified,
-      isCreator: !!afterData.isCreator,
-      location: afterData.location || '',
-      createdAt: toUnixTimestamp(afterData.createdAt),
-      updatedAt: toUnixTimestamp(afterData.updatedAt || afterData.createdAt),
-    };
+    const record = buildUserRecord(userId, afterData);
 
     log('info', `Saving user to Algolia (partial update): ${userId}`);
     await saveOrDeleteWithRetry(() =>
@@ -145,44 +207,13 @@ exports.indexPost = functions.firestore
     const postId = context.params.postId;
     const afterData = change.after.exists ? change.after.data() : null;
 
-    const isIndexable =
-      afterData &&
-      afterData.status === 'published' &&
-      afterData.visibility === 'public' &&
-      afterData.isDeleted !== true;
-
-    if (!isIndexable) {
+    if (!isPostIndexable(afterData)) {
       log('info', `Removing post from Algolia: ${postId}`);
       await saveOrDeleteWithRetry(() => postIndex.deleteObject(postId));
       return;
     }
 
-    let thumbnail = null;
-    if (Array.isArray(afterData.media) && afterData.media.length > 0) {
-      const first = afterData.media[0];
-      thumbnail = typeof first === 'string' ? first : first?.url || first?.path || null;
-    }
-
-    const likeCount = afterData.stats?.likes || 0;
-    const commentCount = afterData.stats?.comments || 0;
-    const engagementScore = likeCount * 2 + commentCount * 3;
-
-    const record = {
-      objectID: postId,
-      content: afterData.content || '',
-      type: afterData.type || 'post',
-      mediaThumbnail: thumbnail,
-      authorId: afterData.authorId || '',
-      authorName: afterData.authorName || '',
-      hashtags: afterData.hashtags || [],
-      tags: afterData.tags || [],
-      likeCount,
-      commentCount,
-      engagementScore,
-      personalizationScore: afterData.personalizationScore || 0,
-      createdAt: toUnixTimestamp(afterData.createdAt),
-      updatedAt: toUnixTimestamp(afterData.updatedAt || afterData.createdAt),
-    };
+    const record = buildPostRecord(postId, afterData);
 
     log('info', `Saving post to Algolia (partial update): ${postId}`);
     await saveOrDeleteWithRetry(() =>
@@ -201,38 +232,13 @@ exports.indexVideo = functions.firestore
     const videoId = context.params.videoId;
     const afterData = change.after.exists ? change.after.data() : null;
 
-    const isIndexable =
-      afterData &&
-      afterData.status === 'ready' &&
-      afterData.visibility === 'public' &&
-      afterData.isDeleted !== true;
-
-    if (!isIndexable) {
+    if (!isVideoIndexable(afterData)) {
       log('info', `Removing video from Algolia: ${videoId}`);
       await saveOrDeleteWithRetry(() => videoIndex.deleteObject(videoId));
       return;
     }
 
-    const views = afterData.stats?.views || 0;
-    const likes = afterData.stats?.likes || 0;
-    const engagementScore = views + likes * 5;
-    const category = afterData.tags?.[0] || afterData.category || 'General';
-
-    const record = {
-      objectID: videoId,
-      title: afterData.title || 'Untitled',
-      description: afterData.description || '',
-      tags: afterData.tags || [],
-      category,
-      duration: afterData.duration || 0,
-      views,
-      likes,
-      thumbnailUrl: afterData.thumbnailUrl || null,
-      rankingScore: afterData.rankingScore || 0,
-      engagementScore,
-      createdAt: toUnixTimestamp(afterData.createdAt),
-      updatedAt: toUnixTimestamp(afterData.updatedAt || afterData.createdAt),
-    };
+    const record = buildVideoRecord(videoId, afterData);
 
     log('info', `Saving video to Algolia (partial update): ${videoId}`);
     await saveOrDeleteWithRetry(() =>
@@ -249,29 +255,35 @@ exports.batchReindex = functions.pubsub
     if (!client) return;
 
     log('info', 'Starting scheduled reindex');
-    // Reindex users
-    const usersSnap = await admin.firestore().collection('users').limit(500).get();
-    const userRecords = [];
-    usersSnap.forEach(doc => {
-      const data = doc.data();
-      userRecords.push({
-        objectID: doc.id,
-        username: data.username || '',
-        displayName: data.displayName || '',
-        bio: data.bio || '',
-        photoURL: data.photoURL || null,
-        followerCount: data.followerCount || 0,
-        isVerified: !!data.isVerified,
-        isCreator: !!data.isCreator,
-        location: data.location || '',
-        createdAt: toUnixTimestamp(data.createdAt),
-        updatedAt: toUnixTimestamp(data.updatedAt || data.createdAt),
-      });
-    });
+    const firestore = admin.firestore();
+    const PAGE = 500;
+
+    const usersSnap = await firestore.collection('users').limit(PAGE).get();
+    const userRecords = usersSnap.docs.map((doc) => buildUserRecord(doc.id, doc.data()));
     if (userRecords.length) {
       await saveOrDeleteWithRetry(() => userIndex.saveObjects(userRecords));
     }
-    // Similar for posts and videos (omitted for brevity)
-    log('info', 'Reindex completed');
+
+    const postsSnap = await firestore.collection('posts').limit(PAGE).get();
+    const postRecords = postsSnap.docs
+      .filter((doc) => isPostIndexable(doc.data()))
+      .map((doc) => buildPostRecord(doc.id, doc.data()));
+    if (postRecords.length) {
+      await saveOrDeleteWithRetry(() => postIndex.saveObjects(postRecords));
+    }
+
+    const videosSnap = await firestore.collection('videos').limit(PAGE).get();
+    const videoRecords = videosSnap.docs
+      .filter((doc) => isVideoIndexable(doc.data()))
+      .map((doc) => buildVideoRecord(doc.id, doc.data()));
+    if (videoRecords.length) {
+      await saveOrDeleteWithRetry(() => videoIndex.saveObjects(videoRecords));
+    }
+
+    log('info', 'Reindex completed', {
+      users: userRecords.length,
+      posts: postRecords.length,
+      videos: videoRecords.length,
+    });
     return null;
   });

@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useProfileStore } from '../../store/profileStore';
 import creatorService from '../../services/creatorService';
 import { LEVEL_GATES } from '../../services/levelSystemService';
 import {
@@ -33,12 +34,15 @@ const CATEGORIES = [
 
 export default function CreatorOnboardingScreen() {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const { theme } = useTheme();
 
   const isDark = theme === 'dark' || theme === 'midnight';
-  const userLevel = Number(user?.level) || 1;
-  const isEligible = userLevel >= LEVEL_GATES.creatorProfile && (!user?.policyStanding || user?.policyStanding === 'good');
+  // A missing level is unknown, not Level 1 — the eligibility gate still uses a
+  // floor, but the copy must not claim a level the profile has not earned.
+  const hasLevel = user?.level != null && Number.isFinite(Number(user.level));
+  const userLevel = hasLevel ? Number(user.level) : 1;
+  const isEligible = hasLevel && userLevel >= LEVEL_GATES.creatorProfile && (!user?.policyStanding || user?.policyStanding === 'good');
 
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [bio, setBio] = useState('');
@@ -81,7 +85,11 @@ export default function CreatorOnboardingScreen() {
       });
 
       toast.success('Creator status approved! Welcome to the Creator Collective.');
-      if (refreshUser) await refreshUser();
+      // Re-pull the profile so the new creator flag/level is reflected before
+      // the dashboard reads it. The canonical refresh is the profile store.
+      if (user?.uid) {
+        await useProfileStore.getState().refreshProfile(user.uid, user.uid).catch(() => {});
+      }
       navigate('/creator/dashboard');
     } catch (err) {
       toast.error(err?.message || 'Failed to submit creator application');
@@ -103,7 +111,7 @@ export default function CreatorOnboardingScreen() {
             <h2 className="text-lg font-bold">Creator Application Locked</h2>
             <p className="text-xs text-gray-400 max-w-md mx-auto">
               In accordance with Arvdoul Product Law, creator status requires authenticated platform standing.
-              You must reach Level {LEVEL_GATES.creatorProfile} (Current: Level {userLevel}) before applying.
+              You must reach Level {LEVEL_GATES.creatorProfile} ({hasLevel ? `Current: Level ${userLevel}` : 'your level is not yet available'}) before applying.
             </p>
             <button
               onClick={() => navigate('/progress')}

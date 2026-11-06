@@ -29,6 +29,7 @@ import {
   projectProfileForViewer,
   OFFLINE_PRESENCE,
 } from '../services/profileReadModel.js';
+import { resolveCapabilities } from '../services/profileCapabilityEngine.js';
 
 describe('profileReadModel - handle derivation', () => {
   it('rejects synthetic user_* ids and generic placeholders', () => {
@@ -436,6 +437,23 @@ describe('profile surfaces consume the canonical read model (N018)', () => {
       expect(src).not.toContain('mutualResult?.users');
     });
 
+    it('the social-context card is gated on the capability map', () => {
+      // The card rendered mutual-friend names/avatars and community memberships
+      // without consulting the engine, so a viewer denied the followers/following
+      // lists could still read the graph here. Each section must fail closed.
+      const src = read('src/components/profile/ProfileSocialContext.jsx');
+      expect(src).toContain('capabilities?.canViewFriends === true');
+      expect(src).toContain('capabilities?.canViewCommunities === true');
+      expect(src).toContain('canShowFriends &&');
+      expect(src).toContain('canShowCommunities &&');
+      expect(src).toContain('canShowRelationship &&');
+      // The wrapper must forward the map from the screen.
+      const wrapper = read('src/components/profile/ProfileMutualFriends.jsx');
+      expect(wrapper).toContain('capabilities={capabilities}');
+      const screen = read('src/screens/Profile/ProfilePublicScreen.jsx');
+      expect(screen).toMatch(/<ProfileMutualFriends[\s\S]*?capabilities=\{capabilities\}/);
+    });
+
     it('profile surfaces do not read standing around the projection', () => {
       // The hero received the raw store `level` (MyScreen) and the public screen
       // hardcoded `|| 0` / `?? 0` for XP and streak, so a viewer denied the
@@ -563,6 +581,54 @@ describe('profile components fail closed on capabilities', () => {
 });
 
 
+describe('profile tab bar wires every tab and the counts prop', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  it('renders an Audio tab and uses the counts prop', () => {
+    const src = read('src/components/profile/ProfileTabsBar.jsx');
+    // The grid had a full `activeTab === 'audio'` view and three screens computed
+    // `counts.audio`, but the tab bar never listed Audio and never read `counts`,
+    // so both were dead wiring the user could never reach or see.
+    expect(src).toContain("{ id: 'audio'");
+    expect(src).toContain('counts[tab.id]');
+  });
+});
+
+describe('friends scope is resolved once and consumed everywhere (N046 follow-up)', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  it('the engine derives canViewFriends from both graphs', () => {
+    const caps = resolveCapabilities({
+      viewer: { uid: 'v' },
+      target: { id: 't', uid: 't', privacy: { followersList: 'ONLY_ME', followingList: 'EVERYONE' } },
+      relationship: {},
+    });
+    expect(caps.canViewFollowers).toBe(false);
+    expect(caps.canViewFollowing).toBe(true);
+    expect(caps.canViewFriends).toBe(false);
+  });
+
+  it('the projection exposes a fail-closed canViewFriendsList', () => {
+    const projected = projectProfileForViewer({ id: 't' }, {});
+    expect(projected.canViewFriendsList).toBe(false);
+  });
+
+  it('the metrics grid gates the friends count on the friends scope, not a fabricated 0', () => {
+    const src = read('src/components/profile/ProfileMetricsGrid.jsx');
+    expect(src).toContain('canViewFriends');
+    expect(src).not.toMatch(/friendsCount\s*=\s*profile\?\.friendCount\s*\?\?\s*profile\?\.friendsCount\s*\?\?\s*0/);
+  });
+
+  it('ConnectionsScreen consumes the engine decision instead of re-deriving it', () => {
+    const src = read('src/screens/Profile/ConnectionsScreen.jsx');
+    expect(src).toContain('caps.canViewFriends');
+    // The old hand-rolled AND of the two resolved booleans is gone.
+    expect(src).not.toContain('const canViewFriends = canViewFollowers && canViewFollowing;');
+  });
+});
+
 describe('ConnectionsScreen gates each list on its own scope (N046)', () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
   const src = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
@@ -582,5 +648,14 @@ describe('ConnectionsScreen gates each list on its own scope (N046)', () => {
     expect(src).toContain('tabVisible.followers &&');
     expect(src).toContain('tabVisible.following &&');
     expect(src).toContain('tabVisible.friends &&');
+  });
+
+  it('fails closed: no capability is treated as visible when undefined', () => {
+    // `capabilities?.canViewX !== false` renders the list when the capability
+    // map is missing entirely (undefined !== false), which leaks a list the
+    // engine never granted. Only an explicit truthy grant may render.
+    expect(src).not.toMatch(/canView[A-Za-z]+\s*!==\s*false/);
+    const about = fs.readFileSync(path.join(root, 'src/screens/Profile/AboutScreen.jsx'), 'utf8');
+    expect(about).not.toMatch(/canView[A-Za-z]+\s*!==\s*false/);
   });
 });

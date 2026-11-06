@@ -43,13 +43,84 @@ export const FUNCTIONS = {
   MODERATE_POST: 'moderatePost',
   PREDICT_POST_PERFORMANCE: 'predictPostPerformance',
   SCRAPE_LINK: 'scrapeLink',
+
+  // Social graph
+  GET_MUTUAL_FRIENDS: 'getMutualFriends',
+  GENERATE_FRIEND_RECOMMENDATIONS: 'generateFriendRecommendations',
+
+  // Privacy: rewrite the denormalised posts.authorIsPrivate flag when the
+  // owner toggles privacy (and one-off backfill for legacy posts).
+  PROPAGATE_POST_PRIVACY: 'propagatePostPrivacy',
+  BACKFILL_POST_PRIVACY: 'backfillPostPrivacy',
+
+  // Moderation / reporting
+  REPORT_USER: 'reportUser',
+
+  // Polls
+  VOTE_POLL: 'votePoll',
+
+  // Marketplace
+  PURCHASE_MARKETPLACE_ITEM: 'purchaseMarketplaceItem',
+
+  // Notifications
+  SEND_NOTIFICATION: 'sendNotification',
+  MARK_NOTIFICATION_READ: 'markNotificationRead',
+  MARK_ALL_NOTIFICATIONS_READ: 'markAllNotificationsRead',
+  DELETE_NOTIFICATION: 'deleteNotification',
+  GET_USER_NOTIFICATIONS: 'getUserNotifications',
+  GET_NOTIFICATION_STATS: 'getNotificationStats',
+  CREATE_BULK_NOTIFICATION_JOB: 'createBulkNotificationJob',
+
+  // Messaging
+  SEARCH_MESSAGES: 'searchMessages',
+
+  // Video
+  CREATE_MUX_UPLOAD: 'createMuxUpload',
+  LIKE_VIDEO: 'likeVideo',
+  SHARE_VIDEO: 'shareVideo',
+  RECORD_VIDEO_VIEW: 'recordVideoView',
+  PAY_PER_VIEW: 'payPerView',
+  SEND_TIP: 'sendTip',
+  SET_VIDEO_CHAPTERS: 'setVideoChapters',
+  CREATE_DUET: 'createDuet',
+  CREATE_STITCH: 'createStitch',
+  REPORT_VIDEO: 'reportVideo',
+  GET_VIDEO_RECOMMENDATIONS: 'getVideoRecommendations',
+  PROCESS_VIDEO_EVENT: 'processVideoEvent',
+  WATERMARK_VIDEO: 'watermarkVideo',
+  MODERATE_VIDEO: 'moderateVideo',
+
+  // Stories
+  GENERATE_CAPTION_FOR_IMAGE: 'generateCaptionForImage',
+
+  // Feed
+  GET_PERSONALIZED_FEED_ML: 'getPersonalizedFeedML',
+
+  // Monetization / ads / wallet
+  ADD_COINS: 'addCoins',
+  SPEND_COINS: 'spendCoins',
+  TRANSFER_COINS: 'transferCoins',
+  SEND_GIFT: 'sendGift',
+  BOOST_POST: 'boostPost',
+  REQUEST_WITHDRAWAL: 'requestWithdrawal',
+  RECORD_AD_IMPRESSION: 'recordAdImpression',
+  GET_SPONSORED_SEARCH_RESULT: 'getSponsoredSearchResult',
+  GET_AD: 'getAd',
+  WATCH_AD: 'watchAd',
+  REPORT_AD: 'reportAd',
+  PURCHASE_COINS: 'purchaseCoins',
+  GET_SUBSCRIPTION_STATUS: 'getSubscriptionStatus',
+  CREATE_SUBSCRIPTION: 'createSubscription',
+  CANCEL_SUBSCRIPTION: 'cancelSubscription',
+  GET_PAYOUT_SETTINGS: 'getPayoutSettings',
+  CREATE_PAYOUT_ACCOUNT: 'createPayoutAccount',
 };
 
 /**
  * Invoke a Firebase callable function by name
  * @param {string} functionName
  * @param {object} [data={}]
- * @returns {Promise<any>}
+ * @returns {Promise<any>} the callable's `data` payload
  */
 export async function callFunction(functionName, data = {}) {
   try {
@@ -62,6 +133,17 @@ export async function callFunction(functionName, data = {}) {
     console.error(`[callableService] Error calling ${functionName}:`, error);
     throw error;
   }
+}
+
+/**
+ * Build a bound invoker that mirrors the Firebase `httpsCallable` return shape
+ * (`{ data }`), so services that destructure `res.data` keep working without
+ * importing `firebase/functions` directly.
+ * @param {string} functionName
+ * @returns {(data?: object) => Promise<{ data: any }>}
+ */
+export function makeCallable(functionName) {
+  return async (data = {}) => ({ data: await callFunction(functionName, data) });
 }
 
 /**
@@ -125,6 +207,7 @@ export async function applyUserAdminAction(userId, action) {
 export default {
   FUNCTIONS,
   callFunction,
+  makeCallable,
   fetchAdminStatus,
   bootstrapOwner,
   grantAdmin,

@@ -169,6 +169,31 @@ before `MediaRecorder` produced a blob.
 ## Contract guards
 `src/__tests__/userServiceContract.test.js` fails if any `src` file calls a `userService.*`
 method that is not defined on the service. Run it after adding/renaming service methods.
+`src/__tests__/serviceContract.test.js` generalises that guard to EVERY service singleton
+under `src/services` (object-literal, `new Class()`, and `Object.assign` export shapes): it
+fails if any `import`ed service's method is called but not defined. This catches the
+recurring "dead service-method call" bug class (`commentService.addReaction`,
+`messagingService.getConversationMessages`, `commentService.getCommentsByTarget`) where a
+feature silently no-op'd because the method never existed. It is in the hard-failing
+`guards` CI job. When adding a service method, make sure the call site name matches exactly;
+when renaming, update every call site.
+
+`src/__tests__/storeContract.test.js` is the Zustand analogue: it imports every store
+(`appStore`, `profileStore`, `messagingStore`, `searchStore`, `videoStore`,
+`analyticsStore`) and fails if any `src` file reads a key via a selector
+(`useXStore((s) => s.key)`), a destructure (`const { key } = useXStore()`), or
+`useXStore.getState().key` that the store's state creator does not expose. This is the
+"dead store key" class (`appStore.unreadCounts` backed the BottomNav badges while
+nothing ever wrote it; `updateCurrentUser` was destructured but never defined). Add a
+real state field (or fix the call site) instead of reading an invented key. It is in the
+hard-failing `guards` CI job.
+
+Navigation badge counts come from `src/hooks/useNavBadges.js`, which reads the real
+sharded counters (`messagesService.getTotalUnreadCount`, `notificationsService
+.getNotificationStats`, `userService.getFriendRequests`). Do not reintroduce a store
+slice for unread counts; the services that change a count emit
+`arvdoul:messages-read` / `arvdoul:notification-read` / `arvdoul:friend-request-changed`
+and the hook refreshes on those plus window focus/visibility.
 
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus
@@ -199,6 +224,25 @@ eligibility live in exactly ONE hand-edited file: `src/shared/levelConfig.cjs`
 - Never re-declare a level curve, level name, coin reward or gate threshold in a
   component or service. Read `LEVEL_GATES` / `getLevelInfo` / `getRankTitle`
   from the shared config. A literal like `LEVEL >= 10` in JSX is a bug.
+- XP is awarded only through `functions/xpAward.js#awardXp` (the shared server
+  routine) — `awardExperience` is a thin callable over it, and every XP rule in
+  `XP_RULES` must have a real trigger: `story_created`/`post_shared` on the
+  client, `civic_vote_cast` (`polls.js`), `ad_reward_claimed` (`monetization.js`
+  `watchAd`), `daily_login`/`streak_milestone` (`levelSystem.js`
+  `recordActiveDay`), `live_minute` (`liveService.leaveLiveStream`),
+  `video_watched` (`video.js` `recordVideoView`), and `gift_sent`/`gift_received`
+  (`monetization.js` `sendGift`). `src/__tests__/xpWiring.test.js` fails if a
+  rule has no trigger. Never mutate `experience`/`level` inline in a function or
+  credit a level-up reward outside `awardXp`.
+- **XP is credited to a resolved beneficiary, never to a client-named uid.**
+  `like_received`/`follow_received`/`gift_received` are *received* actions: the
+  `awardExperience` callable re-verifies the real edge server-side
+  (`posts/{id}/likes/{uid}` for a like, `follows/{follower}_{following}` for a
+  follow) and credits the other party; it returns a no-op when the edge is
+  absent. Self-credit actions reject a foreign `userId` with
+  `permission-denied`. `gift_received` is credited **only** inside `sendGift`
+  (the only path that can prove a gift) — do not re-add a client-side award.
+  `xpWiring.test.js` guards this.
 - The shared config also owns the economy constants: `COINS_PER_DOLLAR` and
   `MIN_WITHDRAWAL_COINS`. The wallet/payout screens read them and
   `functions/monetization.js` `requestWithdrawal` enforces
@@ -294,6 +338,19 @@ walks the import graph and fails CI if a service becomes unreachable; it runs in
 the hard-failing `guards` job. If a service is dead, delete it and its test —
 never add an exemption. If logic is real but must run server-side, put it in
 `functions/` (where it is actually enforced) rather than leaving an inert client copy.
+Reachability is not proof of use: a service whose *only* reachable call is an
+inherited method (e.g. `RedisCacheManager`, whose single caller was the inherited
+`clear()` from `CacheManager`) is still dead — its own methods have no caller and
+its backend never runs. Delete the class, not just the caller.
+
+## No dead props or fabricated successes
+A control that collects a value nothing reads is a bug, not a feature: the Create-Post
+`CrossPlatformPanel` wrote a `crossPlatform` array into the post payload that no reader
+ever consumed, and `firestoreService.publishToPlatform` "confirmed" a cross-post by
+sleeping 600 ms and returning invented `https://<platform>.com/...` URLs. If a capability
+has no integrated provider, remove the control and throw an honest "not available" error
+(or render an unavailable state) — never fabricate a success or a URL. Guarded by
+`noFabricatedData.test.js`; the same rule as §11's "no fabricated standing".
 
 ## Reconstruction deliverable
 `docs/audits/REPOSITORY_RECONSTRUCTION_V1.md` is the inventory/reachability/

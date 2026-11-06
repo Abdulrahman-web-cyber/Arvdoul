@@ -202,20 +202,16 @@ class EnterpriseFirestoreService {
     }
   }
 
-  async publishToPlatform(postId, platforms = ['instagram', 'tiktok', 'twitter']) {
+  async publishToPlatform(postId, platforms = []) {
     await this.ensureInitialized();
-    try {
-      logger.info('Simulating cross-platform publication', { postId, platforms });
-      await new Promise(r => setTimeout(r, 600)); // Network delay simulation
-      return {
-        success: true,
-        publishedPlatforms: platforms,
-        urls: platforms.map(p => `https://${p}.com/arvdoul_post_${postId}`)
-      };
-    } catch (err) {
-      logger.error('Publish to platform failed:', err);
-      throw enhanceError(err, 'Cross platform publication failed');
-    }
+    // No cross-post provider is integrated, so there is nothing to publish to.
+    // The previous implementation slept 600ms and returned fabricated
+    // `https://<platform>.com/...` URLs as if the post had been shared. Report
+    // the honest state instead of a fake success.
+    logger.warn('publishToPlatform called but no cross-platform provider is integrated', { postId, platforms });
+    throw new Error(
+      'Cross-platform publishing is not available: no provider is integrated.'
+    );
   }
 
   async createPost(postData) {
@@ -261,6 +257,20 @@ class EnterpriseFirestoreService {
       if (!currentUser?.uid) throw new Error('User not authenticated. Please sign in to publish.');
       postData.authorId = currentUser.uid;
       const { collection, addDoc, serverTimestamp } = this.firestoreMethods;
+
+      // Denormalise the author's privacy onto the post: the read rule gates a
+      // private account's content on this field (rules cannot get() a user doc
+      // during a list query). The create rule verifies it equals
+      // users/{uid}.isPrivate, so it cannot be spoofed; a read failure defaults
+      // to public and a genuinely-private author is then rejected (fail closed).
+      let authorIsPrivate = false;
+      try {
+        const { doc: userDoc, getDoc: getUserDoc } = this.firestoreMethods;
+        const authorSnap = await getUserDoc(userDoc(this.firestore, 'users', postData.authorId));
+        if (authorSnap.exists()) authorIsPrivate = authorSnap.data()?.isPrivate === true;
+      } catch (privacyErr) {
+        logger.warn('Author privacy lookup failed; defaulting post to public', { error: privacyErr?.message });
+      }
       
       const scheduledTime = postData.scheduledTime && !isNaN(new Date(postData.scheduledTime).getTime())
         ? new Date(postData.scheduledTime)
@@ -298,6 +308,7 @@ class EnterpriseFirestoreService {
         authorId: postData.authorId,
         authorName: postData.authorName || currentUser.displayName || 'Arvdoul User',
         authorUsername: postData.authorUsername || `user_${postData.authorId?.slice(0,8)}`,
+        authorIsPrivate,
         authorPhoto: getSafeAvatarUrl(postData.authorPhoto, postData.authorName || 'Arvdoul User', postData.authorId),
         ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0, allowMultiple: !!postData.poll?.allowMultiple } }),
         ...(postData.type === 'question' && { question: postData.question, answers: postData.answers || [] }),
@@ -423,6 +434,21 @@ class EnterpriseFirestoreService {
       ];
       if (options.status) conditions.push(where('status', '==', options.status));
       if (options.type) conditions.push(where('type', '==', options.type));
+
+      // The read rule gates a private author's posts behind a follow edge. A list
+      // query must constrain `authorIsPrivate` unless the viewer is the author or
+      // an approved follower, otherwise Firestore denies the whole query. Only the
+      // owner or a follower may see the private posts, so resolve that first.
+      const viewerId = options.viewerId || null;
+      let canViewPrivate = Boolean(viewerId && viewerId === userId);
+      if (viewerId && !canViewPrivate) {
+        try {
+          const followSnap = await getDoc(doc(this.firestore, 'follows', `${viewerId}_${userId}`));
+          canViewPrivate = followSnap.exists();
+        } catch { /* treat as non-follower (fail closed) */ }
+      }
+      if (!canViewPrivate) conditions.push(where('authorIsPrivate', '==', false));
+
       // Always bound: a caller that omits `limit` must not pull the author's
       // entire post history in one read.
       conditions.push(limit(Math.max(1, Number(options.limit) || 20)));
@@ -774,8 +800,118 @@ class EnterpriseFirestoreService {
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'shares' });
       auditLogger.log('content.share', { userId, meta: { postId } });
+      // Best-effort XP; sharing is already recorded, so a failure must not fail
+      // the share. `source` makes the award idempotent server-side.
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId, action: 'post_shared', source: postId })
+          .catch(() => {});
+      } catch (e) {
+        // XP award is best-effort
+      }
       return { success: true };
     } catch (error) { throw enhanceError(error, 'Failed to share post'); }
+  }
+
+  // A repost is a first-class post authored by the reposter that references the
+  // original. The document id is deterministic (`repost_<uid>_<postId>`) so a
+  // second repost is idempotent instead of a duplicate, and the reposter's post
+  // count and the original's share counter are updated on success. The caller
+  // must not report success unless this resolves — a `?.` call to a missing
+  // method used to toast "Reposted" while nothing was written.
+  async repostPost(postId, userId) {
+    await this.ensureInitialized();
+    try {
+      const auth = await this.getAuthInstance();
+      const uid = userId || auth?.currentUser?.uid;
+      if (!uid) throw new Error('User not authenticated. Please sign in to repost.');
+      if (!postId) throw new Error('A post id is required to repost.');
+
+      const { collection, doc, getDoc, setDoc, addDoc, serverTimestamp } = this.firestoreMethods;
+
+      const originalRef = doc(this.firestore, 'posts', postId);
+      const originalSnap = await getDoc(originalRef);
+      if (!originalSnap.exists() || originalSnap.data().isDeleted) {
+        throw new Error('The original post no longer exists.');
+      }
+      const original = originalSnap.data();
+
+      const repostId = `repost_${uid}_${postId}`;
+      const repostRef = doc(this.firestore, 'posts', repostId);
+      const existing = await getDoc(repostRef);
+      if (existing.exists()) {
+        return { success: true, alreadyReposted: true, postId: repostId };
+      }
+
+      const userSnap = await getDoc(doc(this.firestore, 'users', uid));
+      const me = userSnap.exists() ? userSnap.data() : {};
+      const myName = me.displayName || auth?.currentUser?.displayName || 'Arvdoul User';
+
+      // A repost copies the original's content, so reposting a private account's
+      // post would publish that content to the reposter's (public) followers —
+      // the exact leak the post read gate prevents. Refuse it.
+      if (original.authorIsPrivate === true && original.authorId !== uid) {
+        throw new Error('You cannot repost content from a private account.');
+      }
+
+      const repostDoc = {
+        type: 'repost',
+        content: '',
+        authorId: uid,
+        authorName: myName,
+        authorUsername: me.username || `user_${uid.slice(0, 8)}`,
+        authorPhoto: getSafeAvatarUrl(me.photoURL, myName, uid),
+        // Must mirror users/{uid}.isPrivate (the create rule enforces it).
+        authorIsPrivate: me.isPrivate === true,
+        originalPostId: postId,
+        originalAuthorId: original.authorId || null,
+        originalAuthorName: original.authorName || null,
+        originalContent: (original.content || '').slice(0, 280),
+        originalMedia: Array.isArray(original.media) ? original.media.slice(0, 4) : [],
+        originalType: original.type || 'text',
+        visibility: CONFIG.POST_VISIBILITY.PUBLIC,
+        enableComments: true,
+        enableGifts: true,
+        isDeleted: false,
+        stats: {
+          likes: 0, comments: 0, shares: 0, saves: 0, views: 0, gifts: 0, giftValue: 0,
+          reactions: Object.fromEntries(CONFIG.ALLOWED_REACTIONS.map(r => [r, 0])),
+          pollVotes: 0,
+        },
+        gifts: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        publishedAt: serverTimestamp(),
+        version: 'v5',
+      };
+
+      await setDoc(repostRef, repostDoc);
+      this.cache.set(repostId, { ...repostDoc, id: repostId, _cachedAt: Date.now() });
+      this.invalidateCachePattern(`user_posts_${uid}*`);
+
+      // Secondary metrics: the repost itself already exists, so these are
+      // best-effort and never flip the result to a failure.
+      try {
+        await countersManager.increment({ docPath: `posts/${postId}`, field: 'shares' });
+        countersManager.invalidate({ docPath: `posts/${postId}`, field: 'shares' });
+        await addDoc(collection(this.firestore, 'shares'), {
+          postId, userId: uid, type: 'repost', sharedAt: serverTimestamp(),
+        });
+      } catch (e) { logger.warn('Repost share-counter update failed:', e?.message); }
+      try { await this.updateUserPostCount(uid, 1); } catch (e) {}
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId: uid, action: 'post_created', source: repostId })
+          .catch(() => {});
+      } catch (e) {}
+
+      auditLogger.log('content.repost', { userId: uid, meta: { postId, repostId } });
+      return { success: true, alreadyReposted: false, postId: repostId };
+    } catch (error) {
+      throw enhanceError(error, 'Failed to repost');
+    }
   }
 
   async sendGift(postId, userId, giftType, coinValue) {
@@ -1050,6 +1186,23 @@ class EnterpriseFirestoreService {
     return unsubscribe;
   }
 
+  // Engagement-only view of a post, for cards that render counts without the
+  // whole document. Reuses `subscribeToPost` (one listener per post) and maps
+  // the stats block to the shape the card reducer consumes.
+  subscribeToPostStats(postId, callback) {
+    return this.subscribeToPost(postId, (data) => {
+      if (!data) return callback(null);
+      const stats = data.stats || {};
+      callback({
+        likes: stats.likes ?? 0,
+        comments: stats.comments ?? 0,
+        shares: stats.shares ?? 0,
+        gifts: stats.gifts ?? 0,
+        views: stats.views ?? 0,
+      });
+    });
+  }
+
   async getAuthInstance() {
     if (!this.firebaseApp) this.firebaseApp = await import('../firebase/firebase.js');
     return await this.firebaseApp.getAuthInstance();
@@ -1109,6 +1262,7 @@ const firestoreService = {
   likePost: (pid, uid) => getFirestoreService().likePost(pid, uid),
   unlikePost: (pid, uid) => getFirestoreService().unlikePost(pid, uid),
   sharePost: (pid, uid) => getFirestoreService().sharePost(pid, uid),
+  repostPost: (pid, uid) => getFirestoreService().repostPost(pid, uid),
   savePost: (pid, uid) => getFirestoreService().savePost(pid, uid),
   unsavePost: (pid, uid) => getFirestoreService().unsavePost(pid, uid),
   getSavedPosts: (uid, opts) => getFirestoreService().getSavedPosts(uid, opts),

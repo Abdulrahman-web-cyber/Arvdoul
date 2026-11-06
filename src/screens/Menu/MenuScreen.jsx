@@ -46,6 +46,7 @@ import {
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
+import { useNavBadges } from "../../hooks/useNavBadges";
 
 // Animation Variants
 const containerVariants = {
@@ -70,7 +71,8 @@ export default function MenuScreen() {
   const navigate = useNavigate();
   const { theme, isDark } = useTheme();
   const { user, signOut } = useAuth();
-  const { currentUser, unreadCounts = {} } = useAppStore();
+  const { currentUser } = useAppStore();
+  const unreadCounts = useNavBadges();
 
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");

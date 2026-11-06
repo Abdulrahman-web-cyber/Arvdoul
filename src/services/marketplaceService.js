@@ -102,24 +102,16 @@ class MarketplaceService {
     // stock and creates the order. Client-side writes to marketplace_items
     // are denied by rules (buyer != creator), so there is no client fallback
     // for this money path — it fails loudly until the function is deployed.
+    // The result is NOT fabricated: if the function did not return an order
+    // there is no order, and the caller must not be shown a plausible-looking
+    // receipt for a purchase that never happened.
     try {
-      const { getFunctions, httpsCallable } = await import('firebase/functions');
-      const { getApp } = await import('firebase/app');
-      const functions = getFunctions(getApp());
-      const fn = httpsCallable(functions, 'purchaseMarketplaceItem');
-      const res = await fn({ productId });
-      const result = res.data || {};
-      const order = result.order || {
-        orderId: `ARV-ORD-${Date.now()}`,
-        productId,
-        productTitle: product.title,
-        product,
-        buyerId: buyerUser.uid,
-        purchasedAt: new Date().toISOString(),
-        amountPaidCoins: product.priceCoins,
-        downloadUrl: product.downloadUrl || null,
-        status: 'Completed',
-      };
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const result = (await callFunction(FUNCTIONS.PURCHASE_MARKETPLACE_ITEM, { productId })) || {};
+      if (!result.success || !result.order) {
+        throw new Error('Purchase did not complete: the server returned no order.');
+      }
+      const order = result.order;
       this.orders.unshift(order);
       await this._saveOrders();
       return order;

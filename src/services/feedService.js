@@ -130,7 +130,6 @@ const FEED_CONFIG = {
 let firestoreModule = null;
 let monetizationService = null;
 let userService = null;
-let functionsModule = null;
 
 async function _lazyImportFirestore() {
   if (firestoreModule) return firestoreModule;
@@ -157,12 +156,6 @@ async function _getUserService() {
   const mod = await import('./userService.js');
   userService = mod.default || mod.getUserService?.() || mod;
   return userService;
-}
-
-async function _getFunctions() {
-  if (functionsModule) return functionsModule;
-  functionsModule = await import('firebase/functions');
-  return functionsModule;
 }
 
 class UltimateFeedService {
@@ -489,15 +482,15 @@ class UltimateFeedService {
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20, lastDoc } = options;
-      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
+      const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
       
       let snapshot;
       try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch (err) {
-        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
       }
 
       const posts = [];
@@ -537,18 +530,18 @@ class UltimateFeedService {
       await this._ensureInitialized();
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20 } = options;
-      const { collection, query, limit: firestoreLimit, getDocs, orderBy } = this.firestoreMethods || {};
+      const { collection, query, where, limit: firestoreLimit, getDocs, orderBy } = this.firestoreMethods || {};
       if (!collection) return [];
       const postsRef = collection(this.firestore, 'posts');
       let snapshot;
       try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch {
         // The ordered query can fail (missing index / field); fall back to an
         // unordered read, but keep the limit — an unbounded `getDocs(postsRef)`
         // reads the entire posts collection (bill + latency cliff).
-        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
       }
       const posts = [];
       snapshot.forEach(doc => {
@@ -584,49 +577,6 @@ class UltimateFeedService {
         }
       } catch {}
       posts.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
-      if (posts.length === 0) {
-        posts.push(
-          {
-            id: 'arvdoul_starter_welcome',
-            authorId: 'arvdoul_official',
-            authorName: 'Arvdoul Official',
-            authorUsername: 'arvdoul',
-            authorPhoto: '/logo/logo.svg',
-            isVerified: true,
-            type: 'text',
-            content: '✨ Welcome to Arvdoul — the creator network and social ecosystem! Explore Sparks & Reels, live audio spaces, instant messaging with voice notes, coin gifting, and vibrant creator communities. Tap "Create Post" to publish your first post!',
-            tags: ['Arvdoul', 'CreatorEconomy', 'Sparks', 'Welcome'],
-            stats: { likes: 142, comments: 19, shares: 45 },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            _source: 'starter_seed',
-            _score: 1.0
-          },
-          {
-            id: 'arvdoul_starter_sparks',
-            authorId: 'creator_hub',
-            authorName: 'Creator Hub',
-            authorUsername: 'creatorhub',
-            authorPhoto: '/assets/default-profile.png',
-            isVerified: true,
-            type: 'media',
-            content: '🔥 Discover Sparks & Reels! Head to the Sparks tab in the bottom bar to watch full-screen trending videos, tip creators with coins, and participate in prediction markets.',
-            media: [
-              {
-                type: 'image',
-                url: '/logo/logo.svg',
-                thumbnail: '/logo/logo.svg'
-              }
-            ],
-            tags: ['Sparks', 'Trending', 'Reels'],
-            stats: { likes: 88, comments: 12, shares: 27 },
-            createdAt: new Date(Date.now() - 3600000),
-            updatedAt: new Date(Date.now() - 3600000),
-            _source: 'starter_seed',
-            _score: 0.9
-          }
-        );
-      }
       return posts.slice(0, limit);
     } catch (error) {
       return [];
@@ -638,15 +588,15 @@ class UltimateFeedService {
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20 } = options;
-      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
+      const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
       
       let snapshot;
       try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch {
-        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -675,15 +625,15 @@ class UltimateFeedService {
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20 } = options;
-      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
+      const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
       
       let snapshot;
       try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
+        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
         snapshot = await getDocs(q);
       } catch {
-        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -711,15 +661,15 @@ class UltimateFeedService {
     try {
       const blockedUsers = await this._getBlockedUsersCached(userId);
       const { limit = 20 } = options;
-      const { collection, query, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
+      const { collection, query, where, orderBy, limit: firestoreLimit, getDocs } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
       
       let snapshot;
       try {
-        const q = query(postsRef, orderBy('createdAt', 'desc'), firestoreLimit(limit * 4));
+        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 4));
         snapshot = await getDocs(q);
       } catch {
-        snapshot = await getDocs(query(postsRef, firestoreLimit(limit * 4)));
+        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 4)));
       }
       
       const posts = [];
@@ -800,6 +750,7 @@ class UltimateFeedService {
         this.firestoreMethods.where('isDeleted', '==', false),
         this.firestoreMethods.where('status', '==', 'published'),
         this.firestoreMethods.where('visibility', '==', 'public'),
+        this.firestoreMethods.where('authorIsPrivate', '==', false),
         this.firestoreMethods.orderBy('createdAt', 'desc'),
         this.firestoreMethods.limit(limit)
       );
@@ -840,14 +791,14 @@ class UltimateFeedService {
       return cached.data;
     }
     try {
-      const { getFunctions, httpsCallable } = await _getFunctions();
-      const functions = getFunctions();
-      const getMLFeed = httpsCallable(functions, FEED_CONFIG.ALGORITHM.ML_ENDPOINT);
-      const result = await getMLFeed({ userId, limit: options.limit, lastPostId: options.lastDoc });
-      if (result.data && result.data.feed) {
-        const feed = result.data.feed.map(post => ({ ...post, _source: 'ml' }));
-        this.mlCache.set(cacheKey, { data: { feed, nextCursor: result.data.nextCursor }, timestamp: Date.now() });
-        return { feed, nextCursor: result.data.nextCursor };
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const data = await callFunction(FUNCTIONS.GET_PERSONALIZED_FEED_ML, {
+        userId, limit: options.limit, lastPostId: options.lastDoc,
+      });
+      if (data && data.feed) {
+        const feed = data.feed.map(post => ({ ...post, _source: 'ml' }));
+        this.mlCache.set(cacheKey, { data: { feed, nextCursor: data.nextCursor }, timestamp: Date.now() });
+        return { feed, nextCursor: data.nextCursor };
       }
     } catch (error) {}
     return null;

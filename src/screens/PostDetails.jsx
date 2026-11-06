@@ -20,7 +20,7 @@ const cn = (...classes) => classes.filter(Boolean).join(' ');
 export default function PostDetails() {
   const { postId } = useParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const { theme } = useTheme();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);

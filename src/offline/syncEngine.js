@@ -86,6 +86,26 @@ registerSyncHandler('post.unlike', async (payload) => {
   return feedService.unlikePost(payload.postId, payload.userId);
 });
 
+registerSyncHandler('post.save', async (payload) => {
+  const { getFirestoreService } = await import('../services/firestoreService');
+  return getFirestoreService().savePost(payload.postId, payload.userId);
+});
+
+registerSyncHandler('post.unsave', async (payload) => {
+  const { getFirestoreService } = await import('../services/firestoreService');
+  return getFirestoreService().unsavePost(payload.postId, payload.userId);
+});
+
+registerSyncHandler('post.reaction', async (payload) => {
+  const { getFirestoreService } = await import('../services/firestoreService');
+  return getFirestoreService().addReaction(payload.postId, payload.userId, payload.reaction);
+});
+
+registerSyncHandler('post.removeReaction', async (payload) => {
+  const { getFirestoreService } = await import('../services/firestoreService');
+  return getFirestoreService().removeReaction(payload.postId, payload.userId);
+});
+
 registerSyncHandler('user.follow', async (payload) => {
   // Canonical follow implementation lives on userService; the previous
   // `followService` module never existed and the payload key was wrong, so the
@@ -108,6 +128,73 @@ registerSyncHandler('notification.markRead', async (payload) => {
   const { getNotificationsService } = await import('../services/notificationsService');
   return getNotificationsService().markNotificationAsRead(payload.notificationId, payload.userId);
 });
+
+// Comment/reel/analytics ops are produced by the service layer (commentService
+// enqueues offline comments, CreatePost queues posts under its own draft store).
+registerSyncHandler('comment.create', async (payload) => {
+  const { getCommentService } = await import('../services/commentService');
+  return getCommentService().createComment(
+    payload.postId,
+    payload.userId,
+    payload.content,
+    payload.options || {}
+  );
+});
+
+registerSyncHandler('settings.update', async (payload) => {
+  const { settingsService } = await import('../services/settingsService');
+  return settingsService.updateSetting(payload.userId, payload.path, payload.value);
+});
+
+registerSyncHandler('live.join', async (payload) => {
+  const { getLiveService } = await import('../services/liveService');
+  return getLiveService().joinLiveStream(payload.streamId, payload.viewerId);
+});
+
+registerSyncHandler('live.leave', async (payload) => {
+  const { getLiveService } = await import('../services/liveService');
+  return getLiveService().leaveLiveStream(payload.streamId, payload.viewerId);
+});
+
+registerSyncHandler('live.gift', async (payload) => {
+  const { getLiveService } = await import('../services/liveService');
+  return getLiveService().sendLiveGift(
+    payload.streamId,
+    payload.senderId,
+    payload.recipientId,
+    payload.giftType
+  );
+});
+
+// `live_gift` / `sendLiveGift` are legacy aliases for the same live-gift op.
+registerSyncHandler('live_gift', operationHandlers.get('live.gift'));
+registerSyncHandler('sendLiveGift', operationHandlers.get('live.gift'));
+
+registerSyncHandler('notification.welcome', async (payload) => {
+  const { getNotificationsService } = await import('../services/notificationsService');
+  return getNotificationsService().sendNotification({
+    type: 'welcome',
+    recipientId: payload.userId,
+    title: 'Welcome to Arvdoul!',
+    message: `Hi ${payload.userName || 'there'}! Start exploring, connect with friends, and enjoy the experience.`,
+    priority: 'normal',
+    channel: 'in_app',
+  });
+});
+
+// Analytics is best-effort: consume the op instead of retrying it forever.
+registerSyncHandler('search.analytics', async () => ({ skipped: true, reason: 'best-effort' }));
+
+/**
+ * Register many handlers at once. The App shell owns the wiring so the op-type
+ * → service map lives in one place (this engine) instead of a second switch.
+ * @param {Record<string, (payload: object) => Promise<any>>} map
+ */
+export function registerSyncHandlers(map) {
+  for (const [type, handler] of Object.entries(map)) {
+    registerSyncHandler(type, handler);
+  }
+}
 
 /**
  * Drains the offline queue by executing pending operations against their handlers.
@@ -227,5 +314,6 @@ export default {
   getQueueStatus,
   subscribeSyncStatus,
   registerSyncHandler,
+  registerSyncHandlers,
   purgeQueueForOwner,
 };

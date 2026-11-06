@@ -117,14 +117,18 @@ async function canSendPushToRecipient(senderId, recipientId) {
   ]);
   if (block1.exists || block2.exists) return false;
 
-  const settingsDoc = await db.collection('user_settings').doc(recipientId).get();
-  const messagePermission = settingsDoc.exists
-    ? (settingsDoc.data().messagePermission || 'everyone')
+  // Read the recipient's DM preference from `users/{uid}.settings.privacy.allowDMs`
+  // — the document the Settings screen writes and `firestore.rules` `dmAllowedTo()`
+  // enforces. It was previously read from a `messagePermission` field that
+  // nothing ever wrote, so this check silently allowed everyone.
+  const settingsDoc = await db.collection('users').doc(recipientId).get();
+  const allowDMs = settingsDoc.exists
+    ? (settingsDoc.data()?.settings?.privacy?.allowDMs || 'everyone')
     : 'everyone';
 
-  if (messagePermission === 'nobody') return false;
-  if (messagePermission === 'everyone') return true;
-  if (messagePermission === 'friends_only') {
+  if (allowDMs === 'none') return false;
+  if (allowDMs === 'everyone') return true;
+  if (allowDMs === 'friends') {
     const [forward, backward] = await Promise.all([
       db.collection('follows').doc(`${senderId}_${recipientId}`).get(),
       db.collection('follows').doc(`${recipientId}_${senderId}`).get(),
@@ -497,7 +501,7 @@ exports.cleanupOldCalls = functions.pubsub
   3. For each conversation's messages subcollection:
        content ASC, createdAt DESC  → search fallback
   4. calls: status ASC, createdAt ASC → cleanup (with status filter)
-  5. user_settings: single‑field index on messagePermission (if needed)
+  5. users: no extra index — allowDMs lives at users/{uid}.settings.privacy.allowDMs
 */
 
 // Roadmap: end-to-end encryption. Implement Signal Protocol / ECDH + AES-GCM.

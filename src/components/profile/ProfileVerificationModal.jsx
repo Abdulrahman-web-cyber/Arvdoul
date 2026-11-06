@@ -88,6 +88,37 @@ export const ProfileVerificationModal = memo(({
   const requiredLevel = LEVEL_GATES.verifiedPriority;
   const isLevelEligible = userLevel !== null && requiredLevel != null && userLevel >= requiredLevel;
 
+  // The applicant sees the same requirements the admin queue enforces, derived
+  // from the shared contract (a restated "1,000 followers" literal would drift).
+  // A criterion whose value the applicant cannot know (policy strikes, phone
+  // verification) is listed as a requirement without claiming a status.
+  const followerCount = Number(profile?.followerCount ?? profile?.followersCount ?? 0);
+  const meetsFollowers = followerCount >= CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS;
+  const checklist = [
+    {
+      key: 'level',
+      label: `Reach Level ${requiredLevel}`,
+      met: isLevelEligible,
+    },
+    {
+      key: 'followers',
+      label: `${CREATOR_VERIFICATION_REQUIREMENTS.MIN_FOLLOWERS.toLocaleString()}+ followers`,
+      met: meetsFollowers,
+      detail: `${followerCount.toLocaleString()} so far`,
+    },
+    {
+      key: 'strikes',
+      label: 'No active policy strikes',
+      met: null,
+    },
+    ...(CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_EMAIL_VERIFIED
+      ? [{ key: 'email', label: 'Email verified', met: Boolean(profile?.emailVerified) }]
+      : []),
+    ...(CREATOR_VERIFICATION_REQUIREMENTS.REQUIRE_PHONE_VERIFIED
+      ? [{ key: 'phone', label: 'Phone verified', met: Boolean(profile?.phoneVerified) }]
+      : []),
+  ];
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (submitting) return;
@@ -323,10 +354,24 @@ export const ProfileVerificationModal = memo(({
                       <Sparkles className="w-3.5 h-3.5 text-purple-500" />
                       <span>Verification Standards</span>
                     </div>
-                    <ul className="space-y-1 text-slate-500 dark:text-slate-400 text-[11px] list-disc pl-4">
-                      <li>Authentic, notable individual or creator with consistent activity.</li>
-                      <li>Profile adheres to Arvdoul community guidelines with zero active strikes.</li>
-                      <li>Valid contact verification and public portfolio or reference.</li>
+                    <ul className="space-y-1.5 text-slate-500 dark:text-slate-400 text-[11px]">
+                      {checklist.map((item) => (
+                        <li key={item.key} className="flex items-center gap-1.5">
+                          {item.met === true ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : item.met === false ? (
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          ) : (
+                            <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-slate-400">•</span>
+                          )}
+                          <span className={item.met === false ? 'text-amber-600 dark:text-amber-400' : ''}>
+                            {item.label}
+                          </span>
+                          {item.detail && (
+                            <span className="text-slate-400">({item.detail})</span>
+                          )}
+                        </li>
+                      ))}
                     </ul>
                   </div>
 

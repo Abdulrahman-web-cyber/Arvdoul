@@ -7,7 +7,7 @@
  *  - Language switcher wired to i18n (7 locales) + persisted
  *  - Reduce-motion override applies a document-level class
  *  - Clear cache actually clears localStorage + IndexedDB + memory caches
- *  - Danger zone: real account deletion via userService.deleteUserData
+ *  - Danger zone: real account deletion via userService.deleteAccount
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -240,6 +240,25 @@ export default function SettingsScreen() {
     updateSetting('appearance.reduceMotion', value);
   };
 
+  // Push/email toggles persist to `users/{uid}.settings` (so the UI reads a
+  // single document) AND mirror to `user_settings/{uid}.notificationPreferences`
+  // — the document the server actually reads when dispatching a notification.
+  // Without the mirror these switches were inert.
+  const handleNotificationChannel = useCallback(async (path, value) => {
+    updateSetting(path, value);
+    if (!uid) return;
+    const channel = path === 'notifications.push' ? 'push'
+      : path === 'notifications.email' ? 'email'
+        : null;
+    if (!channel) return;
+    try {
+      const { default: notificationsService } = await import('../services/notificationsService.js');
+      await notificationsService.updateUserNotificationPreferences(uid, { [channel]: value });
+    } catch (err) {
+      console.warn('Failed to sync notification preference:', err);
+    }
+  }, [uid, updateSetting]);
+
   const handleLanguage = async (code) => {
     try {
       await i18n.changeLanguage(code);
@@ -273,7 +292,7 @@ export default function SettingsScreen() {
     setDeleting(true);
     try {
       const { default: userService } = await import('../services/userService.js');
-      await userService.deleteUserData(uid);
+      await userService.deleteAccount(uid);
       setShowDeleteConfirm(false);
       toast.success(t('settings.accountDeleted'));
       navigate('/login');
@@ -368,7 +387,9 @@ export default function SettingsScreen() {
                     ? t('level.maxLevelDesc')
                     : t('level.xpProgress', {
                         xp: Math.round(levelInfo.xpIntoLevel),
-                        next: levelInfo.nextLevelXp,
+                        // `nextLevelXp` is an absolute total; the numerator is
+                        // relative, so the level span is the honest denominator.
+                        next: levelInfo.nextLevelXp - levelInfo.currentLevelXp,
                       })}
                 </p>
               </div>
@@ -514,8 +535,8 @@ export default function SettingsScreen() {
 
         {/* ============ NOTIFICATIONS ============ */}
         <Section icon={Bell} title={t('settings.notificationsSection')}>
-          <ToggleRow icon={Bell} label={t('settings.pushNotifs')} checked={settings.notifications.push} onChange={(v) => updateSetting('notifications.push', v)} />
-          <ToggleRow icon={MailIcon} label={t('settings.emailNotifs')} checked={settings.notifications.email} onChange={(v) => updateSetting('notifications.email', v)} />
+          <ToggleRow icon={Bell} label={t('settings.pushNotifs')} checked={settings.notifications.push} onChange={(v) => handleNotificationChannel('notifications.push', v)} />
+          <ToggleRow icon={MailIcon} label={t('settings.emailNotifs')} checked={settings.notifications.email} onChange={(v) => handleNotificationChannel('notifications.email', v)} />
           <ToggleRow icon={Volume2} label={t('settings.soundFx')} checked={settings.notifications.soundFx} onChange={(v) => updateSetting('notifications.soundFx', v)} />
           <ToggleRow icon={Smartphone} label={t('settings.spatialAudio')} checked={settings.notifications.spatialAudio} onChange={(v) => updateSetting('notifications.spatialAudio', v)} />
         </Section>

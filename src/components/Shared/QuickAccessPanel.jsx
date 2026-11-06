@@ -147,6 +147,13 @@ import { getProfileUrl, copyToClipboard } from "../../utils/shareUtils";
 // panel can never advertise a different level than the server enforces.
 const MONETIZATION_MIN_LEVEL = LEVEL_GATES.withdrawals;
 
+// A missing/unknown level must never be silently treated as "Level 1" — it would
+// either fabricate standing or wrongly lock a gate. Unknown levels count as 0.
+const knownLevel = (level) => {
+  const n = Number(level);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
 const ANIMATION_CONFIG = {
   panelSpring: { 
     type: "spring", 
@@ -584,7 +591,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
 
   const quickActions = useMemo(() => {
     const isCreator = currentUser?.isCreator || false;
-    const canMonetize = (currentUser?.level || 1) >= MONETIZATION_MIN_LEVEL || isCreator;
+    const canMonetize = knownLevel(currentUser?.level) >= MONETIZATION_MIN_LEVEL || isCreator;
     
     return {
       create: [
@@ -1346,7 +1353,7 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
   );
 
   const renderMonetization = () => {
-    const canMonetize = (currentUser?.level || 1) >= MONETIZATION_MIN_LEVEL || currentUser?.isCreator;
+    const canMonetize = knownLevel(currentUser?.level) >= MONETIZATION_MIN_LEVEL || currentUser?.isCreator;
     
     return (
       <motion.div
@@ -1382,10 +1389,10 @@ const QuickAccessPanel = memo(({ isPanelOpen, closePanel, navigateToWithLoading 
                     Monetization Locked
                   </h4>
                   <p className="text-sm text-amber-700/70 dark:text-amber-300/70 mt-1">
-                    Reach Level {MONETIZATION_MIN_LEVEL} to unlock monetization features. You need {Math.max(0, MONETIZATION_MIN_LEVEL - (currentUser?.level || 1))} more levels.
+                    Reach Level {MONETIZATION_MIN_LEVEL} to unlock monetization features. You need {Math.max(0, MONETIZATION_MIN_LEVEL - knownLevel(currentUser?.level))} more levels.
                   </p>
                   <ProgressBar 
-                    value={currentUser?.level || 1} 
+                    value={knownLevel(currentUser?.level)} 
                     max={MONETIZATION_MIN_LEVEL}
                     label={`Progress to Level ${MONETIZATION_MIN_LEVEL}`}
                     color="amber"

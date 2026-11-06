@@ -175,7 +175,8 @@ function getRoyalEligibility(titleName, stats = {}) {
       ? stats.achievementsCount
       : (Array.isArray(stats.achievements) ? stats.achievements.length : stats.achievements)
   ) || 0;
-  const standing = stats.policyStanding || stats.accountStanding;
+  const standingRaw = stats.policyStanding || stats.accountStanding || stats.accountStatus;
+  const standing = typeof standingRaw === 'string' ? standingRaw.toLowerCase() : standingRaw;
 
   const missing = [];
   if (level < rule.minLevel) missing.push('level');
@@ -184,7 +185,13 @@ function getRoyalEligibility(titleName, stats = {}) {
   if (contribution < rule.minContribution) missing.push('contribution');
   if (influence < rule.minInfluence) missing.push('influence');
   if (achievements < rule.minAchievements) missing.push('achievements');
-  if (rule.requiresGoodStanding && standing !== undefined && standing !== null && standing !== 'good') {
+  // Fail closed: a royal title requires a standing that is *affirmatively* good.
+  // The account vocabulary (`accountStatus`) says 'active'; the policy
+  // vocabulary (`policyStanding`) says 'good'. An absent signal is NOT good
+  // standing — the previous `standing !== undefined && ...` check let a caller
+  // that forgot to pass a standing silently grant the title.
+  const GOOD_STANDING = ['good', 'active'];
+  if (rule.requiresGoodStanding && !GOOD_STANDING.includes(standing)) {
     missing.push('policyStanding');
   }
 

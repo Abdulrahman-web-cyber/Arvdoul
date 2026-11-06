@@ -36,6 +36,7 @@ const { pubsub } = functions;
 const logger = functions.logger;
 const { checkRateLimit } = require('./rateLimit');
 const { assertAdmin, checkIsAdmin, getUserIdFromContext } = require('./auth');
+const { awardXpSafe } = require('./xpAward');
 
 // ----------------------------------------------------------------------
 //  MUX CLIENTS
@@ -468,6 +469,13 @@ exports.recordVideoView = onCall(async (data, context) => {
       });
       return { success: true, newView: true };
     });
+
+    // Watching a video grants video_watched XP (one unit per first view;
+    // best-effort, keyed on the video so a re-watch cannot farm it).
+    if (result && result.newView) {
+      await awardXpSafe(uid, 'video_watched', { source: videoId });
+    }
+
     return result;
   } catch (error) {
     logger.error('recordVideoView', error);

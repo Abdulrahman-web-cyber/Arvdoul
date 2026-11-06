@@ -2,7 +2,6 @@
 
 import { jest } from '@jest/globals';
 import { CacheManager, cacheManager } from '../utils/CacheManager.js';
-import { redisCacheManager } from '../services/RedisCacheManager.js';
 
 describe('CacheManager', () => {
   let cache;
@@ -117,23 +116,6 @@ describe('CacheManager', () => {
     expect(ns.get('home_1')).toBe('x');
     ns.clear();
     expect(ns.size).toBe(0);
-  });
-});
-
-describe('RedisCacheManager (L1/L2/L3 hybrid)', () => {
-  beforeEach(() => {
-    redisCacheManager.clear();
-  });
-
-  test('inherits core CacheManager behavior', () => {
-    redisCacheManager.set('ns', 'k', 'v', 60000);
-    expect(redisCacheManager.get('ns', 'k')).toBe('v');
-  });
-
-  test('setNamespaceTtlMultiplier persists multiplier per namespace', () => {
-    redisCacheManager.setNamespaceTtlMultiplier('hot', 2.5);
-    expect(redisCacheManager.getNamespaceTtlMultiplier('hot')).toBe(2.5);
-    expect(redisCacheManager.getNamespaceTtlMultiplier('cold')).toBe(1.0);
   });
 });
 

@@ -125,6 +125,14 @@ class ProfessionalUserService {
     cacheManager.invalidateUser(userId);
   }
 
+  // Broadcast that the pending friend-request set changed so nav badges refresh
+  // without waiting for the next window focus.
+  _notifyFriendRequestsChanged() {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('arvdoul:friend-request-changed'));
+    }
+  }
+
   /**
    * Record today's follower-count snapshot (feeds real growth analytics).
    * One write per user per day - cheap and bounded.
@@ -892,6 +900,20 @@ class ProfessionalUserService {
     } catch {}
 
     this._invalidateUserCache(userId);
+
+    // Toggling privacy must rewrite the denormalised flag on the author's
+    // existing posts, or a newly-private account's history stays world-readable
+    // (and a newly-public one stays unreadable). Best-effort: the profile write
+    // already succeeded, so a failure here must not fail the whole update.
+    if (typeof sanitizedUpdates.isPrivate === 'boolean') {
+      try {
+        const { callFunction, FUNCTIONS } = await import('./callableService.js');
+        await callFunction(FUNCTIONS.PROPAGATE_POST_PRIVACY, {});
+      } catch (propagationErr) {
+        logger.warn('Post privacy propagation failed (non-blocking)', { error: propagationErr?.message });
+      }
+    }
+
     return { success: true };
   }
 
@@ -929,7 +951,7 @@ class ProfessionalUserService {
       reason: applicationData.reason || '',
       portfolioLink: applicationData.portfolioLink || applicationData.website || '',
       followerCount: Number(applicationData.followerCount || 0),
-      level: Number(applicationData.level || 1),
+      level: Number(applicationData.level) || null,
       status: 'pending',
       submittedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
@@ -1015,7 +1037,53 @@ class ProfessionalUserService {
       return { success: true, queued: true };
     }
 
-    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+    const { doc, getDoc, setDoc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+
+    // A private account must approve a follow before it grants content access.
+    // Creating the edge directly (the old behaviour) let anyone unilaterally
+    // follow a private account and thereby read its posts, so a follow against a
+    // private target becomes a pending request the owner approves.
+    let targetIsPrivate = false;
+    try {
+      const targetSnap = await getDoc(doc(this.firestore, 'users', followingId));
+      targetIsPrivate = targetSnap.exists() && targetSnap.data()?.isPrivate === true;
+    } catch (privacyErr) {
+      logger.warn('Follow target privacy lookup failed; treating as public', { error: privacyErr?.message });
+    }
+
+    if (targetIsPrivate) {
+      const requestRef = doc(this.firestore, 'follow_requests', `${followerId}_${followingId}`);
+      const existing = await getDoc(requestRef);
+      if (existing.exists() && existing.data()?.status === 'pending') {
+        return { success: true, requested: true, requestStatus: 'pending', alreadyRequested: true };
+      }
+      await setDoc(requestRef, {
+        fromUserId: followerId,
+        toUserId: followingId,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      auditLogger.log('social.follow.requested', { userId: followerId, meta: { followingId } });
+      try {
+        const notifications = await this._getNotificationsService();
+        const requester = await this.getUserProfile(followerId);
+        await notifications.sendNotification({
+          type: 'follow_request',
+          recipientId: followingId,
+          senderId: followerId,
+          title: 'New follow request',
+          message: `${requester?.displayName || 'Someone'} requested to follow you`,
+          metadata: { fromUserId: followerId, requestId: `${followerId}_${followingId}` },
+          priority: 'normal',
+        });
+      } catch (e) {
+        // Follow-request notification failed
+      }
+      this._invalidateUserCache(followerId);
+      this._invalidateUserCache(followingId);
+      return { success: true, requested: true, requestStatus: 'pending' };
+    }
+
     const followRef = doc(this.firestore, 'follows', `${followerId}_${followingId}`);
 
     const result = await runTransaction(this.firestore, async (transaction) => {
@@ -1086,6 +1154,109 @@ class ProfessionalUserService {
     return result;
   }
 
+  // ---------- private-account follow requests ----------
+
+  /** Follow requests the user has received and not yet answered. */
+  async getFollowRequests(userId) {
+    await this._ensureInitialized();
+    const { collection, query, where, getDocs, limit: fLimit } = await import('firebase/firestore');
+    const snap = await getDocs(query(
+      collection(this.firestore, 'follow_requests'),
+      where('toUserId', '==', userId),
+      where('status', '==', 'pending'),
+      fLimit(200)
+    ));
+    return { success: true, requests: snap.docs.map((d) => ({ id: d.id, ...d.data() })) };
+  }
+
+  /** Whether `followerId` has a pending follow request outstanding to `followingId`. */
+  async getFollowRequestStatus(followerId, followingId) {
+    if (!followerId || !followingId || followerId === followingId) return { status: null };
+    try {
+      await this._ensureInitialized();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snap = await getDoc(doc(this.firestore, 'follow_requests', `${followerId}_${followingId}`));
+      return { status: snap.exists() ? snap.data().status : null };
+    } catch {
+      return { status: null };
+    }
+  }
+
+  /**
+   * Owner approves a follow request: in one transaction, mark it accepted and
+   * create the requester's follow edge (the consent path the `follows` create
+   * rule recognises, since the edge's follower is not the caller).
+   */
+  async approveFollowRequest(requestId, ownerId) {
+    await this._ensureInitialized();
+    const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+    const requestRef = doc(this.firestore, 'follow_requests', requestId);
+    let requesterId = null;
+    const result = await runTransaction(this.firestore, async (transaction) => {
+      const snap = await transaction.get(requestRef);
+      if (!snap.exists()) throw new Error('Request not found');
+      const req = snap.data();
+      if (req.toUserId !== ownerId) throw new Error('Not authorized');
+      if (req.status !== 'pending') throw new Error('Already processed');
+      requesterId = req.fromUserId;
+
+      transaction.update(requestRef, { status: 'accepted', updatedAt: serverTimestamp() });
+      transaction.set(
+        doc(this.firestore, 'follows', `${req.fromUserId}_${req.toUserId}`),
+        { followerId: req.fromUserId, followingId: req.toUserId, createdAt: serverTimestamp() }
+      );
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.toUserId}`, field: 'followerCount' });
+      await countersManager.incrementInTransaction(transaction, { docPath: `users/${req.fromUserId}`, field: 'followingCount' });
+      return { success: true };
+    });
+
+    countersManager.invalidate({ docPath: `users/${ownerId}`, field: 'followerCount' });
+    countersManager.invalidate({ docPath: `users/${requesterId}`, field: 'followingCount' });
+    if (requesterId) {
+      auditLogger.log('social.follow.approved', { userId: ownerId, meta: { requesterId } });
+      try {
+        const notif = await this._getNotificationsService();
+        const owner = await this.getUserProfile(ownerId);
+        await notif.sendNotification({
+          type: 'follow_accepted',
+          recipientId: requesterId,
+          senderId: ownerId,
+          title: 'Follow request accepted',
+          message: `${owner?.displayName || 'Someone'} accepted your follow request`,
+          metadata: { userId: ownerId },
+        });
+      } catch (e) {
+        // Follow-accept notification failed
+      }
+      // The edge now exists; credit the owner's follow_received XP (verified
+      // server-side against the edge, so it is idempotent per follower).
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId: ownerId, action: 'follow_received', source: requesterId })
+          .catch(() => {});
+      } catch (e) {
+        // XP award is best-effort
+      }
+      this._invalidateUserCache(requesterId);
+    }
+    this._invalidateUserCache(ownerId);
+    return result;
+  }
+
+  /** Owner declines a follow request (status only; no edge is created). */
+  async declineFollowRequest(requestId, ownerId) {
+    await this._ensureInitialized();
+    const { doc, getDoc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+    const requestRef = doc(this.firestore, 'follow_requests', requestId);
+    const snap = await getDoc(requestRef);
+    if (!snap.exists()) throw new Error('Request not found');
+    if (snap.data().toUserId !== ownerId) throw new Error('Not authorized');
+    if (snap.data().status !== 'pending') throw new Error('Already processed');
+    await updateDoc(requestRef, { status: 'declined', updatedAt: serverTimestamp() });
+    return { success: true };
+  }
+
   async getFollowStatus(followerId, followingId) {
     if (!followerId || !followingId || followerId === followingId) return { isFollowing: false };
     const cacheKey = `follow_${followerId}_${followingId}`;
@@ -1097,7 +1268,20 @@ class ProfessionalUserService {
       await this._ensureInitialized();
       const { doc, getDoc } = await import('firebase/firestore');
       const snap = await getDoc(doc(this.firestore, 'follows', `${followerId}_${followingId}`));
-      const result = { isFollowing: snap.exists() };
+      let result = { isFollowing: snap.exists() };
+      // No edge yet: a private target may still have an unanswered request. The
+      // UI must show "Requested" rather than "Follow" so a tap does not look
+      // like a no-op (the second tap returns alreadyRequested). The read rule is
+      // `resource.data`-based, so a get() of an absent request is denied — that
+      // is the common case, hence the isolated catch.
+      if (!result.isFollowing) {
+        try {
+          const reqSnap = await getDoc(doc(this.firestore, 'follow_requests', `${followerId}_${followingId}`));
+          if (reqSnap.exists() && reqSnap.data()?.status === 'pending') {
+            result = { isFollowing: false, requestStatus: 'pending' };
+          }
+        } catch { /* no request edge for this pair */ }
+      }
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch {
@@ -1334,6 +1518,7 @@ class ProfessionalUserService {
       } catch (e) {
         // Friend request notification is best-effort
       }
+      this._notifyFriendRequestsChanged();
     }
     return result;
   }
@@ -1347,7 +1532,7 @@ class ProfessionalUserService {
     await this._ensureInitialized();
     const { doc, runTransaction, serverTimestamp } = await import('firebase/firestore');
     const ref = doc(this.firestore, 'friend_requests', `${fromUserId}_${toUserId}`);
-    return await runTransaction(this.firestore, async (transaction) => {
+    const result = await runTransaction(this.firestore, async (transaction) => {
       const snap = await transaction.get(ref);
       if (!snap.exists()) return { success: true, notFound: true };
       if (snap.data().fromUserId !== fromUserId) throw new Error('Not authorized');
@@ -1355,6 +1540,8 @@ class ProfessionalUserService {
       transaction.update(ref, { status: 'cancelled', updatedAt: serverTimestamp() });
       return { success: true };
     });
+    this._notifyFriendRequestsChanged();
+    return result;
   }
 
   async acceptFriendRequest(requestId, userId) {
@@ -1401,9 +1588,23 @@ class ProfessionalUserService {
       } catch (e) {
         // Friend notification failed
       }
+      // Mutual follow edges now exist: credit both users' follow_received XP
+      // (verified server-side against each edge, idempotent per follower).
+      try {
+        const { levelSystemService } = await import('./levelSystemService.js');
+        levelSystemService
+          .awardExperience({ userId, action: 'follow_received', source: requesterId })
+          .catch(() => {});
+        levelSystemService
+          .awardExperience({ userId: requesterId, action: 'follow_received', source: userId })
+          .catch(() => {});
+      } catch (e) {
+        // XP award is best-effort
+      }
     }
     this._invalidateUserCache(requesterId);
     this._invalidateUserCache(userId);
+    this._notifyFriendRequestsChanged();
     return result;
   }
 
@@ -1419,6 +1620,7 @@ class ProfessionalUserService {
       transaction.update(ref, { status: 'declined', updatedAt: serverTimestamp() });
       return { success: true };
     });
+    this._notifyFriendRequestsChanged();
     return result;
   }
 
@@ -1632,10 +1834,9 @@ class ProfessionalUserService {
   // and the report record shape match every other report type.
   async reportUser(reporterId, reportedId, reason, details = '') {
     await this._ensureInitialized();
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
-    const func = httpsCallable(getFunctions(), 'reportUser');
-    const res = await func({ targetId: reportedId, reason, details });
-    return { success: true, ...(res?.data || {}) };
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const data = await callFunction(FUNCTIONS.REPORT_USER, { targetId: reportedId, reason, details });
+    return { success: true, ...(data || {}) };
   }
 
   // The server-side cascade is the only thing that actually deletes the
@@ -1643,11 +1844,9 @@ class ProfessionalUserService {
   // the failure rather than reporting a deletion that never happened.
   async deleteAccount(userId) {
     await this._ensureInitialized();
-    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
 
-    const functions = getFunctions();
-    const func = httpsCallable(functions, 'deleteUserData');
-    const result = await func({ userId });
+    const data = await callFunction(FUNCTIONS.DELETE_USER_DATA, { userId });
 
     try {
       const { getAuth, signOut } = await import('firebase/auth');
@@ -1658,7 +1857,7 @@ class ProfessionalUserService {
     }
 
     this._invalidateUserCache(userId);
-    return { success: true, ...(result?.data || {}), message: 'Account deleted.' };
+    return { success: true, ...(data || {}), message: 'Account deleted.' };
   }
 
   async searchUsers(queryStr, options = {}) {

@@ -249,10 +249,7 @@ async function getCachedTranslation(text, lang) {
 // MAIN COMPONENT
 const TextCard = React.memo(({
   content,
-  expanded,        // unused – we manage internal expansion
-  setExpanded,
   tokens,
-  currentUser,
   postId,
   onAnalytics
 }) => {

@@ -368,6 +368,7 @@ export const useProfileStore = create(
         
         const result = await firestoreService.getPostsByUser(userId, {
           limit: options.limit || 12,
+          viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
           ...options,
         });
 
@@ -428,6 +429,7 @@ export const useProfileStore = create(
         const result = await firestoreService.getPostsByUser(userId, {
           limit: 12,
           cursor: postsCursor,
+          viewerId: getStoredUid() || useAppStore.getState().currentUser?.uid || null,
         });
 
         if (!get()._isLoadCurrent('posts', __seq)) return;

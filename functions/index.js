@@ -10,6 +10,7 @@ admin.initializeApp();
 const db = admin.firestore();
 const dns = require('node:dns');
 const { checkRateLimit } = require('./rateLimit');
+const { assertAdmin, getUserEmail } = require('./auth');
 
 // ==================== FEATURE MODULES ====================
 // Each module self-registers its https.onCall / trigger exports with
@@ -65,6 +66,9 @@ merge(require('./analytics.js'));
 // PII boundary backfill: moves legacy contact/verification/Stripe fields off
 // the world-readable users/{uid} doc into users_private/{uid}.
 merge(require('./privacyMigration.js'));
+// Keeps the denormalised posts.authorIsPrivate flag in step with the author's
+// privacy (the post read rule gates a private account's content on it).
+merge(require('./privacyPropagation.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
@@ -370,8 +374,17 @@ exports.deleteVideo = functions.https.onCall(async (data, context) => {
 // ==================== PUSH & EMAIL NOTIFICATIONS ====================
 
 exports.sendEmailNotification = functions.https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
-  const { to, subject, body, notificationId } = data;
+  // Admin-only: this is a server-side transactional-email primitive. An
+  // authenticated-but-unprivileged caller could otherwise use it as an open
+  // relay to send arbitrary HTML to any address from the Arvdoul domain.
+  const uid = await assertAdmin(context);
+  const { subject, body, notificationId } = data;
+
+  // The recipient is derived server-side from the caller's own verified
+  // account (or an explicit `to` an admin supplies for support flows) — never
+  // an arbitrary client-chosen address.
+  const to = data.to || (await getUserEmail(uid));
+  if (!to) throw new functions.https.HttpsError('failed-precondition', 'No recipient email on file.');
 
   // Honest email delivery: real SendGrid call when configured. Without
   // configuration the function reports 'unconfigured' — it NEVER logs a

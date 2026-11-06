@@ -135,7 +135,7 @@ class PassportService {
       influenceScore: influence?.score ?? 0,
       contributionScore: contribution?.score ?? 0,
       achievementsCount: verifiedAchievements.length,
-      policyStanding: profile.policyStanding || 'good',
+      policyStanding: profile.policyStanding || profile.accountStatus || null,
     };
     const dukeEligibility = getRoyalEligibility('duke', royalStats);
     const kingEligibility = getRoyalEligibility('king', royalStats);

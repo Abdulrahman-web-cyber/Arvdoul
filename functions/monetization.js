@@ -90,7 +90,8 @@ const createLedgerEntry = (transaction, debitAccount, creditAccount, amount, met
 // SHARDED RATE LIMITER – globally accurate by aggregating all shards
 // ----------------------------------------------------------------------
 const { checkRateLimit } = require('./rateLimit');
-const { LEVEL_GATES } = require('./levelConfig.cjs');
+const { LEVEL_GATES, getCreatorCapabilities } = require('./levelConfig.cjs');
+const { awardXpSafe } = require('./xpAward');
 
 // ----------------------------------------------------------------------
 // FRAUD PROTECTION – daily velocity, new account, interaction pairs
@@ -543,7 +544,7 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
 
       createLedgerEntry(t, `users:${senderUid}`, `users:${authorUid}`, giftValue, { reason: 'gift', postId, giftType, transactionId: giftTxRef.id });
 
-      const resultData = { success: true, newBalance: senderNewBalance, giftTxId: giftTxRef.id };
+      const resultData = { success: true, newBalance: senderNewBalance, giftTxId: giftTxRef.id, receiverId: authorUid };
       t.set(ledgerRef, {
         function: 'sendGift',
         userId: senderUid,
@@ -565,6 +566,15 @@ exports.sendGift = functions.https.onCall(async (data, context) => {
     });
 
     logEvent('gift_sent', { sender: senderUid, postId, giftType, value: giftValue });
+
+    // Gift XP: the sender's own action, plus the recipient's `gift_received`.
+    // Both are awarded here (the gift transaction id is the idempotency key) so
+    // a client cannot mint recipient XP without a real gift — the bare
+    // awardExperience callable cannot prove a gift happened.
+    await awardXpSafe(senderUid, 'gift_sent', { source: result.giftTxId });
+    if (result && result.receiverId && result.receiverId !== senderUid) {
+      await awardXpSafe(result.receiverId, 'gift_received', { source: result.giftTxId });
+    }
     return result;
   } catch (err) { throw handleError(err); }
 });
@@ -670,12 +680,22 @@ exports.requestWithdrawal = functions.https.onCall(async (data, context) => {
     }
     if (!paymentMethod || !paymentDetails) throw new functions.https.HttpsError('invalid-argument', 'paymentMethod and paymentDetails required.');
 
-    const minLevel = functions.config().app?.withdrawal_min_level || LEVEL_GATES.withdrawals;
+    const configuredMinLevel = Number(functions.config().app?.withdrawal_min_level) || LEVEL_GATES.withdrawals;
     const userRef = admin.firestore().collection('users').doc(uid);
     const userSnap = await userRef.get();
     if (!userSnap.exists) throw new functions.https.HttpsError('not-found', 'User not found.');
     const userData = userSnap.data();
-    if ((userData.level || 0) < minLevel) throw new functions.https.HttpsError('failed-precondition', `Minimum level ${minLevel} required.`);
+    // The withdrawal gate is the canonical capability helper, not a bare level
+    // comparison, so a verified or partner/elite creator is admitted exactly as
+    // the client advertises. An operator may still raise the level floor via
+    // config, which can only tighten the gate.
+    const capabilities = getCreatorCapabilities(userData);
+    if (!capabilities.canWithdraw) {
+      throw new functions.https.HttpsError('failed-precondition', `Withdrawals unlock at Level ${LEVEL_GATES.withdrawals}.`);
+    }
+    if (configuredMinLevel > LEVEL_GATES.withdrawals && (userData.level || 0) < configuredMinLevel) {
+      throw new functions.https.HttpsError('failed-precondition', `Minimum level ${configuredMinLevel} required.`);
+    }
 
     const available = getAvailableBalance(userData);
     if (available < amount) throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins (some may be locked).');
@@ -1521,6 +1541,8 @@ exports.watchAd = functions.https.onCall(async (data, context) => {
     });
 
     logEvent('ad_rewarded', { uid, adId, reward });
+    // Claiming a rewarded ad grants XP (idempotent per ad impression key).
+    await awardXpSafe(uid, 'ad_reward_claimed', { source: key });
     return result;
   } catch (err) { throw handleError(err); }
 });

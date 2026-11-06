@@ -44,7 +44,12 @@ export default function PerksRewardsScreen() {
   const isDark = theme === 'dark' || theme === 'midnight';
 
   const profile = userProfile || user;
-  const currentLevel = Number(profile?.level) || 1;
+  // A missing stored level is "unknown", not Level 1. Gate math still needs a
+  // floor, but the standing badge renders an em-dash when nothing is stored
+  // rather than asserting a rank the profile has not earned.
+  const storedLevel = profile?.level != null ? Number(profile.level) : null;
+  const hasStoredLevel = storedLevel != null && Number.isFinite(storedLevel);
+  const currentLevel = hasStoredLevel ? storedLevel : 1;
   const userCoins = Number(profile?.coins) || 0;
   const activeDays = Number(profile?.activeDaysCount || profile?.activeDays) || 1;
   const experience = Number(profile?.experience) || 0;
@@ -164,18 +169,18 @@ export default function PerksRewardsScreen() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{citizenTier.icon}</span>
+                <span className="text-2xl">{hasStoredLevel ? citizenTier.icon : '—'}</span>
                 <span className="text-xs font-bold uppercase tracking-wider text-purple-400 font-mono">
-                  {citizenTier.tier} Standing · Level {currentLevel}
+                  {hasStoredLevel ? `${citizenTier.tier} Standing · Level ${currentLevel}` : 'Standing unavailable'}
                 </span>
-                {prestige.isPrestige && (
+                {hasStoredLevel && prestige.isPrestige && (
                   <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                     Prestige {prestige.prestigeRoman}
                   </span>
                 )}
               </div>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-                {getRankTitle(currentLevel)} Rank Capabilities
+                {hasStoredLevel ? `${getRankTitle(currentLevel)} Rank Capabilities` : 'Rank Capabilities'}
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-lg">
                 Your sovereign citizen level unlocks platform creation powers, verified gift earnings, coin milestone bonuses, and civic governance rights.
@@ -214,7 +219,7 @@ export default function PerksRewardsScreen() {
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-400 font-medium">Stage Experience Progress</span>
               <span className="font-mono text-purple-400 font-bold">
-                {levelInfo.isMaxLevel ? 'Ascendant' : `${levelInfo.xpToNext} XP to Level ${currentLevel + 1}`}
+                {levelInfo.isMaxLevel ? 'Ascendant' : `${levelInfo.xpToNext} XP to Level ${levelInfo.level + 1}`}
               </span>
             </div>
             <div className="w-full h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/[0.08]">

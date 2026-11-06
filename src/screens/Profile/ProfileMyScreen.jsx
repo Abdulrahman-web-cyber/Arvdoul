@@ -27,6 +27,7 @@ import {
   projectProfileForViewer,
 } from '../../services/profileReadModel.js';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { PROFILE_TABS } from '../../config/profileContracts.js';
 import { toast } from 'sonner';
 
 // Modular Profile Components
@@ -58,7 +59,6 @@ export default function ProfileMyScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
-  const [showScannerModal, setShowScannerModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [showQuickEditModal, setShowQuickEditModal] = useState(false);
@@ -110,7 +110,6 @@ export default function ProfileMyScreen() {
   const highlights = useProfileStore((state) => state.highlights);
   const level = useProfileStore((state) => state.level);
   const balance = useProfileStore((state) => state.balance);
-  const position = useProfileStore((state) => state.position);
 
   // Analytics store - reactive state selectors
   const analytics = useAnalyticsStore((state) => state.analytics);
@@ -199,6 +198,19 @@ export default function ProfileMyScreen() {
     return projectProfileForViewer(effectiveProfile, capabilities);
   }, [effectiveProfile, capabilities, viewAs]);
 
+  // Open on the owner's chosen default tab (the Edit Profile "Default Starting
+  // Tab"). Applied once per mount so it cannot override the owner's own tab
+  // clicks on a later store update.
+  const appliedDefaultTabRef = useRef(false);
+  useEffect(() => {
+    if (appliedDefaultTabRef.current) return;
+    const preferred = displayedProfile?.defaultTab;
+    if (preferred && PROFILE_TABS.includes(preferred)) {
+      setActiveTab(preferred);
+      appliedDefaultTabRef.current = true;
+    }
+  }, [displayedProfile?.defaultTab]);
+
   // Load user data on mount
   useEffect(() => {
     if (!currentUserId) return;
@@ -228,6 +240,7 @@ export default function ProfileMyScreen() {
   }, [currentUserId, savedPosts]);
 
   // Pull to refresh
+  const pullStartYRef = useRef(null);
   const handleRefresh = useCallback(async () => {
     if (!currentUserId) return;
     setIsRefreshing(true);
@@ -246,6 +259,27 @@ export default function ProfileMyScreen() {
       setIsRefreshing(false);
     }
   }, [currentUserId, timeframe]);
+
+  // Pull-to-refresh: a downward drag from the top of the page triggers
+  // handleRefresh(). Without this the refresh handler (and its pill) was
+  // unreachable — the state could never be set.
+  const PULL_THRESHOLD = 70;
+  const handleTouchStart = useCallback((e) => {
+    const el = scrollRef.current;
+    if (!el || el.scrollTop > 0 || isRefreshing) return;
+    pullStartYRef.current = e.touches?.[0]?.clientY ?? null;
+  }, [isRefreshing]);
+  const handleTouchMove = useCallback((e) => {
+    if (pullStartYRef.current == null) return;
+    const currentY = e.touches?.[0]?.clientY ?? 0;
+    if (currentY - pullStartYRef.current > PULL_THRESHOLD) {
+      pullStartYRef.current = null;
+      handleRefresh();
+    }
+  }, [handleRefresh]);
+  const handleTouchEnd = useCallback(() => {
+    pullStartYRef.current = null;
+  }, []);
 
   // Handle Share
   const handleShare = useCallback(async () => {
@@ -300,6 +334,9 @@ export default function ProfileMyScreen() {
     <ErrorBoundary>
       <div
         ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className={cn(
           "min-h-screen pb-24 transition-colors duration-200",
           isDark
@@ -319,17 +356,12 @@ export default function ProfileMyScreen() {
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
           {/* 1. Master Identity Card with Level Badge, Passport & 6 Action Buttons */}
           <ProfileHeroSection
-            variant="identity"
             profile={displayedProfile}
             isOwner={viewAs === 'owner'}
-            viewAs={viewAs}
             level={displayedProfile?.level}
-            position={position}
             theme={theme}
             onOpenQrCode={() => setShowQrModal(true)}
-            onOpenQrScanner={() => setShowScannerModal(true)}
             onOpenLocationSetup={() => setShowLocationModal(true)}
-            onOpenPerspective={() => setShowPerspectiveModal(true)}
             onOpenOptions={() => setShowOptionsMenu(true)}
             onAvatarClick={() => setShowAvatarModal(true)}
             onShare={handleShare}
@@ -341,7 +373,6 @@ export default function ProfileMyScreen() {
             onOpenVerificationModal={() => setShowVerificationModal(true)}
             onInsightsPress={() => navigate('/profile/analytics')}
             capabilities={capabilities}
-            analytics={analytics}
           />
 
           {/* 2. 6-Card Metrics Grid */}
@@ -405,7 +436,6 @@ export default function ProfileMyScreen() {
                   analytics={analytics}
                   ranking={ranking}
                   userLevel={effectiveProfile?.level ?? null}
-                  userXp={effectiveProfile?.experience}
                   isCreator={effectiveProfile?.isCreator}
                   theme={theme}
                   timeframe={timeframe}
@@ -492,14 +522,9 @@ export default function ProfileMyScreen() {
           theme={theme}
         />
 
-        {/* QR Scanner Modal */}
-        {showScannerModal && (
-          <ProfileQRScannerModal
-            isOpen={showScannerModal}
-            onClose={() => setShowScannerModal(false)}
-            theme={theme}
-          />
-        )}
+        {/* QR Scanner is reachable from within ProfileQRCodeModal (scan a
+            friend's code). The screen-level scanner state was never settable
+            once the hero dropped its onOpenQrScanner prop, so it is removed. */}
 
         {/* Location Setup Modal */}
         {showLocationModal && (

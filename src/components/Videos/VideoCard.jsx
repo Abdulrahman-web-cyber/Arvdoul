@@ -56,6 +56,7 @@ const VideoCard = memo(({
   onGift,
   onReport,
   onFollow,
+  followedByViewer,
   autoPlay = false,
   showControls = true,
   className = '',
@@ -75,7 +76,7 @@ const VideoCard = memo(({
   const [showSettings, setShowSettings] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(video?.creator?.isFollowing || false);
+  const [isFollowing, setIsFollowing] = useState(followedByViewer ?? video?.creator?.isFollowing ?? false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showGestureGuide, setShowGestureGuide] = useState(true);
@@ -919,6 +920,7 @@ VideoCard.propTypes = {
   onGift: PropTypes.func,
   onReport: PropTypes.func,
   onFollow: PropTypes.func,
+  followedByViewer: PropTypes.bool,
   autoPlay: PropTypes.bool,
   showControls: PropTypes.bool,
   className: PropTypes.string,

@@ -12,6 +12,7 @@ class BackgroundSyncService {
   constructor() {
     this.syncTagName = 'arvdoul-sync';
     this.isSyncRegistered = false;
+    this._pendingCount = 0;
   }
 
   /**
@@ -36,62 +37,37 @@ class BackgroundSyncService {
   }
 
   /**
-   * Dispatches queued offline operations to their respective service handlers.
+   * Dispatches queued offline operations. Delegates to the canonical sync
+   * engine (`syncQueue`) so there is exactly one op-type → service map. The
+   * previous local switch was a divergent third copy that called a
+   * non-existent `commentService.addComment`, so offline comments never
+   * drained.
    */
   async triggerQueueDrain() {
     logger.info('[BackgroundSync] Triggering offline queue drain.');
-    const result = await offlineQueue.process(async (op) => {
-      logger.debug(`[BackgroundSync] Processing offline op: ${op.type}`, op.payload);
-
-      switch (op.type) {
-        case 'post.like': {
-          const { postService } = await import('./postService.js');
-          await postService.likePost(op.payload.postId, op.payload.userId);
-          break;
-        }
-        case 'post.create': {
-          const { postService } = await import('./postService.js');
-          await postService.createPost(op.payload);
-          break;
-        }
-        case 'comment.create': {
-          const { commentService } = await import('./commentService.js');
-          await commentService.addComment(op.payload.postId, op.payload.userId, op.payload.text);
-          break;
-        }
-        case 'message.send': {
-          const { messagesService } = await import('./messagesService.js');
-          await messagesService.sendMessage(op.payload.conversationId, op.payload.senderId, op.payload.text, op.payload.media);
-          break;
-        }
-        case 'user.follow': {
-          const { userService } = await import('./userService.js');
-          await userService.followUser(op.payload.currentUserId, op.payload.targetUserId);
-          break;
-        }
-        default:
-          logger.debug(`[BackgroundSync] Handled generic queued op ${op.type}`);
-          break;
-      }
-    });
-
-    logger.info('[BackgroundSync] Queue drain completed:', result);
-    return result;
+    const { syncQueue } = await import('../offline/syncEngine.js');
+    const uid =
+      typeof window !== 'undefined' ? window._arvdoul_auth?.currentUser?.uid || null : null;
+    await syncQueue({ ownerUid: uid });
+    this._pendingCount = await offlineQueue.getPendingCount({ ownerUid: uid });
+    return { processed: this._pendingCount === 0 ? 0 : this._pendingCount };
   }
 
   /**
-   * Returns current pending offline queue size snapshot.
+   * Current pending offline queue size for the signed-in account.
+   * Reads the real IndexedDB-backed count; returns the last known value
+   * synchronously while the async read resolves.
    */
   getPendingCount() {
-    if (typeof offlineQueue?.length === 'function') {
-      try {
-        // Return cached memory length or fallback to 0
-        return offlineQueue._memory?.filter((o) => o.status === 'pending')?.length || 0;
-      } catch {
-        return 0;
-      }
-    }
-    return 0;
+    const uid =
+      typeof window !== 'undefined' ? window._arvdoul_auth?.currentUser?.uid || null : null;
+    offlineQueue
+      .getPendingCount({ ownerUid: uid })
+      .then((count) => {
+        this._pendingCount = count;
+      })
+      .catch(() => {});
+    return this._pendingCount;
   }
 
   /**

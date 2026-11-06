@@ -141,6 +141,7 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
       canViewContent: false,
       canViewFollowers: false,
       canViewFollowing: false,
+      canViewFriends: false,
       canViewEconomicStatus: false,
       canFollow: false,
       canUnfollow: false,
@@ -190,6 +191,11 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
   const canViewCreatorInfo = isSimulatedOwner || canViewProfileSection('creatorInfo', targetPrivacy, effectiveRelation);
   const canViewFollowers = canViewProfileSection('followersList', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewFollowing = canViewProfileSection('followingList', targetPrivacy, effectiveRelation) && canViewContent;
+  // A friend is a mutual follow, so the friends surface is visible only when BOTH
+  // underlying graphs are. Resolving it here (rather than re-deriving it in each
+  // surface) keeps the friends tab, the metrics grid and the /friends route from
+  // drifting apart.
+  const canViewFriends = canViewFollowers && canViewFollowing;
   const canViewActivity = canViewProfileSection('activity', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewAchievements = canViewProfileSection('achievements', targetPrivacy, effectiveRelation) && canViewContent;
   const canViewTitles = canViewProfileSection('titles', targetPrivacy, effectiveRelation) && canViewContent;
@@ -228,6 +234,7 @@ export function resolveCapabilities({ viewer, target, relationship = {}, viewAs 
     canViewContent,
     canViewFollowers,
     canViewFollowing,
+    canViewFriends,
     canViewActivity,
     canViewAchievements,
     canViewTitles,

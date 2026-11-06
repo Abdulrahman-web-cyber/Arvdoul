@@ -52,7 +52,9 @@ export default function AchievementsScreen() {
     if (!user?.uid) return;
     try {
       const items = await achievementService.getEnrichedAchievements(user.uid, {
-        level: user.level || 1,
+        // Pass the real values through unchanged: a missing level must not be
+        // laundered into "Level 1" (see src/__tests__/noFabricatedData.test.js).
+        level: user.level,
         activeStreak: user.activeStreak || 1,
         activeDaysCount: user.activeDaysCount || 1,
         postsCount: user.postsCount || user.postCount || 0,

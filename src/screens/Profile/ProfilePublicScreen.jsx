@@ -25,6 +25,7 @@ import {
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
+import { PROFILE_TABS } from '../../config/profileContracts.js';
 import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
@@ -315,6 +316,21 @@ export default function ProfilePublicScreen() {
     [baseProfile, capabilities, isOwner]
   );
 
+  // Honour the owner's chosen default tab ("the tab visitors see first"). The
+  // field was persisted and validated but never read, so every profile opened on
+  // Posts. Apply once per target so a later snapshot cannot override the viewer's
+  // own tab choice.
+  const appliedDefaultTabFor = React.useRef(null);
+  useEffect(() => {
+    const targetKey = effectiveProfile?.id || effectiveProfile?.uid;
+    if (!targetKey || appliedDefaultTabFor.current === targetKey) return;
+    const preferred = effectiveProfile?.defaultTab;
+    if (preferred && PROFILE_TABS.includes(preferred)) {
+      setActiveTab(preferred);
+      appliedDefaultTabFor.current = targetKey;
+    }
+  }, [effectiveProfile?.id, effectiveProfile?.uid, effectiveProfile?.defaultTab]);
+
   const handleUnblock = useCallback(async () => {
     const targetUid = effectiveProfile?.id || effectiveProfile?.uid || userId;
     if (!currentUser?.uid || !targetUid) return;
@@ -483,7 +499,6 @@ export default function ProfilePublicScreen() {
         <div className="w-full max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-5">
           {/* 1. Master Identity Card with Level Badge, Passport & Public Action Buttons */}
           <ProfileHeroSection
-            variant="identity"
             profile={effectiveProfile}
             isOwner={false}
             level={effectiveProfile.level}
@@ -507,7 +522,6 @@ export default function ProfilePublicScreen() {
             onFriendRequestToggle={handleFriendRequestToggle}
             onOpenTipModal={() => setShowTipModal(true)}
             capabilities={capabilities}
-            analytics={null}
           />
 
           {/* 2. Social Context Bar (Mutual Friends, Shared Communities, Follows You) */}
@@ -517,6 +531,7 @@ export default function ProfilePublicScreen() {
             isFollowing={isFollowing}
             targetName={effectiveProfile?.displayName || 'Creator'}
             theme={theme}
+            capabilities={capabilities}
             onFriendPress={(friend) => navigate(`/profile/${friend.id || friend.uid || friend.username}`)}
           />
 
@@ -592,7 +607,6 @@ export default function ProfilePublicScreen() {
                 posts={posts}
                 theme={theme}
                 isOwner={false}
-                capabilities={capabilities}
                 onPostClick={(post) => navigate(`/post/${post.id}`)}
               />
 

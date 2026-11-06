@@ -17,6 +17,7 @@ import { useSound } from "../../hooks/useSound";
 import { useAnalytics } from "../../hooks/useAnalytics";
 import { useAppStore } from "../../store/appStore";
 import { useProfileStore } from "../../store/profileStore";
+import { useNavBadges } from "../../hooks/useNavBadges";
 import { getSafeAvatarUrl } from "../../utils/avatarUtils";
 import QuickAccessPanel from "./QuickAccessPanel";
 
@@ -884,7 +885,7 @@ function BottomNav() {
   const currentUser = useAppStore((state) => state.currentUser);
   const profileStoreProfile = useProfileStore((state) => state.profile);
   const effectiveUser = profileStoreProfile || userProfile || currentUser || authUser;
-  const unreadCounts = useAppStore((state) => state.unreadCounts);
+  const unreadCounts = useNavBadges();
 
   const reducedMotion = useReducedMotion();
   const dark = isDarkTheme(themeMode);

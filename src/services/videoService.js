@@ -1,7 +1,6 @@
 // src/services/videoService.js
 
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   collection,
   doc,
@@ -332,7 +331,6 @@ class UltimateVideoService {
     this.firestore = null;
     this.storage = null;
     this.auth = null;
-    this.functions = null;
     this.initialized = false;
     this.initPromise = null;
     // Centralized CacheManager namespace (video-scoped TTL).
@@ -376,23 +374,27 @@ class UltimateVideoService {
         this.firestore = await getFirestoreInstance();
         this.storage = await getStorageInstance();
         this.auth = await getAuthInstance();
-        this.functions = getFunctions();
 
-        this.fns.createMuxUpload = httpsCallable(this.functions, 'createMuxUpload');
-        this.fns.getMuxPlaybackUrl = httpsCallable(this.functions, 'getMuxPlaybackUrl');
-        this.fns.likeVideo = httpsCallable(this.functions, 'likeVideo');
-        this.fns.shareVideo = httpsCallable(this.functions, 'shareVideo');
-        this.fns.recordVideoView = httpsCallable(this.functions, 'recordVideoView');
-        this.fns.payPerView = httpsCallable(this.functions, 'payPerView');
-        this.fns.sendTip = httpsCallable(this.functions, 'sendTip');
-        this.fns.setVideoChapters = httpsCallable(this.functions, 'setVideoChapters');
-        this.fns.createDuet = httpsCallable(this.functions, 'createDuet');
-        this.fns.createStitch = httpsCallable(this.functions, 'createStitch');
-        this.fns.reportVideo = httpsCallable(this.functions, 'reportVideo');
-        this.fns.getVideoRecommendations = httpsCallable(this.functions, 'getVideoRecommendations');
-        this.fns.processVideoEvent = httpsCallable(this.functions, 'processVideoEvent');
-        this.fns.watermarkVideo = httpsCallable(this.functions, 'watermarkVideo');
-        this.fns.moderateVideo = httpsCallable(this.functions, 'moderateVideo');
+        // All callables go through the canonical callableService. `cf` re-wraps
+        // the data-returning helper in the `{ data }` envelope the call sites
+        // below already destructure.
+        const { makeCallable, FUNCTIONS } = await import('./callableService.js');
+        const cf = makeCallable;
+        this.fns.createMuxUpload = cf(FUNCTIONS.CREATE_MUX_UPLOAD);
+        this.fns.getMuxPlaybackUrl = cf(FUNCTIONS.GET_MUX_PLAYBACK_URL);
+        this.fns.likeVideo = cf(FUNCTIONS.LIKE_VIDEO);
+        this.fns.shareVideo = cf(FUNCTIONS.SHARE_VIDEO);
+        this.fns.recordVideoView = cf(FUNCTIONS.RECORD_VIDEO_VIEW);
+        this.fns.payPerView = cf(FUNCTIONS.PAY_PER_VIEW);
+        this.fns.sendTip = cf(FUNCTIONS.SEND_TIP);
+        this.fns.setVideoChapters = cf(FUNCTIONS.SET_VIDEO_CHAPTERS);
+        this.fns.createDuet = cf(FUNCTIONS.CREATE_DUET);
+        this.fns.createStitch = cf(FUNCTIONS.CREATE_STITCH);
+        this.fns.reportVideo = cf(FUNCTIONS.REPORT_VIDEO);
+        this.fns.getVideoRecommendations = cf(FUNCTIONS.GET_VIDEO_RECOMMENDATIONS);
+        this.fns.processVideoEvent = cf(FUNCTIONS.PROCESS_VIDEO_EVENT);
+        this.fns.watermarkVideo = cf(FUNCTIONS.WATERMARK_VIDEO);
+        this.fns.moderateVideo = cf(FUNCTIONS.MODERATE_VIDEO);
 
         this.initialized = true;
       } catch (err) {
@@ -977,6 +979,23 @@ class UltimateVideoService {
     return { success: true };
   }
 
+  /**
+   * Viewer-specific like/save state for one video. The public video document
+   * only carries aggregate counters; whether *this* viewer liked or saved it
+   * lives in the `likes` subcollection and the viewer's `saved_videos`, so a
+   * detail screen must resolve it separately (the feed does this server-side).
+   * Returns { liked: false, saved: false } for anonymous viewers.
+   */
+  async getViewerVideoState(videoId, userId) {
+    if (!videoId || !userId) return { liked: false, saved: false };
+    await this.ensureInitialized();
+    const [likeSnap, savedSnap] = await Promise.all([
+      getDoc(doc(this.firestore, 'videos', videoId, 'likes', userId)),
+      getDoc(doc(this.firestore, 'users', userId, 'saved_videos', videoId)),
+    ]);
+    return { liked: likeSnap.exists(), saved: savedSnap.exists() };
+  }
+
   async getSavedVideos(userId, { limit: max = 50 } = {}) {
     await this.ensureInitialized();
     try {
@@ -1147,6 +1166,7 @@ const videoService = {
   reportVideo: (vid, reason) => getVideoService().reportVideo(vid, reason),
   saveVideo: (vid, uid) => getVideoService().saveVideo(vid, uid),
   unsaveVideo: (vid, uid) => getVideoService().unsaveVideo(vid, uid),
+  getViewerVideoState: (vid, uid) => getVideoService().getViewerVideoState(vid, uid),
   getSavedVideos: (uid, opts) => getVideoService().getSavedVideos(uid, opts),
   getWatchNext: (vid) => getVideoService().getWatchNext(vid),
   getWatermarkedDownloadUrl: (vid) => getVideoService().getWatermarkedDownloadUrl(vid),

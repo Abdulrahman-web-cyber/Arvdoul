@@ -84,6 +84,49 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/message_requests/$(recipientUid + '_' + senderUid));
     }
 
+    // A pending friend request from `fromUid` to `toUid`. Used to authorise the
+    // mutual-follow edges that accepting a friend request creates: the accepter
+    // writes an edge whose `followerId` is the requester, which the plain
+    // self-follow rule would refuse (this is why friend acceptance was silently
+    // denied and no request could ever be accepted).
+    // exists() first: get() on an absent document returns null and reading
+    // `.data.status` from it raises an evaluation error, which would deny the
+    // whole (short-circuiting OR) expression rather than just this branch.
+    function friendRequestFrom(fromUid, toUid) {
+      let p = /databases/$(database)/documents/friend_requests/$(fromUid + '_' + toUid);
+      return exists(p) && get(p).data.status == 'pending';
+    }
+
+    // The same consent path for a private account's follow request: approving it
+    // writes the requester's edge (followerId = requester, followingId = owner).
+    function followRequestFrom(fromUid, toUid) {
+      let p = /databases/$(database)/documents/follow_requests/$(fromUid + '_' + toUid);
+      return exists(p) && get(p).data.status == 'pending';
+    }
+
+    // ---------- private-account content gate ----------
+    // A private account's posts are readable only by the author, an admin, or an
+    // approved follower. Firestore rules cannot call get()/exists() while
+    // evaluating a list query *unless the query constrains the field*, so the
+    // author's privacy is denormalised onto each post as `authorIsPrivate`
+    // (written on every create path and refreshed when the owner toggles privacy).
+    //   - Public feeds filter with `where('authorIsPrivate', '==', false)`; the
+    //     first branch proves the condition and short-circuits, so exists() is
+    //     never evaluated and the query is allowed.
+    //   - An author-scoped query (`where('authorId', '==', x)`) proves the exists()
+    //     branch, so an approved follower can read a private author's content.
+    //   - An unconstrained list query cannot prove either branch and is denied
+    //     wholesale (rules are not filters). The field must always be present: a
+    //     missing value evaluates false, so only the owner branch can still admit
+    //     it — everyone else is denied (fail closed).
+    function postReadableByViewer() {
+      return resource.data.authorIsPrivate == false ||
+        isAdmin() ||
+        (isSignedIn() &&
+          (uid() == resource.data.authorId ||
+            followEdgeExists(uid(), resource.data.authorId)));
+    }
+
     // Fields that must never appear on the world-readable `users/{uid}` doc.
     // They live in `users_private/{uid}` instead (owner/admin only). Mirrors
     // PRIVATE_PROFILE_FIELDS in src/config/profileContracts.js.
@@ -266,8 +309,16 @@ service cloud.firestore {
 
     // ==================== POSTS ====================
     match /posts/{postId} {
-      allow read: if true;
-      allow create: if isSignedIn() && authoredBy('authorId');
+      // Public content (authorIsPrivate != true) is readable by anyone; a private
+      // author's content only by the author or an admin (see postReadableByViewer).
+      allow read: if postReadableByViewer();
+      // `authorIsPrivate` is denormalised but not client-controlled: on the write
+      // path a get() is allowed, so the stored value must equal the author's real
+      // users/{uid}.isPrivate. A client cannot publish a public post for a private
+      // account (or vice versa) to bypass the read gate.
+      allow create: if isSignedIn() && authoredBy('authorId') &&
+        request.resource.data.authorIsPrivate ==
+          get(/databases/$(database)/documents/users/$(uid())).data.get('isPrivate', false);
       // Two legitimate updates, nothing else:
       //  - the author editing their own post, minus the moderation fields. Those
       //    belong to the server (reportContent / adminModerateContent); without
@@ -315,7 +366,7 @@ service cloud.firestore {
             'autoModeratedAt', 'reports'
           ])) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'likes', 'likesBy', 'dislikes', 'dislikesBy', 'updatedAt', 'lastActivityAt'
+          'likes', 'likesBy', 'dislikes', 'dislikesBy', 'reactionCounts', 'updatedAt', 'lastActivityAt'
         ])
       ));
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
@@ -326,6 +377,13 @@ service cloud.firestore {
       match /dislikes/{dislikerId} {
         allow read: if true;
         allow write: if isSignedIn() && dislikerId == uid();
+      }
+      // Per-user emoji reaction (mirrors the post reaction subcollection). The
+      // aggregate `reactionCounts` map lives on the comment doc; without this
+      // match a reaction write fell through to the deny-all catch-all.
+      match /reactions/{reactorId} {
+        allow read: if true;
+        allow write: if isSignedIn() && reactorId == uid();
       }
       // Edit history is appended by the comment author only; the record must
       // name the editor, so it cannot be forged as another user's edit.
@@ -339,12 +397,37 @@ service cloud.firestore {
     // ==================== SOCIAL GRAPH ====================
     match /follows/{followId} {
       allow read: if isSignedIn();
-      // You can only create your own follow edge (follower must be you).
+      // You can only create your own follow edge (follower must be you), UNLESS
+      // you are accepting a pending friend/follow request addressed to you:
+      // accepting creates the requester's edge (`followerId` = requester,
+      // `followingId` = you), which the self-follow rule alone would refuse. A
+      // private account's content is gated on `authorIsPrivate`, so this consent
+      // path is the only way a non-follower ever gains access.
       allow create: if isSignedIn() &&
-        request.resource.data.followerId == uid() &&
-        request.resource.data.followingId != uid();
+        request.resource.data.followerId != request.resource.data.followingId &&
+        (request.resource.data.followerId == uid() ||
+          (request.resource.data.followingId == uid() &&
+            (friendRequestFrom(request.resource.data.followerId, uid()) ||
+              followRequestFrom(request.resource.data.followerId, uid()))));
       allow delete: if isSignedIn() &&
         (resource.data.followerId == uid() || resource.data.followingId == uid());
+    }
+    // ==================== FOLLOW REQUESTS ====================
+    // A follow request is how a non-follower asks a private account for content
+    // access. Firestore rules cannot read the target's `isPrivate` on create
+    // (get() on the write path is fine, but the account state lives on the target
+    // user doc), so the request is always allowed to be created for any target;
+    // the target approves it, and approval writes the real `follows` edge under
+    // the friendRequestFrom()/owner path. Only the two parties may read or write.
+    match /follow_requests/{requestId} {
+      allow read: if isSignedIn() &&
+        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
+      allow create: if isSignedIn() &&
+        request.resource.data.fromUserId == uid() &&
+        request.resource.data.toUserId != uid() &&
+        request.resource.data.status == 'pending';
+      allow update, delete: if isSignedIn() &&
+        (resource.data.fromUserId == uid() || resource.data.toUserId == uid());
     }
     match /blocks/{blockId} {
       // Only the two parties may read a block edge. A world-readable block
@@ -427,7 +510,20 @@ service cloud.firestore {
       allow create: if isSignedIn() && authoredBy('userId') &&
         request.resource.data.status == 'published' &&
         request.resource.data.moderationStatus == 'pending';
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+      // The owner may edit their own story (music, collaborators, tagged users,
+      // visibility, lifecycle, share stats, soft-delete), but NOT the
+      // moderation verdict. Without the exclusion the owner could clear
+      // `moderationStatus` on their own rejected story and keep it visible.
+      // `isDeleted` is allowed only as a one-way soft delete (false -> true) so
+      // a removed story cannot be resurrected by its owner.
+      allow update: if isSignedIn() && request.auth.uid == resource.data.userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'moderationStatus', 'moderationNotes', 'moderatedAt', 'moderatedBy',
+          'moderationScore', 'reports', 'reportCount', 'userId', 'processingState'
+        ]) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isDeleted']) ||
+          request.resource.data.isDeleted == true);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
       match /viewers/{viewerId} {
         allow read: if isSignedIn() && (vibeData().userId == uid() || viewerId == uid());
         allow write: if isSignedIn() && viewerId == uid();
@@ -435,17 +531,25 @@ service cloud.firestore {
       // Shards are BOUNDED AGGREGATION COUNTERS (spec §58): any signed-in
       // user may increment them; the pubsub aggregator owns the story-doc
       // stats. Clients cannot inflate the doc itself — only these counters.
+      // Each shard is restricted to its known counter keys (+ updatedAt) so a
+      // client cannot write arbitrary data into the aggregation collections.
       match /view_shards/{shardId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow write: if isSignedIn() &&
+          request.resource.data.keys().hasOnly(['count', 'updatedAt']) &&
+          request.resource.data.count is number;
       }
       match /reaction_shards/{shardId} {
         allow read: if true;
-        allow write: if isSignedIn();
+        allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
+          '❤️', '🔥', '😂', '😢', '😮', '👍', 'updatedAt'
+        ]);
       }
       match /analytics_shards/{shardId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow write: if isSignedIn() && request.resource.data.keys().hasOnly([
+          'forwardTaps', 'backTaps', 'completions', 'comments', 'replies', 'updatedAt'
+        ]);
       }
       // Reactions: only when the creator enabled them, and only while the
       // Vibe is active and visible to the reactor (spec §22).
@@ -672,7 +776,13 @@ service cloud.firestore {
     }
     match /withdrawal_requests/{requestId} {
       allow read, create: if isSignedIn() && request.resource.data.userId == uid();
-      allow update: if isSignedIn() && resource.data.userId == uid() && resource.data.status == 'pending';
+      // The owner may only CANCEL their own pending request. Approval/paid/
+      // rejected transitions are server-only (adminDecideWithdrawal), and the
+      // amount/address are immutable once the request exists.
+      allow update: if isSignedIn() && resource.data.userId == uid() &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status in ['cancelled'] &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['amount', 'address', 'method', 'userId']);
       allow delete: if false;
     }
     match /gift_transactions/{txId} {
@@ -689,6 +799,22 @@ service cloud.firestore {
     }
     match /idempotency_ledger/{key} {
       allow read, write: if false; // server-only
+    }
+    // Double-entry ledger written by functions/monetization.js
+    // `createLedgerEntry` (debit + credit entries per coin movement). It is
+    // server-write-only; a client-writable ledger is not an accounting record.
+    match /ledger_entries/{entryId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+    // Per-user fraud velocity buckets and abuse flags, written by
+    // functions/monetization.js (enforceDailyLimit / flagSuspiciousActivity).
+    match /fraud_limits/{docId} {
+      allow read, write: if false; // server-only
+    }
+    match /fraud_flags/{docId} {
+      allow read: if isAdmin();
+      allow write: if false; // server-only
     }
     match /counter_shards/{shardId} {
       // Hashed, non-PII shard keys. Only single-field value updates are
@@ -943,8 +1069,18 @@ service cloud.firestore {
     }
     match /marketplace_orders/{orderId} {
       allow read: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.buyerId == uid();
-      allow update: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.buyerId == uid() &&
+        request.resource.data.status in ['pending', 'created', 'awaiting_payment'];
+      // Fulfilment state may move, but the financial fields are immutable once
+      // written: neither party may rewrite the price, the buyer/seller, the
+      // product or the download URL after the fact.
+      allow update: if isAdmin() || (isSignedIn() &&
+        (resource.data.buyerId == uid() || resource.data.sellerId == uid()) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'amountPaidCoins', 'priceCoins', 'priceUsd', 'buyerId', 'sellerId',
+          'productId', 'product', 'amount', 'downloadUrl', 'purchasedAt', 'createdAt'
+        ]));
+      allow delete: if isAdmin();
     }
     match /polls/{pollId} {
       allow read: if true;
@@ -1014,10 +1150,34 @@ service cloud.firestore {
     match /videos/{videoId} {
       allow read: if true;
       allow create: if isSignedIn() && (request.resource.data.userId == uid() || request.resource.data.authorId == uid());
-      allow update, delete: if isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid() || isAdmin());
+      // The owner may edit their own video, but the moderation verdict and the
+      // server-computed ranking/processing fields belong to the server
+      // (moderateVideo / processVideoEvent). Without the exclusion the owner
+      // could clear `moderationStatus` / `isDeleted` / `status` on their own
+      // rejected video, or inflate `viralScore`/`rankingScore`.
+      allow update: if isAdmin() || (isSignedIn() &&
+        (resource.data.userId == uid() || resource.data.authorId == uid()) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'moderationStatus', 'moderationNotes', 'moderatedAt', 'moderatedBy',
+          'moderationScore', 'reports', 'reportCount', 'status', 'isDeleted',
+          'rankingScore', 'viralScore', 'audioFingerprint', 'muxAssetId',
+          'muxPlaybackId', 'stats', 'userId'
+        ]));
+      allow delete: if isAdmin() || (isSignedIn() && (resource.data.userId == uid() || resource.data.authorId == uid()));
       match /stats/{statId} {
         allow read: if true;
         allow write: if false; // server-computed (sharded counters)
+      }
+      // Like docs: the doc id is the liker's uid. The likeVideo callable writes
+      // them with the admin SDK (rules bypassed); a client may only read its own
+      // so a detail screen can resolve "did I like this".
+      match /likes/{likerId} {
+        allow read: if isSignedIn() && request.auth.uid == likerId;
+        allow write: if false; // server-owned (likeVideo)
+      }
+      match /like_shards/{shardId} {
+        allow read: if true;
+        allow write: if false; // server-computed
       }
     }
 
@@ -1135,8 +1295,15 @@ service cloud.firestore {
     // ==================== MARKETPLACE ORDERS ====================
     match /orders/{orderId} {
       allow read: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.buyerId == uid();
-      allow update: if isSignedIn() && (resource.data.buyerId == uid() || resource.data.sellerId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.buyerId == uid() &&
+        request.resource.data.status in ['pending', 'created', 'awaiting_payment'];
+      // Same financial-field immutability as marketplace_orders.
+      allow update: if isAdmin() || (isSignedIn() &&
+        (resource.data.buyerId == uid() || resource.data.sellerId == uid()) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'amountPaidCoins', 'priceCoins', 'priceUsd', 'buyerId', 'sellerId',
+          'productId', 'product', 'amount', 'downloadUrl', 'purchasedAt', 'createdAt'
+        ]));
       allow delete: if isAdmin();
     }
 
@@ -1261,11 +1428,13 @@ service cloud.firestore {
       allow create, update: if isOwner(request.resource.data.userId);
     }
 
-    // ==================== ENGAGEMENT COIN EVENTS (owner-authored, immutable) ====================
+    // ==================== ENGAGEMENT COIN EVENTS (server-authored, immutable) ====================
     match /coin_events/{eventId} {
+      // Coin events are economic records: they must be authored by the server
+      // (they are credited by awardExperience / the engagement pipeline), never
+      // minted by a client. A client-writable coin event is a forged ledger row.
       allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.userId == uid();
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // ==================== VIDEO PURCHASES (entitlement record) ====================

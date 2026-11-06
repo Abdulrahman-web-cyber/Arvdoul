@@ -119,7 +119,7 @@ export const ProfileCitizenshipCard = memo(function ProfileCitizenshipCard({
           )}>
             <span className="text-[9px] uppercase tracking-wider text-slate-400 block font-mono">Rank Title</span>
             <span className="font-bold text-indigo-400 mt-0.5 block truncate">
-              {passport.rankTitle || 'Arrival'}
+              {passport.rankTitle || '—'}
             </span>
           </div>
 

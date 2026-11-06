@@ -7,12 +7,16 @@
  */
 
 import { jest } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   PROFILE_TYPES,
   VISIBILITY_SCOPES,
   DEFAULT_PROFILE_PRIVACY,
   SERVER_AUTHORITATIVE_FIELDS,
   PROFILE_CONSTRAINTS,
+  PROFILE_TABS,
   isValidWebUrl,
   sanitizeProfileUrl,
   validateProfileUpdate,
@@ -278,5 +282,26 @@ describe('Profile System Hardening & Validation Contracts', () => {
       expect(useProfileStore.getState().loadSeq.posts).toBeGreaterThan(posts);
       expect(useProfileStore.getState().loadSeq.stories).toBeGreaterThan(stories);
     });
+  });
+});
+
+describe('Profile default tab - persisted setting is actually consumed', () => {
+  test('PROFILE_TABS is the single source for the validated tab ids', () => {
+    expect(PROFILE_TABS).toEqual(['posts', 'reels', 'audio', 'citizenship', 'about']);
+    // Validation must accept every declared tab and reject anything else.
+    for (const tab of PROFILE_TABS) {
+      expect(validateProfileUpdate({ defaultTab: tab }).sanitized.defaultTab).toBe(tab);
+    }
+    expect(validateProfileUpdate({ defaultTab: 'not-a-tab' }).sanitized.defaultTab).toBeUndefined();
+  });
+
+  test('both profile screens read defaultTab (it was write-only before)', () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    for (const rel of ['screens/Profile/ProfileMyScreen.jsx', 'screens/Profile/ProfilePublicScreen.jsx']) {
+      const src = fs.readFileSync(path.join(root, 'src', rel), 'utf8');
+      expect(src).toContain('PROFILE_TABS');
+      expect(src).toMatch(/defaultTab/);
+      expect(src).toContain('setActiveTab');
+    }
   });
 });
