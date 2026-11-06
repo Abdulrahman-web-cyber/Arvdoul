@@ -1995,3 +1995,25 @@ describe('Profile feed grid quick actions hit the real services', () => {
     expect(s).not.toMatch(/item\.genre\s*\|\|\s*'Electronic'/);
   });
 });
+
+describe('Messaging never claims E2EE the app cannot deliver', () => {
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+  test('no surface advertises end-to-end encryption', () => {
+    // E2EE needs per-user key provisioning (generateUserKeys/unlockPrivateKey),
+    // which has no caller and no server path, so no message is ever encrypted
+    // and no one holds a public key. A lock badge / "E2EE protected" label is
+    // therefore a fabricated security claim.
+    expect(read('src/screens/ChatScreen.jsx')).not.toContain('End-to-end encrypted');
+    expect(read('src/screens/ConversationSettingsScreen.jsx')).not.toContain('E2EE');
+  });
+
+  test('a text send cannot be blocked by the encryption gate', () => {
+    // The send path must fall back to plaintext when keys are absent; an
+    // unconditional throw would make every text message fail to send.
+    const s = read('src/services/messagesService.js');
+    expect(s).toContain('canEncrypt');
+    expect(s).not.toMatch(/throw new Error\('Your public key not found'\)/);
+    expect(s).not.toMatch(/has no public key/);
+  });
+});

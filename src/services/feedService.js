@@ -202,6 +202,12 @@ class UltimateFeedService {
     } catch (err) {
       logger.error('❌ Feed service init failed, entering offline mode:', err.message);
       this.offlineMode = true;
+      // Reads fail closed (empty results); writes must fail LOUDLY. A write
+      // stub that resolves `{ id: 'dummy' }` would let an unguarded path report
+      // a fabricated success and hand callers a nonexistent document id.
+      const offlineWrite = () => {
+        throw new Error('FEED_OFFLINE: feed service write attempted while offline');
+      };
       this.firestoreMethods = {
         collection: () => this._dummyCollectionRef(),
         query: () => this._dummyQuery(),
@@ -212,17 +218,17 @@ class UltimateFeedService {
         getDocs: async () => ({ docs: [], empty: true, size: 0 }),
         getDoc: async () => ({ exists: () => false }),
         doc: () => ({}),
-        setDoc: async () => {},
-        updateDoc: async () => {},
-        deleteDoc: async () => {},
+        setDoc: offlineWrite,
+        updateDoc: offlineWrite,
+        deleteDoc: offlineWrite,
         increment: () => 0,
         serverTimestamp: () => new Date(),
         onSnapshot: () => () => {},
-        runTransaction: async (_, fn) => {},
-        writeBatch: () => ({ commit: async () => {} }),
+        runTransaction: offlineWrite,
+        writeBatch: offlineWrite,
         arrayUnion: () => {},
         arrayRemove: () => {},
-        addDoc: async () => ({ id: 'dummy' }),
+        addDoc: offlineWrite,
         Timestamp: { fromDate: () => ({ toDate: () => new Date() }) }
       };
       this.firestore = {};

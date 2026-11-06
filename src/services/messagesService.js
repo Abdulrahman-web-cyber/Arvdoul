@@ -242,7 +242,6 @@ function enhanceError(error, defaultMessage) {
     'messaging/privacy': 'This user does not accept messages from you.',
     'messaging/rate-limited': 'Too many messages. Please wait.',
     'messaging/duplicate': 'Duplicate message detected.',
-    'messaging/encryption-not-implemented': 'E2EE not yet implemented.',
     'messaging/encryption-key-required': 'Private key not unlocked.',
     'messaging/not-moderator': 'Moderator or admin required.',
     'messaging/not-admin': 'Admin privileges required.',
@@ -656,9 +655,12 @@ class UltimateMessagingService {
     return snap.exists() && snap.data().publicKey ? snap.data().publicKey : null;
   }
 
-  _getSessionPrivateKey(userId) {
+  _getSessionPrivateKey(userId, { silent = false } = {}) {
     const key = this.unlockedPrivateKeys.get(userId);
-    if (!key) throw enhanceError({ code: 'messaging/encryption-key-required' }, 'Private key not unlocked');
+    if (!key) {
+      if (silent) return null;
+      throw enhanceError({ code: 'messaging/encryption-key-required' }, 'Private key not unlocked');
+    }
     return key;
   }
 
@@ -1129,31 +1131,42 @@ class UltimateMessagingService {
 
     let encryptedPayload = null;
     if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
-      const plaintext = validated.content;
-      const symKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-      const symKeyRaw = await crypto.subtle.exportKey('raw', symKey);
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, symKey, new TextEncoder().encode(plaintext));
-
-      const currentPrivateKey = this._getSessionPrivateKey(currentUser.uid);
+      // Best-effort E2EE. Encryption requires the sender's private key to be
+      // unlocked and every participant to have published a public key. Until
+      // key provisioning is wired, an unconditional gate would throw on the
+      // first text of every conversation and no message would ever send; so
+      // encrypt when the keys are present and fall back to plaintext otherwise.
+      const currentPrivateKey = this._getSessionPrivateKey(currentUser.uid, { silent: true });
       const currentPublicKey = await this.getUserPublicKey(currentUser.uid);
-      if (!currentPublicKey) throw new Error('Your public key not found');
-
-      const recipientKeys = {};
-      for (const userId of conv.conversation.participants) {
-        const publicKey = await this.getUserPublicKey(userId);
-        if (!publicKey) throw new Error(`Recipient ${userId} has no public key`);
-        const sharedSecret = await deriveSharedSecret(currentPrivateKey, publicKey);
-        const encryptedKey = await encryptWithSharedSecret(sharedSecret, arrayBufferToBase64(symKeyRaw));
-        recipientKeys[userId] = encryptedKey;
+      const participantPublicKeys = {};
+      let canEncrypt = Boolean(currentPrivateKey && currentPublicKey);
+      if (canEncrypt) {
+        for (const userId of conv.conversation.participants) {
+          const publicKey = await this.getUserPublicKey(userId);
+          if (!publicKey) { canEncrypt = false; break; }
+          participantPublicKeys[userId] = publicKey;
+        }
       }
-      encryptedPayload = {
-        iv: arrayBufferToBase64(iv),
-        data: arrayBufferToBase64(encrypted),
-        recipientKeys,
-        senderPublicKey: currentPublicKey,
-      };
-      validated.content = null;
+      if (canEncrypt) {
+        const plaintext = validated.content;
+        const symKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+        const symKeyRaw = await crypto.subtle.exportKey('raw', symKey);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, symKey, new TextEncoder().encode(plaintext));
+
+        const recipientKeys = {};
+        for (const userId of conv.conversation.participants) {
+          const sharedSecret = await deriveSharedSecret(currentPrivateKey, participantPublicKeys[userId]);
+          recipientKeys[userId] = await encryptWithSharedSecret(sharedSecret, arrayBufferToBase64(symKeyRaw));
+        }
+        encryptedPayload = {
+          iv: arrayBufferToBase64(iv),
+          data: arrayBufferToBase64(encrypted),
+          recipientKeys,
+          senderPublicKey: currentPublicKey,
+        };
+        validated.content = null;
+      }
     }
 
     const message = this._buildMessage(idempotencyKey, conversationId, currentUser, validated, mediaInfo, ttlExpiresAt, encryptedPayload);

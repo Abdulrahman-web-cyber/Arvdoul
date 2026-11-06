@@ -310,6 +310,14 @@ A missing `level`/`xp` renders as unavailable (null), never as `Level 1` /
 `Citizen`. Do not add `|| 1` level defaults or `() => 'Citizen'` fallbacks in
 profile components — `src/__tests__/noFabricatedData.test.js` guards this.
 
+## No fabricated security claims
+Do not render a "secure"/"encrypted" claim a feature cannot back. Messaging has
+no key provisioning (`generateUserKeys`/`unlockPrivateKey` have no caller and no
+server writes a `publicKey`), so the E2EE path never encrypts and the send gate
+falls back to plaintext — no lock badge or "E2EE protected" label. Likewise
+`feedService` offline-mode write stubs throw instead of resolving a fake
+`{ id: 'dummy' }`. `noFabricatedData.test.js` guards both.
+
 ## Cloud Functions deploy path — merge, don't just require
 Firebase publishes exactly what `functions/index.js` exports. `require('./x.js')`
 runs a module but does NOT deploy its functions — every module's exports must be
@@ -349,6 +357,13 @@ that is now **empty** (all offenders migrated): callables go through
 mutations through `firestoreService`, and follows/mutes/profile through
 `userService`. Do not re-add direct SDK imports in UI — add a service method
 and a `FUNCTIONS` key instead. Never add an allowlist entry.
+
+## One canonical path per module (no case-only duplicates)
+Two sibling entries whose names differ only by case (`components/UI` vs
+`components/ui`) collapse into one on macOS/Windows, so an import silently binds
+to whichever copy the filesystem kept and the other becomes unreachable. Keep a
+single canonical casing. `architectureBoundaries.test.js` fails if any two
+sibling entries under `src` differ only by case.
 
 ## No dead service theatre
 `src/services/**` must be reachable from an app entry point (`src/main.jsx` or
