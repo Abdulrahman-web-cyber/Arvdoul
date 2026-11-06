@@ -659,6 +659,77 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     [post.poll, userPollVoteIndex],
   );
 
+  // The viewer's own up/down votes on this question's answers. QuestionCard
+  // renders the per-answer selection from `answer.userVote`, which nothing
+  // supplied; without it a returning voter could re-vote (and the server would
+  // toggle it off).
+  const [answerVotes, setAnswerVotes] = useState({});
+  useEffect(() => {
+    if (post.type !== 'question' || !post.id || !currentUser?.uid) {
+      setAnswerVotes({});
+      return undefined;
+    }
+    let cancelled = false;
+    firestoreService.getMyAnswerVotes?.(post.id, currentUser.uid)
+      .then((res) => { if (!cancelled) setAnswerVotes(res?.votes || {}); })
+      .catch(() => { if (!cancelled) setAnswerVotes({}); });
+    return () => { cancelled = true; };
+  }, [post.type, post.id, currentUser?.uid]);
+
+  const questionWithVotes = useMemo(() => {
+    const q = post.question;
+    if (!q || typeof q !== 'object') return q;
+    const answers = Array.isArray(q.answers)
+      ? q.answers.map((a) => ({ ...a, userVote: answerVotes[a.id] ?? null }))
+      : q.answers;
+    return { ...q, answers };
+  }, [post.question, answerVotes]);
+
+  const handleAddAnswer = useCallback(async (answerText, idempotencyKey) => {
+    if (!currentUser?.uid) throw new Error('Sign in to answer');
+    await firestoreService.addAnswer?.(post.id, answerText, idempotencyKey);
+  }, [currentUser, post.id]);
+
+  const handleAnswerVote = useCallback(async (answerId, direction) => {
+    if (!currentUser?.uid) throw new Error('Sign in to vote');
+    const res = await firestoreService.voteAnswer?.(post.id, answerId, direction);
+    setAnswerVotes((prev) => {
+      const next = { ...prev };
+      if (res?.vote) next[answerId] = res.vote;
+      else delete next[answerId];
+      return next;
+    });
+  }, [currentUser, post.id]);
+
+  const handleEditAnswer = useCallback(async (answerId, answerText) => {
+    await firestoreService.editAnswer?.(post.id, answerId, answerText);
+  }, [post.id]);
+
+  const handleDeleteAnswer = useCallback(async (answerId) => {
+    await firestoreService.deleteAnswer?.(post.id, answerId);
+  }, [post.id]);
+
+  const handleMarkBest = useCallback(async (answerId) => {
+    await firestoreService.acceptAnswer?.(post.id, answerId);
+  }, [post.id]);
+
+  // Reporting an answer reports its parent question post through the canonical
+  // reportContent path (rate-limited + de-duplicated server-side); the flag
+  // button was otherwise a dead control.
+  const handleReportAnswer = useCallback(async () => {
+    try {
+      const { callFunction, FUNCTIONS } = await import('../services/callableService.js');
+      await callFunction(FUNCTIONS.REPORT_POST, {
+        targetId: post.id,
+        reason: 'Inappropriate answer',
+        details: 'Reported from a Q&A answer',
+      });
+      toast.success('Report submitted');
+    } catch (err) {
+      toast.error(err.message || 'Report failed');
+    }
+  }, [post.id]);
+
   // Cleanup timers
   useEffect(() => {
     return () => {
@@ -1076,7 +1147,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
       {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} onAnalytics={handleAnalytics} />}
       {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
-      {isQuestion && <QuestionCard question={post.question} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} />}
+      {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
       {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}
       {isLink && <LinkCard link={post.link} tokens={tokens} postId={post.id} onAnalytics={handleAnalytics} />}
 

@@ -89,6 +89,8 @@ const XP_RULES = Object.freeze({
   story_created: { xp: 15, dailyCap: 45 },
   audio_track_created: { xp: 25, dailyCap: 50 },
   comment_created: { xp: 5, dailyCap: 50 },
+  answer_created: { xp: 10, dailyCap: 50 },
+  answer_accepted: { xp: 25, dailyCap: 50 },
   like_received: { xp: 1, dailyCap: 50 },
   follow_received: { xp: 15, dailyCap: 150 },
   daily_login: { xp: 20, dailyCap: 20 },

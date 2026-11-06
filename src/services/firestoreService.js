@@ -308,7 +308,7 @@ class EnterpriseFirestoreService {
         authorIsPrivate,
         authorPhoto: getSafeAvatarUrl(postData.authorPhoto, postData.authorName || 'Arvdoul User', postData.authorId),
         ...(postData.type === 'poll' && { poll: { options: postData.poll?.options || [], totalVotes: 0, allowMultiple: !!postData.poll?.allowMultiple } }),
-        ...(postData.type === 'question' && { question: postData.question, answers: postData.answers || [] }),
+        ...(postData.type === 'question' && { question: this._normaliseQuestion(postData.question, postData.content) }),
         ...(postData.type === 'link' && { link: postData.link }),
         ...(postData.type === 'event' && { event: postData.event }),
         ...(postData.type === 'video' && { video: postData.video || { url: videoItem?.url || '' } }),
@@ -1069,6 +1069,79 @@ class EnterpriseFirestoreService {
     return { success: true, optionIndex: data.optionIndex ?? null, optionId: data.optionId ?? null };
   }
 
+  // ── Q&A (post-embedded questions) ───────────────────────────────────
+  // Answers live on `posts/{id}.question.answers` and are mutated only by the
+  // `functions/questions.js` callables (a direct client write is denied — an
+  // answerer is not the post author — and would let a voter forge `isBest`).
+  // The composer used to publish `question` as a bare string; normalise the
+  // shape so QuestionCard's `question.text`/`answers` reads resolve.
+  _normaliseQuestion(raw, fallbackText) {
+    if (raw && typeof raw === 'object') {
+      return {
+        text: raw.text || raw.question || fallbackText || '',
+        bounty: Number(raw.bounty) || 0,
+        closed: raw.closed === true,
+        acceptedAnswerId: raw.acceptedAnswerId ?? null,
+        answers: Array.isArray(raw.answers) ? raw.answers : [],
+      };
+    }
+    return {
+      text: (typeof raw === 'string' && raw) || fallbackText || '',
+      bounty: 0,
+      closed: false,
+      acceptedAnswerId: null,
+      answers: [],
+    };
+  }
+
+  async addAnswer(postId, answer, idempotencyKey) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const result = await callFunction(FUNCTIONS.ADD_ANSWER, { postId, answer, idempotencyKey });
+    return { success: true, answerId: result?.answerId ?? null };
+  }
+
+  async editAnswer(postId, answerId, answer) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    await callFunction(FUNCTIONS.EDIT_ANSWER, { postId, answerId, answer });
+    return { success: true };
+  }
+
+  async deleteAnswer(postId, answerId) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    await callFunction(FUNCTIONS.DELETE_ANSWER, { postId, answerId });
+    return { success: true };
+  }
+
+  async voteAnswer(postId, answerId, direction) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    const result = await callFunction(FUNCTIONS.CAST_ANSWER_VOTE, { postId, answerId, direction });
+    return { success: true, answer: result?.answer ?? null, vote: result?.vote ?? null };
+  }
+
+  async acceptAnswer(postId, answerId) {
+    const { callFunction, FUNCTIONS } = await import('./callableService.js');
+    await callFunction(FUNCTIONS.ACCEPT_ANSWER, { postId, answerId });
+    return { success: true };
+  }
+
+  // The viewer's own votes on a question's answers, as { answerId: 'up'|'down' }.
+  // Bounded to the (small) answer_votes subcollection for this question.
+  async getMyAnswerVotes(postId, userId) {
+    if (!postId || !userId) return { success: true, votes: {} };
+    await this.ensureInitialized();
+    try {
+      const { collection, query, where, getDocs, limit } = this.firestoreMethods;
+      const ref = collection(this.firestore, 'posts', postId, 'answer_votes');
+      const snap = await getDocs(query(ref, where('userId', '==', userId), limit(100)));
+      const votes = {};
+      snap.forEach((d) => { votes[d.data().answerId] = d.data().direction; });
+      return { success: true, votes };
+    } catch (error) {
+      logger.warn('getMyAnswerVotes failed', { postId, error: error.message });
+      return { success: true, votes: {} };
+    }
+  }
+
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
     try {
@@ -1275,6 +1348,12 @@ const firestoreService = {
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),
   voteOnPoll: (pid, uid, optIdx, mult) => getFirestoreService().voteOnPoll(pid, uid, optIdx, mult),
   getUserPollVote: (pid, uid) => getFirestoreService().getUserPollVote(pid, uid),
+  addAnswer: (pid, answer, key) => getFirestoreService().addAnswer(pid, answer, key),
+  editAnswer: (pid, aid, answer) => getFirestoreService().editAnswer(pid, aid, answer),
+  deleteAnswer: (pid, aid) => getFirestoreService().deleteAnswer(pid, aid),
+  voteAnswer: (pid, aid, dir) => getFirestoreService().voteAnswer(pid, aid, dir),
+  acceptAnswer: (pid, aid) => getFirestoreService().acceptAnswer(pid, aid),
+  getMyAnswerVotes: (pid, uid) => getFirestoreService().getMyAnswerVotes(pid, uid),
   incrementCommentCount: (pid, delta) => getFirestoreService().incrementCommentCount(pid, delta),
   recordPostView: (pid, uid) => getFirestoreService().recordPostView(pid, uid),
   getPostViewCount: (pid) => getFirestoreService().getPostViewCount(pid),

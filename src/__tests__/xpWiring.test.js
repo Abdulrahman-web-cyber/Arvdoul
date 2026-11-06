@@ -42,6 +42,8 @@ describe('XP award wiring', () => {
     gift_received: ['functions/monetization.js'],
     like_received: ['src/services/firestoreService.js'],
     follow_received: ['src/services/userService.js'],
+    answer_created: ['functions/questions.js'],
+    answer_accepted: ['functions/questions.js'],
   };
 
   test.each(Object.keys(triggers))('%s has a real trigger', (action) => {

@@ -40,6 +40,9 @@ merge(require('./messaging.js'));
 merge(require('./search.js'));
 merge(require('./monetization.js'));
 merge(require('./polls.js'));
+// Q&A: post-embedded questions/answers (server-authoritative answer votes and
+// the question author's accept-best decision).
+merge(require('./questions.js'));
 // GDPR compliance exports - MUST be merged or they never deploy
 // (deleteUserData lives in user.js; exportUserData lives in userExport.js).
 merge(require('./userExport.js'));

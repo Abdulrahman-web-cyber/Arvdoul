@@ -224,6 +224,70 @@ describe('post-embedded poll voting is wired end-to-end', () => {
   });
 });
 
+describe('post-embedded Q&A is wired end-to-end', () => {
+  // QuestionCard is a fully-built UI with no backend: the composer published
+  // `question` as a bare string while the card renders `question.text`, answers
+  // lived in a client array nothing read, and no answer control had a handler.
+  test('the composer publishes a question object with an answers array', () => {
+    const src = read('src/screens/CreatePost.jsx');
+    expect(src).toMatch(/question: effectiveType === "question" \? \{ text: effectiveText/);
+    expect(src).toContain('answers: []');
+  });
+
+  test('createPost normalises the question shape for legacy string values', () => {
+    const src = read('src/services/firestoreService.js');
+    expect(src).toContain('_normaliseQuestion');
+    expect(src).toContain('_normaliseQuestion(postData.question');
+  });
+
+  test('PostCard passes every QuestionCard handler and the viewer vote', () => {
+    const src = read('src/screens/PostCard.jsx');
+    const m = src.match(/<QuestionCard\b[^>]*>/);
+    expect(m).not.toBeNull();
+    for (const prop of ['onSubmitAnswer=', 'onVote=', 'onMarkBest=', 'onEditAnswer=', 'onDeleteAnswer=', 'onReport=']) {
+      expect(m[0]).toContain(prop);
+    }
+    expect(src).toContain('const handleAddAnswer = useCallback');
+    expect(src).toContain('const handleAnswerVote = useCallback');
+    expect(src).toContain('const handleMarkBest = useCallback');
+    expect(src).toContain('getMyAnswerVotes');
+  });
+
+  test('answer mutations are server-authoritative callables, never client writes', () => {
+    const svc = read('src/services/firestoreService.js');
+    for (const fn of ['addAnswer', 'editAnswer', 'deleteAnswer', 'voteAnswer', 'acceptAnswer']) {
+      expect(svc).toContain(`async ${fn}(`);
+    }
+    // The answerer is not the post author, so a direct post write would be
+    // denied by rules; every mutation must go through a callable.
+    const body = svc.slice(svc.indexOf('async addAnswer('), svc.indexOf('async getMyAnswerVotes('));
+    expect(body).toContain('FUNCTIONS.ADD_ANSWER');
+    expect(body).toContain('FUNCTIONS.CAST_ANSWER_VOTE');
+    expect(body).toContain('FUNCTIONS.ACCEPT_ANSWER');
+    expect(body).not.toMatch(/updateDoc\(.*question\.answers/);
+  });
+
+  test('the answer callables are deployed and registered for the client', () => {
+    const idx = read('functions/index.js');
+    expect(idx).toContain("merge(require('./questions.js'))");
+    const mod = read('functions/questions.js');
+    for (const name of ['addAnswer', 'editAnswer', 'deleteAnswer', 'castAnswerVote', 'acceptAnswer']) {
+      expect(mod).toContain(`exports.${name} =`);
+    }
+    const callables = read('src/services/callableService.js');
+    expect(callables).toContain("ADD_ANSWER: 'addAnswer'");
+    expect(callables).toContain("ACCEPT_ANSWER: 'acceptAnswer'");
+  });
+
+  test('answer_votes is server-write and self-read only', () => {
+    const rules = read('firestore.rules');
+    const m = rules.match(/match \/posts\/\{postId\}\/answer_votes\/\{voteId\} \{[\s\S]*?\n {4}\}/);
+    expect(m).not.toBeNull();
+    expect(m[0]).toContain('allow read: if isSignedIn() && resource.data.userId == uid()');
+    expect(m[0]).toContain('allow write: if false');
+  });
+});
+
 describe('AudioCard playback state stays in sync', () => {
   // The `<audio>` `onPause` handler was a literal `() => {}` no-op, so a pause
   // that did not go through the card's own button (OS media controls, the

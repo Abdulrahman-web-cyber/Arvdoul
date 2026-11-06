@@ -1455,7 +1455,7 @@ function CreatePostProvider({ children }) {
         poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null, rewardCoins: Number(current.pollReward) || 0 } : null,
         event: effectiveType === "event" ? { title: effectiveText, date: current.typeData.event.date, location: current.typeData.event.location } : null,
         link: effectiveType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
-        question: effectiveType === "question" ? effectiveText : null,
+        question: effectiveType === "question" ? { text: effectiveText, bounty: 0, closed: false, answers: [] } : null,
         audio: effectiveType === "audio" ? {
           url: instantMedia[0]?.url || current.typeData.audio?.url || "",
           duration: current.typeData.audio?.duration || 0,

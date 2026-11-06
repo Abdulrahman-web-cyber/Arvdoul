@@ -60,6 +60,13 @@ export const FUNCTIONS = {
   // Polls
   VOTE_POLL: 'votePoll',
 
+  // Q&A (post-embedded questions)
+  ADD_ANSWER: 'addAnswer',
+  EDIT_ANSWER: 'editAnswer',
+  DELETE_ANSWER: 'deleteAnswer',
+  CAST_ANSWER_VOTE: 'castAnswerVote',
+  ACCEPT_ANSWER: 'acceptAnswer',
+
   // Marketplace
   PURCHASE_MARKETPLACE_ITEM: 'purchaseMarketplaceItem',
 

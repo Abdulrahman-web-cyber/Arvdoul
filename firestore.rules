@@ -348,11 +348,15 @@ service cloud.firestore {
         allow read: if true;
         allow write: if false;
       }
-      // post subcollections (likes, saves, gifts, reactions): the doc id encodes
-      // the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) — enforce it.
+      // post subcollections (likes, saves, gifts, reactions, poll_votes): the doc
+      // id encodes the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) —
+      // enforce it. `answer_votes` is excluded (its own server-write block below)
+      // and `poll_votes` is readable only by the voter, so a signed-in user
+      // cannot enumerate who voted on a poll.
       match /{subcollection}/{docId} {
-        allow read: if true;
-        allow write: if isSignedIn() &&
+        allow read: if subcollection != 'answer_votes' &&
+          (subcollection != 'poll_votes' || docId == uid());
+        allow write: if isSignedIn() && subcollection != 'answer_votes' &&
           (docId == uid() || docId.startsWith(uid() + '_'));
       }
     }
@@ -1266,6 +1270,16 @@ service cloud.firestore {
       // flat collection (vote history is kept locally in pollService), so this
       // is server-only — otherwise any signed-in user could enumerate voters.
       allow read, write: if false;
+    }
+
+    // ==================== ANSWER VOTES (post subcollection) ====================
+    // One vote per (answer, voter), written by the `castAnswerVote` callable
+    // with the Admin SDK. Reads are scoped to the caller's own votes (the client
+    // query filters `userId == uid()`), so voters cannot be enumerated, and the
+    // answer counters (upvotes / isBest) stay server-authoritative.
+    match /posts/{postId}/answer_votes/{voteId} {
+      allow read: if isSignedIn() && resource.data.userId == uid();
+      allow write: if false;
     }
 
     // ==================== STORY REPLIES ====================
