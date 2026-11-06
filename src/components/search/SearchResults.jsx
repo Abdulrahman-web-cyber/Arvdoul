@@ -7,7 +7,7 @@ import { User, Video, FileText, Image, Users, Radio, Calendar, BarChart2, HelpCi
 import { useTheme } from '../../context/ThemeContext';
 import { cn, formatCount, getResultIcon, getResultColor } from '../../lib/searchUtils';
 import ProfileAvatar from '../profile/ProfileAvatar';
-import EmptyState from '../UI/EmptyState';
+import EmptyState from '../../design-system/EmptyState.jsx';
 import LoadingSpinner from '../Shared/LoadingSpinner';
 
 /**

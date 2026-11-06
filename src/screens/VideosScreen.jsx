@@ -25,8 +25,9 @@ import { VideoFeed } from '../components/Videos';
 import videoService from '../services/videoService';
 import { toast } from 'sonner';
 import LoadingSpinner from '../components/Shared/LoadingSpinner';
-import EmptyState from '../components/UI/EmptyState';
-import ErrorState from '../components/UI/ErrorState';
+import EmptyState from '../design-system/EmptyState.jsx';
+import ErrorState from '../design-system/ErrorState.jsx';
+import Button from '../design-system/Button.jsx';
 import { RouteProgressBar } from '../components/Navigation/RouteProgressBar';
 
 /**
@@ -254,7 +255,6 @@ const GridView = memo(({
           title="Failed to load videos"
           message={error}
           onRetry={onRefresh}
-          severity="error"
         />
       </div>
     );
@@ -302,8 +302,11 @@ const GridView = memo(({
           icon={Video}
           title="No videos found"
           description="Be the first to upload and share your video story!"
-          actionLabel="Create Video"
-          onAction={onCreateVideo}
+          action={
+            <Button variant="primary" onClick={onCreateVideo}>
+              Create Video
+            </Button>
+          }
         />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">

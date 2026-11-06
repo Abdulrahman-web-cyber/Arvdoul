@@ -95,6 +95,20 @@ describe('search reindex completeness', () => {
   });
 });
 
+describe('design-system duplication', () => {
+  test('no component basename exists in both design-system and components/UI', () => {
+    // EmptyState and ErrorState were fully duplicated in both trees, so the
+    // two screens that imported the `components/UI` copy silently diverged from
+    // the tested, axe-verified `design-system` pair. One implementation only.
+    const dsDir = path.join(root, 'src/design-system');
+    const uiDir = path.join(root, 'src/components/UI');
+    const names = (dir) =>
+      fs.readdirSync(dir).filter((f) => /\.jsx?$/.test(f));
+    const overlap = names(dsDir).filter((f) => names(uiDir).includes(f));
+    expect(overlap).toEqual([]);
+  });
+});
+
 describe('router wiring: every lazy screen is actually routed', () => {
   test('no lazy screen is declared without a matching route element', () => {
     // A `const X = lazy(() => import('../screens/X'))` that no `<X />` renders is
