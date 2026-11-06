@@ -269,6 +269,7 @@ jobs:
           src/__tests__/settingsWiring.test.js
           src/__tests__/dmPermissionWiring.test.js
           src/__tests__/integrationWiring.test.js
+          src/__tests__/analyticsInteractionSink.test.js
           src/__tests__/videoEditorWiring.test.js
           src/__tests__/videoEditorRender.test.jsx
           src/__tests__/authContextContract.test.js

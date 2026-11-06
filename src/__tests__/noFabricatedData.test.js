@@ -1015,9 +1015,6 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
 
   test('profile screens prefer the live auth user over the store mirror', () => {
     for (const rel of [
-      'src/screens/Profile/FollowersScreen.jsx',
-      'src/screens/Profile/FollowingScreen.jsx',
-      'src/screens/Profile/FriendsScreen.jsx',
       'src/screens/Profile/HighlightsScreen.jsx',
       'src/screens/Profile/CreatorDashboardScreen.jsx',
     ]) {
@@ -1025,6 +1022,23 @@ describe('Account isolation (audit N002) - persisted identity cannot bleed accou
       expect(src).toContain('const currentUser = authUser || storeUser;');
       expect(src).not.toContain('const currentUser = storeUser || authUser;');
     }
+  });
+
+  test('the delegating connections screens do not re-derive identity', () => {
+    // Followers/Following/Friends only choose a tab; ConnectionsScreen itself
+    // resolves the viewer from the live auth context, so passing a store-mirror
+    // `currentUser` prop was dead and a N002 regression risk.
+    for (const rel of [
+      'src/screens/Profile/FollowersScreen.jsx',
+      'src/screens/Profile/FollowingScreen.jsx',
+      'src/screens/Profile/FriendsScreen.jsx',
+    ]) {
+      const src = fs.readFileSync(path.join(root, rel), 'utf8');
+      expect(src).not.toContain('currentUser={');
+      expect(src).not.toContain('storeUser');
+    }
+    const connections = fs.readFileSync(path.join(root, 'src/screens/Profile/ConnectionsScreen.jsx'), 'utf8');
+    expect(connections).toContain('const currentUser = authUser || storeUser');
   });
 });
 

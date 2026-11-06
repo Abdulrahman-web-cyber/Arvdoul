@@ -206,6 +206,26 @@ describe('AudioCard playback state stays in sync', () => {
   });
 });
 
+describe('no dead props on first-party components', () => {
+  test('the delegating connections screens do not pass a prop the target never reads', () => {
+    // ConnectionsScreen resolves the viewer from the auth context itself; the
+    // `currentUser` prop passed by the three delegating screens was dead (and a
+    // store-mirror identity, the N002 regression risk).
+    for (const rel of [
+      'src/screens/Profile/FollowersScreen.jsx',
+      'src/screens/Profile/FollowingScreen.jsx',
+      'src/screens/Profile/FriendsScreen.jsx',
+    ]) {
+      expect(read(rel)).not.toContain('currentUser={');
+    }
+  });
+
+  test('ThemeToggle no longer advertises an unimplemented size prop', () => {
+    expect(read('src/components/Shared/ThemeToggle.jsx')).not.toContain('getNextTheme');
+    expect(read('src/screens/IntroScreen.jsx')).not.toContain('size="lg"');
+  });
+});
+
 describe('router wiring: every lazy screen is actually routed', () => {
   test('no lazy screen is declared without a matching route element', () => {
     // A `const X = lazy(() => import('../screens/X'))` that no `<X />` renders is
