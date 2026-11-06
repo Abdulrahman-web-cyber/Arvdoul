@@ -908,7 +908,7 @@ export const TopAppBar = ({
                 )}
                 onClick={() => {
                   if (!isOnline) {
-                    navigate('/offline-status');
+                    navigate('/offline');
                   }
                 }}
               >

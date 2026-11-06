@@ -276,11 +276,6 @@ describe('Badge system - real stats map', () => {
     expect(src).toContain('followerCount'); // computed from real stats
     expect(src).toContain('first_like');
   });
-
-  test('BadgeScreen shows honest "not available" instead of fabricated zeros', () => {
-    const src = fs.readFileSync(path.join(root, 'src/screens/BadgeScreen.jsx'), 'utf8');
-    expect(src).toContain('Progress not available yet');
-  });
 });
 
 describe('Payouts - honest account state', () => {

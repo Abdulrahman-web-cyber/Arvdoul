@@ -94,3 +94,57 @@ describe('search reindex completeness', () => {
     expect(reindex).toMatch(/collection\('videos'\)/);
   });
 });
+
+describe('router wiring: every lazy screen is actually routed', () => {
+  test('no lazy screen is declared without a matching route element', () => {
+    // A `const X = lazy(() => import('../screens/X'))` that no `<X />` renders is
+    // dead: the chunk is never requested and the screen is unreachable. Three
+    // such screens (BadgeScreen, NetworkScreen, CollaborationScreen) shipped
+    // that way, shadowed by routed equivalents.
+    const src = read('src/routes/AppRoutes.jsx');
+    const declared = [...src.matchAll(/const\s+([A-Za-z0-9_]+)\s*=\s*lazy\(/g)].map((m) => m[1]);
+    const unused = declared.filter((name) => {
+      const rendered = new RegExp(`<${name}\\b`).test(src);
+      return !rendered;
+    });
+    expect(unused).toEqual([]);
+  });
+
+  test('no literal navigate() target points at a non-existent route', () => {
+    // `navigate('/offline-status')` and `navigate('/app/feed')` shipped against
+    // routes that do not exist (`/offline`, `/home`), so the buttons silently
+    // fell through to the 404 route. Only plain (non-template) string literals
+    // are checked; dynamic segments are skipped.
+    const routes = read('src/routes/AppRoutes.jsx');
+    const routeSegments = new Set();
+    for (const m of routes.matchAll(/path="([^"]+)"/g)) {
+      for (const seg of m[1].split('/').filter(Boolean)) routeSegments.add(seg);
+    }
+
+    const files = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === '__tests__' || e.name === 'node_modules') continue;
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.name.endsWith('.jsx')) files.push(full);
+      }
+    };
+    walk(path.join(root, 'src'));
+
+    const NAV_RE = /navigate\(\s*(['"])(\/[^'"]*)\1\s*\)/g;
+    const missing = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, 'utf8');
+      for (const m of src.matchAll(NAV_RE)) {
+        const target = m[2].split(/[?#]/)[0];
+        if (target === '/') continue;
+        const first = target.split('/').filter(Boolean)[0];
+        if (first && !routeSegments.has(first)) {
+          missing.push(`${path.relative(root, file)}: ${target}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+});
