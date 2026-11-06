@@ -8,6 +8,9 @@ import {
   HelpCircle, Hash, Music, MapPin, Sparkles, Clock, X, Search, SlidersHorizontal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { getUserService } from '../services/userService';
+import { toast } from 'sonner';
 import { useSearch } from '../hooks/useSearch';
 import { cn } from '../lib/utils';
 import SearchSuggestions from '../components/search/SearchSuggestions';
@@ -57,6 +60,7 @@ const DISCOVERY_ITEMS = [
 const SearchScreen = memo(() => {
   const navigate = useNavigate();
   const { isDark, spring } = useTheme();
+  const { user } = useAuth();
   
   const [showFilters, setShowFilters] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -66,6 +70,7 @@ const SearchScreen = memo(() => {
     results,
     suggestions,
     trending,
+    setTrending,
     recent,
     filters,
     loading,
@@ -169,7 +174,8 @@ const SearchScreen = memo(() => {
         navigate(`/post/${result.id || result.objectID}`);
         break;
       default:
-        console.log('Navigate to:', result.id);
+        // Unknown result types have no route; nothing to navigate to.
+        break;
     }
   }, [navigate]);
 
@@ -178,10 +184,36 @@ const SearchScreen = memo(() => {
     navigate(`/profile/${creator.id || creator.uid}`);
   }, [navigate]);
 
-  // Handle follow
-  const handleFollow = useCallback((creatorId) => {
-    console.log('Follow creator:', creatorId);
-  }, []);
+  // Handle follow — the CreatorCarousel button emitted to a console.log no-op,
+  // so "Follow" on a recommended creator did nothing. Route it to the canonical
+  // follow service (the same one Reels/PostCard use) and reflect the new state
+  // in the carousel, rolling back on failure.
+  const handleFollow = useCallback(async (creatorId) => {
+    if (!user?.uid) {
+      toast.error('Sign in to follow creators');
+      return;
+    }
+    if (!creatorId || creatorId === user.uid) return;
+    const creators = Array.isArray(trending?.creators) ? trending.creators : [];
+    const target = creators.find((c) => (c.id || c.uid) === creatorId);
+    const wasFollowing = Boolean(target?.isFollowing);
+    const applyState = (following) => setTrending((prev) => {
+      if (!prev || !Array.isArray(prev.creators)) return prev;
+      return {
+        ...prev,
+        creators: prev.creators.map((c) => ((c.id || c.uid) === creatorId ? { ...c, isFollowing: following } : c)),
+      };
+    });
+    applyState(!wasFollowing);
+    try {
+      if (wasFollowing) await getUserService().unfollowUser(user.uid, creatorId);
+      else await getUserService().followUser(user.uid, creatorId);
+      toast.success(wasFollowing ? 'Unfollowed' : 'Following 🎉');
+    } catch (err) {
+      applyState(wasFollowing);
+      toast.error(err?.message || 'Could not update follow');
+    }
+  }, [user?.uid, trending, setTrending]);
 
   // Show search results or home content
   const renderContent = () => {

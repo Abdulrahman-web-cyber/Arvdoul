@@ -301,6 +301,18 @@ describe('post-embedded Q&A is wired end-to-end', () => {
   });
 });
 
+describe('no dead follow handlers', () => {
+  // SearchScreen's CreatorCarousel "Follow" button emitted to a `console.log`
+  // no-op, so following a recommended creator did nothing while every other
+  // surface (Reels, PostCard, Connections) called userService.followUser.
+  test('SearchScreen routes creator-follow to the canonical follow service', () => {
+    const src = read('src/screens/SearchScreen.jsx');
+    expect(src).not.toMatch(/console\.log\(\s*['"]Follow creator/);
+    expect(src).toMatch(/getUserService\(\)\.followUser\(user\.uid, creatorId\)/);
+    expect(src).toMatch(/getUserService\(\)\.unfollowUser\(user\.uid, creatorId\)/);
+  });
+});
+
 describe('comment reliability: moderation-visible states stay in the thread', () => {
   // The top-level comment query filtered `moderationStatus in ['approved','pending']`.
   // The async moderation trigger flips a comment from `pending` to
