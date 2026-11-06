@@ -1,6 +1,7 @@
 // src/services/firestoreService.js
 
 import { countersManager } from '../utils/CountersManager.js';
+import { setLocalLike } from '../utils/localContentCache.js';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
@@ -635,16 +636,12 @@ class EnterpriseFirestoreService {
 
   async likePost(postId, userId) {
     if (!postId || !userId) return { success: false, error: 'Missing postId or userId' };
-    
-    // Store in local likes registry for instantaneous & offline recovery
-    try {
-      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
-      localLikes[postId] = true;
-      localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
-    } catch {}
 
-    // If local or offline post, succeed immediately
-    if (postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine) {
+    // Offline / local posts: the device-local registry is the source of truth
+    // and there is no server document to write, so this is a genuine success.
+    const isLocalOnly = postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine;
+    if (isLocalOnly) {
+      this._rememberLocalLike(postId, userId, true);
       return { success: true, alreadyLiked: false, localOnly: true };
     }
 
@@ -652,7 +649,7 @@ class EnterpriseFirestoreService {
       await this.ensureInitialized();
       const rl = rateLimiter.checkAndHit(`like:${userId}`, { max: 120, windowMs: 60000 });
       if (!rl.allowed) {
-        return { success: true, alreadyLiked: false }; // Rate limit soft-pass for UI
+        return { success: false, error: 'rate-limited', localOnly: true };
       }
 
       const { doc, runTransaction, serverTimestamp } = this.firestoreMethods;
@@ -662,38 +659,37 @@ class EnterpriseFirestoreService {
       let alreadyLiked = false;
       let authorId = null;
 
-      try {
-        await runTransaction(this.firestore, async (transaction) => {
-          const postSnap = await transaction.get(postRef);
-          if (!postSnap.exists()) return;
-          authorId = postSnap.data().authorId;
-          const likeSnap = await transaction.get(userLikeRef);
-          alreadyLiked = likeSnap.exists();
-          if (!alreadyLiked) {
-            await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes' });
-            const postData = postSnap.data();
-            transaction.set(userLikeRef, {
-              postId,
-              likedAt: serverTimestamp(),
-              snapshot: {
-                id: postId,
-                content: postData.content || '',
-                type: postData.type || 'text',
-                media: postData.media || [],
-                authorId: postData.authorId || '',
-                authorName: postData.authorName || '',
-                authorPhoto: postData.authorPhoto || '',
-                createdAt: postData.createdAt || serverTimestamp()
-              }
-            });
-            transaction.set(postLikeRef, { userId, likedAt: serverTimestamp() });
-          }
-        });
-      } catch (txErr) {
-        console.warn('Firestore transaction like skipped, stored locally:', txErr?.message);
-        return { success: true, alreadyLiked: false, localFallback: true };
-      }
+      // No inner catch: a failed transaction surfaces as success:false so the
+      // caller can roll back the optimistic heart instead of showing a like
+      // that was never persisted.
+      await runTransaction(this.firestore, async (transaction) => {
+        const postSnap = await transaction.get(postRef);
+        if (!postSnap.exists()) return;
+        authorId = postSnap.data().authorId;
+        const likeSnap = await transaction.get(userLikeRef);
+        alreadyLiked = likeSnap.exists();
+        if (!alreadyLiked) {
+          await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes' });
+          const postData = postSnap.data();
+          transaction.set(userLikeRef, {
+            postId,
+            likedAt: serverTimestamp(),
+            snapshot: {
+              id: postId,
+              content: postData.content || '',
+              type: postData.type || 'text',
+              media: postData.media || [],
+              authorId: postData.authorId || '',
+              authorName: postData.authorName || '',
+              authorPhoto: postData.authorPhoto || '',
+              createdAt: postData.createdAt || serverTimestamp()
+            }
+          });
+          transaction.set(postLikeRef, { userId, likedAt: serverTimestamp() });
+        }
+      });
 
+      this._rememberLocalLike(postId, userId, true);
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.like', { userId, meta: { postId, alreadyLiked } });
@@ -721,51 +717,52 @@ class EnterpriseFirestoreService {
 
       return { success: true, alreadyLiked };
     } catch (error) {
-      console.warn('likePost caught error, keeping optimistic like:', error?.message);
-      return { success: true, alreadyLiked: false, localFallback: true };
+      logger.warn('likePost failed', { postId, error: error?.message });
+      return { success: false, error: error?.message || 'like-failed', localFallback: true };
     }
+  }
+
+  /**
+   * Device-local likes registry, uid-scoped by `setLocalLike` so a like on a
+   * shared device never bleeds into the next signed-in account.
+   */
+  _rememberLocalLike(postId, userId, liked) {
+    setLocalLike(userId, postId, liked);
   }
 
   async unlikePost(postId, userId) {
     if (!postId || !userId) return { success: false };
 
-    try {
-      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
-      delete localLikes[postId];
-      localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
-    } catch {}
-
-    if (postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine) {
+    const isLocalOnly = postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine;
+    if (isLocalOnly) {
+      this._rememberLocalLike(postId, userId, false);
       return { success: true, localOnly: true };
     }
 
     try {
       await this.ensureInitialized();
       const { doc, runTransaction } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
       const userLikeRef = doc(this.firestore, 'users', userId, 'liked_posts', postId);
       const postLikeRef = doc(this.firestore, 'posts', postId, 'likes', userId);
 
-      try {
-        await runTransaction(this.firestore, async (transaction) => {
-          const likeSnap = await transaction.get(userLikeRef);
-          if (!likeSnap.exists()) return;
-          await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes', amount: -1 });
-          transaction.delete(userLikeRef);
-          transaction.delete(postLikeRef);
-        });
-      } catch (txErr) {
-        console.warn('Firestore unlike transaction skipped:', txErr?.message);
-        return { success: true, localFallback: true };
-      }
+      // No inner catch: a failed transaction surfaces as success:false so the
+      // optimistic UI can restore the like instead of pretending it persisted.
+      await runTransaction(this.firestore, async (transaction) => {
+        const likeSnap = await transaction.get(userLikeRef);
+        if (!likeSnap.exists()) return;
+        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes', amount: -1 });
+        transaction.delete(userLikeRef);
+        transaction.delete(postLikeRef);
+      });
 
+      this._rememberLocalLike(postId, userId, false);
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.unlike', { userId, meta: { postId } });
       return { success: true };
     } catch (error) {
-      console.warn('unlikePost error handled gracefully:', error?.message);
-      return { success: true, localFallback: true };
+      logger.warn('unlikePost failed', { postId, error: error?.message });
+      return { success: false, error: error?.message || 'unlike-failed', localFallback: true };
     }
   }
 
@@ -1123,7 +1120,10 @@ class EnterpriseFirestoreService {
       return { success: true, votes };
     } catch (error) {
       logger.warn('getMyAnswerVotes failed', { postId, error: error.message });
-      return { success: true, votes: {} };
+      // Fail closed: the caller must know the vote state is unknown so a
+      // returning voter is not shown as having no vote (which would let the
+      // server toggle their existing vote off).
+      return { success: false, votes: {}, error: error?.message || 'answer-votes-failed' };
     }
   }
 

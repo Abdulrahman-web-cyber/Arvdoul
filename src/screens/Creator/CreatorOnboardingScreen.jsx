@@ -2,23 +2,14 @@
 //
 // Gate check (Level >= 5, good standing), category selection, server submission.
 
-import React, { useState } from 'react';
+import { useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useProfileStore } from '../../store/profileStore';
 import creatorService from '../../services/creatorService';
 import { LEVEL_GATES } from '../../services/levelSystemService';
-import {
-  ArrowLeft,
-  Sparkles,
-  CheckCircle,
-  AlertCircle,
-  Link as LinkIcon,
-  Shield,
-  Loader2,
-  Lock,
-} from 'lucide-react';
+import { Sparkles, Link as LinkIcon, Loader2, Lock } from "lucide-react";
 import { toast } from 'sonner';
 
 const CATEGORIES = [

@@ -1,13 +1,10 @@
 // src/screens/Event/CreateEventScreen.jsx
 
-import React, { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, Upload, X, Calendar, MapPin, Users, 
-  Video, Globe, Ticket, Plus, Check, Image as ImageIcon
-} from 'lucide-react';
+import { X, Calendar, MapPin, Users, Video, Globe, Plus, Check, Image as ImageIcon } from "lucide-react";
 import { getEventService } from '../../services/eventService';
 import { getStorageService } from '../../services/storageService';
 import { useAuth } from '../../context/AuthContext';

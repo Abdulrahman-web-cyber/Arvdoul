@@ -1,6 +1,6 @@
 // src/screens/NewConversationScreen.jsx
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -11,7 +11,8 @@ import { cn } from '../lib/utils';
 import { getProfileUrl, getProfileHandle } from '../utils/shareUtils';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
-import { X, Search, UserPlus, Loader2, ArrowLeft } from 'lucide-react';
+import { X, Search, UserPlus, Loader2, ArrowLeft, Camera } from 'lucide-react';
+import storageService from '../services/storageService';
 
 const NewConversationScreen = () => {
   const navigate = useNavigate();
@@ -34,6 +35,8 @@ const NewConversationScreen = () => {
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [groupName, setGroupName] = useState('');
   const [groupPhoto, setGroupPhoto] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = React.useRef(null);
 
   // If a specific recipient UID was passed (e.g. from a user's profile "Message" button),
   // immediately create/retrieve the direct conversation and navigate straight to the chat.
@@ -152,6 +155,27 @@ const NewConversationScreen = () => {
       }
     });
   }, []);
+
+  const handleGroupPhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const result = await storageService.uploadFile(file, `group-photos/${user?.uid || 'anon'}`);
+      const url = result?.downloadURL || result?.url;
+      if (!url) throw new Error('Upload did not return a URL');
+      setGroupPhoto(url);
+    } catch {
+      toast.error('Could not upload group photo');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const handleCreateConversation = async () => {
     if (selectedUsers.length === 0) {
@@ -328,18 +352,46 @@ const NewConversationScreen = () => {
           'border-b p-4 space-y-3',
           theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
         )}>
-          <input
-            type="text"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="Group name (optional)"
-            className={cn(
-              'w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500',
-              theme === 'dark'
-                ? 'bg-gray-800 text-white border border-gray-700'
-                : 'bg-gray-100 text-gray-900 border border-gray-200'
-            )}
-          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              aria-label="Set group photo"
+              className={cn(
+                'w-12 h-12 rounded-full flex items-center justify-center shrink-0 overflow-hidden border',
+                theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-gray-100 border-gray-200',
+                uploadingPhoto && 'opacity-60 cursor-wait'
+              )}
+            >
+              {uploadingPhoto ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              ) : groupPhoto ? (
+                <img src={groupPhoto} alt="Group" className="w-full h-full object-cover" />
+              ) : (
+                <Camera className={cn('w-5 h-5', theme === 'dark' ? 'text-gray-500' : 'text-gray-400')} />
+              )}
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleGroupPhotoSelect}
+            />
+            <input
+              type="text"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="Group name (optional)"
+              className={cn(
+                'flex-1 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500',
+                theme === 'dark'
+                  ? 'bg-gray-800 text-white border border-gray-700'
+                  : 'bg-gray-100 text-gray-900 border border-gray-200'
+              )}
+            />
+          </div>
         </div>
       )}
 

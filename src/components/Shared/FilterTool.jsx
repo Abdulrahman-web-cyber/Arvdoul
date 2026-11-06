@@ -5,18 +5,11 @@
  * @requires React, framer-motion, lucide-react, prop-types
  */
 
-import React, { useState, useCallback, useMemo, useEffect, memo, useRef } from "react";
+import { useState, useCallback, useMemo, useEffect, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search,
-  Star,
-  SlidersHorizontal,
-  Grid3x3,
-  RotateCw,
-  Image as ImageIcon,
-} from "lucide-react";
+import { Search, Star, SlidersHorizontal, Image as ImageIcon } from "lucide-react";
 
 // ARVDOUL Design System
 const DNA_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';

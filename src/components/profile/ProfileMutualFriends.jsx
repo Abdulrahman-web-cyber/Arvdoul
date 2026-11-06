@@ -5,7 +5,7 @@
  * @component
  */
 
-import React, { memo } from 'react';
+import { memo } from "react";
 import ProfileSocialContext from './ProfileSocialContext';
 
 const ProfileMutualFriends = memo(({

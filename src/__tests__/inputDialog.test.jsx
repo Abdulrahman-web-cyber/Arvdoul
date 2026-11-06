@@ -4,7 +4,6 @@
  *   - Dialog: role/aria-modal, Escape close, focus trap, focus restore
  */
 
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
 import { Dialog } from '../components/UI/Dialog.jsx';

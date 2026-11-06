@@ -1,6 +1,6 @@
 // src/screens/AudioEditor/components/StudioHeader.jsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   X, Undo2, Redo2, Download, ChevronDown, Check, Send
 } from 'lucide-react';

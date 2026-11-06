@@ -1,8 +1,8 @@
 // src/app/GlobalErrorBoundary.jsx
 
-import React, { Component, createRef } from 'react';
+import { Component, createRef } from "react";
 import { useTheme } from '../context/ThemeContext';
-import { ERROR_CODES, getPublicMessage } from '../utils/errorCodes';
+import { ERROR_CODES } from "../utils/errorCodes";
 import { withLanguage } from '../i18n/index.js';
 
 /**

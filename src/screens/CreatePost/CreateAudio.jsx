@@ -1,6 +1,6 @@
 // src/screens/CreatePost/CreateAudio.jsx
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useCreatePostState, useCreatePostServices } from "../CreatePost";
 import * as Icons from "lucide-react";
@@ -24,18 +24,22 @@ export default function CreateAudio() {
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
+  // Seed from state so a track handed over from the Sounds library or the
+  // editor (which only carries a persisted URL, no File) is not blanked out.
+  const seed = state.typeData.audio || {};
   const [audioFile, setAudioFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [coverUrl, setCoverUrl] = useState(null);
-  const [trackTitle, setTrackTitle] = useState("");
-  const [artistName, setArtistName] = useState("");
-  const [selectedGenre, setSelectedGenre] = useState("✨ Original");
+  const [previewUrl, setPreviewUrl] = useState(seed.previewUrl || seed.url || null);
+  const [coverUrl, setCoverUrl] = useState(seed.coverUrl || null);
+  const [trackTitle, setTrackTitle] = useState(seed.title || "");
+  const [artistName, setArtistName] = useState(seed.artist || "");
+  const [selectedGenre, setSelectedGenre] = useState(seed.genre || "✨ Original");
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
 
+  const persistedAudioUrl = state.typeData.audio?.url || "";
   useEffect(() => {
     dispatch({
       type: "SET_TYPE_DATA",
@@ -50,8 +54,28 @@ export default function CreateAudio() {
         },
       },
     });
-    dispatch({ type: "SET_CONTENT_READY", payload: !!audioFile });
-  }, [audioFile, previewUrl, coverUrl, trackTitle, artistName, selectedGenre, dispatch]);
+    // The track must travel through mediaItems: that is the only array the
+    // publish pipeline uploads to Storage, and the audio post's `url` is read
+    // back from the first uploaded media item. A handed-over track already has a
+    // persisted URL and no File, so pass it through untouched.
+    dispatch({
+      type: "SET_MEDIA_ITEMS",
+      payload: audioFile
+        ? [{
+            id: "audio-main",
+            type: "audio",
+            file: audioFile,
+            preview: previewUrl,
+            url: "",
+            name: trackTitle || audioFile.name || "audio",
+            alt: "",
+          }]
+        : (persistedAudioUrl
+          ? [{ id: "audio-main", type: "audio", file: null, url: persistedAudioUrl, preview: persistedAudioUrl, name: trackTitle || "audio", alt: "" }]
+          : []),
+    });
+    dispatch({ type: "SET_CONTENT_READY", payload: !!(audioFile || persistedAudioUrl) });
+  }, [audioFile, previewUrl, coverUrl, trackTitle, artistName, selectedGenre, persistedAudioUrl, dispatch]);
 
   const handleFile = useCallback((file) => {
     if (!file.type.startsWith("audio/")) {

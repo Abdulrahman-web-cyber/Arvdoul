@@ -6,9 +6,9 @@
 // real (rendered frames / total frames). No fabricated URLs, no fake
 // percentages, no demo videos.
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import PropTypes from 'prop-types';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from "framer-motion";
 import {
   X, Download, Share2, CheckCircle2, Film,
   AlertTriangle, HardDrive

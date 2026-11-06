@@ -8,7 +8,7 @@
  * @component
  */
 
-import React, { useEffect } from 'react';
+import { useEffect } from "react";
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';

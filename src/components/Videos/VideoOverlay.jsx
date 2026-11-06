@@ -2,7 +2,7 @@
 //
 // Floating glass overlay with playback controls
 
-import React, { memo, useState } from 'react';
+import { memo, useState } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
-import { ARVDOUL_GRADIENT, SPRING_ANIMATION, formatDuration } from '../../utils/videoUtils';
+import { ARVDOUL_GRADIENT, formatDuration } from "../../utils/videoUtils";
 import PropTypes from 'prop-types';
 
 /**

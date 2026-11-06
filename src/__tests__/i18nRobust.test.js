@@ -12,7 +12,6 @@
  *   3. withLanguage injects a working t
  *   4. initI18n() survives blocked localStorage (never throws)
  */
-import { jest } from '@jest/globals';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';

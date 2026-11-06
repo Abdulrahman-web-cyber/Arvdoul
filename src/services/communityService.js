@@ -1,24 +1,7 @@
 // src/services/communityService.js
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp,
-  arrayUnion,
-  arrayRemove,
-  increment
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 
 const COMMUNITIES_PER_PAGE = 20;
 // Hard ceiling for any single community read; a per-user membership list is

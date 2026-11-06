@@ -3,7 +3,7 @@
  * Supports quick preset amounts, custom coin input, personal notes, and real-time coin ledger balance updates.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Heart, Send, X, AlertCircle, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';

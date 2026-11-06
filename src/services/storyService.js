@@ -95,11 +95,6 @@ const STORY_CONFIG = {
     ENABLED: true,
     MAX_CONTRIBUTORS: 10,
   },
-  MUSIC: {
-    ENABLED: true,
-    LIBRARY_URL: 'https://api.royaltyfreemusic.com/v1/tracks',
-    API_KEY: import.meta.env.VITE_MUSIC_API_KEY || null,
-  },
   AI_CAPTION: {
     ENABLED: true,
     CLOUD_FUNCTION: 'generateCaptionForImage',
@@ -882,33 +877,6 @@ class UltimateStoryService {
     return { success: true };
   }
 
-  async searchMusic(query) {
-    if (!STORY_CONFIG.MUSIC.ENABLED) return [];
-    try {
-      const url = `${STORY_CONFIG.MUSIC.LIBRARY_URL}?search=${encodeURIComponent(query)}&api_key=${STORY_CONFIG.MUSIC.API_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      return data.tracks || [];
-    } catch (err) {
-      logger.warn('// Music search failed', err);
-      return [];
-    }
-  }
-
-  async setStoryMusic(storyId, trackInfo) {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw enhanceError({ code: 'unauthenticated' }, 'Auth required');
-    const storyResult = await this.getStory(storyId, currentUser.uid);
-    if (!storyResult.success || storyResult.story.userId !== currentUser.uid) throw enhanceError({ code: 'permission-denied' }, 'Only owner can change music');
-    await this.fs.updateDoc(this.fs.doc(this.firestore, 'stories', storyId), {
-      music: trackInfo,
-      updatedAt: serverTimestamp(),
-    });
-    this.storyCache.delete(storyId);
-    return { success: true };
-  }
-
   async saveTemplate(name, storyData) {
     await this.ensureInitialized();
     const currentUser = this.auth.currentUser;
@@ -1160,7 +1128,9 @@ class UltimateStoryService {
         return { success: true, highlights };
       } catch (innerErr) {
         logger.warn('[StoryService] getHighlights query note', innerErr);
-        return { success: true, highlights: [] };
+        // Fail closed: an empty list that claims success would render as "no
+        // highlights" and hide a real query failure.
+        return { success: false, highlights: [], error: innerErr?.message || 'highlights-failed' };
       }
     }
   }
@@ -1785,7 +1755,12 @@ class UltimateStoryService {
       const { getSocialGraphService } = await import('./socialGraphService.js');
       const edge = await getSocialGraphService().getRelationship(viewerId, story.userId);
       if (edge.isBlocking || edge.isBlockedBy) return false;
-    } catch { /* block check best-effort; rules enforce authoritatively */ }
+    } catch {
+      // Fail closed: if the block edge cannot be resolved we cannot prove the
+      // viewer is allowed, so do not serve the story. Rules enforce the same
+      // condition authoritatively on read.
+      return false;
+    }
     if (story.visibility === STORY_CONFIG.VISIBILITY.PUBLIC) return true;
     if (story.visibility === STORY_CONFIG.VISIBILITY.FOLLOWERS) {
       try {
@@ -1865,8 +1840,6 @@ const storyService = {
   recordEmojiSlider: (...args) => getStoryService().recordEmojiSlider(...args),
   addCollaborator: (...args) => getStoryService().addCollaborator(...args),
   removeCollaborator: (...args) => getStoryService().removeCollaborator(...args),
-  searchMusic: (...args) => getStoryService().searchMusic(...args),
-  setStoryMusic: (...args) => getStoryService().setStoryMusic(...args),
   saveTemplate: (...args) => getStoryService().saveTemplate(...args),
   getUserTemplates: () => getStoryService().getUserTemplates(),
   deleteTemplate: (...args) => getStoryService().deleteTemplate(...args),

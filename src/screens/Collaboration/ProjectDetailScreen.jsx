@@ -2,7 +2,7 @@
 //
 // Per Constitution v5.0 - Team, content versions, review workflow
 
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -11,10 +11,7 @@ import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
 import collaborationService, { COLLABORATION_CONFIG } from '../../services/collaborationService';
 import { copyToClipboard } from '../../utils/shareUtils';
-import { 
-  ArrowLeft, Users, Clock, FileText, CheckCircle, XCircle, 
-  MessageCircle, Share2, MoreVertical, Plus, Eye, Download, Loader2
-} from 'lucide-react';
+import { ArrowLeft, Users, Clock, FileText, CheckCircle, XCircle, Share2, MoreVertical, Plus, Eye, Loader2 } from "lucide-react";
 
 const formatRelativeTime = (value) => {
   if (!value) return 'just now';

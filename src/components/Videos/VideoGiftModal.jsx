@@ -5,9 +5,9 @@
 // store is only updated AFTER the server confirms the debit; no free gifts,
 // no fabricated balances.
 
-import React, { useState, memo, useEffect } from 'react';
+import { useState, memo, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Zap, Award, Coins, Loader2 } from 'lucide-react';
+import { X, Sparkles, Zap, Coins, Loader2 } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';

@@ -3,14 +3,10 @@
  * privacy controls, batch organization, and live item counts.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowLeft, FolderOpen, Plus, Trash2, Folder, Lock, Globe,
-  MoreVertical, Edit2, Share2, Grid, Sparkles, Image as ImageIcon,
-  Check, X, FolderPlus
-} from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Folder, Lock, Globe, X, FolderPlus } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';

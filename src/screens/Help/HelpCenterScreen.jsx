@@ -5,14 +5,11 @@
 // `support_tickets` (owner-readable per firestore.rules) and triaged by
 // supportAutomationService. Admins answer from /admin/tickets.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import {
-  ArrowLeft, HelpCircle, Search, ChevronDown, Send, LifeBuoy,
-  Loader2, MessageCircle, BookOpen, Shield, Coins,
-} from 'lucide-react';
+import { HelpCircle, Search, ChevronDown, Send, LifeBuoy, Loader2, MessageCircle, BookOpen, Shield, Coins } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getSupportTicketService } from '../../services/supportTicketService.js';

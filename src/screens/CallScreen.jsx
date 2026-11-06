@@ -6,14 +6,14 @@
 //   - Offer/answer/ICE-candidate exchange through a `calls/{id}` doc
 // Works across tabs/devices on the same Firestore project.
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getCallService, CALL_STATUS } from '../services/callService';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Loader2 } from 'lucide-react';
+import { ArrowLeft, PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
 
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 

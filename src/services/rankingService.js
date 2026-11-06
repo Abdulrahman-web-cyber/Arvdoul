@@ -1,19 +1,7 @@
 import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  serverTimestamp,
-  increment,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter } from "firebase/firestore";
 
 export const RANKING_CONFIG = {
   CATEGORIES: {

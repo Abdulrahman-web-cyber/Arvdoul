@@ -1,6 +1,6 @@
 // src/screens/SubscriptionScreen.jsx
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -8,8 +8,6 @@ import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { cn } from '../lib/utils';
 import { getSubscriptionStatus, createSubscription, cancelSubscription } from '../services/monetizationService.js';
-import { Loader2 } from 'lucide-react';
-
 const TIERS = [
   {
     id: 'premium',
@@ -115,6 +113,7 @@ export default function SubscriptionScreen() {
 
   const handleCancel = useCallback(async () => {
     if (!user) return;
+    if (!window.confirm('Cancel your subscription? You will keep access until the end of the billing period.')) return;
     
     setLoading('cancel');
     try {
@@ -128,8 +127,10 @@ export default function SubscriptionScreen() {
     }
   }, [user]);
 
+  const [showManage, setShowManage] = useState(false);
+
   const handleManage = useCallback(() => {
-    toast.info('Managing subscription...');
+    setShowManage((prev) => !prev);
   }, []);
 
   const backgroundStyle = useMemo(() => ({
@@ -182,9 +183,23 @@ export default function SubscriptionScreen() {
               onClick={handleManage}
               className="text-arvdoul-blue text-sm hover:underline"
             >
-              Manage
+              {showManage ? 'Close' : 'Manage'}
             </button>
           </div>
+          {showManage && (
+            <div className="mt-3 p-3 rounded-arvdoul-md bg-arvdoul-surface/60 border border-arvdoul-border flex items-center justify-between">
+              <p className="text-xs text-arvdoul-text-secondary">
+                Your plan renews automatically. Cancel anytime.
+              </p>
+              <button
+                onClick={handleCancel}
+                disabled={loading === 'cancel'}
+                className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-semibold border border-red-500/30 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+              >
+                {loading === 'cancel' ? 'Cancelling…' : 'Cancel subscription'}
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
 

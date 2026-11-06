@@ -3,7 +3,7 @@
 // Real live streaming backed by liveService: start/end streams, real
 // viewer counts (sharded), real comments, real gifts (monetization).
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -12,11 +12,7 @@ import { useTheme } from '@context/ThemeContext';
 import { getLiveService } from '../services/liveService';
 import { cn } from '../lib/utils';
 import { useEscapeClose } from '../hooks/useEscapeClose';
-import {
-  Video, VideoOff, Mic, MicOff, Users, Gift, Heart, MessageCircle,
-  X, Send, Phone, PhoneOff, Camera, Eye, Crown, Diamond, Rocket, Star,
-  Wifi, WifiOff, Loader2, ArrowLeft, Play, Radio
-} from 'lucide-react';
+import { Video, Users, Gift, X, Send, PhoneOff, Camera, Eye, Wifi, Loader2, ArrowLeft, Radio } from "lucide-react";
 
 const POLL_MS = 2500;
 
@@ -46,6 +42,7 @@ export default function LiveScreen() {
 
   // Watch state
   const [watching, setWatching] = useState(null); // stream object
+  const [watchViewers, setWatchViewers] = useState(0);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [showGifts, setShowGifts] = useState(false);
@@ -130,12 +127,12 @@ export default function LiveScreen() {
         svc().endLiveStream(myStreamRef.current.id, user.uid).catch(() => {});
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
   const handleWatch = async (stream) => {
     if (!user?.uid) { toast.error('Sign in to watch.'); return; }
     setWatching(stream);
+    setWatchViewers(stream?.viewerCount ?? stream?.stats?.totalViewers ?? 0);
     setComments([]);
     joinedRef.current = false;
   };
@@ -157,8 +154,10 @@ export default function LiveScreen() {
     watchPollRef.current = setInterval(async () => {
       try {
         const fresh = await svc().getLiveStream(watching.id);
-        if (fresh) setWatching((w) => ({ ...w, ...fresh }));
-        else { setWatching(null); toast.info('Stream has ended.'); }
+        if (fresh) {
+          setWatching((w) => ({ ...w, ...fresh }));
+          setWatchViewers(fresh.viewerCount ?? fresh.stats?.totalViewers ?? 0);
+        } else { setWatching(null); toast.info('Stream has ended.'); }
       } catch (e) { /* keep */ }
     }, POLL_MS);
 
@@ -276,7 +275,7 @@ export default function LiveScreen() {
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> LIVE
                 </span>
                 <span className="px-2.5 py-1 rounded-full bg-white/10 flex items-center gap-1">
-                  <Eye className="w-3.5 h-3.5" /> {watching.viewerCount ?? 0}
+                  <Eye className="w-3.5 h-3.5" /> {watchViewers}
                 </span>
               </div>
             </div>
@@ -290,7 +289,7 @@ export default function LiveScreen() {
                 <h2 className="text-2xl font-bold mb-1">{streamerName(watching)}</h2>
                 <p className="text-gray-400 mb-2">{watching.title || 'Live stream'}</p>
                 <div className="flex items-center justify-center gap-4 text-sm text-gray-400">
-                  <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {watching.viewerCount ?? 0} watching</span>
+                  <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {watchViewers} watching</span>
                   <span className="flex items-center gap-1"><Wifi className="w-4 h-4 text-green-500" /> Live</span>
                 </div>
               </div>

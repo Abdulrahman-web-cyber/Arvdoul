@@ -2,24 +2,9 @@
 //
 // Share and save options bottom sheet
 
-import React, { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X,
-  Share2,
-  Bookmark,
-  Download,
-  Flag,
-  Copy,
-  Check,
-  MessageCircle,
-  Twitter,
-  Facebook,
-  Link as LinkIcon,
-  Plus,
-  Clock,
-  AlertTriangle,
-} from 'lucide-react';
+import { X, Share2, Bookmark, Download, Flag, Check, MessageCircle, Twitter, Facebook, Link as LinkIcon, Plus, Clock, AlertTriangle } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { SPRING_ANIMATION, REPORT_REASONS, generateShareUrl } from '../../utils/videoUtils';

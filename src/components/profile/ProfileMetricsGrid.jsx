@@ -13,18 +13,8 @@
  * @component
  */
 
-import React, { memo } from 'react';
-import { 
-  FileText, 
-  Users, 
-  UserCheck, 
-  UserPlus,
-  Eye,
-  Heart,
-  Coins,
-  TrendingUp,
-  Lock
-} from 'lucide-react';
+import { memo } from "react";
+import { FileText, Users, UserCheck, UserPlus, Eye, Heart, Coins } from "lucide-react";
 import { cn } from '../../lib/utils';
 
 const formatNumber = (num) => {

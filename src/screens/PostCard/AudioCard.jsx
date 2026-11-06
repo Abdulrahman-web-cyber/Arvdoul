@@ -323,7 +323,6 @@ const AudioCard = React.memo(({
   tokens,
   isVisible,
   isNearViewport,
-  currentUser,
   postId,
 }) => {
   const audioRef = useRef(null);

@@ -4,9 +4,8 @@
 // engagement rail (like/comment/share), and a comments sheet.
 // Route: /video/:videoId  (wired from SearchScreen + deep links).
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +15,7 @@ import VideoActionRail from '../components/Videos/VideoActionRail';
 import VideoComments from '../components/Videos/VideoComments';
 import VideoBottomSheet from '../components/Videos/VideoBottomSheet';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Volume2, VolumeX, Loader2, Play, Pause } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Loader2, Play } from "lucide-react";
 
 export default function VideoDetailScreen() {
   const { videoId } = useParams();

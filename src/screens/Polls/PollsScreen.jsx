@@ -2,30 +2,15 @@
 //
 // Real-time community voting, coin prediction wagers, percentage animations, and creator opinion analytics
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  BarChart3, 
-  Coins, 
-  Check, 
-  TrendingUp, 
-  Plus, 
-  X, 
-  Vote, 
-  Flame, 
-  Clock, 
-  Sparkles, 
-  Users, 
-  Award 
-} from 'lucide-react';
+import { Coins, Check, Plus, X, Vote, Clock, Sparkles, Users, Award } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import pollService from '../../services/pollService';
-import LoadingSpinner from '../../components/Shared/LoadingSpinner';
-
 const CATEGORIES = ['All', 'Tech & Trends', 'Gear & Studio', 'Creator Economy'];
 
 /** Honest countdown label derived from the poll's real endsAt timestamp.
@@ -429,6 +414,21 @@ export default function PollsScreen() {
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'
                     }`}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Category</label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className={`w-full p-3 rounded-xl text-xs border ${
+                      isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50'
+                    }`}
+                  >
+                    {CATEGORIES.filter((c) => c !== 'All').map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">

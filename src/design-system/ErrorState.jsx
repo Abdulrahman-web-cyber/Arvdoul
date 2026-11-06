@@ -4,7 +4,6 @@
  * action when provided.
  */
 
-import React from 'react';
 import Button from './Button.jsx';
 
 /**

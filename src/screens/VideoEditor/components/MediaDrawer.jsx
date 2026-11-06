@@ -1,11 +1,9 @@
 // src/screens/VideoEditor/components/MediaDrawer.jsx
 
-import React, { useState } from 'react';
+import { useState } from "react";
 import PropTypes from 'prop-types';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X, Image as ImageIcon, Video, Music, Upload, Plus, Check, Search
-} from 'lucide-react';
+import { motion } from "framer-motion";
+import { X, Image as ImageIcon, Video, Music, Plus } from "lucide-react";
 import { STOCK_VIDEOS, STOCK_AUDIO } from '../constants';
 
 export default function MediaDrawer({
@@ -14,7 +12,6 @@ export default function MediaDrawer({
   onAddMedia,
 }) {
   const [activeTab, setActiveTab] = useState('stock_videos');
-  const [searchQuery, setSearchQuery] = useState('');
 
   if (!isOpen) return null;
 

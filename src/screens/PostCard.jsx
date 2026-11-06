@@ -3,9 +3,9 @@
 // Perfect rounded edges, compact height, larger avatar, bubble counts, all bugs fixed.
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, useReducer } from 'react';
+import { readLocalLikes, setLocalLike } from '../utils/localContentCache.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import firestoreService from '../services/firestoreService';
 import { trackAnalyticsEvent } from '../services/analyticsService';
@@ -15,13 +15,7 @@ import * as monetizationService from '../services/monetizationService';
 import notificationService from '../services/notificationsService';
 import { triggerHaptic } from '../utils/haptics';
 import { formatDistanceToNow } from 'date-fns';
-import {
-  Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift,
-  MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, Sparkles,
-  Eye, BarChart3, Coins, Send, AlertTriangle, Shield,
-  Download, RefreshCw, Quote, PlusCircle, Copy, X, Flag, Users,
-  ShoppingBag, ExternalLink
-} from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Gift, MapPin, Globe, CheckCircle, Zap, Crown, TrendingUp, Sparkles, BarChart3, Coins, Send, AlertTriangle, Shield, Download, RefreshCw, Quote, PlusCircle, Copy, X, Users, ShoppingBag, ExternalLink } from "lucide-react";
 import { FaHeart, FaWhatsapp, FaTelegram, FaTwitter, FaFacebook, FaInstagram } from 'react-icons/fa6';
 
 // Sub‑cards
@@ -515,10 +509,7 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     if (post.isLiked || post.liked) return true;
     const uid = currentUser?.uid || (typeof window !== 'undefined' ? localStorage.getItem('arvdoul_uid') || localStorage.getItem('uid') : null);
     if (uid && likedBySet.has(uid)) return true;
-    try {
-      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
-      if (localLikes[post.id]) return true;
-    } catch {}
+    if (uid && readLocalLikes(uid)[post.id]) return true;
     return false;
   }, [post.id, post.isLiked, post.liked, likedBySet, currentUser?.uid]);
 
@@ -765,25 +756,27 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
     dispatch({ type: 'SET_LIKED', payload: newLiked });
     triggerHaptic('light');
 
-    // Persist immediately in client storage
-    try {
-      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
-      if (newLiked) localLikes[post.id] = true;
-      else delete localLikes[post.id];
-      localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
-    } catch {}
+    // Persist immediately in client storage (uid-scoped)
+    setLocalLike(userId, post.id, newLiked);
 
     if (debounceLikeRef.current) clearTimeout(debounceLikeRef.current);
     debounceLikeRef.current = setTimeout(async () => {
       try {
+        let res;
         if (navigator.onLine) {
-          if (newLiked) {
-            await firestoreService.likePost?.(post.id, userId);
-          } else {
-            await firestoreService.unlikePost?.(post.id, userId);
-          }
+          res = newLiked
+            ? await firestoreService.likePost?.(post.id, userId)
+            : await firestoreService.unlikePost?.(post.id, userId);
         } else {
           await addToOfflineQueue(newLiked ? 'like' : 'unlike', { postId: post.id, userId });
+        }
+        // A rate-limited / failed write returns success:false (no throw). Roll
+        // the optimistic heart back so the UI never shows an unpersisted like.
+        if (res && res.success === false && !res.localOnly) {
+          rollbackTo(snapshot);
+          setLocalLike(userId, post.id, snapshot.liked);
+          toast.error('Could not update like');
+          return;
         }
         if (newLiked && post.authorId && post.authorId !== userId) {
           notificationService.sendNotification?.({
@@ -791,11 +784,13 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           }).catch(() => {});
         }
       } catch (err) {
-        console.warn('Like sync background error handled:', err);
-        // Do not rollback local like unless critical
+        // A thrown write (network/offline) rolls the optimistic state back.
+        rollbackTo(snapshot);
+        setLocalLike(userId, post.id, snapshot.liked);
+        toast.error('Could not update like');
       }
     }, 250);
-  }, [currentUser, post.id, post.authorId, takeSnapshot]);
+  }, [currentUser, post.id, post.authorId, takeSnapshot, rollbackTo]);
 
   const handleReaction = useCallback((reaction) => {
     const effectiveUserId = currentUser?.uid || null;
@@ -1141,9 +1136,9 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
           {post.hashtags.map(tag => <span key={tag} className="text-xs" style={{ color: tokens.primary }}>#{tag}</span>)}
         </div>
       )}
-      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} currentUser={currentUser} postId={post.id} onAnalytics={handleAnalytics} />}
-      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} tokens={tokens} currentUser={currentUser} onAnalytics={handleAnalytics} />}
-      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} currentUser={currentUser} postId={post.id} />}
+      {isImage && <ImageCard images={post.media} onLike={handleLikeClick} postId={post.id} onAnalytics={handleAnalytics} />}
+      {isVideo && <VideoCard src={post.media?.[0]?.url} isVisible={isVisible} onDoubleTap={handleLikeClick} postId={post.id} currentUser={currentUser} onAnalytics={handleAnalytics} />}
+      {isAudio && <AudioCard audio={post.media?.[0]} isVisible={isVisible} tokens={tokens} postId={post.id} />}
       {isPoll && <PollCard poll={pollWithVote} postId={post.id} currentUser={currentUser} tokens={tokens} onVote={handlePollVote} onAnalytics={handleAnalytics} />}
       {isQuestion && <QuestionCard question={questionWithVotes} postId={post.id} currentUser={currentUser} tokens={tokens} isAuthor={isAuthor} answers={questionWithVotes?.answers || []} userReputation={typeof currentUser?.reputation === 'number' ? currentUser.reputation : null} onSubmitAnswer={handleAddAnswer} onVote={handleAnswerVote} onMarkBest={handleMarkBest} onEditAnswer={handleEditAnswer} onDeleteAnswer={handleDeleteAnswer} onReport={handleReportAnswer} />}
       {isEvent && <EventCard event={post.event} postId={post.id} currentUser={currentUser} tokens={tokens} onOpenEvent={() => navigate(`/event/${post.event?.id || post.id}`)} />}

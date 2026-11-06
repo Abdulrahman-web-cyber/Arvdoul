@@ -17,7 +17,6 @@ import {
 } from 'firebase/firestore';
 import { getDatabase, ref, onValue, set, remove, onDisconnect, push as rtdbPush } from 'firebase/database';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, getStorage } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase';
 import { openDB } from 'idb';
 
@@ -684,12 +683,26 @@ class UltimateMessagingService {
   }
 
   subscribeToUserPresence(userId, callback) {
+    let unsubscribe = null;
+    let cancelled = false;
     this.ensureInitialized().then(() => {
+      // Teardown may run before initialization resolves; without this guard the
+      // listener is created after the caller already unsubscribed and leaks.
+      if (cancelled) return;
       const presenceRef = this.rt.ref(this.rtdb, `${MESSAGING_CONFIG.RTDB_PATHS.PRESENCE}/${userId}`);
-      const unsubscribe = this.rt.onValue(presenceRef, snap => callback(snap.val()));
+      unsubscribe = this.rt.onValue(presenceRef, snap => callback(snap.val()));
       this.rtdbListeners.set(`presence_${userId}`, unsubscribe);
     });
-    return () => this.rtdbListeners.get(`presence_${userId}`)?.();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+      // Only drop the map entry if it still points at *this* listener — a second
+      // subscriber to the same uid must not have its listener removed by the
+      // first one's teardown.
+      if (unsubscribe && this.rtdbListeners.get(`presence_${userId}`) === unsubscribe) {
+        this.rtdbListeners.delete(`presence_${userId}`);
+      }
+    };
   }
 
   async sendTypingIndicator(conversationId, userId, isTyping = true) {
@@ -727,9 +740,12 @@ class UltimateMessagingService {
   }
 
   subscribeToTyping(conversationId, userId, callback) {
+    let unsubscribe = null;
+    let cancelled = false;
     this.ensureInitialized().then(() => {
+      if (cancelled) return; // torn down before init resolved — do not leak
       const typingRef = this.rt.ref(this.rtdb, `${MESSAGING_CONFIG.RTDB_PATHS.TYPING}/${conversationId}`);
-      const unsubscribe = this.rt.onValue(typingRef, snap => {
+      unsubscribe = this.rt.onValue(typingRef, snap => {
         const data = snap.val() || {};
         const filtered = Object.entries(data).reduce((acc, [uid, val]) => {
           if (uid !== userId && val.isTyping && Date.now() - val.timestamp < 5000) acc[uid] = val;
@@ -739,7 +755,13 @@ class UltimateMessagingService {
       });
       this.rtdbListeners.set(`typing_${conversationId}`, unsubscribe);
     });
-    return () => this.rtdbListeners.get(`typing_${conversationId}`)?.();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+      if (unsubscribe && this.rtdbListeners.get(`typing_${conversationId}`) === unsubscribe) {
+        this.rtdbListeners.delete(`typing_${conversationId}`);
+      }
+    };
   }
 
   async getUserPrivacySettings(userId) {
@@ -1486,11 +1508,23 @@ class UltimateMessagingService {
   }
 
   subscribeToConversation(conversationId, userId, callback, options = {}) {
-    let unsubscribeMessages, unsubscribeConversation, unsubscribeTyping, unsubscribePresence;
+    let unsubscribeMessages, unsubscribeConversation, unsubscribeTyping;
+    // The async setup below can resolve *after* the caller tears the
+    // subscription down (StrictMode double-mount, fast navigation). Without a
+    // torn-down flag the presence listeners registered late are never unsubscribed
+    // — a real RTDB listener leak that survives the component that created it.
+    let tornDown = false;
+    const presenceUnsubs = [];
+    const releasePresence = () => {
+      for (const unsub of presenceUnsubs) unsub?.();
+      presenceUnsubs.length = 0;
+    };
 
     this.ensureInitialized().then(async () => {
       const conv = await this.getConversation(conversationId, { cacheFirst: true });
       if (!conv.success) return;
+      // Teardown ran while we awaited the conversation — do not register anything.
+      if (tornDown) return;
 
       const useInbox = (conv.conversation.participantCount > MESSAGING_CONFIG.SUPERGROUP.THRESHOLD || conv.conversation.type === 'channel')
         && options.inboxEnabled !== false;
@@ -1541,20 +1575,21 @@ class UltimateMessagingService {
       });
 
       conv.conversation.participants.forEach(pid => {
+        // subscribeToUserPresence owns its own map entry and teardown; we only
+        // keep the returned disposer so a late teardown still releases it.
         const presenceUnsub = this.subscribeToUserPresence(pid, (presence) => {
           callback({ type: 'presence_update', userId: pid, presence, conversationId });
         });
-        this.rtdbListeners.set(`presence_${conversationId}_${pid}`, presenceUnsub);
+        presenceUnsubs.push(presenceUnsub);
       });
     });
 
     return () => {
+      tornDown = true;
       unsubscribeMessages?.();
       unsubscribeConversation?.();
       unsubscribeTyping?.();
-      this.rtdbListeners.forEach((unsub, key) => {
-        if (key.startsWith(`presence_${conversationId}`)) unsub();
-      });
+      releasePresence();
     };
   }
 

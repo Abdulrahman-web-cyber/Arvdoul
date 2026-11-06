@@ -10,19 +10,7 @@ import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
-import {
-  PROFILE_TYPES,
-  VISIBILITY_SCOPES,
-  DEFAULT_PROFILE_PRIVACY,
-  SERVER_AUTHORITATIVE_FIELDS,
-  PROFILE_CONSTRAINTS,
-  isValidWebUrl,
-  sanitizeProfileUrl,
-  validateProfileUpdate,
-  PRIVATE_PROFILE_FIELDS,
-  PRIVATE_PROFILE_COLLECTION,
-  splitProfileFields
-} from '../config/profileContracts.js';
+import { PROFILE_CONSTRAINTS, validateProfileUpdate, PRIVATE_PROFILE_FIELDS, PRIVATE_PROFILE_COLLECTION, splitProfileFields } from "../config/profileContracts.js";
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { projectProfileForViewer } from './profileReadModel.js';
 import { socialGraphService } from './socialGraphService.js';
@@ -280,7 +268,11 @@ class ProfessionalUserService {
       if (normalized.length < 3) return { available: false, error: 'Too short' };
       if (normalized.length > USER_CONFIG.DEFAULT_USERNAME_LENGTH) return { available: false, error: 'Too long' };
       if (!/^[a-z0-9._]+$/.test(normalized)) return { available: false, error: 'Invalid characters' };
-      return { available: true, username: normalized, uncertain: true, error: error.message };
+      // The lookup itself failed (offline / rules / SDK error). Reporting
+      // `available: true` here let a taken username sail through the UI as
+      // free; the honest answer is "cannot confirm", which fails closed and
+      // leaves uniqueness to the server-side write.
+      return { available: false, username: normalized, uncertain: true, error: error.message };
     }
   }
 

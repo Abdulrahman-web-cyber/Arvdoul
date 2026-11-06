@@ -3,15 +3,7 @@
 // Fully optimized search routing, real Algolia index querying, and structured lexical token-overlap indexing fallback.
 
 import { getMonetizationService } from './monetizationService.js';
-import {
-  collection,
-  query as firestoreQuery,
-  where,
-  orderBy,
-  limit as firestoreLimit,
-  getDocs,
-  startAfter,
-} from 'firebase/firestore';
+import { collection, query as firestoreQuery, where, limit as firestoreLimit, getDocs, startAfter } from "firebase/firestore";
 
 function enhanceError(error, defaultMessage) {
   const code = error?.code || 'unknown';

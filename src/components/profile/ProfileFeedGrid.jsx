@@ -3,32 +3,7 @@
 import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { 
-  Heart, 
-  MessageCircle, 
-  Play, 
-  Pause,
-  Film, 
-  Image as ImageIcon, 
-  Bookmark, 
-  Share2, 
-  Sparkles, 
-  Layers, 
-  MapPin, 
-  Globe, 
-  Calendar, 
-  MoreHorizontal, 
-  Coins, 
-  ShieldCheck, 
-  Check,
-  Music,
-  Tag,
-  Volume2,
-  Sliders,
-  ExternalLink,
-  Plus,
-  Loader2
-} from 'lucide-react';
+import { Heart, MessageCircle, Play, Pause, Film, Image as ImageIcon, Bookmark, Share2, Sparkles, Layers, MapPin, Globe, Calendar, Coins, ShieldCheck, Music, Tag, Sliders, Loader2 } from "lucide-react";
 import { cn } from '../../lib/utils';
 import { getPerksForLevel } from '../../services/levelSystemService';
 import { pickDisplayName, resolveAvatarUrl } from '../../services/profileReadModel.js';
@@ -585,7 +560,7 @@ const ProfileFeedGrid = memo(({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate('/audio-editor', { state: { trackId: item.id, title: trackTitle } });
+                    navigate('/audio-editor', { state: { audioUrl: item.audioURL || item.audioUrl || item.soundUrl || '', trackId: item.id, title: trackTitle } });
                   }}
                   className="p-2 rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
                   title="Open in Audio Studio"

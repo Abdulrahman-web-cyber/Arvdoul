@@ -11,7 +11,7 @@
  * @module Shared/AdjustTool
  */
 
-import React, { useState, useCallback, useMemo, memo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";

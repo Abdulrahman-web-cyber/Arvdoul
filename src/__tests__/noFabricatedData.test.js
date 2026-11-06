@@ -1070,7 +1070,11 @@ describe('Auth - signup never grants fabricated coins/levels', () => {
 describe('Monetization - canonical level curve (no duplicated drift)', () => {
   test('monetizationService reads LEVELS from the shared levelConfig', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
-    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG, getLevelInfo } from '../shared/levelConfig.cjs';");
+    // The import must carry the canonical LEVELS table (aliased) plus the
+    // shared helpers it actually uses; do not re-import symbols that are dead.
+    expect(src).toMatch(
+      /import \{ LEVELS as CANONICAL_LEVELS,[^}]*?GIFT_CATALOG,[^}]*?getLevelInfo \} from ['"]\.\.\/shared\/levelConfig\.cjs['"];/
+    );
     expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
     expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
   });
@@ -2030,6 +2034,8 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
     // therefore a fabricated security claim.
     expect(read('src/screens/ChatScreen.jsx')).not.toContain('End-to-end encrypted');
     expect(read('src/screens/ConversationSettingsScreen.jsx')).not.toContain('E2EE');
+    // MenuScreen described Direct Messages as "End-to-end encrypted" too.
+    expect(read('src/screens/Menu/MenuScreen.jsx')).not.toMatch(/[Ee]nd-to-end encrypted/i);
   });
 
   test('a text send cannot be blocked by the encryption gate', () => {

@@ -1,11 +1,11 @@
 // src/components/search/SearchResults.jsx
 
-import React, { memo, useCallback, useMemo } from 'react';
+import { memo, useMemo } from "react";
 import { motion } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
-import { User, Video, FileText, Image, Users, Radio, Calendar, BarChart2, HelpCircle, Hash, Music, MapPin, Search } from 'lucide-react';
+import { User, Video, FileText, Image, Users, Radio, Calendar, BarChart2, HelpCircle, Hash, Search } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
-import { cn, formatCount, getResultIcon, getResultColor } from '../../lib/searchUtils';
+import { cn, formatCount, getResultColor } from "../../lib/searchUtils";
 import ProfileAvatar from '../profile/ProfileAvatar';
 import EmptyState from '../../design-system/EmptyState.jsx';
 import LoadingSpinner from '../Shared/LoadingSpinner';

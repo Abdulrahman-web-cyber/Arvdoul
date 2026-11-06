@@ -1,6 +1,5 @@
 // src/services/analyticsService.js
 
-import { produce } from 'immer';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';

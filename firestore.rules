@@ -1107,9 +1107,14 @@ service cloud.firestore {
     match /signaling_rooms/{roomId} {
       function signalingParticipants() {
         // A signing-in member of the parent live stream or space may join.
+        // `exists()` guards each lookup: the room id names exactly one parent,
+        // so the other `get()` returns null and a bare `.data` read would throw
+        // and deny the request (making spaces signalling impossible).
         return isSignedIn() && (
-          uid() in get(/databases/$(database)/documents/live_streams/$(roomId)).data.participants ||
-          uid() in get(/databases/$(database)/documents/spaces/$(roomId)).data.participants
+          (exists(/databases/$(database)/documents/live_streams/$(roomId)) &&
+            uid() in get(/databases/$(database)/documents/live_streams/$(roomId)).data.participants) ||
+          (exists(/databases/$(database)/documents/spaces/$(roomId)) &&
+            uid() in get(/databases/$(database)/documents/spaces/$(roomId)).data.participants)
         );
       }
       // Membership is resolved from the parent stream/space, not from this
@@ -1134,7 +1139,18 @@ service cloud.firestore {
     match /spaces/{spaceId} {
       allow read: if true;
       allow create: if isSignedIn() && (request.resource.data.host.id == uid() || request.resource.data.userId == uid());
-      allow update, delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
+      // The host owns the space; any signed-in member may change only the
+      // non-authoritative roster (raised hands, participants, listeners,
+      // audience count). Without this carve-out a member's "raise hand" /
+      // "join" write was silently DENIED, so the stage never updated.
+      allow update: if isSignedIn() && (
+        resource.data.host.id == uid() ||
+        resource.data.userId == uid() ||
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount'])
+      );
+      allow delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
       match /signals/{signalId} {
         allow read, write: if isSignedIn();
       }

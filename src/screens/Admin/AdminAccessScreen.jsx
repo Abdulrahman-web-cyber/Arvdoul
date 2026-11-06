@@ -1,6 +1,6 @@
 // src/screens/Admin/AdminAccessScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from '../../context/AuthContext.jsx';
 import {
   fetchAdminStatus,

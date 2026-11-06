@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { Eye, ShieldCheck, UserCheck, Users, Lock, X, Check } from 'lucide-react';
+import { memo } from "react";
+import { Eye, ShieldCheck, UserCheck, Users, X, Check } from "lucide-react";
 import { cn } from '../../lib/utils';
 
 const PERSPECTIVES = [

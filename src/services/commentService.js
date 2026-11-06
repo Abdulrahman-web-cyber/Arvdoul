@@ -16,6 +16,7 @@ const COMMENTS_CONFIG = {
 };
 
 import { cacheManager } from '../utils/CacheManager.js';
+import { LOCAL_COMMENTS_PREFIX } from '../utils/localContentCache.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
@@ -250,7 +251,7 @@ class UltimateCommentService {
 
       if (typeof window !== 'undefined') {
         try {
-          const key = `arvdoul_local_comments_${postId}`;
+          const key = `${LOCAL_COMMENTS_PREFIX}${postId}`;
           const current = JSON.parse(localStorage.getItem(key) || '[]');
           current.unshift({ ...commentData, id: commentId, createdAt: new Date().toISOString() });
           localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
@@ -350,7 +351,7 @@ class UltimateCommentService {
       // Merge local-first persistent comments from localStorage
       if (typeof window !== 'undefined') {
         try {
-          const localStored = JSON.parse(localStorage.getItem(`arvdoul_local_comments_${postId}`) || '[]');
+          const localStored = JSON.parse(localStorage.getItem(`${LOCAL_COMMENTS_PREFIX}${postId}`) || '[]');
           if (Array.isArray(localStored)) {
             localStored.forEach(lc => {
               if (lc && lc.id && !commentMap.has(lc.id)) {
@@ -768,7 +769,9 @@ class UltimateCommentService {
       return { success: true, edits };
     } catch (error) {
       logger.error('Get comment history failed', { error: error.message, commentId });
-      return { success: true, edits: [] };
+      // Fail closed: an empty edit list reported as success would render as
+      // "never edited" and hide the failure.
+      return { success: false, edits: [], error: error?.message || 'comment-history-failed' };
     }
   }
 

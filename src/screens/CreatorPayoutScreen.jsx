@@ -1,17 +1,13 @@
 // src/screens/CreatorPayoutScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '@context/ThemeContext';
 import { cn } from '../lib/utils';
-import {
-  Banknote, DollarSign, ArrowLeft, TrendingUp, ShieldCheck,
-  CreditCard, Sparkles, CheckCircle2, AlertCircle, Clock,
-  ArrowUpRight, RefreshCw, Wallet, ChevronRight, Lock
-} from 'lucide-react';
+import { Banknote, DollarSign, ArrowLeft, TrendingUp, ShieldCheck, CreditCard, Sparkles, Clock, ArrowUpRight, RefreshCw, Wallet } from "lucide-react";
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
 import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';

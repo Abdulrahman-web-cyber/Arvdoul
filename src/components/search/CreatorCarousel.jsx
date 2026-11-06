@@ -1,13 +1,11 @@
 // src/components/search/CreatorCarousel.jsx
 
-import React, { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useRef } from "react";
 import { motion } from 'framer-motion';
 import { Award, Users } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { cn, formatCount } from '../../lib/searchUtils';
 import ProfileAvatar from '../profile/ProfileAvatar';
-import LoadingSpinner from '../Shared/LoadingSpinner';
-
 /**
  * Creator Carousel Component
  */

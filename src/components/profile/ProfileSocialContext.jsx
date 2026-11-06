@@ -8,8 +8,8 @@
  * @component
  */
 
-import React, { memo } from 'react';
-import { Users, UserCheck, Sparkles } from 'lucide-react';
+import { memo } from "react";
+import { Users, UserCheck } from "lucide-react";
 import { cn } from '../../lib/utils';
 
 const ProfileSocialContext = memo(({

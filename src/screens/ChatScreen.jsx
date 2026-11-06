@@ -19,7 +19,7 @@
  *  - loading / error / empty states; optimistic send with rollback
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -30,8 +30,8 @@ import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';
-import { ArrowLeft, Users, Phone, Video, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark } from 'lucide-react';
-import { format, isSameDay, isSameMinute } from 'date-fns';
+import { ArrowLeft, Users, Info, Search, Pin, Image as ImageIcon, ArrowDown, Bookmark } from "lucide-react";
+import { format, isSameDay } from "date-fns";
 
 const REACTION_TYPES = (MESSAGING_CONFIG && MESSAGING_CONFIG.REACTION_TYPES) || ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -67,7 +67,6 @@ export default function ChatScreen() {
   const mainRef = useRef(null);
 
   const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
   const pendingRef = useRef(new Map()); // localId -> {convId, data}
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -842,8 +841,6 @@ export default function ChatScreen() {
       {/* Input */}
       <div className="max-w-3xl mx-auto w-full">
         <MessageInput
-          ref={inputRef}
-          conversationId={conversationId}
           onSendMessage={handleSendMessage}
           onSendMedia={handleSendMedia}
           onTyping={handleTyping}

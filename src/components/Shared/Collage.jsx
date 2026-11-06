@@ -1,11 +1,8 @@
 // src/components/Shared/Collage.jsx
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Grid, Columns, Layout, Sliders, Check, Download,
-  X, RefreshCw, Sparkles, Image as ImageIcon, Plus, ArrowLeftRight
-} from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
+import { Grid, Columns, Layout, Download, X, Sparkles, Image as ImageIcon, Plus, ArrowLeftRight } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 

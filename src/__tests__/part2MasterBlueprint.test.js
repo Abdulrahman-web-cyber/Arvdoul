@@ -1,21 +1,7 @@
 // src/__tests__/part2MasterBlueprint.test.js — ARVDOUL PART 2 MASTER BLUEPRINT TEST SUITE
 // Validates Progression, Achievements, Titles, Reputation, Citizenship, Creator Tiers, and Economy.
 
-import {
-  ACHIEVEMENTS_CATALOG,
-  TITLES_CATALOG,
-  REPUTATION_BANDS,
-  INFLUENCE_BANDS,
-  CONTRIBUTION_BANDS,
-  CREATOR_TIERS,
-  TRANSACTION_STATES,
-  getReputationBand,
-  getInfluenceBand,
-  getContributionBand,
-  getCitizenTier,
-  getCreatorCapabilities,
-  LEVEL_GATES,
-} from '../shared/levelConfig.cjs';
+import { ACHIEVEMENTS_CATALOG, TITLES_CATALOG, getReputationBand, getInfluenceBand, getContributionBand, getCitizenTier, getCreatorCapabilities, LEVEL_GATES } from "../shared/levelConfig.cjs";
 import achievementService from '../services/achievementService.js';
 import titleService from '../services/titleService.js';
 import creatorService from '../services/creatorService.js';

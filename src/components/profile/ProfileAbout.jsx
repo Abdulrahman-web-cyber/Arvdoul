@@ -4,20 +4,10 @@
  * @component
  */
 
-import React, { memo } from 'react';
+import { memo } from "react";
 import { cn } from '../../lib/utils';
 import { sanitizeProfileUrl } from '../../config/profileContracts.js';
-import { 
-  MapPin, 
-  Link as LinkIcon, 
-  Calendar, 
-  User,
-  Globe,
-  Briefcase,
-  GraduationCap,
-  Heart,
-  Star
-} from 'lucide-react';
+import { MapPin, Link as LinkIcon, Calendar, User, Globe, Briefcase, GraduationCap, Star } from "lucide-react";
 
 /**
  * ProfileAbout Component
@@ -26,7 +16,6 @@ import {
 const ProfileAbout = ({
   profile,
   user,
-  theme = 'light',
   isOwner,
   isCurrentUser,
   onEdit,

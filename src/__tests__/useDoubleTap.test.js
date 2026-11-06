@@ -6,7 +6,6 @@
  */
 
 import { jest } from '@jest/globals';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import useDoubleTap from '../hooks/useDoubleTap.js';
 

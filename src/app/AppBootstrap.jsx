@@ -1,6 +1,6 @@
 // src/app/AppBootstrap.jsx
 
-import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { BrowserRouter } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { MotionConfig } from 'framer-motion';
@@ -10,7 +10,6 @@ import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
 import OfflineIndicator from '../components/UI/OfflineIndicator.jsx';
-import PageLoader from '../components/UI/PageLoader.jsx';
 import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
 import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
 import { initAppBackgroundPrefetch } from '../utils/routePrefetcher.js';

@@ -52,7 +52,6 @@ import { v4 as uuidv4 } from 'uuid';
 import FocusTrap from 'focus-trap-react';
 import clamp from 'lodash-es/clamp';
 import useMediaQuery from '../../hooks/useMediaQuery';
-import { cn } from '../../lib/utils';
 import { loadImage, createCanvas, cleanupImage } from './imageEffects';
 import AdjustTool from '../../components/Shared/AdjustTool';
 import FilterTool from '../../components/Shared/FilterTool';
@@ -1664,7 +1663,6 @@ const ImageEditor = forwardRef(function ImageEditor({ media, onClose, onSave, ad
     for (const f of list) {
       const url = URL.createObjectURL(f);
       objectUrlsRef.current.push(url);
-      // eslint-disable-next-line no-await-in-loop
       await addImageFromSrc(url, f.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Photo');
     }
     toast.success(list.length > 1 ? `${list.length} photos added` : 'Photo added');

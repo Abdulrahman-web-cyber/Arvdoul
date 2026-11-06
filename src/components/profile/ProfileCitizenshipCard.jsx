@@ -3,20 +3,9 @@
 // Institutional Digital Nation Citizenship Card for Profile embedding.
 // Adheres to Zero-Pill discipline, heraldic dignity, and real system telemetry.
 
-import React, { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import {
-  ShieldCheck,
-  Crown,
-  Award,
-  Stamp,
-  QrCode,
-  ArrowRight,
-  ExternalLink,
-  ChevronRight,
-  Sparkles,
-  Lock,
-} from 'lucide-react';
+import { ShieldCheck, Stamp, ArrowRight, ChevronRight } from "lucide-react";
 import { cn } from '../../lib/utils';
 import passportService from '../../services/passportService';
 

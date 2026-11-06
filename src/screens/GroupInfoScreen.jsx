@@ -1,6 +1,6 @@
 // src/screens/GroupInfoScreen.jsx
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -9,20 +9,7 @@ import userService from '../services/userService';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  Plus,
-  UserMinus,
-  Shield,
-  Edit2,
-  Trash2,
-  Link as LinkIcon,
-  Loader2,
-  CheckCircle2,
-  Search,
-  X,
-  Share2,
-} from 'lucide-react';
+import { ArrowLeft, Plus, UserMinus, Shield, Edit2, Trash2, Link as LinkIcon, Loader2, CheckCircle2, Search, X } from "lucide-react";
 
 export default function GroupInfoScreen() {
   const { conversationId } = useParams();

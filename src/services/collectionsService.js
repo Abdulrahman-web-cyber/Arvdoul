@@ -5,7 +5,6 @@
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
 import { cacheManager } from '../utils/CacheManager.js';
-import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 
 const PAGE_SIZE = 20;

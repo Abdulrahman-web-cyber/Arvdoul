@@ -3,24 +3,18 @@
 // Real flows only: live balance, CF-verified purchases, ad-earn rewards,
 // transaction history and withdrawal requests. No demo/simulated paths.
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from "framer-motion";
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 import { MIN_WITHDRAWAL_COINS, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, SUBSCRIPTION_TIERS as SUBSCRIPTION_TIERS_CANONICAL, AD_REWARD_COINS as AD_REWARD_COINS_CANONICAL } from '../shared/levelConfig.cjs';
 
-import {
-  Coins, CreditCard, Wallet, Crown, Zap, Rocket, Star,
-  CheckCircle, Shield, Gift, TrendingUp, ArrowLeft, Play,
-  History, Banknote, AlertTriangle, Loader2, RefreshCw, Sparkles
-} from 'lucide-react';
+import { Coins, Crown, Zap, Rocket, Star, CheckCircle, Shield, Gift, TrendingUp, Play, History, Banknote, Loader2, Sparkles } from "lucide-react";
 import PaymentModal from '../components/Shared/PaymentModal';
 import CoinStackIcon from '../components/Shared/CoinStackIcon';
-import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
-
 // Presentation-only icon/color, keyed by the canonical package id. Amounts and
 // prices come from COIN_PACKAGES in the shared levelConfig (same table the
 // server prices from), so the client can never advertise a price or coin amount
@@ -66,7 +60,6 @@ export default function CoinsScreen() {
 
   const [paymentPkg, setPaymentPkg] = useState(null); // coin package being bought
   const [subTier, setSubTier] = useState(null); // subscription tier being bought
-  const [subscriptions, setSubscriptions] = useState([]);
   const [currentSub, setCurrentSub] = useState(null);
 
   // Amounts/prices come from the shared SUBSCRIPTION_TIERS; only names, perks

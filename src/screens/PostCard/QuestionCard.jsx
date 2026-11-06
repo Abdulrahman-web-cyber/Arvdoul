@@ -3,12 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import {
-  HelpCircle, Star, Award, ThumbsUp, ThumbsDown,
-  Flag, Edit3, Trash2, Clock, Coins,
-  Send, MessageCircle, X, Save, ChevronDown, ChevronUp,
-  Lock, Sparkles, CheckCircle, Eye, EyeOff
-} from 'lucide-react';
+import { HelpCircle, Star, ThumbsUp, ThumbsDown, Flag, Edit3, Trash2, Coins, Send, MessageCircle, X, Save, ChevronDown, ChevronUp, Lock, Sparkles, CheckCircle, Eye, EyeOff } from "lucide-react";
 
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 

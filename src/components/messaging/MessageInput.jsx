@@ -1,22 +1,9 @@
 // src/components/messaging/MessageInput.jsx
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from "react";
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
-import {
-  Send,
-  Paperclip,
-  Mic,
-  Smile,
-  Image as ImageIcon,
-  Video,
-  File,
-  MapPin,
-  User,
-  Plus,
-  X,
-  Loader2,
-} from 'lucide-react';
+import { Send, Paperclip, Mic, Smile, Image as ImageIcon, Video, File, MapPin, User, X, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
 import EmojiPicker from 'emoji-picker-react';
 import GIFPicker from '../Shared/GIFPicker';
@@ -27,7 +14,6 @@ const MessageInput = React.memo(({
   onStartRecording,
   onStopRecording,
   onTyping,
-  conversationId,
   theme,
   disabled = false,
   placeholder = 'Message...',

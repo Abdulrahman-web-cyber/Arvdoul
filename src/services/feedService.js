@@ -1,6 +1,7 @@
 // src/services/feedService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
+import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
@@ -575,7 +576,7 @@ class UltimateFeedService {
       });
       try {
         if (typeof window !== 'undefined' && window.localStorage) {
-          const localPosts = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
+          const localPosts = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
           if (Array.isArray(localPosts) && localPosts.length > 0) {
             const existingIds = new Set(posts.map(p => p.id));
             for (const lp of localPosts) {
@@ -790,7 +791,9 @@ class UltimateFeedService {
       return result;
     } catch (error) {
       logger.error('Latest feed error:', error);
-      return { success: true, feed: [], nextCursor: null };
+      // Fail closed: an empty page that claims success would be cached as
+      // "no posts" and stop pagination. Surface the failure instead.
+      return { success: false, feed: [], nextCursor: null, error: error?.message || 'latest-feed-failed' };
     }
   }
 
@@ -1516,7 +1519,9 @@ class UltimateFeedService {
       return result;
     } catch (error) {
       logger.error('Follow suggestions error:', error);
-      return { success: true, suggestions: [] };
+      // Fail closed: an empty suggestion list reported as success would render
+      // as "nobody to follow" instead of an error state.
+      return { success: false, suggestions: [], error: error?.message || 'suggestions-failed' };
     }
   }
 

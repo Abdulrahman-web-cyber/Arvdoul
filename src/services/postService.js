@@ -1,7 +1,7 @@
 // src/services/postService.js
 
-import { getFirestoreService, firestoreService } from './firestoreService.js';
-import { getFeedService, feedService } from './feedService.js';
+import { getFirestoreService } from "./firestoreService.js";
+import { getFeedService } from "./feedService.js";
 
 class PostService {
   constructor() {

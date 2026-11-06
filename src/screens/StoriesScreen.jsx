@@ -1,18 +1,13 @@
 // src/screens/StoriesScreen.jsx
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import {
-  Search, Camera, Calendar, Plus, CheckCircle2, Play, Volume2,
-  VolumeX, Heart, Send, MessageCircle, MoreVertical, X,
-  Sparkles, Star, Radio, MapPin, Music, ChevronDown, Flame,
-  Share2, Bookmark, Gift, RefreshCw, Eye, ThumbsUp, Smile
-} from 'lucide-react';
+import { Search, Camera, Calendar, Plus, CheckCircle2, Volume2, VolumeX, Send, X, Sparkles, Star, Radio, MapPin, Music, ChevronDown } from "lucide-react";
 import { getStoryService } from '../services/storyService';
 import { getMonetizationService } from '../services/monetizationService';
 import ArvdoulLogo from '../components/Shared/ArvdoulLogo';
@@ -69,9 +64,9 @@ export default function StoriesScreen() {
   const [flyingParticles, setFlyingParticles] = useState([]);
   const [stories, setStories] = useState([]);
   const [storiesLoading, setStoriesLoading] = useState(true);
-  const [likedStories, setLikedStories] = useState({});
 
   const progressIntervalRef = useRef(null);
+  const storyAudioRef = useRef(null);
 
   // Load stories from storyService (Firestore-backed feed)
   useEffect(() => {
@@ -116,6 +111,9 @@ export default function StoriesScreen() {
               duration: st.duration || 5,
               ctaText: st.ctaText || '',
               ctaUrl: st.ctaUrl || '',
+              // The track chosen in CreateStory is persisted on the story doc;
+              // the viewer has to read it back or the Music tool is a no-op.
+              music: st.music || null,
             })),
           };
         });
@@ -232,6 +230,34 @@ export default function StoriesScreen() {
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
   }, [activeStoryIndex, activeItemIndex, isPaused, currentStory, currentItem, filteredStories.length]);
+
+  // Story music playback. CreateStory persists a track per story; the viewer
+  // plays it and the mute button actually silences it (a mute control that
+  // toggles state but never touches playback is a false affordance).
+  useEffect(() => {
+    const url = currentItem?.music?.audioUrl || null;
+    if (!url || activeStoryIndex === null) {
+      if (storyAudioRef.current) {
+        storyAudioRef.current.pause();
+        storyAudioRef.current = null;
+      }
+      return;
+    }
+    if (!storyAudioRef.current || storyAudioRef.current.src !== url) {
+      storyAudioRef.current?.pause();
+      storyAudioRef.current = new Audio(url);
+      storyAudioRef.current.loop = true;
+    }
+    storyAudioRef.current.muted = isMuted;
+    if (isPaused) storyAudioRef.current.pause();
+    else storyAudioRef.current.play().catch(() => {});
+  }, [currentItem, activeStoryIndex, isPaused, isMuted]);
+
+  // Never leave a track playing after the viewer closes.
+  useEffect(() => () => {
+    storyAudioRef.current?.pause();
+    storyAudioRef.current = null;
+  }, []);
 
   // Handle tap left/right to navigate items
   const handleStoryTap = (e) => {

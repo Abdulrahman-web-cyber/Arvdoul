@@ -1,25 +1,10 @@
 // src/screens/Admin/AdminSupportTicketsScreen.jsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  MessageCircle,
-  Search,
-  Filter,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  Send,
-  User,
-  Bot,
-  Sparkles,
-  ChevronRight,
-  X,
-  Mail,
-} from 'lucide-react';
+import { ArrowLeft, MessageCircle, Search, Send, User, Bot, Sparkles, ChevronRight, X } from "lucide-react";
 import { supportAutomationService } from '../../services/supportAutomationService.js';
 import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 

@@ -1,6 +1,6 @@
 // src/screens/SearchScreen.jsx
 
-import React, { memo, useCallback, useState, useMemo, useEffect } from 'react';
+import { memo, useCallback, useState, useEffect } from "react";
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 

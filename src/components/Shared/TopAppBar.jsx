@@ -1,34 +1,13 @@
 // src/components/Shared/TopAppBar.jsx
 
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-  memo,
-} from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useSound } from "../../hooks/useSound.js";
 import { useAnalytics } from "../../hooks/useAnalytics.js";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../lib/utils.js";
-import {
-  Search,
-  Menu,
-  X,
-  ChevronLeft,
-  SlidersHorizontal,
-  WifiOff,
-  Check,
-  RefreshCw,
-  QrCode,
-  Share2,
-  MoreVertical,
-  Eye,
-  ShieldCheck,
-} from "lucide-react";
+import { Search, Menu, X, ChevronLeft, SlidersHorizontal, WifiOff, Check, RefreshCw, QrCode, Share2, MoreVertical } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import { useAuth } from "../../context/AuthContext";
 import { useProfileStore } from "../../store/profileStore";

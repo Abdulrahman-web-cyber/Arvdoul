@@ -16,7 +16,7 @@
  * @property {string} [theme='light'] - Current theme
  */
 
-import React, { memo, useCallback, useState, useMemo } from 'react';
+import { memo, useCallback, useState, useMemo } from "react";
 import PropTypes from 'prop-types';
 import { BadgeCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';

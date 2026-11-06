@@ -2,34 +2,14 @@
 //
 // Viral audio tracks, real-time waveform playback, reels creation integration, and audio stem library
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Play, 
-  Pause, 
-  Music, 
-  Bookmark, 
-  Share2, 
-  Plus, 
-  TrendingUp, 
-  Sparkles, 
-  Radio, 
-  Video, 
-  Sliders, 
-  Volume2, 
-  VolumeX, 
-  Check, 
-  Clock, 
-  Flame,
-  Search,
-  Disc
-} from 'lucide-react';
+import { Play, Pause, Music, Bookmark, Plus, TrendingUp, Video, Sliders, Flame, Search, Disc } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import soundService from '../../services/soundService';
-import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const GENRES = ['All', 'Hyperpop', 'Lo-Fi / Chill', 'Cyberpunk', 'Afrobeat', 'Cinematic'];
@@ -50,7 +30,6 @@ export default function SoundsScreen() {
   const [currentSound, setCurrentSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef(null);
 
   // Upload modal
@@ -116,7 +95,7 @@ export default function SoundsScreen() {
   };
 
   const handleOpenAudioEditor = (snd) => {
-    navigate('/audio-editor', { state: { audioTrack: snd } });
+    navigate('/audio-editor', { state: { audioUrl: snd.audioUrl || snd.url || '', trackId: snd.id, title: snd.title || 'Untitled Audio' } });
   };
 
   const handleUploadAudio = async (e) => {

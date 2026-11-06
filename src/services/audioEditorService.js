@@ -172,6 +172,8 @@ class AudioEditorService {
       sampleRate: AUDIO_EDITOR_CONFIG.EXPORT.SAMPLING_RATES[0],
       channels: 2,
       sourceUrl: null,
+      sourceTrackId: metadata.sourceTrackId || null,
+      sourceArtist: metadata.sourceArtist || null,
       trimStart: 0,
       trimEnd: 0,
       effects: [],

@@ -1,11 +1,10 @@
 // src/routes/AppRoutes.jsx
 
-import React, { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import AppStateGuard from "../app/AppStateGuard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import MainLayout from "../layouts/MainLayout.jsx";
-import LoadingSpinner from "../components/Shared/LoadingSpinner.jsx";
 import SplashScreen from "../screens/SplashScreen.jsx";
 
 const IntroScreen = lazy(() => import("../screens/IntroScreen.jsx"));
@@ -125,7 +124,6 @@ const PollsScreen = lazy(() => import("../screens/Polls/PollsScreen.jsx"));
 const NotFoundScreen = lazy(() => import("../screens/NotFoundScreen.jsx"));
 const HelpCenterScreen = lazy(() => import("../screens/Help/HelpCenterScreen.jsx"));
 
-import PageLoader from "../components/UI/PageLoader.jsx";
 import {
   SectionErrorBoundary,
   FeedErrorBoundary,
@@ -134,7 +132,7 @@ import {
   CreatorErrorBoundary,
   PostErrorBoundary,
 } from "../components/ErrorBoundary/SectionErrorBoundary.jsx";
-import { RouteProgressBar, RouteSkeletonShell } from "../components/Navigation/RouteProgressBar.jsx";
+import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
 
 // Seamless, non-blocking route transition fallback (ambient top progress line)
 const RouteLoadingFallback = () => (

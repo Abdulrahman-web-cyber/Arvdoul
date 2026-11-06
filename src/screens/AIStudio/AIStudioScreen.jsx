@@ -2,29 +2,10 @@
 //
 // Comprehensive AI toolkit: Viral Hooks, Caption Crafter, Reel Scriptwriter, Prompt Studio, Viral Analyzer & Localization
 
-import React, { useState } from 'react';
+import { useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Sparkles, 
-  Flame, 
-  Copy, 
-  Check, 
-  Video, 
-  Image as ImageIcon, 
-  TrendingUp, 
-  Globe, 
-  ArrowRight, 
-  Sliders, 
-  Zap, 
-  RefreshCw, 
-  MessageSquare,
-  Play,
-  Lightbulb,
-  Share2,
-  Crown,
-  ChevronLeft
-} from 'lucide-react';
+import { Sparkles, Flame, Copy, Check, Video, Image as ImageIcon, TrendingUp, Globe, ArrowRight, Play, Lightbulb, Crown } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -405,7 +386,7 @@ export default function AIStudioScreen() {
             className="space-y-6"
           >
             <div className={`p-6 rounded-3xl border ${isDark ? 'bg-gray-900/70 border-gray-800' : 'bg-white border-gray-200'} shadow-xl space-y-4`}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Video Concept / Script Goal</label>
                   <input
@@ -416,6 +397,22 @@ export default function AIStudioScreen() {
                       isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                     }`}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Script Style</label>
+                  <select
+                    value={scriptStyle}
+                    onChange={(e) => setScriptStyle(e.target.value)}
+                    className={`w-full p-3.5 rounded-xl text-sm border focus:ring-2 focus:ring-purple-500 outline-none ${
+                      isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    <option value="tech">Tech & Product</option>
+                    <option value="funny">Comedy & Skits</option>
+                    <option value="educational">Educational</option>
+                    <option value="storytelling">Storytelling</option>
+                    <option value="motivational">Motivational</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Duration Target</label>

@@ -9,9 +9,10 @@ Arvdoul — Vite + React SPA with Firebase (Firestore/Auth/Storage), Cloud Funct
 - Lint: `npm run lint`
 - Test: `npm test` (requires `NODE_OPTIONS=--experimental-vm-modules`, already set in the script)
 
-ESLint currently reports 0 errors and many `no-unused-vars` warnings; the config is not
-JSX-aware, so JSX-used components (e.g. `ToggleRow`) are still flagged as unused. Warnings
-are expected — only treat errors as failures.
+ESLint reports 0 errors. `react/jsx-uses-vars` is enabled, so JSX-used components are no
+longer flagged; the remaining `no-unused-vars` warnings are genuine leftovers (mostly
+`catch (e)` params and dead locals), not the old JSX false positives. Only treat errors
+as failures.
 
 ## Single sources of truth
 - **Settings**: `src/services/settingsService.js` owns persisted user settings
@@ -218,6 +219,15 @@ module nothing imports can drift and keep stale tests green (whole "phase N"
 subsystems once sat on disk reachable only from their own test). Delete dead modules
 and their tests instead of exempting them; the only allowlisted entry is the
 hand-edited `src/design-system/tokens.js` registry, mirrored into `tokens.css`.
+
+`src/__tests__/deadWiringGuard.test.js` is the N076 dead-wiring guard: it fails when a
+component destructures a prop it never references, or when a module is imported by every
+importer without ever being referenced (an import that keeps a module "reachable" for the
+orphan guard while the UI never renders it — `GlassCard`/`GlassButton` in
+`VideoAnalyticsScreen`, `PageLoader`, `RouteSkeletonShell`). It is conservative (a prop
+is only flagged when the identifier appears nowhere after the destructure; an import only
+when *all* importers ignore it), so it stays at zero false positives. Delete the dead
+import/component; do not allowlist it.
 
 ## Conventions
 - Profile privacy is stored on the user profile (`profile.isPrivate` plus

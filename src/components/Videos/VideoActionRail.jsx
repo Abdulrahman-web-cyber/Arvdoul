@@ -1,6 +1,6 @@
 // src/components/Videos/VideoActionRail.jsx
 
-import React, { memo } from 'react';
+import { memo } from "react";
 import { motion } from 'framer-motion';
 import {
   Heart,
@@ -9,7 +9,7 @@ import {
   Bookmark,
   MoreHorizontal,
 } from 'lucide-react';
-import { SPRING_ANIMATION, formatViewCount } from '../../utils/videoUtils';
+import { formatViewCount } from "../../utils/videoUtils";
 import PropTypes from 'prop-types';
 
 /**

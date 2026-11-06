@@ -277,6 +277,18 @@ jobs:
           src/__tests__/contextContract.test.js
           src/__tests__/hookContract.test.js
           src/__tests__/deadEventGuard.test.js
+          src/__tests__/deadWiringGuard.test.js
+          src/__tests__/uiStateWiringGuard.test.js
+          src/__tests__/reducerDispatchGuard.test.js
+          src/__tests__/routeStateHandoffGuard.test.js
+          src/__tests__/failOpenReadGuard.test.js
+          src/__tests__/falseSuccessToastGuard.test.js
+          src/__tests__/spacesRosterWiringGuard.test.js
+          src/__tests__/localContentCacheGuard.test.js
+          src/__tests__/liveWiringGuard.test.js
+          src/__tests__/notificationsWiringGuard.test.js
+          src/__tests__/highlightsWiringGuard.test.js
+          src/__tests__/subscriptionLifecycleGuard.test.js
           src/__tests__/orphanModuleGuard.test.js
           src/__tests__/noFabricatedData.test.js
           src/__tests__/storageRulesDeploy.test.js
@@ -291,7 +303,7 @@ jobs:
           npx firebase-tools emulators:exec
           --only firestore
           --project demo-arvdoul
-          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js"
+          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js src/__tests__/spacesRosterWiringGuard.test.js"
 
   # ========== SECURITY CHECK ==========
   security:

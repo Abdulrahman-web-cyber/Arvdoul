@@ -5,7 +5,7 @@
 // applied to the live BiquadFilterNodes in the audio engine. The loudness meter
 // reads the engine's measured output — it is never animated with random values.
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Power, ChevronDown } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';

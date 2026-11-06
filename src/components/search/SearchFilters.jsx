@@ -1,6 +1,6 @@
 // src/components/search/SearchFilters.jsx
 
-import React, { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, RotateCcw } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';

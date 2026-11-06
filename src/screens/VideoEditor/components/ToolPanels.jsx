@@ -1,17 +1,9 @@
 // src/screens/VideoEditor/components/ToolPanels.jsx
 
-import React, { useState } from 'react';
+import { useState } from "react";
 import PropTypes from 'prop-types';
-import { motion } from 'framer-motion';
-import {
-  Palette, Sliders, Type, Music, Smile, Layers, Sparkles,
-  Wand2, Plus, Check, Play, Pause, RefreshCw, Volume2, Mic,
-  Download, Image as ImageIcon, Zap, Scissors, Bot, Gauge, Shield, Grid, PenTool
-} from 'lucide-react';
-import {
-  FILTERS_LIST, TRANSITIONS_LIST, EFFECTS_LIST, FONT_LIST,
-  STICKER_CATEGORIES, STOCK_AUDIO, STOCK_VIDEOS, RESOLUTION_PRESETS
-} from '../constants';
+import { Palette, Sliders, Type, Music, Smile, Layers, Sparkles, Wand2, Plus, Check, Play, Pause, RefreshCw, Zap, Scissors, Bot, Gauge, Shield, Grid, PenTool } from "lucide-react";
+import { FILTERS_LIST, TRANSITIONS_LIST, EFFECTS_LIST, FONT_LIST, STICKER_CATEGORIES, STOCK_AUDIO, RESOLUTION_PRESETS } from "../constants";
 
 export default function ToolPanels({
   activeTool,
@@ -262,6 +254,17 @@ export default function ToolPanels({
                   type="color"
                   value={textColor}
                   onChange={(e) => setTextColor(e.target.value)}
+                  aria-label="Text color"
+                  className="w-7 h-7 rounded-lg border-0 cursor-pointer bg-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-400">BG</span>
+                <input
+                  type="color"
+                  value={textBgColor?.startsWith('#') ? textBgColor : '#10b981'}
+                  onChange={(e) => setTextBgColor(e.target.value)}
+                  aria-label="Text background color"
                   className="w-7 h-7 rounded-lg border-0 cursor-pointer bg-transparent"
                 />
               </div>

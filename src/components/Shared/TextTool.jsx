@@ -5,42 +5,11 @@
  * @requires React, framer-motion, lucide-react, prop-types
  */
 
-import React, { useState, useCallback, useMemo, memo, useEffect } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Type,
-  Trash2,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  AlignJustify,
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  Palette,
-  Search,
-  ChevronDown,
-  ChevronUp,
-  RotateCw,
-  ArrowUpFromLine,
-  ArrowDownFromLine,
-  Copy,
-  Layers,
-  Sparkles,
-  Plus,
-  X,
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-} from "lucide-react";
-
-// ARVDOUL Design System
-const DNA_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
-const DNA_SHADOW = '0 0 20px rgba(147,51,234,0.4)';
+import { Type, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Bold, Italic, Underline, Strikethrough, Search, ChevronDown, ChevronUp, RotateCw, Copy, Layers, Sparkles, Plus } from "lucide-react";
 
 /**
  * Popular Google Fonts for quick access
@@ -77,31 +46,6 @@ const POPULAR_FONTS = [
   'Cabin',
   'Figtree',
   'Geist',
-];
-
-/**
- * Font categories
- */
-const FONT_CATEGORIES = [
-  { id: 'popular', name: 'Popular' },
-  { id: 'sans', name: 'Sans Serif' },
-  { id: 'serif', name: 'Serif' },
-  { id: 'display', name: 'Display' },
-  { id: 'handwriting', name: 'Handwriting' },
-  { id: 'monospace', name: 'Monospace' },
-];
-
-/**
- * Text effect presets
- */
-const TEXT_EFFECTS = [
-  { id: 'none', name: 'None', icon: null },
-  { id: 'glow', name: 'Glow', icon: Sparkles },
-  { id: 'shadow', name: 'Shadow', icon: Layers },
-  { id: 'outline', name: 'Outline', icon: Type },
-  { id: 'gradient', name: 'Gradient', icon: Palette },
-  { id: 'neon', name: 'Neon', icon: Sparkles },
-  { id: 'emboss', name: 'Emboss', icon: Layers },
 ];
 
 /**
@@ -241,7 +185,6 @@ const FontSelector = memo(({
     const { isDark } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('popular');
 
   const filteredFonts = useMemo(() => {
     let fonts = POPULAR_FONTS;
@@ -251,7 +194,7 @@ const FontSelector = memo(({
     }
     
     return fonts;
-  }, [searchQuery, activeCategory]);
+  }, [searchQuery]);
 
   return (
     <div className="relative">
@@ -347,7 +290,6 @@ const TextTool = memo(({
     layers: false,
   });
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [showEffects, setShowEffects] = useState(false);
 
   // Toggle section
   const toggleSection = useCallback((section) => {

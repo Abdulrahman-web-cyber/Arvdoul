@@ -2,23 +2,12 @@
 //
 // Server-validated, categorized, auditable, zero-pill design.
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import achievementService from '../../services/achievementService';
-import {
-  ArrowLeft,
-  Award,
-  Filter,
-  CheckCircle2,
-  Lock,
-  Sparkles,
-  Share2,
-  RefreshCw,
-  Search,
-  X,
-} from 'lucide-react';
+import { CheckCircle2, Lock, Sparkles, Share2, Search, X } from "lucide-react";
 import { toast } from 'sonner';
 
 const CATEGORIES = [

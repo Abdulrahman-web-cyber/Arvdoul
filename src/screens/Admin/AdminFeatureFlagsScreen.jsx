@@ -1,6 +1,6 @@
 // src/screens/Admin/AdminFeatureFlagsScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, RotateCcw, Zap, MonitorSmartphone } from 'lucide-react';

@@ -35,16 +35,7 @@
 //   6. Record required registration acceptance with the applicable document version and timestamp.
 //      Opening these documents is not consent.
 
-import React, {
-  Component,
-  Fragment,
-  memo,
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { Component, Fragment, memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   AnimatePresence,
@@ -53,7 +44,7 @@ import {
   useReducedMotion,
 } from "framer-motion";
 import { useTheme } from "@context/ThemeContext";
-import { useAuth, useOptionalAuth } from "@context/AuthContext";
+import { useOptionalAuth } from "@context/AuthContext";
 import ThemeToggle from "@components/Shared/ThemeToggle";
 
 /* ═════════════════════════════ configuration ═════════════════════════════ */

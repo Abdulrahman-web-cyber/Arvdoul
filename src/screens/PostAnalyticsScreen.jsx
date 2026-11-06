@@ -1,25 +1,9 @@
 // src/screens/PostAnalyticsScreen.jsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  ArrowLeft,
-  Eye,
-  Heart,
-  MessageCircle,
-  Share2,
-  TrendingUp,
-  Clock,
-  Users,
-  BarChart3,
-  Bookmark,
-  Sparkles,
-  RefreshCw,
-} from 'lucide-react';
+import { ArrowLeft, Eye, Heart, MessageCircle, Share2, TrendingUp, BarChart3, Bookmark, Sparkles } from "lucide-react";
 import { useAuth } from '../context/AuthContext';
-import { toast } from 'sonner';
-
 export default function PostAnalyticsScreen() {
   const { postId } = useParams();
   const navigate = useNavigate();

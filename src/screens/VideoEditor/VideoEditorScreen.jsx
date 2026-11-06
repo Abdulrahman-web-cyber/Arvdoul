@@ -1,14 +1,11 @@
 // src/screens/VideoEditor/VideoEditorScreen.jsx
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers as LayersIcon } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  INITIAL_TRACKS, RESOLUTION_PRESETS, formatTimecode,
-  FILTERS_LIST
-} from './constants';
+import { INITIAL_TRACKS, RESOLUTION_PRESETS } from "./constants";
 
 import EditorHeader from './components/EditorHeader';
 import PreviewCanvas from './components/PreviewCanvas';
@@ -163,11 +160,9 @@ export default function VideoEditorScreen() {
   // Playhead & Playback State
   const [currentTime, setCurrentTime] = useState(4.2);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const [isMagnetSnap, setIsMagnetSnap] = useState(true);
   const [isRippleEdit, setIsRippleEdit] = useState(true);
-  const [showSafeZone, setShowSafeZone] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -254,7 +249,7 @@ export default function VideoEditorScreen() {
       if (isPlaying) {
         const delta = (now - lastTime) / 1000;
         setCurrentTime((prev) => {
-          const next = prev + delta * playbackSpeed;
+          const next = prev + delta * clipSpeed;
           if (next >= totalDuration) {
             setIsPlaying(false);
             return totalDuration;
@@ -268,7 +263,7 @@ export default function VideoEditorScreen() {
 
     animationFrameRef.current = requestAnimationFrame(updatePlayhead);
     return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [isPlaying, playbackSpeed, totalDuration]);
+  }, [isPlaying, clipSpeed, totalDuration]);
 
   // Synchronize native video element if loaded
   useEffect(() => {
@@ -280,6 +275,12 @@ export default function VideoEditorScreen() {
       }
     }
   }, [isPlaying, currentVideoClip]);
+
+  // Apply the selected speed to the live preview element so what the user sees
+  // matches the timeline scrub rate.
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = clipSpeed;
+  }, [clipSpeed, currentVideoClip]);
 
   // Toggle Play / Pause
   const handleTogglePlay = () => {

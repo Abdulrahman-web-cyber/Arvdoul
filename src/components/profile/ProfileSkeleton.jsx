@@ -1,6 +1,5 @@
 // src/components/profile/ProfileSkeleton.jsx
 
-import React from 'react';
 import { Skeleton } from '../UI/Skeleton';
 import { cn } from '../../lib/utils';
 

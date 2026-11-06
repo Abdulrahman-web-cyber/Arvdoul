@@ -3,31 +3,14 @@
 // Institutional digital-nation sovereign identity artifact.
 // Adheres strictly to Zero-Pill discipline, heraldic dignity, and verified state authority.
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import passportService from '../../services/passportService';
 import { shareProfile } from '../../utils/shareUtils';
 import { generateQrDataUrl } from '../../utils/qrCodeGenerator';
-import {
-  ShieldCheck,
-  Award,
-  Crown,
-  Share2,
-  QrCode,
-  CheckCircle,
-  Copy,
-  ChevronRight,
-  Stamp,
-  Globe,
-  Sparkles,
-  ExternalLink,
-  Lock,
-  UserCheck,
-  Check,
-  Flame,
-} from 'lucide-react';
+import { ShieldCheck, Award, Crown, Share2, QrCode, CheckCircle, Copy, ChevronRight, Stamp, Lock, UserCheck, Check } from "lucide-react";
 import { toast } from 'sonner';
 
 /**

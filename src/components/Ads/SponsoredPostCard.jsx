@@ -3,12 +3,9 @@
 // ARVDOUL SPONSORED AD CARD & REWARDED AD SYSTEM
 // Supports light & dark themes, real Firestore impression & click tracking, and Rewarded Ad video modal
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Sparkles, ExternalLink, MoreHorizontal, Eye, Volume2, VolumeX,
-  Gift, CheckCircle2, ShieldCheck, X, Clock, Play, Award
-} from 'lucide-react';
+import { Sparkles, ExternalLink, MoreHorizontal, Gift, CheckCircle2, ShieldCheck, X, Award } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../context/ThemeContext';
@@ -261,13 +258,11 @@ export default function SponsoredPostCard({
                   Hide this ad
                 </button>
                 <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    toast.success('Thank you. Ad reported for review.');
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 rounded-lg text-gray-300 cursor-pointer"
+                  onClick={handleReportAd}
+                  disabled={isReporting}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 rounded-lg text-gray-300 cursor-pointer disabled:opacity-50"
                 >
-                  Report ad
+                  {isReporting ? 'Reporting…' : 'Report ad'}
                 </button>
                 <button
                   onClick={() => {

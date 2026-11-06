@@ -26,7 +26,9 @@ export default [
     },
     rules: {
       'no-undef': 'error',
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // `caughtErrors: 'none'`: an unused `catch (e)` binding is noise, not a
+      // defect, and it was drowning the real dead-local signal.
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
       'no-empty': ['warn', { allowEmptyCatch: true }],
     },
   },
@@ -62,10 +64,14 @@ export default [
     },
     rules: {
       'react/react-in-jsx-scope': 'off',
+      // Without this, every component referenced only in JSX (`<Foo />`) is
+      // reported as unused, which buried the real dead imports under thousands
+      // of false positives and made `no-unused-vars` useless as a signal.
+      'react/jsx-uses-vars': 'error',
       'react/prop-types': 'off', // project uses dynamic props; revisit with TS
       'no-console': 'warn',
       'no-empty': ['warn', { allowEmptyCatch: true }],
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
       'no-undef': 'error', // crash-bug gate — must stay zero
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',

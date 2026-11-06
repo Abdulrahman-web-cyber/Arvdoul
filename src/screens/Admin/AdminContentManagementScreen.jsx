@@ -1,16 +1,12 @@
 // src/screens/Admin/AdminContentManagementScreen.jsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, Search, Filter, Eye, Trash2, Flag,
-  Image as ImageIcon, Video, FileText, MoreVertical,
-  CheckCircle, XCircle, Clock
-} from 'lucide-react';
+import { ArrowLeft, Search, Eye, Trash2, Flag, Image as ImageIcon, Video, FileText, CheckCircle, XCircle } from "lucide-react";
 
 const AdminContentManagementScreen = () => {
   const navigate = useNavigate();

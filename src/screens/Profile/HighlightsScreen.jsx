@@ -4,12 +4,12 @@
  * @component
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X, Check } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Edit2, Loader2, Sparkles, X, Check } from "lucide-react";
 import { toast } from 'sonner';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';

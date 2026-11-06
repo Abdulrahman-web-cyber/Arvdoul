@@ -1,32 +1,12 @@
 // src/services/videoService.js
 
 import { getFirestoreInstance, getStorageInstance, getAuthInstance } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  serverTimestamp,
-  writeBatch,
-  runTransaction,
-  Timestamp,
-  onSnapshot,
-} from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, startAfter, serverTimestamp, runTransaction, onSnapshot } from "firebase/firestore";
 import { openDB } from 'idb';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
-import { errorHandler } from '../utils/ErrorHandler.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 
 const VIDEO_CONFIG = {
@@ -759,8 +739,10 @@ class UltimateVideoService {
       const nextCursor = formatted.length ? formatted[formatted.length - 1].id : null;
       return { success: true, feed: formatted, hasMore: formatted.length >= limit, nextCursor };
     } catch (err) {
-      logger.warn('[Video] Feed query fallback triggered:', err?.message);
-      return { success: true, feed: [], hasMore: false, nextCursor: null };
+      logger.warn('[Video] Feed query failed:', err?.message);
+      // Fail closed: an empty page reported as success hides the outage and
+      // stops pagination instead of letting the screen show an error.
+      return { success: false, feed: [], hasMore: false, nextCursor: null, error: err?.message || 'video-feed-failed' };
     }
   }
 

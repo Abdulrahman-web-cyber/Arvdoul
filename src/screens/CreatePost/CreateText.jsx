@@ -1,8 +1,6 @@
 // src/screens/CreatePost/CreateText.jsx
 
-import React, {
-  useEffect, useCallback, useState, useRef, useMemo
-} from "react";
+import { useEffect, useCallback, useState, useRef, useMemo } from "react";
 import { useCreatePostState, useCreatePostServices } from "../CreatePost";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";

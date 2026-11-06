@@ -17,7 +17,7 @@
  * @component
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
@@ -57,7 +57,7 @@ import {
   validateProfileUpdate 
 } from '../../config/profileContracts.js';
 import { isPlaceholderHandle, resolveCreatorFlag } from '../../services/profileReadModel.js';
-import { LEVEL_GATES, getRoyalEligibility } from '../../shared/levelConfig.cjs';
+import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';

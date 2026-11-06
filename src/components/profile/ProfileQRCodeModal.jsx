@@ -6,7 +6,7 @@
  * @component
  */
 
-import React, { memo, useState, useEffect, useMemo } from 'react';
+import { memo, useState, useEffect, useMemo } from "react";
 import { X, Copy, Check, Share2, Download, QrCode, Sparkles, Loader2, ScanLine, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';

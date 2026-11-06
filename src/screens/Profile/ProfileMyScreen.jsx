@@ -6,9 +6,9 @@
  * 
  * @component
  */
-import React, { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from 'react';
+import { useCallback, useEffect, useState, useMemo, Suspense, lazy, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Eye, ShieldCheck, X, Lock } from 'lucide-react';
+import { Eye, Lock } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
@@ -17,7 +17,6 @@ import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import ProfileViewAsBanner from '../../components/profile/ProfileViewAsBanner';
-import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import {
@@ -40,7 +39,6 @@ import ProfileTabsBar from '../../components/profile/ProfileTabsBar';
 import ProfilePinnedPosts from '../../components/profile/ProfilePinnedPosts';
 import ProfileFeedGrid from '../../components/profile/ProfileFeedGrid';
 import ProfileQRCodeModal from '../../components/profile/ProfileQRCodeModal';
-import ProfileQRScannerModal from '../../components/profile/ProfileQRScannerModal';
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import ProfilePerspectiveModal from '../../components/profile/ProfilePerspectiveModal';
 import ProfileSkeleton from '../../components/profile/ProfileSkeleton';
@@ -620,7 +618,6 @@ export default function ProfileMyScreen() {
           viewAs={viewAs}
           onViewAsChange={handleViewAsChange}
           onExit={() => handleViewAsChange('owner')}
-          theme={theme}
         />
       </div>
     </ErrorBoundary>

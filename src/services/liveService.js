@@ -13,7 +13,6 @@
  * @version 5.0.0
  */
 
-import { produce } from 'immer';
 import { cacheManager } from '../utils/CacheManager.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';

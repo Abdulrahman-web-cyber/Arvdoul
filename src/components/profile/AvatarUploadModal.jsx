@@ -7,7 +7,7 @@
  * - Accessible keyboard & modal dialog UX
  */
 
-import React, { memo, useState, useCallback, useRef } from 'react';
+import { memo, useState, useCallback, useRef } from "react";
 import Cropper from 'react-easy-crop';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, ZoomIn, ZoomOut, Check, Trash2, Camera, RefreshCw } from 'lucide-react';

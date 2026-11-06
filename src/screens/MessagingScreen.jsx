@@ -10,20 +10,14 @@
  * - Integrated BottomNav & real message transitions
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
 import { getSafeAvatarUrl } from '../utils/avatarUtils';
-import {
-  Search, SlidersHorizontal, Plus, Sparkles, Pin, BellOff,
-  CheckCircle2, Volume2, Mic, Image as ImageIcon, FileText,
-  Users, User, Radio, Archive, MessageSquare, ChevronRight,
-  MoreVertical, CheckCheck, Flame, Phone, Video
-} from 'lucide-react';
+import { Search, SlidersHorizontal, Plus, Sparkles, Pin, BellOff, CheckCircle2, Users, User, Radio, Archive, MessageSquare, ChevronRight } from "lucide-react";
 
 // Pinned Conversations data matching the exact screenshot
 // Master Conversation List matching the screenshots
@@ -261,9 +255,7 @@ export default function MessagingScreen() {
             </button>
 
             <button
-              onClick={() => {
-                toast.success('ARVDOUL AI Intelligence Hub connected! ✨');
-              }}
+              onClick={() => navigate('/ai-studio')}
               className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600/80 to-blue-600/80 border border-purple-400/30 hover:scale-105 flex items-center justify-center text-white transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)]"
               title="AI Assistant"
             >

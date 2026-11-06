@@ -2,29 +2,15 @@
 //
 // Futuristic TikTok & Reels style immersive video ecosystem
 
-import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Video, 
-  RefreshCw, 
-  Play, 
-  LayoutGrid, 
-  Smartphone, 
-  Sparkles, 
-  Search, 
-  Camera, 
-  TrendingUp, 
-  Flame, 
-  Radio, 
-  Plus 
-} from 'lucide-react';
+import { Video, Play, LayoutGrid, Smartphone, Flame } from "lucide-react";
 import { useTheme } from '../context/ThemeContext';
 import { useVideoStore } from '../store/videoStore';
 import { VideoFeed } from '../components/Videos';
 import videoService from '../services/videoService';
 import { toast } from 'sonner';
-import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import Button from '../design-system/Button.jsx';

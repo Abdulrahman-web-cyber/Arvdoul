@@ -2,24 +2,12 @@
 //
 // Server-validated, multidimensional criteria, Zero Pay-to-Legitimacy.
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import titleService from '../../services/titleService';
-import {
-  Crown,
-  Check,
-  Lock,
-  Sparkles,
-  Info,
-  ShieldCheck,
-  RefreshCw,
-  X,
-  Award,
-  Flame,
-  CheckCircle2,
-} from 'lucide-react';
+import { Check, Lock, Info, ShieldCheck, X, CheckCircle2 } from "lucide-react";
 import { toast } from 'sonner';
 
 const DOMAINS = [

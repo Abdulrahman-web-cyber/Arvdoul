@@ -5,7 +5,7 @@
 import { ACHIEVEMENTS_CATALOG } from './levelSystemService.js';
 import { callFunction, FUNCTIONS } from './callableService.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, getDocs, doc, getDoc, query, limit } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from "firebase/firestore";
 import { logger } from '../utils/Logger.js';
 
 // Hard ceiling for a user's earned-achievements list read.
