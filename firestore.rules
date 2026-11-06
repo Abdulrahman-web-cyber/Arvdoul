@@ -120,11 +120,68 @@ service cloud.firestore {
     //     missing value evaluates false, so only the owner branch can still admit
     //     it — everyone else is denied (fail closed).
     function postReadableByViewer() {
-      return resource.data.authorIsPrivate == false ||
+      return (isSignedIn() && resource.data.authorId == uid()) ||
         isAdmin() ||
+        (resource.data.isDeleted == false &&
+          (resource.data.expiresAt == null || resource.data.expiresAt > request.time) &&
+          (
+            // A community post is readable when its community is public or the
+            // viewer is a member. Community posts carry no `authorIsPrivate`
+            // (they are scoped by membership, not by the author's account).
+            (resource.data.visibility == 'community' &&
+              resource.data.status == 'published' &&
+              isSignedIn() &&
+              (get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.get('privacy', 'public') == 'public' ||
+                isCommunityMember(resource.data.communityId))) ||
+            // Otherwise the public/private-account shape.
+            (resource.data.authorIsPrivate == false &&
+              resource.data.status == 'published' &&
+              (resource.data.visibility == 'public' ||
+                (resource.data.visibility == 'followers' &&
+                  isSignedIn() &&
+                  followEdgeExists(uid(), resource.data.authorId))))
+          ));
+    }
+
+    // Rules are not filters: a LIST read is allowed only when the query itself
+    // proves the visibility predicate, so the query can never return a
+    // draft/scheduled/deleted/only-me post. `request.query.get(field, sentinel)`
+    // returns the value the query constrained with `==`, or the sentinel when
+    // the query did not constrain it. Three safe shapes:
+    //   - the public feed shape: `authorIsPrivate == false` + `visibility == 'public'`
+    //   - the owner's own shape: `authorId == uid()`
+    //   - a community feed: `communityId == X` + `visibility == 'community'`,
+    //     admitted only when X is public or the viewer is a member
+    // Everything else (no constraint, or a narrower set) is denied. Server-side
+    // workers/admin use the Admin SDK, which bypasses these rules.
+    function postQueryConstrainsPublic() {
+      return request.query.get('authorIsPrivate', '__none__') == false &&
+        request.query.get('visibility', '__none__') == 'public' &&
+        request.query.get('status', '__none__') == 'published' &&
+        request.query.get('isDeleted', '__none__') == false;
+    }
+    function postQueryConstrainsOwn() {
+      return request.query.get('authorId', '__none__') == uid();
+    }
+    function isCommunityMember(communityId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/communities/$(communityId)/members/$(uid()));
+    }
+    function postQueryConstrainsViewableCommunity() {
+      let communityId = request.query.get('communityId', '__none__');
+      return communityId != '__none__' &&
+        request.query.get('visibility', '__none__') == 'community' &&
+        request.query.get('status', '__none__') == 'published' &&
+        request.query.get('isDeleted', '__none__') == false &&
+        (get(/databases/$(database)/documents/communities/$(communityId)).data.get('privacy', 'public') == 'public' ||
+          isCommunityMember(communityId));
+    }
+    function postListableByViewer() {
+      return isAdmin() ||
         (isSignedIn() &&
-          (uid() == resource.data.authorId ||
-            followEdgeExists(uid(), resource.data.authorId)));
+          (postQueryConstrainsPublic() ||
+            postQueryConstrainsOwn() ||
+            postQueryConstrainsViewableCommunity()));
     }
 
     // Fields that must never appear on the world-readable `users/{uid}` doc.
@@ -309,9 +366,11 @@ service cloud.firestore {
 
     // ==================== POSTS ====================
     match /posts/{postId} {
-      // Public content (authorIsPrivate != true) is readable by anyone; a private
-      // author's content only by the author or an admin (see postReadableByViewer).
-      allow read: if postReadableByViewer();
+      // `get` (single doc): the full per-document visibility decision.
+      allow get: if postReadableByViewer();
+      // `list` (query): only when the query itself proves public-or-own (rules
+      // are not filters), so drafts/scheduled/only-me posts can never be listed.
+      allow list: if postListableByViewer();
       // `authorIsPrivate` is denormalised but not client-controlled: on the write
       // path a get() is allowed, so the stored value must equal the author's real
       // users/{uid}.isPrivate. A client cannot publish a public post for a private

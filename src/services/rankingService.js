@@ -468,7 +468,7 @@ class RankingService {
       let posts = [];
       try {
         const postsSnap = await getDocs(
-          query(collection(this.firestore, 'posts'), where('authorId', '==', userId), limit(500))
+          query(collection(this.firestore, 'posts'), where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), limit(500))
         );
         posts = postsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       } catch (err) {

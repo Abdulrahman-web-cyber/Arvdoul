@@ -720,9 +720,17 @@ class CommunityService {
     }
 
     const postId = doc(collection(this.db, 'posts')).id;
+    // The posts create rule pins `authorIsPrivate` to the author's real
+    // users/{uid}.isPrivate; a community post that omits it is rejected.
+    let authorIsPrivate = false;
+    try {
+      const authorSnap = await getDoc(doc(this.db, 'users', userId));
+      if (authorSnap.exists()) authorIsPrivate = authorSnap.data()?.isPrivate === true;
+    } catch { /* default public (fail closed at the rule if the account is private) */ }
     const post = {
       id: postId,
       authorId: userId,
+      authorIsPrivate,
       communityId,
       content: postData.content,
       type: postData.type || 'text',
@@ -770,15 +778,18 @@ class CommunityService {
     
     const { page = 1, sortBy = 'recent', status = 'published' } = options;
     
+    // The list rule proves a community feed only via
+    // `communityId == X` + `visibility == 'community'` + `status == 'published'`
+    // + `isDeleted == false`, and only when X is public or the viewer is a
+    // member. 'all' cannot be expressed to the rule, so it resolves to the
+    // published feed; a non-published status query is denied by the rule.
     let q = query(
       collection(this.db, 'posts'),
       where('communityId', '==', communityId),
-      where('isDeleted', '==', false)
+      where('visibility', '==', 'community'),
+      where('isDeleted', '==', false),
+      where('status', '==', status === 'all' ? 'published' : status)
     );
-
-    if (status !== 'all') {
-      q = query(q, where('status', '==', status));
-    }
 
     if (sortBy === 'recent') {
       q = query(q, orderBy('createdAt', 'desc'));

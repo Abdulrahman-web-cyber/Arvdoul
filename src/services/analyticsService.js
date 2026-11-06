@@ -361,7 +361,7 @@ class UltimateAnalyticsService {
         let totalEngagement = 0;
         try {
           const postsRef = collection(this.firestore, 'posts');
-          const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), orderBy('createdAt', 'desc'), limit(10)));
+          const pSnap = await getDocs(query(postsRef, where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), orderBy('createdAt', 'desc'), limit(10)));
           topPosts = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
           totalEngagement = topPosts.reduce((sum, p) => sum + (p.likesCount || p.likes || 0) + (p.commentsCount || 0) + (p.sharesCount || 0), 0);
         } catch { /* posts optional */ }

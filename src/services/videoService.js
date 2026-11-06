@@ -744,6 +744,9 @@ class UltimateVideoService {
         const postQ = query(
           postsRef,
           where('isDeleted', '==', false),
+          where('status', '==', 'published'),
+          where('visibility', '==', 'public'),
+          where('authorIsPrivate', '==', false),
           where('type', '==', 'video'),
           orderBy('createdAt', 'desc'),
           limit(limit)

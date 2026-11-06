@@ -718,7 +718,7 @@ class UltimateSearchService {
 
     if (tokens.length > 0) {
       try {
-        let tokenQ = firestoreQuery(postsRef, where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
+        let tokenQ = firestoreQuery(postsRef, where('authorIsPrivate', '==', false), where('visibility', '==', 'public'), where('status', '==', 'published'), where('isDeleted', '==', false), where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
         if (cursorSnapshot) tokenQ = firestoreQuery(tokenQ, startAfter(cursorSnapshot));
         const tokenSnap = await getDocs(tokenQ);
         if (!tokenSnap.empty) {
@@ -730,7 +730,7 @@ class UltimateSearchService {
 
     if (docs.length === 0) {
       try {
-        let q = firestoreQuery(postsRef, firestoreLimit(limitCount));
+        let q = firestoreQuery(postsRef, where('authorIsPrivate', '==', false), where('visibility', '==', 'public'), where('status', '==', 'published'), where('isDeleted', '==', false), firestoreLimit(limitCount));
         if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
         const snap = await getDocs(q);
         docs = snap.docs;
@@ -829,7 +829,9 @@ class UltimateSearchService {
         ];
         for (const ref of refs) {
           try {
-            const q = fq(ref, where('searchTokens', 'array-contains', token), limit(12));
+            const q = ref.id === 'posts'
+              ? fq(ref, where('authorIsPrivate', '==', false), where('visibility', '==', 'public'), where('status', '==', 'published'), where('isDeleted', '==', false), where('searchTokens', 'array-contains', token), limit(12))
+              : fq(ref, where('searchTokens', 'array-contains', token), limit(12));
             const snap = await getDocs(q);
             snap.docs.forEach((d) => {
               const data = d.data();

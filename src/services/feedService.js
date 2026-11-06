@@ -418,6 +418,21 @@ class UltimateFeedService {
     } catch (e) { return new Set(); }
   }
 
+  // The public-feed predicate the Firestore list rule proves. Every public
+  // post query must constrain exactly these fields (rules are not filters), or
+  // the whole query is denied — and a query that omits them could surface a
+  // draft/scheduled/only-me post. Keep in sync with `postQueryConstrainsPublic`
+  // in firestore.rules.
+  _publicPostFilters() {
+    const { where } = this.firestoreMethods;
+    return [
+      where('authorIsPrivate', '==', false),
+      where('status', '==', 'published'),
+      where('isDeleted', '==', false),
+      where('visibility', '==', 'public'),
+    ];
+  }
+
   async _getFollowingFeedEfficient(userId, options) {
     if (this.offlineMode) return [];
     try {
@@ -441,9 +456,7 @@ class UltimateFeedService {
         const q = this.firestoreMethods.query(
           this.firestoreMethods.collection(this.firestore, 'posts'),
           this.firestoreMethods.where('authorId', 'in', chunk),
-          this.firestoreMethods.where('isDeleted', '==', false),
-          this.firestoreMethods.where('status', '==', 'published'),
-          this.firestoreMethods.where('visibility', '==', 'public'),
+          ...this._publicPostFilters(),
           this.firestoreMethods.orderBy('createdAt', 'desc'),
           this.firestoreMethods.limit(10)
         );
@@ -493,10 +506,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch (err) {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
 
       const posts = [];
@@ -541,13 +553,12 @@ class UltimateFeedService {
       const postsRef = collection(this.firestore, 'posts');
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
         // The ordered query can fail (missing index / field); fall back to an
         // unordered read, but keep the limit — an unbounded `getDocs(postsRef)`
         // reads the entire posts collection (bill + latency cliff).
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       const posts = [];
       snapshot.forEach(doc => {
@@ -599,10 +610,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -636,10 +646,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -672,10 +681,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 4));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 4)));
       } catch {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 4)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 4)));
       }
       
       const posts = [];
@@ -753,10 +761,7 @@ class UltimateFeedService {
       const postsRef = this.firestoreMethods.collection(this.firestore, 'posts');
       let q = this.firestoreMethods.query(
         postsRef,
-        this.firestoreMethods.where('isDeleted', '==', false),
-        this.firestoreMethods.where('status', '==', 'published'),
-        this.firestoreMethods.where('visibility', '==', 'public'),
-        this.firestoreMethods.where('authorIsPrivate', '==', false),
+        ...this._publicPostFilters(),
         this.firestoreMethods.orderBy('createdAt', 'desc'),
         this.firestoreMethods.limit(limit)
       );
@@ -1621,10 +1626,21 @@ class UltimateFeedService {
     const postsRef = collection(this.firestore, 'posts');
     let q;
     if (postId) {
-      q = query(postsRef, where('__name__', '==', postId));
-    } else {
+      // Single-document read: `get` is gated by the per-document visibility rule.
+      const snap0 = await this.firestoreMethods.getDoc(this.firestoreMethods.doc(this.firestore, 'posts', postId));
+      if (!snap0.exists()) return { success: true, updated: 0 };
+      const data = snap0.data();
+      const engagement0 = (data.likeCount || 0) + (data.commentCount || 0) * 2 + (data.shareCount || 0) * 3;
+      const ageHours0 = (Date.now() - (data.createdAt?.toDate?.() || Date.now())) / (1000 * 60 * 60);
+      await this.firestoreMethods.updateDoc(this.firestoreMethods.doc(this.firestore, 'posts', postId), {
+        trendingScore: (engagement0 / Math.max(1, data.viewCount || 0)) * Math.exp(-ageHours0 / 12),
+        scoreUpdatedAt: this.firestoreMethods.serverTimestamp(),
+      });
+      return { success: true, updated: 1 };
+    }
+    {
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      q = query(postsRef, where('updatedAt', '>=', oneDayAgo), firestoreLimit(500));
+      q = query(postsRef, ...this._publicPostFilters(), where('updatedAt', '>=', oneDayAgo), firestoreLimit(500));
     }
     const snapshot = await getDocs(q);
     const updates = [];

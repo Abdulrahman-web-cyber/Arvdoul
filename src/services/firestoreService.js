@@ -424,27 +424,28 @@ class EnterpriseFirestoreService {
     try {
       const { collection, query, where, getDocs, orderBy, limit, startAfter, doc, getDoc } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let conditions = [
-        where('authorId', '==', userId),
-        where('isDeleted', '==', false),
-        orderBy('createdAt', 'desc')
-      ];
-      if (options.status) conditions.push(where('status', '==', options.status));
-      if (options.type) conditions.push(where('type', '==', options.type));
-
-      // The read rule gates a private author's posts behind a follow edge. A list
-      // query must constrain `authorIsPrivate` unless the viewer is the author or
-      // an approved follower, otherwise Firestore denies the whole query. Only the
-      // owner or a follower may see the private posts, so resolve that first.
       const viewerId = options.viewerId || null;
-      let canViewPrivate = Boolean(viewerId && viewerId === userId);
-      if (viewerId && !canViewPrivate) {
-        try {
-          const followSnap = await getDoc(doc(this.firestore, 'follows', `${viewerId}_${userId}`));
-          canViewPrivate = followSnap.exists();
-        } catch { /* treat as non-follower (fail closed) */ }
+      const isOwnerView = Boolean(viewerId && viewerId === userId);
+      // The list rule only admits two shapes (rules are not filters): the
+      // owner's own shape (`authorId == uid()`) and the public-feed shape
+      // (`authorIsPrivate == false` + `visibility == 'public'` +
+      // `status == 'published'` + `isDeleted == false`). A non-owner can
+      // therefore only list public published posts; drafts/scheduled/only-me
+      // posts stay invisible even though the query is author-scoped.
+      const conditions = [
+        where('authorId', '==', userId),
+        orderBy('createdAt', 'desc'),
+      ];
+      if (options.type) conditions.push(where('type', '==', options.type));
+      if (isOwnerView) {
+        conditions.push(where('isDeleted', '==', false));
+        if (options.status) conditions.push(where('status', '==', options.status));
+      } else {
+        conditions.push(where('authorIsPrivate', '==', false));
+        conditions.push(where('status', '==', 'published'));
+        conditions.push(where('isDeleted', '==', false));
+        conditions.push(where('visibility', '==', 'public'));
       }
-      if (!canViewPrivate) conditions.push(where('authorIsPrivate', '==', false));
 
       // Always bound: a caller that omits `limit` must not pull the author's
       // entire post history in one read.
