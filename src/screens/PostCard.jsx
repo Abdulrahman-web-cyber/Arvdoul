@@ -600,6 +600,23 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
   // Pause subscriptions when card not visible
   useEffect(() => { setIsActiveForSubs(isVisible); }, [isVisible]);
 
+  // Real post analytics for the author panel. The panel used to read
+  // `post.analytics.{views,reach,watchTime,completionRate,earnings}`, a shape
+  // nothing ever wrote, so every row rendered blank. Only the author may read
+  // it, and only while the analytics panel is open.
+  const [postAnalytics, setPostAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  useEffect(() => {
+    if (!ui.showAnalytics || !isAuthor || !post.id) return undefined;
+    let cancelled = false;
+    setAnalyticsLoading(true);
+    firestoreService.getPostAnalytics?.(post.id)
+      .then((res) => { if (!cancelled) setPostAnalytics(res?.success ? res.analytics : null); })
+      .catch(() => { if (!cancelled) setPostAnalytics(null); })
+      .finally(() => { if (!cancelled) setAnalyticsLoading(false); });
+    return () => { cancelled = true; };
+  }, [ui.showAnalytics, isAuthor, post.id]);
+
   // Cleanup timers
   useEffect(() => {
     return () => {
@@ -1001,16 +1018,25 @@ function PostCardContent({ post, currentUser, onOpenComments, onOpenOptions, nav
         )}
       </div>
 
-      {/* ANALYTICS PANEL */}
+      {/* ANALYTICS PANEL — real counters only (views/likes/comments/shares).
+          Reach, watch-time, completion-rate and earnings are not tracked for
+          posts, so they are not shown rather than rendered as fabricated zeros. */}
       <AnimatePresence>
         {ui.showAnalytics && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-3 pb-2 overflow-hidden">
             <div className="bg-black/20 rounded-xl p-2 space-y-1 text-xs" style={{ color: tokens.textSecondary }}>
-              <div className="flex justify-between"><span>Views</span><span>{post.analytics?.views?.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Reach</span><span>{post.analytics?.reach?.toLocaleString()}</span></div>
-              <div className="flex justify-between"><span>Watch Time (avg)</span><span>{post.analytics?.watchTime || 'N/A'}</span></div>
-              <div className="flex justify-between"><span>Completion Rate</span><span>{post.analytics?.completionRate || 0}%</span></div>
-              <div className="flex justify-between"><span>Earnings</span><span style={{ color: tokens.gold }}>+{post.analytics?.earnings || 0} Coins</span></div>
+              {analyticsLoading ? (
+                <div className="py-1 text-center">Loading analytics…</div>
+              ) : postAnalytics ? (
+                <>
+                  <div className="flex justify-between"><span>Views</span><span>{(postAnalytics.totalViews || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Likes</span><span>{(postAnalytics.totalLikes || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Comments</span><span>{(postAnalytics.totalComments || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Shares</span><span>{(postAnalytics.totalShares || 0).toLocaleString()}</span></div>
+                </>
+              ) : (
+                <div className="py-1 text-center">Analytics unavailable</div>
+              )}
             </div>
           </motion.div>
         )}

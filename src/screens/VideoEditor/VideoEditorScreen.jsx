@@ -23,6 +23,20 @@ import ExportModal from './components/ExportModal';
 import RecordVoiceModal from './components/RecordVoiceModal';
 import MediaDrawer from './components/MediaDrawer';
 
+// Saved project snapshots survive reload; previously "Save Project" only
+// pushed onto in-memory state and the header still claimed the work was saved.
+const PROJECTS_STORAGE_KEY = 'arvdoul_video_projects_v1';
+
+function readStoredProjects() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * REAL video frame capture: loads the media, draws one frame to a canvas and
  * returns a JPEG data URL. Returns '' when the frame cannot be decoded —
@@ -116,7 +130,6 @@ export default function VideoEditorScreen() {
   // their own project; we never present a pre-made demo project.
   const [projectName, setProjectName] = useState('Untitled Project');
   const [selectedResolution, setSelectedResolution] = useState(RESOLUTION_PRESETS[0]); // 4K 16:9
-  const [isSaved, setIsSaved] = useState(true);
 
   // Tracks & Clips State
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
@@ -131,8 +144,6 @@ export default function VideoEditorScreen() {
     setHistory([...updated, newTracks]);
     setHistoryIndex(updated.length);
     setTracks(newTracks);
-    setIsSaved(false);
-    setTimeout(() => setIsSaved(true), 1200);
   };
 
   const handleUndo = () => {
@@ -161,8 +172,8 @@ export default function VideoEditorScreen() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
-  // Saved projects (in-session list for the header project menu)
-  const [savedProjects, setSavedProjects] = useState([]);
+  // Saved projects (persisted snapshots for the header project menu)
+  const [savedProjects, setSavedProjects] = useState(readStoredProjects);
 
   // Tool & Ribbon State
   const [activeTool, setActiveTool] = useState('trim');
@@ -641,7 +652,9 @@ export default function VideoEditorScreen() {
     pushHistory(tracks.map((t) => (t.id === trackId ? { ...t, locked: !t.locked } : t)));
   };
 
-  // Save the current project into localStorage and keep an in-session list.
+  // Persist the current project snapshot so it survives a reload. Clip media
+  // that came from `URL.createObjectURL` is session-scoped, so a reloaded
+  // project keeps its edit structure but may need its media re-added.
   const handleSaveProject = () => {
     const snapshot = {
       id: `project-${Date.now()}`,
@@ -650,8 +663,15 @@ export default function VideoEditorScreen() {
       tracks,
       updatedAtText: 'Just now',
     };
-    setSavedProjects((prev) => [snapshot, ...prev].slice(0, 10));
-    setIsSaved(true);
+    setSavedProjects((prev) => {
+      const next = [snapshot, ...prev].slice(0, 10);
+      try {
+        localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Quota exceeded / unavailable storage: the in-memory list still works.
+      }
+      return next;
+    });
   };
 
   const handleNewProject = () => {
@@ -696,7 +716,6 @@ export default function VideoEditorScreen() {
         onClose={() => navigate(-1)}
         currentResolution={selectedResolution}
         onSelectResolution={setSelectedResolution}
-        isSaved={isSaved}
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={historyIndex > 0}

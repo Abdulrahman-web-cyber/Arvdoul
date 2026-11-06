@@ -153,8 +153,10 @@ export default function NotificationsScreen() {
         setNetworkActionState((prev) => ({ ...prev, [targetId]: 'following' }));
         toast.success(`Now following ${targetUser.displayName || targetUser.username || 'user'}! ✨`);
       } catch {
-        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'connected' }));
-        toast.success(`Connected with ${targetUser.displayName || targetUser.username || 'user'}`);
+        // Both the friend request and the follow failed — do not claim a
+        // connection that was never made.
+        setNetworkActionState((prev) => ({ ...prev, [targetId]: 'idle' }));
+        toast.error(`Could not connect with ${targetUser.displayName || targetUser.username || 'user'}`);
       }
     }
   };

@@ -109,6 +109,19 @@ describe('design-system duplication', () => {
   });
 });
 
+describe('PostCard analytics panel', () => {
+  test('reads real post analytics instead of an unproduced post.analytics shape', () => {
+    const src = read('src/screens/PostCard.jsx');
+    // Nothing ever wrote post.analytics.{views,reach,watchTime,...}, so the
+    // panel rendered blank rows. It now loads the real counters.
+    expect(src).toContain('firestoreService.getPostAnalytics');
+    expect(src).not.toContain('post.analytics?.views');
+    expect(src).not.toContain('post.analytics?.reach');
+    expect(src).not.toContain('post.analytics?.watchTime');
+    expect(src).not.toContain('post.analytics?.completionRate');
+  });
+});
+
 describe('router wiring: every lazy screen is actually routed', () => {
   test('no lazy screen is declared without a matching route element', () => {
     // A `const X = lazy(() => import('../screens/X'))` that no `<X />` renders is

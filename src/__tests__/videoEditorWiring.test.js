@@ -106,4 +106,15 @@ describe('Video Studio dead props removed', () => {
     expect(screen).toMatch(/savedProjects=\{savedProjects\}/);
     expect(screen).toMatch(/onLoadProject=\{handleLoadProject\}/);
   });
+
+  test('saving a project persists it, and no fake "saved" timer remains', () => {
+    // "Save Project" claimed to persist but only pushed onto in-memory state,
+    // and `isSaved` was flipped back by a 1200ms timer — a fabricated saved
+    // indicator (the prop was also never read by EditorHeader).
+    expect(screen).toContain('localStorage.setItem(PROJECTS_STORAGE_KEY');
+    expect(screen).toMatch(/useState\(readStoredProjects\)/);
+    expect(screen).not.toContain('setIsSaved');
+    expect(screen).not.toContain('isSaved={isSaved}');
+    expect(screen).not.toMatch(/setTimeout\(\(\) => setIsSaved\(true\)/);
+  });
 });
