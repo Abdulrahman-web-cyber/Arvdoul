@@ -16,7 +16,8 @@ let lastSyncTime = null;
 const syncListeners = new Set();
 
 /**
- * Dispatch sync state changes to all subscribers
+ * Dispatch sync state changes to all subscribers. `subscribeSyncStatus` is the
+ * single consumption path; the old `window` CustomEvent had no listener.
  */
 function notifyListeners(state) {
   syncListeners.forEach((listener) => {
@@ -26,14 +27,6 @@ function notifyListeners(state) {
       console.warn('Sync listener error:', err);
     }
   });
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent('arvdoul-sync-status', {
-        detail: state,
-      })
-    );
-  }
 }
 
 /**

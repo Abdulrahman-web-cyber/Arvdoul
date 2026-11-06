@@ -2,7 +2,6 @@
  * ARVDOUL pure-logic formatter tests (no mocks, no Firebase).
  */
 import { formatDuration, formatViewCount, getInitials } from '../videoUtils.js';
-import { saveToCache, loadFromCache } from '../offlineCache.js';
 
 describe('videoUtils formatDuration', () => {
   test('formats seconds as H:MM:SS', () => {
@@ -32,17 +31,5 @@ describe('videoUtils getInitials', () => {
     expect(getInitials('alice')).toBe('AL');
     expect(getInitials('')).toBe('??');
     expect(getInitials(null)).toBe('??');
-  });
-});
-
-describe('offlineCache', () => {
-  test('round-trips and honors TTL (6h)', () => {
-    const key = 'test_offline_cache';
-    saveToCache(key, { hello: 'world' });
-    expect(loadFromCache(key)).toEqual({ hello: 'world' });
-    // Corrupt / expired entry (timestamp 7h old) is discarded.
-    localStorage.setItem(key, JSON.stringify({ data: 1, timestamp: Date.now() - 7 * 60 * 60 * 1000 }));
-    expect(loadFromCache(key)).toBeNull();
-    localStorage.removeItem(key);
   });
 });

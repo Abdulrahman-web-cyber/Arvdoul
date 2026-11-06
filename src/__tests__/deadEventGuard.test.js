@@ -35,14 +35,14 @@ const sources = [
 
 function names(src, kind) {
   const re = new RegExp(
-    `${kind}\\(\\s*(?:new CustomEvent\\(\\s*)?['"\`](arvdoul:[\\w:-]+)['"\`]`,
+    `${kind}\\(\\s*(?:new\\s+(?:Custom)?Event\\(\\s*)?['"\`]([\\w:.-]+)['"\`]`,
     'g',
   );
   return [...src.matchAll(re)].map((m) => m[1]);
 }
 
-describe('dead-event guard - every dispatched arvdoul:* event has a listener', () => {
-  test('no arvdoul:* event is dispatched without a listener', () => {
+describe('dead-event guard - every dispatched app event has a listener', () => {
+  test('no app-dispatched window/document event lacks a listener', () => {
     const dispatched = new Set();
     const listened = new Set();
     for (const file of sources) {
