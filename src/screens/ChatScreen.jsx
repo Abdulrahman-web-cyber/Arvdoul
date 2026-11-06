@@ -26,7 +26,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getMessagingService, MESSAGING_CONFIG } from '../services/messagesService.js';
 import MessageInput from '../components/messaging/MessageInput.jsx';
 import MessageBubble from '../components/messaging/MessageBubble.jsx';
-import { Skeleton } from '../components/ui/Skeleton.jsx';
+import { Skeleton } from '../components/UI/Skeleton.jsx';
 import EmptyState from '../design-system/EmptyState.jsx';
 import ErrorState from '../design-system/ErrorState.jsx';
 import { cn } from '../lib/utils';

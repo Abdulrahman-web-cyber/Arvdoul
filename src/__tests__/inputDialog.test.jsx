@@ -7,7 +7,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
-import { Dialog } from '../components/ui/Dialog.jsx';
+import { Dialog } from '../components/UI/Dialog.jsx';
 
 // lib/utils.js is ESM; .jsx tests are transformed to CJS, so stub it.
 jest.mock('../lib/utils.js', () => ({

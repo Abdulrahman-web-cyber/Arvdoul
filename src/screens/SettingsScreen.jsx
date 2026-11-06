@@ -30,8 +30,8 @@ import { levelSystemService, getPerksForLevel, getLifetimeRewards, LEVEL_GATES }
 import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY } from '../config/profileContracts.js';
 import { ProfileSystemRoadmapModal } from '../components/profile/ProfileSystemRoadmapModal.jsx';
 import { SUPPORTED_LOCALES } from '../i18n/index.js';
-import { Dialog } from '../components/ui/Dialog.jsx';
-import { Skeleton } from '../components/ui/Skeleton.jsx';
+import { Dialog } from '../components/UI/Dialog.jsx';
+import { Skeleton } from '../components/UI/Skeleton.jsx';
 import { cn } from '../lib/utils';
 
 /* ---------- Reusable row primitives ---------- */

@@ -18,7 +18,7 @@ import notificationsService from '../services/notificationsService';
 import { getMonetizationService } from '../services/monetizationService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
-import { Dialog } from '../components/ui/Dialog.jsx';
+import { Dialog } from '../components/UI/Dialog.jsx';
 
 const FILTERS = [
   { id: 'All', label: 'All' },

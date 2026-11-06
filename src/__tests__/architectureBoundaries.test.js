@@ -108,3 +108,27 @@ describe('architecture boundary: services reach callables through callableServic
     expect(offenders).toEqual([]);
   });
 });
+
+// Two sibling directories whose names differ only by case (`components/UI` vs
+// `components/ui`) collapse into one on macOS/Windows, so imports silently
+// resolve to whichever copy the filesystem kept. Keep one canonical path.
+describe('architecture boundary: no case-only duplicate paths', () => {
+  test('no two sibling entries under src differ only by case', () => {
+    const collisions = [];
+    const check = (dir) => {
+      const seen = new Map();
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules') continue;
+        const lower = entry.name.toLowerCase();
+        if (seen.has(lower)) {
+          collisions.push(`${path.relative(root, dir)}: ${seen.get(lower)} vs ${entry.name}`);
+        } else {
+          seen.set(lower, entry.name);
+        }
+        if (entry.isDirectory()) check(path.join(dir, entry.name));
+      }
+    };
+    check(path.join(root, 'src'));
+    expect(collisions).toEqual([]);
+  });
+});

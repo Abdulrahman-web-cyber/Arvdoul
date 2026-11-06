@@ -9,7 +9,7 @@ import { AuthProvider } from '../context/AuthContext.jsx';
 import { Toaster } from 'sonner';
 import GlobalErrorBoundary from './GlobalErrorBoundary.jsx';
 import AppRoutes from '../routes/AppRoutes.jsx';
-import OfflineIndicator from '../components/ui/OfflineIndicator.jsx';
+import OfflineIndicator from '../components/UI/OfflineIndicator.jsx';
 import PageLoader from '../components/UI/PageLoader.jsx';
 import PWAInstallBanner from '../components/common/PWAInstallBanner.jsx';
 import SWUpdateBanner from '../components/common/SWUpdateBanner.jsx';
