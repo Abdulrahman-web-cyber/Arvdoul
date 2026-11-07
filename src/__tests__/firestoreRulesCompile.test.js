@@ -455,6 +455,13 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       // callback value.
       const after = await getDoc(doc(alice, 'usernames/alice'));
       expect(after.data().userId).toBe('alice');
+
+      // N103 — previous_usernames squatting: carol cannot pre-create a history
+      // doc for a name she never held, but alice (who owns it) can record it.
+      await assertFails(setDoc(doc(env.authenticatedContext('carol').firestore(), 'previous_usernames/alice'),
+        { userId: 'carol', oldUsername: 'alice', currentUsername: 'carol2' }));
+      await assertSucceeds(setDoc(doc(alice, 'previous_usernames/alice'),
+        { userId: 'alice', oldUsername: 'alice', currentUsername: 'alice2' }));
     } finally {
       await env.cleanup();
     }

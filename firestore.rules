@@ -341,11 +341,16 @@ service cloud.firestore {
       allow update: if isSignedIn() && resource.data.userId == uid() && request.resource.data.userId == uid();
       allow delete: if isSignedIn() && resource.data.userId == uid();
     }
-    // Immutable username history: readable so old share/QR links keep resolving,
-    // writable only by the owner who held the previous username.
+    // Immutable username history: readable so old share/QR links keep resolving.
+    // A create is allowed only for a name the writer CURRENTLY holds (verified
+    // against `usernames/{name}`), so an outsider cannot pre-squat a
+    // `previous_usernames` doc for a name they never owned — that would make the
+    // real owner's later rename transaction fail (this rule forbids update) and
+    // block them from ever changing their username.
     match /previous_usernames/{username} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid() &&
+        get(/databases/$(database)/documents/usernames/$(username)).data.userId == uid();
       allow update, delete: if false;
     }
     match /user_settings/{userId} {
