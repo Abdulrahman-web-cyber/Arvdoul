@@ -72,6 +72,10 @@ merge(require('./privacyMigration.js'));
 // Keeps the denormalised posts.authorIsPrivate flag in step with the author's
 // privacy (the post read rule gates a private account's content on it).
 merge(require('./privacyPropagation.js'));
+// Server-authoritative community mutations (create/join/leave/roles/spaces/
+// moderation). The community document's members map and derived counters are
+// privilege data, so the client never writes it directly.
+merge(require('./communities.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {

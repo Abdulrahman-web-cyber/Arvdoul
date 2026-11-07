@@ -909,42 +909,6 @@ class EnterpriseFirestoreService {
     }
   }
 
-  async sendGift(postId, userId, giftType, coinValue) {
-    await this.ensureInitialized();
-    try {
-      const { collection, addDoc, doc, arrayUnion, serverTimestamp, runTransaction } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      let authorId;
-      await runTransaction(this.firestore, async (transaction) => {
-        const postSnap = await transaction.get(postRef);
-        if (!postSnap.exists()) throw new Error('Post not found');
-        authorId = postSnap.data().authorId;
-        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'gifts' });
-        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'giftValue', amount: coinValue });
-        transaction.update(postRef, {
-          gifts: arrayUnion({ userId, giftType, coinValue, sentAt: serverTimestamp() }),
-          updatedAt: serverTimestamp()
-        });
-        const giftDocRef = doc(this.firestore, 'posts', postId, 'gifts', `${userId}_${Date.now()}`);
-        transaction.set(giftDocRef, { userId, giftType, coinValue, sentAt: serverTimestamp() });
-      });
-      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'gifts' });
-      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'giftValue' });
-      auditLogger.log('monetization.gift', { userId, meta: { postId, giftType, coinValue, recipientId: authorId } });
-
-      const giftsRef = collection(this.firestore, 'gift_transactions');
-      await addDoc(giftsRef, {
-        postId, fromUserId: userId, toUserId: authorId,
-        giftType, coinValue, sentAt: serverTimestamp(), status: 'completed'
-      });
-
-      const monetizationService = await import('./monetizationService.js').then(m => m.getMonetizationService());
-      await monetizationService.spendCoins(userId, coinValue, 'gift', { postId, giftType, recipientId: authorId });
-      this.cache.delete(postId);
-      return { success: true };
-    } catch (error) { throw enhanceError(error, 'Failed to send gift'); }
-  }
-
   async addReaction(postId, userId, reactionType) {
     await this.ensureInitialized();
     if (!CONFIG.ALLOWED_REACTIONS.includes(reactionType)) {
@@ -1314,7 +1278,6 @@ const firestoreService = {
   unsavePost: (pid, uid) => getFirestoreService().unsavePost(pid, uid),
   getSavedPosts: (uid, opts) => getFirestoreService().getSavedPosts(uid, opts),
   getLikedPosts: (uid, opts) => getFirestoreService().getLikedPosts(uid, opts),
-  sendGift: (pid, uid, type, value) => getFirestoreService().sendGift(pid, uid, type, value),
   addReaction: (pid, uid, reactionType) => getFirestoreService().addReaction(pid, uid, reactionType),
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),

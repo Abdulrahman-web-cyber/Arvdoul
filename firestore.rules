@@ -170,8 +170,12 @@ service cloud.firestore {
       return request.query.get('authorId', '__none__') == uid();
     }
     function isCommunityMember(communityId) {
+      // Membership is a MAP field `members: { [uid]: {...} }`, not a
+      // subcollection. The old `exists(.../members/$(uid()))` never matched
+      // anything, so every non-public community post was unreadable even to its
+      // own members. `uid() in map` is the documented key-membership test.
       return isSignedIn() &&
-        exists(/databases/$(database)/documents/communities/$(communityId)/members/$(uid()));
+        uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.get('members', {});
     }
     function postQueryConstrainsViewableCommunity() {
       let communityId = request.query.get('communityId', '__none__');
@@ -934,9 +938,13 @@ service cloud.firestore {
 
     // ==================== COMMUNITIES ====================
     match /communities/{communityId} {
+      // The community document holds the members map (privilege data: roles,
+      // permissions), moderation state and derived counters. A client write
+      // could therefore grant itself `role: 'owner'`, so every mutation goes
+      // through the server-authoritative `community*` callables in
+      // functions/communities.js. Reads stay public for the directory.
       allow read: if true;
-      allow create: if isSignedIn() && authoredBy('ownerId');
-      allow update, delete: if (isSignedIn() && request.auth.uid == resource.data.ownerId) || isAdmin();
+      allow write: if false; // server-verified
       match /{subcollection}/{docId} {
         allow read: if true;
         // Members may create their own content; only the author (or admin) may edit/delete.
