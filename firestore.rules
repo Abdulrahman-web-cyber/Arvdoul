@@ -330,8 +330,15 @@ service cloud.firestore {
     // usernames registry: created/updated via owner flows; public read for availability and profile lookups
     match /usernames/{username} {
       allow read: if true;
-      // Only the owner may create/update/delete a username doc that belongs to them.
-      allow create, update: if isSignedIn() && request.resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      // A claimed username is immutable except by the user who already owns the
+      // doc, and even they may never reassign its `userId`. The previous
+      // `create, update` grant let ANY signed-in user overwrite ANY username doc
+      // with their own userId (`request.resource.data.userId == uid()`), silently
+      // stealing the username — every share/QR link for it then resolved to the
+      // attacker. Re-asserting the owner's own doc (createUserProfile's merge
+      // set) still passes because resource.data.userId == uid() there.
+      allow update: if isSignedIn() && resource.data.userId == uid() && request.resource.data.userId == uid();
       allow delete: if isSignedIn() && resource.data.userId == uid();
     }
     // Immutable username history: readable so old share/QR links keep resolving,

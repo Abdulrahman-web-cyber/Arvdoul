@@ -416,4 +416,47 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await env.cleanup();
     }
   });
+
+  test('a username doc cannot be hijacked by another user (N102)', async () => {
+    // `usernames/{name}` grants `create, update: request.resource.data.userId == uid()`.
+    // For an UPDATE that compares the NEW userId, so any signed-in user could
+    // overwrite any claimed username doc with their own userId — stealing the
+    // username; every share/QR link for it then resolved to the attacker.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'usernames/alice'), { userId: 'alice', username: 'alice' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // Bob must not be able to steal alice's username doc...
+      await assertFails(setDoc(doc(bob, 'usernames/alice'), { userId: 'bob', username: 'alice' }));
+      // ...nor claim a brand-new name as someone else's userId.
+      await assertFails(setDoc(doc(bob, 'usernames/newname'), { userId: 'alice', username: 'newname' }));
+      // The owner may re-assert their own doc (createUserProfile merge set)...
+      await assertSucceeds(setDoc(doc(alice, 'usernames/alice'), { userId: 'alice', username: 'alice' }, { merge: true }));
+      // ...and a fresh user may claim an unclaimed name.
+      await assertSucceeds(setDoc(doc(bob, 'usernames/bobname'), { userId: 'bob', username: 'bobname' }));
+
+      // Read back through a normal (rules-enabled) context: `usernames` is
+      // world-readable, and `withSecurityRulesDisabled` does not return the
+      // callback value.
+      const after = await getDoc(doc(alice, 'usernames/alice'));
+      expect(after.data().userId).toBe('alice');
+    } finally {
+      await env.cleanup();
+    }
+  });
 });
