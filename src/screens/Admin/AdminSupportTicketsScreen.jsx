@@ -113,7 +113,7 @@ const AdminSupportTicketsScreen = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-750 p-1 rounded-xl">
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
             {['open', 'in_progress', 'resolved', 'all'].map(status => (
               <button
                 key={status}
@@ -163,7 +163,7 @@ const AdminSupportTicketsScreen = () => {
               <div
                 key={tkt.id}
                 onClick={() => setSelectedTicket(tkt)}
-                className="p-5 flex items-center justify-between gap-4 hover:bg-gray-50/70 dark:hover:bg-gray-750 transition cursor-pointer"
+                className="p-5 flex items-center justify-between gap-4 hover:bg-gray-50/70 dark:hover:bg-gray-700 transition cursor-pointer"
               >
                 <div className="flex items-start gap-3.5">
                   <div
@@ -271,7 +271,7 @@ const AdminSupportTicketsScreen = () => {
             </div>
 
             {/* Response Composer */}
-            <div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+            <div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-gray-500">Compose Official Response</span>
                 <button

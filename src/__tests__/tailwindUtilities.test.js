@@ -15,8 +15,12 @@
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const paletteColors = require('tailwindcss/colors');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SRC = path.join(root, 'src');
@@ -50,6 +54,19 @@ function walk(dir, out = []) {
 // Any color-opacity utility: bg-white/8, border-white/12, from-arvdoul-purple/30 …
 const UTILITY = /\b(?:bg|border|text|from|via|to|ring|divide|fill|stroke|outline|decoration|placeholder|accent|caret|shadow)-[a-z][a-z0-9-]*\/(\d+)\b/g;
 
+// Any palette shade utility: bg-gray-750, dark:bg-gray-750, border-gray-700 …
+const SHADE = /\b(?:bg|border|text|from|via|to|ring|divide|fill|stroke|outline|decoration|placeholder|accent|caret)-([a-z][a-z0-9]*)-(\d{2,3})\b/g;
+
+const DEFAULT_SHADES = new Set([0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]);
+
+// Colors whose shade set differs from the default scale. Everything else must be
+// a default shade; anything outside both is a typo (e.g. `gray-750`).
+function knownShades(color) {
+  const def = paletteColors[color];
+  if (!def || typeof def === 'string') return null; // not a palette we validate
+  return new Set(Object.keys(def).map(Number).filter((n) => !Number.isNaN(n)));
+}
+
 describe('tailwind utilities reference declared scale steps (N111)', () => {
   test('every color/opacity step used in src is declared in the opacity scale', () => {
     const configured = configuredOpacitySteps();
@@ -59,6 +76,22 @@ describe('tailwind utilities reference declared scale steps (N111)', () => {
       for (const m of text.matchAll(UTILITY)) {
         const step = Number(m[1]);
         if (!configured.has(step)) {
+          offenders.push(`${path.relative(root, file)}: ${m[0]}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('every palette shade used in src exists (no gray-750-style typos)', () => {
+    const offenders = [];
+    for (const file of walk(SRC)) {
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(SHADE)) {
+        const [, color, shade] = m;
+        const shades = knownShades(color);
+        if (!shades) continue; // custom/arvdoul-* colors or non-palette classes
+        if (!shades.has(Number(shade)) && !DEFAULT_SHADES.has(Number(shade))) {
           offenders.push(`${path.relative(root, file)}: ${m[0]}`);
         }
       }

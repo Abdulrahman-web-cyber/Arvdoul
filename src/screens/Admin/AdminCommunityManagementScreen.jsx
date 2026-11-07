@@ -106,7 +106,7 @@ const AdminCommunityManagementScreen = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-750 p-1 rounded-xl">
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
             {['all', 'public', 'private'].map(p => (
               <button
                 key={p}
@@ -186,7 +186,7 @@ const AdminCommunityManagementScreen = () => {
                   {comm.description || 'No description provided.'}
                 </p>
 
-                <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-750 rounded-xl text-xs mb-4">
+                <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-xs mb-4">
                   <div>
                     <span className="text-gray-500">Members</span>
                     <div className="font-bold text-gray-900 dark:text-white">{Number(comm.stats?.memberCount ?? comm.memberCount ?? 0).toLocaleString()}</div>

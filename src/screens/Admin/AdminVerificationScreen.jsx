@@ -113,7 +113,7 @@ const AdminVerificationScreen = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-750 p-1 rounded-xl">
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
             {['pending', 'approved', 'rejected', 'all'].map(status => (
               <button
                 key={status}
@@ -218,7 +218,7 @@ const AdminVerificationScreen = () => {
                   </div>
 
                   {/* Standing Checklist */}
-                  <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-750 rounded-xl mb-4 text-xs">
+                  <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl mb-4 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-500">Citizenship:</span>
                       <span className="font-bold text-violet-600 dark:text-violet-400">

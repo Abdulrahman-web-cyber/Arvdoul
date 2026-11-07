@@ -432,7 +432,7 @@ const AdminEconomyScreen = () => {
                       </tr>
                     )}
                     {filteredPayouts.map(payout => (
-                      <tr key={payout.id} className="hover:bg-gray-50/70 dark:hover:bg-gray-750 transition">
+                      <tr key={payout.id} className="hover:bg-gray-50/70 dark:hover:bg-gray-700 transition">
                         <td className="px-6 py-4">
                           <div className="font-semibold text-gray-900 dark:text-white font-mono text-xs">{payout.userId}</div>
                           <div className="text-xs text-gray-500 font-mono">{payout.id}</div>
@@ -536,7 +536,7 @@ const AdminEconomyScreen = () => {
                   </div>
                 )}
                 {filteredTransactions.map(tx => (
-                  <div key={tx.id} className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-gray-50/50 dark:hover:bg-gray-750 transition">
+                  <div key={tx.id} className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-gray-50/50 dark:hover:bg-gray-700 transition">
                     <div className="flex items-center gap-3.5">
                       <div
                         className={`p-2.5 rounded-xl ${

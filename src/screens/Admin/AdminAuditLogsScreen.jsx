@@ -170,7 +170,7 @@ const AdminAuditLogsScreen = () => {
             {filteredLogs.map(log => {
               const isExpanded = expandedLogId === log.id;
               return (
-                <div key={log.id} className="p-4 sm:p-5 hover:bg-gray-50/60 dark:hover:bg-gray-750 transition">
+                <div key={log.id} className="p-4 sm:p-5 hover:bg-gray-50/60 dark:hover:bg-gray-700 transition">
                   <div
                     onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
                     className="flex items-center justify-between gap-4 cursor-pointer"

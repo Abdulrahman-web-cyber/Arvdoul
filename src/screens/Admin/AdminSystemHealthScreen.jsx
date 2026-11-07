@@ -205,7 +205,7 @@ const AdminSystemHealthScreen = () => {
               return (
                 <div
                   key={svc.id}
-                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-750 flex flex-col justify-between"
+                  className="p-5 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-700 flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
