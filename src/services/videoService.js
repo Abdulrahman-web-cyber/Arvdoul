@@ -639,8 +639,22 @@ class UltimateVideoService {
 
   async getVideoFeed(userId, options = {}) {
     await this.ensureInitialized();
-    const { feedType = 'for_you', limit = 20, type = null, lastDocSnapshot, signal } = options;
+    const { feedType = 'for_you', limit = 20, type = null, signal, cursor } = options;
+    let { lastDocSnapshot } = options;
     const safeUserId = userId || 'anonymous_user';
+
+    // Callers paginate with the opaque `nextCursor` (a video id) they received
+    // from the previous page. Resolve it to a document snapshot here — the
+    // service previously only honoured `lastDocSnapshot`, so every "load more"
+    // silently returned the first page again.
+    if (!lastDocSnapshot && cursor) {
+      try {
+        const cursorSnap = await getDoc(doc(this.firestore, 'videos', String(cursor)));
+        if (cursorSnap.exists()) lastDocSnapshot = cursorSnap;
+      } catch (err) {
+        logger.warn('[Video] Could not resolve feed cursor:', err?.message);
+      }
+    }
 
     if (this.activeAbortControllers.has(safeUserId)) {
       this.activeAbortControllers.get(safeUserId).abort();

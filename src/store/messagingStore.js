@@ -96,9 +96,10 @@ export const useMessagingStore = create((set, get) => ({
               draft.messages[conversationId] = result.messages || [];
             }
             draft.messagesHasMore[conversationId] = result.hasMore || false;
-            // The next page is older, so the cursor is the OLDEST loaded
-            // message's timestamp (getMessages paginates by startAfter date).
-            const oldest = result.messages?.[result.messages.length - 1];
+            // getMessages now returns chronological (oldest-first) order, so the
+            // oldest message in the page is the FIRST element. The next page is
+            // older, so the cursor is that timestamp (startAfter date).
+            const oldest = result.messages?.[0];
             const oldestAt = oldest?.createdAt?.toDate?.() || oldest?.createdAt;
             draft.messagesNextCursor[conversationId] = oldestAt
               ? new Date(oldestAt).toISOString()

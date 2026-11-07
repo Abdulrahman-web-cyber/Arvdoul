@@ -80,19 +80,25 @@ export default function ChatScreen() {
       const res = await svc.getMessages(conversationId, { cacheFirst: false, limit: 60 });
       if (res.success) {
         setHasMoreOlder(Boolean(res.hasMore));
-        // Merge pending optimistic messages (they'll be replaced once the
-        // server copy arrives via the realtime channel).
-        const pending = Array.from(pendingRef.current.values()).map((p) => ({
-          id: p.localId,
-          _local: true,
-          _pending: true,
-          senderId: uid,
-          type: p.data.type || 'text',
-          content: p.data.content,
-          media: p.data.media,
-          createdAt: new Date(),
-        }));
-        setMessages([...pending, ...res.messages]);
+        // Merge pending optimistic messages that the server copy has NOT yet
+        // returned. The optimistic id IS the server id (it is sent as the
+        // idempotency key), so any pending entry already present in the server
+        // page is dropped here — otherwise the sent bubble rendered twice.
+        const serverMessages = res.messages || [];
+        const serverIds = new Set(serverMessages.map((m) => m.id));
+        const pending = Array.from(pendingRef.current.entries())
+          .filter(([localId]) => !serverIds.has(localId))
+          .map(([localId, p]) => ({
+            id: localId,
+            _local: true,
+            _pending: true,
+            senderId: uid,
+            type: p.data.type || 'text',
+            content: p.data.content,
+            media: p.data.media,
+            createdAt: new Date(),
+          }));
+        setMessages([...pending, ...serverMessages]);
       }
     } catch (err) {
       setLoadError(err.message || 'Failed to load messages');
@@ -216,6 +222,22 @@ export default function ChatScreen() {
   }, [conversationId, uid, messages]);
 
   // Actions (all real, via messagesService)
+  // The optimistic id is sent as the idempotency key, so it BECOMES the server
+  // doc id. That lets the realtime subscription and the debounced reload
+  // replace the bubble in place (same React key) instead of appending a second
+  // copy — the "sent message appears twice" bug. On a successful send we clear
+  // the pending markers but keep the local timestamp: the send result carries an
+  // unresolved serverTimestamp sentinel, and the authoritative copy arrives via
+  // the realtime channel a moment later. An offline-queued send stays pending
+  // until the queue drains.
+  const reconcileSentMessage = useCallback((localId, res) => {
+    if (res?.offlineQueued) return;
+    pendingRef.current.delete(localId);
+    setMessages((prev) => prev.map((m) => (
+      m.id === localId ? { ...m, _local: false, _pending: false, _failed: false } : m
+    )));
+  }, []);
+
   const handleSendMessage = useCallback(
     async (data) => {
       if (!conversationId || !uid || !data?.content?.trim()) return;
@@ -235,7 +257,8 @@ export default function ChatScreen() {
       ]);
       setSendingId(localId);
       try {
-        await getMessagingService().sendMessage(conversationId, { type: 'text', content: data.content });
+        const res = await getMessagingService().sendMessage(conversationId, { type: 'text', content: data.content });
+        reconcileSentMessage(localId, res);
       } catch (err) {
         toastError(err.message || 'Failed to send message');
         // Roll back the optimistic message so the UI never lies
@@ -245,7 +268,7 @@ export default function ChatScreen() {
         setSendingId(null);
       }
     },
-    [conversationId, uid]
+    [conversationId, uid, reconcileSentMessage]
   );
 
   const handleSendMedia = useCallback(
@@ -276,7 +299,8 @@ export default function ChatScreen() {
       setSendingId(localId);
       try {
         // The service uploads the file and builds the media message.
-        await getMessagingService().sendMessage(conversationId, { type, media: { file } });
+        const res = await getMessagingService().sendMessage(conversationId, { type, media: { file } });
+        reconcileSentMessage(localId, res);
       } catch (err) {
         toastError(err.message || 'Failed to send media');
         pendingRef.current.delete(localId);
@@ -285,7 +309,7 @@ export default function ChatScreen() {
         setSendingId(null);
       }
     },
-    [conversationId, uid]
+    [conversationId, uid, reconcileSentMessage]
   );
 
   const handleReaction = useCallback(

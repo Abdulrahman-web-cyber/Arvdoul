@@ -1450,10 +1450,26 @@ class UltimateMessagingService {
       console.warn('[Messaging] Reaction merge failed:', err.message);
     }
 
+    // Enforce the message TTL in-memory (there is no server-side cleanup
+    // trigger): drop only messages that DECLARE an expired ttlExpiresAt. A
+    // document with no TTL field is kept — the previous server-side range filter
+    // on that field also excluded field-less docs, which made them permanently
+    // invisible while still counting toward the unread badge.
+    const nowMs = Date.now();
+    const liveMessages = messages.filter((m) => {
+      const ttl = this._toMillis(m.ttlExpiresAt);
+      return ttl === null || ttl > nowMs;
+    });
+
+    // The shard query walks newest-first (orderBy createdAt desc) so it can page
+    // backwards, but every consumer renders oldest-first. Normalise ONCE here so
+    // the wire format is chronological and no screen has to know the query order.
+    liveMessages.sort((a, b) => this._messageTime(a) - this._messageTime(b));
+
     const result = {
       success: true,
-      messages,
-      hasMore: messages.length === (options.limit || MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE),
+      messages: liveMessages,
+      hasMore: liveMessages.length === (options.limit || MESSAGING_CONFIG.PERFORMANCE.READ_BATCH_SIZE),
       conversationId,
     };
 
@@ -1461,6 +1477,19 @@ class UltimateMessagingService {
     this.messageKeysByConversation.get(conversationId).add(cacheKey);
     this.messagesCache.set(cacheKey, result);
     return result;
+  }
+
+  _toMillis(ts) {
+    if (!ts) return null;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+    if (ts instanceof Date) return ts.getTime();
+    const parsed = new Date(ts).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  _messageTime(msg) {
+    return this._toMillis(msg?.createdAt) ?? 0;
   }
 
   async markConversationAsRead(conversationId, userId) {
@@ -3038,7 +3067,6 @@ class UltimateMessagingService {
     const messages = [];
     let remaining = limit;
     let currentDate = startAfterDate ? new Date(startAfterDate) : new Date();
-    const now = new Date();
 
     while (remaining > 0) {
       const shardPath = this._getMessageSubcollectionPath(conversationId, conversation, currentDate);
@@ -3047,7 +3075,6 @@ class UltimateMessagingService {
       let q = this.fs.query(
         messagesRef,
         this.fs.where('isDeleted', '==', false),
-        this.fs.where('ttlExpiresAt', '>', this.fs.Timestamp.fromDate(now)),
         this.fs.orderBy('createdAt', 'desc'),
         this.fs.limit(remaining + 1)
       );
