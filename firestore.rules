@@ -879,6 +879,18 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if false; // admin via console/CF
     }
+    // Sponsored feed units and the shared audio library are admin/CDN-published
+    // content (like `ads`): the client reads them, only the console/CF writes.
+    // Both collections were read by a live client path with no rule, so the read
+    // fell through to the deny-all catch-all and the caller silently got [].
+    match /sponsored_posts/{sponsoredId} {
+      allow read: if isSignedIn();
+      allow write: if false; // admin via console/CF
+    }
+    match /audio_tracks/{trackId} {
+      allow read: if isSignedIn();
+      allow write: if false; // admin via console/CF
+    }
     match /ad_impressions/{impressionId} {
       allow read: if isSignedIn() && resource.data.userId == uid();
       allow write: if false;
@@ -1537,6 +1549,13 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
     match /user_interest_vectors/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    // Feed session state (seen/hidden/not-interested post ids per user). The
+    // client read+write path existed but the collection had NO rule, so every
+    // load returned nothing and every save was silently denied — the feed's
+    // "already seen" de-duplication and "not interested" demotion were dead.
+    match /user_sessions/{userId} {
       allow read, write: if isOwner(userId);
     }
 

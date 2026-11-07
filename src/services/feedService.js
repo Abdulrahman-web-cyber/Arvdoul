@@ -103,10 +103,6 @@ const FEED_CONFIG = {
     MAX_SAME_TYPE: 3,
     MAX_SAME_TOPIC: 2,
   },
-  FOLLOWING_FEED: {
-    COLLECTION: 'feeds',
-    MAX_FEED_SIZE: 1000,
-  },
   BLOCK_CACHE_TTL: 5 * 60 * 1000,
   SESSION: {
     COLLECTION: 'user_sessions',
