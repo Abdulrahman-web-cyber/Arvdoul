@@ -57,8 +57,8 @@ const GlassButton = memo(({
   const variantStyles = useMemo(() => {
     const variants = {
       gradient: {
-        base: `bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-500 text-white font-semibold ${isDark ? 'shadow-[0_8px_32px_rgba(180,22,219,0.4)]' : 'shadow-[0_8px_32px_rgba(180,22,219,0.3)]'}`,
-        hover: 'hover:shadow-[0_12px_40px_rgba(180,22,219,0.5)] hover:brightness-110',
+        base: `bg-arvdoul-gradient text-white font-semibold ${isDark ? 'shadow-[0_8px_32px_rgba(139,30,243,0.4)]' : 'shadow-[0_8px_32px_rgba(139,30,243,0.3)]'}`,
+        hover: 'hover:shadow-[0_12px_40px_rgba(139,30,243,0.5)] hover:brightness-110',
         active: 'active:scale-95',
       },
       glass: {

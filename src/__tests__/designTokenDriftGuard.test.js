@@ -25,12 +25,23 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tokens, BRAND_GRADIENT } from '../design-system/tokens.js';
+import { LIGHT_THEME, DARK_THEME } from '../context/themePalettes.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SRC = path.join(root, 'src');
 
 const DIVERGENT = /#(B416DB|872FE2|4B6BFF|0EA3E6)/i;
+// The same divergent family, in rgba() decimal form. The hex-only guard missed
+// these: rgba(180,22,219) shipped in FollowButton/GlassButton, rgba(135,47,226)
+// in editorConstants and the legacy `rgba(138,43,226)` (BlueViolet) violet in the
+// search glass components and ThemeProvider — none in the brand family.
+const DIVERGENT_RGBA = /rgba?\(\s*(?:180\s*,\s*22\s*,\s*219|135\s*,\s*47\s*,\s*226|75\s*,\s*107\s*,\s*255|14\s*,\s*163\s*,\s*230|138\s*,\s*43\s*,\s*226)\b/i;
 const CANONICAL_LITERAL = /linear-gradient\(\s*135deg\s*,\s*#8B1EF3\s+0%\s*,\s*#4431F7\s+(?:50|52)%\s*,\s*#055BFB\s+100%\s*\)/;
+// Tailwind's default purple/pink/cyan ramp, used as a stand-in for the brand
+// gradient in GlassButton's `gradient` variant. The brand gradient is
+// `#8B1EF3 → #4431F7 → #055BFB`; a `from-purple-600 via-pink-600` triple is a
+// second brand gradient and must not be introduced.
+const ROGUE_GRADIENT = /from-purple-600\s+via-pink-600\s+to-cyan-500/;
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -45,12 +56,28 @@ function walk(dir, out = []) {
 const files = walk(SRC);
 
 describe('brand gradient — design system is the single source of truth (N104)', () => {
-  test('the divergent #B416DB gradient family never reappears', () => {
+  test('the divergent #B416DB gradient family never reappears (hex or rgba)', () => {
     const offenders = [];
     for (const file of files) {
-      if (DIVERGENT.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+      const text = readFileSync(file, 'utf8');
+      if (DIVERGENT.test(text) || DIVERGENT_RGBA.test(text)) offenders.push(path.relative(root, file));
     }
     expect(offenders).toEqual([]);
+  });
+
+  test('no rogue purple/pink/cyan gradient stands in for the brand gradient', () => {
+    const offenders = [];
+    for (const file of files) {
+      if (ROGUE_GRADIENT.test(readFileSync(file, 'utf8'))) offenders.push(path.relative(root, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('the ThemeProvider palettes derive their surfaces from the design tokens', () => {
+    expect(LIGHT_THEME.colors.background).toBe(tokens.color.bg.light);
+    expect(LIGHT_THEME.colors.surface).toBe(tokens.color.bg.lightElevated);
+    expect(DARK_THEME.colors.background).toBe(tokens.color.bg.dark);
+    expect(DARK_THEME.colors.text.primary).toBe(tokens.color.text.primaryDark);
   });
 
   test('no module outside the design system re-declares the canonical gradient literal', () => {

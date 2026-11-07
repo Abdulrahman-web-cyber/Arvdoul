@@ -1,7 +1,7 @@
 // src/screens/CreatePost/editorConstants.js
 
 export { BRAND_GRADIENT as ARVDOUL_GRADIENT } from '../../design-system/tokens.js';
-export const ARVDOUL_SHADOW = '0 12px 40px rgba(135,47,226,.35)';
+export const ARVDOUL_SHADOW = '0 12px 40px rgba(139,30,243,.35)';
 export const ARVDOUL_GLOW = '0 0 30px rgba(147,51,234,0.25)';
 
 export const TOKENS = {
@@ -30,7 +30,7 @@ export const TOKENS = {
   // Shadows
   shadows: {
     ambient: '0 20px 60px rgba(0,0,0,0.3)',
-    primary: '0 12px 40px rgba(135,47,226,.35)',
+    primary: '0 12px 40px rgba(139,30,243,.35)',
     elevation1: '0 2px 8px rgba(0,0,0,0.08)',
     elevation2: '0 4px 16px rgba(0,0,0,0.12)',
     elevation3: '0 8px 32px rgba(0,0,0,0.16)',

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
 import { BRAND_GRADIENT } from "../design-system/tokens.js";
+import { LIGHT_THEME, DARK_THEME } from "./themePalettes.js";
 
 /**
  * ARVDOUL DNA Gradient - The signature gradient used throughout the platform
@@ -53,85 +54,8 @@ export const RADIUS = {
   full: 9999,
 };
 
-/**
- * Light Theme Palette
- */
-const LIGHT_THEME = {
-  name: 'light',
-  colors: {
-    background: '#F8F9FA',
-    surface: '#FFFFFF',
-    glass: 'rgba(255,255,255,0.7)',
-    glassBorder: 'rgba(0,0,0,0.08)',
-    text: {
-      primary: '#0F172A',
-      secondary: '#475569',
-      tertiary: '#94A3B8',
-      inverse: '#FFFFFF',
-    },
-    border: {
-      light: 'rgba(0,0,0,0.06)',
-      medium: 'rgba(0,0,0,0.12)',
-      strong: 'rgba(0,0,0,0.20)',
-    },
-    shadow: {
-      ambient: '0 20px 60px rgba(0,0,0,0.08)',
-      glow: '0 0 40px rgba(138,43,226,0.12)',
-      directional: '0 8px 32px rgba(0,0,0,0.06)',
-      card: '0 25px 80px rgba(0,0,0,0.08)',
-    },
-    success: '#10B981',
-    warning: '#F59E0B',
-    error: '#EF4444',
-    info: '#3B82F6',
-  },
-  glass: {
-    small: 'backdrop-blur-md bg-white/50 border border-white/20',
-    medium: 'backdrop-blur-xl bg-white/60 border border-white/30',
-    large: 'backdrop-blur-2xl bg-white/70 border border-white/40',
-    ultra: 'backdrop-blur-3xl bg-white/80 border border-white/50',
-  },
-};
 
-/**
- * Dark Theme Palette
- */
-const DARK_THEME = {
-  name: 'dark',
-  colors: {
-    background: '#050510',
-    surface: 'rgba(255,255,255,0.05)',
-    glass: 'rgba(255,255,255,0.08)',
-    glassBorder: 'rgba(255,255,255,0.12)',
-    text: {
-      primary: '#FFFFFF',
-      secondary: '#C9C9D6',
-      tertiary: '#94A3B8',
-      inverse: '#0F172A',
-    },
-    border: {
-      light: 'rgba(255,255,255,0.06)',
-      medium: 'rgba(255,255,255,0.12)',
-      strong: 'rgba(255,255,255,0.20)',
-    },
-    shadow: {
-      ambient: '0 20px 60px rgba(0,0,0,0.4)',
-      glow: '0 0 40px rgba(138,43,226,0.25)',
-      directional: '0 8px 32px rgba(0,0,0,0.25)',
-      card: '0 25px 80px rgba(138,43,226,0.45)',
-    },
-    success: '#34D399',
-    warning: '#FBBF24',
-    error: '#F87171',
-    info: '#60A5FA',
-  },
-  glass: {
-    small: 'backdrop-blur-md bg-white/5 border border-white/10',
-    medium: 'backdrop-blur-xl bg-white/8 border border-white/12',
-    large: 'backdrop-blur-2xl bg-white/10 border border-white/15',
-    ultra: 'backdrop-blur-3xl bg-white/12 border border-white/20',
-  },
-};
+
 
 /**
  * Spring Animation Configurations

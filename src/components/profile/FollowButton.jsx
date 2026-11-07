@@ -35,7 +35,7 @@ const FollowButton = memo(({
   const buttonGradient = BRAND_GRADIENT;
   
   // Glow effect for following button
-  const glowEffect = '0 0 20px rgba(180, 22, 219, 0.4), 0 0 40px rgba(135, 47, 226, 0.2)';
+  const glowEffect = '0 0 20px rgba(139, 30, 243, 0.4), 0 0 40px rgba(139, 30, 243, 0.2)';
   
   // Size classes
   const sizeClasses = {

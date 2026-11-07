@@ -108,9 +108,13 @@ as failures.
   `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
   (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the
   `#8B1EF3`/`#4431F7`/`#055BFB`/`#0088FF` hexes. The old divergent family
-  (`#B416DB`/`#872FE2`/`#4B6BFF`/`#0EA3E6`) is banned; `designTokenDriftGuard.test.js`
-  (hard-failing `guards` job) fails if it reappears, if a non-design-system module
-  re-declares the canonical literal, or if `tokens.js`/`tokens.css`/`tokens.json` drift.
+  (`#B416DB`/`#872FE2`/`#4B6BFF`/`#0EA3E6`) is banned **in hex and `rgba()`
+  decimal form** (`rgba(180,22,219)` etc.), as is the legacy BlueViolet violet
+  `rgba(138,43,226)` and the rogue `from-purple-600 via-pink-600 to-cyan-500`
+  gradient; `designTokenDriftGuard.test.js` (hard-failing `guards` job) fails if
+  any reappears, if a non-design-system module re-declares the canonical literal,
+  if the `ThemeProvider` palettes (`src/context/themePalettes.js`) stop deriving
+  from the tokens, or if `tokens.js`/`tokens.css`/`tokens.json` drift.
   Signup/login/onboarding keep their own 125deg/52% geometry by policy.
 - **Feature flags**: `src/shared/featureFlagRegistry.cjs` is the canonical flag
   list (synced to `functions/featureFlagRegistry.cjs`, guarded by
