@@ -120,11 +120,6 @@ const FEED_CONFIG = {
     MAX_PER_PAGE: 1,
     AUCTION_QUERY_LIMIT: 20
   },
-  HEALTH_METRICS: {
-    ENABLED: true,
-    COLLECTION: 'feed_health',
-    REPORT_INTERVAL_MS: 60 * 60 * 1000
-  },
   DEBUG: false,
 };
 
@@ -188,10 +183,8 @@ class UltimateFeedService {
     this.activeUsers = new Set();
     this.algorithmVersion = 'v24.2';
     this.mlCache = new Map();
-    this.healthMetrics = { avgLatency: 0, lastLatency: 0 };
 
     this._readyPromise = this._initWithTimeout();
-    this._scheduleHealthMetrics();
   }
 
   async _initWithTimeout() {
@@ -1578,95 +1571,6 @@ class UltimateFeedService {
     };
   }
 
-  async _reportHealthMetrics() {
-    if (!FEED_CONFIG.HEALTH_METRICS.ENABLED || this.offlineMode) return;
-    try {
-      const healthRef = this.firestoreMethods.collection(this.firestore, FEED_CONFIG.HEALTH_METRICS.COLLECTION);
-      const report = {
-        timestamp: this.firestoreMethods.serverTimestamp(),
-        cacheSize: this.cache.size,
-        activeUsers: this.activeUsers.size,
-        subscriptions: this.realtimeSubscriptions.size,
-        avgLatency: this.healthMetrics.avgLatency || 0,
-      };
-      await this.firestoreMethods.addDoc(healthRef, report);
-    } catch (e) {}
-  }
-
-  _scheduleHealthMetrics() {
-    setInterval(() => this._reportHealthMetrics(), FEED_CONFIG.HEALTH_METRICS.REPORT_INTERVAL_MS);
-  }
-
-  async fanoutPostToFollowers(postId, authorId, postData) {
-    if (this.offlineMode) return { success: true, fannedOutTo: 0 };
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, writeBatch, doc, serverTimestamp } = this.firestoreMethods;
-    const followsRef = collection(this.firestore, 'follows');
-    const q = query(followsRef, where('followingId', '==', authorId));
-    const snapshot = await getDocs(q);
-    const followerIds = snapshot.docs.map(d => d.data().followerId);
-    if (followerIds.length === 0) return { success: true, fannedOutTo: 0 };
-    const batches = [];
-    let batch = writeBatch(this.firestore);
-    let ops = 0;
-    const feedEntry = { postId, authorId, ...postData, fanoutAt: serverTimestamp() };
-    for (const followerId of followerIds) {
-      batch.set(doc(this.firestore, 'users', followerId, 'feeds', postId), feedEntry);
-      ops++;
-      if (ops >= FEED_CONFIG.PERFORMANCE.FANOUT_BATCH_SIZE) {
-        batches.push(batch.commit());
-        batch = writeBatch(this.firestore);
-        ops = 0;
-      }
-    }
-    if (ops > 0) batches.push(batch.commit());
-    await Promise.all(batches);
-    return { success: true, fannedOutTo: followerIds.length };
-  }
-
-  async updatePostScores(postId = null, trendingOnly = false) {
-    if (this.offlineMode) return { success: true, updated: 0 };
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, doc, updateDoc, limit: firestoreLimit } = this.firestoreMethods;
-    const postsRef = collection(this.firestore, 'posts');
-    let q;
-    if (postId) {
-      // Single-document read: `get` is gated by the per-document visibility rule.
-      const snap0 = await this.firestoreMethods.getDoc(this.firestoreMethods.doc(this.firestore, 'posts', postId));
-      if (!snap0.exists()) return { success: true, updated: 0 };
-      const data = snap0.data();
-      const engagement0 = (data.likeCount || 0) + (data.commentCount || 0) * 2 + (data.shareCount || 0) * 3;
-      const ageHours0 = (Date.now() - (data.createdAt?.toDate?.() || Date.now())) / (1000 * 60 * 60);
-      await this.firestoreMethods.updateDoc(this.firestoreMethods.doc(this.firestore, 'posts', postId), {
-        trendingScore: (engagement0 / Math.max(1, data.viewCount || 0)) * Math.exp(-ageHours0 / 12),
-        scoreUpdatedAt: this.firestoreMethods.serverTimestamp(),
-      });
-      return { success: true, updated: 1 };
-    }
-    {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      q = query(postsRef, ...this._publicPostFilters(), where('updatedAt', '>=', oneDayAgo), firestoreLimit(500));
-    }
-    const snapshot = await getDocs(q);
-    const updates = [];
-    snapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      const likes = data.likeCount || 0;
-      const comments = data.commentCount || 0;
-      const shares = data.shareCount || 0;
-      const views = data.viewCount || 0;
-      const ageHours = (Date.now() - (data.createdAt?.toDate?.() || Date.now())) / (1000 * 60 * 60);
-      const engagement = likes + comments * 2 + shares * 3;
-      const timeDecay = Math.exp(-ageHours / 12);
-      const trendingScore = (engagement / Math.max(1, views)) * timeDecay;
-      const updateData = { trendingScore };
-      if (!trendingOnly) updateData.personalizationScore = Math.min(1, (engagement / 50) * timeDecay);
-      updates.push(updateDoc(doc(this.firestore, 'posts', docSnap.id), updateData));
-    });
-    await Promise.all(updates);
-    return { success: true, updated: updates.length };
-  }
-
   async triggerRealTimeReRanking(userId, interactionType, postId) {
     this.clearUserCache(userId);
     this.mlCache.delete(`ml_${userId}_20`);
@@ -1864,8 +1768,6 @@ const feedService = {
   getFollowSuggestions: (userId, limit) => getFeedService().getFollowSuggestions(userId, limit),
   demotePost: (userId, postId, reason) => getFeedService().demotePost(userId, postId, reason),
   boostSimilarContent: (...args) => getFeedService().boostSimilarContent(...args),
-  fanoutPostToFollowers: (...args) => getFeedService().fanoutPostToFollowers(...args),
-  updatePostScores: (...args) => getFeedService().updatePostScores(...args),
   getStats: () => getFeedService().getStats(),
   clearUserCache: (userId) => getFeedService().clearUserCache(userId),
   clearCache: () => getFeedService().clearCache(),
