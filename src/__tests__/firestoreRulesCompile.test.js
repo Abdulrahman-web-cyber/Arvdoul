@@ -59,6 +59,23 @@ describe('firestore.rules syntax', () => {
     expect(rules).toMatch(/match\s+\/\{messageShardCollection\}\/\{messageId\}/);
     expect(rules).toContain("collection.matches('messages_[0-9]{4}_[0-9]{2}')");
   });
+
+  test('no read rule evaluates request.resource (null on read → denies everyone)', () => {
+    // `request.resource` exists only for create/update. On a read it is null, so
+    // `request.resource.data.x` throws and the rule denies the read for
+    // EVERYONE — `withdrawal_requests` shipped as `allow read, create: if …
+    // request.resource.data.userId == uid()`, which silently zeroed the wallet's
+    // pending breakdown and the admin payout queue. Reads must key on the
+    // stored `resource.data` instead. This guard fails on the read shape.
+    const offenders = [];
+    for (const m of rules.matchAll(/^\s*allow\s+([a-z, ]+?)\s*:\s*if\s+([\s\S]*?);/gm)) {
+      const verbs = m[1].split(',').map((v) => v.trim());
+      if (verbs.includes('read') && /request\.resource\./.test(m[2])) {
+        offenders.push(m[0].trim().slice(0, 110));
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 // A match block's body, so privacy invariants can be asserted without an

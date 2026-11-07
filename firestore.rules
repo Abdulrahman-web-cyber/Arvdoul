@@ -861,7 +861,14 @@ service cloud.firestore {
       allow read, create, update: if isOwner(userId);
     }
     match /withdrawal_requests/{requestId} {
-      allow read, create: if isSignedIn() && request.resource.data.userId == uid();
+      // `read` and `create` need DIFFERENT expressions: `request.resource` is
+      // null on a read, so the old combined `allow read, create: if …
+      // request.resource.data.userId == uid()` threw and denied EVERY read —
+      // the wallet's pending-withdrawal breakdown and the admin payout queue
+      // both silently showed zero. Reads key on the stored `resource.data`
+      // (owner or admin); creates key on the incoming `request.resource`.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
       // The owner may only CANCEL their own pending request. Approval/paid/
       // rejected transitions are server-only (adminDecideWithdrawal), and the
       // amount/address are immutable once the request exists.
