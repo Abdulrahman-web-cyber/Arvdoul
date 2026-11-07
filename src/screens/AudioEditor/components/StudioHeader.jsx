@@ -7,6 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../../lib/utils';
 import ArvdoulLogo from '../../../components/Shared/ArvdoulLogo';
+import { BRAND_GRADIENT } from '../../../design-system/tokens.js';
 
 export default function StudioHeader({
   projectName = 'Untitled Audio Session',
@@ -135,7 +136,7 @@ export default function StudioHeader({
             disabled={isExporting || !hasSource}
             title={hasSource ? 'Export mix' : 'Load audio into the session first'}
             className="px-4 py-2 rounded-xl font-bold text-xs text-white shadow-lg flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-            style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
+            style={{ background: BRAND_GRADIENT }}
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export</span>

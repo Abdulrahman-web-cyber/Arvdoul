@@ -104,6 +104,14 @@ as failures.
   (`getUserIdFromContext`, `isAdmin`, `checkIsAdmin`, `assertAdmin`). Do not re-declare
   `isAdmin` in a module — a divergent check means an account can be admin for one endpoint
   and not another.
+- **Design system / brand gradient**: `src/design-system/tokens.js` (+ `tokens.css`,
+  `tokens.json`) is the single source of truth for the brand. Import `BRAND_GRADIENT`
+  (or read the `--arv-*` CSS vars) — never re-declare the gradient literal or the
+  `#8B1EF3`/`#4431F7`/`#055BFB`/`#0088FF` hexes. The old divergent family
+  (`#B416DB`/`#872FE2`/`#4B6BFF`/`#0EA3E6`) is banned; `designTokenDriftGuard.test.js`
+  (hard-failing `guards` job) fails if it reappears, if a non-design-system module
+  re-declares the canonical literal, or if `tokens.js`/`tokens.css`/`tokens.json` drift.
+  Signup/login/onboarding keep their own 125deg/52% geometry by policy.
 - **Feature flags**: `src/shared/featureFlagRegistry.cjs` is the canonical flag
   list (synced to `functions/featureFlagRegistry.cjs`, guarded by
   `sharedConfigSync.test.js`). Platform-wide overrides live in Firestore

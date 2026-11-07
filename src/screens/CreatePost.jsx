@@ -46,10 +46,10 @@ import { getNotificationsService } from "../services/notificationsService";
 import { getFeedService } from "../services/feedService";
 import { getUserService } from "../services/userService";
 import { LOCAL_POSTS_KEY } from "../utils/localContentCache.js";
+import { BRAND_GRADIENT } from "../design-system/tokens.js";
 
 // ── CONSTANTS & DESIGN TOKENS ──────────────────────────────────────────
-const DNA_GRADIENT_STYLE =
-  "linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)";
+const DNA_GRADIENT_STYLE = BRAND_GRADIENT;
 const DRAFT_DB_NAME = "arvdoul_create_post_v6";
 const OFFLINE_QUEUE_STORE = "offline_queue";
 const MEDIA_BLOB_STORE = "media_blobs";
@@ -73,10 +73,10 @@ const PhotoIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <linearGradient id={`glass-${uid}`} x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.40"/>
@@ -92,8 +92,8 @@ const PhotoIcon = makeIconComponent((uid) => (
       <radialGradient id={`core-${uid}`}>
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1"/>
         <stop offset="30%" stopColor="#9BE9FF" stopOpacity="0.55"/>
-        <stop offset="70%" stopColor="#0EA3E6" stopOpacity="0.12"/>
-        <stop offset="100%" stopColor="#0EA3E6" stopOpacity="0"/>
+        <stop offset="70%" stopColor="#0088FF" stopOpacity="0.12"/>
+        <stop offset="100%" stopColor="#0088FF" stopOpacity="0"/>
       </radialGradient>
       <filter id={`shadow-${uid}`} x="-60%" y="-60%" width="220%" height="220%">
         <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="#000000" floodOpacity="0.55"/>
@@ -117,12 +117,12 @@ const PhotoIcon = makeIconComponent((uid) => (
     <rect x="18" y="28" width="84" height="10" rx="5" fill="#FFFFFF" opacity="0.16"/>
     <rect x="22" y="30" width="42" height="6" rx="3" fill="#FFFFFF" opacity="0.10"/>
     <circle cx="92" cy="33" r="2" fill="#7FE7FF" opacity="0.75"/>
-    <circle cx="60" cy="62" r="38" fill="none" stroke="#0EA3E6" strokeOpacity="0.18" strokeWidth="2" filter={`url(#glow-${uid})`}/>
-    <circle cx="60" cy="62" r="34" fill="none" stroke="#4B6BFF" strokeOpacity="0.10" strokeWidth="2"/>
+    <circle cx="60" cy="62" r="38" fill="none" stroke="#0088FF" strokeOpacity="0.18" strokeWidth="2" filter={`url(#glow-${uid})`}/>
+    <circle cx="60" cy="62" r="34" fill="none" stroke="#055BFB" strokeOpacity="0.10" strokeWidth="2"/>
     <circle cx="60" cy="62" r="33" fill="#050A14" filter={`url(#inner-${uid})`}/>
     <circle cx="60" cy="62" r="26" fill={`url(#lens-${uid})`}/>
     <circle cx="60" cy="62" r="21" fill="none" stroke="#BFEFFF" strokeOpacity="0.22" strokeWidth="2"/>
-    <circle cx="60" cy="62" r="17" fill="none" stroke="#0EA3E6" strokeOpacity="0.14" strokeWidth="1.5"/>
+    <circle cx="60" cy="62" r="17" fill="none" stroke="#0088FF" strokeOpacity="0.14" strokeWidth="1.5"/>
     <circle cx="60" cy="62" r="13" fill="#061022"/>
     <circle cx="60" cy="62" r="11" fill={`url(#core-${uid})`}/>
     <circle cx="53" cy="55" r="5" fill="#FFFFFF" opacity="0.25"/>
@@ -138,10 +138,10 @@ const EventIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <linearGradient id={`glass-${uid}`} x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.28"/>
@@ -150,8 +150,8 @@ const EventIcon = makeIconComponent((uid) => (
       </linearGradient>
       <radialGradient id={`corePulse-${uid}`}>
         <stop offset="0%" stopColor="#7FE7FF" stopOpacity="0.95"/>
-        <stop offset="40%" stopColor="#4B6BFF" stopOpacity="0.25"/>
-        <stop offset="100%" stopColor="#0EA3E6" stopOpacity="0"/>
+        <stop offset="40%" stopColor="#055BFB" stopOpacity="0.25"/>
+        <stop offset="100%" stopColor="#0088FF" stopOpacity="0"/>
       </radialGradient>
       <filter id={`shadow-${uid}`} x="-60%" y="-60%" width="220%" height="220%">
         <feDropShadow dx="0" dy="10" stdDeviation="12" floodColor="#000000" floodOpacity="0.55"/>
@@ -181,12 +181,12 @@ const EventIcon = makeIconComponent((uid) => (
     <circle cx="60" cy="66" r="16" fill={`url(#corePulse-${uid})`} filter={`url(#glow-${uid})`}/>
     <circle cx="60" cy="66" r="9" fill="#7FE7FF"/>
     <circle cx="60" cy="66" r="3.5" fill="#FFFFFF"/>
-    <circle cx="38" cy="52" r="3.2" fill="#B416DB" filter={`url(#glow-${uid})`}/>
-    <circle cx="82" cy="52" r="3.2" fill="#4B6BFF" filter={`url(#glow-${uid})`}/>
-    <circle cx="38" cy="78" r="3.2" fill="#0EA3E6" filter={`url(#glow-${uid})`}/>
+    <circle cx="38" cy="52" r="3.2" fill="#8B1EF3" filter={`url(#glow-${uid})`}/>
+    <circle cx="82" cy="52" r="3.2" fill="#055BFB" filter={`url(#glow-${uid})`}/>
+    <circle cx="38" cy="78" r="3.2" fill="#0088FF" filter={`url(#glow-${uid})`}/>
     <circle cx="82" cy="78" r="3.2" fill="#7FE7FF" filter={`url(#glow-${uid})`}/>
     <rect x="38" y="52" width="44" height="1" fill="#7FE7FF" opacity="0.08"/>
-    <rect x="38" y="78" width="44" height="1" fill="#4B6BFF" opacity="0.06"/>
+    <rect x="38" y="78" width="44" height="1" fill="#055BFB" opacity="0.06"/>
     <circle cx="60" cy="52" r="2" fill="#FFFFFF" opacity="0.35"/>
     <circle cx="60" cy="78" r="2" fill="#FFFFFF" opacity="0.25"/>
     <rect x="36" y="100" width="48" height="4" rx="2" fill="#FFFFFF" opacity="0.12"/>
@@ -197,10 +197,10 @@ const QuestionIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`arvdoul-gradient-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <radialGradient id={`core-bg-${uid}`} cx="50%" cy="50%" r="50%">
         <stop offset="0%" stopColor="#0F1A33"/>
@@ -209,8 +209,8 @@ const QuestionIcon = makeIconComponent((uid) => (
       </radialGradient>
       <radialGradient id={`dot-glow-${uid}`} cx="50%" cy="50%" r="50%">
         <stop offset="0%" stopColor="#7FE7FF" stopOpacity="1"/>
-        <stop offset="45%" stopColor="#4B6BFF" stopOpacity="0.35"/>
-        <stop offset="100%" stopColor="#0EA3E6" stopOpacity="0"/>
+        <stop offset="45%" stopColor="#055BFB" stopOpacity="0.35"/>
+        <stop offset="100%" stopColor="#0088FF" stopOpacity="0"/>
       </radialGradient>
       <filter id={`shadow-${uid}`} x="-25%" y="-15%" width="150%" height="150%">
         <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="#000000" floodOpacity="0.6"/>
@@ -237,10 +237,10 @@ const PollIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`arvdoul-gradient-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <linearGradient id={`glass-highlight-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.24"/>
@@ -264,10 +264,10 @@ const TextIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <linearGradient id={`glass-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.24"/>
@@ -290,10 +290,10 @@ const VideoIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <radialGradient id={`glass-${uid}`} cx="35%" cy="30%" r="70%">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.35"/>
@@ -334,10 +334,10 @@ const AudioIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <radialGradient id={`glass-${uid}`} cx="42%" cy="32%" r="70%">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30"/>
@@ -381,10 +381,10 @@ const VibeIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <radialGradient id={`glass-${uid}`} cx="40%" cy="30%" r="70%">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30"/>
@@ -417,10 +417,10 @@ const LinkIcon = makeIconComponent((uid) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-16 h-16">
     <defs>
       <linearGradient id={`g-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="#B416DB"/>
-        <stop offset="35%" stopColor="#872FE2"/>
-        <stop offset="70%" stopColor="#4B6BFF"/>
-        <stop offset="100%" stopColor="#0EA3E6"/>
+        <stop offset="0%" stopColor="#8B1EF3"/>
+        <stop offset="35%" stopColor="#4431F7"/>
+        <stop offset="70%" stopColor="#055BFB"/>
+        <stop offset="100%" stopColor="#0088FF"/>
       </linearGradient>
       <radialGradient id={`glass-${uid}`} cx="40%" cy="30%" r="70%">
         <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.25"/>
@@ -1788,7 +1788,7 @@ function CreatePostProvider({ children }) {
             <h3 className="text-lg font-bold mb-2">Draft found</h3>
             <p className="text-sm mb-4">You have a saved draft for {pendingType}. Resume it or start fresh?</p>
             <div className="flex gap-3">
-              <button onClick={handleResumeDraft} className="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] via-[#872FE2] to-[#0EA3E6] text-white font-medium">Resume</button>
+              <button onClick={handleResumeDraft} className="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#8B1EF3] via-[#4431F7] to-[#0088FF] text-white font-medium">Resume</button>
               <button onClick={handleStartFresh} className="flex-1 py-2 rounded-xl border dark:border-gray-600">New</button>
             </div>
           </Modal>}

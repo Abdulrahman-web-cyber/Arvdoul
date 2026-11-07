@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { Play, Pause, Square, SkipBack, Repeat, Clock } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';
+import { BRAND_GRADIENT } from '../../../design-system/tokens.js';
 
 export default function TransportBar({
   currentTime,
@@ -96,7 +97,7 @@ export default function TransportBar({
           onClick={onPlayPause}
           disabled={!canPlay}
           className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-[0_0_25px_rgba(139,30,243,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100"
-          style={{ background: 'linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)' }}
+          style={{ background: BRAND_GRADIENT }}
           title={!canPlay ? 'Load audio to enable playback' : isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}

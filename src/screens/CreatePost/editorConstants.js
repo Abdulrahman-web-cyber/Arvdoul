@@ -1,6 +1,6 @@
 // src/screens/CreatePost/editorConstants.js
 
-export const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
+export { BRAND_GRADIENT as ARVDOUL_GRADIENT } from '../../design-system/tokens.js';
 export const ARVDOUL_SHADOW = '0 12px 40px rgba(135,47,226,.35)';
 export const ARVDOUL_GLOW = '0 0 30px rgba(147,51,234,0.25)';
 

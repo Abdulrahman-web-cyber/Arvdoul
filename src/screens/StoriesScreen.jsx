@@ -901,7 +901,7 @@ export default function StoriesScreen() {
                           getMonetizationService().recordAdImpression(currentStory.id, 'stories_click');
                         } catch {}
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B416DB] to-[#0EA3E6] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8B1EF3] to-[#0088FF] text-white text-xs font-bold whitespace-nowrap shadow-lg hover:scale-105 active:scale-95 transition-transform"
                     >
                       {currentStory.ctaText || 'Learn More'}
                     </a>

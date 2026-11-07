@@ -60,6 +60,7 @@ import TextTool from '../../components/Shared/TextTool';
 import DrawingTool from '../../components/Shared/DrawingTool';
 import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useTheme } from '../../context/ThemeContext';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Icons (resolved defensively so a lucide-react rename can never crash render)
@@ -115,7 +116,7 @@ const IFrame = pick('Scan', 'Square');
  * Design tokens (shared with the Signup / Login / OTP / Verify / Setup screens)
  * ──────────────────────────────────────────────────────────────────────────── */
 
-const GRADIENT = 'linear-gradient(125deg, #8B1EF3 0%, #4431F7 52%, #055BFB 100%)';
+const GRADIENT = BRAND_GRADIENT;
 const ACCENT = '#7A6BFF';
 
 const THEMES = {

@@ -193,3 +193,10 @@ export const tokens = {
 };
 
 export default tokens;
+
+/**
+ * Canonical brand gradient as a plain CSS string, for call sites that need a
+ * `style={{ background }}` value or an SVG stop. Import this instead of
+ * re-declaring the literal — the design system is the single source of truth.
+ */
+export const BRAND_GRADIENT = tokens.color.brand.gradient;

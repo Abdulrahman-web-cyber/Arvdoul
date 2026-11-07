@@ -27,9 +27,9 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import CharacterCount from "@tiptap/extension-character-count";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 // ── Design Tokens (CSS variables) ───────────────────────────────────
-const DNA_GRADIENT =
-  "linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)";
+const DNA_GRADIENT = BRAND_GRADIENT;
 const DNA_SHADOW = "0 0 20px rgba(147,51,234,0.4)";
 const GLASS_BG = "rgba(255,255,255,.08)";
 const GLASS_BORDER = "rgba(255,255,255,.12)";

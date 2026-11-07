@@ -19,11 +19,13 @@ import TrendingSection from '../components/search/TrendingSection';
 import CreatorCarousel from '../components/search/CreatorCarousel';
 import SearchFilters from '../components/search/SearchFilters';
 import SponsoredPostCard from '../components/Ads/SponsoredPostCard';
+import { BRAND_GRADIENT } from '../design-system/tokens.js';
 
 /**
- * ARVDOUL Design Tokens
+ * ARVDOUL Design Tokens — the brand gradient comes from the design system so
+ * this screen cannot drift from the canonical value (N104).
  */
-const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
+const ARVDOUL_GRADIENT = BRAND_GRADIENT;
 
 /**
  * Category definitions
@@ -431,7 +433,7 @@ const RecentSearches = memo(({ recent, onSelect, onRemove, onClear, isDark }) =>
       <div className="flex items-center gap-2">
         <div className={cn(
           'w-8 h-8 rounded-xl flex items-center justify-center',
-          'bg-gradient-to-r from-[#B416DB] to-[#4B6BFF]'
+          'bg-gradient-to-r from-[#8B1EF3] to-[#055BFB]'
         )}>
           <Clock className="w-4 h-4 text-white" />
         </div>
@@ -446,9 +448,9 @@ const RecentSearches = memo(({ recent, onSelect, onRemove, onClear, isDark }) =>
         onClick={onClear}
         className={cn(
           'text-xs font-medium px-3 py-1.5 rounded-full',
-          'bg-gradient-to-r from-[#B416DB]/10 to-[#4B6BFF]/10',
-          'hover:from-[#B416DB]/20 hover:to-[#4B6BFF]/20',
-          isDark ? 'text-[#B416DB]' : 'text-[#872FE2]',
+          'bg-gradient-to-r from-[#8B1EF3]/10 to-[#055BFB]/10',
+          'hover:from-[#8B1EF3]/20 hover:to-[#055BFB]/20',
+          isDark ? 'text-[#8B1EF3]' : 'text-[#4431F7]',
           'transition-all duration-200'
         )}
       >
@@ -507,7 +509,7 @@ const ForYouSection = memo(({ isDark }) => (
     className="mb-6"
   >
     <div className="flex items-center gap-2 mb-4">
-      <Sparkles className="w-5 h-5" style={{ color: '#B416DB' }} />
+      <Sparkles className="w-5 h-5" style={{ color: '#8B1EF3' }} />
       <h2 className={cn(
         'text-lg font-bold',
         isDark ? 'text-white' : 'text-gray-900'
@@ -548,7 +550,7 @@ const ForYouSection = memo(({ isDark }) => (
             <p className="text-white/70 text-xs mt-0.5">{item.subtitle}</p>
           </div>
           {/* Gradient overlay on hover */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#B416DB]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#8B1EF3]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10" />
         </motion.div>
       ))}
     </div>
@@ -587,7 +589,7 @@ const ExploreCategories = memo(({ onCategoryClick, isDark }) => (
               'flex flex-col items-center justify-center p-3 rounded-2xl',
               'backdrop-blur-xl border border-white/10',
               'transition-all duration-200',
-              'focus:outline-none focus:ring-2 focus:ring-[#B416DB]/50',
+              'focus:outline-none focus:ring-2 focus:ring-[#8B1EF3]/50',
               isDark 
                 ? 'bg-white/5 hover:bg-white/10' 
                 : 'bg-white/50 hover:bg-white/70',

@@ -61,6 +61,7 @@ import { LEVEL_GATES } from "../../shared/levelConfig.cjs";
 import ProfileLocationModal from '../../components/profile/ProfileLocationModal';
 import AvatarUploadModal from '../../components/profile/AvatarUploadModal';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';
+import { BRAND_GRADIENT } from '../../design-system/tokens.js';
 
 const PRONOUN_PRESETS = ['they/them', 'she/her', 'he/him', 'other'];
 
@@ -563,7 +564,7 @@ export default function EditProfileScreen() {
               disabled={saving || usernameAvailability === 'taken'}
               className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md shadow-purple-500/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)"
+                background: BRAND_GRADIENT
               }}
             >
               {saving ? (
@@ -1658,7 +1659,7 @@ export default function EditProfileScreen() {
             disabled={saving || usernameAvailability === 'taken'}
             className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-white shadow-[0_4px_16px_rgba(68,49,247,0.35)] hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              background: "linear-gradient(135deg, #8B1EF3 0%, #4431F7 50%, #055BFB 100%)"
+              background: BRAND_GRADIENT
             }}
           >
             {saving ? (

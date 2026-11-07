@@ -1,13 +1,14 @@
 // src/context/ThemeProvider.jsx
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
+import { BRAND_GRADIENT } from "../design-system/tokens.js";
 
 /**
  * ARVDOUL DNA Gradient - The signature gradient used throughout the platform
  */
-export const ARVDOUL_GRADIENT = 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)';
+export const ARVDOUL_GRADIENT = BRAND_GRADIENT;
 export const ARVDOUL_GRADIENT_CSS = {
-  background: 'linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)'
+  background: BRAND_GRADIENT
 };
 
 /**
@@ -15,12 +16,12 @@ export const ARVDOUL_GRADIENT_CSS = {
  */
 export const ARVDOUL_COLORS = {
   primary: {
-    purple: '#B416DB',
-    violet: '#872FE2',
-    blue: '#4B6BFF',
-    cyan: '#0EA3E6',
+    purple: '#8B1EF3',
+    violet: '#4431F7',
+    blue: '#055BFB',
+    cyan: '#0088FF',
   },
-  gradient: ['#B416DB', '#872FE2', '#4B6BFF', '#0EA3E6'],
+  gradient: ['#8B1EF3', '#4431F7', '#055BFB', '#0088FF'],
 };
 
 /**
