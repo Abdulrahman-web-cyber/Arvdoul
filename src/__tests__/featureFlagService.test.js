@@ -18,7 +18,7 @@ describe('featureFlagService', () => {
 
   test('all registered flags are booleans with documented defaults', () => {
     const names = Object.keys(DEFAULT_FLAGS);
-    expect(names.length).toBeGreaterThanOrEqual(10);
+    expect(names.length).toBeGreaterThanOrEqual(8);
     for (const name of names) {
       expect(DEFAULT_FLAGS[name].type).toBe('boolean');
       expect(typeof DEFAULT_FLAGS[name].defaultValue).toBe('boolean');
@@ -34,7 +34,7 @@ describe('featureFlagService', () => {
   test('defaults apply before any remote fetch', () => {
     expect(featureFlagService.isEnabled('feed.diversity_rerank')).toBe(true);
     expect(featureFlagService.isEnabled('feed.ml_ranking')).toBe(false);
-    expect(featureFlagService.isEnabled('live.recording')).toBe(false);
+    expect(featureFlagService.isEnabled('stories.music_library')).toBe(false);
   });
 
   test('admin override beats remote and default values', () => {
@@ -49,13 +49,13 @@ describe('featureFlagService', () => {
   });
 
   test('overrides persist across service instances (localStorage)', () => {
-    featureFlagService.setOverride('ai.streaming', true);
-    const stored = localStorage.getItem('arvdoul_flag_override_ai.streaming');
+    featureFlagService.setOverride('messaging.calls', true);
+    const stored = localStorage.getItem('arvdoul_flag_override_messaging.calls');
     expect(stored).toBe('true');
 
     // A fresh instance must pick up the persisted override
     const fresh = new FeatureFlagService();
-    expect(fresh.isEnabled('ai.streaming')).toBe(true);
+    expect(fresh.isEnabled('messaging.calls')).toBe(true);
   });
 
   test('resetOverrides clears all kill switches', () => {

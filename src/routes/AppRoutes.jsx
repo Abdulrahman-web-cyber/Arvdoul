@@ -133,6 +133,7 @@ import {
   PostErrorBoundary,
 } from "../components/ErrorBoundary/SectionErrorBoundary.jsx";
 import { RouteProgressBar } from "../components/Navigation/RouteProgressBar.jsx";
+import FeatureGate from "../components/Shared/FeatureGate.jsx";
 
 // Seamless, non-blocking route transition fallback (ambient top progress line)
 const RouteLoadingFallback = () => (
@@ -1148,9 +1149,11 @@ export default function AppRoutes() {
       {/* 1. AI Creative Studio */}
       <Route path="/ai-studio" element={
         <ProtectedRoute>
-          <Suspense fallback={<RouteFallback />}>
-            <AIStudioScreen />
-          </Suspense>
+          <FeatureGate flag="ai.studio">
+            <Suspense fallback={<RouteFallback />}>
+              <AIStudioScreen />
+            </Suspense>
+          </FeatureGate>
         </ProtectedRoute>
       } />
       <Route path="/ai" element={<Navigate to="/ai-studio" replace />} />

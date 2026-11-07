@@ -22,6 +22,7 @@ import { getSafeAvatarUrl } from '../../utils/avatarUtils';
 import { pickHandle, deriveHandle } from '../../services/profileReadModel.js';
 import { toast } from 'sonner';
 import ProfileSystemRoadmapModal from './ProfileSystemRoadmapModal';
+import { useFeatureFlag } from '../../hooks/useFeatureFlag.js';
 
 const getRankTitle = LevelModule.getRankTitle || (() => null);
 const getLevelInfo = LevelModule.getLevelInfo || (() => null);
@@ -281,6 +282,7 @@ export const ProfileHeroSection = memo(({
 }) => {
   const navigate = useNavigate();
   const isDark = theme === 'dark';
+  const callsEnabled = useFeatureFlag('messaging.calls');
   const [copiedHandle, setCopiedHandle] = useState(false);
   const [showRoadmapModal, setShowRoadmapModal] = useState(false);
   const [roadmapInitialTab, setRoadmapInitialTab] = useState('levels');
@@ -289,6 +291,19 @@ export const ProfileHeroSection = memo(({
     setRoadmapInitialTab(tab);
     setShowRoadmapModal(true);
   }, []);
+
+  // The call route keys off a conversation id, not a user id: resolve (or
+  // create) the direct conversation first so the signaling doc has the
+  // `participants` array the rules require.
+  const handleStartCall = useCallback(async () => {
+    try {
+      const { getMessagingService } = await import('../../services/messagesService.js');
+      const { conversation } = await getMessagingService().createConversation([profileUid]);
+      navigate(`/call/${conversation.id}?type=audio`);
+    } catch (err) {
+      toast.error('Could not start call');
+    }
+  }, [profileUid, navigate]);
 
   const profileUid = profile?.id || profile?.uid || 'user';
   const displayName = profile?.displayName || profile?.name || 'User';
@@ -829,10 +844,11 @@ export const ProfileHeroSection = memo(({
             <span>Message</span>
           </button>
 
-          {/* Audio Call Button */}
+          {/* Audio Call Button - hidden unless the calls flag is on */}
+          {callsEnabled && (
           <button
             type="button"
-            onClick={() => navigate(`/call/${profileUid}?type=audio`)}
+            onClick={handleStartCall}
             className={cn(
               "p-2.5 sm:p-3 rounded-2xl border transition-all active:scale-95 cursor-pointer",
               isDark
@@ -844,6 +860,7 @@ export const ProfileHeroSection = memo(({
           >
             <Phone className="w-4 h-4" />
           </button>
+          )}
 
           {/* Gift / Tip Button */}
           <button

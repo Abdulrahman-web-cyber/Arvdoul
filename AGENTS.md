@@ -124,6 +124,19 @@ as failures.
   validates the name against the registry and audits to `moderation_logs`.
   `featureFlagService.setOverride()` is a device-local lever, not governance —
   never present it as an audit record.
+  A flag that no surface reads is a false feature claim, not a flag:
+  `featureFlagConsumption.test.js` (hard-failing `guards` job) fails if a
+  registered flag has no `isEnabled` / `isFlagEnabled` / `useFeatureFlag` /
+  `<FeatureGate flag>` consumer. Read flags through `src/hooks/useFeatureFlag.js`
+  (reactive) or `src/components/Shared/FeatureGate.jsx`; the server reads through
+  `functions/featureFlags.js#isFlagEnabled` (override > registry default,
+  fail-closed). Only register a flag alongside the real code it gates — do not
+  add a flag for a feature that does not exist yet.
+- **Calls**: `src/services/callService.js` is the canonical call implementation
+  (Firestore `calls/{id}` signaling, `participants` array, `CallScreen`).
+  `messagesService` must not re-implement `startCall`/`acceptCall`/`endCall`;
+  the `/call/:conversationId` route takes a **conversationId**, not a uid — a
+  caller with only a uid must resolve the direct conversation first.
 - **Audit trail**: `functions/admin.js#writeAudit` appends to `moderation_logs`
   (admin-readable, server-write-only). `AdminAuditLogsScreen` reads that
   collection. `src/utils/AuditLogger.js` is a local IndexedDB queue and is not

@@ -43,20 +43,10 @@ const DEFAULT_FLAGS = Object.freeze({
     type: 'boolean',
     description: 'Voice/video calls in messaging (WebRTC).',
   },
-  'live.recording': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Live stream recording & replay (server-side).',
-  },
   'ai.studio': {
     defaultValue: true,
     type: 'boolean',
     description: 'AI Studio (captions, scripts, images).',
-  },
-  'ai.streaming': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Streaming responses for AI Studio.',
   },
   'stories.music_library': {
     defaultValue: false,
@@ -67,11 +57,6 @@ const DEFAULT_FLAGS = Object.freeze({
     defaultValue: true,
     type: 'boolean',
     description: 'Pay-per-view videos.',
-  },
-  'admin.analytics_beta': {
-    defaultValue: false,
-    type: 'boolean',
-    description: 'Beta analytics dashboard for creators.',
   },
   'search.vector': {
     defaultValue: false,

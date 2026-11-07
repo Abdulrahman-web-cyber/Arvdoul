@@ -19,6 +19,7 @@ import { getDatabase, ref, onValue, set, remove, onDisconnect, push as rtdbPush 
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, getStorage } from 'firebase/storage';
 import { getFirestoreInstance, getAuthInstance } from '../firebase/firebase';
 import { openDB } from 'idb';
+import { featureFlagService } from './featureFlagService.js';
 
 const MESSAGING_CONFIG = {
   FREE: {
@@ -1152,7 +1153,7 @@ class UltimateMessagingService {
     const ttlExpiresAt = new Date(Date.now() + MESSAGING_CONFIG.MESSAGE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
     let encryptedPayload = null;
-    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
+    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && featureFlagService.isEnabled('messaging.e2ee') && validated.type === MESSAGING_CONFIG.MESSAGE_TYPES.TEXT) {
       // Best-effort E2EE. Encryption requires the sender's private key to be
       // unlocked and every participant to have published a public key. Until
       // key provisioning is wired, an unconditional gate would throw on the
@@ -1389,7 +1390,7 @@ class UltimateMessagingService {
     });
 
     // decryption
-    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED) {
+    if (MESSAGING_CONFIG.ENCRYPTION.ENABLED && featureFlagService.isEnabled('messaging.e2ee')) {
       const privateKey = this.unlockedPrivateKeys.get(currentUser.uid);
       if (privateKey) {
         for (const msg of messages) {
@@ -2650,52 +2651,6 @@ class UltimateMessagingService {
     return { success: true };
   }
 
-  async startCall(conversationId, callType = 'audio') {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw new Error('Auth required');
-    const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const callRef = this.fs.doc(this.firestore, 'calls', callId);
-    const callData = {
-      id: callId,
-      conversationId,
-      createdBy: currentUser.uid,
-      participants: [currentUser.uid],
-      type: callType,
-      status: 'ringing',
-      createdAt: this.fs.serverTimestamp(),
-      updatedAt: this.fs.serverTimestamp(),
-    };
-    await this.fs.setDoc(callRef, callData);
-    return { success: true, callId };
-  }
-
-  async acceptCall(callId) {
-    await this.ensureInitialized();
-    const currentUser = this.auth.currentUser;
-    if (!currentUser) throw new Error('Auth required');
-    const callRef = this.fs.doc(this.firestore, 'calls', callId);
-    await this.fs.runTransaction(this.firestore, async (transaction) => {
-      const snap = await transaction.get(callRef);
-      if (!snap.exists()) throw new Error('Call not found');
-      const call = snap.data();
-      if (call.participants.includes(currentUser.uid)) return; // already accepted
-      transaction.update(callRef, {
-        participants: arrayUnion(currentUser.uid),
-        status: 'ongoing',
-        updatedAt: this.fs.serverTimestamp(),
-      });
-    });
-    return { success: true };
-  }
-
-  async endCall(callId) {
-    await this.ensureInitialized();
-    const callRef = this.fs.doc(this.firestore, 'calls', callId);
-    await this.fs.updateDoc(callRef, { status: 'ended', updatedAt: this.fs.serverTimestamp() });
-    return { success: true };
-  }
-
   async _findExistingConversation(participants) {
     const [uid1, uid2] = participants.sort();
     const id = `direct_${uid1}_${uid2}`;
@@ -3363,9 +3318,6 @@ const messagingService = {
   getConversationMedia: (cid, opts) => getMessagingService().getConversationMedia(cid, opts),
   getMessageHistory: (cid, mid) => getMessagingService().getMessageHistory(cid, mid),
   registerPushToken: (uid, token) => getMessagingService().registerPushToken(uid, token),
-  startCall: (cid, callType) => getMessagingService().startCall(cid, callType),
-  acceptCall: (callId) => getMessagingService().acceptCall(callId),
-  endCall: (callId) => getMessagingService().endCall(callId),
   getUnreadCount: (userId, conversationId) => getMessagingService().getUnreadCount(userId, conversationId),
   getTotalUnreadCount: (userId) => getMessagingService().getTotalUnreadCount(userId),
   getService: getMessagingService,

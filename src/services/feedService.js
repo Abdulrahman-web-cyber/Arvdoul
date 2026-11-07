@@ -7,6 +7,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { firestoreService } from './firestoreService.js';
+import { featureFlagService } from './featureFlagService.js';
 
 const FEED_CONFIG = {
   FEED_TYPES: {
@@ -886,7 +887,7 @@ class UltimateFeedService {
       dynamicWeights = { ...dynamicWeights, following: Math.min(0.6, dynamicWeights.following + 0.05) };
       const total = Object.values(dynamicWeights).reduce((s, w) => s + w, 0);
       Object.keys(dynamicWeights).forEach(k => dynamicWeights[k] /= total);
-    } else if (expGroup === 'ml_personalized') {
+    } else if (expGroup === 'ml_personalized' && featureFlagService.isEnabled('feed.ml_ranking')) {
       const mlFeed = await this._getMLPersonalizedFeed(userId, { limit, lastDoc });
       if (mlFeed && mlFeed.feed && mlFeed.feed.length > 0) {
         const newPosts = mlFeed.feed.filter(p => !seenPostIds.has(p.id));
@@ -939,7 +940,9 @@ class UltimateFeedService {
     let scoredPosts = this._scoreAndRankPostsOptimized(feedSources, userId, dynamicWeights, sessionSeed, hiddenPosts, seenPostIds);
     scoredPosts = this._applySessionBoosts(userId, scoredPosts);
     scoredPosts = scoredPosts.filter(p => !notInterestedPosts.has(p.id));
-    const diversified = this._applyDiversityOptimized(scoredPosts, userId, limit, sessionSeed, topicStreaks);
+    const diversified = featureFlagService.isEnabled('feed.diversity_rerank')
+      ? this._applyDiversityOptimized(scoredPosts, userId, limit, sessionSeed, topicStreaks)
+      : scoredPosts;
     const monetisedFeed = await this._insertMonetizationOptimized(diversified, userId, options);
     const finalFeed = this._finalizeFeedOptimized(monetisedFeed, userId, options);
 
@@ -1212,7 +1215,7 @@ class UltimateFeedService {
   }
 
   async _insertMonetizationOptimized(posts, userId, options) {
-    if (options.ads === false) return posts;
+    if (options.ads === false || !featureFlagService.isEnabled('feed.ads')) return posts;
     let adInterval = options.adInterval || FEED_CONFIG.MONETISATION.AD_INTERVAL;
     const range = FEED_CONFIG.RANDOMNESS.AD_INTERVAL_RANDOM_RANGE || 0;
     if (range > 0) {

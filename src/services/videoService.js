@@ -8,6 +8,7 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
+import { featureFlagService } from './featureFlagService.js';
 
 const VIDEO_CONFIG = {
   UPLOAD: {
@@ -546,7 +547,7 @@ class UltimateVideoService {
       return { success: false, error: 'Video is still processing' };
     }
 
-    if (video.monetization?.type === 'pay_per_view' && video.userId !== currentUser?.uid) {
+    if (featureFlagService.isEnabled('monetization.pay_per_view') && video.monetization?.type === 'pay_per_view' && video.userId !== currentUser?.uid) {
       const hasAccess = await this._checkPayPerViewAccess(videoId, currentUser?.uid);
       if (!hasAccess) throw new VideoError('access-denied', 'Payment required.');
     }
