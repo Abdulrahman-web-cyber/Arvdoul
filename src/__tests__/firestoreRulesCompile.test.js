@@ -374,4 +374,46 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       await env.cleanup();
     }
   });
+
+  test('message reactions are readable via the collection-group query (N098)', async () => {
+    // `messagesService.getMessages` merges reactions with ONE
+    // `collectionGroup('reactions')` query. Firestore authorizes a
+    // collection-group query only through a recursive-wildcard rule; the
+    // per-subcollection rule cannot, so without the `match /{path=**}/reactions`
+    // block the query failed `list` and every reaction was silently dropped.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collectionGroup, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'conversations/c1'), { participants: ['alice', 'bob'] });
+        await setDoc(doc(db, 'conversations/c1/messages/m1'), { senderId: 'bob', text: 'hi' });
+        await setDoc(doc(db, 'conversations/c1/messages/m1/reactions/alice'),
+          { emoji: '❤️', conversationId: 'c1', messageId: 'm1' });
+        // supergroup shard layout must resolve through the same rule
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2'), { senderId: 'bob', text: 'hi2' });
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2/reactions/bob'),
+          { emoji: '🔥', conversationId: 'c1', messageId: 'm2' });
+      });
+      const cgQuery = (db) => query(
+        collectionGroup(db, 'reactions'),
+        where('conversationId', '==', 'c1'),
+        where('messageId', 'in', ['m1', 'm2'])
+      );
+      await assertSucceeds(getDocs(cgQuery(env.authenticatedContext('alice').firestore())));
+      await assertFails(getDocs(cgQuery(env.authenticatedContext('carol').firestore())));
+    } finally {
+      await env.cleanup();
+    }
+  });
 });

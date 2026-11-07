@@ -70,6 +70,18 @@ service cloud.firestore {
     function followEdgeExists(a, b) {
       return exists(/databases/$(database)/documents/follows/$(a + '_' + b));
     }
+    // Collection-group authorization. `messagesService.getMessages` merges
+    // message reactions with ONE `collectionGroup('reactions')` query, and
+    // Firestore authorizes a collection-group query ONLY through a
+    // recursive-wildcard rule (`match /{path=**}/<collection>/<doc>`). There was
+    // no such rule, so the query failed `list` and every reaction was silently
+    // dropped from the thread. The reaction doc carries its `conversationId`
+    // (written by the same client path that the exact-path rule gates), so the
+    // read is scoped to participants of that conversation.
+    function isConvParticipantById(conversationId) {
+      return isSignedIn() && conversationId is string &&
+        uid() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+    }
     function dmAllowedTo(senderUid, recipientUid) {
       let pref = get(/databases/$(database)/documents/users/$(recipientUid)).data
         .get('settings', {}).get('privacy', {}).get('allowDMs', 'everyone');
@@ -1592,6 +1604,22 @@ service cloud.firestore {
     match /config/{configId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // ==================== COLLECTION-GROUP: MESSAGE REACTIONS ====================
+    // A message's reaction docs live at
+    // `conversations/{cid}/{messages|messages_YYYY_MM}/{mid}/reactions/{uid}`.
+    // `messagesService.getMessages` merges them with a single
+    // `collectionGroup('reactions')` query, which the per-subcollection rule
+    // cannot authorize — a collection-group query is authorized only by a
+    // recursive-wildcard rule. Without this block the query failed `list` and
+    // every reaction was silently dropped from the thread. The query filters on
+    // the reaction's own `conversationId`, so the read is scoped to that
+    // conversation's participants; writes stay on the exact-path
+    // `conversations/{cid}/{shard}/{mid}/reactions/{uid}` rule above.
+    match /{path=**}/reactions/{reactorId} {
+      allow read: if resource.data.conversationId is string &&
+        isConvParticipantById(resource.data.conversationId);
     }
 
     // ==================== DEFAULT DENY ====================
