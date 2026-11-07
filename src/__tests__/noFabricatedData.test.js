@@ -1253,11 +1253,49 @@ describe('Analytics view dedupe is transactional and server-authoritative (N019/
     expect(src).toContain('db.runTransaction');
     expect(src).toContain('getUserIdFromContext');
     expect(src).toContain('checkRateLimit');
-    // Shard key must match CountersManager.hashString (same algorithm).
-    expect(src).toContain('5381');
     expect(src).toContain("'counter_shards'");
     const index = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
     expect(index).toContain("require('./analytics.js')");
+  });
+
+  test('server and client derive counter shard ids identically (byte-identical hash + shard count)', () => {
+    // AGENTS.md: the server shard key must stay byte-identical to hashString()
+    // in src/utils/CountersManager.js because the client SUMS counter_shards on
+    // read. A guard that merely greps for `5381` does not catch a drifted
+    // algorithm, a different modulus, or a changed shard count — any of which
+    // makes client and server write/read different documents and the counter
+    // silently wrong. Extract the real function bodies and the shard counts and
+    // compare them exactly.
+    const client = fs.readFileSync(path.join(root, 'src/utils/CountersManager.js'), 'utf8');
+    const server = fs.readFileSync(path.join(root, 'functions/analytics.js'), 'utf8');
+
+    const extractFn = (src, name) => {
+      const m = src.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\n\\}`));
+      return m && m[0].replace(/\s+/g, ' ').trim();
+    };
+    const clientHash = extractFn(client, 'hashString');
+    const serverHash = extractFn(server, 'hashString');
+    expect(clientHash).toBeTruthy();
+    expect(serverHash).toBe(clientHash);
+
+    const extractInt = (src, patterns) => {
+      for (const re of patterns) {
+        const m = src.match(re);
+        if (m) return Number(m[1]);
+      }
+      return null;
+    };
+    const clientShards = extractInt(client, [/shards\s*=\s*(\d+)/]);
+    const serverShards = extractInt(server, [/COUNTER_SHARDS\s*=\s*(\d+)/]);
+    expect(clientShards).toBe(serverShards);
+
+    // The shard document id layout must match too: `${hash}__${field}__${index}`.
+    const layout = (src) => {
+      const m = src.match(/`\$\{hashString\([^`]*?\)\}__\$\{[^}]*\}__\$\{[^}]*\}`/);
+      return m && m[0];
+    };
+    expect(layout(server)).toBeTruthy();
+    expect(layout(server)).toBe(layout(client));
   });
 });
 
