@@ -1,6 +1,6 @@
 // src/context/AuthContext.jsx
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { useAppStore } from "../store/appStore";
@@ -16,6 +16,7 @@ import {
 } from "../utils/profileCompletion.js";
 import { getSafeAvatarUrl } from "../utils/avatarUtils.js";
 import { cacheManager } from "../utils/CacheManager.js";
+import { purgeDeviceLocalContent } from "../utils/localContentCache.js";
 import { PRIVATE_PROFILE_FIELDS } from "../config/profileContracts.js";
 import { useUserSettings } from "../hooks/useUserSettings.js";
 
@@ -299,6 +300,15 @@ export function AuthProvider({ children }) {
       cacheManager.clear();
     } catch (cacheError) {
       console.warn('Cache clear on session reset failed:', cacheError?.message);
+    }
+    // Device-local post/comment caches are not uid-scoped, so HomeScreen,
+    // feedService and profileStore merge the *previous* account's freshly
+    // published posts into the next account's feed. Purge them on every
+    // session reset.
+    try {
+      purgeDeviceLocalContent();
+    } catch (purgeError) {
+      console.warn('Local content purge on session reset failed:', purgeError?.message);
     }
   }, []);
   const unsubscribeAuthRef = useRef(null);
@@ -729,6 +739,13 @@ export function AuthProvider({ children }) {
                 cacheManager.clear();
               } catch (cacheError) {
                 console.warn('Cache clear on account switch failed:', cacheError?.message);
+              }
+              // Device-local post/comment caches are not uid-scoped; purge them
+              // so the departing account's posts do not bleed into the new one.
+              try {
+                purgeDeviceLocalContent();
+              } catch (purgeError) {
+                console.warn('Local content purge on account switch failed:', purgeError?.message);
               }
               // Drop the departing account's queued offline writes so they
               // cannot drain into this session.

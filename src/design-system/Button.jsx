@@ -7,7 +7,6 @@
  * No hardcoded brand hex values - surfaces come from the design tokens.
  */
 
-import React from 'react';
 import { cn } from '../lib/utils.js';
 
 const VARIANTS = {

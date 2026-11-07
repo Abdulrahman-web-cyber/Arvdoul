@@ -5,14 +5,14 @@
  * @component
  */
 
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import { useProfileStore } from '../../store/profileStore';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Edit3, Shield, Award, Sparkles, MapPin, Globe, Calendar, Link as LinkIcon, Briefcase, Mail, HeartHandshake, Palette } from 'lucide-react';
+import { Edit3, Shield, Sparkles, Mail, HeartHandshake, Palette } from "lucide-react";
 import ProfileAbout from '../../components/profile/ProfileAbout';
 import { getStoredUid, getStoredUser } from '../../utils/security';
 import { getRankTitle, getPerksForLevel } from '../../services/levelSystemService';
@@ -128,7 +128,6 @@ export default function AboutScreen() {
           profile={displayedProfile}
           isOwner={isActualOwner}
           onEdit={handleEdit}
-          theme={theme}
         />
 
         {/* Creator Suite — gated by the `creatorInfo` scope (was a dead control:

@@ -2,28 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { cn } from '../../lib/utils';
-import {
-  Copy,
-  Reply,
-  Share,
-  Trash2,
-  Edit3,
-  Flag,
-  Lock,
-  MoreVertical,
-  Check,
-  CheckCheck,
-  Clock,
-  AlertCircle,
-  Bookmark,
-  MapPin,
-  ExternalLink,
-  User,
-  X,
-  Play,
-  Pause,
-  Volume2,
-} from 'lucide-react';
+import { Copy, Reply, Share, Trash2, Edit3, Flag, Lock, MoreVertical, CheckCheck, Clock, AlertCircle, Bookmark, MapPin, ExternalLink, User, X, Play, Pause, Volume2 } from "lucide-react";
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 

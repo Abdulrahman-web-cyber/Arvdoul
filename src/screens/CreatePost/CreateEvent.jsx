@@ -735,38 +735,3 @@ export default function CreateEvent() {
     </div>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────────
-   REQUIRED ORCHESTRATOR REDUCER EXTENSIONS (add to CreatePost.jsx)
-
-   In initialState.typeData.event, add:
-     description: "",
-     coverImage: "",
-     rsvpEnabled: false,
-     capacity: null,
-     locationData: null,        // { displayName, lat, lon }
-     timezone: getUserTimezone(),
-
-   In reducer:
-     case "SET_EVENT_DESCRIPTION": draft.typeData.event.description = action.payload; break;
-     case "SET_EVENT_COVER": draft.typeData.event.coverImage = action.payload; break;
-     case "SET_EVENT_RSVP": draft.typeData.event.rsvpEnabled = action.payload; break;
-     case "SET_EVENT_CAPACITY": draft.typeData.event.capacity = action.payload; break;
-     case "SET_EVENT_LOCATION_DATA": draft.typeData.event.locationData = action.payload; break;
-     case "SET_EVENT_TIMEZONE": draft.typeData.event.timezone = action.payload; break;
-
-   In orchestrator publishPost, extend the event object:
-     event: current.postType === "event" ? {
-       title: sanitizedContent,
-       date: current.typeData.event.date,
-       location: current.typeData.event.location,
-       locationData: current.typeData.event.locationData,
-       description: current.typeData.event.description,
-       coverImage: current.typeData.event.coverImage,
-       rsvpEnabled: current.typeData.event.rsvpEnabled,
-       capacity: current.typeData.event.capacity,
-       timezone: current.typeData.event.timezone,
-     } : null,
-
-   Update firestoreService.createPost to store the new fields.
-   ──────────────────────────────────────────────────────────────────── */

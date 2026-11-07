@@ -11,9 +11,8 @@
  *      hatch instead of dead-ending the user.
  */
 
-import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { axe, toHaveNoViolations } from 'jest-axe';
+import { toHaveNoViolations } from "jest-axe";
 import { MemoryRouter } from 'react-router-dom';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import i18n from 'i18next';

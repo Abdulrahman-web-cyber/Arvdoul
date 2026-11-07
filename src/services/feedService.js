@@ -1,6 +1,7 @@
 // src/services/feedService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
+import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
@@ -102,10 +103,6 @@ const FEED_CONFIG = {
     MAX_SAME_TYPE: 3,
     MAX_SAME_TOPIC: 2,
   },
-  FOLLOWING_FEED: {
-    COLLECTION: 'feeds',
-    MAX_FEED_SIZE: 1000,
-  },
   BLOCK_CACHE_TTL: 5 * 60 * 1000,
   SESSION: {
     COLLECTION: 'user_sessions',
@@ -118,11 +115,6 @@ const FEED_CONFIG = {
     CACHE_TTL: 15 * 60 * 1000,
     MAX_PER_PAGE: 1,
     AUCTION_QUERY_LIMIT: 20
-  },
-  HEALTH_METRICS: {
-    ENABLED: true,
-    COLLECTION: 'feed_health',
-    REPORT_INTERVAL_MS: 60 * 60 * 1000
   },
   DEBUG: false,
 };
@@ -187,10 +179,8 @@ class UltimateFeedService {
     this.activeUsers = new Set();
     this.algorithmVersion = 'v24.2';
     this.mlCache = new Map();
-    this.healthMetrics = { avgLatency: 0, lastLatency: 0 };
 
     this._readyPromise = this._initWithTimeout();
-    this._scheduleHealthMetrics();
   }
 
   async _initWithTimeout() {
@@ -418,6 +408,21 @@ class UltimateFeedService {
     } catch (e) { return new Set(); }
   }
 
+  // The public-feed predicate the Firestore list rule proves. Every public
+  // post query must constrain exactly these fields (rules are not filters), or
+  // the whole query is denied — and a query that omits them could surface a
+  // draft/scheduled/only-me post. Keep in sync with `postQueryConstrainsPublic`
+  // in firestore.rules.
+  _publicPostFilters() {
+    const { where } = this.firestoreMethods;
+    return [
+      where('authorIsPrivate', '==', false),
+      where('status', '==', 'published'),
+      where('isDeleted', '==', false),
+      where('visibility', '==', 'public'),
+    ];
+  }
+
   async _getFollowingFeedEfficient(userId, options) {
     if (this.offlineMode) return [];
     try {
@@ -441,9 +446,7 @@ class UltimateFeedService {
         const q = this.firestoreMethods.query(
           this.firestoreMethods.collection(this.firestore, 'posts'),
           this.firestoreMethods.where('authorId', 'in', chunk),
-          this.firestoreMethods.where('isDeleted', '==', false),
-          this.firestoreMethods.where('status', '==', 'published'),
-          this.firestoreMethods.where('visibility', '==', 'public'),
+          ...this._publicPostFilters(),
           this.firestoreMethods.orderBy('createdAt', 'desc'),
           this.firestoreMethods.limit(10)
         );
@@ -493,10 +496,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch (err) {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
 
       const posts = [];
@@ -541,13 +543,12 @@ class UltimateFeedService {
       const postsRef = collection(this.firestore, 'posts');
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
         // The ordered query can fail (missing index / field); fall back to an
         // unordered read, but keep the limit — an unbounded `getDocs(postsRef)`
         // reads the entire posts collection (bill + latency cliff).
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       const posts = [];
       snapshot.forEach(doc => {
@@ -564,7 +565,7 @@ class UltimateFeedService {
       });
       try {
         if (typeof window !== 'undefined' && window.localStorage) {
-          const localPosts = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
+          const localPosts = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
           if (Array.isArray(localPosts) && localPosts.length > 0) {
             const existingIds = new Set(posts.map(p => p.id));
             for (const lp of localPosts) {
@@ -599,10 +600,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -636,10 +636,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 3)));
       } catch {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 3)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 3)));
       }
       
       const posts = [];
@@ -672,10 +671,9 @@ class UltimateFeedService {
       
       let snapshot;
       try {
-        const q = query(postsRef, where('authorIsPrivate', '==', false), orderBy('createdAt', 'desc'), firestoreLimit(limit * 4));
-        snapshot = await getDocs(q);
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), orderBy('createdAt', 'desc'), firestoreLimit(limit * 4)));
       } catch {
-        snapshot = await getDocs(query(postsRef, where('authorIsPrivate', '==', false), firestoreLimit(limit * 4)));
+        snapshot = await getDocs(query(postsRef, ...this._publicPostFilters(), firestoreLimit(limit * 4)));
       }
       
       const posts = [];
@@ -753,10 +751,7 @@ class UltimateFeedService {
       const postsRef = this.firestoreMethods.collection(this.firestore, 'posts');
       let q = this.firestoreMethods.query(
         postsRef,
-        this.firestoreMethods.where('isDeleted', '==', false),
-        this.firestoreMethods.where('status', '==', 'published'),
-        this.firestoreMethods.where('visibility', '==', 'public'),
-        this.firestoreMethods.where('authorIsPrivate', '==', false),
+        ...this._publicPostFilters(),
         this.firestoreMethods.orderBy('createdAt', 'desc'),
         this.firestoreMethods.limit(limit)
       );
@@ -785,7 +780,9 @@ class UltimateFeedService {
       return result;
     } catch (error) {
       logger.error('Latest feed error:', error);
-      return { success: true, feed: [], nextCursor: null };
+      // Fail closed: an empty page that claims success would be cached as
+      // "no posts" and stop pagination. Surface the failure instead.
+      return { success: false, feed: [], nextCursor: null, error: error?.message || 'latest-feed-failed' };
     }
   }
 
@@ -1511,7 +1508,9 @@ class UltimateFeedService {
       return result;
     } catch (error) {
       logger.error('Follow suggestions error:', error);
-      return { success: true, suggestions: [] };
+      // Fail closed: an empty suggestion list reported as success would render
+      // as "nobody to follow" instead of an error state.
+      return { success: false, suggestions: [], error: error?.message || 'suggestions-failed' };
     }
   }
 
@@ -1566,84 +1565,6 @@ class UltimateFeedService {
       },
       timeframe
     };
-  }
-
-  async _reportHealthMetrics() {
-    if (!FEED_CONFIG.HEALTH_METRICS.ENABLED || this.offlineMode) return;
-    try {
-      const healthRef = this.firestoreMethods.collection(this.firestore, FEED_CONFIG.HEALTH_METRICS.COLLECTION);
-      const report = {
-        timestamp: this.firestoreMethods.serverTimestamp(),
-        cacheSize: this.cache.size,
-        activeUsers: this.activeUsers.size,
-        subscriptions: this.realtimeSubscriptions.size,
-        avgLatency: this.healthMetrics.avgLatency || 0,
-      };
-      await this.firestoreMethods.addDoc(healthRef, report);
-    } catch (e) {}
-  }
-
-  _scheduleHealthMetrics() {
-    setInterval(() => this._reportHealthMetrics(), FEED_CONFIG.HEALTH_METRICS.REPORT_INTERVAL_MS);
-  }
-
-  async fanoutPostToFollowers(postId, authorId, postData) {
-    if (this.offlineMode) return { success: true, fannedOutTo: 0 };
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, writeBatch, doc, serverTimestamp } = this.firestoreMethods;
-    const followsRef = collection(this.firestore, 'follows');
-    const q = query(followsRef, where('followingId', '==', authorId));
-    const snapshot = await getDocs(q);
-    const followerIds = snapshot.docs.map(d => d.data().followerId);
-    if (followerIds.length === 0) return { success: true, fannedOutTo: 0 };
-    const batches = [];
-    let batch = writeBatch(this.firestore);
-    let ops = 0;
-    const feedEntry = { postId, authorId, ...postData, fanoutAt: serverTimestamp() };
-    for (const followerId of followerIds) {
-      batch.set(doc(this.firestore, 'users', followerId, 'feeds', postId), feedEntry);
-      ops++;
-      if (ops >= FEED_CONFIG.PERFORMANCE.FANOUT_BATCH_SIZE) {
-        batches.push(batch.commit());
-        batch = writeBatch(this.firestore);
-        ops = 0;
-      }
-    }
-    if (ops > 0) batches.push(batch.commit());
-    await Promise.all(batches);
-    return { success: true, fannedOutTo: followerIds.length };
-  }
-
-  async updatePostScores(postId = null, trendingOnly = false) {
-    if (this.offlineMode) return { success: true, updated: 0 };
-    await this._ensureInitialized();
-    const { collection, query, where, getDocs, doc, updateDoc, limit: firestoreLimit } = this.firestoreMethods;
-    const postsRef = collection(this.firestore, 'posts');
-    let q;
-    if (postId) {
-      q = query(postsRef, where('__name__', '==', postId));
-    } else {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      q = query(postsRef, where('updatedAt', '>=', oneDayAgo), firestoreLimit(500));
-    }
-    const snapshot = await getDocs(q);
-    const updates = [];
-    snapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      const likes = data.likeCount || 0;
-      const comments = data.commentCount || 0;
-      const shares = data.shareCount || 0;
-      const views = data.viewCount || 0;
-      const ageHours = (Date.now() - (data.createdAt?.toDate?.() || Date.now())) / (1000 * 60 * 60);
-      const engagement = likes + comments * 2 + shares * 3;
-      const timeDecay = Math.exp(-ageHours / 12);
-      const trendingScore = (engagement / Math.max(1, views)) * timeDecay;
-      const updateData = { trendingScore };
-      if (!trendingOnly) updateData.personalizationScore = Math.min(1, (engagement / 50) * timeDecay);
-      updates.push(updateDoc(doc(this.firestore, 'posts', docSnap.id), updateData));
-    });
-    await Promise.all(updates);
-    return { success: true, updated: updates.length };
   }
 
   async triggerRealTimeReRanking(userId, interactionType, postId) {
@@ -1843,8 +1764,6 @@ const feedService = {
   getFollowSuggestions: (userId, limit) => getFeedService().getFollowSuggestions(userId, limit),
   demotePost: (userId, postId, reason) => getFeedService().demotePost(userId, postId, reason),
   boostSimilarContent: (...args) => getFeedService().boostSimilarContent(...args),
-  fanoutPostToFollowers: (...args) => getFeedService().fanoutPostToFollowers(...args),
-  updatePostScores: (...args) => getFeedService().updatePostScores(...args),
   getStats: () => getFeedService().getStats(),
   clearUserCache: (userId) => getFeedService().clearUserCache(userId),
   clearCache: () => getFeedService().clearCache(),

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, memo } from 'react';
+import { useState, useEffect, memo } from "react";
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, ChevronRight, Eye, Flame, Play } from 'lucide-react';
+import { Plus, Sparkles, ChevronRight } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';

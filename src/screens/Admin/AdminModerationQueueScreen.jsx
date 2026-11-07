@@ -1,16 +1,12 @@
 // src/screens/Admin/AdminModerationQueueScreen.jsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fetchAdminStatus, callFunction, FUNCTIONS } from '../../services/callableService.js';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, Filter, Eye, CheckCircle, XCircle, 
-  Flag, AlertTriangle, User, MessageSquare, Image as ImageIcon,
-  Clock, ChevronRight
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Flag, AlertTriangle, User, MessageSquare, Image as ImageIcon, ChevronRight } from "lucide-react";
 
 const AdminModerationQueueScreen = () => {
   const navigate = useNavigate();

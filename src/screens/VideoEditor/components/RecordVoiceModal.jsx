@@ -1,12 +1,9 @@
 // src/screens/VideoEditor/components/RecordVoiceModal.jsx
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from "react";
 import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';
-import {
-  X, Video, Mic, Square, Play, RefreshCw, Check, Camera,
-  Volume2, AlertCircle
-} from 'lucide-react';
+import { X, Video, Mic, Square, RefreshCw, Check, AlertCircle } from "lucide-react";
 import { formatTimecode } from '../constants';
 
 export default function RecordVoiceModal({

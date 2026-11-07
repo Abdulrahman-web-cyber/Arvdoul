@@ -1,24 +1,10 @@
 // src/screens/Admin/AdminAuditLogsScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  FileText,
-  Search,
-  Filter,
-  Download,
-  ShieldCheck,
-  AlertTriangle,
-  Clock,
-  User,
-  ChevronDown,
-  ChevronRight,
-  Code,
-  RefreshCw,
-} from 'lucide-react';
+import { ArrowLeft, Search, Download, ShieldCheck, Clock, User, ChevronDown, ChevronRight, Code, RefreshCw } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
 
 // Firestore timestamps arrive as { seconds, nanoseconds } objects; ISO strings

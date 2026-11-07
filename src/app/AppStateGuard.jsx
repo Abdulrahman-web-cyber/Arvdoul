@@ -1,9 +1,8 @@
 // src/app/AppStateGuard.jsx
 
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import PageLoader from "../components/UI/PageLoader.jsx";
 import {
   resolvePostAuthDestination,
   safeReturnPath,

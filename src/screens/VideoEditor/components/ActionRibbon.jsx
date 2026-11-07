@@ -1,6 +1,5 @@
 // src/screens/VideoEditor/components/ActionRibbon.jsx
 
-import React from 'react';
 import PropTypes from 'prop-types';
 import {
   Scissors, SplitSquareVertical, Layers, Palette, Sliders, Music,

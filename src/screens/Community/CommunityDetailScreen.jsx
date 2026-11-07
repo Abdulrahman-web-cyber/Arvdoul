@@ -1,15 +1,10 @@
 // src/screens/Community/CommunityDetailScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, Users, Calendar, Settings, Shield, 
-  Globe, Lock, Plus, MoreVertical, UserPlus, UserMinus,
-  MessageCircle, FileText, Image as ImageIcon, Video,
-  Send, Bell, BellOff, Share2, Bookmark, Flag
-} from 'lucide-react';
+import { ArrowLeft, Settings, Shield, Globe, Lock, UserPlus, UserMinus, MessageCircle, FileText, Share2 } from "lucide-react";
 import { getCommunityService } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
@@ -29,7 +24,6 @@ const CommunityDetailScreen = () => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isMember, setIsMember] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
 
   // Load community
   const loadCommunity = useCallback(async () => {

@@ -1,7 +1,6 @@
 // src/services/storageService.js
 
 import { cacheManager } from '../utils/CacheManager.js';
-import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { idempotencyStore } from '../utils/IdempotencyKey.js';

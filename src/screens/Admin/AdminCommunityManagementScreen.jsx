@@ -1,23 +1,9 @@
 // src/screens/Admin/AdminCommunityManagementScreen.jsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  Users,
-  Search,
-  CheckCircle2,
-  ShieldCheck,
-  AlertTriangle,
-  Lock,
-  Globe,
-  Award,
-  MoreVertical,
-  Flag,
-  Trash2,
-} from 'lucide-react';
+import { ArrowLeft, Search, CheckCircle2, Lock, Globe, Flag } from "lucide-react";
 import { callFunction, FUNCTIONS } from '../../services/callableService.js';
 
 const AdminCommunityManagementScreen = () => {

@@ -6,14 +6,14 @@
  * @component
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfileStore } from '../../store/profileStore';
 import { useAppStore } from '../../store/appStore';
 import { cn } from '../../lib/utils';
-import { ArrowLeft, Edit3, Eye, ShieldCheck, User } from 'lucide-react';
+import { Edit3, ShieldCheck } from "lucide-react";
 import ProfileHeroSection from '../../components/profile/ProfileHeroSection';
 import ProfileMetricsGrid from '../../components/profile/ProfileMetricsGrid';
 import ProfileHighlightsSection from '../../components/profile/ProfileHighlightsSection';

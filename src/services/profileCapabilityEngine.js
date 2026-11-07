@@ -7,7 +7,7 @@
  * privacy contracts, and safety state.
  */
 
-import { VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY, canViewProfileSection } from '../config/profileContracts.js';
+import { DEFAULT_PROFILE_PRIVACY, canViewProfileSection } from "../config/profileContracts.js";
 
 export const RELATIONSHIP_STATES = Object.freeze({
   NONE: 'NONE',

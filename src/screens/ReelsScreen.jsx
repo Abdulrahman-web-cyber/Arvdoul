@@ -1,6 +1,6 @@
 // src/screens/ReelsScreen.jsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -8,12 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import settingsService from '../services/settingsService.js';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import {
-  Heart, MessageCircle, Share2, Bookmark, Gift, MoreVertical,
-  Volume2, VolumeX, Play, Pause, Search, Camera, ChevronRight,
-  Sparkles, Home, Users, Plus, MessageSquare, User, CheckCircle2,
-  Music, ArrowUp, ArrowLeftRight, Flame
-} from 'lucide-react';
+import { Heart, MessageCircle, Share2, Bookmark, Gift, MoreVertical, Volume2, VolumeX, Play, Search, Camera, ChevronRight, Sparkles, Home, Users, Plus, MessageSquare, User, CheckCircle2, Music, ArrowUp, ArrowLeftRight } from "lucide-react";
 import videoService from '../services/videoService';
 import { getMonetizationService } from '../services/monetizationService';
 import { getUserService } from '../services/userService';
@@ -196,13 +191,6 @@ const formatDuration = (seconds) => {
     if (giftModal) setGiftAmount(null);
   }, [giftModal]);
 
-  const handleScroll = useCallback((e) => {
-    const el = e.currentTarget;
-    if (!el.clientHeight) return;
-    const idx = Math.round(el.scrollTop / el.clientHeight);
-    setCurrentReelIndex((prev) => (idx !== prev ? idx : prev));
-  }, []);
-
   // Mouse-wheel / trackpad navigation between reels (desktop).
   const handleWheel = useCallback((e) => {
     const now = Date.now();
@@ -362,17 +350,8 @@ const formatDuration = (seconds) => {
     } catch { /* counter stays authoritative */ }
   };
 
-  // Report — real moderation report via videoService.reportVideo.
-  const handleReport = async (reason) => {
-    if (!currentReel) return;
-    try {
-      await videoService.reportVideo(currentReel.id, reason);
-      toast.success('Report submitted — thank you');
-      setSheetView(null);
-    } catch (err) {
-      toast.error(err?.message || 'Could not submit report');
-    }
-  };
+  // Reporting is owned by VideoBottomSheet (videoService.reportVideo); the reels
+  // screen only routes to it via `sheetView === 'report'`.
 
   // Keyboard navigation & Swipe gestures
   const handleNextReel = () => {

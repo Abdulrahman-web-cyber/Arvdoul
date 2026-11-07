@@ -2,54 +2,13 @@
 //
 // Global · Contextual · Intelligent · Full Canvas Manipulation · Multi-Photo Filmstrip · 10-Tool Grid
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { cn } from '../../lib/utils';
-import {
-  ChevronLeft,
-  Undo2,
-  Redo2,
-  Layers,
-  Sparkles,
-  Wand2,
-  Scissors,
-  ChevronDown,
-  Crop,
-  Sliders,
-  Sparkle,
-  Zap,
-  Minus,
-  Plus,
-  Maximize2,
-  Image as ImageIcon,
-  Type,
-  Pencil,
-  Smile,
-  Square,
-  Flame,
-  MoreHorizontal,
-  Columns,
-  RotateCcw,
-  Clock,
-  SlidersHorizontal,
-  Upload,
-  Download,
-  Eye,
-  EyeOff,
-  Lock,
-  Unlock,
-  Trash2,
-  Check,
-  X,
-  Palette,
-  Sun,
-  Moon,
-  RefreshCw,
-} from 'lucide-react';
+import { ChevronLeft, Undo2, Redo2, Layers, Sparkles, Wand2, Scissors, ChevronDown, Crop, Sliders, Sparkle, Zap, Minus, Plus, Maximize2, Image as ImageIcon, Type, Pencil, Smile, Square, MoreHorizontal, Columns, RotateCcw, Clock, SlidersHorizontal, Download, Eye, EyeOff, Trash2, X } from "lucide-react";
 
 // Studio base canvas presets (vector gradient artwork, self-contained SVG)
 const STUDIO_CANVASES = [
@@ -162,7 +121,6 @@ export default function ThumbnailDesignerScreen() {
 
   // Zoom & Viewport state
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [fitMode, setFitMode] = useState('contain');
 
   // Canvas Adjustments
   const [adjustments, setAdjustments] = useState({
@@ -189,6 +147,8 @@ export default function ThumbnailDesignerScreen() {
   // Comparison & Export states
   const [isComparing, setIsComparing] = useState(false);
   const [compareSlider, setCompareSlider] = useState(50);
+  const [draggingCompare, setDraggingCompare] = useState(false);
+  const compareFrameRef = useRef(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
 
@@ -432,11 +392,11 @@ export default function ThumbnailDesignerScreen() {
       }
 
       setIsExporting(false);
-      toast.success('Master exported in 4K UHD (PNG 3840×2160)');
+      toast.success(`Master exported in ${exportW}×${exportH}`);
     } catch (err) {
-      console.warn('Canvas export fallback:', err);
+      console.warn('Canvas export failed:', err);
       setIsExporting(false);
-      toast.success('Master exported in 4K UHD');
+      toast.error('Export failed — the master could not be rendered.');
     }
   };
 
@@ -572,10 +532,22 @@ export default function ThumbnailDesignerScreen() {
 
         {/* Center Canvas Frame */}
         <div
+          ref={compareFrameRef}
+          onPointerDown={isComparing ? () => setDraggingCompare(true) : undefined}
+          onPointerMove={isComparing ? (e) => {
+            if (!draggingCompare) return;
+            const rect = compareFrameRef.current?.getBoundingClientRect();
+            if (!rect?.width) return;
+            const pct = ((e.clientX - rect.left) / rect.width) * 100;
+            setCompareSlider(Math.min(100, Math.max(0, pct)));
+          } : undefined}
+          onPointerUp={isComparing ? () => setDraggingCompare(false) : undefined}
+          onPointerLeave={isComparing ? () => setDraggingCompare(false) : undefined}
           className={cn(
             'relative w-full max-w-3xl aspect-[16/10] sm:aspect-[16/9] rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.85)] border border-white/[0.12] bg-black transition-transform duration-200',
             cropAspect === '1:1' && 'max-w-md aspect-square',
-            cropAspect === '9:16' && 'max-w-xs aspect-[9/16]'
+            cropAspect === '9:16' && 'max-w-xs aspect-[9/16]',
+            isComparing && 'cursor-ew-resize touch-none'
           )}
           style={{
             transform: `scale(${zoomLevel / 100})`,
@@ -704,6 +676,10 @@ export default function ThumbnailDesignerScreen() {
               />
               <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-white uppercase tracking-wider">
                 Original
+              </div>
+              {/* Divider handle — drag anywhere on the frame to move the split */}
+              <div className="absolute top-1/2 -translate-y-1/2 -left-3 w-6 h-6 rounded-full bg-white shadow-lg flex items-center justify-center z-30">
+                <span className="w-3 h-0.5 bg-gray-700 rounded-full" />
               </div>
             </div>
           )}

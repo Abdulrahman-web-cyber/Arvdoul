@@ -3,8 +3,8 @@
 // Persistent floating banner for View As perspective simulation.
 // Adheres strictly to Zero-Pill discipline, heraldic dignity, and reactive state management.
 
-import React, { memo } from 'react';
-import { Eye, Users, UserCheck, ShieldCheck, X, Sparkles } from 'lucide-react';
+import { memo } from "react";
+import { Eye, Users, UserCheck, ShieldCheck, X } from "lucide-react";
 import { cn } from '../../lib/utils';
 
 const PERSPECTIVE_OPTIONS = [
@@ -17,7 +17,6 @@ export const ProfileViewAsBanner = memo(({
   viewAs = 'public',
   onViewAsChange,
   onExit,
-  theme = 'dark',
 }) => {
   if (viewAs === 'owner') return null;
 

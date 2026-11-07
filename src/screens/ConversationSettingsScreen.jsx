@@ -2,7 +2,7 @@
 //
 // Conversation info, mute/unmute, pin/unpin, leave group — backed by messagesService.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';

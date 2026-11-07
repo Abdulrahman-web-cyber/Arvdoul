@@ -1,6 +1,6 @@
 // src/components/search/TrendingSection.jsx
 
-import React, { memo, useCallback } from 'react';
+import { memo } from "react";
 import { motion } from 'framer-motion';
 import { TrendingUp, Hash, Users, Eye, MessageCircle, Award } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';

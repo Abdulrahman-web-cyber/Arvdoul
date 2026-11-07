@@ -14,8 +14,6 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { toast } from 'sonner';
-
 const initialState = {
   // Analytics data
   analytics: null,

@@ -3,7 +3,7 @@
 // Sends coins to a user via the server-verified transferCoins Cloud Function
 // (double-entry ledger + idempotency). Route: /gift/:userId
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';

@@ -1,8 +1,6 @@
 // src/screens/CreatePost/CreateVideo.jsx
 
-import React, {
-  useCallback, useEffect, useRef, useState, useMemo, lazy, Suspense
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreatePostState, useCreatePostServices } from "../CreatePost";
 import { useDropzone } from "react-dropzone";
@@ -19,7 +17,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import * as Icons from "lucide-react";
@@ -27,13 +24,9 @@ import { getStorageService } from "../../services/storageService";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import Mention from "@tiptap/extension-mention";
 import Link from "@tiptap/extension-link";
 import CharacterCount from "@tiptap/extension-character-count";
-import DOMPurify from "dompurify";
 import LoadingSpinner from "../../components/Shared/LoadingSpinner";
-import { openDB } from "idb";
-
 // ── Design Tokens (CSS variables) ───────────────────────────────────
 const DNA_GRADIENT =
   "linear-gradient(135deg, #B416DB 0%, #872FE2 35%, #4B6BFF 70%, #0EA3E6 100%)";
@@ -402,7 +395,12 @@ const CaptionComposer = React.memo(({ value, onChange, maxLength, isDark }) => {
         }}
       >
         <div className="p-3 sm:p-4">
-          <EditorContent editor={editor} />
+          <div
+            onFocusCapture={() => setIsFocused(true)}
+            onBlurCapture={() => setIsFocused(false)}
+          >
+            <EditorContent editor={editor} />
+          </div>
           <div className="flex items-center justify-between mt-1.5">
             <div className="flex gap-3 text-xs text-gray-400">
               <span>

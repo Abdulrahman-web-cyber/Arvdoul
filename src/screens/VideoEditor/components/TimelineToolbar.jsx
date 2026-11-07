@@ -1,6 +1,5 @@
 // src/screens/VideoEditor/components/TimelineToolbar.jsx
 
-import React from 'react';
 import PropTypes from 'prop-types';
 import {
   ArrowLeft, Undo2, Redo2, Trash2, Scissors, Crop, Copy,

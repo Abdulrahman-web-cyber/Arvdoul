@@ -3,15 +3,9 @@
  * multi-select batch actions, search, and rich media previews.
  */
 
-import React, { useState, useEffect, useMemo, useCallback} from 'react';
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ArrowLeft, Bookmark, Trash2, FolderPlus, Search, Filter,
-  Grid, List, Share2, Play, Heart, MessageCircle, MoreVertical,
-  Plus, CheckSquare, Square, Folder, ExternalLink, Sparkles,
-  Download, Eye, Film, Image as ImageIcon, Music, Tag
-} from 'lucide-react';
+import { Bookmark, Trash2, Search, Grid, List, Share2, Play, Plus, CheckSquare, Square, Folder, Sparkles, Film, Image as ImageIcon, Music } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -99,10 +93,17 @@ export default function SavedScreen() {
     });
   }, [items, activeCollection, activeTypeFilter, searchQuery]);
 
-  // Remove single item
-  const handleRemoveItem = (id, title) => {
+  // Remove single item. Optimistic, but persisted — a local-only removal
+  // reappears on reload, so the "Removed" toast would be a lie.
+  const handleRemoveItem = async (id, title) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
-    toast.success(`Removed "${title}" from saved`);
+    try {
+      const { getFirestoreService } = await import('../services/firestoreService.js');
+      await getFirestoreService().unsavePost(id, user.uid);
+      toast.success(`Removed "${title}" from saved`);
+    } catch {
+      toast.error('Could not remove from saved');
+    }
   };
 
   // Toggle selection
@@ -112,13 +113,21 @@ export default function SavedScreen() {
     );
   };
 
-  // Delete all selected
-  const handleDeleteSelected = () => {
+  // Delete all selected (optimistic + persisted, same reason as above).
+  const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
-    setItems((prev) => prev.filter((i) => !selectedIds.includes(i.id)));
-    toast.success(`Removed ${selectedIds.length} items from saved`);
+    const ids = [...selectedIds];
+    setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
     setSelectedIds([]);
     setIsSelectMode(false);
+    try {
+      const { getFirestoreService } = await import('../services/firestoreService.js');
+      const svc = getFirestoreService();
+      await Promise.all(ids.map((id) => svc.unsavePost(id, user.uid)));
+      toast.success(`Removed ${ids.length} items from saved`);
+    } catch {
+      toast.error('Could not remove all selected items');
+    }
   };
 
   // Share item

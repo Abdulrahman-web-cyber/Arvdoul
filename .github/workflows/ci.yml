@@ -254,6 +254,7 @@ jobs:
           src/__tests__/deployIntegrity.test.js
           src/__tests__/sharedConfigSync.test.js
           src/__tests__/firestoreRulesCompile.test.js
+          src/__tests__/firestoreRulesCoverage.test.js
           src/__tests__/levelConfig.test.js
           src/__tests__/profileReadModel.test.js
           src/__tests__/userServicePrivacyProjection.test.js
@@ -277,8 +278,28 @@ jobs:
           src/__tests__/contextContract.test.js
           src/__tests__/hookContract.test.js
           src/__tests__/deadEventGuard.test.js
+          src/__tests__/deadWiringGuard.test.js
+          src/__tests__/uiStateWiringGuard.test.js
+          src/__tests__/reducerDispatchGuard.test.js
+          src/__tests__/routeStateHandoffGuard.test.js
+          src/__tests__/failOpenReadGuard.test.js
+          src/__tests__/falseSuccessToastGuard.test.js
+          src/__tests__/spacesRosterWiringGuard.test.js
+          src/__tests__/localContentCacheGuard.test.js
+          src/__tests__/liveWiringGuard.test.js
+          src/__tests__/notificationsWiringGuard.test.js
+          src/__tests__/highlightsWiringGuard.test.js
+          src/__tests__/subscriptionLifecycleGuard.test.js
           src/__tests__/orphanModuleGuard.test.js
           src/__tests__/noFabricatedData.test.js
+          src/__tests__/storageRulesDeploy.test.js
+          src/__tests__/postVisibilityEnforcement.test.js
+          src/__tests__/liveMonetizationGuard.test.js
+          src/__tests__/serverOnlyCollectionWriteGuard.test.js
+          src/__tests__/messagingSupportGuard.test.js
+          src/__tests__/functionsContract.test.js
+          src/__tests__/userServiceContract.test.js
+          src/__tests__/designTokenDriftGuard.test.js
 
       # The rules/graph adversarial checks only run against a live emulator.
       # `emulators:exec` boots it and exports FIRESTORE_EMULATOR_HOST for the
@@ -289,7 +310,7 @@ jobs:
           npx firebase-tools emulators:exec
           --only firestore
           --project demo-arvdoul
-          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js"
+          "npm run test -- --watchAll=false src/__tests__/firestoreRulesCompile.test.js src/__tests__/socialGraphEdgeReadRules.test.js src/__tests__/spacesRosterWiringGuard.test.js"
 
   # ========== SECURITY CHECK ==========
   security:

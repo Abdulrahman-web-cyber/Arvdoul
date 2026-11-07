@@ -2,11 +2,7 @@
 
 import React from 'react';
 import PropTypes from 'prop-types';
-import { motion } from 'framer-motion';
-import {
-  Scissors, Slice, SplitSquareVertical, Trash2,
-  Plus, Minus, ChevronDown, Check, Sparkles
-} from 'lucide-react';
+import { Scissors, Slice, SplitSquareVertical, Trash2, Plus, Minus, ChevronDown, Check } from "lucide-react";
 import { formatTimecode } from '../constants';
 
 export default function TrimSubPanel({

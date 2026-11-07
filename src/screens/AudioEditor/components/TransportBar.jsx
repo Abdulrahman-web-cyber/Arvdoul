@@ -3,7 +3,7 @@
 // Transport controls. Every readout is measured: the LUFS/peak meter polls the
 // engine's analyser and the spectrum bars read real frequency bins.
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { Play, Pause, Square, SkipBack, Repeat, Clock } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';

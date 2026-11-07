@@ -120,10 +120,13 @@ class SpacesService {
       const { collection, getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
       const spacesCol = collection(firestore, 'spaces');
-      let q = query(spacesCol, orderBy('startedAt', 'desc'), limit(30));
+      // Only genuinely live spaces: without the `isLive` filter the list
+      // accumulated every space ever created (nothing ends a space), so the
+      // "Discover Live Lounges" rail filled with dead rooms.
+      let q = query(spacesCol, where('isLive', '==', true), orderBy('startedAt', 'desc'), limit(30));
 
       if (category && category !== 'All') {
-        q = query(spacesCol, where('category', '==', category), limit(30));
+        q = query(spacesCol, where('category', '==', category), where('isLive', '==', true), limit(30));
       }
 
       const snapshot = await getDocs(q);
@@ -136,6 +139,31 @@ class SpacesService {
     } catch (err) {
       log.error('Error getting active spaces from Firestore', err);
       return [];
+    }
+  }
+
+  /**
+   * Ends a space: flips `isLive` so it leaves the discover list, and stops the
+   * host's local capture. Host-only server-side (the rules enforce ownership).
+   */
+  async endSpace(spaceId, userId) {
+    if (!spaceId || !userId) return { success: false, error: 'Not signed in' };
+    try {
+      const firestore = await getFirestoreInstance();
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      await updateDoc(doc(firestore, 'spaces', spaceId), {
+        isLive: false,
+        endedAt: serverTimestamp(),
+        endedBy: userId,
+      });
+      if (this.activeRoomId === spaceId) {
+        this.stopAudio();
+        this.activeRoomId = null;
+      }
+      return { success: true };
+    } catch (err) {
+      log.error('Error ending space', err);
+      return { success: false, error: err.message };
     }
   }
 
@@ -202,8 +230,16 @@ class SpacesService {
         isVerified: false
       },
       speakers: [],
-      audienceCount: 0,
-      listeners: [],
+      audienceCount: 1,
+      listeners: [{
+        id: hostUser.uid,
+        name: hostUser.displayName || '',
+        avatar: hostUser.photoURL || null,
+      }],
+      // The signaling rules resolve membership from this array, so the host
+      // must be seeded here or `signaling_rooms/{spaceId}` denies the host's
+      // own offer.
+      participants: [hostUser.uid],
       raisedHands: [],
       tipsTotalCoins: 0,
       isRecording
@@ -278,9 +314,106 @@ class SpacesService {
       } else {
         await updateDoc(spaceRef, { raisedHands: arrayRemove(handObject) });
       }
+      return { success: true };
     } catch (err) {
+      // Surface the failure: the screen used to show "Hand raised ✋" even when
+      // the write was denied, so the hand state was never persisted.
       log.error('Error toggling raised hand', err);
+      return { success: false, error: err.message };
     }
+  }
+
+  /**
+   * Adds the member to the space roster and the `participants` array the
+   * signaling rules read. Idempotent — re-joining keeps one roster entry.
+   */
+  async joinSpace(spaceId, user) {
+    if (!spaceId || !user?.uid) {
+      return { success: false, error: 'Sign in to join a space' };
+    }
+    try {
+      const firestore = await getFirestoreInstance();
+      const { doc, runTransaction, arrayUnion } = await import('firebase/firestore');
+      const spaceRef = doc(firestore, 'spaces', spaceId);
+      const listener = {
+        id: user.uid,
+        name: user.displayName || user.username || '',
+        avatar: user.photoURL || null,
+      };
+      await runTransaction(firestore, async (tx) => {
+        const snap = await tx.get(spaceRef);
+        if (!snap.exists()) throw new Error('Space not found');
+        const data = snap.data();
+        const already = (data.participants || []).includes(user.uid);
+        if (already) return;
+        const listeners = [...(data.listeners || []), listener];
+        tx.update(spaceRef, {
+          listeners,
+          participants: arrayUnion(user.uid),
+          audienceCount: listeners.length,
+        });
+      });
+      return { success: true };
+    } catch (err) {
+      log.error('Error joining space', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /** Removes the member from the roster + participants array. */
+  async leaveSpace(spaceId, userId) {
+    if (!spaceId || !userId) return { success: false, error: 'Not signed in' };
+    try {
+      const firestore = await getFirestoreInstance();
+      const { doc, runTransaction, arrayRemove } = await import('firebase/firestore');
+      const spaceRef = doc(firestore, 'spaces', spaceId);
+      await runTransaction(firestore, async (tx) => {
+        const snap = await tx.get(spaceRef);
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const listeners = (data.listeners || []).filter((l) => l.id !== userId);
+        tx.update(spaceRef, {
+          listeners,
+          participants: arrayRemove(userId),
+          audienceCount: listeners.length,
+        });
+      });
+      return { success: true };
+    } catch (err) {
+      log.error('Error leaving space', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Opens the microphone and wires it into the real signaling room, returning
+   * the remote stream via `onRemoteTrack`. Honest failure: throws if the mic
+   * permission is refused instead of pretending the user is on stage.
+   */
+  async startAudio(spaceId, user, { isHost = false, onRemoteTrack } = {}) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Microphone access is not supported in this browser.');
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    this.localStream = stream;
+    this.activeRoomId = spaceId;
+    try {
+      await this.createSignalRoom(spaceId, isHost, onRemoteTrack);
+    } catch (err) {
+      stream.getTracks().forEach((t) => t.stop());
+      this.localStream = null;
+      throw err;
+    }
+    return stream;
+  }
+
+  /** Stops the local microphone tracks (and clears the peer connection). */
+  stopAudio() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((t) => t.stop());
+      this.localStream = null;
+    }
+    this.destroy();
   }
 
   destroy() {

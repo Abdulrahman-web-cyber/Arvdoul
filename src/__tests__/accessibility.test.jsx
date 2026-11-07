@@ -1,6 +1,5 @@
 // src/__tests__/accessibility.test.jsx
 
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { axe, toHaveNoViolations } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';

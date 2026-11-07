@@ -9,7 +9,7 @@
  * @component
  */
 
-import React, { memo } from 'react';
+import { memo } from "react";
 import { 
   Grid3x3, 
   Video, 

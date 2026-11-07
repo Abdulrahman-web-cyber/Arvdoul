@@ -10,36 +10,9 @@
 import React, { memo, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  X,
-  Crown,
-  Shield,
-  ShieldCheck,
-  CheckCircle2,
-  Lock,
-  Sparkles,
-  ArrowRight,
-  TrendingUp,
-  Award,
-  Vote,
-  Radio,
-  Zap,
-  Coins,
-  ChevronRight,
-  Star,
-  Flame,
-} from 'lucide-react';
+import { X, Crown, ShieldCheck, CheckCircle2, Lock, ArrowRight, Zap } from "lucide-react";
 import { cn } from '../../lib/utils';
-import {
-  LEVEL_PERKS,
-  CITIZEN_TIERS,
-  ROYAL_ELIGIBILITY,
-  getRankTitle,
-  getCitizenTier,
-  getRoyalEligibility,
-  getLevelInfo,
-  LEVEL_GATES,
-} from '../../shared/levelConfig.cjs';
+import { LEVEL_PERKS, CITIZEN_TIERS, getRankTitle, getCitizenTier, getRoyalEligibility, getLevelInfo } from "../../shared/levelConfig.cjs";
 
 export const ProfileSystemRoadmapModal = memo(function ProfileSystemRoadmapModal({
   isOpen,

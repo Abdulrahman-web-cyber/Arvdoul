@@ -1,6 +1,7 @@
 // src/services/firestoreService.js
 
 import { countersManager } from '../utils/CountersManager.js';
+import { setLocalLike } from '../utils/localContentCache.js';
 import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
@@ -424,27 +425,28 @@ class EnterpriseFirestoreService {
     try {
       const { collection, query, where, getDocs, orderBy, limit, startAfter, doc, getDoc } = this.firestoreMethods;
       const postsRef = collection(this.firestore, 'posts');
-      let conditions = [
-        where('authorId', '==', userId),
-        where('isDeleted', '==', false),
-        orderBy('createdAt', 'desc')
-      ];
-      if (options.status) conditions.push(where('status', '==', options.status));
-      if (options.type) conditions.push(where('type', '==', options.type));
-
-      // The read rule gates a private author's posts behind a follow edge. A list
-      // query must constrain `authorIsPrivate` unless the viewer is the author or
-      // an approved follower, otherwise Firestore denies the whole query. Only the
-      // owner or a follower may see the private posts, so resolve that first.
       const viewerId = options.viewerId || null;
-      let canViewPrivate = Boolean(viewerId && viewerId === userId);
-      if (viewerId && !canViewPrivate) {
-        try {
-          const followSnap = await getDoc(doc(this.firestore, 'follows', `${viewerId}_${userId}`));
-          canViewPrivate = followSnap.exists();
-        } catch { /* treat as non-follower (fail closed) */ }
+      const isOwnerView = Boolean(viewerId && viewerId === userId);
+      // The list rule only admits two shapes (rules are not filters): the
+      // owner's own shape (`authorId == uid()`) and the public-feed shape
+      // (`authorIsPrivate == false` + `visibility == 'public'` +
+      // `status == 'published'` + `isDeleted == false`). A non-owner can
+      // therefore only list public published posts; drafts/scheduled/only-me
+      // posts stay invisible even though the query is author-scoped.
+      const conditions = [
+        where('authorId', '==', userId),
+        orderBy('createdAt', 'desc'),
+      ];
+      if (options.type) conditions.push(where('type', '==', options.type));
+      if (isOwnerView) {
+        conditions.push(where('isDeleted', '==', false));
+        if (options.status) conditions.push(where('status', '==', options.status));
+      } else {
+        conditions.push(where('authorIsPrivate', '==', false));
+        conditions.push(where('status', '==', 'published'));
+        conditions.push(where('isDeleted', '==', false));
+        conditions.push(where('visibility', '==', 'public'));
       }
-      if (!canViewPrivate) conditions.push(where('authorIsPrivate', '==', false));
 
       // Always bound: a caller that omits `limit` must not pull the author's
       // entire post history in one read.
@@ -634,16 +636,12 @@ class EnterpriseFirestoreService {
 
   async likePost(postId, userId) {
     if (!postId || !userId) return { success: false, error: 'Missing postId or userId' };
-    
-    // Store in local likes registry for instantaneous & offline recovery
-    try {
-      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
-      localLikes[postId] = true;
-      localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
-    } catch {}
 
-    // If local or offline post, succeed immediately
-    if (postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine) {
+    // Offline / local posts: the device-local registry is the source of truth
+    // and there is no server document to write, so this is a genuine success.
+    const isLocalOnly = postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine;
+    if (isLocalOnly) {
+      this._rememberLocalLike(postId, userId, true);
       return { success: true, alreadyLiked: false, localOnly: true };
     }
 
@@ -651,7 +649,7 @@ class EnterpriseFirestoreService {
       await this.ensureInitialized();
       const rl = rateLimiter.checkAndHit(`like:${userId}`, { max: 120, windowMs: 60000 });
       if (!rl.allowed) {
-        return { success: true, alreadyLiked: false }; // Rate limit soft-pass for UI
+        return { success: false, error: 'rate-limited', localOnly: true };
       }
 
       const { doc, runTransaction, serverTimestamp } = this.firestoreMethods;
@@ -661,38 +659,37 @@ class EnterpriseFirestoreService {
       let alreadyLiked = false;
       let authorId = null;
 
-      try {
-        await runTransaction(this.firestore, async (transaction) => {
-          const postSnap = await transaction.get(postRef);
-          if (!postSnap.exists()) return;
-          authorId = postSnap.data().authorId;
-          const likeSnap = await transaction.get(userLikeRef);
-          alreadyLiked = likeSnap.exists();
-          if (!alreadyLiked) {
-            await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes' });
-            const postData = postSnap.data();
-            transaction.set(userLikeRef, {
-              postId,
-              likedAt: serverTimestamp(),
-              snapshot: {
-                id: postId,
-                content: postData.content || '',
-                type: postData.type || 'text',
-                media: postData.media || [],
-                authorId: postData.authorId || '',
-                authorName: postData.authorName || '',
-                authorPhoto: postData.authorPhoto || '',
-                createdAt: postData.createdAt || serverTimestamp()
-              }
-            });
-            transaction.set(postLikeRef, { userId, likedAt: serverTimestamp() });
-          }
-        });
-      } catch (txErr) {
-        console.warn('Firestore transaction like skipped, stored locally:', txErr?.message);
-        return { success: true, alreadyLiked: false, localFallback: true };
-      }
+      // No inner catch: a failed transaction surfaces as success:false so the
+      // caller can roll back the optimistic heart instead of showing a like
+      // that was never persisted.
+      await runTransaction(this.firestore, async (transaction) => {
+        const postSnap = await transaction.get(postRef);
+        if (!postSnap.exists()) return;
+        authorId = postSnap.data().authorId;
+        const likeSnap = await transaction.get(userLikeRef);
+        alreadyLiked = likeSnap.exists();
+        if (!alreadyLiked) {
+          await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes' });
+          const postData = postSnap.data();
+          transaction.set(userLikeRef, {
+            postId,
+            likedAt: serverTimestamp(),
+            snapshot: {
+              id: postId,
+              content: postData.content || '',
+              type: postData.type || 'text',
+              media: postData.media || [],
+              authorId: postData.authorId || '',
+              authorName: postData.authorName || '',
+              authorPhoto: postData.authorPhoto || '',
+              createdAt: postData.createdAt || serverTimestamp()
+            }
+          });
+          transaction.set(postLikeRef, { userId, likedAt: serverTimestamp() });
+        }
+      });
 
+      this._rememberLocalLike(postId, userId, true);
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.like', { userId, meta: { postId, alreadyLiked } });
@@ -720,51 +717,52 @@ class EnterpriseFirestoreService {
 
       return { success: true, alreadyLiked };
     } catch (error) {
-      console.warn('likePost caught error, keeping optimistic like:', error?.message);
-      return { success: true, alreadyLiked: false, localFallback: true };
+      logger.warn('likePost failed', { postId, error: error?.message });
+      return { success: false, error: error?.message || 'like-failed', localFallback: true };
     }
+  }
+
+  /**
+   * Device-local likes registry, uid-scoped by `setLocalLike` so a like on a
+   * shared device never bleeds into the next signed-in account.
+   */
+  _rememberLocalLike(postId, userId, liked) {
+    setLocalLike(userId, postId, liked);
   }
 
   async unlikePost(postId, userId) {
     if (!postId || !userId) return { success: false };
 
-    try {
-      const localLikes = JSON.parse(localStorage.getItem('arvdoul_user_likes') || '{}');
-      delete localLikes[postId];
-      localStorage.setItem('arvdoul_user_likes', JSON.stringify(localLikes));
-    } catch {}
-
-    if (postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine) {
+    const isLocalOnly = postId.startsWith('local_') || postId.startsWith('offline_') || !navigator.onLine;
+    if (isLocalOnly) {
+      this._rememberLocalLike(postId, userId, false);
       return { success: true, localOnly: true };
     }
 
     try {
       await this.ensureInitialized();
       const { doc, runTransaction } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
       const userLikeRef = doc(this.firestore, 'users', userId, 'liked_posts', postId);
       const postLikeRef = doc(this.firestore, 'posts', postId, 'likes', userId);
 
-      try {
-        await runTransaction(this.firestore, async (transaction) => {
-          const likeSnap = await transaction.get(userLikeRef);
-          if (!likeSnap.exists()) return;
-          await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes', amount: -1 });
-          transaction.delete(userLikeRef);
-          transaction.delete(postLikeRef);
-        });
-      } catch (txErr) {
-        console.warn('Firestore unlike transaction skipped:', txErr?.message);
-        return { success: true, localFallback: true };
-      }
+      // No inner catch: a failed transaction surfaces as success:false so the
+      // optimistic UI can restore the like instead of pretending it persisted.
+      await runTransaction(this.firestore, async (transaction) => {
+        const likeSnap = await transaction.get(userLikeRef);
+        if (!likeSnap.exists()) return;
+        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'likes', amount: -1 });
+        transaction.delete(userLikeRef);
+        transaction.delete(postLikeRef);
+      });
 
+      this._rememberLocalLike(postId, userId, false);
       this.cache.delete(postId);
       countersManager.invalidate({ docPath: `posts/${postId}`, field: 'likes' });
       auditLogger.log('content.unlike', { userId, meta: { postId } });
       return { success: true };
     } catch (error) {
-      console.warn('unlikePost error handled gracefully:', error?.message);
-      return { success: true, localFallback: true };
+      logger.warn('unlikePost failed', { postId, error: error?.message });
+      return { success: false, error: error?.message || 'unlike-failed', localFallback: true };
     }
   }
 
@@ -911,42 +909,6 @@ class EnterpriseFirestoreService {
     }
   }
 
-  async sendGift(postId, userId, giftType, coinValue) {
-    await this.ensureInitialized();
-    try {
-      const { collection, addDoc, doc, arrayUnion, serverTimestamp, runTransaction } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      let authorId;
-      await runTransaction(this.firestore, async (transaction) => {
-        const postSnap = await transaction.get(postRef);
-        if (!postSnap.exists()) throw new Error('Post not found');
-        authorId = postSnap.data().authorId;
-        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'gifts' });
-        await countersManager.incrementInTransaction(transaction, { docPath: `posts/${postId}`, field: 'giftValue', amount: coinValue });
-        transaction.update(postRef, {
-          gifts: arrayUnion({ userId, giftType, coinValue, sentAt: serverTimestamp() }),
-          updatedAt: serverTimestamp()
-        });
-        const giftDocRef = doc(this.firestore, 'posts', postId, 'gifts', `${userId}_${Date.now()}`);
-        transaction.set(giftDocRef, { userId, giftType, coinValue, sentAt: serverTimestamp() });
-      });
-      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'gifts' });
-      countersManager.invalidate({ docPath: `posts/${postId}`, field: 'giftValue' });
-      auditLogger.log('monetization.gift', { userId, meta: { postId, giftType, coinValue, recipientId: authorId } });
-
-      const giftsRef = collection(this.firestore, 'gift_transactions');
-      await addDoc(giftsRef, {
-        postId, fromUserId: userId, toUserId: authorId,
-        giftType, coinValue, sentAt: serverTimestamp(), status: 'completed'
-      });
-
-      const monetizationService = await import('./monetizationService.js').then(m => m.getMonetizationService());
-      await monetizationService.spendCoins(userId, coinValue, 'gift', { postId, giftType, recipientId: authorId });
-      this.cache.delete(postId);
-      return { success: true };
-    } catch (error) { throw enhanceError(error, 'Failed to send gift'); }
-  }
-
   async addReaction(postId, userId, reactionType) {
     await this.ensureInitialized();
     if (!CONFIG.ALLOWED_REACTIONS.includes(reactionType)) {
@@ -1043,22 +1005,6 @@ class EnterpriseFirestoreService {
     } catch (error) { throw enhanceError(error, 'Failed to increment comment count'); }
   }
 
-  // Post-embedded polls store their options as plain strings (the composer's
-  // `typeData.poll.options` is a string array), but the vote transaction keys
-  // on `option.id`. Normalise once so a vote actually lands on the option the
-  // voter tapped instead of silently no-op'ing.
-  _normalisePollOptions(rawOptions) {
-    if (!Array.isArray(rawOptions)) return [];
-    return rawOptions.map((opt, idx) => {
-      if (typeof opt === 'string') return { id: `opt_${idx}`, text: opt, votes: 0 };
-      return {
-        id: opt.id ?? `opt_${idx}`,
-        text: opt.text ?? 'Option',
-        votes: typeof opt.votes === 'number' ? opt.votes : 0,
-      };
-    });
-  }
-
   async getUserPollVote(postId, userId) {
     await this.ensureInitialized();
     const { doc, getDoc } = this.firestoreMethods;
@@ -1138,46 +1084,36 @@ class EnterpriseFirestoreService {
       return { success: true, votes };
     } catch (error) {
       logger.warn('getMyAnswerVotes failed', { postId, error: error.message });
-      return { success: true, votes: {} };
+      // Fail closed: the caller must know the vote state is unknown so a
+      // returning voter is not shown as having no vote (which would let the
+      // server toggle their existing vote off).
+      return { success: false, votes: {}, error: error?.message || 'answer-votes-failed' };
     }
   }
 
+  // Post-embedded poll voting is server-authoritative: `functions/polls.js`
+  // `votePostPoll` validates eligibility/expiry/option, records one vote per
+  // viewer in a transaction and credits the reward. The posts update rule lets
+  // any signed-in user write `poll`, so a client transaction here would let a
+  // voter forge counts (the previous implementation did exactly that).
   async voteOnPoll(postId, userId, optionIndex, isMultiple = false) {
     await this.ensureInitialized();
+    if (!userId) throw new Error('Sign in to vote');
     try {
-      const { doc, runTransaction, increment, serverTimestamp } = this.firestoreMethods;
-      const postRef = doc(this.firestore, 'posts', postId);
-      const pollVoteRef = doc(this.firestore, 'posts', postId, 'poll_votes', userId);
-      let alreadyVoted = false;
-      await runTransaction(this.firestore, async (transaction) => {
-        const postSnap = await transaction.get(postRef);
-        if (!postSnap.exists()) throw new Error('Post not found');
-        const voteSnap = await transaction.get(pollVoteRef);
-        alreadyVoted = voteSnap.exists();
-        if (!isMultiple && alreadyVoted) throw new Error('Already voted');
-        if (!alreadyVoted) {
-          const poll = postSnap.data().poll || {};
-          const newOptions = this._normalisePollOptions(poll.options);
-          if (newOptions[optionIndex]) {
-            newOptions[optionIndex] = { ...newOptions[optionIndex], votes: (newOptions[optionIndex].votes || 0) + 1 };
-          }
-          transaction.update(postRef, {
-            'poll.options': newOptions,
-            'poll.totalVotes': increment(1),
-            'stats.pollVotes': increment(1),
-            updatedAt: serverTimestamp()
-          });
-          transaction.set(pollVoteRef, {
-            userId,
-            optionIndex,
-            optionId: newOptions[optionIndex]?.id ?? `opt_${optionIndex}`,
-            votedAt: serverTimestamp()
-          });
-        }
+      const { callFunction, FUNCTIONS } = await import('./callableService.js');
+      const data = await callFunction(FUNCTIONS.VOTE_POST_POLL, {
+        postId,
+        optionId: `opt_${optionIndex}`,
       });
       this.cache.delete(postId);
-      return { success: true, alreadyVoted };
-    } catch (error) { throw enhanceError(error, 'Failed to vote on poll'); }
+      return { success: true, alreadyVoted: false, options: data?.options, totalVotes: data?.totalVotes, rewardCoins: data?.rewardCoins };
+    } catch (error) {
+      const code = error?.code || '';
+      if (String(code).includes('already-exists')) {
+        return { success: true, alreadyVoted: true };
+      }
+      throw enhanceError(error, 'Failed to vote on poll');
+    }
   }
 
   async recordPostView(postId, userId) {
@@ -1342,7 +1278,6 @@ const firestoreService = {
   unsavePost: (pid, uid) => getFirestoreService().unsavePost(pid, uid),
   getSavedPosts: (uid, opts) => getFirestoreService().getSavedPosts(uid, opts),
   getLikedPosts: (uid, opts) => getFirestoreService().getLikedPosts(uid, opts),
-  sendGift: (pid, uid, type, value) => getFirestoreService().sendGift(pid, uid, type, value),
   addReaction: (pid, uid, reactionType) => getFirestoreService().addReaction(pid, uid, reactionType),
   removeReaction: (pid, uid) => getFirestoreService().removeReaction(pid, uid),
   getUserReaction: (pid, uid) => getFirestoreService().getUserReaction(pid, uid),

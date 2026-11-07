@@ -1,15 +1,9 @@
 // src/screens/Admin/AdminDashboardScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { toast } from 'sonner';
-import { 
-  Users, FileText, Flag, AlertTriangle, Shield, TrendingUp,
-  Eye, Clock, CheckCircle, XCircle, BarChart3, Settings,
-  Activity, DollarSign, MessageCircle, Coins, Sliders,
-  ShieldCheck, UserCheck, Zap, Radio
-} from 'lucide-react';
+import { Users, FileText, Flag, AlertTriangle, Shield, TrendingUp, Clock, Activity, DollarSign, MessageCircle, Coins, ShieldCheck, UserCheck, Zap } from "lucide-react";
 import { useAuth } from '../../context/AuthContext';
 import { fetchAdminStatus } from '../../services/callableService.js';
 

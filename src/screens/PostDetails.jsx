@@ -1,6 +1,6 @@
 // src/screens/PostDetails.jsx
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, useMotionValue } from 'framer-motion';
 import { toast } from 'sonner';

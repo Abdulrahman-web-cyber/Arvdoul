@@ -2,27 +2,14 @@
 //
 // Double-entry, ledger-backed, multi-state transactions.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import walletService from '../../services/walletService';
 import monetizationService from '../../services/monetizationService';
 import PaymentModal from '../../components/Shared/PaymentModal';
-import CoinStackIcon from '../../components/Shared/CoinStackIcon';
-import {
-  ArrowLeft,
-  Coins,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Plus,
-  CreditCard,
-  Building,
-  RefreshCw,
-} from 'lucide-react';
+import { Coins, ArrowUpRight, ArrowDownLeft, AlertCircle, Plus, Building, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
 import { MIN_WITHDRAWAL_COINS, coinsToUsd, formatCoinsAsUsd, COIN_PACKAGES as COIN_PACKAGES_CANONICAL, LEVEL_GATES, getCreatorCapabilities } from '../../shared/levelConfig.cjs';
 

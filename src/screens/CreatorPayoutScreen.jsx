@@ -1,20 +1,29 @@
 // src/screens/CreatorPayoutScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '@context/ThemeContext';
 import { cn } from '../lib/utils';
-import {
-  Banknote, DollarSign, ArrowLeft, TrendingUp, ShieldCheck,
-  CreditCard, Sparkles, CheckCircle2, AlertCircle, Clock,
-  ArrowUpRight, RefreshCw, Wallet, ChevronRight, Lock
-} from 'lucide-react';
+import { Banknote, DollarSign, ArrowLeft, TrendingUp, ShieldCheck, CreditCard, Sparkles, Clock, ArrowUpRight, RefreshCw, Wallet } from "lucide-react";
 import { getMonetizationService } from '../services/monetizationService';
 import { getAnalyticsService } from '../services/analyticsService';
 import { coinsToUsd, formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../shared/levelConfig.cjs';
+
+// The earnings breakdown must come from the real coin ledger, never a fixed
+// ratio. Gifts/tips and ad revenue are credited with these reasons by
+// functions/monetization.js; the split is a sum over actual transactions.
+const GIFT_REASONS = ['gift', 'tip', 'super_thanks'];
+const AD_REASONS = ['ad_reward', 'ad_share', 'ad_revenue'];
+const OTHER_EARNING_REASONS = ['poll_vote_reward', 'level_up_reward', 'subscription', 'purchase', 'bonus', 'reward'];
+
+function sumCredits(items, reasons) {
+  return items
+    .filter((tx) => reasons.includes(tx.reason))
+    .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0);
+}
 
 // Single-sourced with the payout server (functions/monetization.js) so the
 // estimate shown here can never diverge from what Stripe actually pays.
@@ -29,6 +38,8 @@ export default function CreatorPayoutScreen() {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [payouts, setPayouts] = useState([]);
+  const [earnings, setEarnings] = useState({ gifts: 0, ads: 0, other: 0 });
+  const [lifetimeWithdrawnCoins, setLifetimeWithdrawnCoins] = useState(0);
   const [analytics, setAnalytics] = useState(null);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [connectingStripe, setConnectingStripe] = useState(false);
@@ -46,10 +57,12 @@ export default function CreatorPayoutScreen() {
     try {
       const monSvc = getMonetizationService();
       const anaSvc = getAnalyticsService();
-      const [balRes, histRes, analyticsRes] = await Promise.allSettled([
+      const [balRes, histRes, analyticsRes, earnRes, spendRes] = await Promise.allSettled([
         monSvc.getBalance(user.uid),
         monSvc.getTransactionHistory(user.uid, 20),
-        anaSvc?.getAnalyticsSummary?.(user.uid)
+        anaSvc?.getAnalyticsSummary?.(user.uid),
+        anaSvc?.getCoinEarningHistory?.(user.uid, 200),
+        anaSvc?.getCoinSpendingHistory?.(user.uid, 200),
       ]);
 
       if (balRes.status === 'fulfilled') {
@@ -59,6 +72,17 @@ export default function CreatorPayoutScreen() {
       if (histRes.status === 'fulfilled' && Array.isArray(histRes.value?.items)) {
         setPayouts(histRes.value.items.filter(tx => tx.type === 'debit' || tx.type === 'withdrawal' || tx.reason?.includes('withdraw')));
       }
+      // Real earnings breakdown, summed from the coin ledger — not a fixed ratio.
+      const earned = earnRes.status === 'fulfilled' && Array.isArray(earnRes.value) ? earnRes.value : [];
+      setEarnings({
+        gifts: sumCredits(earned, GIFT_REASONS),
+        ads: sumCredits(earned, AD_REASONS),
+        other: sumCredits(earned, OTHER_EARNING_REASONS),
+      });
+      const spent = spendRes.status === 'fulfilled' && Array.isArray(spendRes.value) ? spendRes.value : [];
+      setLifetimeWithdrawnCoins(spent
+        .filter((tx) => tx.reason === 'withdrawal_request' || tx.reason === 'withdrawal_completed' || tx.reason === 'withdrawal')
+        .reduce((acc, tx) => acc + (Number(tx.amount) || 0), 0));
       if (analyticsRes.status === 'fulfilled') {
         setAnalytics(analyticsRes.value);
       }
@@ -297,7 +321,7 @@ export default function CreatorPayoutScreen() {
               <span>Gifts & Tips</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             </div>
-            <p className="text-xl font-bold">{(balance * 0.7).toFixed(0)} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold">{earnings.gifts.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
           </div>
 
           <div className={cn(
@@ -308,7 +332,7 @@ export default function CreatorPayoutScreen() {
               <span>Ad Revenue Share</span>
               <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             </div>
-            <p className="text-xl font-bold">{(balance * 0.3).toFixed(0)} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
+            <p className="text-xl font-bold">{earnings.ads.toLocaleString()} <span className="text-xs font-normal text-arvdoul-text-secondary">Coins</span></p>
           </div>
 
           <div className={cn(
@@ -319,7 +343,7 @@ export default function CreatorPayoutScreen() {
               <span>Lifetime Withdrawn</span>
               <Clock className="w-3.5 h-3.5 text-blue-500" />
             </div>
-            <p className="text-xl font-bold">$0.00 <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
+            <p className="text-xl font-bold">{formatCoinsAsUsd(lifetimeWithdrawnCoins)} <span className="text-xs font-normal text-arvdoul-text-secondary">USD</span></p>
           </div>
         </div>
 

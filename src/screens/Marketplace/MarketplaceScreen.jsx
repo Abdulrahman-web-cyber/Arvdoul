@@ -2,30 +2,15 @@
 //
 // Digital presets, sample packs, creator merchandise, 1-click coin checkout, and digital delivery
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ShoppingBag, 
-  Coins, 
-  Star, 
-  Download, 
-  Check, 
-  Plus, 
-  X, 
-  Sparkles, 
-  Tag, 
-  ShieldCheck, 
-  ArrowRight, 
-  ExternalLink,
-  Crown
-} from 'lucide-react';
+import { ShoppingBag, Coins, Star, Download, Check, Plus, X, Sparkles } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import marketplaceService from '../../services/marketplaceService';
-import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const CATEGORIES = ['All', 'Digital Assets', 'Audio & Sounds', 'Merch & Apparel', 'Mentorship & VIP'];

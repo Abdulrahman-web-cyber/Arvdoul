@@ -1,12 +1,8 @@
 // src/screens/PostCard/LinkCard.jsx
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  LinkIcon, ExternalLink, Shield, AlertTriangle, CheckCircle,
-  Eye, BarChart3, Heart, Play, Music, ShoppingBag, Newspaper,
-  BookOpen, Clock, Coins, Send, Save, Share2, X, TrendingUp, Sparkles
-} from 'lucide-react';
+import { ExternalLink, Shield, AlertTriangle, CheckCircle, Eye, Play, BookOpen, Clock, Coins, Save, Share2, X, TrendingUp, Sparkles } from "lucide-react";
 import { toast } from 'sonner';
 
 // 1. IndexedDB cache (simple, with LRU eviction)

@@ -4,7 +4,7 @@ import React, {
   useReducer, useEffect, useCallback, useRef, useState,
   createContext, useContext, useMemo, lazy, Suspense, useId
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import { useTheme } from "../context/ThemeContext";
@@ -45,6 +45,7 @@ import { getMonetizationService } from "../services/monetizationService";
 import { getNotificationsService } from "../services/notificationsService";
 import { getFeedService } from "../services/feedService";
 import { getUserService } from "../services/userService";
+import { LOCAL_POSTS_KEY } from "../utils/localContentCache.js";
 
 // ── CONSTANTS & DESIGN TOKENS ──────────────────────────────────────────
 const DNA_GRADIENT_STYLE =
@@ -452,14 +453,15 @@ const POST_TYPES = [
   { id: "event", label: "Events", icon: EventIcon, subtitle: "Plan together" },
 ];
 
+// Only scopes with a real backing model are offered. `close_friends`,
+// `subscribers` and `custom_list` had no list/edge/tier collection and no
+// management UI, so choosing them produced a post nobody (or everybody) could
+// see; they are withheld until the model exists.
 const VISIBILITY_OPTIONS = [
   { value: "public", label: "Public" },
   { value: "followers", label: "Followers" },
   { value: "friends", label: "Friends" },
-  { value: "close_friends", label: "Close Friends" },
-  { value: "subscribers", label: "Subscribers" },
   { value: "only_me", label: "Only Me" },
-  { value: "custom_list", label: "Custom List" },
 ];
 
 const MONETIZATION_TYPES = [
@@ -527,9 +529,12 @@ const initialState = {
   },
   typeData: {
     poll: { options: [], allowMultiple: false },
-    event: { date: null, location: "" },
-    link: { url: "", title: "" },
-    audio: { file: null },
+    event: {
+      date: null, location: "", locationData: null, description: "",
+      coverImage: "", rsvpEnabled: false, capacity: null, timezone: null,
+    },
+    link: { url: "", title: "", metadata: null, thumbnail: "" },
+    audio: { file: null, url: "", previewUrl: null, coverUrl: null, title: "", artist: "", genre: "", sourceSoundId: null },
     video: { file: null },
   },
   pollClosesAt: null,
@@ -629,6 +634,33 @@ function reducer(state, action) {
       case "SET_LINK_URL": draft.typeData.link.url = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_LINK_TITLE": draft.typeData.link.title = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_AUDIO_FILE": draft.typeData.audio.file = action.payload; draft.isDirty = true; pushHistory = true; break;
+      case "SET_TYPE_DATA": {
+        // Deep-merge per-type data (CreateAudio dispatches the whole audio
+        // sub-object). A plain assign would drop sibling keys, so merge one
+        // level down and only for the keys the caller sends.
+        const patch = action.payload || {};
+        for (const [typeKey, value] of Object.entries(patch)) {
+          if (value && typeof value === "object" && !Array.isArray(value)) {
+            draft.typeData[typeKey] = { ...(draft.typeData[typeKey] || {}), ...value };
+          } else {
+            draft.typeData[typeKey] = value;
+          }
+        }
+        draft.isDirty = true;
+        pushHistory = true;
+        break;
+      }
+      // Timezone/locationData/metadata are derived or scraped, not edits the
+      // user made, so they must not flip the draft to "dirty" (CreateEvent
+      // dispatches the timezone on mount).
+      case "SET_EVENT_TIMEZONE": draft.typeData.event.timezone = action.payload; break;
+      case "SET_EVENT_LOCATION_DATA": draft.typeData.event.locationData = action.payload; break;
+      case "SET_EVENT_COVER": draft.typeData.event.coverImage = action.payload; draft.isDirty = true; pushHistory = true; break;
+      case "SET_EVENT_DESCRIPTION": draft.typeData.event.description = action.payload; draft.isDirty = true; pushHistory = true; break;
+      case "SET_EVENT_RSVP": draft.typeData.event.rsvpEnabled = action.payload; draft.isDirty = true; break;
+      case "SET_EVENT_CAPACITY": draft.typeData.event.capacity = action.payload; draft.isDirty = true; break;
+      case "SET_LINK_METADATA": draft.typeData.link.metadata = action.payload; break;
+      case "SET_LINK_THUMBNAIL": draft.typeData.link.thumbnail = action.payload; draft.isDirty = true; break;
       case "SET_VIDEO_FILE": draft.typeData.video.file = action.payload; draft.isDirty = true; pushHistory = true; break;
       case "SET_STEP": draft.step = action.payload; break;
       case "SET_LOADING": draft.loading = action.payload; break;
@@ -1453,13 +1485,32 @@ function CreatePostProvider({ children }) {
         settings: current.settings || {},
         coAuthors: current.coAuthors || [],
         poll: effectiveType === "poll" ? { question: effectiveText, options: current.typeData.poll.options.filter(o => o.trim()), allowMultiple: !!current.typeData.poll.allowMultiple, closesAt: current.pollClosesAt || null, rewardCoins: Number(current.pollReward) || 0 } : null,
-        event: effectiveType === "event" ? { title: effectiveText, date: current.typeData.event.date, location: current.typeData.event.location } : null,
-        link: effectiveType === "link" ? { url: current.typeData.link.url, title: current.typeData.link.title || effectiveText } : null,
+        event: effectiveType === "event" ? {
+          title: effectiveText,
+          date: current.typeData.event.date,
+          location: current.typeData.event.location,
+          locationData: current.typeData.event.locationData || null,
+          description: current.typeData.event.description || "",
+          coverImage: current.typeData.event.coverImage || "",
+          rsvpEnabled: !!current.typeData.event.rsvpEnabled,
+          capacity: current.typeData.event.capacity ?? null,
+          timezone: current.typeData.event.timezone || null,
+        } : null,
+        link: effectiveType === "link" ? {
+          url: current.typeData.link.url,
+          title: current.typeData.link.title || effectiveText,
+          thumbnail: current.typeData.link.thumbnail || "",
+          metadata: current.typeData.link.metadata || null,
+        } : null,
         question: effectiveType === "question" ? { text: effectiveText, bounty: 0, closed: false, answers: [] } : null,
         audio: effectiveType === "audio" ? {
-          url: instantMedia[0]?.url || current.typeData.audio?.url || "",
+          url: current.typeData.audio?.url || instantMedia[0]?.url || "",
           duration: current.typeData.audio?.duration || 0,
-          title: current.typeData.audio?.title || effectiveText
+          title: current.typeData.audio?.title || effectiveText,
+          artist: current.typeData.audio?.artist || "",
+          genre: current.typeData.audio?.genre || "",
+          coverUrl: current.typeData.audio?.coverUrl || "",
+          sourceSoundId: current.typeData.audio?.sourceSoundId || null,
         } : null,
         video: effectiveType === "video" ? {
           url: videoInstantMedia?.url || instantMedia[0]?.url || current.typeData.video?.url || "",
@@ -1477,9 +1528,9 @@ function CreatePostProvider({ children }) {
 
       // 1. Immediately inject into client cache & emit event
       try {
-        const localList = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
+        const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
         const updated = [instantPublishedPost, ...localList.filter(p => p.id !== instantPostId)];
-        localStorage.setItem('arvdoul_local_posts', JSON.stringify(updated.slice(0, 50)));
+        localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated.slice(0, 50)));
         window.dispatchEvent(new CustomEvent('arvdoul:new_post_published', { detail: instantPublishedPost }));
       } catch (cacheErr) {
         console.warn("Local post caching note:", cacheErr);
@@ -1513,6 +1564,11 @@ function CreatePostProvider({ children }) {
             mediaUrl: uploadedMedia[0]?.url || instantPublishedPost.mediaUrl,
             videoUrl: (uploadedMedia.find(m => m.type === "video")?.url) || instantPublishedPost.videoUrl,
             thumbnailUrl: uploadedMedia[0]?.thumbnail || uploadedMedia[0]?.url || instantPublishedPost.thumbnailUrl,
+            // The optimistic audio URL is a local blob; persist the Storage URL
+            // instead or the published track is unplayable after reload.
+            ...(instantPublishedPost.audio
+              ? { audio: { ...instantPublishedPost.audio, url: uploadedMedia.find(m => m.type === "audio")?.url || instantPublishedPost.audio.url } }
+              : {}),
           };
           delete finalPostData.isOptimistic;
 
@@ -1520,15 +1576,20 @@ function CreatePostProvider({ children }) {
           const firestoreService = services.current.firestore || getFirestoreService();
           const result = await firestoreService.createPost(finalPostData);
 
-          if (result?.postId) {
-            // Replace temporary optimistic ID with real Firestore doc ID
-            try {
-              const localList = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
-              const updated = localList.map(p => p.id === instantPostId ? { ...p, id: result.postId, isOptimistic: false } : p);
-              localStorage.setItem('arvdoul_local_posts', JSON.stringify(updated));
-              window.dispatchEvent(new CustomEvent('arvdoul:post_id_synced', { detail: { oldId: instantPostId, newId: result.postId } }));
-            } catch {}
+          if (!result?.postId) {
+            // createPost resolved without an id: the server never persisted the
+            // post. Drop the optimistic entry so a ghost post does not linger in
+            // the device-local cache and reappear in every future feed load.
+            throw new Error("The post could not be saved.");
           }
+
+          // Replace temporary optimistic ID with real Firestore doc ID
+          try {
+            const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
+            const updated = localList.map(p => p.id === instantPostId ? { ...p, id: result.postId, isOptimistic: false } : p);
+            localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('arvdoul:post_id_synced', { detail: { oldId: instantPostId, newId: result.postId } }));
+          } catch {}
 
           // Monetization coins boost
           if (current.boost?.type !== "none" && current.boost?.budget > 0) {
@@ -1546,7 +1607,32 @@ function CreatePostProvider({ children }) {
             feedService.clearUserCache(userNow.uid);
           } catch {}
         } catch (bgErr) {
-          console.warn("Background post creation queued or synced locally:", bgErr);
+          // The server write failed (offline or transient). The optimistic entry
+          // holds blob: URLs and no Firestore document, so leaving it in the
+          // device-local cache would show a broken post forever and then
+          // duplicate once the real one lands. Drop it and hand the post to the
+          // real IndexedDB offline queue, which the sync engine drains on
+          // reconnect (and which is uid-scoped, so it cannot bleed across
+          // accounts).
+          let queued = false;
+          try {
+            await addToOfflineQueue(current);
+            queued = true;
+          } catch (queueErr) {
+            console.warn("Offline queue enqueue failed:", queueErr);
+          }
+          try {
+            const localList = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
+            localStorage.setItem(
+              LOCAL_POSTS_KEY,
+              JSON.stringify(localList.filter(p => p.id !== instantPostId))
+            );
+          } catch {}
+          toast.error(
+            queued
+              ? "You're offline — this post will publish when you reconnect."
+              : (bgErr?.message || "Post could not be saved.")
+          );
         }
       })();
 
@@ -2912,7 +2998,7 @@ function CreatePostShell({ children }) {
       switch (state.postType) {
         case "text": case "question": return hasText;
         case "image": case "video": return state.mediaItems.length > 0 || hasText;
-        case "audio": return state.typeData.audio.file !== null || hasText;
+        case "audio": return state.typeData.audio.file !== null || !!state.typeData.audio.url || hasText;
         case "poll": return hasText && state.typeData.poll.options.filter(o => o.trim()).length >= 2;
         case "event": return hasText && state.typeData.event.date !== null;
         case "link": return state.typeData.link.url.trim().length > 0;
@@ -3026,8 +3112,67 @@ function EditPostLoader() {
   const { dispatch } = useCreatePostState();
   const editId = searchParams.get("edit");
   const quoteSnippet = searchParams.get("quote");
+  const location = useLocation();
   const loadedRef = React.useRef(false);
   const quotedRef = React.useRef(false);
+  const soundRef = React.useRef(false);
+  const videoRef = React.useRef(false);
+
+  // "Share to Feed" from the Video Editor navigates here with the rendered
+  // blob/URL in route state. Nothing read it, so the composer opened empty and
+  // the just-rendered video was thrown away.
+  React.useEffect(() => {
+    const file = location.state?.videoFile;
+    const url = location.state?.videoUrl;
+    if ((!file && !url) || videoRef.current) return;
+    videoRef.current = true;
+    dispatch({
+      type: "SET_MEDIA_ITEMS",
+      payload: [{
+        id: "video-export",
+        type: "video",
+        file: file || null,
+        url: file ? "" : url,
+        preview: url || "",
+        name: location.state?.title || "video",
+        alt: "",
+      }],
+    });
+    if (location.state?.title) dispatch({ type: "SET_CONTENT", payload: `${location.state.title} ` });
+    // The editor labels the handoff with `mediaType`; honour it when it is a
+    // known post type instead of always assuming "video".
+    const handedType = location.state?.mediaType;
+    dispatch({ type: "SET_POST_TYPE", payload: handedType === 'audio' || handedType === 'photo' ? handedType : 'video' });
+    dispatch({ type: "SET_STEP", payload: 2 });
+  }, [location.state, dispatch]);
+
+  // "Use in Reel" from the Sounds library navigates here with the chosen track
+  // in route state. Nothing read it, so the toast promised a reel that opened
+  // empty. Seed an audio post from the sound's persisted URL.
+  React.useEffect(() => {
+    const snd = location.state?.selectedAudio;
+    if (!snd || soundRef.current) return;
+    soundRef.current = true;
+    const audioUrl = snd.audioUrl || snd.url || "";
+    if (!audioUrl) return;
+    dispatch({
+      type: "SET_TYPE_DATA",
+      payload: {
+        audio: {
+          url: audioUrl,
+          previewUrl: audioUrl,
+          title: snd.title || "Untitled Audio",
+          artist: snd.artist || snd.creatorName || "",
+          genre: snd.genre || "",
+          coverUrl: snd.coverUrl || snd.thumbnail || "",
+          sourceSoundId: snd.id || null,
+        },
+      },
+    });
+    if (snd.title) dispatch({ type: "SET_CONTENT", payload: `${snd.title} ` });
+    dispatch({ type: "SET_POST_TYPE", payload: "audio" });
+    dispatch({ type: "SET_STEP", payload: 2 });
+  }, [location.state, dispatch]);
 
   // "Quote Post" seeds the composer with the quoted snippet as a blockquote.
   React.useEffect(() => {

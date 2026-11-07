@@ -5,26 +5,6 @@ import { cacheManager } from '../utils/CacheManager.js';
 import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp,
-  arrayUnion,
-  arrayRemove,
-  increment,
-  writeBatch,
-  runTransaction
-} from 'firebase/firestore';
 import { openDB } from 'idb';
 import QuickLRU from 'quick-lru';
 
@@ -322,7 +302,18 @@ class UltimateNotificationsService {
 
         this.firestore = await getFirestoreInstance();
         this.auth = await getAuthInstance();
-        this.messaging = await getMessagingInstance();
+        // FCM is a best-effort capability, NOT a prerequisite for notifications.
+        // `getMessagingInstance()` throws `messaging/unsupported-browser` on any
+        // browser (or jsdom) without the required APIs; awaiting it here aborted
+        // the whole init, so notification reads/stats/mark-read were all broken
+        // in unsupported browsers, and the rejected init promise surfaced as an
+        // unhandled rejection. Resolve it lazily per push action instead.
+        try {
+          this.messaging = await getMessagingInstance();
+        } catch (messagingError) {
+          this.messaging = null;
+          logger.warn('[Notifications] Push messaging unavailable', messagingError?.message || messagingError);
+        }
         this.fs = {
           collection: firebase.collection,
           doc: firebase.doc,
@@ -541,6 +532,7 @@ class UltimateNotificationsService {
   async requestPushPermission(userId) {
     await this.ensureInitialized();
     if (!hasNotification) throw new Error('Notifications not supported');
+    if (!this.messaging || !this.messagingMethods) throw new Error('Push messaging unavailable');
     const supported = await this.messagingMethods.isSupported();
     if (!supported) throw new Error('FCM not supported');
     const permission = await Notification.requestPermission();

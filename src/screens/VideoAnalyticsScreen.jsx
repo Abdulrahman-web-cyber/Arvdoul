@@ -2,7 +2,7 @@
 //
 // Creator dashboard with video performance metrics
 
-import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Video,
@@ -11,25 +11,18 @@ import {
   MessageCircle,
   Share2,
   TrendingUp,
-  TrendingDown,
   DollarSign,
   Users,
   Clock,
   Play,
-  Calendar,
   ArrowUpRight,
   ArrowDownRight,
-  BarChart3,
-  PieChart,
-  TrendingUp as TrendingUpIcon,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { formatViewCount, formatDuration, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
+import { formatViewCount, formatWatchTime, ARVDOUL_GRADIENT } from '../utils/videoUtils';
 import { formatCoinsAsUsd } from '../shared/levelConfig.cjs';
-import { toast } from 'sonner';
-import LoadingSpinner from '../components/Shared/LoadingSpinner';
 import GlassCard from '../components/UI/GlassCard';
 import GlassButton from '../components/UI/GlassButton';
 
@@ -39,7 +32,7 @@ import GlassButton from '../components/UI/GlassButton';
  * World-class UI with ARVDOUL DNA design system
  */
 const VideoAnalyticsScreen = () => {
-  const { theme, isDark, gradient, glass, spring, colors } = useTheme();
+  const { isDark } = useTheme();
   const [activeTab, setActiveTab] = useState('overview');
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(false);
@@ -305,11 +298,9 @@ const OverviewTab = ({ analytics }) => {
       </div>
 
       {/* Views Over Time — real daily series only, never a fabricated curve */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl"
+      <GlassCard
+        hoverable={false}
+        className="p-6"
       >
         <h3 className="text-lg font-bold text-white mb-4">Views Over Time</h3>
         <div className="h-48 flex items-end justify-between gap-2">
@@ -338,7 +329,7 @@ const OverviewTab = ({ analytics }) => {
           <span>{series[0]?.date || ''}</span>
           <span>{series[series.length - 1]?.date || ''}</span>
         </div>
-      </motion.div>
+      </GlassCard>
     </div>
   );
 };
@@ -649,13 +640,13 @@ const RevenueTab = ({ revenue }) => {
             </div>
           </div>
         )}
-        <motion.button
-          whileTap={{ scale: 0.98 }}
+        <GlassButton
+          variant="gradient"
+          className="w-full mt-4"
           onClick={() => navigate('/creator-payout')}
-          className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold"
         >
           Manage Payouts
-        </motion.button>
+        </GlassButton>
       </motion.div>
     </div>
   );

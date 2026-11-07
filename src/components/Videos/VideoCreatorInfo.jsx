@@ -1,6 +1,6 @@
 // src/components/Videos/VideoCreatorInfo.jsx
 
-import React, { memo } from 'react';
+import { memo } from "react";
 import { motion } from 'framer-motion';
 import { BadgeCheck, UserPlus } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';

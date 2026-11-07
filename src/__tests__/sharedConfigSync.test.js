@@ -1,6 +1,5 @@
 // src/__tests__/sharedConfigSync.test.js
 
-import { jest } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
 import levelConfig from '../shared/levelConfig.cjs';

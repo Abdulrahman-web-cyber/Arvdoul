@@ -70,6 +70,18 @@ service cloud.firestore {
     function followEdgeExists(a, b) {
       return exists(/databases/$(database)/documents/follows/$(a + '_' + b));
     }
+    // Collection-group authorization. `messagesService.getMessages` merges
+    // message reactions with ONE `collectionGroup('reactions')` query, and
+    // Firestore authorizes a collection-group query ONLY through a
+    // recursive-wildcard rule (`match /{path=**}/<collection>/<doc>`). There was
+    // no such rule, so the query failed `list` and every reaction was silently
+    // dropped from the thread. The reaction doc carries its `conversationId`
+    // (written by the same client path that the exact-path rule gates), so the
+    // read is scoped to participants of that conversation.
+    function isConvParticipantById(conversationId) {
+      return isSignedIn() && conversationId is string &&
+        uid() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+    }
     function dmAllowedTo(senderUid, recipientUid) {
       let pref = get(/databases/$(database)/documents/users/$(recipientUid)).data
         .get('settings', {}).get('privacy', {}).get('allowDMs', 'everyone');
@@ -120,11 +132,78 @@ service cloud.firestore {
     //     missing value evaluates false, so only the owner branch can still admit
     //     it — everyone else is denied (fail closed).
     function postReadableByViewer() {
-      return resource.data.authorIsPrivate == false ||
+      return (isSignedIn() && resource.data.authorId == uid()) ||
         isAdmin() ||
+        (resource.data.isDeleted == false &&
+          (resource.data.expiresAt == null || resource.data.expiresAt > request.time) &&
+          (
+            // A community post is readable when its community is public or the
+            // viewer is a member. Community posts carry no `authorIsPrivate`
+            // (they are scoped by membership, not by the author's account).
+            (resource.data.visibility == 'community' &&
+              resource.data.status == 'published' &&
+              isSignedIn() &&
+              (get(/databases/$(database)/documents/communities/$(resource.data.communityId)).data.get('privacy', 'public') == 'public' ||
+                isCommunityMember(resource.data.communityId))) ||
+            // Otherwise the public/private-account shape.
+            (resource.data.authorIsPrivate == false &&
+              resource.data.status == 'published' &&
+              (resource.data.visibility == 'public' ||
+                (resource.data.visibility == 'followers' &&
+                  isSignedIn() &&
+                  followEdgeExists(uid(), resource.data.authorId)) ||
+                // "friends" is a mutual follow; the app has no separate friend
+                // edge, so both directions must exist.
+                (resource.data.visibility == 'friends' &&
+                  isSignedIn() &&
+                  followEdgeExists(uid(), resource.data.authorId) &&
+                  followEdgeExists(resource.data.authorId, uid()))))
+          ));
+    }
+
+    // Rules are not filters: a LIST read is allowed only when the query itself
+    // proves the visibility predicate, so the query can never return a
+    // draft/scheduled/deleted/only-me post. `request.query.get(field, sentinel)`
+    // returns the value the query constrained with `==`, or the sentinel when
+    // the query did not constrain it. Three safe shapes:
+    //   - the public feed shape: `authorIsPrivate == false` + `visibility == 'public'`
+    //   - the owner's own shape: `authorId == uid()`
+    //   - a community feed: `communityId == X` + `visibility == 'community'`,
+    //     admitted only when X is public or the viewer is a member
+    // Everything else (no constraint, or a narrower set) is denied. Server-side
+    // workers/admin use the Admin SDK, which bypasses these rules.
+    function postQueryConstrainsPublic() {
+      return request.query.get('authorIsPrivate', '__none__') == false &&
+        request.query.get('visibility', '__none__') == 'public' &&
+        request.query.get('status', '__none__') == 'published' &&
+        request.query.get('isDeleted', '__none__') == false;
+    }
+    function postQueryConstrainsOwn() {
+      return request.query.get('authorId', '__none__') == uid();
+    }
+    function isCommunityMember(communityId) {
+      // Membership is a MAP field `members: { [uid]: {...} }`, not a
+      // subcollection. The old `exists(.../members/$(uid()))` never matched
+      // anything, so every non-public community post was unreadable even to its
+      // own members. `uid() in map` is the documented key-membership test.
+      return isSignedIn() &&
+        uid() in get(/databases/$(database)/documents/communities/$(communityId)).data.get('members', {});
+    }
+    function postQueryConstrainsViewableCommunity() {
+      let communityId = request.query.get('communityId', '__none__');
+      return communityId != '__none__' &&
+        request.query.get('visibility', '__none__') == 'community' &&
+        request.query.get('status', '__none__') == 'published' &&
+        request.query.get('isDeleted', '__none__') == false &&
+        (get(/databases/$(database)/documents/communities/$(communityId)).data.get('privacy', 'public') == 'public' ||
+          isCommunityMember(communityId));
+    }
+    function postListableByViewer() {
+      return isAdmin() ||
         (isSignedIn() &&
-          (uid() == resource.data.authorId ||
-            followEdgeExists(uid(), resource.data.authorId)));
+          (postQueryConstrainsPublic() ||
+            postQueryConstrainsOwn() ||
+            postQueryConstrainsViewableCommunity()));
     }
 
     // Fields that must never appear on the world-readable `users/{uid}` doc.
@@ -251,15 +330,27 @@ service cloud.firestore {
     // usernames registry: created/updated via owner flows; public read for availability and profile lookups
     match /usernames/{username} {
       allow read: if true;
-      // Only the owner may create/update/delete a username doc that belongs to them.
-      allow create, update: if isSignedIn() && request.resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      // A claimed username is immutable except by the user who already owns the
+      // doc, and even they may never reassign its `userId`. The previous
+      // `create, update` grant let ANY signed-in user overwrite ANY username doc
+      // with their own userId (`request.resource.data.userId == uid()`), silently
+      // stealing the username — every share/QR link for it then resolved to the
+      // attacker. Re-asserting the owner's own doc (createUserProfile's merge
+      // set) still passes because resource.data.userId == uid() there.
+      allow update: if isSignedIn() && resource.data.userId == uid() && request.resource.data.userId == uid();
       allow delete: if isSignedIn() && resource.data.userId == uid();
     }
-    // Immutable username history: readable so old share/QR links keep resolving,
-    // writable only by the owner who held the previous username.
+    // Immutable username history: readable so old share/QR links keep resolving.
+    // A create is allowed only for a name the writer CURRENTLY holds (verified
+    // against `usernames/{name}`), so an outsider cannot pre-squat a
+    // `previous_usernames` doc for a name they never owned — that would make the
+    // real owner's later rename transaction fail (this rule forbids update) and
+    // block them from ever changing their username.
     match /previous_usernames/{username} {
       allow read: if true;
-      allow create: if isSignedIn() && request.resource.data.userId == uid();
+      allow create: if isSignedIn() && request.resource.data.userId == uid() &&
+        get(/databases/$(database)/documents/usernames/$(username)).data.userId == uid();
       allow update, delete: if false;
     }
     match /user_settings/{userId} {
@@ -309,9 +400,11 @@ service cloud.firestore {
 
     // ==================== POSTS ====================
     match /posts/{postId} {
-      // Public content (authorIsPrivate != true) is readable by anyone; a private
-      // author's content only by the author or an admin (see postReadableByViewer).
-      allow read: if postReadableByViewer();
+      // `get` (single doc): the full per-document visibility decision.
+      allow get: if postReadableByViewer();
+      // `list` (query): only when the query itself proves public-or-own (rules
+      // are not filters), so drafts/scheduled/only-me posts can never be listed.
+      allow list: if postListableByViewer();
       // `authorIsPrivate` is denormalised but not client-controlled: on the write
       // path a get() is allowed, so the stored value must equal the author's real
       // users/{uid}.isPrivate. A client cannot publish a public post for a private
@@ -348,15 +441,17 @@ service cloud.firestore {
         allow read: if true;
         allow write: if false;
       }
-      // post subcollections (likes, saves, gifts, reactions, poll_votes): the doc
-      // id encodes the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) —
-      // enforce it. `answer_votes` is excluded (its own server-write block below)
-      // and `poll_votes` is readable only by the voter, so a signed-in user
-      // cannot enumerate who voted on a poll.
+      // post subcollections (likes, saves, gifts, reactions): the doc id
+      // encodes the acting user (e.g. likes/{userId}, gifts/{userId}_<ts>) —
+      // enforce it. `answer_votes` and `poll_votes` are excluded — both are
+      // written only by their callables (castAnswerVote / votePostPoll) with
+      // the Admin SDK, so a client cannot forge a vote or enumerate voters
+      // (poll_votes is readable only by the voter, keyed on their own uid).
       match /{subcollection}/{docId} {
         allow read: if subcollection != 'answer_votes' &&
           (subcollection != 'poll_votes' || docId == uid());
-        allow write: if isSignedIn() && subcollection != 'answer_votes' &&
+        allow write: if isSignedIn() &&
+          subcollection != 'answer_votes' && subcollection != 'poll_votes' &&
           (docId == uid() || docId.startsWith(uid() + '_'));
       }
     }
@@ -790,7 +885,14 @@ service cloud.firestore {
       allow read, create, update: if isOwner(userId);
     }
     match /withdrawal_requests/{requestId} {
-      allow read, create: if isSignedIn() && request.resource.data.userId == uid();
+      // `read` and `create` need DIFFERENT expressions: `request.resource` is
+      // null on a read, so the old combined `allow read, create: if …
+      // request.resource.data.userId == uid()` threw and denied EVERY read —
+      // the wallet's pending-withdrawal breakdown and the admin payout queue
+      // both silently showed zero. Reads key on the stored `resource.data`
+      // (owner or admin); creates key on the incoming `request.resource`.
+      allow read: if isSignedIn() && (resource.data.userId == uid() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == uid();
       // The owner may only CANCEL their own pending request. Approval/paid/
       // rejected transitions are server-only (adminDecideWithdrawal), and the
       // amount/address are immutable once the request exists.
@@ -805,6 +907,18 @@ service cloud.firestore {
       allow write: if false; // server-verified
     }
     match /ads/{adId} {
+      allow read: if isSignedIn();
+      allow write: if false; // admin via console/CF
+    }
+    // Sponsored feed units and the shared audio library are admin/CDN-published
+    // content (like `ads`): the client reads them, only the console/CF writes.
+    // Both collections were read by a live client path with no rule, so the read
+    // fell through to the deny-all catch-all and the caller silently got [].
+    match /sponsored_posts/{sponsoredId} {
+      allow read: if isSignedIn();
+      allow write: if false; // admin via console/CF
+    }
+    match /audio_tracks/{trackId} {
       allow read: if isSignedIn();
       allow write: if false; // admin via console/CF
     }
@@ -867,9 +981,13 @@ service cloud.firestore {
 
     // ==================== COMMUNITIES ====================
     match /communities/{communityId} {
+      // The community document holds the members map (privilege data: roles,
+      // permissions), moderation state and derived counters. A client write
+      // could therefore grant itself `role: 'owner'`, so every mutation goes
+      // through the server-authoritative `community*` callables in
+      // functions/communities.js. Reads stay public for the directory.
       allow read: if true;
-      allow create: if isSignedIn() && authoredBy('ownerId');
-      allow update, delete: if (isSignedIn() && request.auth.uid == resource.data.ownerId) || isAdmin();
+      allow write: if false; // server-verified
       match /{subcollection}/{docId} {
         allow read: if true;
         // Members may create their own content; only the author (or admin) may edit/delete.
@@ -891,29 +1009,29 @@ service cloud.firestore {
     }
 
     // ==================== COLLABORATION ====================
+    // Membership and roles are privilege data. The client used to write the
+    // project document and the `team`/`content` subcollections directly, but
+    // the subcollection rule required an `authorId`/`userId` field the client
+    // never wrote and the parent rule keyed on `ownerId` — so creating,
+    // inviting, saving, submitting, reviewing and publishing were all denied.
+    // Every mutation now goes through functions/collaboration.js.
     match /collaboration_projects/{projectId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && authoredBy('ownerId');
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      allow write: if false;
       match /{subcollection}/{docId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
-        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
+        allow write: if false;
       }
     }
     match /collaboration_invites/{inviteId} {
       // Invites carry the invitee's email address, so they are not a public
-      // feed: only the inviter and the invited address may read them.
+      // feed: only the inviter and the invited address may read them. Writes
+      // are server-only (createCollaborationInvite / accept / decline).
       allow read: if isSignedIn() && (
         resource.data.invitedBy == uid() ||
         (resource.data.email != null && resource.data.email == request.auth.token.email)
       );
-      allow create: if isSignedIn() && request.resource.data.invitedBy == uid();
-      allow update, delete: if isSignedIn() && (
-        resource.data.invitedBy == uid() ||
-        (resource.data.email != null && resource.data.email == request.auth.token.email) ||
-        isAdmin()
-      );
+      allow write: if false;
     }
 
     // ==================== COLLECTIONS (saved posts) ====================
@@ -1040,9 +1158,14 @@ service cloud.firestore {
     match /signaling_rooms/{roomId} {
       function signalingParticipants() {
         // A signing-in member of the parent live stream or space may join.
+        // `exists()` guards each lookup: the room id names exactly one parent,
+        // so the other `get()` returns null and a bare `.data` read would throw
+        // and deny the request (making spaces signalling impossible).
         return isSignedIn() && (
-          uid() in get(/databases/$(database)/documents/live_streams/$(roomId)).data.participants ||
-          uid() in get(/databases/$(database)/documents/spaces/$(roomId)).data.participants
+          (exists(/databases/$(database)/documents/live_streams/$(roomId)) &&
+            uid() in get(/databases/$(database)/documents/live_streams/$(roomId)).data.participants) ||
+          (exists(/databases/$(database)/documents/spaces/$(roomId)) &&
+            uid() in get(/databases/$(database)/documents/spaces/$(roomId)).data.participants)
         );
       }
       // Membership is resolved from the parent stream/space, not from this
@@ -1067,7 +1190,18 @@ service cloud.firestore {
     match /spaces/{spaceId} {
       allow read: if true;
       allow create: if isSignedIn() && (request.resource.data.host.id == uid() || request.resource.data.userId == uid());
-      allow update, delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
+      // The host owns the space; any signed-in member may change only the
+      // non-authoritative roster (raised hands, participants, listeners,
+      // audience count). Without this carve-out a member's "raise hand" /
+      // "join" write was silently DENIED, so the stage never updated.
+      allow update: if isSignedIn() && (
+        resource.data.host.id == uid() ||
+        resource.data.userId == uid() ||
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['raisedHands', 'participants', 'listeners', 'audienceCount'])
+      );
+      allow delete: if isSignedIn() && (resource.data.host.id == uid() || resource.data.userId == uid() || isAdmin());
       match /signals/{signalId} {
         allow read, write: if isSignedIn();
       }
@@ -1242,9 +1376,11 @@ service cloud.firestore {
 
     // ==================== LIVE TIPS ====================
     match /live_tips/{tipId} {
+      // Tips move real coins sender -> streamer inside the `sendLiveTip`
+      // callable, so the client never writes here (a forged row would claim a
+      // tip that never happened).
       allow read: if isSignedIn() && (resource.data.senderId == uid() || resource.data.recipientId == uid());
-      allow create: if isSignedIn() && request.resource.data.senderId == uid();
-      allow update, delete: if isAdmin();
+      allow write: if false; // server-verified
     }
 
     // ==================== MESSAGE REPORTS ====================
@@ -1446,6 +1582,13 @@ service cloud.firestore {
     match /user_interest_vectors/{userId} {
       allow read, write: if isOwner(userId);
     }
+    // Feed session state (seen/hidden/not-interested post ids per user). The
+    // client read+write path existed but the collection had NO rule, so every
+    // load returned nothing and every save was silently denied — the feed's
+    // "already seen" de-duplication and "not interested" demotion were dead.
+    match /user_sessions/{userId} {
+      allow read, write: if isOwner(userId);
+    }
 
     // ==================== DAILY UPLOAD COUNTERS (owner-scoped shards) ====================
     match /daily_upload_counters/{shardId} {
@@ -1473,6 +1616,22 @@ service cloud.firestore {
     match /config/{configId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // ==================== COLLECTION-GROUP: MESSAGE REACTIONS ====================
+    // A message's reaction docs live at
+    // `conversations/{cid}/{messages|messages_YYYY_MM}/{mid}/reactions/{uid}`.
+    // `messagesService.getMessages` merges them with a single
+    // `collectionGroup('reactions')` query, which the per-subcollection rule
+    // cannot authorize — a collection-group query is authorized only by a
+    // recursive-wildcard rule. Without this block the query failed `list` and
+    // every reaction was silently dropped from the thread. The query filters on
+    // the reaction's own `conversationId`, so the read is scoped to that
+    // conversation's participants; writes stay on the exact-path
+    // `conversations/{cid}/{shard}/{mid}/reactions/{uid}` rule above.
+    match /{path=**}/reactions/{reactorId} {
+      allow read: if resource.data.conversationId is string &&
+        isConvParticipantById(resource.data.conversationId);
     }
 
     // ==================== DEFAULT DENY ====================

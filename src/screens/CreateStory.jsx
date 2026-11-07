@@ -1,20 +1,13 @@
 // src/screens/CreateStory.jsx
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import {
-  X, Zap, RefreshCw, Sliders, FileText, Type,
-  Smile, Music, Video, Image as ImageIcon, BarChart2,
-  HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight,
-  ChevronLeft, Sparkles, Send, Camera, Grid, Check, Loader2
-} from 'lucide-react';
+import { X, Zap, RefreshCw, Sliders, Type, Smile, Music, BarChart2, HelpCircle, AtSign, MapPin, Link2, Timer, ChevronRight, Sparkles, Send, Check, Loader2 } from "lucide-react";
 import { getStoryService } from '../services/storyService';
-import storageService, { getStorageService } from '../services/storageService';
 import GIFPicker from '../components/Shared/GIFPicker';
 
 const CREATIVE_TOOLS = [
@@ -442,12 +435,22 @@ export default function CreateStory() {
                   className="w-full text-sm font-bold bg-transparent border-b border-white/20 pb-2 mb-3 outline-none text-center"
                 />
                 <div className="space-y-2">
-                  <div className="p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10">
-                    {pollOption1}
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10">
-                    {pollOption2}
-                  </div>
+                  <input
+                    type="text"
+                    value={pollOption1}
+                    onChange={(e) => setPollOption1(e.target.value)}
+                    placeholder="Option 1"
+                    aria-label="Poll option 1"
+                    className="w-full p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10 outline-none focus:border-white/40"
+                  />
+                  <input
+                    type="text"
+                    value={pollOption2}
+                    onChange={(e) => setPollOption2(e.target.value)}
+                    placeholder="Option 2"
+                    aria-label="Poll option 2"
+                    className="w-full p-2.5 rounded-xl bg-white/10 text-xs font-semibold text-center border border-white/10 outline-none focus:border-white/40"
+                  />
                 </div>
               </div>
             )}

@@ -1,20 +1,7 @@
 // src/services/monetizationService.js
 
 import { getFirestoreInstance, auth } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit as firestoreLimit,
-  addDoc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit as firestoreLimit, addDoc, serverTimestamp } from "firebase/firestore";
 import { getRemoteConfig, getValue, fetchAndActivate, setLogLevel } from 'firebase/remote-config';
 import { openDB } from 'idb';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
@@ -23,7 +10,7 @@ import { svcLogger } from './ServiceKit.js';
 // Canonical level curve (single source of truth). The previous local copy had
 // already drifted from levelConfig.cjs (it stopped at level 15 with a
 // different curve), so progression here now reads the shared table.
-import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG, getLevelInfo } from '../shared/levelConfig.cjs';
+import { LEVELS as CANONICAL_LEVELS, GIFT_CATALOG, getLevelInfo } from "../shared/levelConfig.cjs";
 
 const log = svcLogger('monetizationService');
 

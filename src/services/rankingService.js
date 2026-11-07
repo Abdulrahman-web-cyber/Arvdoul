@@ -1,19 +1,7 @@
 import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  serverTimestamp,
-  increment,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter } from "firebase/firestore";
 
 export const RANKING_CONFIG = {
   CATEGORIES: {
@@ -468,7 +456,7 @@ class RankingService {
       let posts = [];
       try {
         const postsSnap = await getDocs(
-          query(collection(this.firestore, 'posts'), where('authorId', '==', userId), limit(500))
+          query(collection(this.firestore, 'posts'), where('authorId', '==', userId), where('isDeleted', '==', false), where('status', '==', 'published'), where('visibility', '==', 'public'), limit(500))
         );
         posts = postsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       } catch (err) {

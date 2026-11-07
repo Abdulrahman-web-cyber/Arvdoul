@@ -14,6 +14,21 @@ import { XP_RULES } from '../shared/levelConfig.cjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
 
+describe('CreatorPayoutScreen - real ledger-derived figures only', () => {
+  const src = fs.readFileSync(path.join(root, 'src/screens/CreatorPayoutScreen.jsx'), 'utf8');
+  test('earnings breakdown is summed from the coin ledger, not a fixed ratio', () => {
+    // `(balance * 0.7)` / `(balance * 0.3)` fabricated a gifts/ad split that no
+    // server ever produced.
+    expect(src).not.toMatch(/balance\s*\*\s*0\.[0-9]/);
+    expect(src).toContain('getCoinEarningHistory');
+    expect(src).toContain('sumCredits');
+  });
+  test('lifetime withdrawn is computed, not a hardcoded $0.00', () => {
+    expect(src).not.toMatch(/>\$0\.00</);
+    expect(src).toContain('lifetimeWithdrawnCoins');
+  });
+});
+
 describe('videoData - no fabricated content', () => {
   test('contains no fabricated users (Zaid/Elena/Marcus...) or Unsplash stock', () => {
     const src = fs.readFileSync(path.join(root, 'src/data/videoData.js'), 'utf8');
@@ -256,16 +271,24 @@ describe('Spaces & Live - no free-money tips/gifts', () => {
     expect(src).toContain('Sign in to send a tip');
   });
 
-  test('liveService debits coins BEFORE recording gifts/tips', () => {
+  test('liveService delegates gifts/tips to the server callable (no client debit or write)', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/liveService.js'), 'utf8');
     const giftIdx = src.indexOf('async sendLiveGift');
     const tipIdx = src.indexOf('async sendLiveTip');
-    // spendCoins/transferCoins must appear before addDoc(live_gifts/live_tips)
+    expect(giftIdx).toBeGreaterThan(-1);
+    expect(tipIdx).toBeGreaterThan(giftIdx);
     const giftBlock = src.slice(giftIdx, tipIdx);
-    const spendIdx = giftBlock.indexOf('spendCoins');
-    const addGiftIdx = giftBlock.indexOf("addDoc(giftsRef");
-    expect(spendIdx).toBeGreaterThan(-1);
-    expect(addGiftIdx).toBeGreaterThan(spendIdx);
+    // The server callable moves value sender -> streamer in one transaction.
+    // The old client path debited via spendCoins and then wrote a `live_gifts`
+    // row that the rules deny — the coins were destroyed and the streamer was
+    // never paid.
+    expect(giftBlock).toContain('callFunction(FUNCTIONS.SEND_LIVE_GIFT');
+    expect(giftBlock).not.toContain('spendCoins');
+    expect(giftBlock).not.toContain('addDoc');
+    const tipBlock = src.slice(tipIdx, src.indexOf('\n  async ', tipIdx + 1));
+    expect(tipBlock).toContain('callFunction(FUNCTIONS.SEND_LIVE_TIP');
+    expect(tipBlock).not.toContain('transferCoins(');
+    expect(tipBlock).not.toContain('addDoc');
   });
 });
 
@@ -602,6 +625,18 @@ describe('Unbounded queries bounded', () => {
     expect(feed).toContain("getSocialGraphService().listConnections(userId, 'blocked'");
     const spine = fs.readFileSync(path.join(root, 'src/services/socialGraphService.js'), 'utf8');
     expect(spine).toContain('MAX_PAGE_SIZE');
+  });
+});
+
+describe('searchService - honest trending hashtags, never fabricated counts', () => {
+  test('the no-Algolia facet fallback derives counts from real posts', () => {
+    const src = fs.readFileSync(path.join(root, 'src/services/searchService.js'), 'utf8');
+    // It once returned a hardcoded list of tags with invented counts
+    // (`count: 120`, `count: 98`, ...) presented as "N posts" in TrendingSection.
+    expect(src).not.toContain('fallbackTags');
+    expect(src).not.toMatch(/count:\s*(120|98|85|64|52|47|39)\b/);
+    expect(src).toContain('_hashtagFacetsFromPosts');
+    expect(src).toContain('doc.data().hashtags');
   });
 });
 
@@ -1055,7 +1090,11 @@ describe('Auth - signup never grants fabricated coins/levels', () => {
 describe('Monetization - canonical level curve (no duplicated drift)', () => {
   test('monetizationService reads LEVELS from the shared levelConfig', () => {
     const src = fs.readFileSync(path.join(root, 'src/services/monetizationService.js'), 'utf8');
-    expect(src).toContain("import { LEVELS as CANONICAL_LEVELS, LEVEL_GATES, GIFT_CATALOG, getLevelInfo } from '../shared/levelConfig.cjs';");
+    // The import must carry the canonical LEVELS table (aliased) plus the
+    // shared helpers it actually uses; do not re-import symbols that are dead.
+    expect(src).toMatch(
+      /import \{ LEVELS as CANONICAL_LEVELS,[^}]*?GIFT_CATALOG,[^}]*?getLevelInfo \} from ['"]\.\.\/shared\/levelConfig\.cjs['"];/
+    );
     expect(src).toContain('LEVELS: CANONICAL_LEVELS,');
     expect(src).not.toContain('{ level: 2, xpRequired: 100, coinReward: 10 },');
   });
@@ -1214,11 +1253,49 @@ describe('Analytics view dedupe is transactional and server-authoritative (N019/
     expect(src).toContain('db.runTransaction');
     expect(src).toContain('getUserIdFromContext');
     expect(src).toContain('checkRateLimit');
-    // Shard key must match CountersManager.hashString (same algorithm).
-    expect(src).toContain('5381');
     expect(src).toContain("'counter_shards'");
     const index = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
     expect(index).toContain("require('./analytics.js')");
+  });
+
+  test('server and client derive counter shard ids identically (byte-identical hash + shard count)', () => {
+    // AGENTS.md: the server shard key must stay byte-identical to hashString()
+    // in src/utils/CountersManager.js because the client SUMS counter_shards on
+    // read. A guard that merely greps for `5381` does not catch a drifted
+    // algorithm, a different modulus, or a changed shard count — any of which
+    // makes client and server write/read different documents and the counter
+    // silently wrong. Extract the real function bodies and the shard counts and
+    // compare them exactly.
+    const client = fs.readFileSync(path.join(root, 'src/utils/CountersManager.js'), 'utf8');
+    const server = fs.readFileSync(path.join(root, 'functions/analytics.js'), 'utf8');
+
+    const extractFn = (src, name) => {
+      const m = src.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\n\\}`));
+      return m && m[0].replace(/\s+/g, ' ').trim();
+    };
+    const clientHash = extractFn(client, 'hashString');
+    const serverHash = extractFn(server, 'hashString');
+    expect(clientHash).toBeTruthy();
+    expect(serverHash).toBe(clientHash);
+
+    const extractInt = (src, patterns) => {
+      for (const re of patterns) {
+        const m = src.match(re);
+        if (m) return Number(m[1]);
+      }
+      return null;
+    };
+    const clientShards = extractInt(client, [/shards\s*=\s*(\d+)/]);
+    const serverShards = extractInt(server, [/COUNTER_SHARDS\s*=\s*(\d+)/]);
+    expect(clientShards).toBe(serverShards);
+
+    // The shard document id layout must match too: `${hash}__${field}__${index}`.
+    const layout = (src) => {
+      const m = src.match(/`\$\{hashString\([^`]*?\)\}__\$\{[^}]*\}__\$\{[^}]*\}`/);
+      return m && m[0];
+    };
+    expect(layout(server)).toBeTruthy();
+    expect(layout(server)).toBe(layout(client));
   });
 });
 
@@ -2015,6 +2092,8 @@ describe('Messaging never claims E2EE the app cannot deliver', () => {
     // therefore a fabricated security claim.
     expect(read('src/screens/ChatScreen.jsx')).not.toContain('End-to-end encrypted');
     expect(read('src/screens/ConversationSettingsScreen.jsx')).not.toContain('E2EE');
+    // MenuScreen described Direct Messages as "End-to-end encrypted" too.
+    expect(read('src/screens/Menu/MenuScreen.jsx')).not.toMatch(/[Ee]nd-to-end encrypted/i);
   });
 
   test('a text send cannot be blocked by the encryption gate', () => {

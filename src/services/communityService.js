@@ -1,24 +1,8 @@
 // src/services/communityService.js
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp,
-  arrayUnion,
-  arrayRemove,
-  increment
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { callFunction, FUNCTIONS } from './callableService.js';
 
 const COMMUNITIES_PER_PAGE = 20;
 // Hard ceiling for any single community read; a per-user membership list is
@@ -39,63 +23,20 @@ class CommunityService {
 
   async createCommunity(userId, data) {
     await this.initialize();
-    
-    const communityId = doc(collection(this.db, 'communities')).id;
-    const communityData = {
-      id: communityId,
-      name: data.name,
-      description: data.description || '',
-      rules: data.rules || '',
-      avatar: data.avatar || '',
-      cover: data.cover || '',
-      privacy: data.privacy || 'public', // public, private, secret
-      members: {
-        [userId]: {
-          role: 'owner',
-          joinedAt: serverTimestamp(),
-          permissions: ['all']
-        }
-      },
-      spaces: [
-        { name: 'General', type: 'discussion', description: 'General discussion', isDefault: true },
-        { name: 'Announcements', type: 'announcements', description: 'Official announcements', isDefault: true }
-      ],
-      channels: [
-        { name: 'general', description: 'General chat', isDefault: true }
-      ],
-      stats: {
-        memberCount: 1,
-        postCount: 0,
-        eventCount: 0,
-        activityScore: 100
-      },
-      moderation: {
-        slowMode: false,
-        slowModeDelay: 0,
-        contentApproval: false,
-        bannedUsers: []
-      },
-      settings: {
-        defaultRole: 'member',
-        joinApproval: false,
-        inviteOnly: false,
-        discoveryEnabled: true
-      },
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: userId,
-      isDeleted: false
-    };
-
-    await setDoc(doc(this.db, 'communities', communityId), communityData);
-    
-    // Update user's community count
-    await updateDoc(doc(this.db, 'users', userId), {
-      communityCount: increment(1),
-      updatedAt: serverTimestamp()
+    // Creation writes the members map (privilege data) and the derived
+    // counters, so it is server-authoritative.
+    const community = await callFunction(FUNCTIONS.CREATE_COMMUNITY, {
+      name: data?.name,
+      description: data?.description,
+      rules: data?.rules,
+      avatar: data?.avatar,
+      cover: data?.cover,
+      privacy: data?.privacy,
+      joinApproval: data?.settings?.joinApproval ?? data?.joinApproval,
+      inviteOnly: data?.settings?.inviteOnly ?? data?.inviteOnly,
+      discoveryEnabled: data?.settings?.discoveryEnabled ?? data?.discoveryEnabled,
     });
-
-    return { id: communityId, ...communityData };
+    return community;
   }
 
   async getCommunity(communityId) {
@@ -127,49 +68,15 @@ class CommunityService {
 
   async updateCommunity(communityId, data, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[userId];
-    if (!membership || !['owner', 'admin'].includes(membership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    const allowedFields = ['name', 'description', 'rules', 'avatar', 'cover', 'privacy', 'settings'];
-    const updateData = { updatedAt: serverTimestamp() };
-    
-    Object.keys(data).forEach(key => {
-      if (allowedFields.includes(key)) {
-        updateData[key] = data[key];
-      }
-    });
-
-    await updateDoc(doc(this.db, 'communities', communityId), updateData);
+    // The community document is server-write-only; the callable re-checks the
+    // caller's role from the members map.
+    await callFunction(FUNCTIONS.UPDATE_COMMUNITY_SETTINGS, { communityId, updates: data || {} });
     return true;
   }
 
   async deleteCommunity(communityId, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    if (community.createdBy !== userId) {
-      throw new Error('Only the owner can delete this community');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      isDeleted: true,
-      deletedAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    await updateDoc(doc(this.db, 'users', userId), {
-      communityCount: increment(-1),
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.DELETE_COMMUNITY, { communityId });
     return true;
   }
 
@@ -256,235 +163,61 @@ class CommunityService {
 
   async joinCommunity(communityId, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    if (community.members?.[userId]) {
-      throw new Error('Already a member');
-    }
-
-    if (community.privacy === 'secret') {
-      throw new Error('Cannot join secret community');
-    }
-
-    const updateData = {
-      [`members.${userId}`]: {
-        role: community.settings?.defaultRole || 'member',
-        joinedAt: serverTimestamp(),
-        permissions: []
-      },
-      'stats.memberCount': increment(1),
-      updatedAt: serverTimestamp()
-    };
-
-    if (community.settings?.joinApproval) {
-      updateData[`pendingRequests.${userId}`] = {
-        requestedAt: serverTimestamp()
-      };
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), updateData);
-
-    await updateDoc(doc(this.db, 'users', userId), {
-      joinedCommunities: arrayUnion(communityId),
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true, requiresApproval: community.settings?.joinApproval };
+    const result = await callFunction(FUNCTIONS.JOIN_COMMUNITY, { communityId });
+    return { success: true, requiresApproval: result?.requiresApproval === true };
   }
 
   async leaveCommunity(communityId, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[userId];
-    if (!membership) {
-      throw new Error('Not a member');
-    }
-
-    if (membership.role === 'owner') {
-      throw new Error('Owner cannot leave. Transfer ownership or delete the community.');
-    }
-
-    const updateData = {
-      [`members.${userId}`]: null,
-      'stats.memberCount': increment(-1),
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(doc(this.db, 'communities', communityId), updateData);
-
-    await updateDoc(doc(this.db, 'users', userId), {
-      joinedCommunities: arrayRemove(communityId),
-      updatedAt: serverTimestamp()
-    });
-
+    // `userId` is the member being removed. The server compares it against the
+    // authenticated caller: equal means a self-leave, different means a kick
+    // (which requires owner/admin, re-checked server-side).
+    await callFunction(FUNCTIONS.LEAVE_COMMUNITY, { communityId, targetUserId: userId });
     return true;
   }
 
   async requestToJoin(communityId, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    if (community.privacy !== 'private') {
-      throw new Error('This community does not require approval');
-    }
-
-    if (community.members?.[userId]) {
-      throw new Error('Already a member');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      [`pendingRequests.${userId}`]: {
-        requestedAt: serverTimestamp(),
-        status: 'pending'
-      },
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.REQUEST_TO_JOIN, { communityId });
     return true;
   }
 
   async approveJoinRequest(communityId, requesterId, approverId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[approverId];
-    if (!membership || !['owner', 'admin'].includes(membership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    const updateData = {
-      [`members.${requesterId}`]: {
-        role: community.settings?.defaultRole || 'member',
-        joinedAt: serverTimestamp(),
-        permissions: []
-      },
-      [`pendingRequests.${requesterId}`]: null,
-      'stats.memberCount': increment(1),
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(doc(this.db, 'communities', communityId), updateData);
-
-    await updateDoc(doc(this.db, 'users', requesterId), {
-      joinedCommunities: arrayUnion(communityId),
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.APPROVE_JOIN_REQUEST, { communityId, requesterId });
     return true;
   }
 
   async rejectJoinRequest(communityId, requesterId, rejecterId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[rejecterId];
-    if (!membership || !['owner', 'admin'].includes(membership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      [`pendingRequests.${requesterId}`]: null,
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.REJECT_JOIN_REQUEST, { communityId, requesterId });
     return true;
   }
 
   async assignRole(communityId, targetUserId, role, adminUserId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const adminMembership = community.members?.[adminUserId];
-    if (!adminMembership || !['owner', 'admin'].includes(adminMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    const validRoles = ['owner', 'admin', 'moderator', 'contributor', 'member', 'restricted'];
-    if (!validRoles.includes(role)) {
-      throw new Error('Invalid role');
-    }
-
-    if (community.members?.[targetUserId]?.role === 'owner') {
-      throw new Error('Cannot modify owner role');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      [`members.${targetUserId}.role`]: role,
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.ASSIGN_COMMUNITY_ROLE, { communityId, targetUserId, role });
     return true;
   }
 
   async updateMemberPermissions(communityId, targetUserId, permissions, adminUserId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const adminMembership = community.members?.[adminUserId];
-    if (!adminMembership || !['owner', 'admin'].includes(adminMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      [`members.${targetUserId}.permissions`]: permissions,
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.UPDATE_MEMBER_PERMISSIONS, { communityId, targetUserId, permissions });
     return true;
   }
 
   async updateCommunitySettings(communityId, adminUserId, data) {
     await this.initialize();
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-
-    const adminMembership = community.members?.[adminUserId];
-    if (!adminMembership || !['owner', 'admin'].includes(adminMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    const allowed = {};
-    if (typeof data.name === 'string') allowed.name = data.name.trim();
-    if (typeof data.description === 'string') allowed.description = data.description.trim();
-    if (typeof data.rules === 'string') allowed.rules = data.rules.trim();
-    if (typeof data.avatar === 'string') allowed.avatar = data.avatar.trim();
-    if (['public', 'private', 'secret'].includes(data.privacy)) allowed.privacy = data.privacy;
-    if (data.settings && typeof data.settings === 'object') {
-      allowed.settings = { ...(community.settings || {}), ...data.settings };
-    }
-
-    allowed.updatedAt = serverTimestamp();
-    await updateDoc(doc(this.db, 'communities', communityId), allowed);
+    await callFunction(FUNCTIONS.UPDATE_COMMUNITY_SETTINGS, { communityId, updates: data || {} });
     return true;
   }
 
   async getUserCommunities(userId) {
     await this.initialize();
-    
-    const q = query(
-      collection(this.db, 'communities'),
-      where(`members.${userId}.role`, 'in', ['owner', 'admin', 'moderator', 'contributor', 'member']),
-      where('isDeleted', '==', false),
-      limit(MAX_COMMUNITY_READ)
-    );
-
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Membership lives in a map field, so this is resolved server-side rather
+    // than with a dynamic field-path query the rules cannot express.
+    const result = await callFunction(FUNCTIONS.GET_MY_COMMUNITIES, {});
+    return result?.communities || [];
   }
 
   async getUserManagedCommunities(userId) {
@@ -503,266 +236,62 @@ class CommunityService {
 
   async banUser(communityId, targetUserId, moderatorId, reason = '') {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const moderatorMembership = community.members?.[moderatorId];
-    if (!moderatorMembership || !['owner', 'admin', 'moderator'].includes(moderatorMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    if (community.members?.[targetUserId]?.role === 'owner') {
-      throw new Error('Cannot ban the owner');
-    }
-
-    const updateData = {
-      [`members.${targetUserId}`]: null,
-      moderation: {
-        ...community.moderation,
-        bannedUsers: arrayUnion(targetUserId)
-      },
-      'stats.memberCount': increment(-1),
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(doc(this.db, 'communities', communityId), updateData);
-
-    await this.logModerationAction(communityId, moderatorId, 'ban', targetUserId, reason);
-
+    await callFunction(FUNCTIONS.COMMUNITY_MODERATE, { communityId, action: 'ban', targetUserId, reason });
     return true;
   }
 
   async unbanUser(communityId, targetUserId, moderatorId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const moderatorMembership = community.members?.[moderatorId];
-    if (!moderatorMembership || !['owner', 'admin', 'moderator'].includes(moderatorMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      moderation: {
-        ...community.moderation,
-        bannedUsers: arrayRemove(targetUserId)
-      },
-      updatedAt: serverTimestamp()
-    });
-
-    await this.logModerationAction(communityId, moderatorId, 'unban', targetUserId);
-
+    await callFunction(FUNCTIONS.COMMUNITY_MODERATE, { communityId, action: 'unban', targetUserId });
     return true;
   }
 
   async enableSlowMode(communityId, delay, moderatorId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const moderatorMembership = community.members?.[moderatorId];
-    if (!moderatorMembership || !['owner', 'admin', 'moderator'].includes(moderatorMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      moderation: {
-        ...community.moderation,
-        slowMode: true,
-        slowModeDelay: delay
-      },
-      updatedAt: serverTimestamp()
-    });
-
-    await this.logModerationAction(communityId, moderatorId, 'slow_mode', null, `Enabled slow mode: ${delay}s`);
-
+    await callFunction(FUNCTIONS.COMMUNITY_MODERATE, { communityId, action: 'slow_mode', delay });
     return true;
   }
 
   async disableSlowMode(communityId, moderatorId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const moderatorMembership = community.members?.[moderatorId];
-    if (!moderatorMembership || !['owner', 'admin', 'moderator'].includes(moderatorMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      moderation: {
-        ...community.moderation,
-        slowMode: false,
-        slowModeDelay: 0
-      },
-      updatedAt: serverTimestamp()
-    });
-
-    await this.logModerationAction(communityId, moderatorId, 'slow_mode_off', null, 'Disabled slow mode');
-
+    await callFunction(FUNCTIONS.COMMUNITY_MODERATE, { communityId, action: 'slow_mode_off' });
     return true;
   }
 
   async enableContentApproval(communityId, moderatorId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const moderatorMembership = community.members?.[moderatorId];
-    if (!moderatorMembership || !['owner', 'admin'].includes(moderatorMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      moderation: {
-        ...community.moderation,
-        contentApproval: true
-      },
-      updatedAt: serverTimestamp()
-    });
-
-    await this.logModerationAction(communityId, moderatorId, 'content_approval_on', null, 'Enabled content approval');
-
+    await callFunction(FUNCTIONS.COMMUNITY_MODERATE, { communityId, action: 'content_approval_on' });
     return true;
   }
 
   async disableContentApproval(communityId, moderatorId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const moderatorMembership = community.members?.[moderatorId];
-    if (!moderatorMembership || !['owner', 'admin'].includes(moderatorMembership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      moderation: {
-        ...community.moderation,
-        contentApproval: false
-      },
-      updatedAt: serverTimestamp()
-    });
-
-    await this.logModerationAction(communityId, moderatorId, 'content_approval_off', null, 'Disabled content approval');
-
+    await callFunction(FUNCTIONS.COMMUNITY_MODERATE, { communityId, action: 'content_approval_off' });
     return true;
   }
 
   async addSpace(communityId, space, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[userId];
-    if (!membership || !['owner', 'admin'].includes(membership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    const spaceId = `space_${Date.now()}`;
-    const newSpace = {
-      id: spaceId,
-      ...space,
-      isDefault: false,
-      createdAt: serverTimestamp()
-    };
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      spaces: arrayUnion(newSpace),
-      updatedAt: serverTimestamp()
-    });
-
-    return { ...newSpace, spaceId };
+    const result = await callFunction(FUNCTIONS.ADD_COMMUNITY_SPACE, { communityId, space });
+    return result?.space;
   }
 
   async removeSpace(communityId, spaceId, userId) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[userId];
-    if (!membership || !['owner', 'admin'].includes(membership.role)) {
-      throw new Error('Insufficient permissions');
-    }
-
-    const space = community.spaces?.find(s => s.id === spaceId);
-    if (space?.isDefault) {
-      throw new Error('Cannot remove default spaces');
-    }
-
-    const updatedSpaces = community.spaces?.filter(s => s.id !== spaceId) || [];
-    
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      spaces: updatedSpaces,
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.REMOVE_COMMUNITY_SPACE, { communityId, spaceId });
     return true;
   }
 
   async createCommunityPost(communityId, userId, postData) {
     await this.initialize();
-    
-    const community = await this.getCommunity(communityId);
-    if (!community) throw new Error('Community not found');
-    
-    const membership = community.members?.[userId];
-    if (!membership) {
-      throw new Error('Must be a member to post');
-    }
-
-    const postId = doc(collection(this.db, 'posts')).id;
-    const post = {
-      id: postId,
-      authorId: userId,
+    // The post is written server-side: membership and the content-approval
+    // status are decided there, and the community's postCount/activityScore
+    // live on the now server-only community document.
+    const result = await callFunction(FUNCTIONS.CREATE_COMMUNITY_POST, {
       communityId,
-      content: postData.content,
-      type: postData.type || 'text',
-      media: postData.media || [],
-      visibility: 'community',
-      allowComments: postData.allowComments !== false,
-      allowSharing: postData.allowSharing !== false,
-      stats: {
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        saves: 0,
-        views: 0
-      },
-      reactions: {
-        like: 0,
-        love: 0,
-        laugh: 0,
-        celebrate: 0,
-        support: 0,
-        insightful: 0
-      },
-      hashtags: postData.hashtags || [],
-      mentions: postData.mentions || [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      publishedAt: serverTimestamp(),
-      status: community.moderation?.contentApproval ? 'pending' : 'published',
-      isDeleted: false
-    };
-
-    await setDoc(doc(this.db, 'posts', postId), post);
-
-    await updateDoc(doc(this.db, 'communities', communityId), {
-      'stats.postCount': increment(1),
-      'stats.activityScore': increment(10),
-      updatedAt: serverTimestamp()
+      post: postData || {},
     });
-
-    return post;
+    return result?.post;
   }
 
   async getCommunityPosts(communityId, options = {}) {
@@ -770,15 +299,18 @@ class CommunityService {
     
     const { page = 1, sortBy = 'recent', status = 'published' } = options;
     
+    // The list rule proves a community feed only via
+    // `communityId == X` + `visibility == 'community'` + `status == 'published'`
+    // + `isDeleted == false`, and only when X is public or the viewer is a
+    // member. 'all' cannot be expressed to the rule, so it resolves to the
+    // published feed; a non-published status query is denied by the rule.
     let q = query(
       collection(this.db, 'posts'),
       where('communityId', '==', communityId),
-      where('isDeleted', '==', false)
+      where('visibility', '==', 'community'),
+      where('isDeleted', '==', false),
+      where('status', '==', status === 'all' ? 'published' : status)
     );
-
-    if (status !== 'all') {
-      q = query(q, where('status', '==', status));
-    }
 
     if (sortBy === 'recent') {
       q = query(q, orderBy('createdAt', 'desc'));
@@ -792,18 +324,11 @@ class CommunityService {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
+  // Moderation actions are audited server-side by the community callables
+  // (functions/communities.js -> writeAudit -> moderation_logs). There is no
+  // client-writable audit path; moderation_logs is server-write-only.
   async logModerationAction(communityId, moderatorId, action, targetUserId = null, reason = '') {
-    await this.initialize();
-    
-    const logId = doc(collection(this.db, 'moderation_logs')).id;
-    await setDoc(doc(this.db, 'moderation_logs', logId), {
-      communityId,
-      moderatorId,
-      action,
-      targetUserId,
-      reason,
-      createdAt: serverTimestamp()
-    });
+    return { success: false, reason: 'server_authoritative' };
   }
 
   async getModerationLogs(communityId, limitNum = 50) {

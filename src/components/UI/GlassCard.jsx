@@ -1,6 +1,6 @@
 // src/components/UI/GlassCard.jsx
 
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from "react";
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 

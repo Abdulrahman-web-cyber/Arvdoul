@@ -1695,6 +1695,282 @@ exports.purchaseMarketplaceItem = functions.https.onCall(async (data, context) =
   } catch (err) { throw handleError(err); }
 });
 
+// ----------------------------------------------------------------------
+// 14. sendLiveGift – server-authoritative live-stream gift.
+//
+// The client (`liveService.sendLiveGift`) used to debit the sender via
+// `spendCoins` (coins -> system:coin_supply) and then `addDoc` a
+// `live_gifts` row, but it NEVER credited the streamer. Every live gift
+// therefore destroyed the coins: the sender's balance dropped, the
+// streamer's never rose, and `live_streams.stats.coinsEarned` was
+// incremented client-side (forgeable) with no ledger behind it. The
+// `live_gifts` rule is `write: if false`, so that client write was denied
+// outright — the gift silently vanished after the debit.
+//
+// Gifts now move real value in ONE server transaction: sender -> streamer,
+// priced from the shared GIFT_VALUES table, with the same abuse gates as
+// `sendGift`. A client cannot name the price or the recipient.
+// ----------------------------------------------------------------------
+exports.sendLiveGift = functions.https.onCall(async (data, context) => {
+  try {
+    const senderUid = getUserIdFromContext(context);
+    const { streamId, giftType, idempotencyKey } = data || {};
+    if (!streamId || typeof streamId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'streamId is required.');
+    }
+    if (!giftType || typeof giftType !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'giftType is required.');
+    }
+
+    // Price comes ONLY from the shared table — a client cannot name the cost.
+    const giftValue = DEFAULT_GIFT_TYPES[giftType];
+    if (!giftValue) {
+      throw new functions.https.HttpsError('invalid-argument', `Unknown gift type: ${giftType}`);
+    }
+
+    await checkRateLimit(senderUid, 'sendLiveGift', 30, 60000);
+    await enforceDailyLimit(senderUid, giftValue, 'giftSent', 50000);
+    await checkNewAccountAbuse(senderUid, giftValue);
+
+    const key = generateIdempotencyKey(idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    // Fraud gate runs before the transaction (the helper opens its own
+    // transaction, and Firestore does not allow nested transactions).
+    const streamPre = await admin.firestore().collection('live_streams').doc(streamId).get();
+    if (streamPre.exists && streamPre.data().userId) {
+      await checkMutualTransfer(senderUid, streamPre.data().userId, giftValue);
+    }
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== senderUid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
+
+      const streamRef = admin.firestore().collection('live_streams').doc(streamId);
+      const senderRef = admin.firestore().collection('users').doc(senderUid);
+      const [streamSnap, senderSnap] = await Promise.all([t.get(streamRef), t.get(senderRef)]);
+      if (!streamSnap.exists) throw new functions.https.HttpsError('not-found', 'Stream not found.');
+      if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
+
+      const stream = streamSnap.data();
+      if (stream.status !== 'live') throw new functions.https.HttpsError('failed-precondition', 'Stream is not live.');
+      if (!stream.monetization?.giftsEnabled) {
+        throw new functions.https.HttpsError('failed-precondition', 'Gifts are disabled for this stream.');
+      }
+      const recipientUid = stream.userId;
+      if (!recipientUid) throw new functions.https.HttpsError('internal', 'Stream has no owner.');
+      if (recipientUid === senderUid) {
+        throw new functions.https.HttpsError('invalid-argument', 'Cannot gift your own stream.');
+      }
+
+      const senderData = senderSnap.data();
+      const available = getAvailableBalance(senderData);
+      if (available < giftValue) {
+        throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
+      }
+
+      const recipientRef = admin.firestore().collection('users').doc(recipientUid);
+      const recipientSnap = await t.get(recipientRef);
+      if (!recipientSnap.exists) throw new functions.https.HttpsError('not-found', 'Streamer not found.');
+
+      const senderNewBalance = (senderData.coins || 0) - giftValue;
+      const recipientNewBalance = (recipientSnap.data().coins || 0) + giftValue;
+      t.update(senderRef, { coins: senderNewBalance });
+      t.update(recipientRef, { coins: recipientNewBalance });
+
+      t.update(streamRef, {
+        'stats.totalGifts': admin.firestore.FieldValue.increment(1),
+        'stats.coinsEarned': admin.firestore.FieldValue.increment(giftValue),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const giftRef = admin.firestore().collection('live_gifts').doc();
+      t.set(giftRef, {
+        streamId,
+        senderId: senderUid,
+        recipientId: recipientUid,
+        giftType,
+        coinValue: giftValue,
+        idempotencyKey: key,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const txRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(txRef, {
+        userId: senderUid, type: 'debit', amount: giftValue, reason: 'live_gift',
+        relatedUserId: recipientUid, metadata: { streamId, giftType },
+        idempotencyKey: key, balanceAfter: senderNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+
+      createLedgerEntry(t, `users:${senderUid}`, `users:${recipientUid}`, giftValue, {
+        reason: 'live_gift', streamId, giftType, transactionId: giftRef.id,
+      });
+
+      const resultData = { success: true, newBalance: senderNewBalance, giftId: giftRef.id, recipientId: recipientUid, coinValue: giftValue };
+      t.set(ledgerRef, {
+        function: 'sendLiveGift',
+        userId: senderUid,
+        result: resultData,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      enqueuePush(recipientUid, {
+        title: 'New live gift!',
+        body: `You received a ${giftType} gift worth ${giftValue} coins`,
+        type: 'gift_received',
+        data: { from: senderUid, streamId, giftType },
+      }).catch(console.warn);
+
+      return resultData;
+    });
+
+    logEvent('live_gift_sent', { sender: senderUid, streamId, giftType, value: giftValue });
+    await awardXpSafe(senderUid, 'gift_sent', { source: result.giftId });
+    if (result && result.recipientId && result.recipientId !== senderUid) {
+      await awardXpSafe(result.recipientId, 'gift_received', { source: result.giftId });
+    }
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
+// ----------------------------------------------------------------------
+// 15. sendLiveTip – server-authoritative live-stream tip.
+//
+// Same defect class as sendLiveGift: the client debited the sender and
+// wrote an unreadable `live_tips` row, but the streamer was never
+// credited. Tips now transfer real coins sender -> streamer in one
+// transaction, with the stream's own TIPS.MIN/MAX bounds enforced
+// server-side.
+// ----------------------------------------------------------------------
+const LIVE_TIP_MIN = 1;
+const LIVE_TIP_MAX = 1000;
+
+exports.sendLiveTip = functions.https.onCall(async (data, context) => {
+  try {
+    const senderUid = getUserIdFromContext(context);
+    const { streamId, amount, idempotencyKey } = data || {};
+    if (!streamId || typeof streamId !== 'string') {
+      throw new functions.https.HttpsError('invalid-argument', 'streamId is required.');
+    }
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < LIVE_TIP_MIN || amount > LIVE_TIP_MAX) {
+      throw new functions.https.HttpsError('invalid-argument', `amount must be between ${LIVE_TIP_MIN} and ${LIVE_TIP_MAX}.`);
+    }
+
+    await checkRateLimit(senderUid, 'sendLiveTip', 10, 60000);
+    await enforceDailyLimit(senderUid, amount, 'tipSent', 50000);
+    await checkNewAccountAbuse(senderUid, amount);
+
+    const key = generateIdempotencyKey(idempotencyKey);
+    const ledgerRef = admin.firestore().collection('idempotency_ledger').doc(key);
+
+    // Fraud gate before the transaction (nested transactions are invalid).
+    const streamPre = await admin.firestore().collection('live_streams').doc(streamId).get();
+    if (streamPre.exists && streamPre.data().userId) {
+      await checkMutualTransfer(senderUid, streamPre.data().userId, amount);
+    }
+
+    const result = await createFirestoreTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      if (ledgerSnap.exists) {
+        if (ledgerSnap.data().userId !== senderUid) {
+          throw new functions.https.HttpsError('permission-denied', 'Idempotency key belongs to another user.');
+        }
+        return ledgerSnap.data().result;
+      }
+
+      const streamRef = admin.firestore().collection('live_streams').doc(streamId);
+      const senderRef = admin.firestore().collection('users').doc(senderUid);
+      const [streamSnap, senderSnap] = await Promise.all([t.get(streamRef), t.get(senderRef)]);
+      if (!streamSnap.exists) throw new functions.https.HttpsError('not-found', 'Stream not found.');
+      if (!senderSnap.exists) throw new functions.https.HttpsError('not-found', 'Sender not found.');
+
+      const stream = streamSnap.data();
+      if (stream.status !== 'live') throw new functions.https.HttpsError('failed-precondition', 'Stream is not live.');
+      if (!stream.monetization?.tipsEnabled) {
+        throw new functions.https.HttpsError('failed-precondition', 'Tips are disabled for this stream.');
+      }
+      const recipientUid = stream.userId;
+      if (!recipientUid) throw new functions.https.HttpsError('internal', 'Stream has no owner.');
+      if (recipientUid === senderUid) {
+        throw new functions.https.HttpsError('invalid-argument', 'Cannot tip your own stream.');
+      }
+
+      const senderData = senderSnap.data();
+      const available = getAvailableBalance(senderData);
+      if (available < amount) {
+        throw new functions.https.HttpsError('failed-precondition', 'Insufficient available coins.');
+      }
+
+      const recipientRef = admin.firestore().collection('users').doc(recipientUid);
+      const recipientSnap = await t.get(recipientRef);
+      if (!recipientSnap.exists) throw new functions.https.HttpsError('not-found', 'Streamer not found.');
+
+      const senderNewBalance = (senderData.coins || 0) - amount;
+      const recipientNewBalance = (recipientSnap.data().coins || 0) + amount;
+      t.update(senderRef, { coins: senderNewBalance });
+      t.update(recipientRef, { coins: recipientNewBalance });
+
+      t.update(streamRef, {
+        'stats.totalTips': admin.firestore.FieldValue.increment(1),
+        'stats.coinsEarned': admin.firestore.FieldValue.increment(amount),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const tipRef = admin.firestore().collection('live_tips').doc();
+      t.set(tipRef, {
+        streamId,
+        senderId: senderUid,
+        recipientId: recipientUid,
+        amount,
+        idempotencyKey: key,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const txRef = admin.firestore().collection('coin_transactions').doc();
+      t.set(txRef, {
+        userId: senderUid, type: 'debit', amount, reason: 'live_tip',
+        relatedUserId: recipientUid, metadata: { streamId },
+        idempotencyKey: key, balanceAfter: senderNewBalance,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+
+      createLedgerEntry(t, `users:${senderUid}`, `users:${recipientUid}`, amount, {
+        reason: 'live_tip', streamId, transactionId: tipRef.id,
+      });
+
+      const resultData = { success: true, newBalance: senderNewBalance, tipId: tipRef.id, recipientId: recipientUid };
+      t.set(ledgerRef, {
+        function: 'sendLiveTip',
+        userId: senderUid,
+        result: resultData,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      enqueuePush(recipientUid, {
+        title: 'You received a tip!',
+        body: `You received a ${amount} coin tip`,
+        type: 'tip_received',
+        data: { from: senderUid, streamId, amount },
+      }).catch(console.warn);
+
+      return resultData;
+    });
+
+    logEvent('live_tip_sent', { sender: senderUid, streamId, amount });
+    return result;
+  } catch (err) { throw handleError(err); }
+});
+
 // Shared internals exposed to sibling modules (admin.js) so the money-path
 // helpers exist exactly once: the single configured Stripe client and the
 // double-entry ledger writer. Not deployed as callables.

@@ -11,21 +11,8 @@
  * @component
  */
 
-import React, { memo, useState, useEffect, useCallback } from 'react';
-import { 
-  X, 
-  BadgeCheck, 
-  ShieldCheck, 
-  CheckCircle2, 
-  Clock, 
-  ExternalLink, 
-  Sparkles, 
-  AlertCircle,
-  Send,
-  Loader2,
-  Lock,
-  UserCheck
-} from 'lucide-react';
+import { memo, useState, useEffect } from "react";
+import { X, BadgeCheck, ShieldCheck, CheckCircle2, Clock, Sparkles, AlertCircle, Send, Loader2, Lock } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';

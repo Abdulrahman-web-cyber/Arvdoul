@@ -13,7 +13,6 @@
  */
 
 import fs from 'node:fs';
-import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -59,6 +58,23 @@ describe('firestore.rules syntax', () => {
     expect(rules).toContain('isMessageShardCollection');
     expect(rules).toMatch(/match\s+\/\{messageShardCollection\}\/\{messageId\}/);
     expect(rules).toContain("collection.matches('messages_[0-9]{4}_[0-9]{2}')");
+  });
+
+  test('no read rule evaluates request.resource (null on read → denies everyone)', () => {
+    // `request.resource` exists only for create/update. On a read it is null, so
+    // `request.resource.data.x` throws and the rule denies the read for
+    // EVERYONE — `withdrawal_requests` shipped as `allow read, create: if …
+    // request.resource.data.userId == uid()`, which silently zeroed the wallet's
+    // pending breakdown and the admin payout queue. Reads must key on the
+    // stored `resource.data` instead. This guard fails on the read shape.
+    const offenders = [];
+    for (const m of rules.matchAll(/^\s*allow\s+([a-z, ]+?)\s*:\s*if\s+([\s\S]*?);/gm)) {
+      const verbs = m[1].split(',').map((v) => v.trim());
+      if (verbs.includes('read') && /request\.resource\./.test(m[2])) {
+        offenders.push(m[0].trim().slice(0, 110));
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -354,6 +370,98 @@ describe('firestore.rules adversarial checks (emulator)', () => {
       });
       const carol = env.authenticatedContext('carol').firestore();
       await assertSucceeds(setDoc(doc(carol, 'conversations/direct_carol_dave'), dm('carol', 'dave')));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('message reactions are readable via the collection-group query (N098)', async () => {
+    // `messagesService.getMessages` merges reactions with ONE
+    // `collectionGroup('reactions')` query. Firestore authorizes a
+    // collection-group query only through a recursive-wildcard rule; the
+    // per-subcollection rule cannot, so without the `match /{path=**}/reactions`
+    // block the query failed `list` and every reaction was silently dropped.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, collectionGroup, query, where, getDocs } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'conversations/c1'), { participants: ['alice', 'bob'] });
+        await setDoc(doc(db, 'conversations/c1/messages/m1'), { senderId: 'bob', text: 'hi' });
+        await setDoc(doc(db, 'conversations/c1/messages/m1/reactions/alice'),
+          { emoji: '❤️', conversationId: 'c1', messageId: 'm1' });
+        // supergroup shard layout must resolve through the same rule
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2'), { senderId: 'bob', text: 'hi2' });
+        await setDoc(doc(db, 'conversations/c1/messages_2026_11/m2/reactions/bob'),
+          { emoji: '🔥', conversationId: 'c1', messageId: 'm2' });
+      });
+      const cgQuery = (db) => query(
+        collectionGroup(db, 'reactions'),
+        where('conversationId', '==', 'c1'),
+        where('messageId', 'in', ['m1', 'm2'])
+      );
+      await assertSucceeds(getDocs(cgQuery(env.authenticatedContext('alice').firestore())));
+      await assertFails(getDocs(cgQuery(env.authenticatedContext('carol').firestore())));
+    } finally {
+      await env.cleanup();
+    }
+  });
+
+  test('a username doc cannot be hijacked by another user (N102)', async () => {
+    // `usernames/{name}` grants `create, update: request.resource.data.userId == uid()`.
+    // For an UPDATE that compares the NEW userId, so any signed-in user could
+    // overwrite any claimed username doc with their own userId — stealing the
+    // username; every share/QR link for it then resolved to the attacker.
+    if (!reachable) {
+      console.warn(`[firestoreRulesCompile] emulator not reachable at ${emulatorHost}; skipping live checks`);
+      return;
+    }
+    const { initializeTestEnvironment, assertFails, assertSucceeds } = await import('@firebase/rules-unit-testing');
+    const { doc, setDoc, getDoc } = await import('firebase/firestore');
+
+    const env = await initializeTestEnvironment({
+      projectId: 'arvdoul-rules-test',
+      firestore: { rules, host: emulatorHost.split(':')[0], port: Number(emulatorHost.split(':')[1]) },
+    });
+    try {
+      await env.clearFirestore();
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'usernames/alice'), { userId: 'alice', username: 'alice' });
+      });
+      const alice = env.authenticatedContext('alice').firestore();
+      const bob = env.authenticatedContext('bob').firestore();
+
+      // Bob must not be able to steal alice's username doc...
+      await assertFails(setDoc(doc(bob, 'usernames/alice'), { userId: 'bob', username: 'alice' }));
+      // ...nor claim a brand-new name as someone else's userId.
+      await assertFails(setDoc(doc(bob, 'usernames/newname'), { userId: 'alice', username: 'newname' }));
+      // The owner may re-assert their own doc (createUserProfile merge set)...
+      await assertSucceeds(setDoc(doc(alice, 'usernames/alice'), { userId: 'alice', username: 'alice' }, { merge: true }));
+      // ...and a fresh user may claim an unclaimed name.
+      await assertSucceeds(setDoc(doc(bob, 'usernames/bobname'), { userId: 'bob', username: 'bobname' }));
+
+      // Read back through a normal (rules-enabled) context: `usernames` is
+      // world-readable, and `withSecurityRulesDisabled` does not return the
+      // callback value.
+      const after = await getDoc(doc(alice, 'usernames/alice'));
+      expect(after.data().userId).toBe('alice');
+
+      // N103 — previous_usernames squatting: carol cannot pre-create a history
+      // doc for a name she never held, but alice (who owns it) can record it.
+      await assertFails(setDoc(doc(env.authenticatedContext('carol').firestore(), 'previous_usernames/alice'),
+        { userId: 'carol', oldUsername: 'alice', currentUsername: 'carol2' }));
+      await assertSucceeds(setDoc(doc(alice, 'previous_usernames/alice'),
+        { userId: 'alice', oldUsername: 'alice', currentUsername: 'alice2' }));
     } finally {
       await env.cleanup();
     }

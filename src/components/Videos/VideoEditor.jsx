@@ -2,27 +2,11 @@
 //
 // Video editing capabilities with trim, filters, text, music
 
-import React, { useState, useRef, useCallback, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X,
-  Scissors,
-  Sparkles,
-  Type,
-  Music,
-  Mic,
-  Gauge,
-  Image,
-  Calendar,
-  Check,
-  RotateCcw,
-  Play,
-  Pause,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { useState, useRef, memo } from "react";
+import { motion } from "framer-motion";
+import { X, Scissors, Sparkles, Type, Music, Gauge, Image, Calendar, Check, Play, Pause } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
-import { SPRING_ANIMATION, formatDuration } from '../../utils/videoUtils';
+import { formatDuration } from "../../utils/videoUtils";
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
 

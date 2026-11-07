@@ -6,10 +6,10 @@
  * • Does not obstruct app interactions, respects safe-area-inset
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wifi, WifiOff, RefreshCw, CheckCircle2, Cloud, ArrowUpCircle } from 'lucide-react';
+import { WifiOff, RefreshCw, CheckCircle2 } from "lucide-react";
 import { backgroundSyncService } from '../../services/BackgroundSyncService.js';
 import { subscribeSyncStatus } from '../../offline/syncEngine.js';
 import { useTheme } from '../../context/ThemeContext';

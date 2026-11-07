@@ -36,6 +36,47 @@ function extractNestedPaths(source) {
   return out;
 }
 
+/**
+ * Resolves nested config constants to their string values, e.g.
+ *   SESSION: { COLLECTION: 'user_sessions' }  ->  SESSION.COLLECTION = user_sessions
+ * A call like `collection(db, FEED_CONFIG.SESSION.COLLECTION)` is invisible to a
+ * literal-only scan — which is how `user_sessions` shipped with no rule at all
+ * while the coverage test stayed green. A small brace-tracking tokenizer ignores
+ * strings/comments and records `<object path>.<key> = <string>`.
+ */
+function collectConstPaths(src) {
+  const map = new Map();
+  const stack = [];
+  let i = 0;
+  let ident = '';
+  let pendingKey = null;
+  const n = src.length;
+  const flush = () => { if (ident) pendingKey = ident; ident = ''; };
+  while (i < n) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') { while (i < n && src[i] !== '\n') i += 1; continue; }
+    if (c === '/' && src[i + 1] === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i += 1; i += 2; continue; }
+    if (c === "'" || c === '"' || c === '`') {
+      const q = c;
+      let j = i + 1;
+      let val = '';
+      while (j < n && src[j] !== q) { if (src[j] === '\\') j += 1; val += src[j]; j += 1; }
+      i = j + 1;
+      if (pendingKey && /^[A-Za-z_][\w]*$/.test(val)) map.set([...stack, pendingKey].join('.'), val);
+      pendingKey = null;
+      continue;
+    }
+    if (/[A-Za-z_$]/.test(c) || (ident && /[\w$]/.test(c))) { ident += c; i += 1; continue; }
+    if (c === ':' && ident) { pendingKey = ident; ident = ''; i += 1; continue; }
+    if (c === '{') { stack.push(pendingKey || '_'); pendingKey = null; i += 1; continue; }
+    if (c === '}') { stack.pop(); pendingKey = null; ident = ''; i += 1; continue; }
+    if (c === ',' || c === ';' || c === '\n') { pendingKey = null; ident = ''; i += 1; continue; }
+    flush();
+    i += 1;
+  }
+  return map;
+}
+
 // Parse `match /a/{x} {` blocks using indentation, the file's uniform style.
 // The path pattern must include the `{var}` segments, not stop at the brace.
 function declaredPaths(rules) {
@@ -96,9 +137,20 @@ describe('Firestore nested rule coverage', () => {
     const referenced = new Set();
     for (const file of walk(path.join(ROOT, 'src'))) {
       const src = fs.readFileSync(file, 'utf8');
+      // Direct literal: `collection(db, 'posts')` / `doc(db, 'users', uid)`.
       const re = /(?:collection|doc)\(\s*[^,()]+,\s*'([A-Za-z_][\w]*)'/g;
       let m;
       while ((m = re.exec(src))) referenced.add(m[1]);
+      // Resolved config constant: `collection(db, FEED_CONFIG.SESSION.COLLECTION)`.
+      // These indirections are invisible to a literal-only scan, which is how
+      // `user_sessions` (feed session state) shipped with no rule at all while
+      // this test stayed green — every session load returned nothing and every
+      // save was denied. Resolve the const to its string value and check that.
+      const consts = collectConstPaths(src);
+      const ref = /(?:collection|doc)\(\s*[^,()]+,\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*[,)]/g;
+      while ((m = ref.exec(src))) {
+        if (consts.has(m[1])) referenced.add(consts.get(m[1]));
+      }
     }
     const declaredTop = new Set(
       [...rules.matchAll(/match\s+\/([A-Za-z_][\w]*)/g)].map((m) => m[1])

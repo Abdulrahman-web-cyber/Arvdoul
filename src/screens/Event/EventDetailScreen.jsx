@@ -1,18 +1,14 @@
 // src/screens/Event/EventDetailScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from "framer-motion";
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, Calendar, MapPin, Users, Clock, Share2, 
-  Ticket, Video, Globe, Settings, Check, X, MessageCircle,
-  Star, UserPlus, UserMinus, ExternalLink
-} from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Clock, Share2, Ticket, Video, Globe, Settings, Check, X, ExternalLink } from "lucide-react";
 import { getEventService } from '../../services/eventService';
 import { useAuth } from '../../context/AuthContext';
 import { copyToClipboard } from '../../utils/shareUtils';
-import { format, formatDistanceToNow, isPast, isFuture, isToday } from 'date-fns';
+import { format, isPast, isFuture, isToday } from "date-fns";
 
 const EventDetailScreen = () => {
   const { eventId } = useParams();

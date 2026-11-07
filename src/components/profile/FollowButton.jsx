@@ -14,7 +14,7 @@
  * @property {'sm'|'md'|'lg'} [size='md'] - Button size
  */
 
-import React, { memo, useCallback } from 'react';
+import { memo, useCallback } from "react";
 import { cn } from '../../lib/utils';
 import { UserPlus, UserMinus, Loader2 } from 'lucide-react';
 

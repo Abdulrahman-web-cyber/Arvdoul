@@ -2,7 +2,7 @@
 //
 // TikTok-style vertical scrolling video feed with gesture support, interactive modals, and preloading
 
-import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
+import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSwipeable } from 'react-swipeable';
 import { useVideoStore } from '../../store/videoStore';

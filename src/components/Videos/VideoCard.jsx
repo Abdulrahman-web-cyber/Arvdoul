@@ -2,44 +2,14 @@
 //
 // Immersive full-screen vertical player with interactive action rail, creator overlay, and playback controls
 
-import React, { useRef, useState, useEffect, useCallback, memo } from 'react';
+import { useRef, useState, useEffect, useCallback, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize,
-  Minimize,
-  PictureInPicture2,
-  Settings,
-  Download,
-  Bookmark,
-  Flag,
-  Heart,
-  MessageCircle,
-  Share2,
-  Repeat,
-  Loader2,
-  Music,
-  BadgeCheck,
-  Plus,
-  Check,
-  Coins,
-  Sparkles,
-  Users,
-  MoreHorizontal,
-  ChevronRight,
-  Gift,
-  ArrowUpCircle,
-  MoveHorizontal,
-  X,
-} from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, PictureInPicture2, Download, Bookmark, Flag, Heart, MessageCircle, Share2, Repeat, Maximize, Music, BadgeCheck, Plus, Check, Sparkles, MoreHorizontal, ChevronRight, Gift, ArrowUpCircle, MoveHorizontal, X } from "lucide-react";
 import { useVideoStore } from '../../store/videoStore';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatDuration, ARVDOUL_GRADIENT, SPRING_ANIMATION, formatViewCount } from '../../utils/videoUtils';
+import { formatDuration, formatViewCount } from "../../utils/videoUtils";
 import useDoubleTap from '../../hooks/useDoubleTap.js';
 import { toast } from 'sonner';
 import PropTypes from 'prop-types';
@@ -611,6 +581,15 @@ const VideoCard = memo(({
                 >
                   <span className="text-white/80">Loop</span>
                   <Repeat className={`w-4 h-4 ${isLooping ? 'text-cyan-400' : 'text-white/40'}`} />
+                </button>
+
+                {/* Fullscreen */}
+                <button
+                  onClick={handleFullscreen}
+                  className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl hover:bg-white/10 text-sm font-medium transition-colors"
+                >
+                  <span className="text-white/80">Fullscreen</span>
+                  <Maximize className={`w-4 h-4 ${isFullscreen ? 'text-cyan-400' : 'text-white/40'}`} />
                 </button>
 
                 {/* PiP */}

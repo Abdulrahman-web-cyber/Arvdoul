@@ -1,0 +1,56 @@
+/**
+ * Notifications screen wiring guard.
+ *
+ * The Firestore notifications subscription (`notificationsService
+ * .subscribeToUserNotifications`) emits a change *batch*:
+ *
+ *     { type: 'update', added: [...], modified: [...], subscriptionId }
+ *
+ * The screen, however, only accepted a bare array
+ * (`if (Array.isArray(payload) && payload.length > 0)`), so the branch never
+ * ran: every real notification was silently dropped and the Alerts tab stayed
+ * empty. On top of that:
+ *
+ *  - the screen's icon / gift-modal / Live-navigation logic was keyed on legacy
+ *    type aliases (`post_like`, `coin_gift`, `live_stream`) while the service
+ *    emits canonical ids (`like`, `gift_received`, `live_started`), so those
+ *    branches were dead even once the payload arrived;
+ *  - `handleMarkRead` flipped only local state and never called
+ *    `markNotificationAsRead`, so the server unread counter (and the nav badge)
+ *    never cleared.
+ *
+ * @jest-environment node
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+describe('NotificationsScreen consumes the real subscription payload', () => {
+  const screen = read('src/screens/NotificationsScreen.jsx');
+
+  test('the change batch ({ added, modified }) is read, not only a bare array', () => {
+    expect(screen).toMatch(/payload\?\.added/);
+    expect(screen).toMatch(/payload\?\.modified/);
+    // The old bug: an array-only guard that discarded the real payload.
+    expect(screen).not.toMatch(/if \(Array\.isArray\(firestoreNotifs\)/);
+  });
+
+  test('canonical service type ids are normalised to the aliases the UI renders', () => {
+    expect(screen).toMatch(/normalizeNotificationType/);
+    expect(screen).toMatch(/gift_received:\s*'coin_gift'/);
+    expect(screen).toMatch(/live_started:\s*'live_stream'/);
+    expect(screen).toMatch(/like:\s*'post_like'/);
+    // The mapped type must be what the icon/gift logic compares against.
+    expect(screen).toMatch(/const type = normalizeNotificationType\(fn\.type\)/);
+  });
+
+  test('marking a single notification read is persisted, not just local', () => {
+    const start = screen.indexOf('const handleMarkRead');
+    const body = screen.slice(start, screen.indexOf('\n  };', start));
+    expect(body).toMatch(/notificationsService\.markNotificationAsRead\(/);
+  });
+});

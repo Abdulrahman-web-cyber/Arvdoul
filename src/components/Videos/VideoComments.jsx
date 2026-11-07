@@ -1,19 +1,8 @@
 // src/components/Videos/VideoComments.jsx
 
-import React, { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  X,
-  Heart,
-  Reply,
-  MoreHorizontal,
-  Send,
-  BadgeCheck,
-  Smile,
-  Flame,
-  Crown,
-  Sparkles
-} from 'lucide-react';
+import { X, Heart, Reply, Send, BadgeCheck, Smile, Crown, Sparkles } from "lucide-react";
 import { useTheme } from '../../context/ThemeContext';
 import { formatTimeAgo, SPRING_ANIMATION } from '../../utils/videoUtils';
 import { toast } from 'sonner';

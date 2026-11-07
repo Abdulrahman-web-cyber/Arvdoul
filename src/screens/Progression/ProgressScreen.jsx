@@ -2,34 +2,12 @@
 //
 // Answers: Where am I? Why am I here? What did I accomplish? What can I unlock? What comes next?
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  levelSystemService,
-  getLevelInfo,
-  getCitizenTier,
-  getPerksForLevel,
-  LEVEL_PERKS,
-  LEVEL_GATES,
-  getPrestigeInfo,
-  XP_RULES,
-} from '../../services/levelSystemService';
-import {
-  ArrowLeft,
-  Flame,
-  Award,
-  ChevronRight,
-  Sparkles,
-  Lock,
-  Unlock,
-  Coins,
-  ShieldCheck,
-  TrendingUp,
-  RefreshCw,
-  Share2,
-} from 'lucide-react';
+import { levelSystemService, getCitizenTier, getPerksForLevel, LEVEL_PERKS, getPrestigeInfo, XP_RULES } from "../../services/levelSystemService";
+import { Flame, ChevronRight, Lock, Coins, ShieldCheck, RefreshCw } from "lucide-react";
 import { toast } from 'sonner';
 
 export default function ProgressScreen() {
@@ -40,12 +18,10 @@ export default function ProgressScreen() {
   const profile = userProfile || user;
   const currentUid = profile?.uid || user?.uid;
 
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [levelInfo, setLevelInfo] = useState(null);
   const [activeStreak, setActiveStreak] = useState(1);
   const [activeDaysCount, setActiveDaysCount] = useState(1);
-  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
 
   const isDark = theme === 'dark' || theme === 'midnight';
 
@@ -59,7 +35,6 @@ export default function ProgressScreen() {
     } catch {
       toast.error('Failed to load live progression data');
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, [currentUid, profile]);

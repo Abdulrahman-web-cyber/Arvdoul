@@ -5,7 +5,7 @@
 // starts empty unless a recorded/uploaded source is handed over in route state,
 // and nothing on screen shows a level or a clip that does not exist.
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
@@ -73,6 +73,8 @@ export default function AudioEditorScreen() {
       try {
         const project = audioEditorService.createProject({
           name: location.state?.title || 'Recorded Audio',
+          sourceTrackId: location.state?.trackId,
+          sourceArtist: location.state?.artist,
         });
         const info = await audioEditorService.loadAudio(audioUrl);
         const peaks = audioEditorService.generateWaveform();

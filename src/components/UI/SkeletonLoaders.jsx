@@ -3,7 +3,6 @@
 // Lightweight, non-intrusive loaders adhering strictly to the TopAppLoadingBanner design.
 // Zero screen-covering skeletons, zero layout interference.
 
-import React from "react";
 import { TopAppLoadingBanner } from "../Navigation/RouteProgressBar.jsx";
 
 export function Shimmer({ className = "" }) {

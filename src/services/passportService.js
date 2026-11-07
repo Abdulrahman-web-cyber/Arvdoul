@@ -11,7 +11,7 @@ import {
   getRoyalEligibility,
   LEVEL_GATES,
 } from './levelSystemService.js';
-import { getProfileUrl, getPassportUrl } from '../utils/shareUtils.js';
+import { getPassportUrl } from "../utils/shareUtils.js";
 import { resolveCapabilities } from './profileCapabilityEngine.js';
 import { pickDisplayName, resolveVerifiedFlag, resolveCreatorFlag, readStandingScore, projectProfileForViewer } from './profileReadModel.js';
 import { logger } from '../utils/Logger.js';

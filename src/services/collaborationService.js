@@ -2,22 +2,8 @@
 
 import { logger } from '../utils/Logger.js';
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-  increment,
-} from 'firebase/firestore';
-import { v4 as uuidv4 } from 'uuid';
+import { collection, doc, getDoc, getDocs, query, where, orderBy, limit } from "firebase/firestore";
+import { callFunction, FUNCTIONS } from './callableService.js';
 
 export const COLLABORATION_CONFIG = {
   // Hard ceiling for any single collaboration list read.
@@ -176,30 +162,14 @@ class CollaborationService {
 
   async createProject(projectData) {
     await this.ensureInitialized();
-
-    const projectId = uuidv4();
-    const project = {
-      id: projectId,
-      name: projectData.name || 'Untitled Project',
-      description: projectData.description || '',
-      ownerId: projectData.ownerId,
-      contentType: projectData.contentType || 'video',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      settings: {
-        requireReview: projectData.requireReview ?? true,
-        autoPublish: false,
-        notifyOnChanges: true,
-      },
-    };
-
-    const projectRef = doc(this.firestore, 'collaboration_projects', projectId);
-    await setDoc(projectRef, project);
-
-    // Add owner as team member
-    await this.addTeamMember(projectId, projectData.ownerId, 'owner');
-
-    return project;
+    // Server-authoritative: the project document and its team/content
+    // subcollections are client-read-only (roles are privilege data).
+    const result = await callFunction(FUNCTIONS.CREATE_COLLAB_PROJECT, {
+      name: projectData.name,
+      description: projectData.description,
+      contentType: projectData.contentType,
+    });
+    return this.getProject(result.id);
   }
 
   async getProject(projectId) {
@@ -217,71 +187,19 @@ class CollaborationService {
 
   async updateProject(projectId, updates, userId, userRole) {
     await this.ensureInitialized();
-
-    if (!this.hasPermission(userRole, 'settings.edit')) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to update this project');
-    }
-
-    const projectRef = doc(this.firestore, 'collaboration_projects', projectId);
-    await updateDoc(projectRef, {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    });
-
+    await callFunction(FUNCTIONS.UPDATE_COLLAB_PROJECT, { projectId, updates });
     return this.getProject(projectId);
   }
 
   async deleteProject(projectId, userId, userRole) {
     await this.ensureInitialized();
-
-    if (userRole !== 'owner') {
-      throw new CollaborationError('permission_denied', 'Only the owner can delete this project');
-    }
-
-    const projectRef = doc(this.firestore, 'collaboration_projects', projectId);
-    await deleteDoc(projectRef);
-
-    // Delete all team members
-    const teamRef = collection(this.firestore, 'collaboration_projects', projectId, 'team');
-    const teamSnap = await getDocs(query(teamRef, limit(500)));
-    const batch = this.firestore.batch();
-    teamSnap.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-
-    // Delete all content versions
-    const contentRef = collection(this.firestore, 'collaboration_projects', projectId, 'content');
-    const contentSnap = await getDocs(query(contentRef, limit(500)));
-    const contentBatch = this.firestore.batch();
-    contentSnap.docs.forEach((doc) => contentBatch.delete(doc.ref));
-    await contentBatch.commit();
-
+    await callFunction(FUNCTIONS.DELETE_COLLAB_PROJECT, { projectId });
     return true;
   }
 
   async addTeamMember(projectId, userId, role, inviterId = null) {
     await this.ensureInitialized();
-
-    // Check if already a member
-    const existingMember = await this.getTeamMember(projectId, userId);
-    if (existingMember) {
-      throw new CollaborationError('already_member', 'User is already a team member');
-    }
-
-    // Check team size limit
-    const team = await this.getTeam(projectId);
-    if (team.length >= COLLABORATION_CONFIG.MAX_TEAM_SIZE) {
-      throw new CollaborationError('team_full', 'Team has reached maximum size');
-    }
-
-    const memberRef = doc(this.firestore, 'collaboration_projects', projectId, 'team', userId);
-    await setDoc(memberRef, {
-      userId,
-      role,
-      addedAt: serverTimestamp(),
-      addedBy: inviterId,
-      status: 'active',
-    });
-
+    await callFunction(FUNCTIONS.ADD_COLLAB_TEAM_MEMBER, { projectId, userId, role });
     return this.getTeamMember(projectId, userId);
   }
 
@@ -306,127 +224,31 @@ class CollaborationService {
 
   async updateMemberRole(projectId, userId, newRole, adminId, adminRole) {
     await this.ensureInitialized();
-
-    if (!this.canManageTeam(adminRole)) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to manage team members');
-    }
-
-    if (userId === adminId) {
-      throw new CollaborationError('self_update', 'Cannot update your own role');
-    }
-
-    const member = await this.getTeamMember(projectId, userId);
-    if (!member) {
-      throw new CollaborationError('member_not_found', 'Team member not found');
-    }
-
-    if (member.role === 'owner') {
-      throw new CollaborationError('owner_protected', 'Cannot change owner role');
-    }
-
-    const memberRef = doc(this.firestore, 'collaboration_projects', projectId, 'team', userId);
-    await updateDoc(memberRef, {
-      role: newRole,
-      updatedAt: serverTimestamp(),
-    });
-
+    await callFunction(FUNCTIONS.UPDATE_COLLAB_MEMBER_ROLE, { projectId, userId, newRole });
     return this.getTeamMember(projectId, userId);
   }
 
   async removeTeamMember(projectId, userId, adminId, adminRole) {
     await this.ensureInitialized();
-
-    if (!this.canManageTeam(adminRole)) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to remove team members');
-    }
-
-    if (userId === adminId) {
-      throw new CollaborationError('self_remove', 'Cannot remove yourself from the team');
-    }
-
-    const member = await this.getTeamMember(projectId, userId);
-    if (!member) {
-      throw new CollaborationError('member_not_found', 'Team member not found');
-    }
-
-    if (member.role === 'owner') {
-      throw new CollaborationError('owner_protected', 'Cannot remove the owner');
-    }
-
-    const memberRef = doc(this.firestore, 'collaboration_projects', projectId, 'team', userId);
-    await deleteDoc(memberRef);
-
+    await callFunction(FUNCTIONS.REMOVE_COLLAB_TEAM_MEMBER, { projectId, userId });
     return true;
   }
 
   async createInvite(projectId, email, role, inviterId) {
     await this.ensureInitialized();
-
-    const inviteId = uuidv4();
-    const invite = {
-      id: inviteId,
-      projectId,
-      email,
-      role,
-      invitedBy: inviterId,
-      status: 'pending',
-      createdAt: serverTimestamp(),
-      expiresAt: new Date(Date.now() + COLLABORATION_CONFIG.INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-    };
-
-    const inviteRef = doc(this.firestore, 'collaboration_invites', inviteId);
-    await setDoc(inviteRef, invite);
-
-    return invite;
+    const result = await callFunction(FUNCTIONS.CREATE_COLLAB_INVITE, { projectId, email, role });
+    return { id: result.inviteId, projectId, email, role, status: 'pending' };
   }
 
   async acceptInvite(inviteId, userId, userEmail) {
     await this.ensureInitialized();
-
-    const inviteRef = doc(this.firestore, 'collaboration_invites', inviteId);
-    const snap = await getDoc(inviteRef);
-
-    if (!snap.exists()) {
-      throw new CollaborationError('invite_not_found', 'Invite not found');
-    }
-
-    const invite = snap.data();
-
-    if (invite.status !== 'pending') {
-      throw new CollaborationError('invite_invalid', 'Invite is no longer valid');
-    }
-
-    if (new Date(invite.expiresAt) < new Date()) {
-      throw new CollaborationError('invite_expired', 'Invite has expired');
-    }
-
-    if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
-      throw new CollaborationError('email_mismatch', 'Email does not match invite');
-    }
-
-    // Add as team member
-    await this.addTeamMember(invite.projectId, userId, invite.role, invite.invitedBy);
-
-    // Mark invite as accepted
-    await updateDoc(inviteRef, {
-      status: 'accepted',
-      acceptedAt: serverTimestamp(),
-      acceptedBy: userId,
-    });
-
-    return this.getProject(invite.projectId);
+    const result = await callFunction(FUNCTIONS.ACCEPT_COLLAB_INVITE, { inviteId });
+    return this.getProject(result.projectId);
   }
 
   async declineInvite(inviteId, userId) {
     await this.ensureInitialized();
-
-    const inviteRef = doc(this.firestore, 'collaboration_invites', inviteId);
-    await updateDoc(inviteRef, {
-      status: 'declined',
-      declinedAt: serverTimestamp(),
-      declinedBy: userId,
-    });
-
+    await callFunction(FUNCTIONS.DECLINE_COLLAB_INVITE, { inviteId });
     return true;
   }
 
@@ -448,42 +270,18 @@ class CollaborationService {
 
   async createContentVersion(projectId, contentData, userId, userRole) {
     await this.ensureInitialized();
-
-    if (!this.canEditContent(userRole)) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to create content');
-    }
-
-    const versionId = uuidv4();
-    const version = {
-      id: versionId,
+    const result = await callFunction(FUNCTIONS.CREATE_COLLAB_CONTENT, {
+      projectId,
+      content: contentData,
+      notes: contentData?.notes,
+    });
+    return {
+      id: result.versionId,
       projectId,
       content: contentData,
       createdBy: userId,
-      createdAt: serverTimestamp(),
-      state: contentData.state || COLLABORATION_CONFIG.REVIEW_STATES.DRAFT,
-      notes: contentData.notes || '',
-      timestamp: Date.now(), // used for LWW resolution
+      state: COLLABORATION_CONFIG.REVIEW_STATES.DRAFT,
     };
-
-    // Apply LWW conflict resolution check if the file is locked
-    const existingLock = this.locks.get(versionId);
-    if (existingLock && existingLock.userId !== userId && existingLock.expiresAt > Date.now()) {
-      throw new CollaborationError('conflict', 'This content has been locked and modified concurrently by another member.');
-    }
-
-    const versionRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', versionId);
-    await setDoc(versionRef, version);
-
-    // Enforce 50 max version logs limit
-    const versions = await this.getContentVersions(projectId);
-    if (versions.length > COLLABORATION_CONFIG.MAX_VERSION_LOGS) {
-      // Delete oldest version
-      const oldest = versions[versions.length - 1];
-      const oldestRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', oldest.id);
-      await deleteDoc(oldestRef).catch(() => {});
-    }
-
-    return version;
   }
 
   async getContentVersions(projectId) {
@@ -498,65 +296,21 @@ class CollaborationService {
 
   async submitForReview(projectId, versionId, userId, userRole) {
     await this.ensureInitialized();
-
-    if (!this.canEditContent(userRole)) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to submit for review');
-    }
-
-    const versionRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', versionId);
-    await updateDoc(versionRef, {
-      state: COLLABORATION_CONFIG.REVIEW_STATES.PENDING_REVIEW,
-      submittedAt: serverTimestamp(),
-      submittedBy: userId,
-    });
-
+    await callFunction(FUNCTIONS.SUBMIT_COLLAB_CONTENT, { projectId, versionId });
     return { id: versionId, state: COLLABORATION_CONFIG.REVIEW_STATES.PENDING_REVIEW };
   }
 
   async reviewContent(projectId, versionId, decision, feedback, reviewerId, reviewerRole) {
     await this.ensureInitialized();
-
-    if (!this.canReviewContent(reviewerRole)) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to review content');
-    }
-
-    let newState;
-    switch (decision) {
-      case 'approve':
-        newState = COLLABORATION_CONFIG.REVIEW_STATES.APPROVED;
-        break;
-      case 'request_changes':
-        newState = COLLABORATION_CONFIG.REVIEW_STATES.CHANGES_REQUESTED;
-        break;
-      default:
-        throw new CollaborationError('invalid_decision', 'Invalid review decision');
-    }
-
-    const versionRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', versionId);
-    await updateDoc(versionRef, {
-      state: newState,
-      reviewFeedback: feedback,
-      reviewedAt: serverTimestamp(),
-      reviewedBy: reviewerId,
+    const result = await callFunction(FUNCTIONS.REVIEW_COLLAB_CONTENT, {
+      projectId, versionId, decision, feedback,
     });
-
-    return { id: versionId, state: newState, feedback };
+    return { id: versionId, state: result.state, feedback };
   }
 
   async publishContent(projectId, versionId, publisherId, publisherRole) {
     await this.ensureInitialized();
-
-    if (!this.canPublishContent(publisherRole)) {
-      throw new CollaborationError('permission_denied', 'You do not have permission to publish content');
-    }
-
-    const versionRef = doc(this.firestore, 'collaboration_projects', projectId, 'content', versionId);
-    await updateDoc(versionRef, {
-      state: COLLABORATION_CONFIG.REVIEW_STATES.PUBLISHED,
-      publishedAt: serverTimestamp(),
-      publishedBy: publisherId,
-    });
-
+    await callFunction(FUNCTIONS.PUBLISH_COLLAB_CONTENT, { projectId, versionId });
     return { id: versionId, state: COLLABORATION_CONFIG.REVIEW_STATES.PUBLISHED };
   }
 

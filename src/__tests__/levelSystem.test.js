@@ -1,15 +1,7 @@
 // src/__tests__/levelSystem.test.js
 
 import { jest } from '@jest/globals';
-import {
-  getLevelInfo,
-  getRankTitle,
-  getPerksForLevel,
-  getLifetimeRewards,
-  LEVELS,
-  XP_RULES,
-  levelSystemService,
-} from '../services/levelSystemService.js';
+import { getLevelInfo, getRankTitle, getPerksForLevel, getLifetimeRewards, LEVELS, XP_RULES } from "../services/levelSystemService.js";
 
 describe('level curve (pure math)', () => {
   test('level 1 at 0 XP with 0 progress', () => {

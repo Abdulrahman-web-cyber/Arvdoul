@@ -250,17 +250,28 @@ class UltimateFirebaseManager {
 
   async getMessaging() {
     if (!this._initialized) await this.initialize();
-    
+
     if (this._messaging) return this._messaging;
-    
+
     try {
-      const { getMessaging } = await import('firebase/messaging');
-      
-      this._messaging = getMessaging(this._app);
-      
+      const messagingMod = await import('firebase/messaging');
+
+      // `getMessaging()` performs its browser-support check in a FLOATING
+      // promise (`isWindowSupported().then(() => { throw ... })`), so on any
+      // browser without the required APIs (jsdom, older Safari/Firefox) the
+      // error becomes an unhandled rejection instead of a catchable throw,
+      // aborting unrelated code at random. Gate on `isSupported()` first so
+      // `getMessaging()` is never called when it would throw.
+      const supported = await messagingMod.isSupported();
+      if (!supported) {
+        throw new Error('FCM is not supported in this browser');
+      }
+
+      this._messaging = messagingMod.getMessaging(this._app);
+
       console.log('✅ Messaging service loaded');
       return this._messaging;
-      
+
     } catch (error) {
       console.error('❌ Failed to load Messaging service:', error);
       throw error;

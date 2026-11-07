@@ -1033,21 +1033,31 @@ const FullscreenViewer = React.memo(({
   const [showControls, setShowControls] = useState(true);
   const [dismissOffset, setDismissOffset] = useState(0);
   const controlsTimerRef = useRef(null);
+  // A drag (pan at zoom > 1) ends with a click; it must not toggle the chrome.
+  const suppressClickRef = useRef(false);
+
+  const armControlsTimer = useCallback(() => {
+    clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = setTimeout(() => setShowControls(false), 3000);
+  }, []);
 
   const toggleControls = useCallback(() => {
-    setShowControls(prev => !prev);
-    clearTimeout(controlsTimerRef.current);
-    if (!showControls) {
-      controlsTimerRef.current = setTimeout(() => setShowControls(false), 3000);
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
     }
-  }, []);
+    clearTimeout(controlsTimerRef.current);
+    setShowControls((prev) => {
+      const next = !prev;
+      if (next) armControlsTimer();
+      return next;
+    });
+  }, [armControlsTimer]);
 
   const resetControlsTimer = useCallback(() => {
     clearTimeout(controlsTimerRef.current);
-    if (showControls) {
-      controlsTimerRef.current = setTimeout(() => setShowControls(false), 3000);
-    }
-  }, [showControls]);
+    if (showControls) armControlsTimer();
+  }, [showControls, armControlsTimer]);
 
   useEffect(() => {
     controlsTimerRef.current = setTimeout(() => setShowControls(false), 3000);
@@ -1067,6 +1077,7 @@ const FullscreenViewer = React.memo(({
   const handleMouseDown = useCallback((e) => {
     if (scale <= 1) return;
     setIsDragging(true);
+    suppressClickRef.current = true;
     dragStart.current = {
       x: e.clientX,
       y: e.clientY,
@@ -1114,7 +1125,7 @@ const FullscreenViewer = React.memo(({
       const t = e.touches[0];
       const dx = t.clientX - touchStart.current.x;
       const dy = t.clientY - touchStart.current.y;
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) setIsDragging(true);
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) { setIsDragging(true); suppressClickRef.current = true; }
 
       if (scale > 1) {
         setPosition(p => ({ x: p.x + dx, y: p.y + dy }));
@@ -1184,6 +1195,7 @@ const FullscreenViewer = React.memo(({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[999] bg-black flex flex-col"
+      onClick={toggleControls}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}

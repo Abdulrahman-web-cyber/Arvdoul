@@ -16,6 +16,7 @@ const COMMENTS_CONFIG = {
 };
 
 import { cacheManager } from '../utils/CacheManager.js';
+import { LOCAL_COMMENTS_PREFIX } from '../utils/localContentCache.js';
 import { getSafeAvatarUrl } from '../utils/avatarUtils.js';
 import { countersManager } from '../utils/CountersManager.js';
 import { offlineQueue } from '../utils/OfflineQueue.js';
@@ -23,6 +24,14 @@ import { logger } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
 import { rateLimiter } from '../utils/RateLimiter.js';
 import { errorHandler } from '../utils/ErrorHandler.js';
+
+// Moderation states a reader may still see. `pending` is the pre-scan state and
+// `pending_manual_review` is "flagged but shown until a human decides" (written
+// with isHidden=false). Only `rejected`/`removed` hide, and those are always
+// written together with isHidden=true. Excluding `pending_manual_review` here
+// made a mildly-flagged comment vanish from the thread the moment the async
+// moderation trigger flipped it off `pending` — a comment-reliability bug.
+const VISIBLE_COMMENT_MODERATION_STATUSES = ['approved', 'pending', 'pending_manual_review'];
 
 const COMMENT_REACTION_ARRAY_CAP = COMMENTS_CONFIG.REACTION_ARRAY_CAP;
 
@@ -242,7 +251,7 @@ class UltimateCommentService {
 
       if (typeof window !== 'undefined') {
         try {
-          const key = `arvdoul_local_comments_${postId}`;
+          const key = `${LOCAL_COMMENTS_PREFIX}${postId}`;
           const current = JSON.parse(localStorage.getItem(key) || '[]');
           current.unshift({ ...commentData, id: commentId, createdAt: new Date().toISOString() });
           localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
@@ -292,7 +301,7 @@ class UltimateCommentService {
           this.firestoreMethods.where('postId', '==', postId),
           this.firestoreMethods.where('isDeleted', '==', false),
           this.firestoreMethods.where('isHidden', '==', false),
-          this.firestoreMethods.where('moderationStatus', 'in', ['approved', 'pending']),
+          this.firestoreMethods.where('moderationStatus', 'in', VISIBLE_COMMENT_MODERATION_STATUSES),
           this.firestoreMethods.orderBy('createdAt', 'desc')
         ];
         conditions.push(this.firestoreMethods.limit(
@@ -342,7 +351,7 @@ class UltimateCommentService {
       // Merge local-first persistent comments from localStorage
       if (typeof window !== 'undefined') {
         try {
-          const localStored = JSON.parse(localStorage.getItem(`arvdoul_local_comments_${postId}`) || '[]');
+          const localStored = JSON.parse(localStorage.getItem(`${LOCAL_COMMENTS_PREFIX}${postId}`) || '[]');
           if (Array.isArray(localStored)) {
             localStored.forEach(lc => {
               if (lc && lc.id && !commentMap.has(lc.id)) {
@@ -760,7 +769,9 @@ class UltimateCommentService {
       return { success: true, edits };
     } catch (error) {
       logger.error('Get comment history failed', { error: error.message, commentId });
-      return { success: true, edits: [] };
+      // Fail closed: an empty edit list reported as success would render as
+      // "never edited" and hide the failure.
+      return { success: false, edits: [], error: error?.message || 'comment-history-failed' };
     }
   }
 
@@ -869,8 +880,12 @@ class UltimateCommentService {
       const pageSize = options.limit || COMMENTS_CONFIG.PAGINATION_LIMIT;
       conditions.push(this.firestoreMethods.limit(pageSize));
 
-      if (options.cursor) {
-        const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', options.cursor);
+      // Callers pass the cursor as `startAfter` (the drawer's name); accept
+      // `cursor` too. Reading only `cursor` meant the "load more replies"
+      // control re-fetched page 1 forever (deduped, so nothing new appeared).
+      const afterId = options.startAfter || options.cursor;
+      if (afterId) {
+        const cursorRef = this.firestoreMethods.doc(this.firestore, 'comments', afterId);
         const cursorSnap = await this.firestoreMethods.getDoc(cursorRef);
         if (cursorSnap.exists()) {
           conditions.push(this.firestoreMethods.startAfter(cursorSnap));
@@ -1223,8 +1238,8 @@ class UltimateCommentService {
       await this._ensureInitialized();
 
       const usersRef = this.firestoreMethods.collection(this.firestore, 'users');
-      const batch = this.firestoreMethods.writeBatch(this.firestore);
-      const notificationsRef = this.firestoreMethods.collection(this.firestore, 'notifications');
+      const { getNotificationsService } = await import('./notificationsService.js');
+      const notifications = getNotificationsService();
 
       const chunkSize = 10;
       for (let i = 0; i < mentions.length; i += chunkSize) {
@@ -1235,31 +1250,33 @@ class UltimateCommentService {
         );
         const userSnapshot = await this.firestoreMethods.getDocs(userQuery);
 
-        userSnapshot.forEach(docSnap => {
-          const mentionedUserId = docSnap.id;
-          const notifRef = this.firestoreMethods.doc(notificationsRef);
-          batch.set(notifRef, {
-            type: 'mention',
-            userId: mentionedUserId,
-            title: 'You were mentioned in a comment',
-            message: `${context.userName || 'Someone'} mentioned you in a comment`,
-            data: {
-              commentId: context.commentId,
-              postId: context.postId,
-              authorId: context.userId,
-              authorName: context.userName,
-              preview: context.content
-            },
-            isRead: false,
-            createdAt: this.firestoreMethods.serverTimestamp()
-          });
-        });
+        // Route through the server `sendNotification` callable. The previous
+        // code wrote a top-level `notifications` document from the client, but
+        // that collection is `allow create: if false` — the write was denied
+        // and the empty catch swallowed it, so mentions notified nobody.
+        for (const docSnap of userSnapshot.docs) {
+          try {
+            await notifications.sendNotification({
+              type: 'mention',
+              recipientId: docSnap.id,
+              senderId: context.userId,
+              title: 'You were mentioned in a comment',
+              message: `${context.userName || 'Someone'} mentioned you in a comment`,
+              data: {
+                commentId: context.commentId,
+                postId: context.postId,
+                authorId: context.userId,
+                authorName: context.userName,
+                preview: context.content
+              }
+            });
+          } catch (err) {
+            logger.warn('Mention notification failed', { error: err.message });
+          }
+        }
       }
-
-      await batch.commit();
-
     } catch (error) {
-      // Mention processing failed
+      logger.warn('Mention processing failed', { error: error.message });
     }
   }
 

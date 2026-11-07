@@ -4,7 +4,7 @@
  * @component
  */
 
-import React, { useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -12,24 +12,7 @@ import { useAnalyticsStore } from '../../store/analyticsStore';
 import { useAppStore } from '../../store/appStore';
 import { getStoredUid } from '../../utils/security';
 import { cn } from '../../lib/utils';
-import { 
-  ArrowLeft, 
-  Download, 
-  TrendingUp, 
-  TrendingDown,
-  Eye,
-  Heart,
-  MessageCircle,
-  Share2,
-  Coins,
-  Users,
-  BarChart2,
-  Calendar,
-  RefreshCw,
-  Loader2,
-  Wallet,
-  ArrowUpRight
-} from 'lucide-react';
+import { Download, TrendingUp, TrendingDown, Eye, Heart, Coins, Users, Calendar, RefreshCw, Loader2, Wallet, ArrowUpRight } from "lucide-react";
 import { formatCoinsAsUsd, MIN_WITHDRAWAL_COINS } from '../../shared/levelConfig.cjs';
 
 /**

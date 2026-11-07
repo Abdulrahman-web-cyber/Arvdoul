@@ -5,7 +5,7 @@
 // With no clip selected it shows an explicit empty state rather than invented
 // timings and levels.
 
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 import { RotateCcw, Activity, Radio } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { audioStudioEngine } from '../audioEngine';

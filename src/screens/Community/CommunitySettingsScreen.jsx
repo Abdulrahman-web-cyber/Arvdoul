@@ -3,16 +3,11 @@
 // Full-featured Community Administration & Member Management Command Center.
 // Adheres strictly to zero-pill discipline, WCAG AA, and service-layer boundary.
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { 
-  ArrowLeft, Shield, Users, UserPlus, UserMinus, 
-  UserCheck, UserX, Settings, Lock, Globe, EyeOff,
-  Search, Check, AlertTriangle, Clock, RefreshCw,
-  MoreVertical, ShieldAlert, Sliders, Save, Trash2
-} from 'lucide-react';
+import { ArrowLeft, Shield, Users, UserPlus, UserMinus, UserCheck, UserX, Settings, Lock, Globe, EyeOff, Search, Check, AlertTriangle, RefreshCw, MoreVertical, ShieldAlert, Sliders, Save } from "lucide-react";
 import { getCommunityService } from '../../services/communityService';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';

@@ -474,26 +474,3 @@ export default function CreateLink() {
     </div>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────────
-   REQUIRED ORCHESTRATOR REDUCER EXTENSIONS (add to CreatePost.jsx)
-
-   In initialState.typeData.link, add:
-     metadata: null,   // { url, title, description, image, siteName }
-     thumbnail: "",
-
-   In reducer:
-     case "SET_LINK_METADATA": draft.typeData.link.metadata = action.payload; break;
-     case "SET_LINK_THUMBNAIL": draft.typeData.link.thumbnail = action.payload; break;
-
-   In orchestrator publishPost, extend the link object:
-     link: current.postType === "link" ? {
-       url: current.typeData.link.url,
-       title: current.typeData.link.title || sanitizedContent,
-       description: sanitizedContent,
-       thumbnail: current.typeData.link.thumbnail,
-       metadata: current.typeData.link.metadata,
-     } : null,
-
-   Update firestoreService.createPost to store the new fields.
-   ──────────────────────────────────────────────────────────────────── */

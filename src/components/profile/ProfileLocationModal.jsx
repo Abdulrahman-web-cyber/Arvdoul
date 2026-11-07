@@ -9,19 +9,8 @@
  * @component
  */
 
-import React, { memo, useState, useEffect } from 'react';
-import { 
-  X, 
-  MapPin, 
-  Navigation, 
-  Search, 
-  Globe, 
-  Check, 
-  Shield, 
-  Loader2, 
-  Sparkles,
-  AlertCircle
-} from 'lucide-react';
+import { memo, useState, useEffect } from "react";
+import { X, MapPin, Navigation, Search, Check, Shield, Loader2, Sparkles } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';

@@ -13,41 +13,9 @@
  * @component
  */
 
-import React, { memo, useMemo, useState, useCallback } from 'react';
+import { memo, useMemo, useState, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
-import { 
-  BadgeCheck, 
-  MapPin, 
-  Globe, 
-  Calendar, 
-  Crown,
-  MoreHorizontal,
-  QrCode,
-  Share2,
-  Edit3,
-  MessageSquare,
-  Phone,
-  Gift,
-  Coins,
-  Settings,
-  UserCheck,
-  UserPlus,
-  Camera,
-  Copy,
-  Check,
-  Sparkles,
-  BarChart2,
-  ChevronLeft,
-  User,
-  Bell,
-  Send,
-  Shield,
-  ShieldCheck,
-  ArrowRight,
-  TrendingUp,
-  Star,
-  Lock
-} from 'lucide-react';
+import { BadgeCheck, MapPin, Globe, Calendar, Crown, MoreHorizontal, QrCode, Share2, Edit3, MessageSquare, Phone, Gift, Coins, Settings, UserCheck, UserPlus, Camera, Copy, Check, Sparkles, BarChart2, ChevronLeft, Shield, ShieldCheck, Star, Lock } from "lucide-react";
 import { cn } from '../../lib/utils';
 import * as LevelModule from '../../services/levelSystemService';
 import { getSafeAvatarUrl } from '../../utils/avatarUtils';

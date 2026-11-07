@@ -5,10 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Sparkles, Volume2, Languages, BookOpen, Heart, Smile, Frown,
-  Copy, Check, Mic, MicOff, Settings, Hash, Play
-} from 'lucide-react';
+import { Sparkles, Volume2, Languages, BookOpen, Heart, Smile, Frown, Copy, Check, MicOff, Settings, Hash, Play } from "lucide-react";
 import DOMPurify from 'dompurify';
 import { marked } from 'marked'; // optional – we'll handle safely
 

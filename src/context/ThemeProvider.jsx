@@ -1,6 +1,6 @@
 // src/context/ThemeProvider.jsx
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, memo } from "react";
 
 /**
  * ARVDOUL DNA Gradient - The signature gradient used throughout the platform

@@ -1,4 +1,3 @@
-import React from 'react';
 import { WifiOff, RefreshCw, Clock } from 'lucide-react';
 
 export default function OfflineStatusScreen() {

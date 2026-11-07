@@ -1,13 +1,9 @@
 // src/screens/VideoEditor/components/PreviewCanvas.jsx
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState } from "react";
 import PropTypes from 'prop-types';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Play, Pause, SkipBack, SkipForward, Repeat,
-  Volume2, VolumeX, Maximize, Minimize, Eye, Sparkles,
-  Move, RotateCw, Trash2
-} from 'lucide-react';
+import { motion } from "framer-motion";
+import { Play, Pause, SkipBack, SkipForward, Repeat, Volume2, VolumeX, Maximize, Minimize, Eye, Grid3x3 } from "lucide-react";
 import { formatTimecode, FILTERS_LIST } from '../constants';
 
 export default function PreviewCanvas({
@@ -375,6 +371,18 @@ export default function PreviewCanvas({
               className="w-14 sm:w-20 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-purple-500"
             />
           </div>
+
+          {/* Grid Overlay Toggle */}
+          <button
+            onClick={() => setShowGrid((g) => !g)}
+            title={showGrid ? 'Hide framing grid' : 'Show framing grid'}
+            aria-pressed={showGrid}
+            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center transition-colors active:scale-95 ${
+              showGrid ? 'text-cyan-400 bg-white/10' : 'text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Grid3x3 className="w-4 h-4" />
+          </button>
 
           {/* Fullscreen Button */}
           <button

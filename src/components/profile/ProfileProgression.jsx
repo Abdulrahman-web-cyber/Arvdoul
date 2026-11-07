@@ -8,9 +8,9 @@
  * @component
  */
 
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
-import { Crown, Flame, ChevronRight, Award, Sparkles, ShieldCheck } from 'lucide-react';
+import { Crown, Flame, ChevronRight, Award, Sparkles } from "lucide-react";
 import { cn } from '../../lib/utils';
 import { 
   getLevelInfo, 

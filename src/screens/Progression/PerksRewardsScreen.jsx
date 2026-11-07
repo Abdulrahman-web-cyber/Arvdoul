@@ -3,7 +3,7 @@
 // View Perks, Level Milestone Coin Rewards, Virtual Gifts, and Prestige Benefits.
 // Consumes canonical shared/levelConfig.cjs and adheres to Zero-Pill discipline.
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -18,22 +18,7 @@ import {
   formatCoinsAsUsd,
   XP_RULES,
 } from '../../shared/levelConfig.cjs';
-import {
-  Sparkles,
-  Gift,
-  Coins,
-  Crown,
-  Lock,
-  CheckCircle2,
-  ChevronRight,
-  ShieldCheck,
-  Send,
-  Flame,
-  Award,
-  Zap,
-  ArrowRight,
-  UserCheck
-} from 'lucide-react';
+import { Sparkles, Gift, Coins, Crown, Lock, CheckCircle2, Send, Zap, ArrowRight, UserCheck } from "lucide-react";
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 
@@ -63,7 +48,6 @@ export default function PerksRewardsScreen() {
 
   // Unlocked vs upcoming perks
   const unlockedPerks = useMemo(() => LEVEL_PERKS.filter(p => currentLevel >= p.minLevel), [currentLevel]);
-  const upcomingPerks = useMemo(() => LEVEL_PERKS.filter(p => currentLevel < p.minLevel), [currentLevel]);
 
   // Upcoming coin reward milestones
   const upcomingCoinMilestones = useMemo(() => {

@@ -4,10 +4,7 @@ import React, {
   useState, useEffect, useRef, useCallback, useReducer, useMemo
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Settings,
-  Loader2, Share2, Info, ArrowUp, ArrowDown, Heart, FastForward
-} from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Settings, Share2, Info, ArrowUp, ArrowDown } from "lucide-react";
 import { FaHeart } from 'react-icons/fa6';
 import levelSystemService from '../../services/levelSystemService';
 
@@ -331,7 +328,6 @@ const VideoCard = React.memo(({
   onNext,
   onPrev,
   postId,
-  tokens,
   nextVideoUrls = [],
   prevVideoUrl = null,
   onAnalytics,

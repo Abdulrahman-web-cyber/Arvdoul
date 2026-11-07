@@ -1,21 +1,14 @@
 // src/screens/NotificationsScreen.jsx
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../lib/utils';
-import {
-  Bell, Search, SlidersHorizontal, CheckCircle2, Settings,
-  Sparkles, Check, X, Heart, MessageCircle, Gift, Users,
-  AtSign, Eye, Radio, ChevronRight, ChevronDown, Clock,
-  ArrowRight, ShieldCheck, DollarSign, Flame, Award,
-  Home, MessageSquare, Compass, User, RefreshCw, UserPlus, Loader2
-} from 'lucide-react';
+import { Bell, Search, SlidersHorizontal, CheckCircle2, Settings, Sparkles, X, Heart, MessageCircle, Gift, Users, AtSign, Eye, Radio, ChevronRight, ChevronDown, DollarSign, RefreshCw, Loader2 } from "lucide-react";
 import notificationsService from '../services/notificationsService';
-import { getMonetizationService } from '../services/monetizationService';
 import EmptyState from '../design-system/EmptyState.jsx';
 import Button from '../design-system/Button.jsx';
 import { Dialog } from '../components/UI/Dialog.jsx';
@@ -30,6 +23,21 @@ const FILTERS = [
   { id: 'Live', label: 'Live', icon: Radio },
   { id: 'System', label: 'System', icon: Settings },
 ];
+
+// The notifications service emits canonical type ids (`like`, `gift_received`,
+// `live_started`), while this screen's icon/navigation logic was written
+// against older aliases (`post_like`, `coin_gift`, `live_stream`). Normalise
+// once so the icon badge, the gift modal and the Live/Stories navigation are
+// driven by the real payload instead of dead branches.
+const NOTIFICATION_TYPE_ALIASES = {
+  like: 'post_like',
+  reply: 'story_reply',
+  gift_received: 'coin_gift',
+  coins_earned: 'coin_gift',
+  coin_reward: 'coin_gift',
+  live_started: 'live_stream',
+};
+const normalizeNotificationType = (type) => NOTIFICATION_TYPE_ALIASES[type] || type || 'system';
 
 export default function NotificationsScreen() {
   const navigate = useNavigate();
@@ -211,43 +219,58 @@ export default function NotificationsScreen() {
   useEffect(() => {
     if (!user?.uid) return;
     let unsub;
+    const formatNotification = (fn, idx) => {
+      const createdAt = fn.createdAt?.toDate?.() || (fn.createdAt ? new Date(fn.createdAt) : null);
+      const createdAtMs = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0;
+      const ts = createdAt && !Number.isNaN(createdAt.getTime())
+        ? createdAt.toLocaleString()
+        : (fn.timestamp ? String(fn.timestamp) : '');
+      const type = normalizeNotificationType(fn.type);
+      const category = type === 'message' || type === 'story_reply' ? 'Messages'
+        : type?.includes('friend') ? 'Friends'
+          : type === 'coin_gift' ? 'Coins'
+            : 'All';
+      return {
+        id: fn.id || `fn-${idx}`,
+        category,
+        type,
+        timeGroup: createdAt && createdAtMs ? (Date.now() - createdAtMs < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
+        user: {
+          id: fn.senderId || null,
+          name: fn.senderName || fn.title || '',
+          username: fn.senderUsername || '',
+          avatar: fn.senderAvatar || '/assets/default-profile.png',
+          verified: !!fn.senderVerified,
+        },
+        message: fn.body || fn.message || '',
+        // Friend requests must carry the friend_requests doc id (not the
+        // notification id) so accept/decline can hit the right document.
+        requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
+        // Real gift metadata only — never invent an amount. The gift
+        // modal hides the amount block when the payload omits it.
+        amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
+        giftType: fn.metadata?.giftType || null,
+        timestamp: ts,
+        createdAtMs,
+        unread: !fn.read,
+      };
+    };
+    const mergeNotifications = (incoming) => {
+      setNotifications((prev) => {
+        const byId = new Map(prev.map((n) => [n.id, n]));
+        for (const n of incoming) byId.set(n.id, { ...byId.get(n.id), ...n });
+        return Array.from(byId.values()).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+      });
+    };
     try {
-      unsub = notificationsService.subscribeToUserNotifications(user.uid, (firestoreNotifs) => {
-        if (Array.isArray(firestoreNotifs) && firestoreNotifs.length > 0) {
-          // Map real Firestore notifications — real fields only, real timestamps.
-          setNotifications((prev) => {
-            const formatted = firestoreNotifs.map((fn, idx) => {
-              const createdAt = fn.createdAt?.toDate?.() || (fn.createdAt ? new Date(fn.createdAt) : null);
-              const ts = createdAt && !Number.isNaN(createdAt.getTime())
-                ? createdAt.toLocaleString()
-                : (fn.timestamp ? String(fn.timestamp) : '');
-              return {
-                id: fn.id || `fn-${idx}`,
-                category: fn.type?.includes('message') ? 'Messages' : fn.type?.includes('friend') ? 'Friends' : fn.type?.includes('coin') ? 'Coins' : 'All',
-                type: fn.type || 'system',
-                timeGroup: createdAt ? (Date.now() - createdAt.getTime() < 3600000 ? 'Now' : createdAt.toLocaleDateString()) : '',
-                user: {
-                  id: fn.senderId || null,
-                  name: fn.senderName || fn.title || '',
-                  username: fn.senderUsername || '',
-                  avatar: fn.senderAvatar || '/assets/default-profile.png',
-                  verified: !!fn.senderVerified,
-                },
-                message: fn.body || fn.message || '',
-                // Friend requests must carry the friend_requests doc id (not the
-                // notification id) so accept/decline can hit the right document.
-                requestId: fn.metadata?.requestId || fn.metadata?.fromUserId || null,
-                // Real gift metadata only — never invent an amount. The gift
-                // modal hides the amount block when the payload omits it.
-                amount: fn.metadata?.cost ?? fn.metadata?.amount ?? null,
-                giftType: fn.metadata?.giftType || null,
-                timestamp: ts,
-                unread: !fn.read,
-              };
-            });
-            return formatted;
-          });
-        }
+      unsub = notificationsService.subscribeToUserNotifications(user.uid, (payload) => {
+        // The subscription emits change batches ({ added, modified }), not a
+        // plain array — the array shape is tolerated for older callers/tests.
+        const raw = Array.isArray(payload)
+          ? payload
+          : [...(payload?.added || []), ...(payload?.modified || [])];
+        if (raw.length === 0) return;
+        mergeNotifications(raw.map(formatNotification));
       });
     } catch (err) {
       console.warn('Notifications stream warning:', err);
@@ -277,11 +300,22 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Handle Mark Single Item Read
-  const handleMarkRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, unread: false } : n))
-    );
+  // Handle Mark Single Item Read — optimistic, then persisted so the server
+  // unread counter (and the nav badge) actually clears. Roll back on failure.
+  const handleMarkRead = async (id) => {
+    if (!user?.uid) return;
+    let wasUnread = false;
+    setNotifications((prev) => prev.map((n) => {
+      if (n.id !== id) return n;
+      wasUnread = n.unread;
+      return { ...n, unread: false };
+    }));
+    if (!wasUnread) return;
+    try {
+      await notificationsService.markNotificationAsRead(id, user.uid);
+    } catch {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, unread: true } : n)));
+    }
   };
 
   // Handle Friend Request Action
@@ -358,11 +392,6 @@ export default function NotificationsScreen() {
     });
     return groups;
   }, [filteredNotifications]);
-
-  // Highlights list
-  const highlights = useMemo(() => {
-    return notifications.filter((n) => n.highlight);
-  }, [notifications]);
 
   const unreadCount = useMemo(() => {
     return notifications.filter((n) => n.unread).length;
@@ -935,90 +964,6 @@ export default function NotificationsScreen() {
               </button>
             </div>
           </div>
-        )}
-
-        {/* Highlights Section */}
-        {highlights.length > 0 && activeFilter === 'All' && !searchQuery && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-arvdoul-text-secondary flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                Highlights
-              </h2>
-              <button
-                onClick={() => navigate('/profile/highlights')}
-                className="text-xs font-semibold text-violet-400 hover:text-violet-300 flex items-center gap-0.5"
-              >
-                View all <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-
-            {/* Highlights Carousel */}
-            <div className="grid grid-cols-4 gap-2.5 overflow-x-auto pb-1 no-scrollbar">
-              {highlights.map((h) => (
-                <div
-                  key={`hl-${h.id}`}
-                  onClick={() => {
-                    if (h.type === 'coin_gift') setGiftModal(h);
-                    else if (h.type === 'live_stream') navigate('/live');
-                    else if (h.type === 'story_reply') navigate('/stories');
-                    else navigate('/profile');
-                  }}
-                  className={cn(
-                    "group relative overflow-hidden rounded-2xl p-3 cursor-pointer transition-all duration-300 border",
-                    isDark
-                      ? "bg-gradient-to-b from-white/[0.08] to-white/[0.02] border-white/10 hover:border-violet-500/50 hover:shadow-arvdoul-glow"
-                      : "bg-white border-slate-200 hover:border-violet-400 shadow-sm"
-                  )}
-                >
-                  {/* Glowing Top Accent */}
-                  <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-violet-500 via-indigo-500 to-pink-500 opacity-60 group-hover:opacity-100" />
-
-                  {/* Avatar & Badge */}
-                  <div className="relative w-11 h-11 mb-2.5">
-                    <img
-                      src={h.user.avatar}
-                      alt={h.user.name}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full rounded-full object-cover ring-2 ring-violet-500/40"
-                    />
-                    {/* Badge Icon */}
-                    {h.type === 'friend_request' && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
-                        <Users className="w-2.5 h-2.5" />
-                      </div>
-                    )}
-                    {h.type === 'coin_gift' && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
-                        <DollarSign className="w-2.5 h-2.5" />
-                      </div>
-                    )}
-                    {h.type === 'story_reply' && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-white flex items-center justify-center ring-2 ring-[#060814]">
-                        <MessageCircle className="w-2.5 h-2.5" />
-                      </div>
-                    )}
-                    {h.type === 'live_stream' && (
-                      <div className="absolute -bottom-1 -right-1 px-1 py-0.2 rounded-full bg-rose-600 text-white text-[8px] font-black uppercase ring-2 ring-[#060814] animate-pulse">
-                        LIVE
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Text Details */}
-                  <p className="text-xs font-bold line-clamp-1 group-hover:text-violet-400 transition-colors">
-                    {h.highlight.title}
-                  </p>
-                  <p className="text-[10px] text-arvdoul-text-secondary line-clamp-2 mt-0.5">
-                    {h.highlight.subtitle}
-                  </p>
-                  <span className="text-[9px] text-arvdoul-text-secondary/70 mt-1 block">
-                    {h.highlight.time}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
         )}
 
         {/* Timeline Groupings: Now, Today, Yesterday */}

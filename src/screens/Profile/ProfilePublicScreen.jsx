@@ -8,7 +8,7 @@
  * @component
  */
 
-import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, UserPlus, UserX } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,7 +26,6 @@ import { shareProfile } from '../../utils/shareUtils';
 import { getStoredUid } from '../../utils/security';
 import { resolveCapabilities } from '../../services/profileCapabilityEngine';
 import { PROFILE_TABS } from '../../config/profileContracts.js';
-import { TopAppLoadingBanner } from '../../components/Navigation/RouteProgressBar';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 
 // Modular Profile Components

@@ -2,16 +2,14 @@
 //
 // Per Constitution v5.0 - Grid of collaboration projects
 
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '@context/AuthContext';
 import { cn } from '../../lib/utils';
 import collaborationService from '../../services/collaborationService';
-import { Plus, Folder, Clock, Users, MoreVertical, Search, Filter, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-
+import { Plus, Folder, Clock, Search, Filter, Loader2 } from "lucide-react";
 const STATUS_COLORS = {
   draft: { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'Draft' },
   in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },

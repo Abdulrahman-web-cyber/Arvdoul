@@ -1,18 +1,10 @@
 // src/screens/PostOptionsDrawer.jsx
 
-import React, {
-  useState, useCallback, useEffect, useRef, useMemo, useReducer
-} from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, useReducer } from "react";
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import {
-  X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark,
-  AlertCircle, VolumeX, EyeOff, ThumbsDown, Pin, Archive, MessageSquareOff,
-  Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle,
-  Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck
-} from 'lucide-react';
-import { triggerHaptic } from '../utils/haptics';
+import { X, Trash2, Flag, Ban, Edit, Zap, BarChart2, Share2, Copy, Bookmark, AlertCircle, VolumeX, Pin, Archive, MessageSquareOff, Download, Coins, Gift, UserPlus, UserMinus, Loader2, CheckCircle, Sparkles, Users, Shield, ChevronDown, ChevronUp, BookmarkCheck, EyeOff, ThumbsDown } from "lucide-react";
 import { VIRTUAL_GIFTS } from '../data/videoData';
 import firestoreService from '../services/firestoreService.js';
 import * as userService from '../services/userService.js';
@@ -733,12 +725,14 @@ export default function PostOptionsDrawer({ isOpen, onClose, post, currentUser, 
 
   const safetyActions = useMemo(() => {
     const actions = [];
+    if (!isAuthor) actions.push({ id: 'hide', icon: EyeOff, label: 'Hide post', onClick: handleHide, secondary: true });
+    if (!isAuthor) actions.push({ id: 'not_interested', icon: ThumbsDown, label: 'Not interested', onClick: handleNotInterested, secondary: true });
     if (!isAuthor) actions.push({ id: 'mute', icon: VolumeX, label: 'Mute', onClick: () => openModal('mute'), secondary: true });
     if (!isAuthor) actions.push({ id: 'block', icon: Ban, label: 'Block', onClick: () => openModal('block'), danger: true });
     if (!isAuthor) actions.push({ id: 'report', icon: Flag, label: 'Report', onClick: () => openModal('report'), danger: true });
     if (isAuthor) actions.push({ id: 'delete', icon: Trash2, label: 'Delete', onClick: () => openModal('delete'), danger: true });
     return actions;
-  }, [isAuthor, openModal]);
+  }, [isAuthor, openModal, handleHide, handleNotInterested]);
 
   return (
     <AnimatePresence>

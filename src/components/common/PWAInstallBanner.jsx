@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, Share2, PlusSquare, Smartphone } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';

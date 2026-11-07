@@ -5,7 +5,7 @@
  * @requires React, framer-motion, lucide-react, prop-types
  */
 
-import React, { useState, useCallback, memo } from "react";
+import { useState, useCallback, memo } from "react";
 import { useTheme } from '../../context/ThemeContext';
 import PropTypes from "prop-types";
 import { motion } from "framer-motion";

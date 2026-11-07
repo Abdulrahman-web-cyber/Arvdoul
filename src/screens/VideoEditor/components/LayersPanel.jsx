@@ -1,6 +1,6 @@
 // src/screens/VideoEditor/components/LayersPanel.jsx
 
-import React, { useState } from 'react';
+import { useState } from "react";
 import PropTypes from 'prop-types';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

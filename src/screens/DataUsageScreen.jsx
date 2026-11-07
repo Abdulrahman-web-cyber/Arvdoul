@@ -4,7 +4,7 @@
 // clearing that actually clears (settingsService + Cache API), and a GDPR
 // user download the returned data. No fake timers, no invented GB numbers.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';

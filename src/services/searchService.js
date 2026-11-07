@@ -3,15 +3,7 @@
 // Fully optimized search routing, real Algolia index querying, and structured lexical token-overlap indexing fallback.
 
 import { getMonetizationService } from './monetizationService.js';
-import {
-  collection,
-  query as firestoreQuery,
-  where,
-  orderBy,
-  limit as firestoreLimit,
-  getDocs,
-  startAfter,
-} from 'firebase/firestore';
+import { collection, query as firestoreQuery, where, limit as firestoreLimit, getDocs, startAfter } from "firebase/firestore";
 
 function enhanceError(error, defaultMessage) {
   const code = error?.code || 'unknown';
@@ -286,42 +278,6 @@ class SearchResultItem {
       isSponsored: rawHit._isSponsored || false,
       highlight: rawHit._highlightResult,
     };
-  }
-}
-
-class LRUCache {
-  constructor(maxSize = 50, ttl = 5 * 60 * 1000) {
-    this.maxSize = maxSize;
-    this.ttl = ttl;
-    this.cache = new Map();
-  }
-
-  get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > this.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-    this.cache.delete(key);
-    this.cache.set(key, entry);
-    return entry.value;
-  }
-
-  set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
-    }
-    this.cache.set(key, { value, timestamp: Date.now() });
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-
-  get size() {
-    return this.cache.size;
   }
 }
 
@@ -718,7 +674,7 @@ class UltimateSearchService {
 
     if (tokens.length > 0) {
       try {
-        let tokenQ = firestoreQuery(postsRef, where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
+        let tokenQ = firestoreQuery(postsRef, where('authorIsPrivate', '==', false), where('visibility', '==', 'public'), where('status', '==', 'published'), where('isDeleted', '==', false), where('searchTokens', 'array-contains', tokens[0]), firestoreLimit(limitCount));
         if (cursorSnapshot) tokenQ = firestoreQuery(tokenQ, startAfter(cursorSnapshot));
         const tokenSnap = await getDocs(tokenQ);
         if (!tokenSnap.empty) {
@@ -730,7 +686,7 @@ class UltimateSearchService {
 
     if (docs.length === 0) {
       try {
-        let q = firestoreQuery(postsRef, firestoreLimit(limitCount));
+        let q = firestoreQuery(postsRef, where('authorIsPrivate', '==', false), where('visibility', '==', 'public'), where('status', '==', 'published'), where('isDeleted', '==', false), firestoreLimit(limitCount));
         if (cursorSnapshot) q = firestoreQuery(q, startAfter(cursorSnapshot));
         const snap = await getDocs(q);
         docs = snap.docs;
@@ -829,7 +785,9 @@ class UltimateSearchService {
         ];
         for (const ref of refs) {
           try {
-            const q = fq(ref, where('searchTokens', 'array-contains', token), limit(12));
+            const q = ref.id === 'posts'
+              ? fq(ref, where('authorIsPrivate', '==', false), where('visibility', '==', 'public'), where('status', '==', 'published'), where('isDeleted', '==', false), where('searchTokens', 'array-contains', token), limit(12))
+              : fq(ref, where('searchTokens', 'array-contains', token), limit(12));
             const snap = await getDocs(q);
             snap.docs.forEach((d) => {
               const data = d.data();
@@ -958,19 +916,51 @@ class UltimateSearchService {
     }
   }
 
+  /**
+   * Honest trending-hashtag source when no Algolia index is configured:
+   * aggregate the `hashtags` array off a bounded page of public, published
+   * posts. Counts are what the sample actually contains — never a constant.
+   */
+  async _hashtagFacetsFromPosts(queryStr, hitsPerPage) {
+    const needle = String(queryStr || '').trim().toLowerCase().replace(/^#/, '');
+    try {
+      const postsRef = collection(this.firestore, 'posts');
+      const snap = await getDocs(firestoreQuery(
+        postsRef,
+        where('authorIsPrivate', '==', false),
+        where('visibility', '==', 'public'),
+        where('status', '==', 'published'),
+        where('isDeleted', '==', false),
+        firestoreLimit(SEARCH_CONFIG.FIRESTORE_FALLBACK.MAX_RESULTS || 50)
+      ));
+      const counts = new Map();
+      snap.docs.forEach((doc) => {
+        for (const raw of doc.data().hashtags || []) {
+          const tag = String(raw).replace(/^#/, '').toLowerCase();
+          if (!tag || (needle && !tag.includes(needle))) continue;
+          counts.set(tag, (counts.get(tag) || 0) + 1);
+        }
+      });
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, hitsPerPage)
+        .map(([value, count]) => ({ value, count, highlighted: value, hashtag: value }));
+    } catch (error) {
+      logger.warn('[Search] Hashtag facet fallback failed', { error: error?.message });
+      return [];
+    }
+  }
+
   async getFacetValues(indexName, facetName, query = '', options = {}) {
     await this.ensureInitialized();
     if (!this.client) {
-      const fallbackTags = [
-        { value: 'arvdoul', count: 120, highlighted: 'arvdoul', hashtag: 'arvdoul' },
-        { value: 'trending', count: 98, highlighted: 'trending', hashtag: 'trending' },
-        { value: 'creators', count: 85, highlighted: 'creators', hashtag: 'creators' },
-        { value: 'music', count: 64, highlighted: 'music', hashtag: 'music' },
-        { value: 'art', count: 52, highlighted: 'art', hashtag: 'art' },
-        { value: 'photography', count: 47, highlighted: 'photography', hashtag: 'photography' },
-        { value: 'tech', count: 39, highlighted: 'tech', hashtag: 'tech' },
-      ].filter(t => !query || t.value.toLowerCase().includes(query.toLowerCase()));
-      return { success: true, facetValues: fallbackTags };
+      // No Algolia configured. Never invent counts: the only honest source of
+      // trending hashtags without a search index is the posts themselves.
+      // Any other facet has no local equivalent, so it stays empty.
+      const facetValues = facetName === 'hashtags'
+        ? await this._hashtagFacetsFromPosts(query, options?.hitsPerPage || 10)
+        : [];
+      return { success: true, facetValues };
     }
     const fullIndexName = this._resolveIndexName(indexName);
     let index = this.indices[fullIndexName];

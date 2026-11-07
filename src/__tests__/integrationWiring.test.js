@@ -206,13 +206,26 @@ describe('post-embedded poll voting is wired end-to-end', () => {
     expect(src).toContain('getUserPollVote');
   });
 
-  test('voteOnPoll normalises string options so the vote lands', () => {
+  test('voteOnPoll is server-authoritative (delegates to the votePostPoll callable)', () => {
     const src = read('src/services/firestoreService.js');
     const body = src.slice(src.indexOf('async voteOnPoll'), src.indexOf('async recordPostView'));
-    // The composer stores options as plain strings; keying on `option.id` on a
-    // string silently incremented nothing.
-    expect(body).toContain('_normalisePollOptions');
-    expect(body).toContain('optionId:');
+    // The posts update rule lets any signed-in user write `poll`, so a client
+    // transaction here would let a voter forge counts (no expiry check, no
+    // one-vote dedupe). The mutation must go through the callable.
+    expect(body).toContain('VOTE_POST_POLL');
+    expect(body).not.toContain('runTransaction');
+    expect(body).not.toContain("'poll.options'");
+  });
+
+  test('the votePostPoll callable is exported and merged', () => {
+    const fn = read('functions/polls.js');
+    expect(fn).toContain('exports.votePostPoll');
+    expect(fn).toContain('already-exists');
+    expect(fn).toMatch(/poll\.closesAt|closesAt/);
+    const idx = read('functions/index.js');
+    expect(idx).toContain("merge(require('./polls.js'))");
+    const callable = read('src/services/callableService.js');
+    expect(callable).toContain("VOTE_POST_POLL: 'votePostPoll'");
   });
 
   test('the composer persists poll closesAt + rewardCoins', () => {
@@ -285,6 +298,40 @@ describe('post-embedded Q&A is wired end-to-end', () => {
     expect(m).not.toBeNull();
     expect(m[0]).toContain('allow read: if isSignedIn() && resource.data.userId == uid()');
     expect(m[0]).toContain('allow write: if false');
+  });
+});
+
+describe('no dead follow handlers', () => {
+  // SearchScreen's CreatorCarousel "Follow" button emitted to a `console.log`
+  // no-op, so following a recommended creator did nothing while every other
+  // surface (Reels, PostCard, Connections) called userService.followUser.
+  test('SearchScreen routes creator-follow to the canonical follow service', () => {
+    const src = read('src/screens/SearchScreen.jsx');
+    expect(src).not.toMatch(/console\.log\(\s*['"]Follow creator/);
+    expect(src).toMatch(/getUserService\(\)\.followUser\(user\.uid, creatorId\)/);
+    expect(src).toMatch(/getUserService\(\)\.unfollowUser\(user\.uid, creatorId\)/);
+  });
+});
+
+describe('comment reliability: moderation-visible states stay in the thread', () => {
+  // The top-level comment query filtered `moderationStatus in ['approved','pending']`.
+  // The async moderation trigger flips a comment from `pending` to
+  // `pending_manual_review` (isHidden=false) as soon as Perspective scans it, so
+  // a mildly-flagged comment vanished from the thread it was posted in.
+  test('getCommentsByPost keeps pending_manual_review visible', () => {
+    const src = read('src/services/commentService.js');
+    expect(src).toContain('VISIBLE_COMMENT_MODERATION_STATUSES');
+    expect(src).toContain("'pending_manual_review'");
+    expect(src).not.toMatch(/moderationStatus', 'in', \['approved', 'pending'\]/);
+    expect(src).toMatch(/where\('moderationStatus', 'in', VISIBLE_COMMENT_MODERATION_STATUSES\)/);
+  });
+
+  test('getReplies accepts the drawer\'s `startAfter` cursor so "load more" works', () => {
+    const src = read('src/services/commentService.js');
+    const drawer = read('src/screens/CommentsDrawer.jsx');
+    // The drawer passes `startAfter`; the service must read that name.
+    expect(drawer).toMatch(/getReplies\([\s\S]*startAfter/);
+    expect(src).toMatch(/const afterId = options\.startAfter \|\| options\.cursor/);
   });
 });
 

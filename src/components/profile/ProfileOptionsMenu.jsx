@@ -4,7 +4,7 @@
 // Full screen backdrop with responsive centered dialog,
 // Arvdoul design tokens, and comprehensive citizen action controls.
 
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';

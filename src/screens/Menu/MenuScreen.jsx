@@ -1,48 +1,9 @@
 // src/screens/Menu/MenuScreen.jsx
 
-import React, { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Sparkles,
-  Radio,
-  Music,
-  ShoppingBag,
-  TrendingUp,
-  Home,
-  Search,
-  User,
-  MessageCircle,
-  Bell,
-  Bookmark,
-  Video,
-  Image as ImageIcon,
-  Calendar,
-  Layers,
-  PlayCircle,
-  Trophy,
-  Coins,
-  Gift,
-  Settings,
-  Shield,
-  ShieldCheck,
-  Palette,
-  HelpCircle,
-  Info,
-  LogOut,
-  ChevronRight,
-  PlusCircle,
-  Zap,
-  Sliders,
-  Eye,
-  SlidersHorizontal,
-  Flame,
-  Award,
-  Wallet,
-  CheckCircle2,
-  Lock,
-  ArrowUpRight
-} from "lucide-react";
+import { Sparkles, Radio, Music, ShoppingBag, TrendingUp, Home, Search, User, MessageCircle, Bell, Bookmark, Video, Image as ImageIcon, Calendar, Layers, PlayCircle, Trophy, Coins, Gift, Settings, Shield, ShieldCheck, Palette, HelpCircle, LogOut, ChevronRight, PlusCircle, Zap, Sliders, Flame, Award, Wallet, CheckCircle2, ArrowUpRight } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useAppStore } from "../../store/appStore";
@@ -154,7 +115,7 @@ export default function MenuScreen() {
     { id: "sounds", category: "social", icon: Music, label: "Viral Sounds & Soundtracks", description: "Browse and use trending audio tracks", color: "#ec4899", path: "/sounds", badge: "Hot" },
     { id: "marketplace", category: "social", icon: ShoppingBag, label: "Creator Marketplace", description: "Buy and sell digital LUTs, audio packs & presets", color: "#10b981", path: "/marketplace", badge: "Store" },
     { id: "polls", category: "social", icon: TrendingUp, label: "Polls & Prediction Markets", description: "Wager virtual coins on community outcomes", color: "#3b82f6", path: "/polls", badge: "Wager" },
-    { id: "messages", category: "social", icon: MessageCircle, label: "Direct Messages", description: "End-to-end encrypted messaging & group chats", color: "#06b6d4", path: "/messages", badge: unreadCounts?.messages ? `${unreadCounts.messages} new` : null },
+    { id: "messages", category: "social", icon: MessageCircle, label: "Direct Messages", description: "Private messaging & group chats", color: "#06b6d4", path: "/messages", badge: unreadCounts?.messages ? `${unreadCounts.messages} new` : null },
     { id: "notifications", category: "social", icon: Bell, label: "Notifications & Alerts", description: "Live activity, comments, likes & coin tips", color: "#f59e0b", path: "/notifications", badge: unreadCounts?.notifications ? `${unreadCounts.notifications}` : null },
     { id: "saved", category: "social", icon: Bookmark, label: "Saved Items & Collections", description: "Bookmarked media, reels, and inspiration folders", color: "#8b5cf6", path: "/saved", badge: null },
 

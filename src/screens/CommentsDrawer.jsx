@@ -1,22 +1,13 @@
 // src/screens/CommentsDrawer.jsx
 
-import React, {
-  useState, useEffect, useCallback, useRef, useMemo, memo,
-} from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { Virtuoso } from 'react-virtuoso';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2,
-  Pin, Heart, Smile, MoreHorizontal, AlertTriangle,
-  Search, ChevronDown, ChevronUp, Mic, StopCircle, History,
-  ChevronsDown, RefreshCw, Link, Copy, Sparkles,
-} from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
+import { MessageCircle, X, Send, Loader2, Flag, Reply, Edit3, Trash2, Pin, Heart, MoreHorizontal, AlertTriangle, Search, ChevronDown, ChevronUp, Mic, StopCircle, ChevronsDown, RefreshCw, Link } from "lucide-react";
 import commentService from '../services/commentService.js';
 import notificationsService from '../services/notificationsService.js';
 import { getSafeAvatarUrl, generateDefaultAvatarSvg } from '../utils/avatarUtils.js';
@@ -1325,7 +1316,15 @@ export default function CommentsDrawer({ isOpen, onClose, post, currentUser, the
     } catch (err) {
       if (!mountedRef.current) return;
       console.warn('Comment post error, retained as local comment:', err);
-      // Keep optimistic comment visible rather than harshly discarding user's input
+      // Persist the optimistic comment so the "saved locally" claim is true —
+      // the read path merges `arvdoul_local_comments_<postId>`, so a
+      // memory-only comment vanished on the next load.
+      try {
+        const key = `arvdoul_local_comments_${postId}`;
+        const current = JSON.parse(localStorage.getItem(key) || '[]');
+        current.unshift(optimistic);
+        localStorage.setItem(key, JSON.stringify(current.slice(0, 50)));
+      } catch {}
       toast.success('Comment saved locally');
       setReplyTarget(null);
     }

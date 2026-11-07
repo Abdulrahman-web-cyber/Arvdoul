@@ -1,6 +1,5 @@
 import { logger, setCorrelationId, getCorrelationId } from '../utils/Logger.js';
 import { auditLogger } from '../utils/AuditLogger.js';
-import { errorHandler } from '../utils/ErrorHandler.js';
 import { clearOnboardingRequired } from '../utils/profileCompletion.js';
 
 const AUTH_CONFIG = {

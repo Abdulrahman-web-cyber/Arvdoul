@@ -12,21 +12,9 @@
  * @component
  */
 
-import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
-import { 
-  X, 
-  Camera, 
-  Upload, 
-  Search, 
-  Sparkles, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
-  ScanLine, 
-  RefreshCw,
-  UserCheck
-} from 'lucide-react';
+import { X, Camera, Upload, Search, CheckCircle2, AlertCircle, Loader2, ScanLine, RefreshCw, UserCheck } from "lucide-react";
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getUserService } from '../../services/userService';

@@ -145,7 +145,11 @@ class SettingsService {
         return { success: true, settings: updated, offlineQueued: true };
       } catch (err) {
         logger.warn('[Settings] Offline queue unavailable:', { error: err.message });
-        return { success: true, settings: updated, offlineQueued: true };
+        // The write is only in memory; claiming `offlineQueued: true` promised a
+        // durable queue entry that does not exist. Roll back and surface the
+        // failure so the caller's optimistic state is reverted.
+        this._cache.set(this._cacheKey(userId), { settings: current, at: Date.now() });
+        throw new Error(`SETTINGS_OFFLINE_QUEUE_FAILED: ${err.message}`);
       }
     }
 

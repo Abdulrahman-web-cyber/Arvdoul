@@ -2,8 +2,8 @@
 //
 // Inspired by Linear, Vercel, YouTube, and GitHub
 
-import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 
 /**
  * RouteProgressBar - Mounts an unobtrusive glowing gradient line at the top of the screen
@@ -87,14 +87,6 @@ export const TopAppLoadingBanner = ({ isAnimating = true, label = null }) => {
       )}
     </div>
   );
-};
-
-/**
- * RouteSkeletonShell - Ambient placeholder that displays ONLY the top progress banner,
- * strictly never covering the entire screen or rendering fake card/video skeletons.
- */
-export const RouteSkeletonShell = ({ variant = 'default' }) => {
-  return <TopAppLoadingBanner isAnimating={true} />;
 };
 
 export default RouteProgressBar;

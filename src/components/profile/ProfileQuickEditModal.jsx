@@ -5,7 +5,7 @@
  * @component
  */
 
-import React, { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect } from "react";
 import { X, User, Edit3, Globe, AlignLeft, Sparkles, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';

@@ -5,7 +5,7 @@
 // own sample peaks, and a clip with no decoded audio says so instead of drawing
 // an invented waveform.
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from "react";
 import {
   Mic, Lock, Unlock, Plus, Music, Radio,
   ZoomIn, ZoomOut, Maximize2, Sparkles,

@@ -1,25 +1,9 @@
 // src/screens/Rankings/RankingsScreen.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
-import { 
-  Trophy, 
-  Crown, 
-  Medal, 
-  ArrowUp, 
-  ArrowDown, 
-  Minus, 
-  Star, 
-  Users, 
-  Flame,
-  LineChart, 
-  Coins, 
-  ShieldCheck, 
-  Check, 
-  Sparkles,
-  ChevronRight
-} from 'lucide-react';
+import { Trophy, Crown, Medal, ArrowUp, ArrowDown, Minus, Star, Users, Flame, LineChart, Coins, ShieldCheck, Check, ChevronRight } from "lucide-react";
 import { RANKING_CONFIG } from '../../services/rankingService.js';
 import rankingService from '../../services/rankingService.js';
 import { cn } from '../../lib/utils';

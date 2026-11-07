@@ -14,6 +14,7 @@
  */
 
 import { create } from 'zustand';
+import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
 import { immer } from 'zustand/middleware/immer';
 import { toast } from 'sonner';
 import { useAppStore } from './appStore.js';
@@ -375,7 +376,7 @@ export const useProfileStore = create(
         let userPosts = result?.posts || [];
         try {
           if (typeof window !== 'undefined' && window.localStorage) {
-            const localPosts = JSON.parse(localStorage.getItem('arvdoul_local_posts') || '[]');
+            const localPosts = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]');
             // Match only this author's posts. The previous `|| !p.authorId`
             // clause injected another account's (or an unattributed) cached
             // post into every profile's feed.

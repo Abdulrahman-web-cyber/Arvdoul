@@ -1,6 +1,6 @@
 // src/components/Videos/VideoProgressBar.jsx
 
-import React, { memo } from 'react';
+import { memo } from "react";
 import { motion } from 'framer-motion';
 import { ARVDOUL_GRADIENT } from '../../utils/videoUtils';
 import PropTypes from 'prop-types';

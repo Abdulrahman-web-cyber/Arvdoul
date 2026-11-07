@@ -1,15 +1,13 @@
 // src/screens/HomeScreen.jsx
 
 import React, { useState, useEffect, useCallback, useRef, useReducer, useContext, createContext, useMemo } from 'react';
+import { LOCAL_POSTS_KEY } from '../utils/localContentCache.js';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import {
-  RefreshCw, Sparkles, Compass, AlertCircle, ChevronDown, ChevronUp,
-  Coins, Gift, Flame, PlayCircle, Radio, Users, Check, X
-} from 'lucide-react';
+import { RefreshCw, Compass, AlertCircle, ChevronDown, ChevronUp, Coins, Gift, Check } from "lucide-react";
 import { Virtuoso } from 'react-virtuoso';
 import feedService from '../services/feedService';
 import userService from '../services/userService';
@@ -470,17 +468,11 @@ const VisibilityContext = createContext({
   unregister: () => {},
 });
 
-function VisibilityProvider({ children, scrollerRef }) {
+function VisibilityProvider({ children, root }) {
   const callbacksRef = useRef(new Map());
   const observerRef = useRef(null);
   const visibilityTimers = useRef(new Map());
   const pendingRegistrations = useRef([]);
-  const [rootEl, setRootEl] = useState(null);
-
-  const setScrollerElement = useCallback((el) => {
-    setRootEl(el);
-    if (scrollerRef) scrollerRef.current = el;
-  }, [scrollerRef]);
 
   useEffect(() => {
     // disconnect old observer before creating new one
@@ -488,7 +480,7 @@ function VisibilityProvider({ children, scrollerRef }) {
       observerRef.current.disconnect();
       observerRef.current = null;
     }
-    if (!rootEl) return; // ✅ correct: null = not ready
+    if (!root) return; // ✅ correct: null = not ready
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -512,7 +504,7 @@ function VisibilityProvider({ children, scrollerRef }) {
           }
         });
       },
-      { threshold: OBSERVER_THRESHOLD, root: rootEl, rootMargin: '200px' }
+      { threshold: OBSERVER_THRESHOLD, root, rootMargin: '200px' }
     );
 
     for (const [el, cb] of pendingRegistrations.current) {
@@ -525,7 +517,7 @@ function VisibilityProvider({ children, scrollerRef }) {
       observerRef.current?.disconnect();
       observerRef.current = null;
     };
-  }, [rootEl]);
+  }, [root]);
 
   const register = useCallback((element, callback) => {
     if (!element) return;
@@ -794,13 +786,13 @@ export default function HomeScreen() {
 
   const virtuosoRef = useRef(null);
   const scrollerRef = useRef(null);
-  const [scrollerReady, setScrollerReady] = useState(false);
+  // The scroller element is owned by Virtuoso, which mounts after the first
+  // render. The visibility observer needs it as its IntersectionObserver root;
+  // keeping it in state re-runs the provider effect once it is attached.
+  const [scrollerRootEl, setScrollerRootEl] = useState(null);
+  const scrollerReady = Boolean(scrollerRootEl);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [showOnlineBanner, setShowOnlineBanner] = useState(false);
-  const [showOfflineBanner, setShowOfflineBanner] = useState(!navigator.onLine);
-  const onlineTimerRef = useRef(null);
-  const offlineTimerRef = useRef(null);
   const onlineRefreshDebounceRef = useRef(null);
 
   // Blocked users cache (5 min TTL)
@@ -962,7 +954,7 @@ export default function HomeScreen() {
               // Merge local posts (e.g. freshly published) at the very top of the feed
               let localPosts = [];
               try {
-                const raw = localStorage.getItem('arvdoul_local_posts');
+                const raw = localStorage.getItem(LOCAL_POSTS_KEY);
                 if (raw) localPosts = JSON.parse(raw);
               } catch {}
               if (Array.isArray(localPosts) && localPosts.length > 0) {
@@ -1208,14 +1200,11 @@ export default function HomeScreen() {
     return () => window.removeEventListener('arvdoul:post_id_synced', handleIdSynced);
   }, []);
 
-  // Online/offline with debounced refresh
+  // Online/offline with debounced refresh. Connection banners are owned by the
+  // global `OfflineIndicator` / `TopAppBar`; the screen only re-syncs the feed.
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      setShowOnlineBanner(true);
-      setShowOfflineBanner(false);
-      clearTimeout(onlineTimerRef.current);
-      onlineTimerRef.current = setTimeout(() => setShowOnlineBanner(false), 3000);
       if (onlineRefreshDebounceRef.current) clearTimeout(onlineRefreshDebounceRef.current);
       onlineRefreshDebounceRef.current = setTimeout(() => {
         if (user?.uid) {
@@ -1227,10 +1216,6 @@ export default function HomeScreen() {
     };
     const handleOffline = () => {
       setIsOnline(false);
-      setShowOfflineBanner(true);
-      setShowOnlineBanner(false);
-      clearTimeout(offlineTimerRef.current);
-      offlineTimerRef.current = setTimeout(() => setShowOfflineBanner(false), 4000);
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -1312,7 +1297,7 @@ export default function HomeScreen() {
   const isTrulyIdle = !hasMore && feed.length > 0 && !hasPendingRealtime && !hasPendingPreload && status === STATUS.SUCCESS;
 
   return (
-    <VisibilityProvider scrollerRef={scrollerRef}>
+    <VisibilityProvider root={scrollerRootEl}>
       <div className={cn(
         'h-full min-h-0 w-full flex flex-col overflow-hidden max-w-2xl mx-auto',
         isDark ? 'bg-gradient-to-br from-[#060816] via-[#0b1220] to-[#02040a]' : 'bg-gradient-to-br from-[#f0f4fa] via-white to-[#eef2f8]'
@@ -1341,6 +1326,17 @@ export default function HomeScreen() {
                 {newPostsCount} new post{newPostsCount > 1 ? 's' : ''} – tap to refresh
               </motion.div>
             )}
+            <motion.button
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              onClick={handleRefresh}
+              aria-label="Refresh feed"
+              title="Refresh feed"
+              className="absolute top-12 right-3 z-40 rounded-full bg-black/40 dark:bg-white/10 backdrop-blur-md p-2 text-white shadow-lg transition-colors hover:bg-black/60"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </motion.button>
           </AnimatePresence>
         </div>
 
@@ -1408,7 +1404,7 @@ export default function HomeScreen() {
                 ref={virtuosoRef}
                 scrollerRef={(ref) => {
                   scrollerRef.current = ref;
-                  setScrollerReady(!!ref);
+                  setScrollerRootEl((prev) => (prev === ref ? prev : ref));
                 }}
                 data={feed}
                 endReached={handleEndReached}

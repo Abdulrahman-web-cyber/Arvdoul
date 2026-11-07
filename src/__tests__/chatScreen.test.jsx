@@ -1,6 +1,5 @@
 // src/__tests__/chatScreen.test.jsx
 
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { I18nextProvider, initReactI18next } from 'react-i18next';

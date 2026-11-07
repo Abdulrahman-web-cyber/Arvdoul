@@ -6,22 +6,10 @@
  * and optimistic state updates in useProfileStore.
  */
 
-import { jest } from '@jest/globals';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  PROFILE_TYPES,
-  VISIBILITY_SCOPES,
-  DEFAULT_PROFILE_PRIVACY,
-  SERVER_AUTHORITATIVE_FIELDS,
-  PROFILE_CONSTRAINTS,
-  PROFILE_TABS,
-  isValidWebUrl,
-  sanitizeProfileUrl,
-  validateProfileUpdate,
-  canViewProfileSection
-} from '../config/profileContracts.js';
+import { PROFILE_TYPES, VISIBILITY_SCOPES, DEFAULT_PROFILE_PRIVACY, PROFILE_CONSTRAINTS, PROFILE_TABS, isValidWebUrl, sanitizeProfileUrl, validateProfileUpdate, canViewProfileSection } from "../config/profileContracts.js";
 import { useProfileStore } from '../store/profileStore.js';
 
 describe('Profile System Hardening & Validation Contracts', () => {

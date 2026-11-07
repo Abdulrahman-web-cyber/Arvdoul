@@ -281,7 +281,6 @@ const ImageCard = React.memo(({
   onAnalytics,
   onModerationCheck,
   onPerformanceMetric,
-  currentUser,      // kept for consistency, not used directly
   postId,
   srcSetGenerator,
   overlay,

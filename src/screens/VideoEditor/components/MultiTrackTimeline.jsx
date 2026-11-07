@@ -1,12 +1,8 @@
 // src/screens/VideoEditor/components/MultiTrackTimeline.jsx
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from "react";
 import PropTypes from 'prop-types';
-import { motion } from 'framer-motion';
-import {
-  Eye, EyeOff, Lock, Unlock, Plus, Video, Type, Image as ImageIcon,
-  Music, Mic, Volume2, Sparkles, Scissors, Trash2
-} from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Plus, Video, Type, Image as ImageIcon, Music, Mic } from "lucide-react";
 import { formatMinutesSeconds } from '../constants';
 
 export default function MultiTrackTimeline({

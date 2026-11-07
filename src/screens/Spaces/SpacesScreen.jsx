@@ -2,34 +2,15 @@
 //
 // Real-time audio stages, speaker hand raising, super coin tipping, and interactive reactions
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Radio, 
-  Mic, 
-  MicOff, 
-  Hand, 
-  Users, 
-  Flame, 
-  Sparkles, 
-  Coins, 
-  Heart, 
-  Plus, 
-  X, 
-  Volume2, 
-  Share2,
-  Crown,
-  CheckCircle,
-  MessageCircle,
-  Headphones
-} from 'lucide-react';
+import { Radio, Mic, MicOff, Hand, Users, Coins, Plus, X, Crown, CheckCircle, Headphones } from "lucide-react";
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../store/appStore';
 import spacesService from '../../services/spacesService';
-import LoadingSpinner from '../../components/Shared/LoadingSpinner';
 import { useEscapeClose } from '../../hooks/useEscapeClose';
 
 const CATEGORIES = ['All', 'Tech & AI', 'Music & Audio', 'Crypto & Web3', 'Chill Lounge', 'Creator Talk'];
@@ -48,8 +29,11 @@ export default function SpacesScreen() {
   const [loading, setLoading] = useState(true);
 
   // In-room state
-  const [isMuted, setIsMuted] = useState(true);
   const [isHandRaised, setIsHandRaised] = useState(false);
+  const [isMicLive, setIsMicLive] = useState(false);
+  const [micBusy, setMicBusy] = useState(false);
+  const remoteAudioRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const [reactions, setReactions] = useState([]);
   const [tipModalSpeaker, setTipModalSpeaker] = useState(null);
   const [tipAmount, setTipAmount] = useState(100);
@@ -80,11 +64,32 @@ export default function SpacesScreen() {
     }
   };
 
-  const handleJoinSpace = (space) => {
+  // Stop the microphone and leave the roster when the room changes or the
+  // screen unmounts, so no capture track leaks.
+  useEffect(() => {
+    return () => {
+      spacesService.stopAudio();
+    };
+  }, []);
+
+  const handleJoinSpace = async (space) => {
+    const previous = activeSpace;
+    if (previous?.id && previous.id !== space.id && user?.uid) {
+      spacesService.leaveSpace(previous.id, user.uid).catch(() => {});
+    }
     setActiveSpace(space);
-    setIsMuted(true);
     setIsHandRaised(false);
-    toast.success(`Joined "${space.title}" 🎧`);
+    if (!user?.uid) {
+      toast.info('Sign in to join the conversation.');
+      return;
+    }
+    const res = await spacesService.joinSpace(space.id, user);
+    if (res?.success) {
+      toast.success(`Joined "${space.title}" 🎧`);
+      loadSpaces();
+    } else {
+      toast.error(res?.error || 'Could not join this space.');
+    }
   };
 
   const handleToggleHand = async () => {
@@ -94,12 +99,47 @@ export default function SpacesScreen() {
     }
     const raising = !isHandRaised;
     setIsHandRaised(raising);
-    try {
-      await spacesService.toggleRaisedHand(activeSpace.id, user, raising);
-      toast.info(raising ? 'Hand raised ✋' : 'Hand lowered');
-    } catch {
+    const result = await spacesService.toggleRaisedHand(activeSpace.id, user, raising);
+    if (!result?.success) {
       setIsHandRaised(!raising);
-      toast.error('Could not update your hand state.');
+      toast.error(result?.error || 'Could not update your hand state.');
+      return;
+    }
+    toast.info(raising ? 'Hand raised ✋' : 'Hand lowered');
+  };
+
+  // Real microphone: opens getUserMedia, joins the WebRTC signaling room and
+  // plays the remote stream. Fails honestly if the mic is denied.
+  const handleToggleMic = async () => {
+    if (!activeSpace?.id || !user?.uid) {
+      toast.error('Join a space to speak.');
+      return;
+    }
+    if (isMicLive) {
+      spacesService.stopAudio();
+      setIsMicLive(false);
+        return;
+    }
+    setMicBusy(true);
+    try {
+      const isHost = activeSpace.host?.id === user.uid;
+      const stream = await spacesService.startAudio(activeSpace.id, user, {
+        isHost,
+        onRemoteTrack: (remote) => {
+          remoteStreamRef.current = remote;
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = remote;
+            remoteAudioRef.current.play?.().catch(() => {});
+          }
+        },
+      });
+      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
+      setIsMicLive(true);
+      toast.success(isHost ? 'You are live on stage 🎙️' : 'Microphone connected 🎙️');
+    } catch (err) {
+      toast.error(err?.message || 'Could not start your microphone.');
+    } finally {
+      setMicBusy(false);
     }
   };
 
@@ -161,9 +201,21 @@ export default function SpacesScreen() {
       setIsCreateModalOpen(false);
       setNewSpaceTitle('');
       toast.success('Your live space is now broadcasted! 🎙️');
-    } catch {
-      toast.error('Failed to start space');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to start space');
     }
+  };
+
+  const handleEndSpace = async () => {
+    if (!activeSpace?.id || !user?.uid) return;
+    const res = await spacesService.endSpace(activeSpace.id, user.uid);
+    if (!res?.success) {
+      toast.error(res?.error || 'Could not end this space.');
+      return;
+    }
+    toast.success('Space ended.');
+    setActiveSpace(null);
+    loadSpaces();
   };
 
   return (
@@ -250,6 +302,14 @@ export default function SpacesScreen() {
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-400 text-xs font-bold">
                     <Coins className="w-4 h-4" /> {activeSpace.tipsTotalCoins.toLocaleString()} Tips
                   </div>
+                  {activeSpace.host?.id === user?.uid && (
+                    <button
+                      onClick={handleEndSpace}
+                      className="px-3 py-1.5 rounded-xl bg-red-500/20 text-red-400 text-xs font-bold hover:bg-red-500/30"
+                    >
+                      End Space
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -326,12 +386,13 @@ export default function SpacesScreen() {
               <div className="mt-8 pt-6 border-t border-gray-800 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setIsMuted(!isMuted)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all ${
-                      isMuted ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-green-600 text-white animate-pulse'
+                    onClick={handleToggleMic}
+                    disabled={micBusy}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-60 ${
+                      isMicLive ? 'bg-green-600 text-white animate-pulse' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                     }`}
                   >
-                    {isMuted ? <><MicOff className="w-4 h-4 text-red-400" /> Muted</> : <><Mic className="w-4 h-4" /> Live Mic</>}
+                    {isMicLive ? <><Mic className="w-4 h-4" /> Live Mic</> : <><MicOff className="w-4 h-4 text-red-400" /> Join Mic</>}
                   </button>
 
                   <button
@@ -357,6 +418,8 @@ export default function SpacesScreen() {
                   ))}
                 </div>
               </div>
+              {/* Remote speaker audio (populated by the WebRTC track). */}
+              <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
             </div>
           ) : (
             <div className="p-12 text-center text-gray-500 border border-dashed border-gray-800 rounded-3xl">
