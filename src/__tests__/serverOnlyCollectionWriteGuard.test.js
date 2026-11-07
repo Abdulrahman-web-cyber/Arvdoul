@@ -94,7 +94,8 @@ const REQUIRED_SERVER_ONLY = [
   ['live_gifts', 'create'], ['live_tips', 'create'], ['gift_transactions', 'create'],
   ['coin_ledger', 'create'], ['notifications', 'create'], ['moderation_logs', 'create'],
   ['profile_views', 'create'], ['profile_analytics', 'create'], ['communities', 'update'],
-  ['video_purchases', 'create'],
+  ['video_purchases', 'create'], ['collaboration_projects', 'create'],
+  ['collaboration_projects', 'update'], ['collaboration_invites', 'create'],
 ];
 
 function collectSrcFiles(dir) {
@@ -217,5 +218,36 @@ describe('client writes to server-only collections', () => {
     }
     const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
     expect(index).toContain("merge(require('./communities.js'))");
+  });
+
+  test('the event + collaboration subsystems are server-authoritative', () => {
+    const index = fs.readFileSync(path.join(root, 'functions', 'index.js'), 'utf8');
+    expect(index).toContain("merge(require('./events.js'))");
+    expect(index).toContain("merge(require('./collaboration.js'))");
+
+    // events: organizer-only create/update/delete stays client-side (the rule
+    // permits it), but no client code may write the attendee map or its
+    // counters — the rule only lets the ORGANIZER update the document, so a
+    // direct attendee write was denied and registration silently did nothing.
+    const events = fs.readFileSync(path.join(root, 'src', 'services', 'eventService.js'), 'utf8');
+    // Computed-property writes (`[`attendees.${uid}`]: …`), not the read query
+    // `where(`attendees.${uid}.status`, …)`.
+    expect(events).not.toMatch(/\[`attendees\.\$\{/);
+    // Writes are `'stats.attendeeCount': increment(…)`; the read is
+    // `orderBy('stats.attendeeCount', …)`. Only the write form has the colon.
+    expect(events).not.toMatch(/'stats\.attendeeCount':/);
+    expect(events).not.toMatch(/'stats\.waitlistCount':/);
+    for (const key of ['REGISTER_FOR_EVENT', 'CANCEL_EVENT_REGISTRATION', 'CHECK_IN_EVENT_ATTENDEE', 'SUBMIT_EVENT_FEEDBACK']) {
+      expect(events).toContain(`FUNCTIONS.${key}`);
+    }
+
+    // collaboration: membership/roles are privilege data, so the client must
+    // not write the project document or its team/content subcollections at all.
+    const collab = fs.readFileSync(path.join(root, 'src', 'services', 'collaborationService.js'), 'utf8');
+    for (const pattern of [/\bsetDoc\(/, /\bupdateDoc\(/, /\bdeleteDoc\(/, /\.batch\(\)/]) {
+      expect(collab).not.toMatch(pattern);
+    }
+    expect(collab).toContain('FUNCTIONS.CREATE_COLLAB_PROJECT');
+    expect(collab).toContain('FUNCTIONS.ACCEPT_COLLAB_INVITE');
   });
 });

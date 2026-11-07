@@ -1,7 +1,8 @@
 import { logger } from '../utils/Logger.js';
 
 import { getFirestoreInstance } from '../firebase/firebase.js';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+import { callFunction, FUNCTIONS } from './callableService.js';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 const EVENTS_PER_PAGE = 20;
 // Hard ceiling for any single event read (registrations/organizer/feedback).
@@ -179,39 +180,10 @@ class EventService {
    */
   async registerForEvent(eventId, userId, ticketTier = 'general') {
     await this.initialize();
-    
-    const event = await this.getEvent(eventId);
-    if (!event) throw new Error('Event not found');
-    
-    if (event.attendees?.[userId]) {
-      throw new Error('Already registered for this event');
-    }
-
-    // Check capacity
-    const isFull = event.capacity > 0 && event.stats?.attendeeCount >= event.capacity;
-    const status = isFull ? 'waitlisted' : 'registered';
-
-    const updateData = {
-      [`attendees.${userId}`]: {
-        status,
-        ticketTier,
-        registeredAt: serverTimestamp(),
-        checkedInAt: null
-      },
-      'stats.attendeeCount': status === 'registered' ? increment(1) : increment(0),
-      'stats.waitlistCount': status === 'waitlisted' ? increment(1) : increment(0),
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(doc(this.db, 'events', eventId), updateData);
-
-    // Update user's events
-    await updateDoc(doc(this.db, 'users', userId), {
-      attendingEvents: arrayUnion(eventId),
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true, status, event };
+    // Server-authoritative: the rule only lets the organizer update the event,
+    // so a direct write here was denied and registration silently did nothing.
+    const result = await callFunction(FUNCTIONS.REGISTER_FOR_EVENT, { eventId, ticketTier });
+    return { success: true, status: result?.status || 'registered' };
   }
 
   /**
@@ -222,43 +194,7 @@ class EventService {
    */
   async cancelRegistration(eventId, userId) {
     await this.initialize();
-    
-    const event = await this.getEvent(eventId);
-    if (!event) throw new Error('Event not found');
-    
-    const registration = event.attendees?.[userId];
-    if (!registration) {
-      throw new Error('Not registered for this event');
-    }
-
-    const wasRegistered = registration.status === 'registered';
-    const wasWaitlisted = registration.status === 'waitlisted';
-
-    const updateData = {
-      [`attendees.${userId}`]: null,
-      updatedAt: serverTimestamp()
-    };
-
-    if (wasRegistered) {
-      updateData['stats.attendeeCount'] = increment(-1);
-    }
-    if (wasWaitlisted) {
-      updateData['stats.waitlistCount'] = increment(-1);
-    }
-
-    await updateDoc(doc(this.db, 'events', eventId), updateData);
-
-    // Update user's events
-    await updateDoc(doc(this.db, 'users', userId), {
-      attendingEvents: arrayRemove(eventId),
-      updatedAt: serverTimestamp()
-    });
-
-    // Promote from waitlist if applicable
-    if (wasRegistered && event.stats?.waitlistCount > 0) {
-      await this.promoteFromWaitlist(eventId);
-    }
-
+    await callFunction(FUNCTIONS.CANCEL_EVENT_REGISTRATION, { eventId });
     return true;
   }
 
@@ -268,22 +204,9 @@ class EventService {
    * @returns {Promise<void>}
    */
   async promoteFromWaitlist(eventId) {
-    const event = await this.getEvent(eventId);
-    if (!event) return;
-
-    // Find waitlisted users
-    const waitlisted = Object.entries(event.attendees || {})
-      .filter(([_, data]) => data.status === 'waitlisted')
-      .sort((a, b) => a[1].registeredAt?.seconds - b[1].registeredAt?.seconds);
-
-    if (waitlisted.length > 0) {
-      const [nextUserId] = waitlisted[0];
-      await updateDoc(doc(this.db, 'events', eventId), {
-        [`attendees.${nextUserId}.status`]: 'registered',
-        'stats.waitlistCount': increment(-1),
-        updatedAt: serverTimestamp()
-      });
-    }
+    await this.initialize();
+    const result = await callFunction(FUNCTIONS.PROMOTE_EVENT_WAITLIST, { eventId });
+    return result?.promotedUserId || null;
   }
 
   /**
@@ -295,25 +218,7 @@ class EventService {
    */
   async checkInAttendee(eventId, attendeeId, organizerId) {
     await this.initialize();
-    
-    const event = await this.getEvent(eventId);
-    if (!event) throw new Error('Event not found');
-    
-    if (event.organizerId !== organizerId) {
-      throw new Error('Only the organizer can check in attendees');
-    }
-
-    const registration = event.attendees?.[attendeeId];
-    if (!registration) {
-      throw new Error('User is not registered');
-    }
-
-    await updateDoc(doc(this.db, 'events', eventId), {
-      [`attendees.${attendeeId}.checkedInAt`]: serverTimestamp(),
-      [`attendees.${attendeeId}.status`]: 'checked_in',
-      updatedAt: serverTimestamp()
-    });
-
+    await callFunction(FUNCTIONS.CHECK_IN_EVENT_ATTENDEE, { eventId, attendeeId });
     return true;
   }
 
@@ -494,45 +399,8 @@ class EventService {
    */
   async submitFeedback(eventId, userId, rating, comment = '') {
     await this.initialize();
-    
-    const event = await this.getEvent(eventId);
-    if (!event) throw new Error('Event not found');
-    
-    const registration = event.attendees?.[userId];
-    if (!registration) {
-      throw new Error('Must be registered to submit feedback');
-    }
-
-    const feedbackId = doc(collection(this.db, 'event_feedback')).id;
-    await setDoc(doc(this.db, 'event_feedback', feedbackId), {
-      eventId,
-      userId,
-      rating,
-      comment,
-      createdAt: serverTimestamp()
-    });
-
-    // Update average rating
-    const feedbackQuery = query(
-      collection(this.db, 'event_feedback'),
-      where('eventId', '==', eventId),
-      limit(MAX_EVENT_READ)
-    );
-    const feedbackSnapshot = await getDocs(feedbackQuery);
-    
-    let totalRating = 0;
-    feedbackSnapshot.docs.forEach(doc => {
-      totalRating += doc.data().rating;
-    });
-    
-    const avgRating = totalRating / feedbackSnapshot.size;
-    
-    await updateDoc(doc(this.db, 'events', eventId), {
-      'stats.feedbackScore': avgRating,
-      updatedAt: serverTimestamp()
-    });
-
-    return true;
+    const result = await callFunction(FUNCTIONS.SUBMIT_EVENT_FEEDBACK, { eventId, rating, comment });
+    return { success: true, feedbackScore: result?.feedbackScore ?? 0 };
   }
 
   /**

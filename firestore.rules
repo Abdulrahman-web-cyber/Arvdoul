@@ -966,29 +966,29 @@ service cloud.firestore {
     }
 
     // ==================== COLLABORATION ====================
+    // Membership and roles are privilege data. The client used to write the
+    // project document and the `team`/`content` subcollections directly, but
+    // the subcollection rule required an `authorId`/`userId` field the client
+    // never wrote and the parent rule keyed on `ownerId` — so creating,
+    // inviting, saving, submitting, reviewing and publishing were all denied.
+    // Every mutation now goes through functions/collaboration.js.
     match /collaboration_projects/{projectId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && authoredBy('ownerId');
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      allow write: if false;
       match /{subcollection}/{docId} {
         allow read: if isSignedIn();
-        allow create: if isSignedIn() && (request.resource.data.authorId == uid() || request.resource.data.userId == uid());
-        allow update, delete: if isSignedIn() && (resource.data.authorId == uid() || resource.data.userId == uid() || isAdmin());
+        allow write: if false;
       }
     }
     match /collaboration_invites/{inviteId} {
       // Invites carry the invitee's email address, so they are not a public
-      // feed: only the inviter and the invited address may read them.
+      // feed: only the inviter and the invited address may read them. Writes
+      // are server-only (createCollaborationInvite / accept / decline).
       allow read: if isSignedIn() && (
         resource.data.invitedBy == uid() ||
         (resource.data.email != null && resource.data.email == request.auth.token.email)
       );
-      allow create: if isSignedIn() && request.resource.data.invitedBy == uid();
-      allow update, delete: if isSignedIn() && (
-        resource.data.invitedBy == uid() ||
-        (resource.data.email != null && resource.data.email == request.auth.token.email) ||
-        isAdmin()
-      );
+      allow write: if false;
     }
 
     // ==================== COLLECTIONS (saved posts) ====================

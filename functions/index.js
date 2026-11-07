@@ -76,6 +76,14 @@ merge(require('./privacyPropagation.js'));
 // moderation). The community document's members map and derived counters are
 // privilege data, so the client never writes it directly.
 merge(require('./communities.js'));
+// Server-authoritative event participation (registration/waitlist/check-in/
+// feedback). The rule only lets the organizer update the event document, so
+// these cross-user mutations must go through callables.
+merge(require('./events.js'));
+// Server-authoritative collaboration projects (team roles, content versions,
+// review/publish). Membership is privilege data; the client never writes the
+// project document or its team/content subcollections.
+merge(require('./collaboration.js'));
 
 // ==================== CONFIGURATION ====================
 const VIDEO_CONFIG = {
