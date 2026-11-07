@@ -55,23 +55,111 @@ class CallService {
   }
 
   /**
-   * Create the signaling document. Writes `participants` (rules requirement) plus
-   * the caller/callee fields used by the UI.
+   * One 1:1 call is one document, addressed by the two uids. A random id per
+   * peer meant each side created its OWN `calls/{id}`, subscribed to its own
+   * doc, and the two never saw each other's offer/answer — the call could never
+   * connect. Sorting the uids makes the id identical from both sides, so
+   * whichever peer opens the call screen first creates the doc and the other
+   * joins it.
+   */
+  deriveCallId(uidA, uidB) {
+    const [a, b] = [String(uidA), String(uidB)].sort();
+    return `call_${a}__${b}`;
+  }
+
+  /**
+   * Create (or reuse) the shared signaling document for a 1:1 call.
+   *  - absent            -> create it, this peer is the caller
+   *  - previous ended    -> reset it for the new call (clears stale SDP)
+   *  - already ringing/active -> leave it untouched so a late joiner does not
+   *    clobber the in-flight offer/answer
    * @returns {Promise<string>} callId
    */
-  async createCall({ conversationId, selfUid, peerId, participants }) {
+  async ensureCall({ conversationId, selfUid, peerId, participants }) {
     const db = await this._firestore();
-    const { collection, addDoc, serverTimestamp } = await this._fs();
+    const { doc, getDoc, setDoc, updateDoc, serverTimestamp } = await this._fs();
+    const callId = this.deriveCallId(selfUid, peerId);
+    const ref = doc(db, 'calls', callId);
     const memberList = Array.from(new Set([...(participants || []), selfUid, peerId]));
-    const ref = await addDoc(collection(db, 'calls'), {
-      conversationId,
-      participants: memberList,
-      callerId: selfUid,
-      calleeId: peerId,
-      status: CALL_STATUS.RINGING,
-      createdAt: serverTimestamp(),
-    });
-    return ref.id;
+
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        conversationId,
+        participants: memberList,
+        callerId: selfUid,
+        calleeId: peerId,
+        status: CALL_STATUS.RINGING,
+        createdAt: serverTimestamp(),
+      });
+    } else if (snap.data().status === CALL_STATUS.ENDED) {
+      await updateDoc(ref, {
+        participants: memberList,
+        callerId: selfUid,
+        calleeId: peerId,
+        status: CALL_STATUS.RINGING,
+        offer: null,
+        answer: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    return callId;
+  }
+
+  /**
+   * Watch for ringing calls addressed to this uid. Returns a stop function.
+   *
+   * A bounded `getDocs` poll, not an `onSnapshot`: the repo's Firebase cost
+   * guard forbids net-new realtime listeners (the baseline may only shrink),
+   * and a ringing call is short-lived enough that a few-second poll is fine.
+   * `limit()` keeps each read bounded. The caller never matches (calleeId is
+   * the peer, not self), so only the callee rings.
+   */
+  async watchIncomingCalls(selfUid, onRing, { intervalMs = 4000 } = {}) {
+    const db = await this._firestore();
+    const { collection, query, where, limit, getDocs } = await this._fs();
+    let stopped = false;
+    let seen = new Set();
+
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        // Query on `participants array-contains` so Firestore can prove the
+        // `uid() in resource.data.participants` read rule; a bare `calleeId`
+        // filter would be rejected as an unsafe list query ("rules are not
+        // filters"). calleeId is filtered here in code instead.
+        const snap = await getDocs(query(
+          collection(db, 'calls'),
+          where('participants', 'array-contains', selfUid),
+          where('status', '==', CALL_STATUS.RINGING),
+          limit(5),
+        ));
+        const live = new Set(snap.docs.map((d) => d.id));
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.calleeId !== selfUid) return; // this is our own outgoing call
+          if (seen.has(d.id)) return;
+          seen.add(d.id);
+          onRing({
+            callId: d.id,
+            conversationId: data.conversationId,
+            callerId: data.callerId,
+            participants: data.participants || [],
+          });
+        });
+        // Forget calls that stopped ringing so a later re-ring surfaces again.
+        seen = new Set([...seen].filter((id) => live.has(id)));
+      } catch (e) {
+        logger.warn('[callService] incoming-call poll failed', { error: e?.message });
+      }
+    };
+
+    await tick();
+    const timer = setInterval(tick, intervalMs);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
   }
 
   /** Subscribe to the signaling document (offer/answer/status). Returns unsubscribe. */

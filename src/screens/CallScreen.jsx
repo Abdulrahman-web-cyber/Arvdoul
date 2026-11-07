@@ -7,7 +7,7 @@
 // Works across tabs/devices on the same Firestore project.
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useTheme } from '@context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +23,8 @@ export default function CallScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const [searchParams] = useSearchParams();
+  const isAudioCall = searchParams.get('type') === 'audio';
 
   const [peer, setPeer] = useState(null); // { id, name, avatar }
   const [status, setStatus] = useState('connecting'); // connecting|ringing|active|ended
@@ -76,8 +78,10 @@ export default function CallScreen() {
         const { participants, peerId, peer: peerInfo } = await svc.resolveCall(conversationId, user.uid);
         setPeer(peerInfo);
 
-        // Local media
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        // Local media — audio-only when the caller chose an audio call.
+        const stream = await navigator.mediaDevices.getUserMedia(
+          isAudioCall ? { audio: true, video: false } : { video: true, audio: true }
+        );
         localStreamRef.current = stream;
         if (localRef.current) localRef.current.srcObject = stream;
 
@@ -100,9 +104,10 @@ export default function CallScreen() {
         // Deterministic role split: lower uid creates the offer.
         const isCaller = user.uid < peerId;
 
-        // Create the signaling doc (service writes the `participants` array the
-        // rules require, plus caller/callee).
-        const callId = await svc.createCall({ conversationId, selfUid: user.uid, peerId, participants });
+        // Shared signaling doc: both peers derive the same id, so the second to
+        // open the screen joins the first's offer/answer instead of creating a
+        // second doc neither side can see.
+        const callId = await svc.ensureCall({ conversationId, selfUid: user.uid, peerId, participants });
         callIdRef.current = callId;
         setStatus(CALL_STATUS.RINGING);
 
@@ -148,7 +153,7 @@ export default function CallScreen() {
     };
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, user?.uid]);
+  }, [conversationId, user?.uid, isAudioCall]);
 
   const toggleMute = () => {
     const audio = localStreamRef.current?.getAudioTracks()[0];
@@ -191,10 +196,12 @@ export default function CallScreen() {
           </div>
         )}
 
-        {/* Local video (PiP) */}
-        <div className="absolute bottom-4 right-4 w-28 h-40 rounded-xl overflow-hidden border-2 border-white/20 bg-gray-900">
-          <video ref={localRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-        </div>
+        {/* Local video (PiP) — hidden for audio-only calls */}
+        {!isAudioCall && (
+          <div className="absolute bottom-4 right-4 w-28 h-40 rounded-xl overflow-hidden border-2 border-white/20 bg-gray-900">
+            <video ref={localRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          </div>
+        )}
       </div>
 
       {/* Controls */}
