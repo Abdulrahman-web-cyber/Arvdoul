@@ -1238,8 +1238,8 @@ class UltimateCommentService {
       await this._ensureInitialized();
 
       const usersRef = this.firestoreMethods.collection(this.firestore, 'users');
-      const batch = this.firestoreMethods.writeBatch(this.firestore);
-      const notificationsRef = this.firestoreMethods.collection(this.firestore, 'notifications');
+      const { getNotificationsService } = await import('./notificationsService.js');
+      const notifications = getNotificationsService();
 
       const chunkSize = 10;
       for (let i = 0; i < mentions.length; i += chunkSize) {
@@ -1250,31 +1250,33 @@ class UltimateCommentService {
         );
         const userSnapshot = await this.firestoreMethods.getDocs(userQuery);
 
-        userSnapshot.forEach(docSnap => {
-          const mentionedUserId = docSnap.id;
-          const notifRef = this.firestoreMethods.doc(notificationsRef);
-          batch.set(notifRef, {
-            type: 'mention',
-            userId: mentionedUserId,
-            title: 'You were mentioned in a comment',
-            message: `${context.userName || 'Someone'} mentioned you in a comment`,
-            data: {
-              commentId: context.commentId,
-              postId: context.postId,
-              authorId: context.userId,
-              authorName: context.userName,
-              preview: context.content
-            },
-            isRead: false,
-            createdAt: this.firestoreMethods.serverTimestamp()
-          });
-        });
+        // Route through the server `sendNotification` callable. The previous
+        // code wrote a top-level `notifications` document from the client, but
+        // that collection is `allow create: if false` — the write was denied
+        // and the empty catch swallowed it, so mentions notified nobody.
+        for (const docSnap of userSnapshot.docs) {
+          try {
+            await notifications.sendNotification({
+              type: 'mention',
+              recipientId: docSnap.id,
+              senderId: context.userId,
+              title: 'You were mentioned in a comment',
+              message: `${context.userName || 'Someone'} mentioned you in a comment`,
+              data: {
+                commentId: context.commentId,
+                postId: context.postId,
+                authorId: context.userId,
+                authorName: context.userName,
+                preview: context.content
+              }
+            });
+          } catch (err) {
+            logger.warn('Mention notification failed', { error: err.message });
+          }
+        }
       }
-
-      await batch.commit();
-
     } catch (error) {
-      // Mention processing failed
+      logger.warn('Mention processing failed', { error: error.message });
     }
   }
 

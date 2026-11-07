@@ -664,6 +664,94 @@ exports.adminIssueCommunityStrike = functions.https.onCall(async (data, context)
 });
 
 // ----------------------------------------------------------------------
+//  communityModerate — community moderator actions (NOT platform admin)
+//
+//  A community owner/admin/moderator bans, unbans, toggles slow mode and
+//  toggles content approval. These mutations used to be written straight from
+//  the client, but `communities/{id}` only lets the *owner* (or a platform
+//  admin) update the document — so every moderator action was denied, the
+//  error was surfaced as "Insufficient permissions", and the moderation audit
+//  row was written to the server-only `moderation_logs` collection and denied
+//  too. Moderation now runs here: the caller's role is resolved server-side
+//  from the community document, the mutation is applied, and the action is
+//  audited.
+// ----------------------------------------------------------------------
+const COMMUNITY_ROLE_ACTIONS = {
+  ban: ['owner', 'admin', 'moderator'],
+  unban: ['owner', 'admin', 'moderator'],
+  slow_mode: ['owner', 'admin', 'moderator'],
+  slow_mode_off: ['owner', 'admin', 'moderator'],
+  content_approval_on: ['owner', 'admin'],
+  content_approval_off: ['owner', 'admin'],
+};
+
+exports.communityModerate = functions.https.onCall(async (data, context) => {
+  const actorUid = getUserIdFromContext(context);
+  await checkRateLimit(actorUid, 'communityModerate', 60, 60000);
+
+  const { communityId, action, targetUserId = null, reason = '', delay = 0 } = data || {};
+  if (!communityId || typeof communityId !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'A communityId is required.');
+  }
+  const allowedRoles = COMMUNITY_ROLE_ACTIONS[action];
+  if (!allowedRoles) {
+    throw new functions.https.HttpsError('invalid-argument', `Unknown community action "${action}".`);
+  }
+
+  const communityRef = db.doc(`communities/${communityId}`);
+  const snap = await communityRef.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError('not-found', 'Community not found.');
+  }
+  const community = snap.data();
+  const role = community.members?.[actorUid]?.role;
+  if (!role || !allowedRoles.includes(role)) {
+    throw new functions.https.HttpsError('permission-denied', 'Insufficient permissions.');
+  }
+  if ((action === 'ban' || action === 'unban') && !targetUserId) {
+    throw new functions.https.HttpsError('invalid-argument', 'targetUserId is required.');
+  }
+  if (action === 'ban' && community.members?.[targetUserId]?.role === 'owner') {
+    throw new functions.https.HttpsError('failed-precondition', 'Cannot ban the owner.');
+  }
+
+  const FieldValue = admin.firestore.FieldValue;
+  const patch = { updatedAt: FieldValue.serverTimestamp() };
+  if (action === 'ban') {
+    patch[`members.${targetUserId}`] = FieldValue.delete();
+    patch['moderation.bannedUsers'] = FieldValue.arrayUnion(targetUserId);
+    patch['stats.memberCount'] = FieldValue.increment(-1);
+  } else if (action === 'unban') {
+    patch['moderation.bannedUsers'] = FieldValue.arrayRemove(targetUserId);
+  } else if (action === 'slow_mode') {
+    patch['moderation.slowMode'] = true;
+    patch['moderation.slowModeDelay'] = Math.max(1, Math.min(Number(delay) || 0, 3600));
+  } else if (action === 'slow_mode_off') {
+    patch['moderation.slowMode'] = false;
+    patch['moderation.slowModeDelay'] = 0;
+  } else if (action === 'content_approval_on') {
+    patch['moderation.contentApproval'] = true;
+  } else if (action === 'content_approval_off') {
+    patch['moderation.contentApproval'] = false;
+  }
+
+  await communityRef.update(patch);
+  await writeAudit(
+    actorUid,
+    `community_${action}`,
+    communityId,
+    {
+      communityName: community.name || null,
+      targetUserId: targetUserId || null,
+      reason: String(reason || '').slice(0, 500),
+    },
+    'community'
+  );
+
+  return { success: true, communityId, action };
+});
+
+// ----------------------------------------------------------------------
 //  getAdminStatus — lets a signed-in client learn its *own* admin status
 //  without read access to the whole admins collection.
 // ----------------------------------------------------------------------

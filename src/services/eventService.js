@@ -566,19 +566,24 @@ class EventService {
     if (!event) return;
 
     const notifications = Object.keys(event.attendees || {});
-    
+
+    if (notifications.length === 0) return;
+    const { getNotificationsService } = await import('./notificationsService.js');
+    const notificationsService = getNotificationsService();
+    const senderId = event.organizerId || event.userId;
+
     for (const userId of notifications) {
       try {
-        const notifId = doc(collection(this.db, 'notifications')).id;
-        await setDoc(doc(this.db, 'notifications', notifId), {
+        // Server `sendNotification` callable: the top-level `notifications`
+        // collection is `allow create: if false`, so the old direct setDoc was
+        // denied and swallowed — attendees were never notified.
+        await notificationsService.sendNotification({
           type: 'event_update',
           recipientId: userId,
+          senderId,
           title,
           message,
-          actionUrl: `/event/${eventId}`,
-          eventId,
-          isRead: false,
-          createdAt: serverTimestamp()
+          data: { eventId, actionUrl: `/event/${eventId}` },
         });
       } catch (err) {
         logger.warn(`Failed to notify user ${userId}:`, err);
